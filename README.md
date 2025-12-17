@@ -128,19 +128,16 @@ Create the project with following command.
 ### Configuration
 Once installation is finished, go to `app.module`, and set up configuration of the package.
 
-
 Package
 - joi
   - This is a built-in validator that defines an object schema and validate JavaScript objects.
   - To validate configuration files as they aren't automatically validated with `validationSchema` alone.
   - The package to validate configuration files as they aren't automatically validated with `validationSchema` alone.
 
-
 Methods
 - join
   - Using from 'node:path' not 'path': to avoid conflict between external packages with same name.
   - It ensures OS cross-platform compatibility by using path separators.
-
 
 ```ts
   import * as Joi from 'joi';
@@ -175,24 +172,23 @@ Create a `.env` file in the root directory:
   ENV=dev
   
   # DB configuration
-  DB_TYPE=postgres
-  DB_HOST=localhost
-  # Instead of 5432, To avoid confliction between connected server
-  DB_PORT=5435
-  DB_USERNAME=postgres
-  DB_PASSWORD=postgres
-  DB_DATABASE=postgres
+  DB_TYPE=yourDatabase
+  DB_HOST=yourDatabase
+  DB_PORT=yourPort
+  DB_USERNAME=yourDBport
+  DB_PASSWORD=yourDBpassword
+  DB_DATABASE=yourDBtype
   
   # Hash 
-  HASH_ROUNDS=10
+  HASH_ROUNDS=hashRounds
   
   # Secret Token
-  REFRESH_TOKEN_SECRET=hardEncodedSecretRefreshToken
-  ACCESS_TOKEN_SECRET=hardEncodedSecretAccessToken
+  REFRESH_TOKEN_SECRET=yourEncodedSecretKey
+  ACCESS_TOKEN_SECRET=yourEncodedSecretKey
   
   # Expiry
-  REFRESH_TOKEN_SECRET_EXPIRES_IN=43200
-  ACCESS_TOKEN_SECRET_EXPIRES_IN=180
+  REFRESH_TOKEN_SECRET_EXPIRES_IN=expiryTime
+  ACCESS_TOKEN_SECRET_EXPIRES_IN=expiryTime
 ```
 
 
