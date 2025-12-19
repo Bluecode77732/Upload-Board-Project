@@ -7,7 +7,7 @@ export class UploadFileDto {
     @IsNotEmpty()
     @ApiProperty({
         description: "File title",
-        example: "An Instance of File.",
+        example: "Name the title for each time with different titles, or it will have transaction abort!.",
     })
     title: string;
     

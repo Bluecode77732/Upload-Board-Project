@@ -52,6 +52,7 @@ export class FileService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
+    // Using try/catch for transaction-based operation to ensure data integrity, consistency, and prevent of leaks
     try {
       // Creates two relative file paths, to store file before processing.
       const temporaryFolder = join('file', 'temp');
@@ -120,6 +121,7 @@ export class FileService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
+    // Using try/catch for transaction-based operation to ensure data integrity, consistency, and prevent of leaks
     try {
       // Find File
       const file = await queryRunner.manager.findOne(FileEntity, {
@@ -136,23 +138,34 @@ export class FileService {
       // Extract Specific Arguments
       const { title, userId, filePath } = updateFileDto;
 
+      // Title Update
+      if (updateFileDto.title) {
+        const duplicatedTitle = await this.fileRepository.findOne({
+          where: {
+            title: updateFileDto.title,
+          },
+        });
+        
+        if (duplicatedTitle) {
+          throw new BadRequestException("The title is duplicated!");
+        };
+      };
+
       // Create Update Object
       const updateFields: Partial<FileEntity> = {};
 
-      // Title Update
-      if (title)
-        updateFields.title = title;
+      updateFields.title = title;
 
       // File path label validation
       if (filePath) {
         if (filePath.startsWith('temp_')) {
           // Throw error if the file doesn't exist in 'temp' folder
           throw new BadRequestException("The file must be in upload folder.");
-        } 
-        if(filePath.startsWith(`granted_`)) {
+        }
+        if (filePath.startsWith(`granted_`)) {
           // Proceed upload if file exist in 'upload' folder
           updateFields.filePath = filePath;
-        } 
+        }
         else {
           throw new BadRequestException("Attach file again.");
         }

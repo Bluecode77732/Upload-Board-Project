@@ -32,10 +32,8 @@ export class UserService {
       throw new BadRequestException('Registration failed');
     };
 
-
     // Hashing user password
     const hash = await bcrypt.hash(password, this.configService.getOrThrow<number>("HASH_ROUNDS"));
-
 
     await this.userRepository.save({
       email,

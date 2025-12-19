@@ -5,7 +5,7 @@ export class CreateUserDto {
 
     @ApiProperty({
         description: "User Email",
-        example: "x1@gmail.com",
+        example: "x@gmail.com",
         type: String,
     })
     @IsNotEmpty()

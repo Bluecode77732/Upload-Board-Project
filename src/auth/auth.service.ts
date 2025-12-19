@@ -139,6 +139,7 @@ export class AuthService {
 
 
   async parseBearerToken(rawToken: string, isRefreshToken: boolean) {
+    // This try/catch throws an unified error as JWT throws various error types
     try {
       const bearerToken = rawToken.split(' ');
 
