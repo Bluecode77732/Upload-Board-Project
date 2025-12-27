@@ -36,7 +36,7 @@ A file upload demonstrating project to handle the mp4 format data.
   cp .env
  
   # 3. Create database manually (no migrations in package.json)
-  Set 'synchronize: true' in 'app.module.ts' for dev
+  Set 'synchronize: true' in 'app.module.ts' for development
   
   # 4. Run development
   pnpm run start:dev
