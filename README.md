@@ -10,14 +10,14 @@ A file upload demonstrating project to handle the mp4 format data.
 - Testing: Unit tests with 70%+ coverage on core logic
 
 - Timeline : 6 weeks
-- Skills : TypeORM, PostgreSQL, Transaction, DTO, Relations, Passport, Guard, Jest, Swagger
+- Skills : TypeORM, PostgreSQL, Transaction, DTO, Validation-Exception, Relations, Passport, Guard, Jest, Swagger
 
 
 ## Project Motivation
 - To understand uploading files using `Multer` package.
 - Understanding of user authentication and authorization using basic, bearer and JWT.
 - Adoption of Monolithic Architecture over and NestJs framework.
-- To expand technical knowledges of handling on transferring large files over the network.
+- To expand technical knowledge of handling on transferring large files over the network.
 
 
 ## Quick Start
@@ -130,9 +130,8 @@ Once installation is finished, go to `app.module`, and set up configuration of t
 
 Package
 - joi
-  - This is a built-in validator that defines an object schema and validate JavaScript objects.
-  - To validate configuration files as they aren't automatically validated with `validationSchema` alone.
-  - The package to validate configuration files as they aren't automatically validated with `validationSchema` alone.
+  - This package is a built-in validator that enforce validation to an object schema and JavaScript objects.
+  - To validate configuration files when they aren't automatically validated with `validationSchema` alone.
 
 Methods
 - join
@@ -166,8 +165,8 @@ Methods
 
 ### Environment Configuration
 
-Create a `.env` file in the root directory:
-```env
+Create a `.env` file in the root directory and paste variables below :
+```env.example
   # Development Environment
   ENV=dev
   
