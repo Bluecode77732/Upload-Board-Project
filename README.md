@@ -1,3 +1,8 @@
+![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=flat&logo=nestjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
+![Jest](https://img.shields.io/badge/Jest-C21325?style=flat&logo=jest&logoColor=white)
+
 # Upload Board Project
 - An uploadable server-side management that validated users to upload video files.
 
@@ -193,7 +198,7 @@ Create a `.env` file in the root directory and paste variables below :
 
 ### File Storage Structure
 Create three of folders to store the videos separately. 
-- Structrue of the storage folders
+- Structure of the storage folders
 
 file/
 ├── temp/     # Temporary storage
@@ -430,7 +435,7 @@ import { v4 } from 'uuid';
     imports: [
         MulterModule.register({
             storage: diskStorage({
-                // `join()` is an utility function that disinguishes OS file path between `/` or `\`.
+                // `join()` is an utility function that distinguishes OS file path between `/` or `\`.
                 destination: join(process.cwd(), 'file', 'temp'),
                 // To make this function callable, require those parameters: req, file
                 filename: (req, file, cb) => {
