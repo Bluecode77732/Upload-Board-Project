@@ -73,10 +73,10 @@ export class AuthService {
 
     // Verifies if user exist or not
     if (user) {
-      throw new BadRequestException("User Aleady Exist.");
+      throw new BadRequestException("User Already Exist.");
     };
 
-    // Hashing the password by bcrypt in secret hashig rounds
+    // Hashing the password by bcrypt in secret hashing rounds
     const hash = await bcrypt.hash(password, this.configService.getOrThrow<number>('HASH_ROUNDS'));
 
     // Stores user email and hashed password by TypeORM method

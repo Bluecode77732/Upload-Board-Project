@@ -14,7 +14,7 @@ export class AuthController {
     private readonly authService: AuthService,
   ) { }
 
-  // A Rroute handler decorator, Routes (Get, Post, Patch, Put, Delete) HTTP request to the specific path.
+  // A Route handler decorator, Routes (Get, Post, Patch, Put, Delete) HTTP request to the specific path.
   @Post('register')
   @ApiBasicAuth()
   @ApiBody({ type: CreateUserDto })
@@ -37,7 +37,7 @@ export class AuthController {
   @ApiBasicAuth()
   @ApiResponse({
     status: 201,
-    description: "Sign In Successed.",
+    description: "Sign In Succeed.",
     type: tokenType,
     schema: {
       example: {
@@ -59,12 +59,12 @@ export class AuthController {
   };
 
 
-  // Issueing a refresh access token to let not users redo login
+  // Issuing a refresh access token to let not users redo login
   @Post('token/refreshaccess')
   @ApiBearerAuth()
   @ApiResponse({
     status: 201,
-    description: "Issued Token Successfully.",
+    description: "This issues refresh token for access tokens.",
     type: bearerTokenType,
     example: {
       accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -92,12 +92,12 @@ export class AuthController {
   })
   @ApiResponse({
     status: 201,
-    description: "Issued Token Successfully.",
+    description: "This issues refresh token and access token.",
     type: tokenType,
   })
   @ApiResponse({
     status: 401,
-    description: "Invalid Credentaials.",
+    description: "Invalid Credentials.",
   })
   @ApiBody({
     type: CreateUserDto,
@@ -111,7 +111,7 @@ export class AuthController {
   };
 
 
-  // Set role what a user can do.
+  // Manager sign in method by setting roles what a user can do.
   @UseGuards(JwtAuthGuard)
   @Get('profile')
   @ApiResponse({

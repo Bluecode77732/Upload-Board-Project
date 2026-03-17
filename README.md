@@ -1,5 +1,5 @@
 # Upload Board Project
-- An application that validated users to upload video files.
+- An uploadable server-side management that validated users to upload video files.
 
 
 ## Overview
@@ -281,7 +281,7 @@ upload-board-project/
 ├── tsconfig.json
 └── tsconfig.build.json
 
-## Complete Implementaion
+## Complete Implementation
 ### APP
 Packages
 - @nestjs/core
@@ -314,7 +314,7 @@ async function bootstrap() {
   // Swagger Set Up
   const config = new DocumentBuilder()
     .setTitle("File Upload Board")
-    .setDescription("To test File Uplaod Board, pop up the lock and register a user with any of email and password you want in Authentication API, and then type in the same credentials in the register API. Then repeat the same process you just did in each endpoints when you find Basic Authorization. If you want to receive Bearer Token, you can go to 'POST /auth/signin' or 'POST /auth/signin/local' in Authentication API and fill in the Bearer Autorization blank.")
+    .setDescription("To test File Upload Board, pop up the lock and register a user with any of email and password you want in Authentication API, and then type in the same credentials in the register API. Then repeat the same process you just did in each endpoints when you find Basic Authorization. If you want to receive Bearer Token, you can go to 'POST /auth/signin' or 'POST /auth/signin/local' in Authentication API and fill in the Bearer Authorization blank.")
     .setVersion('1.0')
     .addBearerAuth()
     .addBasicAuth()
@@ -1100,7 +1100,7 @@ export class UserService {
 
 
 ### Auth
-Implemention of two ways of sign-in endpoints.
+Implementation of two ways of sign-in endpoints.
 - Basic Authentication
 - Token-based Authentication
 
@@ -1634,7 +1634,7 @@ export class JwtAuthGuard extends AuthGuard("jwt-auth-guard") { };
 
 
 ### Swagger
-Swagger is a set of tools that provides documentation via Swagger UI, testing through Swagger-editor, based on the OAS(OpenAPI Specifictaion), using an OpenAPI document to describes APIs.
+Swagger is a set of tools that provides documentation via Swagger UI, testing through Swagger-editor, based on the OAS(OpenAPI Specification), using an OpenAPI document to describes APIs.
 
 
 Packages
@@ -1729,10 +1729,11 @@ The directories wrapped in an array gives flexibility to add more test locations
 
 
 - It sets output directory for coverage reports in parents directory, one level above the config file  in `Package.json`.
+Subordinate repository
 ```json
   "coverageDirectory": "../coverage",
 ```
-
+Parents repository
 ```json
   "coverageDirectory": "./coverage",
 ```

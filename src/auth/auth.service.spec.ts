@@ -14,7 +14,7 @@ describe('AuthService', () => {
   let userRepository: Repository<UserEntity>;
   let configService: ConfigService;
   let jwtService: JwtService;
-
+  
   // Mocking 
   const mockUserEntity: UserEntity = {
     id: 1,
@@ -25,21 +25,21 @@ describe('AuthService', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-
+  
   const mockUserRepository = {
     findOne: jest.fn(),
     save: jest.fn(),
   };
-
+  
   const mockConfigService = {
     getOrThrow: jest.fn(),
   };
-
+  
   const mockJwtService = {
     signAsync: jest.fn(),
     verifyAsync: jest.fn(),
   };
-
+  
 
   beforeEach(async () => {
     // Testing basic mocks
@@ -85,7 +85,7 @@ describe('AuthService', () => {
       expect(result.password).toBe("Test123Password");
     });
 
-    it("should throw `BadReqeustException` for invalid token format", () => {
+    it("should throw `BadRequestException` for invalid token format", () => {
       const InvalidRawToken = "InvalidTokenFormat";
       expect(authService.parseBasicToken(InvalidRawToken)).rejects.toThrow(BadRequestException);
     });
