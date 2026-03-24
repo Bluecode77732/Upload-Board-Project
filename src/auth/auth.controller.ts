@@ -109,17 +109,4 @@ export class AuthController {
       accessToken: await this.authService.issueToken(req.user, false),
     };
   };
-
-
-  // Manager sign in method by setting roles what a user can do.
-  @UseGuards(JwtAuthGuard)
-  @Get('profile')
-  @ApiResponse({
-    status: 201,
-    description: "Issued Token Successfully.",
-    type: UserEntity,
-  })
-  async managerSignIn(@Request() req) {
-    return req.user;
-  };
 }

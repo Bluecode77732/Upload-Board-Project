@@ -58,7 +58,7 @@ export class FileService {
       const temporaryFolder = join('file', 'temp');
       const uploadFolder = join('file', 'upload');
 
-      // Creates a QueryBuilder, which allows to build and execute PostgeSQL queries.
+      // Creates a QueryBuilder, which allows to build and execute PostgreSQL queries.
       const upload = await queryRunner.manager.createQueryBuilder()
         .insert()
         .into(FileEntity)
@@ -108,7 +108,7 @@ export class FileService {
       console.log(error);
 
       await queryRunner.rollbackTransaction();
-      throw new InternalServerErrorException("Transcation Abort");
+      throw new InternalServerErrorException("Transaction Abort");
 
     } finally {
       await queryRunner.release();
