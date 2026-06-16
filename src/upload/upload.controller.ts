@@ -46,10 +46,6 @@ export class UploadController {
             throw new BadRequestException("Attach File.");
         };
 
-        // Terminal log
-        console.log(file);
-
-        // Client log
         return {
             filename: file.filename,
         };

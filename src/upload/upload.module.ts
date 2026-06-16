@@ -9,9 +9,7 @@ import { v4 } from 'uuid';
     imports: [
         MulterModule.register({
             storage: diskStorage({
-                // `join()` is an utility function that disinguishes OS file path between `/` or `\`.
                 destination: join(process.cwd(), 'file', 'temp'),
-                // To make this function callable, require those parameters: req, file
                 filename: (req, file, cb) => {
                     const split = file.originalname.split('.');
 

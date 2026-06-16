@@ -7,42 +7,31 @@ import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, Up
 @Entity()
 export class UserEntity {
     @PrimaryGeneratedColumn()
-    id: number;
+    id!: number;
 
-    @Column({
-        unique: true,
-    })
+    @Column({ unique: true })
     @IsEmail()
     @IsString()
     @IsNotEmpty()
-    email: string;
-    
+    email!: string;
+
     @Column()
     @IsString()
     @IsNotEmpty()
-    @Exclude({
-        toPlainOnly: true,
-    })
-    password: string;
+    @Exclude({ toPlainOnly: true })
+    password!: string;
 
-    // A one-to-many relation allows creating the type of relation where Entity1 can have multiple instances of Entity2, but Entity2 has only one Entity1. Entity2 is the owner of the relationship, and stores the id of Entity1 on its side of the relation.
     @OneToMany(
         () => FileEntity,
         (file) => file.creator,
     )
-    creator: FileEntity[];
-
-    @OneToMany(
-        () => FileEntity,
-        file => file.user,
-    )
-    files: FileEntity[];
+    creator!: FileEntity[];
 
     @CreateDateColumn()
     @ApiHideProperty()
-    createdAt: Date;
-    
+    createdAt!: Date;
+
     @UpdateDateColumn()
     @ApiHideProperty()
-    updatedAt: Date;
+    updatedAt!: Date;
 }

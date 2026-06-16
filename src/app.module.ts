@@ -13,11 +13,9 @@ import { join } from 'node:path';
 
 @Module({
   imports: [
-    // FYI : A static method `forRoot`
     ConfigModule.forRoot({
       validationSchema: Joi.object({
         ENV: Joi.string().valid('dev', 'prod').required(),
-        // It prevents wrong connection by DB type
         DB_TYPE: Joi.string().valid('postgres').required(),
         DB_HOST: Joi.string().required(),
         DB_PORT: Joi.number().required(),
@@ -29,11 +27,10 @@ import { join } from 'node:path';
         ACCESS_TOKEN_SECRET: Joi.string().required(),
         REFRESH_TOKEN_SECRET_EXPIRES_IN: Joi.number().required(),
         ACCESS_TOKEN_SECRET_EXPIRES_IN: Joi.number().required(),
+        BASE_URL: Joi.string().default('http://localhost:3000'),
       }),
-      // Configuration global adoption
       isGlobal: true,
     }),
-    // Reason for asynchronizing `forRoot` to `forRootAsync` : Since `configModule` is being instanced by `Inject of Container`, and to extract data from that instanced data schema to TypeORM.
     TypeOrmModule.forRootAsync({
       useFactory: (configService: ConfigService) => ({
         type: configService.get<string>("DB_TYPE") as "postgres",
@@ -46,15 +43,11 @@ import { join } from 'node:path';
           FileEntity,
           UserEntity,
         ],
-        //! WARNING: Set synchronize: `false` in Production to prevent losing data.
-        //! Important: Set it `true` to do migration to create DB during Development.
         synchronize: false,
         autoLoadEntities: true,
       }),
-      // It tells IOC container what dependency injection to be injected with.
       inject: [ConfigService],
     }),
-    // Preventing domain URL security risk by entrancing via rootPath and serveRoot.
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'file'),
       serveRoot: 'file',
