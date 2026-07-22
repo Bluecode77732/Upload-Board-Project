@@ -44,12 +44,34 @@ export class UploadController {
   @ApiResponse({
     status: 400,
     description:
-      'Bad Request. No file attached or the file is too larger than 100MB.',
+      'Bad Request. No file attached, the file is larger than 100MB, or the file is not an allowed video type (mp4, mov, webm).',
   })
   @UseInterceptors(
     FileInterceptor('video', {
       limits: {
-        fileSize: 100000000, //300MB in bytes
+        fileSize: 100000000, // 100MB in bytes
+      },
+      fileFilter: (req, file, cb) => {
+        // Both mimetype and extension are client-supplied, so this is an
+        // allowlist against accidental/blatant misuse, not a content guarantee.
+        const allowedMimeTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
+        const allowedExtensions = ['mp4', 'mov', 'webm'];
+        const extension =
+          file.originalname.split('.').pop()?.toLowerCase() ?? '';
+
+        if (
+          allowedMimeTypes.includes(file.mimetype) &&
+          allowedExtensions.includes(extension)
+        ) {
+          cb(null, true);
+        } else {
+          cb(
+            new BadRequestException(
+              'Only video files are allowed (mp4, mov, webm).',
+            ),
+            false,
+          );
+        }
       },
     }),
   )
