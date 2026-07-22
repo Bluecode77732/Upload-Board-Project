@@ -6,7 +6,9 @@ import {
 
 export const UserId = createParamDecorator(
   (data: unknown, context: ExecutionContext) => {
-    const request = context.switchToHttp().getRequest();
+    const request = context
+      .switchToHttp()
+      .getRequest<{ user?: { id?: number } }>();
 
     // Identity always comes from the JWT-populated request.user
     // (set by JwtStrategy.validate), never from the request body.

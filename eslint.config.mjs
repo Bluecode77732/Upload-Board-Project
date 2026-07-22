@@ -28,7 +28,18 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn'
+      '@typescript-eslint/no-unsafe-argument': 'warn',
+      // The `const { password, ...rest } = user` strip pattern is intentional
+      // (jwt.strategy.ts) — the discarded sibling is the point, not an oversight.
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
+    },
+  },
+  {
+    // Jest mocks are plain objects of jest.fn()s — passing their methods
+    // unbound to expect() is safe and is the established spec pattern here.
+    files: ['**/*.spec.ts', 'test/**/*.ts'],
+    rules: {
+      '@typescript-eslint/unbound-method': 'off',
     },
   },
 );

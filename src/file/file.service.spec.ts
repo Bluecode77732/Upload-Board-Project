@@ -1,7 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { FileService } from './file.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { DataSource, Repository, QueryRunner } from 'typeorm';
+import {
+  DataSource,
+  Repository,
+  QueryRunner,
+  SelectQueryBuilder,
+} from 'typeorm';
 import { FileEntity } from './entity/file.entity';
 import { UserEntity } from 'src/user/entity/user.entity';
 import {
@@ -258,16 +263,23 @@ describe('FileService', () => {
   describe('getFiles', () => {
     it('should apply take and skip to the query', async () => {
       const mockListQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
         take: jest.fn().mockReturnThis(),
         skip: jest.fn().mockReturnThis(),
         getManyAndCount: jest.fn().mockResolvedValue([[mockFileEntity], 1]),
       };
       jest
         .spyOn(fileRepository, 'createQueryBuilder')
-        .mockReturnValue(mockListQueryBuilder as any);
+        .mockReturnValue(
+          mockListQueryBuilder as unknown as SelectQueryBuilder<FileEntity>,
+        );
 
       const [files, count] = await fileService.getFiles(20, 0);
 
+      expect(mockListQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
+        'file.creator',
+        'creator',
+      );
       expect(mockListQueryBuilder.take).toHaveBeenCalledWith(20);
       expect(mockListQueryBuilder.skip).toHaveBeenCalledWith(0);
       expect(count).toBe(1);

@@ -55,6 +55,7 @@ export class FileService {
   ): Promise<[FileResponseDto[], number]> {
     const [files, count] = await this.fileRepository
       .createQueryBuilder('file')
+      .leftJoinAndSelect('file.creator', 'creator')
       .take(take)
       .skip(skip)
       .getManyAndCount();
@@ -101,7 +102,10 @@ export class FileService {
         })
         .execute();
 
-      const fileId = upload.identifiers[0].id;
+      const fileId: unknown = upload.identifiers[0]?.id;
+      if (typeof fileId !== 'number') {
+        throw new InternalServerErrorException('Transaction aborted.');
+      }
       const newFilePath = uploadFileDto.filePath.replace('temp_', 'granted_');
 
       await rename(
@@ -115,7 +119,7 @@ export class FileService {
         where: { id: fileId },
       });
       return this.toResponse(saved!);
-    } catch (error) {
+    } catch {
       await queryRunner.rollbackTransaction();
       throw new InternalServerErrorException('Transaction aborted.');
     } finally {

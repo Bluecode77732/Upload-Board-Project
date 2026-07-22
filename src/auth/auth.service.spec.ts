@@ -69,32 +69,32 @@ describe('AuthService', () => {
   });
 
   describe('parseBasicToken', () => {
-    it('should parse valid basic token', async () => {
+    it('should parse valid basic token', () => {
       const token = Buffer.from('test@gmail.com:Test123Password').toString(
         'base64',
       );
       const rawToken = `Basic ${token}`;
 
-      const result = await authService.parseBasicToken(rawToken);
+      const result = authService.parseBasicToken(rawToken);
 
       expect(result.email).toBe('test@gmail.com');
       expect(result.password).toBe('Test123Password');
     });
 
     it('should throw BadRequestException for invalid token format', () => {
-      expect(authService.parseBasicToken('InvalidTokenFormat')).rejects.toThrow(
+      expect(() => authService.parseBasicToken('InvalidTokenFormat')).toThrow(
         BadRequestException,
       );
     });
 
     it('should throw BadRequestException for invalid basic token format', () => {
-      expect(authService.parseBasicToken('Basic token')).rejects.toThrow(
+      expect(() => authService.parseBasicToken('Basic token')).toThrow(
         BadRequestException,
       );
     });
 
     it('should throw BadRequestException for bearer token passed to parseBasicToken', () => {
-      expect(authService.parseBasicToken('Bearer token')).rejects.toThrow(
+      expect(() => authService.parseBasicToken('Bearer token')).toThrow(
         BadRequestException,
       );
     });
@@ -259,7 +259,7 @@ describe('AuthService', () => {
     it('should sign in a user', async () => {
       jest
         .spyOn(authService, 'parseBasicToken')
-        .mockResolvedValue({ email, password });
+        .mockReturnValue({ email, password });
       jest
         .spyOn(authService, 'validateUser')
         .mockResolvedValue(user as UserEntity);

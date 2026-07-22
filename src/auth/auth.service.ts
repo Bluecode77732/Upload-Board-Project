@@ -20,7 +20,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async parseBasicToken(rawToken: string) {
+  parseBasicToken(rawToken: string) {
     const basicToken = rawToken.split(' ');
 
     if (basicToken.length !== 2) {
@@ -46,7 +46,7 @@ export class AuthService {
   }
 
   async register(rawToken: string) {
-    const { email, password } = await this.parseBasicToken(rawToken);
+    const { email, password } = this.parseBasicToken(rawToken);
 
     const user = await this.userRepository.findOne({ where: { email } });
 
@@ -119,7 +119,7 @@ export class AuthService {
         throw new BadRequestException('Bad token format.');
       }
 
-      const payload = await this.jwtService.verifyAsync(token, {
+      const payload = await this.jwtService.verifyAsync<Payload>(token, {
         secret: this.configService.getOrThrow<string>(
           isRefreshToken ? 'REFRESH_TOKEN_SECRET' : 'ACCESS_TOKEN_SECRET',
         ),
@@ -136,13 +136,13 @@ export class AuthService {
       }
 
       return payload;
-    } catch (err) {
+    } catch {
       throw new UnauthorizedException('Token expired.');
     }
   }
 
   async signIn(rawToken: string) {
-    const { email, password } = await this.parseBasicToken(rawToken);
+    const { email, password } = this.parseBasicToken(rawToken);
     const user = await this.validateUser(email, password);
 
     return {
