@@ -1,28 +1,29 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
-import { PassportStrategy } from "@nestjs/passport";
-import { Strategy } from "passport-local";
-import { AuthService } from "../auth.service";
-import { UserEntity } from "src/user/entity/user.entity";
-
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+import { Strategy } from 'passport-local';
+import { AuthService } from '../auth.service';
+import { UserEntity } from 'src/user/entity/user.entity';
 
 @Injectable()
-export class LocalStrategy extends PassportStrategy(Strategy, "local-auth-guard") {
-    constructor(private readonly authService: AuthService) {
-        super({
-            // Change request variable names
-            usernameField: "email",
-            passwordField: "password",
-        });
-    };
+export class LocalStrategy extends PassportStrategy(
+  Strategy,
+  'local-auth-guard',
+) {
+  constructor(private readonly authService: AuthService) {
+    super({
+      // Change request variable names
+      usernameField: 'email',
+      passwordField: 'password',
+    });
+  }
 
-    async validate(email: string, password: string): Promise<UserEntity> {
+  async validate(email: string, password: string): Promise<UserEntity> {
+    const user = await this.authService.validateUser(email, password);
 
-        const user = await this.authService.validateUser(email, password);
+    if (!user) {
+      throw new UnauthorizedException('User Validation Failed');
+    }
 
-        if (!user) {
-            throw new UnauthorizedException("User Validation Failed");
-        }
-
-        return user;
-    };
+    return user;
+  }
 }

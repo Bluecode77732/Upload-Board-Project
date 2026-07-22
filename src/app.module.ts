@@ -34,16 +34,13 @@ import { join } from 'node:path';
     }),
     TypeOrmModule.forRootAsync({
       useFactory: (configService: ConfigService) => ({
-        type: configService.get<string>("DB_TYPE") as "postgres",
-        host: configService.get<string>("DB_HOST"),
-        port: configService.get<number>("DB_PORT"),
-        username: configService.get<string>("DB_USERNAME"),
-        password: configService.get<string>("DB_PASSWORD"),
-        database: configService.get<string>("DB_DATABASE"),
-        entities: [
-          FileEntity,
-          UserEntity,
-        ],
+        type: configService.get<string>('DB_TYPE') as 'postgres',
+        host: configService.get<string>('DB_HOST'),
+        port: configService.get<number>('DB_PORT'),
+        username: configService.get<string>('DB_USERNAME'),
+        password: configService.get<string>('DB_PASSWORD'),
+        database: configService.get<string>('DB_DATABASE'),
+        entities: [FileEntity, UserEntity],
         synchronize: false,
         autoLoadEntities: true,
       }),
@@ -59,4 +56,4 @@ import { join } from 'node:path';
     UploadModule,
   ],
 })
-export class AppModule { }
+export class AppModule {}

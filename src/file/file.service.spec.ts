@@ -4,7 +4,12 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource, Repository, QueryRunner } from 'typeorm';
 import { FileEntity } from './entity/file.entity';
 import { UserEntity } from 'src/user/entity/user.entity';
-import { NotFoundException, BadRequestException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
+import {
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs/promises';
 
@@ -24,7 +29,7 @@ describe('FileService', () => {
     creator: { id: 1, email: 'creator@test.com' } as UserEntity,
     createdAt: new Date(),
     updatedAt: new Date(),
-  } as FileEntity;
+  };
 
   const mockUser: UserEntity = {
     id: 1,
@@ -85,8 +90,12 @@ describe('FileService', () => {
     }).compile();
 
     fileService = module.get<FileService>(FileService);
-    fileRepository = module.get<Repository<FileEntity>>(getRepositoryToken(FileEntity));
-    userRepository = module.get<Repository<UserEntity>>(getRepositoryToken(UserEntity));
+    fileRepository = module.get<Repository<FileEntity>>(
+      getRepositoryToken(FileEntity),
+    );
+    userRepository = module.get<Repository<UserEntity>>(
+      getRepositoryToken(UserEntity),
+    );
     dataSource = module.get<DataSource>(DataSource);
     queryRunner = dataSource.createQueryRunner();
   });
@@ -94,7 +103,6 @@ describe('FileService', () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
-
 
   describe('uploadFile', () => {
     const uploadFileDto = {
@@ -110,7 +118,9 @@ describe('FileService', () => {
         execute: jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
       };
 
-      queryRunner.manager.createQueryBuilder = jest.fn().mockReturnValue(mockInsertQueryBuilder);
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(mockInsertQueryBuilder);
       (fs.rename as jest.Mock).mockResolvedValue(undefined);
       jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
 
@@ -136,14 +146,17 @@ describe('FileService', () => {
         execute: jest.fn().mockRejectedValue(new Error('DB Error')),
       };
 
-      queryRunner.manager.createQueryBuilder = jest.fn().mockReturnValue(mockInsertQueryBuilder);
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(mockInsertQueryBuilder);
 
-      await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(InternalServerErrorException);
+      await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(
+        InternalServerErrorException,
+      );
       expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
       expect(queryRunner.release).toHaveBeenCalled();
     });
   });
-
 
   describe('updateFile', () => {
     it('should update file title successfully', async () => {
@@ -158,8 +171,11 @@ describe('FileService', () => {
         execute: jest.fn().mockResolvedValue({ affected: 1 }),
       };
 
-      queryRunner.manager.createQueryBuilder = jest.fn().mockReturnValue(mockUpdateQueryBuilder);
-      jest.spyOn(fileRepository, 'findOne')
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(mockUpdateQueryBuilder);
+      jest
+        .spyOn(fileRepository, 'findOne')
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ ...mockFileEntity, title: 'Updated Title' });
 
@@ -169,18 +185,20 @@ describe('FileService', () => {
       expect(queryRunner.commitTransaction).toHaveBeenCalled();
     });
 
-    it("should throw NotFoundException when file is not found", async () => {
+    it('should throw NotFoundException when file is not found', async () => {
       queryRunner.manager.findOne = jest.fn().mockResolvedValue(null);
 
-      await expect(fileService.updateFile(1, { title: 'Test' }, 1)).rejects.toThrow(NotFoundException);
+      await expect(
+        fileService.updateFile(1, { title: 'Test' }, 1),
+      ).rejects.toThrow(NotFoundException);
       expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
     });
 
-    it("should throw ForbiddenException when requester is not the creator", async () => {
+    it('should throw ForbiddenException when requester is not the creator', async () => {
       queryRunner.manager.findOne = jest.fn().mockResolvedValue(mockFileEntity);
 
       await expect(
-        fileService.updateFile(1, { title: 'Test' }, 2)
+        fileService.updateFile(1, { title: 'Test' }, 2),
       ).rejects.toThrow(ForbiddenException);
       expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
     });
@@ -189,7 +207,7 @@ describe('FileService', () => {
       queryRunner.manager.findOne = jest.fn().mockResolvedValue(mockFileEntity);
 
       await expect(
-        fileService.updateFile(1, { filePath: 'temp_video.mp4' }, 1)
+        fileService.updateFile(1, { filePath: 'temp_video.mp4' }, 1),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -203,13 +221,15 @@ describe('FileService', () => {
         execute: jest.fn().mockResolvedValue({ affected: 1 }),
       };
 
-      queryRunner.manager.createQueryBuilder = jest.fn().mockReturnValue(mockUpdateQueryBuilder);
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(mockUpdateQueryBuilder);
       jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
 
       await fileService.updateFile(1, { filePath: 'granted_video.mp4' }, 1);
 
       expect(mockUpdateQueryBuilder.set).toHaveBeenCalledWith(
-        expect.objectContaining({ filePath: 'granted_video.mp4' })
+        expect.objectContaining({ filePath: 'granted_video.mp4' }),
       );
     });
 
@@ -224,7 +244,9 @@ describe('FileService', () => {
         execute: jest.fn().mockResolvedValue({ affected: 1 }),
       };
 
-      queryRunner.manager.createQueryBuilder = jest.fn().mockReturnValue(mockUpdateQueryBuilder);
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(mockUpdateQueryBuilder);
       jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
 
       await fileService.updateFile(1, { userId: 1 }, 1);
@@ -233,7 +255,6 @@ describe('FileService', () => {
     });
   });
 
-
   describe('getFiles', () => {
     it('should apply take and skip to the query', async () => {
       const mockListQueryBuilder = {
@@ -241,7 +262,9 @@ describe('FileService', () => {
         skip: jest.fn().mockReturnThis(),
         getManyAndCount: jest.fn().mockResolvedValue([[mockFileEntity], 1]),
       };
-      jest.spyOn(fileRepository, 'createQueryBuilder').mockReturnValue(mockListQueryBuilder as any);
+      jest
+        .spyOn(fileRepository, 'createQueryBuilder')
+        .mockReturnValue(mockListQueryBuilder as any);
 
       const [files, count] = await fileService.getFiles(20, 0);
 
@@ -252,14 +275,16 @@ describe('FileService', () => {
     });
   });
 
-
   describe('deleteFile', () => {
     it('should delete a file owned by the requester', async () => {
       jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
 
       const result = await fileService.deleteFile(1, 1);
 
-      expect(fileRepository.findOne).toHaveBeenCalledWith({ where: { id: 1 }, relations: ['creator'] });
+      expect(fileRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 1 },
+        relations: ['creator'],
+      });
       expect(fileRepository.delete).toHaveBeenCalledWith(1);
       expect(result).toBe('File 1 deleted.');
     });
@@ -267,14 +292,18 @@ describe('FileService', () => {
     it('should throw NotFoundException when file is not found', async () => {
       jest.spyOn(fileRepository, 'findOne').mockResolvedValue(null);
 
-      await expect(fileService.deleteFile(1, 1)).rejects.toThrow(NotFoundException);
+      await expect(fileService.deleteFile(1, 1)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(fileRepository.delete).not.toHaveBeenCalled();
     });
 
     it('should throw ForbiddenException when requester is not the creator', async () => {
       jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
 
-      await expect(fileService.deleteFile(1, 2)).rejects.toThrow(ForbiddenException);
+      await expect(fileService.deleteFile(1, 2)).rejects.toThrow(
+        ForbiddenException,
+      );
       expect(fileRepository.delete).not.toHaveBeenCalled();
     });
   });

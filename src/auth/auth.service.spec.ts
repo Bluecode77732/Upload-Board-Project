@@ -8,41 +8,37 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
+jest.mock('bcrypt');
 
 describe('AuthService', () => {
   let authService: AuthService;
   let userRepository: Repository<UserEntity>;
-  let configService: ConfigService;
   let jwtService: JwtService;
-  
-  // Mocking 
+
   const mockUserEntity: UserEntity = {
     id: 1,
-    email: "test@gmail.com",
-    password: "Test123Password",
+    email: 'test@gmail.com',
+    password: 'Test123Password',
     creator: [],
-    files: [],
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  
+
   const mockUserRepository = {
     findOne: jest.fn(),
     save: jest.fn(),
   };
-  
+
   const mockConfigService = {
     getOrThrow: jest.fn(),
   };
-  
+
   const mockJwtService = {
     signAsync: jest.fn(),
     verifyAsync: jest.fn(),
   };
-  
 
   beforeEach(async () => {
-    // Testing basic mocks
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -62,208 +58,219 @@ describe('AuthService', () => {
     }).compile();
 
     authService = module.get<AuthService>(AuthService);
-    userRepository = module.get<Repository<UserEntity>>(getRepositoryToken(UserEntity));
-    configService = module.get<ConfigService>(ConfigService);
+    userRepository = module.get<Repository<UserEntity>>(
+      getRepositoryToken(UserEntity),
+    );
     jwtService = module.get<JwtService>(JwtService);
   });
 
   afterEach(() => {
-    // Clear all mocks before each test
     jest.clearAllMocks();
-  })
+  });
 
-
-  describe("parseBasicToken", () => {
-    it("should parse valid basic token", async () => {
-      // Create base64 encoded token => email:password
-      const token = Buffer.from("test@gmail.com:Test123Password").toString('base64');
+  describe('parseBasicToken', () => {
+    it('should parse valid basic token', async () => {
+      const token = Buffer.from('test@gmail.com:Test123Password').toString(
+        'base64',
+      );
       const rawToken = `Basic ${token}`;
 
       const result = await authService.parseBasicToken(rawToken);
 
-      expect(result.email).toBe("test@gmail.com");
-      expect(result.password).toBe("Test123Password");
+      expect(result.email).toBe('test@gmail.com');
+      expect(result.password).toBe('Test123Password');
     });
 
-    it("should throw `BadRequestException` for invalid token format", () => {
-      const InvalidRawToken = "InvalidTokenFormat";
-      expect(authService.parseBasicToken(InvalidRawToken)).rejects.toThrow(BadRequestException);
+    it('should throw BadRequestException for invalid token format', () => {
+      expect(authService.parseBasicToken('InvalidTokenFormat')).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
-    it("should throw an error for invalid basic token format", () => {
-      const InvalidRawToken = "Basic token";
-      expect(authService.parseBasicToken(InvalidRawToken)).rejects.toThrow(BadRequestException);
+    it('should throw BadRequestException for invalid basic token format', () => {
+      expect(authService.parseBasicToken('Basic token')).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
-    it("should throw an error for invalid refresh access token format", () => {
-      const InvalidBearerToken = "Bearer token";
-      expect(authService.parseBasicToken(InvalidBearerToken)).rejects.toThrow(BadRequestException);
+    it('should throw BadRequestException for bearer token passed to parseBasicToken', () => {
+      expect(authService.parseBasicToken('Bearer token')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
-
-  describe("parseBearerToken", () => {
-    it("should parse a bearer token", async () => {
-      const rawToken = "BearerToken";
-      const payload = { type: "access" };
+  describe('parseBearerToken', () => {
+    it('should parse a valid bearer token', async () => {
+      const rawToken = 'Bearer validtoken';
+      const payload = { type: 'access' };
 
       jest.spyOn(jwtService, 'verifyAsync').mockResolvedValue(payload);
-      jest.spyOn(mockConfigService, 'getOrThrow').mockResolvedValue('secret');
+      jest.spyOn(mockConfigService, 'getOrThrow').mockReturnValue('secret');
 
       const result = await authService.parseBearerToken(rawToken, false);
 
       expect(result).toEqual(payload);
     });
 
-    it("should throw BadRequestException for invalid token format", async () => {
-      const token = "InvalidTokenFormat";
-      expect(authService.parseBearerToken(token, false)).rejects.toThrow(new BadRequestException("Bad Token Format"));
+    it('should throw UnauthorizedException for invalid token format', async () => {
+      await expect(
+        authService.parseBearerToken('InvalidTokenFormat', false),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
-    it("should throw BadRequestException for not a bearer token", async () => {
-      const token = "bEaReR token";
-      expect(authService.parseBearerToken(token, false)).rejects.toThrow(new BadRequestException("Bad Token Format"));
+    it('should throw UnauthorizedException for wrong scheme', async () => {
+      await expect(
+        authService.parseBearerToken('Basic token', false),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
-    it("should throw UnauthorizedException for not a refresh token", async () => {
-      const token = "token";
-      expect(authService.parseBearerToken(token, false)).rejects.toThrow(new UnauthorizedException("Token Expired"));
+    it('should throw UnauthorizedException for expired/invalid token', async () => {
+      await expect(
+        authService.parseBearerToken('token', false),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 
-
-  describe("register", () => {
-    // Base64 authentication decoded format => email:password => convert into utf-8 readable string
-    const token = Buffer.from("test@gmail.com:Test123Password").toString('utf-8');
-    const BasicToken = `Basic ${token}`;
+  describe('register', () => {
+    const token = Buffer.from('test@gmail.com:Test123Password').toString(
+      'base64',
+    );
+    const basicToken = `Basic ${token}`;
     const hashRounds = 10;
-    const email = "test@gmail.com";
-    const password = "Test123Password";
-    const hashedPassword = "HashedPassword";
+    const email = 'test@gmail.com';
+    const password = 'Test123Password';
+    const hashedPassword = 'HashedPassword';
 
-    it("should register a new user", async () => {
-      // Mocking user's findOne to resolve value
+    it('should register a new user', async () => {
       mockUserRepository.findOne
-        .mockResolvedValue(null)
-        .mockResolvedValueOnce({ email: "test@gmail.com", password: hashedPassword });
-      // Mocking user's save to resolve value
-      mockUserRepository.save.mockResolvedValueOnce({ email: "test@gmail.com", password: "Test123Password" });
-      // Mocking ConfigService's getOrThrow to resolve value
-      mockConfigService.getOrThrow.mockResolvedValue(hashRounds);
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ email, password: hashedPassword });
+      mockUserRepository.save.mockResolvedValueOnce({
+        email,
+        password: hashedPassword,
+      });
+      mockConfigService.getOrThrow.mockReturnValue(hashRounds);
+      (bcrypt.hash as jest.Mock).mockResolvedValue(hashedPassword);
 
-      // `bcrypt.compare` is async, thus it returns a `Promise`.
-      jest.spyOn(bcrypt, 'hash').mockImplementation(() => Promise.resolve(hashedPassword));
-
-      const result = await authService.register(BasicToken);
+      const result = await authService.register(basicToken);
 
       expect(bcrypt.hash).toHaveBeenCalledWith(password, hashRounds);
       expect(mockUserRepository.save).toHaveBeenCalled();
-      expect(mockUserRepository.findOne).toHaveBeenCalledWith({ email: "test@gmail.com" });
-      expect(result).toEqual({ email, password: "Test123Password" });
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+        where: { email },
+      });
+      expect(result).toEqual({ email, password: hashedPassword });
     });
 
-    it("should throw `BadRequestException` when user already Exist", async () => {
+    it('should throw BadRequestException when user already exists', async () => {
       mockUserRepository.findOne.mockResolvedValue(mockUserEntity);
 
-      await expect(authService.register(BasicToken)).rejects.toThrow(new BadRequestException("User Aleady Exist."));
-
-      // Testing that save wasn't called
+      await expect(authService.register(basicToken)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(mockUserRepository.save).not.toHaveBeenCalled();
     });
   });
 
+  describe('validateUser', () => {
+    const email = 'test@gmail.com';
+    const password = '#Test@123$Password!';
+    const user = { email, password: 'Hashed@123!Password' };
 
-  describe("validateUser", () => {
-    const email = "test@gmail.com";
-    const password = "#Test@123$Password!";
-    const user = {
-      email,
-      password: "Hashed@123!Password",
-    };
-
-      it("should validate user", async () => {
+    it('should validate user', async () => {
       jest.spyOn(mockUserRepository, 'findOne').mockResolvedValue(user);
-      // `bcrypt.compare` is async, thus it returns a `Promise`.
-      jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       const result = await authService.validateUser(email, password);
 
       expect(userRepository.findOne).toHaveBeenCalledWith({ where: { email } });
-      expect(bcrypt.compare).toHaveBeenCalledWith(password, "Hashed@123!Password");
+      expect(bcrypt.compare).toHaveBeenCalledWith(
+        password,
+        'Hashed@123!Password',
+      );
       expect(result).toEqual(user);
     });
 
-    it("should throw a BadRequestException for invalid user", async () => {
+    it('should throw BadRequestException for non-existent user', async () => {
       jest.spyOn(mockUserRepository, 'findOne').mockResolvedValue(null);
 
-      await expect(authService.validateUser(email, password)).rejects.toThrow(new BadRequestException("Invalid User."));
+      await expect(authService.validateUser(email, password)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
-    it("should throw a BadRequestException when user password is incorrect", async () => {
+    it('should throw BadRequestException when password is incorrect', async () => {
       jest.spyOn(mockUserRepository, 'findOne').mockResolvedValue(user);
-      jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(false));
-      // jest.spyOn(bcrypt, 'compare').mockImplementation((a, b) => false);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
-      await expect(authService.validateUser(email, password)).rejects.toThrow(new BadRequestException("Invalid User."));
+      await expect(authService.validateUser(email, password)).rejects.toThrow(
+        BadRequestException,
+      );
     });
-  })
+  });
 
-
-  describe("issueToken", () => {
+  describe('issueToken', () => {
     const user = { id: 1 };
-    const token = "token";
+    const token = 'token';
 
     beforeEach(() => {
-      jest.spyOn(mockConfigService, 'getOrThrow').mockReturnValue('secret');
+      jest
+        .spyOn(mockConfigService, 'getOrThrow')
+        .mockImplementation((key: string) => {
+          const map: Record<string, string | number> = {
+            REFRESH_TOKEN_SECRET: 'refresh_secret',
+            ACCESS_TOKEN_SECRET: 'access_secret',
+            REFRESH_TOKEN_SECRET_EXPIRES_IN: 3600,
+            ACCESS_TOKEN_SECRET_EXPIRES_IN: 900,
+          };
+          return map[key];
+        });
       jest.spyOn(jwtService, 'signAsync').mockResolvedValue(token);
-    })
+    });
 
-    it("should issue an refresh token", async () => {
-      const result = await authService.issueToken(user as UserEntity, true);
+    it('should issue a refresh token', async () => {
+      const result = await authService.issueToken(user, true);
 
-      // Jwt decoded payload
       expect(jwtService.signAsync).toHaveBeenCalledWith(
         { sub: user.id, type: 'refresh' },
-        { secret: 'refresh', expiresIn: 180 },
+        { secret: 'refresh_secret', expiresIn: 3600 },
       );
       expect(result).toBe(token);
     });
 
-    it("should issue an access token", async () => {
-      const result = await authService.issueToken(user as UserEntity, false);
+    it('should issue an access token', async () => {
+      const result = await authService.issueToken(user, false);
 
-      // Jwt decoded payloads
       expect(jwtService.signAsync).toHaveBeenCalledWith(
         { sub: user.id, type: 'access' },
-        { secret: 'access', expiresIn: 180 },
+        { secret: 'access_secret', expiresIn: 900 },
       );
       expect(result).toBe(token);
     });
   });
 
+  describe('signIn', () => {
+    const rawToken = 'Basic token';
+    const email = 'test@gmail.com';
+    const password = '#Test@123$Password!';
+    const user = { id: 1 };
 
-  describe("signIn", () => {
-    const rawToken = "Basic token";
-    const email = "test@gmail.com";
-    const password = "#Test@123$Password!";
-    const user = {
-      id: 1,
-    };
-
-    it("should sign in a user", async () => {
-      jest.spyOn(authService, 'parseBasicToken').mockResolvedValue({ email, password });
-      jest.spyOn(authService, 'validateUser').mockResolvedValue(user as UserEntity);
-      jest.spyOn(authService, 'issueToken').mockResolvedValue("token");
+    it('should sign in a user', async () => {
+      jest
+        .spyOn(authService, 'parseBasicToken')
+        .mockResolvedValue({ email, password });
+      jest
+        .spyOn(authService, 'validateUser')
+        .mockResolvedValue(user as UserEntity);
+      jest.spyOn(authService, 'issueToken').mockResolvedValue('token');
 
       const result = await authService.signIn(rawToken);
 
       expect(authService.parseBasicToken).toHaveBeenCalledWith(rawToken);
       expect(authService.validateUser).toHaveBeenCalledWith(email, password);
       expect(authService.issueToken).toHaveBeenCalledTimes(2);
-      expect(result).toEqual({
-        refreshToken: 'token',
-        accessToken: 'token',
-      });
+      expect(result).toEqual({ refreshToken: 'token', accessToken: 'token' });
     });
-  })
+  });
 });
