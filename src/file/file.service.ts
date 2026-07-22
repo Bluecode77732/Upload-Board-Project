@@ -84,6 +84,7 @@ export class FileService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
+    let fileId: number;
     try {
       const temporaryFolder = join('file', 'temp');
       const uploadFolder = join('file', 'upload');
@@ -102,10 +103,11 @@ export class FileService {
         })
         .execute();
 
-      const fileId: unknown = upload.identifiers[0]?.id;
-      if (typeof fileId !== 'number') {
+      const insertedId: unknown = upload.identifiers[0]?.id;
+      if (typeof insertedId !== 'number') {
         throw new InternalServerErrorException('Transaction aborted.');
       }
+      fileId = insertedId;
       const newFilePath = uploadFileDto.filePath.replace('temp_', 'granted_');
 
       await rename(
@@ -114,17 +116,20 @@ export class FileService {
       );
 
       await queryRunner.commitTransaction();
-
-      const saved = await this.fileRepository.findOne({
-        where: { id: fileId },
-      });
-      return this.toResponse(saved!);
     } catch {
       await queryRunner.rollbackTransaction();
       throw new InternalServerErrorException('Transaction aborted.');
     } finally {
       await queryRunner.release();
     }
+
+    // Post-commit re-read stays outside the try: a read failure here must not
+    // attempt a rollback of the already-committed transaction.
+    const saved = await this.fileRepository.findOne({ where: { id: fileId } });
+    if (!saved) {
+      throw new NotFoundException('No file found.');
+    }
+    return this.toResponse(saved);
   }
 
   async updateFile(
@@ -195,18 +200,23 @@ export class FileService {
         .execute();
 
       await queryRunner.commitTransaction();
-
-      const updated = await this.fileRepository.findOne({
-        where: { id },
-        relations: ['creator'],
-      });
-      return this.toResponse(updated!);
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
       await queryRunner.release();
     }
+
+    // Post-commit re-read stays outside the try: a read failure here must not
+    // attempt a rollback of the already-committed transaction.
+    const updated = await this.fileRepository.findOne({
+      where: { id },
+      relations: ['creator'],
+    });
+    if (!updated) {
+      throw new NotFoundException('No file found.');
+    }
+    return this.toResponse(updated);
   }
 
   async deleteFile(id: number, requesterId: number): Promise<string> {

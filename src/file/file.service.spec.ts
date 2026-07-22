@@ -143,6 +143,28 @@ describe('FileService', () => {
       expect(fs.rename).toHaveBeenCalled();
     });
 
+    it('should throw NotFoundException without rollback when the post-commit re-read finds nothing', async () => {
+      const mockInsertQueryBuilder = {
+        insert: jest.fn().mockReturnThis(),
+        into: jest.fn().mockReturnThis(),
+        values: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
+      };
+
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(mockInsertQueryBuilder);
+      (fs.rename as jest.Mock).mockResolvedValue(undefined);
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(null);
+
+      await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(queryRunner.commitTransaction).toHaveBeenCalled();
+      expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
+      expect(queryRunner.release).toHaveBeenCalled();
+    });
+
     it('should rollback transaction on error', async () => {
       const mockInsertQueryBuilder = {
         insert: jest.fn().mockReturnThis(),
