@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { UploadFileDto } from './dto/create-uploadFile.dto';
 import { DataSource, Repository } from 'typeorm';
 import { UserEntity } from 'src/user/entity/user.entity';
@@ -44,8 +44,11 @@ export class FileService {
   }
 
 
-  async getFiles(): Promise<[FileResponseDto[], number]> {
-    const [files, count] = await this.fileRepository.createQueryBuilder('file').getManyAndCount();
+  async getFiles(take: number, skip: number): Promise<[FileResponseDto[], number]> {
+    const [files, count] = await this.fileRepository.createQueryBuilder('file')
+      .take(take)
+      .skip(skip)
+      .getManyAndCount();
     return [files.map(f => this.toResponse(f)), count];
   };
 
@@ -108,16 +111,21 @@ export class FileService {
   }
 
 
-  async updateFile(id: number, updateFileDto: UpdateFileDto): Promise<FileResponseDto> {
+  async updateFile(id: number, updateFileDto: UpdateFileDto, requesterId: number): Promise<FileResponseDto> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const file = await queryRunner.manager.findOne(FileEntity, { where: { id } });
+      const file = await queryRunner.manager.findOne(FileEntity, { where: { id }, relations: ['creator'] });
 
       if (!file) {
         throw new NotFoundException("No file found.");
+      };
+
+      // No RBAC exists — only the file's creator may modify it (including reassigning ownership).
+      if (file.creator.id !== requesterId) {
+        throw new ForbiddenException("Only the file creator can update this file.");
       };
 
       const { title, userId, filePath } = updateFileDto;
@@ -170,11 +178,15 @@ export class FileService {
   }
 
 
-  async deleteFile(id: number): Promise<string> {
-    const file = await this.fileRepository.findOne({ where: { id } });
+  async deleteFile(id: number, requesterId: number): Promise<string> {
+    const file = await this.fileRepository.findOne({ where: { id }, relations: ['creator'] });
 
     if (!file) {
       throw new NotFoundException("No file found.");
+    }
+
+    if (file.creator.id !== requesterId) {
+      throw new ForbiddenException("Only the file creator can delete this file.");
     }
 
     await this.fileRepository.delete(id);

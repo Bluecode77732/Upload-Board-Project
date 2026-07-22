@@ -28,6 +28,7 @@ import { join } from 'node:path';
         REFRESH_TOKEN_SECRET_EXPIRES_IN: Joi.number().required(),
         ACCESS_TOKEN_SECRET_EXPIRES_IN: Joi.number().required(),
         BASE_URL: Joi.string().default('http://localhost:3000'),
+        CORS_ORIGIN: Joi.string(),
       }),
       isGlobal: true,
     }),

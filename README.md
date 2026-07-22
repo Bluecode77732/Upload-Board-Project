@@ -70,15 +70,18 @@ A file upload demonstrating project to handle the mp4 format data.
 **User**
 - `GET /user` - Get all users
 - `GET /user/:id` - Get a user 
-- `POST /user` - Create a user
-- `PATCH /user/:id` - Update a user
-- `PATCH /user/:id` - Delete a user
+- `PATCH /user/:id` - Update a user (self only)
+- `DELETE /user/:id` - Delete a user (self only)
+
+(User creation is `POST /auth/register` — there is no `POST /user`.)
 
 **File Upload**
-- `POST /upload/upload` - Upload video to temp storage
-- `POST /file` - Move file to permanent storage
-- `PATCH /file/:id` - Update file metadata
-- `DELETE /file/:id` - Delete file
+- `POST /upload/attach` - Upload video to temp storage
+- `GET /file` - List files (paginated: `take` 1–100, default 20 / `skip` default 0)
+- `GET /file/:id` - Get file metadata
+- `POST /file/uploadFile` - Move file to permanent storage
+- `PATCH /file/patch/:id` - Update file metadata (creator only)
+- `DELETE /file/delete/:id` - Delete file (creator only)
 
 
 ## Stacks
