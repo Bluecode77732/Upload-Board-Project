@@ -40,7 +40,7 @@ grep -rniE "RbacGuard|GqlTransaction|QueryRunnerDecorator|RateLimitGuard|kickPre
   --include="*.md" *.md ADR/ .env.example
 ```
 
-모든 검색 결과는 다음 세 분류 중 하나로 판정합니다:
+모든 검색 결과는 다음 네 분류 중 하나로 판정합니다:
 
 1. **잔재** — 채팅 프로젝트의 스택/구조를 이 저장소의 것처럼 서술 → **제거**.
 2. **의도적 부정문** — 배제한 기술을 명시하는 가드레일("Never suggest

@@ -24,8 +24,9 @@
 | `dataSource.transaction(cb)` | TypeORM이 begin/commit/rollback/release 관리 | 순수 다중 DB 쓰기, 부수효과 없음 | 허용; 현재 사용처 없음 — 새 순수 DB 사례에 권장 (release 누락 불가능) |
 | `@Transaction()` 데코레이터 | — | — | **금지** (TypeORM 0.3에서 제거) |
 
-rename은 `commitTransaction` *앞에* 둡니다 — 이 설계가 수용하는 최소 분기 창입니다:
-rename 실패는 insert를 롤백시키고, rename 성공 후 커밋 실패만이 분기할 수 있습니다.
+rename은 `commitTransaction` *앞에* 둡니다 — DB와 파일시스템이 어긋날 수 있는 구간을
+이 설계에서 가장 작게 만드는 배치입니다: rename이 실패하면 insert가 롤백되고, rename
+성공 후 커밋이 실패하는 경우에만 어긋남이 생길 수 있습니다.
 
 ## 결과
 

@@ -59,8 +59,8 @@ Verb: short description
 
 ```bash
 pnpm test          # must pass — repository/QueryRunner mocks only, no DB access
-pnpm lint          # runs, but no clean baseline yet (45 errors as of 2026-07-22 —
-                   # see ROADMAP); at minimum, introduce no NEW lint errors
+pnpm lint          # must pass — clean 0-error baseline since 2026-07-22;
+                   # keep it clean, introduce no new lint errors
 ```
 
 - New/changed service logic needs matching `*.spec.ts` coverage (services are the

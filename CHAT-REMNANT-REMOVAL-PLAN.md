@@ -41,7 +41,7 @@ grep -rniE "RbacGuard|GqlTransaction|QueryRunnerDecorator|RateLimitGuard|kickPre
   --include="*.md" *.md ADR/ .env.example
 ```
 
-Every hit is classified into one of three buckets:
+Every hit is classified into one of four buckets:
 
 1. **Remnant** — describes the chat project's stack/structure as if it were this
    repo's → **remove**.
