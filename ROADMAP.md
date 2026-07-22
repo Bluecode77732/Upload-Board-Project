@@ -6,6 +6,19 @@ Decided next steps and known gaps for the Upload Board Project. Priorities follo
 security → decided architecture work → hygiene → docs/tests. Each roadmap item lands
 as its own dedicated, designed change (see [CLAUDE.md](CLAUDE.md) — Scope Discipline).
 
+## Current position (as of 2026-07-23)
+
+The 2026-07-22 hardening run is fully landed: security quick-wins, the zero-error
+lint baseline, the documentation rewrite, and — the last remaining blocker —
+TypeORM migration adoption (`79603ad`, [ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)),
+followed by the Korean fluency pass over the `.ko.md` docs (`dc1ad72`).
+
+On the priority axis above (security → decided architecture work → hygiene →
+docs/tests), the project now sits **at the start of the decided-architecture-work
+phase**: **RBAC (item 1 below) is the next dedicated task**, with no remaining
+dependencies. Quick fixes and the larger unscheduled items stay undated until
+explicitly picked up.
+
 ## Decided roadmap items
 
 ### 1. RBAC
