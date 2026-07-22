@@ -8,9 +8,9 @@
 > English version: [README.md](README.md)
 
 인증된 사용자가 동영상 파일을 업로드하고 관리하는 NestJS REST API.
-JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, 트랜잭션 안전한
-파일 승격, Swagger 문서화. 로컬/포트폴리오 백엔드 프로젝트 — 프론트엔드와 배포
-파이프라인은 없습니다.
+JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, 트랜잭션으로
+보호되는 파일 승격, Swagger 문서화를 갖춘 로컬/포트폴리오 백엔드 프로젝트입니다 —
+프론트엔드와 배포 파이프라인은 없습니다.
 
 - 기간: 6주(초기 구축), 이후 지속 개선
 - 기술: TypeORM, PostgreSQL, 트랜잭션, DTO 검증, Passport, 가드, Jest, Swagger
@@ -20,11 +20,11 @@ JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, 트랜
 | 문서 | 목적 |
 |---|---|
 | [ARCHITECTURE.ko.md](ARCHITECTURE.ko.md) | 모듈 구성, 요청 흐름, 엔티티, 관례 |
-| [ADR/](ADR/README.ko.md) | 아키텍처 결정 기록 — 설계 뒤의 *이유* |
+| [ADR/](ADR/README.ko.md) | 아키텍처 결정 기록 — 설계 이면의 *이유* |
 | [CHANGELOG.ko.md](CHANGELOG.ko.md) | 버전 이력 |
 | [ROADMAP.ko.md](ROADMAP.ko.md) | 확정된 다음 단계와 알려진 공백 |
 | [CONTRIBUTING.ko.md](CONTRIBUTING.ko.md) | 개발 워크플로와 관례 |
-| [CLAUDE.md](CLAUDE.md) | AI 협업 개발의 운영 계약 |
+| [CLAUDE.md](CLAUDE.md) | AI 협업 개발을 위한 운영 규약 |
 
 각 문서에는 영어 원본(`.md`)과 한국어 버전(`.ko.md`)이 있습니다.
 
@@ -32,14 +32,14 @@ JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, 트랜
 
 - **인증** — HTTP Basic 토큰으로 등록/로그인; `type` 클레임을 가진 이중 시크릿
   JWT 액세스/리프레시 쌍 ([ADR 0002](ADR/0002-dual-secret-token-pair.ko.md))
-- **2단계 업로드** — `temp_` → `granted_` 접두사 상태 기계; DB insert와 물리 파일
-  이동이 함께 커밋되거나 함께 롤백
+- **2단계 업로드** — `temp_` → `granted_` 접두사 상태 머신; DB insert와 물리 파일
+  이동이 함께 커밋되거나 함께 롤백됨
   ([ADR 0003](ADR/0003-two-phase-upload-contract.ko.md))
 - **소유권 검사** — 사용자 쓰기는 본인만, 파일 쓰기는 작성자만
   ([ADR 0007](ADR/0007-ownership-checks-without-rbac.ko.md))
 - **경계 검증** — 전역 `ValidationPipe`(`whitelist` + `forbidNonWhitelisted`);
   직렬화된 엔티티는 `password`를 유출하지 않음
-- **Swagger** — `/doc`에서 전체 API 문서와 수동 테스트 벤치 제공
+- **Swagger** — `/doc`에서 전체 API 문서 열람과 수동 테스트 가능
 
 ## 빠른 시작
 
@@ -128,15 +128,15 @@ POST /file/uploadFile (Bearer, { title, filePath: "temp_..." })
   함께 커밋되어야 하는 곳에는 수동 QueryRunner 트랜잭션
   ([ADR 0004](ADR/0004-transaction-pattern-selection.ko.md))
 - **Passport** — `JwtAuthGuard` / `LocalAuthGuard` 뒤의 `jwt`·`local` 전략
-- **Multer** — 서버 생성 파일명(`temp_{uuid}_{timestamp}`)의 디스크 저장
-- **Jest** — 소스 옆의 `*.spec.ts` 단위 테스트; 리포지토리/QueryRunner 모킹, DB 접근 없음
+- **Multer** — 서버가 생성한 파일명(`temp_{uuid}_{timestamp}`)으로 디스크에 저장
+- **Jest** — 소스 파일 옆에 `*.spec.ts`로 배치한 단위 테스트; 리포지토리/QueryRunner 모킹, DB 접근 없음
 - **Swagger** — `/doc`, `persistAuthorization`으로 Bearer 세션 유지
 
 ## 알려진 한계
 
 [ROADMAP.ko.md](ROADMAP.ko.md)에서 추적합니다. 요점: 마이그레이션 도구 부재,
-RBAC 없음(소유권 검사만), 업로드는 크기만 검증하고 mimetype은 미검증,
-`pnpm lint`는 현재 미해결 lint 오류로 실패(깨끗한 기준선 아직 없음).
+RBAC 없음(소유권 검사만), e2e 스위트는 아직 Nest 템플릿 그대로.
+업로드는 mp4/mov/webm 허용 목록을 강제하며 `pnpm lint`는 2026-07-22 기준 클린.
 
 ## 작성자
 

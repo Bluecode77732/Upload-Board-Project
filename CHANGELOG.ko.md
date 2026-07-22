@@ -18,6 +18,21 @@
 
 ## [0.0.1] — 개발 라인
 
+### 2026-07-22 — `da676c0` … `d97916d` (하드닝 & 빠른 수정)
+- **보안**: 런타임 CVE 지적을 `pnpm.overrides`로 핀 고정(`jws ^3.2.3`,
+  `validator ^13.15.22`); `POST /upload/attach`에 mp4/mov/webm mimetype + 확장자
+  허용 목록 강제 (`da676c0`).
+- **수정**: 0 오류 lint 기준선 도달(unsafe-`any` 체인 타입 지정, spec 파일에
+  `unbound-method` 비활성); `GET /file` 목록이 `creator`를 조인해
+  `GET /file/:id`와 일치 (`063ca14`).
+- **수정**: `@nestjs/jwt`를 `devDependencies`에서 `dependencies`로 이동 —
+  AuthModule의 런타임 의존성이며 `--prod` 설치가 더는 깨지지 않음 (`44a0ac9`).
+- **리팩터**: `FileService.uploadFile`/`updateFile` 커밋 후 재조회를 트랜잭션
+  `try` 밖으로 이동하고 명시적 null 가드로 `saved!`/`updated!` 단언 대체
+  (`d97916d`).
+- **문서**: 하드닝 이후 gaps/로드맵 동기화, chat 잔재 제거 계획, `CLAUDE.md`에
+  `.ko.md` 문서 관례 추가 (`dc336ef`, `837fd14`).
+
 ### 2026-07-22 — `0549ca4`, `48ab8b7`, `7bbc6b6`
 - **추가**: 스키마 변경 없는 소유권 검사
   ([ADR 0007](ADR/0007-ownership-checks-without-rbac.ko.md)): `PATCH /user/:id`·

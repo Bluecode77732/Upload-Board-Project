@@ -19,6 +19,21 @@ development line (package.json version).
 
 ## [0.0.1] — development line
 
+### 2026-07-22 — `da676c0` … `d97916d` (hardening & quick fixes)
+- **Security**: runtime CVE findings pinned via `pnpm.overrides` (`jws ^3.2.3`,
+  `validator ^13.15.22`); `POST /upload/attach` now enforces an mp4/mov/webm
+  mimetype + extension allowlist (`da676c0`).
+- **Fixed**: zero-error lint baseline reached (unsafe-`any` chains typed,
+  `unbound-method` disabled for spec files); `GET /file` list now joins `creator`,
+  matching `GET /file/:id` (`063ca14`).
+- **Fixed**: `@nestjs/jwt` moved from `devDependencies` to `dependencies` — it is a
+  runtime dependency of AuthModule; `--prod` installs no longer break (`44a0ac9`).
+- **Refactor**: `FileService.uploadFile`/`updateFile` post-commit re-reads moved
+  outside the transaction `try` with explicit null guards, replacing the
+  `saved!`/`updated!` non-null assertions (`d97916d`).
+- **Docs**: gaps/roadmap sync after the hardening run, chat-remnant removal plan,
+  `.ko.md` documentation convention added to `CLAUDE.md` (`dc336ef`, `837fd14`).
+
 ### 2026-07-22 — `0549ca4`, `48ab8b7`, `7bbc6b6`
 - **Added**: ownership checks, schema-free
   ([ADR 0007](ADR/0007-ownership-checks-without-rbac.md)): `PATCH /user/:id` and
