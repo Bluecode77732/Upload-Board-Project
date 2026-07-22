@@ -166,6 +166,32 @@ Keep it to three lines, one per field — no exceptions for "obvious" files. Thi
 one place a header comment is required regardless of how self-explanatory the file
 seems. Do not retroactively add this header to existing files being edited.
 
+## Documentation Convention (.ko.md 문서 규약)
+
+Every tracked document has a `.ko.md` sibling updated in the same change. This
+applies to all documentation in the repository, present and future — no document is
+exempt. When writing or updating any `.ko.md` document:
+
+- Review the Korean text and **rewrite unnatural Korean** — anything that reads like
+  a word-for-word translation of the English sibling — into natural technical Korean
+  that a Korean developer can read fluently. Translate meaning, not sentence
+  structure: reorder clauses, split or merge sentences, and use established Korean
+  technical phrasing where one exists.
+- Keep the **markdown structure identical** to the English sibling: same heading
+  hierarchy, same list/table layout, same link targets (pointing to the `.ko.md`
+  variants where they exist).
+- Keep **code blocks, identifiers, commands, file paths, and env var names verbatim**
+  — never translate code, API routes, or config keys. Comments inside code blocks
+  follow the surrounding document's language only if the English sibling's comments
+  were prose; command output stays untouched.
+- Widely-used English technical terms (transaction, guard, migration, endpoint 등)
+  may stay in English or use the accepted Korean term — pick whichever reads more
+  naturally in context, and stay consistent within a document.
+- This applies retroactively as a review pass: when touching an existing `.ko.md`
+  for any reason, re-read the whole file and fix unnatural passages in the same
+  change — this is the one sanctioned exception to "no drive-by edits", scoped to
+  Korean fluency only (never content changes the English sibling doesn't have).
+
 ## Never Do — Forbidden Patterns
 These patterns defeat the purpose of TypeScript and cause production failures.
 Violations are grouped by failure class.
