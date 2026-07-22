@@ -24,11 +24,11 @@ Upload Board Project의 결정된 다음 단계와 알려진 미해결 지점. �
 
 ## 빠른 수정 (소규모, 미일정)
 
-- `@nestjs/jwt`를 `devDependencies`에서 `dependencies`로 이동 — AuthModule의
-  런타임 의존성이며, 현재 `--prod` 설치 시 앱이 깨진다.
-- `FileService.uploadFile`/`updateFile`의 커밋 후 재조회 리팩토링: `saved!` /
-  `updated!` non-null 단언을 가드로 교체하고 재조회를 `try` 밖으로 옮겨,
-  조회 실패가 이미 커밋된 트랜잭션의 롤백을 시도하지 않게 한다.
+- 파일을 보유한 사용자의 `DELETE /user/:id` cascade/소유권 이전 정책 결정 —
+  `FileEntity.creator`가 `nullable: false`라 현재는 혼란스러운 FK 제약 500으로
+  드러난다.
+- 라이선스 결정: `package.json`은 `UNLICENSED`, 재작성 전 README는 MIT 주장.
+  저장소 공개 전에 필요하다.
 
 ## 규모 있는 미일정 작업
 
@@ -57,3 +57,5 @@ Upload Board Project의 결정된 다음 단계와 알려진 미해결 지점. �
 | 런타임 CVE 핀 고정 | `pnpm.overrides`로 `jws ^3.2.3`, `validator ^13.15.22` |
 | lint 복구 및 클린 | `typescript-eslint` 추가, 기존 오류 45건 수정, 0 오류 베이스라인 |
 | 문서 동기화 | README 엔드포인트/제약, CLAUDE.md gaps, `.env.example` (`BASE_URL`, `CORS_ORIGIN`) |
+| `@nestjs/jwt` dependencies 이동 | 런타임 사용인데 devDependencies에 있던 문제 — `--prod` 설치가 더는 깨지지 않음 |
+| `saved!`/`updated!` 제거 | `FileService` 커밋 후 재조회를 `try` 밖으로 이동 + null 가드 |

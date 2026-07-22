@@ -655,9 +655,6 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
   ROADMAP.md > Larger unscheduled work
 
 **Known gaps** (documented, not yet scheduled):
-- `@nestjs/jwt` is declared in `devDependencies` but is a runtime dependency
-  (AuthModule) — a production-only install (`pnpm install --prod`) breaks the app;
-  moving it to `dependencies` is a one-line fix awaiting its own change
 - `pnpm audit` still flags dev-transitive vulnerabilities (handlebars via ts-jest;
   glob/minimatch via jest and @nestjs/cli) — build/test-time only, waiting on
   upstream releases. The two runtime findings (jws, validator) were pinned via
@@ -665,10 +662,11 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
 - `test/app.e2e-spec.ts` is the untouched Nest template: it targets `GET /`, which
   does not exist in this app, and booting AppModule needs a live DB — the e2e suite
   needs a real rewrite before it verifies anything
-- `FileService.uploadFile`/`updateFile` still use `saved!`/`updated!` non-null
-  assertions on the post-commit re-read (a Never Do Group 1 deviation). The honest
-  fix moves the re-read out of the `try` so a read failure can't trigger a rollback
-  of an already-committed transaction — a small refactor, not a drive-by edit
+- Deleting a user who owns files hits an FK constraint (`FileEntity.creator` is
+  `nullable: false`; no cascade path on `DELETE /user/:id`) — surfaces as a
+  confusing 500; a cascade/ownership-transfer policy decision is needed first
+- License mismatch: `package.json` says `UNLICENSED` while the pre-rewrite README
+  claimed MIT — needs an explicit decision before the repo is published
 - CORS is opt-in via the optional `CORS_ORIGIN` env var (added 2026-07-22): unset =
   CORS disabled (same-origin/Swagger use); a browser frontend sets a comma-separated
   origin allowlist
@@ -677,7 +675,9 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for
 spec files, `ignoreRestSiblings` enabled); `POST /upload/attach` now enforces an
 mp4/mov/webm mimetype+extension allowlist; `getFiles` joins `creator` and is
-paginated; `.env.example` documents `BASE_URL`; the "300MB" comment is fixed.
+paginated; `.env.example` documents `BASE_URL`; the "300MB" comment is fixed;
+`@nestjs/jwt` moved to `dependencies`; the `saved!`/`updated!` assertions are gone —
+`FileService` post-commit re-reads now live outside the `try` with a null guard.
 
 ## Project Overview
 

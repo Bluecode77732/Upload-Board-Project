@@ -27,11 +27,11 @@ as its own dedicated, designed change (see [CLAUDE.md](CLAUDE.md) — Scope Disc
 
 ## Quick fixes (small, unscheduled)
 
-- Move `@nestjs/jwt` from `devDependencies` to `dependencies` — it is a runtime
-  dependency of AuthModule; a `--prod` install currently breaks the app.
-- Refactor `FileService.uploadFile`/`updateFile` post-commit re-reads: replace the
-  `saved!` / `updated!` non-null assertions with a guard, moving the re-read out of
-  the `try` so a read failure cannot attempt a rollback of a committed transaction.
+- Decide the cascade/ownership-transfer policy for `DELETE /user/:id` when the user
+  owns files — `FileEntity.creator` is `nullable: false`, so today it surfaces as a
+  confusing FK-constraint 500.
+- Decide the license: `package.json` says `UNLICENSED`; the pre-rewrite README
+  claimed MIT. Needed before the repo is published.
 
 ## Larger unscheduled work
 
@@ -61,3 +61,5 @@ as its own dedicated, designed change (see [CLAUDE.md](CLAUDE.md) — Scope Disc
 | Runtime CVE pins | `jws ^3.2.3`, `validator ^13.15.22` via `pnpm.overrides` |
 | Lint restored & clean | `typescript-eslint` added; 45 pre-existing errors fixed; 0 errors baseline |
 | Doc sync | README endpoints/limitations, CLAUDE.md gaps, `.env.example` (`BASE_URL`, `CORS_ORIGIN`) |
+| `@nestjs/jwt` to `dependencies` | Was in devDependencies despite runtime use — `--prod` installs no longer break |
+| `saved!`/`updated!` removed | `FileService` post-commit re-reads moved outside the `try` with a null guard |

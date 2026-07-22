@@ -135,9 +135,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full request and data flow.
 ## Known Limitations
 
 Tracked in [ROADMAP.md](ROADMAP.md). Highlights: no migration tooling yet, no RBAC
-(ownership checks only), `@nestjs/jwt` sits in devDependencies despite runtime use,
-and the e2e suite is still the untouched Nest template. Uploads enforce an
-mp4/mov/webm allowlist and `pnpm lint` is clean as of 2026-07-22.
+(ownership checks only), and the e2e suite is still the untouched Nest template.
+Uploads enforce an mp4/mov/webm allowlist and `pnpm lint` is clean as of 2026-07-22.
 
 ## Author
 
