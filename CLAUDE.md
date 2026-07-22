@@ -258,7 +258,7 @@ const secret = this.configService.getOrThrow<string>('ACCESS_TOKEN_SECRET')
 getFiles(): Promise<FileEntity[]>
 // ✅
 getFiles(take: number, skip: number): Promise<FileEntity[]>
-// (known gap: the current getFiles() is unpaginated — do not copy it into new list endpoints)
+// (the current getFiles(take, skip) + GetFilesDto follows this — new list endpoints must too)
 ```
 
 ### GROUP 3 — Security
@@ -298,8 +298,9 @@ return user  // without serialization
 
 // ❌ File upload without validation → malicious file, storage exhaustion
 @UploadedFile() file: Express.Multer.File  // no limits, no type check
-// ✅ Enforce size limit in FileInterceptor config (current: 100MB); mimetype/extension
-//    validation is a known gap — see Known Gaps & Roadmap; new upload endpoints must include it
+// ✅ Enforce size limit AND a mimetype/extension allowlist in FileInterceptor config —
+//    the existing upload.controller.ts pattern (100MB; mp4/mov/webm); new upload
+//    endpoints must include both. Client-supplied mimetype is an allowlist, not a guarantee
 
 // ❌ Serving user-supplied paths → path traversal
 res.sendFile(req.query.path)
@@ -623,26 +624,34 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
 - RBAC (role column + role-aware guard) — see Architecture Decisions > Auth
 - ~~Ownership checks~~ — **landed 2026-07-22** (commit `0549ca4`): user writes self-only,
   file writes creator-only
+- Chat-project remnant handling — docs audited clean 2026-07-22; pending git-history
+  decision + re-verification trigger. See `CHAT-REMNANT-REMOVAL-PLAN.md` and
+  ROADMAP.md > Larger unscheduled work
 
 **Known gaps** (documented, not yet scheduled):
-- `pnpm lint` runs (the missing `typescript-eslint` devDependency was added
-  2026-07-22) but reports ~45 pre-existing errors: unsafe-`any` chains in
-  `auth.service.ts` / `auth.controller.ts` / `userId.decorator.ts` /
-  `test/app.e2e-spec.ts`, and `unbound-method` on the `expect(mock.method)` pattern
-  used throughout the spec files. Cleanup is explicit-request work — new code must
-  not add new violations, but matching an existing spec-mock pattern is acceptable
-- `POST /upload/attach` validates size only — no mimetype/extension allowlist despite
-  the "video" intent (any file type is accepted; the extension is trusted from
-  `originalname`)
-- `FileService.getFiles()` does not join `creator` (pagination landed 2026-07-22:
-  `take` 1–100 default 20 / `skip` default 0 via `GetFilesDto`)
+- `@nestjs/jwt` is declared in `devDependencies` but is a runtime dependency
+  (AuthModule) — a production-only install (`pnpm install --prod`) breaks the app;
+  moving it to `dependencies` is a one-line fix awaiting its own change
+- `pnpm audit` still flags dev-transitive vulnerabilities (handlebars via ts-jest;
+  glob/minimatch via jest and @nestjs/cli) — build/test-time only, waiting on
+  upstream releases. The two runtime findings (jws, validator) were pinned via
+  `pnpm.overrides` 2026-07-22
+- `test/app.e2e-spec.ts` is the untouched Nest template: it targets `GET /`, which
+  does not exist in this app, and booting AppModule needs a live DB — the e2e suite
+  needs a real rewrite before it verifies anything
+- `FileService.uploadFile`/`updateFile` still use `saved!`/`updated!` non-null
+  assertions on the post-commit re-read (a Never Do Group 1 deviation). The honest
+  fix moves the re-read out of the `try` so a read failure can't trigger a rollback
+  of an already-committed transaction — a small refactor, not a drive-by edit
 - CORS is opt-in via the optional `CORS_ORIGIN` env var (added 2026-07-22): unset =
   CORS disabled (same-origin/Swagger use); a browser frontend sets a comma-separated
   origin allowlist
-- `.env.example` lacks `BASE_URL` (optional, defaults to `http://localhost:3000`)
-- README "Key Endpoints" omits `POST /auth/signin/local` (User/File sections were
-  aligned with real routes 2026-07-22)
-- `upload.controller.ts` comment says "300MB" while the limit is 100MB
+
+**Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
+lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for
+spec files, `ignoreRestSiblings` enabled); `POST /upload/attach` now enforces an
+mp4/mov/webm mimetype+extension allowlist; `getFiles` joins `creator` and is
+paginated; `.env.example` documents `BASE_URL`; the "300MB" comment is fixed.
 
 ## Project Overview
 
@@ -758,6 +767,13 @@ const mockFileRepository = {
   by convention (see Never Do Group 1)
 - Floating promises are warnings in ESLint — but must be awaited or caught by
   convention (see Never Do Group 1)
+- `@typescript-eslint/unbound-method` is off for `*.spec.ts`/`test/` only — jest mocks
+  are plain objects of `jest.fn()`s, so passing their methods unbound to `expect()` is
+  safe there; the rule stays on for `src/` production code
+- `no-unused-vars` runs with `ignoreRestSiblings` — the `const { password, ...rest }`
+  strip pattern (jwt.strategy.ts) is intentional
+- Lint is clean as of 2026-07-22 — `pnpm lint` must stay at 0 errors; do not introduce
+  new suppressions without documenting why
 - File naming: `{name}.{layer}.ts` (`file.service.ts`, `jwt-auth.guard.ts`); folders
   per concern: `dto/`, `entity/`, `guard/`, `strategy/`, `interface/`, `decorator/`
 

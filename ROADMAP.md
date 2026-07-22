@@ -2,69 +2,62 @@
 
 > 한국어 버전: [ROADMAP.ko.md](ROADMAP.ko.md)
 
-Priority tiers, not dates — this is a solo portfolio project with no release schedule.
-Each item lands as its own dedicated task (Scope Discipline in `CLAUDE.md`: no
-drive-by fixes bundled into unrelated changes). Known gaps are documented deviations —
-do **not** replicate them in new code.
+Decided next steps and known gaps for the Upload Board Project. Priorities follow
+security → decided architecture work → hygiene → docs/tests. Each roadmap item lands
+as its own dedicated, designed change (see [CLAUDE.md](CLAUDE.md) — Scope Discipline).
 
-## Recently Landed (2026-07-22, on `dev`)
+## Decided roadmap items
 
-- **Ownership checks** ([ADR 0007](ADR/0007-ownership-checks-without-rbac.md)) —
-  self-only user writes, creator-only file writes (`0549ca4`).
-- **`GET /file` pagination** — `GetFilesDto` (`take` 1–100 default 20, `skip`
-  default 0) (`0549ca4`).
-- **Opt-in CORS** ([ADR 0008](ADR/0008-opt-in-cors.md)) — `CORS_ORIGIN` env var
-  (`0549ca4`).
-- **`pnpm lint` restored** — missing `typescript-eslint` devDependency declared
-  (`48ab8b7`); Prettier applied repo-wide (`7bbc6b6`). ~45 pre-existing lint errors
-  remain (see Known Gaps).
-- **Documentation set** — README rewrite, ARCHITECTURE, CHANGELOG, ROADMAP,
-  CONTRIBUTING, ADR/, with Korean siblings (this change).
+### 1. TypeORM migration adoption
+- **What**: `migration:generate` / `migration:run` scripts, `src/data-source.ts`,
+  `src/migrations/` — replacing the manual "flip `synchronize` locally" workflow.
+- **Why now**: it is the prerequisite for any schema change, including RBAC's `role`
+  column below.
+- **Notes**: the existing dev DB was created manually, so adoption needs a baseline
+  strategy (initial migration marked as applied) — decide it before the first
+  `migration:run`.
 
-## Next (decided 2026-07-22)
+### 2. RBAC
+- **What**: `UserEntity.role` column + role-aware guard/decorator.
+- **Decided design (2026-07-22)**: Chat-project style — three tiers
+  (`user` / `admin` / `superadmin`) plus a `PATCH /user/:id/role` endpoint restricted
+  to superadmin. Ownership checks (landed 2026-07-22) extend to
+  "self **or** admin".
+- **Depends on**: migration adoption (needs the `role` column).
 
-1. **TypeORM migration adoption** ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md))
-   — `migration:generate`/`migration:run` scripts, a `DataSource` CLI config, and
-   `src/migrations/`. Unblocks every schema-touching item below. Until it lands, the
-   schema is applied manually.
-2. **RBAC** — role column on `UserEntity` (schema change → blocked on item 1) plus a
-   role-aware guard composed with `JwtAuthGuard`. Layers on top of the ownership
-   checks, not instead of them.
+## Quick fixes (small, unscheduled)
 
-## Later (candidates, not yet committed to)
+- Move `@nestjs/jwt` from `devDependencies` to `dependencies` — it is a runtime
+  dependency of AuthModule; a `--prod` install currently breaks the app.
+- Refactor `FileService.uploadFile`/`updateFile` post-commit re-reads: replace the
+  `saved!` / `updated!` non-null assertions with a guard, moving the re-read out of
+  the `try` so a read failure cannot attempt a rollback of a committed transaction.
 
-Carried over from the original README's "Scale Up In The Future" list plus gaps found
-during review — each needs an Introduction Analysis (`CLAUDE.md`) before adoption:
+## Larger unscheduled work
 
-- File type validation (mimetype/extension allowlist) — see Known Gaps below; the
-  most security-relevant candidate.
-- Physical file cleanup: delete the disk file when its `FileEntity` row is deleted;
-  sweep orphaned `temp_` files never claimed by `POST /file/uploadFile`.
-- Multi-file upload.
-- Video compression/processing.
-- Progress tracking for large uploads.
-- User-specific storage paths.
-- CI (lint + test on push) — currently no pipeline exists at all.
-- Logging infrastructure (structured logger, error tracking) — currently none.
-- Cloud deploy (AWS was the original candidate) — would reopen
-  [ADR 0005](ADR/0005-local-disk-storage.md) (local disk storage).
+- **E2E test rewrite** — `test/app.e2e-spec.ts` is the untouched Nest template
+  (targets `GET /`, which does not exist) and requires a live DB to boot AppModule.
+  A meaningful suite would cover: auth flow, ownership 403s, pagination, and the
+  `temp_` → `granted_` upload promotion.
+- **Dev-transitive audit findings** — `pnpm audit` still flags handlebars (via
+  ts-jest) and glob/minimatch (via jest, @nestjs/cli). Build/test-time only; waiting
+  on upstream releases. Runtime findings (jws, validator) were pinned via
+  `pnpm.overrides` on 2026-07-22.
+- **Chat-project remnant handling** ([plan](CHAT-REMNANT-REMOVAL-PLAN.md)) — all
+  tracked docs audited 2026-07-22: 0 remnants (hits were deliberate negations, own
+  features, or explicit design references). Pending: git-history decision (old
+  commits still carry the chat-app CLAUDE.md) and the re-verification trigger for
+  new or pasted-in docs.
 
-## Known Gaps (documented, not yet scheduled)
+## Completed (2026-07-22)
 
-| Gap | Detail | Risk |
-|---|---|---|
-| `pnpm lint` fails | Lint runs (restored in `48ab8b7`) but exits with 45 errors / 5 warnings — mostly `unbound-method` in spec files plus `no-unsafe-*`/`no-floating-promises`. Working them down to zero is the remaining task; until then, introduce no new errors | No clean lint baseline |
-| No mimetype/extension validation | `POST /upload/attach` checks size only; extension trusted from `originalname` | Any file type accepted despite the "video" intent |
-| `GET /file` doesn't join `creator` | List responses omit creator info (single-file `GET /file/:id` includes it) | Inconsistent response shape |
-| `.env.example` lacks `BASE_URL` | Optional var (defaults to `http://localhost:3000`) exists in the Joi schema only | Discoverability |
-| `upload.controller.ts` comment says "300MB" | Actual limit is 100,000,000 bytes (100 MB) | Misleading comment |
-| Deleting a user with files hits an FK constraint | `FileEntity.creator` is `nullable: false`; no cascade path defined for `DELETE /user/:id` | Confusing 500 for that case |
-| License mismatch | `package.json` says `UNLICENSED`; the old README claimed MIT | Needs an explicit decision |
-
-## Non-Goals
-
-Per the ADRs, these are settled — do not propose without an explicit request:
-session-based auth or a single JWT secret ([ADR 0002](ADR/0002-dual-secret-token-pair.md));
-S3/CDN/streaming ([ADR 0005](ADR/0005-local-disk-storage.md)); GraphQL/WebSocket/gRPC
-([ADR 0009](ADR/0009-rest-only-api-with-swagger.md)); `synchronize: true`
-([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)).
+| Item | Notes |
+|---|---|
+| Ownership checks | User writes self-only; file writes creator-only (`0549ca4`) |
+| `GET /file` pagination | `GetFilesDto`: `take` 1–100 (default 20), `skip` (default 0) |
+| `getFiles` creator join | List responses now include `creator`, matching `GET /file/:id` |
+| Opt-in CORS | `CORS_ORIGIN` env var; unset = disabled |
+| Upload type allowlist | mp4/mov/webm mimetype + extension filter on `POST /upload/attach` |
+| Runtime CVE pins | `jws ^3.2.3`, `validator ^13.15.22` via `pnpm.overrides` |
+| Lint restored & clean | `typescript-eslint` added; 45 pre-existing errors fixed; 0 errors baseline |
+| Doc sync | README endpoints/limitations, CLAUDE.md gaps, `.env.example` (`BASE_URL`, `CORS_ORIGIN`) |

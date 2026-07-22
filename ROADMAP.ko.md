@@ -2,69 +2,58 @@
 
 > English version: [ROADMAP.md](ROADMAP.md)
 
-날짜가 아니라 우선순위 계층입니다 — 릴리스 일정이 없는 1인 포트폴리오
-프로젝트입니다. 각 항목은 전용 작업으로 진행됩니다(`CLAUDE.md`의 Scope Discipline:
-무관한 변경에 부수 수정을 끼워 넣지 않음). 알려진 공백은 문서화된 이탈이며 —
-새 코드에서 **복제하지 마세요**.
+Upload Board Project의 결정된 다음 단계와 알려진 미해결 지점. 우선순위는
+보안 → 결정된 아키텍처 작업 → 위생 → 문서/테스트 순이며, 각 로드맵 항목은
+독립된 전용 작업으로 진행한다 ([CLAUDE.md](CLAUDE.md) — Scope Discipline 참조).
 
-## 최근 완료 (2026-07-22, `dev`)
+## 결정된 로드맵 항목
 
-- **소유권 검사** ([ADR 0007](ADR/0007-ownership-checks-without-rbac.ko.md)) —
-  사용자 쓰기는 본인만, 파일 쓰기는 작성자만 (`0549ca4`).
-- **`GET /file` 페이지네이션** — `GetFilesDto`(`take` 1–100 기본 20, `skip`
-  기본 0) (`0549ca4`).
-- **Opt-in CORS** ([ADR 0008](ADR/0008-opt-in-cors.ko.md)) — `CORS_ORIGIN`
-  환경변수 (`0549ca4`).
-- **`pnpm lint` 복구** — 누락됐던 `typescript-eslint` 개발 의존성 선언
-  (`48ab8b7`); Prettier 저장소 전체 적용 (`7bbc6b6`). 기존 lint 오류 약 45건은
-  남아 있음(알려진 공백 참조).
-- **문서 세트** — README 재작성, ARCHITECTURE, CHANGELOG, ROADMAP, CONTRIBUTING,
-  ADR/, 한국어 동반 파일 포함(이번 변경).
+### 1. TypeORM 마이그레이션 도입
+- **내용**: `migration:generate` / `migration:run` 스크립트, `src/data-source.ts`,
+  `src/migrations/` — 수동 "`synchronize` 임시 전환" 워크플로 대체.
+- **지금인 이유**: RBAC의 `role` 컬럼을 포함한 모든 스키마 변경의 선행 조건.
+- **참고**: 기존 dev DB는 수동 생성됐으므로 베이스라인 전략(초기 마이그레이션을
+  적용 완료로 표시)을 첫 `migration:run` 전에 결정해야 한다.
 
-## 다음 (2026-07-22 확정)
+### 2. RBAC
+- **내용**: `UserEntity.role` 컬럼 + role 인식 가드/데코레이터.
+- **결정된 설계 (2026-07-22)**: Chat-project 방식 — 3단계
+  (`user` / `admin` / `superadmin`) + superadmin 전용 `PATCH /user/:id/role`
+  엔드포인트. 소유권 검사(2026-07-22 완료)는 "본인 **또는** admin"으로 확장.
+- **의존**: 마이그레이션 도입 (`role` 컬럼 필요).
 
-1. **TypeORM 마이그레이션 도입**
-   ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)) —
-   `migration:generate`/`migration:run` 스크립트, `DataSource` CLI 설정,
-   `src/migrations/`. 아래의 스키마 변경이 필요한 모든 항목의 선행 조건입니다.
-   도입 전까지 스키마는 수동 적용합니다.
-2. **RBAC** — `UserEntity`의 role 컬럼(스키마 변경 → 1번에 막힘) + `JwtAuthGuard`와
-   합성되는 role 인식 가드. 소유권 검사를 대체하지 않고 그 위에 얹힙니다.
+## 빠른 수정 (소규모, 미일정)
 
-## 이후 (후보, 아직 미확정)
+- `@nestjs/jwt`를 `devDependencies`에서 `dependencies`로 이동 — AuthModule의
+  런타임 의존성이며, 현재 `--prod` 설치 시 앱이 깨진다.
+- `FileService.uploadFile`/`updateFile`의 커밋 후 재조회 리팩토링: `saved!` /
+  `updated!` non-null 단언을 가드로 교체하고 재조회를 `try` 밖으로 옮겨,
+  조회 실패가 이미 커밋된 트랜잭션의 롤백을 시도하지 않게 한다.
 
-기존 README의 "Scale Up In The Future" 목록과 검토 중 발견된 공백에서 이관 —
-각각 도입 전 Introduction Analysis(`CLAUDE.md`)가 필요합니다:
+## 규모 있는 미일정 작업
 
-- 파일 타입 검증(mimetype/확장자 허용 목록) — 아래 알려진 공백 참조; 보안상 가장
-  중요한 후보.
-- 물리 파일 정리: `FileEntity` 행 삭제 시 디스크 파일도 삭제;
-  `POST /file/uploadFile`로 소유되지 않은 고아 `temp_` 파일 청소.
-- 다중 파일 업로드.
-- 동영상 압축/처리.
-- 대용량 업로드 진행률 추적.
-- 사용자별 저장 경로.
-- CI(push 시 lint + test) — 현재 파이프라인이 전혀 없음.
-- 로깅 인프라(구조화 로거, 에러 트래킹) — 현재 없음.
-- 클라우드 배포(원래 후보는 AWS) — [ADR 0005](ADR/0005-local-disk-storage.ko.md)
-  (로컬 디스크 저장)를 다시 여는 결정이 됨.
+- **E2E 테스트 재작성** — `test/app.e2e-spec.ts`는 Nest 템플릿 그대로
+  (존재하지 않는 `GET /` 대상)이며 AppModule 부팅에 실DB가 필요하다.
+  의미 있는 스위트라면 인증 흐름, 소유권 403, 페이지네이션,
+  `temp_` → `granted_` 승격을 커버해야 한다.
+- **dev 전이 의존성 audit 지적** — handlebars(ts-jest 경유),
+  glob/minimatch(jest·@nestjs/cli 경유)가 남아 있다. 빌드/테스트 시점 전용이며
+  업스트림 릴리스 대기. 런타임 지적(jws, validator)은 2026-07-22에
+  `pnpm.overrides`로 핀 고정 완료.
+- **Chat 프로젝트 잔재 처리** ([계획서](CHAT-REMNANT-REMOVAL-PLAN.ko.md)) —
+  2026-07-22 전체 추적 문서 검토 완료: 잔재 0건(검색 결과는 의도적 부정문,
+  고유 기능, 명시적 설계 참조뿐). 처리 예정: Git 히스토리 결정(과거 커밋에
+  채팅 앱 CLAUDE.md 잔존) + 신규/붙여넣기 문서 재검증 트리거.
 
-## 알려진 공백 (문서화됨, 미배정)
+## 완료 (2026-07-22)
 
-| 공백 | 상세 | 위험 |
-|---|---|---|
-| `pnpm lint` 실패 | lint는 실행되지만(`48ab8b7`에서 복구) 45 오류 / 5 경고로 종료 — 대부분 spec 파일의 `unbound-method`와 `no-unsafe-*`/`no-floating-promises`. 0으로 줄이는 것이 남은 과제이며, 그전까지 새 오류를 만들지 말 것 | 깨끗한 lint 기준선 부재 |
-| mimetype/확장자 미검증 | `POST /upload/attach`는 크기만 확인; 확장자는 `originalname`을 신뢰 | "video" 의도에도 모든 파일 타입 허용 |
-| `GET /file`이 `creator` 미조인 | 목록 응답에 작성자 정보 없음(단건 `GET /file/:id`에는 있음) | 응답 형태 불일치 |
-| `.env.example`에 `BASE_URL` 없음 | 선택 변수(기본 `http://localhost:3000`)가 Joi 스키마에만 존재 | 발견 가능성 |
-| `upload.controller.ts` 주석 "300MB" | 실제 제한은 100,000,000바이트(100 MB) | 오해 소지 주석 |
-| 파일 보유 사용자 삭제 시 FK 제약 | `FileEntity.creator`는 `nullable: false`; `DELETE /user/:id`에 cascade 경로 없음 | 해당 사례에서 혼란스러운 500 |
-| 라이선스 불일치 | `package.json`은 `UNLICENSED`, 구 README는 MIT 주장 | 명시적 결정 필요 |
-
-## 비목표 (Non-Goals)
-
-ADR로 확정된 사항 — 명시적 요청 없이 제안 금지: 세션 기반 인증·단일 JWT 시크릿
-([ADR 0002](ADR/0002-dual-secret-token-pair.ko.md)); S3/CDN/스트리밍
-([ADR 0005](ADR/0005-local-disk-storage.ko.md)); GraphQL/WebSocket/gRPC
-([ADR 0009](ADR/0009-rest-only-api-with-swagger.ko.md)); `synchronize: true`
-([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)).
+| 항목 | 비고 |
+|---|---|
+| 소유권 검사 | user 쓰기는 본인만, file 쓰기는 creator만 (`0549ca4`) |
+| `GET /file` 페이지네이션 | `GetFilesDto`: `take` 1–100 (기본 20), `skip` (기본 0) |
+| `getFiles` creator join | 목록 응답에 `creator` 포함, `GET /file/:id`와 일치 |
+| Opt-in CORS | `CORS_ORIGIN` 환경변수, 미설정 시 비활성 |
+| 업로드 타입 allowlist | `POST /upload/attach`에 mp4/mov/webm mimetype + 확장자 필터 |
+| 런타임 CVE 핀 고정 | `pnpm.overrides`로 `jws ^3.2.3`, `validator ^13.15.22` |
+| lint 복구 및 클린 | `typescript-eslint` 추가, 기존 오류 45건 수정, 0 오류 베이스라인 |
+| 문서 동기화 | README 엔드포인트/제약, CLAUDE.md gaps, `.env.example` (`BASE_URL`, `CORS_ORIGIN`) |
