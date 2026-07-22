@@ -1,0 +1,197 @@
+# 아키텍처
+
+> English version: [ARCHITECTURE.md](ARCHITECTURE.md)
+
+인증된 사용자의 동영상 파일 업로드·관리를 위한 단일 패키지 NestJS REST API.
+JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, Swagger 문서화.
+프론트엔드·모노레포·배포 파이프라인 없음 — 로컬/포트폴리오 백엔드 프로젝트.
+
+설계 결정과 그 근거는 [ADR/](ADR/)에 기록되어 있습니다. 이 문서는 *현재* 구조를
+설명하며, 예정된 작업은 [ROADMAP.ko.md](ROADMAP.ko.md)에 있습니다.
+
+## 모듈 구성
+
+```
+AppModule
+├── ConfigModule        — 전역, Joi 검증 환경변수 (.env.example이 기준)
+├── TypeOrmModule       — PostgreSQL, synchronize: false, 엔티티: FileEntity, UserEntity
+├── ServeStaticModule   — ./file 폴더를 URL 접두사 /file 로 정적 서빙
+├── AuthModule          — 토큰 전담: Basic 파싱, JWT 발급/검증, Passport 전략
+├── UserModule          — 사용자 CRUD 전담; UserService export (JwtStrategy가 소비)
+├── FileModule          — 파일 *메타데이터* 전담: FileEntity 행 + temp 승격 트랜잭션
+└── UploadModule        — *물리* 파일 전담: Multer diskStorage; 컨트롤러 전용, DB 접근 없음
+```
+
+모듈 책임은 의도적인 SRP 분리입니다(`CLAUDE.md` > Module Responsibility 참조):
+"물리 파일"과 "파일 메타데이터"에 걸친 변경은 설계상 두 모듈의 작업입니다.
+
+### AuthModule (`src/auth/`)
+
+| 라우트 | 인증 | 동작 |
+|---|---|---|
+| `POST /auth/register` | Basic 토큰 | `Basic base64(email:password)` 파싱, 중복 이메일 거부, `HASH_ROUNDS`로 bcrypt 해싱 후 저장 |
+| `POST /auth/signin` | Basic 토큰 | 자격 증명 검증 후 `{ refreshToken, accessToken }` 반환 |
+| `POST /auth/signin/local` | Body 자격 증명 | Passport `local-auth-guard` 전략으로 동일한 토큰 쌍 발급 |
+| `POST /auth/token/refreshaccess` | Bearer 리프레시 토큰 | 리프레시 토큰 검증 후 새 액세스 토큰 반환 |
+
+- `AuthService` (`src/auth/auth.service.ts`): `parseBasicToken`, `parseBearerToken(rawToken, isRefreshToken)`,
+  `validateUser`, `issueToken(user: Pick<UserEntity, 'id'>, isRefreshToken)`, `register`, `signIn`.
+- 액세스·리프레시 토큰은 **별도 시크릿**(`ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET`)으로
+  서명되며 `payload.type: 'access' | 'refresh'`를 담습니다. `parseBearerToken`은 대응하는
+  시크릿으로 검증하고 **동시에** `type` 클레임을 확인하므로, 리프레시 토큰을 액세스 토큰으로
+  재사용할 수 없습니다 ([ADR 0002](ADR/0002-dual-secret-token-pair.ko.md)).
+- 전략: `JwtStrategy`(이름 `"jwt-auth-guard"`, 액세스 토큰 검증, `UserService.findOne`으로
+  사용자 로드 후 `password` 제거), `LocalStrategy`(이름 `"local-auth-guard"`).
+- `JwtModule.register({})`가 비어 있는 것은 의도된 것입니다 — 두 개의 시크릿이 쓰이므로
+  `issueToken`에서 호출별로 시크릿을 공급합니다.
+- `AuthModule`은 `UserService`를 위해 `UserModule`을 import합니다 (`exports`/`imports`를
+  통한 DI — 다른 모듈의 프로바이더를 재선언하지 않음).
+
+### UserModule (`src/user/`)
+
+모든 라우트는 `JwtAuthGuard` 뒤에 있으며, 컨트롤러에 `ClassSerializerInterceptor`가 있어
+`UserEntity.password`(`@Exclude({ toPlainOnly: true })`)는 API 밖으로 나가지 않습니다.
+
+| 라우트 | 동작 |
+|---|---|
+| `GET /user` | 사용자 목록 (`findAndCount`) |
+| `GET /user/:id` | 단일 사용자 또는 404 |
+| `PATCH /user/:id` | **본인만** — 비밀번호 제공 시 `HASH_ROUNDS`로 재해싱 |
+| `DELETE /user/:id` | **본인만** — 하드 삭제 |
+
+- **`POST /user`는 의도적으로 없습니다** — 등록은 `POST /auth/register`입니다.
+- 본인 확인은 `@UserId()`(JWT 신원)와 경로 id를 비교해 불일치 시 `ForbiddenException`을
+  던집니다 ([ADR 0007](ADR/0007-ownership-checks-without-rbac.ko.md)).
+- `@UserId` 데코레이터(`src/user/decorator/userId.decorator.ts`)는 `JwtStrategy.validate`가
+  채운 `request.user.id`를 읽습니다 — 신원은 절대 body에서 오지 않습니다.
+- `UserModule`은 `UserService`를 export하며, 이것이 모듈의 공개 계약입니다
+  (`JwtStrategy`의 토큰 검증에 소비됨).
+
+### FileModule (`src/file/`)
+
+모든 라우트는 `JwtAuthGuard` 뒤에 있습니다.
+
+| 라우트 | 동작 |
+|---|---|
+| `GET /file` | 페이지네이션 목록 — `GetFilesDto`: `take` 1–100(기본 20), `skip` ≥ 0(기본 0) |
+| `GET /file/:id` | 메타데이터 + creator 조인, 없으면 404 |
+| `POST /file/uploadFile` | temp 파일 승격: DB insert + 물리 rename을 한 트랜잭션에서 수행 |
+| `PATCH /file/patch/:id` | **작성자만** — 제목(중복 검사), `granted_` filePath, 소유권 재할당 |
+| `DELETE /file/delete/:id` | **작성자만** — 메타데이터 행 하드 삭제 |
+
+- `FileService.uploadFile` / `updateFile`은 **수동 QueryRunner** 트랜잭션 패턴을 사용합니다
+  (`createQueryRunner → connect → startTransaction → commit/rollback → release`,
+  `release()`는 항상 `finally`). 비-DB 부수효과(물리 `rename`)가 트랜잭션 경계 안에
+  들어가야 하기 때문입니다 ([ADR 0004](ADR/0004-transaction-pattern-selection.ko.md)).
+- 응답은 `FileService.toResponse()`가 `FileResponseDto`로 성형하며, `fileUrl`은
+  `ConfigService`를 통해 `{BASE_URL}/{filePath}`로 조합됩니다. 엔티티에는 표현 로직이
+  없습니다(엔티티의 구 `@Transform` URL은 의도적으로 제거됨).
+
+### UploadModule (`src/upload/`)
+
+| 라우트 | 동작 |
+|---|---|
+| `POST /upload/attach` | multipart 필드 `video` → Multer diskStorage가 `file/temp/temp_{uuid}_{timestamp}.{ext}` 기록, 100 MB 제한, `{ filename }` 반환 |
+
+- 컨트롤러 전용 모듈: 서비스도 DB 접근도 없음 — 설계상 물리 파일 관심사는
+  메타데이터 관심사와 섞이지 않습니다.
+- 알려진 공백: 크기만 검증하며 mimetype/확장자 허용 목록이 아직 없습니다
+  ([ROADMAP.ko.md](ROADMAP.ko.md) 참조).
+
+## 요청 흐름
+
+### 가드 체인
+
+인증 컨트롤러를 제외한 모든 컨트롤러는 클래스 레벨로 가드됩니다:
+
+```
+요청 → JwtAuthGuard (Passport "jwt-auth-guard")
+     → JwtStrategy.validate (UserService.findOne으로 사용자 로드, password 제거)
+     → request.user
+     → 핸들러 (@UserId()가 request.user.id를 읽음)
+```
+
+역할(role)은 없습니다 — 인증된 모든 사용자는 동등합니다. 쓰기 권한은 핸들러/서비스
+레벨의 소유권 기반(본인만 / 작성자만)입니다
+([ADR 0007](ADR/0007-ownership-checks-without-rbac.ko.md)).
+
+### 경계 검증
+
+전역 `ValidationPipe`(`src/main.ts`)는 `transform + whitelist + forbidNonWhitelisted +
+enableImplicitConversion`을 실행합니다 — DTO에 선언되지 않은 요청 필드는 서비스에
+도달하지 않습니다. 서비스는 검증된 입력을 신뢰합니다(경계 전용 검증).
+
+### 2단계 업로드 (`temp_` → `granted_`)
+
+```
+1. POST /upload/attach   (multipart "video")
+      └─ Multer가 file/temp/temp_{uuid}_{ts}.{ext} 기록  → { filename } 반환
+
+2. POST /file/uploadFile { title, filePath: <그 파일명> }
+      └─ FileService.uploadFile, 하나의 QueryRunner 트랜잭션 안에서:
+           a. FileEntity INSERT (filePath를 file/upload/granted_... 로 재작성)
+           b. file/temp/temp_...  →  file/upload/granted_...  물리 rename
+           c. commit  (실패 시 rollback; release()는 finally)
+
+3. 파일은 {BASE_URL}/file/upload/granted_... 로 공개 서빙 (ServeStaticModule)
+   API 응답에서는 FileResponseDto의 fileUrl로 노출.
+```
+
+접두사는 상태 기계입니다: `temp_` = "업로드됐지만 미소유", `granted_` = "DB 행이 소유".
+정적 서빙이 두 폴더 모두를 노출하므로, 접두사가 파일 수명주기 상태의 유일한 표식입니다.
+`UpdateFileDto.filePath`는 `temp_` 값을 거부하고 `granted_` 값만 허용합니다. 파일명은
+서버가 생성(uuid + timestamp)하며 클라이언트는 그것을 되돌려줄 뿐이므로, 클라이언트가
+선택한 경로 조각이 파일시스템에 닿는 일이 없습니다
+([ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)).
+
+## 엔티티 (TypeORM)
+
+```
+UserEntity                          FileEntity
+├── id          PK                  ├── id        PK
+├── email       unique              ├── title     unique
+├── password    @Exclude(toPlain)   ├── filePath  ("file/upload/granted_...")
+├── creator     OneToMany ────────► ├── creator   ManyToOne (nullable: false, cascade: true)
+├── createdAt                       ├── createdAt
+└── updatedAt                       └── updatedAt
+```
+
+- 관계 프로퍼티 이름은 **양쪽 모두** `creator`입니다 — 이 명명을 따르세요.
+- 공유 베이스 엔티티는 없으며 타임스탬프는 엔티티별로 선언됩니다.
+- `FileEntity.creator`는 `nullable: false`입니다 — 파일을 소유한 사용자를 삭제하면
+  FK 제약에 걸립니다(문서화된 하드 삭제 주의점, `CLAUDE.md` > Scope Discipline 참조).
+- 스키마 관리: `synchronize: false`가 커밋되어 있으며, TypeORM 마이그레이션 도입
+  전까지 스키마는 수동 적용합니다
+  ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)).
+
+## 설정
+
+- 모든 환경변수는 `src/app.module.ts`에서 Joi로 시작 시 검증됩니다. 누락 시 부팅에서 throw.
+- 접근은 `ConfigService`로만 합니다(필수는 `getOrThrow`, 선택은 기본값과 함께 `get`) —
+  `process.env` 직접 접근 금지.
+- 선택 변수: `BASE_URL`(기본 `http://localhost:3000`), `CORS_ORIGIN`
+  (미설정 = CORS 비활성; 설정 시 콤마 구분 허용 목록 —
+  [ADR 0008](ADR/0008-opt-in-cors.ko.md)).
+- 새 환경변수는 같은 변경에서 Joi 스키마와 `.env.example` **둘 다** 갱신해야 합니다.
+
+## API 문서화
+
+REST 전용이며 `/doc`의 Swagger로 문서화됩니다(`persistAuthorization: true`)
+([ADR 0009](ADR/0009-rest-only-api-with-swagger.ko.md)). 모든 컨트롤러는 `@ApiTags`,
+보호된 컨트롤러는 `@ApiBearerAuth`, Basic 토큰 엔드포인트는 `@ApiBasicAuth`를 답니다.
+
+## 테스트
+
+- 단위 테스트는 소스 옆의 `*.spec.ts`이며, Jest 설정은 `package.json`에 내장
+  (`roots: ["src"]`). 커버리지는 **서비스만** 측정합니다(컨트롤러·가드·전략·DTO·엔티티·
+  모듈은 `coveragePathIgnorePatterns`로 제외).
+- `fs/promises`는 `jest.mock('fs/promises')`, `bcrypt`는 `jest.mock('bcrypt')`로 모킹.
+- QueryRunner는 `jest.fn()`으로 이루어진 평범한 객체로 모킹하고, 모킹된 `DataSource`가
+  이를 반환합니다.
+- 테스트에서 DB 직접 접근은 금지 — 리포지토리 모킹만 사용.
+
+## 존재하지 않는 인프라 (가정 금지)
+
+- CI 워크플로, Dockerfile, git hook, 배포 대상 없음.
+- 로깅 인프라 없음(winston 없음, Nest `Logger` 미사용, 에러 트래킹 없음).
+- TypeORM 마이그레이션 도구 아직 없음(도입은 확정된 로드맵 항목).

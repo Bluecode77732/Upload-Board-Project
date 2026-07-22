@@ -1,0 +1,101 @@
+# 변경 이력
+
+> English version: [CHANGELOG.md](CHANGELOG.md)
+
+형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따릅니다. 아직
+버전 태그가 없으므로, 이력은 초기 `0.0.1` 개발 라인(package.json 버전) 아래에
+커밋 날짜별로 묶었습니다.
+
+> **재구성 안내**: 2026-07-22까지의 항목은 git 이력에서 사후 재구성했습니다(커밋
+> 해시 병기). 커밋 메시지가 불충분한 경우 diff가 실제로 보여주는 내용을
+> 기술했습니다.
+
+## [Unreleased]
+
+### 추가
+- 문서 세트: `README.md` 재작성, 신규 `ARCHITECTURE.md`, `CHANGELOG.md`,
+  `ROADMAP.md`, `CONTRIBUTING.md`, `ADR/`(9건) — 각각 한국어 `.ko.md` 동반.
+
+## [0.0.1] — 개발 라인
+
+### 2026-07-22 — `0549ca4`, `48ab8b7`, `7bbc6b6`
+- **추가**: 스키마 변경 없는 소유권 검사
+  ([ADR 0007](ADR/0007-ownership-checks-without-rbac.ko.md)): `PATCH /user/:id`·
+  `DELETE /user/:id`는 본인만, `PATCH /file/patch/:id`·`DELETE /file/delete/:id`는
+  작성자만 가능(불일치 시 `ForbiddenException`).
+- **추가**: 새 `GetFilesDto`를 통한 `GET /file` 페이지네이션 — `take` 1–100
+  (기본 20), `skip` ≥ 0(기본 0); 무페이지네이션 목록이라는 알려진 공백 해소.
+- **추가**: opt-in CORS ([ADR 0008](ADR/0008-opt-in-cors.ko.md)): 선택적
+  `CORS_ORIGIN` 환경변수(콤마 구분 허용 목록); 미설정 시 CORS 비활성 유지.
+  Joi 스키마와 `.env.example`에 추가.
+- **변경**: 테스트 스위트를 현재 서비스 시그니처에 맞춤; `bcrypt`는
+  `jest.mock('bcrypt')`로 모킹; 삭제된 `UserService.create` 테스트 제거
+  (30개 테스트 통과).
+- **변경**: README 엔드포인트 목록을 실제 라우트로 수정(`POST /user` 없음).
+- **수정**: `pnpm lint` 복구 — `eslint.config.mjs`가 import하는 통합
+  `typescript-eslint` 패키지를 `devDependencies`에 선언; lint가 다시 실행되며
+  기존 오류 약 45건은 알려진 공백으로 유지 ([ROADMAP.ko.md](ROADMAP.ko.md) 참조).
+- **스타일**: 복구된 `pnpm lint --fix`로 Prettier 저장소 전체 적용;
+  `CLAUDE.md` 로드맵 동기화(소유권 검사 완료 표시).
+
+### 2026-07-22 — `f3fff1c`
+- `CLAUDE.md`를 저장소 특화 운영 계약으로 재작성(이전에는 범용).
+- **수정**: `@UserId` 데코레이터가 이제 JWT가 채운 `request.user.id`를 읽고, 인증된
+  사용자가 없으면 `UnauthorizedException`을 던짐 — 요청 페이로드로 신원을 위장할
+  수 없게 됨.
+- 로드맵 결정 기록: 마이그레이션 도입, 소유권 검사, RBAC
+  ([ROADMAP.ko.md](ROADMAP.ko.md) 참조).
+
+### 2026-06-16 — `c8eb19f`, `4d00bc2`
+- `CLAUDE.md` 추가(초기 AI 협업 지침).
+- **리팩터 (SOLID & NestJS 원칙)**:
+  - DI 수정: `AuthModule`이 자체 `providers[]`에 `UserService`를 재선언하는 대신
+    `UserModule`을 import.
+  - `FileResponseDto` + `FileService.toResponse()` 추가 — 공개 파일 URL을 엔티티의
+    하드코딩 `@Transform` 대신 `BASE_URL`(신규 선택 환경변수)로 조합.
+  - 엔티티 정리: 중복 `FileEntity.user` / `UserEntity.files` 관계 쌍과 엔티티
+    레벨 표현 데코레이터 제거.
+  - `UserService.create` 제거(등록은 `POST /auth/register`만);
+    `UserService.update`가 설정된 `HASH_ROUNDS`로 재해싱(이전엔 하드코딩 salt).
+  - 타입 안전성: `issueToken`을 `Pick<UserEntity, 'id'>`로 좁힘; local 로그인
+    요청 타입 지정; 여러 `any` 제거.
+
+### 2026-04-14 — `2f2fc99`
+- **변경**: `app.module.ts`의 `synchronize`를 `true` → `false`로 전환 — 부팅 시
+  스키마 자동 변경이 더 이상 일어나지 않음
+  ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md) 참조).
+
+### 2026-03-24 — `d1e830d`
+- **제거**: `GET /auth/profile` 엔드포인트(사용되지 않는 role 실험 잔재).
+- 사소한 `FileService` 정리.
+
+### 2026-03-17 — `3d4d5c1`, `595e7fb`
+- **제거**: 자리표시자 `upload.controller.spec.ts`.
+- 인증 컨트롤러/서비스와 `main.ts` 정리; README 갱신.
+
+### 2026-01-05 — `8b3b633`
+- README 편집(커밋 메시지: "few changes" — diff는 README만 변경).
+
+### 2025-12-27 — `6528b96`
+- README 편집(한 줄).
+
+### 2025-12-19 — `283e9ab`, `88b327a`
+- **수정**: 파일 제목 중복 오류 — `updateFile`이 적용 전에 기존 제목 존재를 확인.
+- `FileEntity`에 `@IsString`/`@IsNotEmpty` 검증 데코레이터 추가; `FileService`
+  주석 정리.
+- `file/temp` / `file/upload`에 커밋됐던 샘플 미디어 제거(참고: `88b327a`의
+  메시지는 "swagger additional update"이지만 diff는 추적된 미디어 제거만 포함).
+
+### 2025-12-18 — `0a77627`
+- `.env.example` 추가; README 정리.
+
+### 2025-12-17 — `434c2bc`
+- **초기 애플리케이션**: 4개 모듈의 NestJS 앱 —
+  - `AuthModule`: Basic 토큰 등록/로그인, `type` 클레임을 가진 이중 시크릿 JWT 쌍,
+    `jwt`/`local` Passport 전략, 리프레시 엔드포인트.
+  - `UserModule`: `JwtAuthGuard` 뒤의 사용자 CRUD, bcrypt 해싱, `@Exclude` 비밀번호.
+  - `FileModule`: 파일 메타데이터 CRUD; 수동 QueryRunner 트랜잭션 안의 2단계
+    `temp_` → `granted_` 승격.
+  - `UploadModule`: 서버 생성 이름의 `file/temp` Multer diskStorage, 100 MB 제한.
+  - Joi 검증 설정, `file/` 위의 `ServeStaticModule`, `/doc`의 Swagger, 세 서비스의
+    Jest 단위 테스트.
