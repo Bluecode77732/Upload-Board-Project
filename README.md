@@ -56,11 +56,11 @@ cp .env.example .env        # then fill in DB credentials and token secrets
 #      file/temp/    (temporary uploads)
 #      file/upload/  (promoted files)
 
-# 4. Create the database schema
-#    No migration tooling yet (see ADR 0006): create the database named in
-#    DB_DATABASE, then EITHER apply the schema manually, OR temporarily set
-#    synchronize: true in src/app.module.ts for the first local boot and flip
-#    it back to false. (Transitional guidance — dies with migration adoption.)
+# 4. Create the database, then apply the schema via migrations (ADR 0006)
+#    Create the database named in DB_DATABASE (createdb / pgAdmin), then:
+#      pnpm migration:run
+#    If your database already carries the schema from the pre-migration era:
+#      pnpm migration:run -- --fake     # marks the baseline as applied, once
 
 # 5. Run the dev server (port 3000)
 pnpm run start:dev

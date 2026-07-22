@@ -95,8 +95,9 @@ All routes behind `JwtAuthGuard`.
 
 - Controller-only module: no service, no DB access — by design, physical-file concerns
   never touch metadata concerns.
-- Known gap: only size is validated; there is no mimetype/extension allowlist yet
-  (see [ROADMAP.md](ROADMAP.md)).
+- Uploads enforce an mp4/mov/webm mimetype **and** extension allowlist via Multer's
+  `fileFilter` (both values are client-supplied — an allowlist against misuse, not a
+  content guarantee).
 
 ## Request Flow
 
@@ -160,8 +161,10 @@ UserEntity                          FileEntity
 - No shared base entity; timestamps are declared per entity.
 - `FileEntity.creator` is `nullable: false` — deleting a user who still owns files will
   hit an FK constraint (documented hard-delete caveat, see `CLAUDE.md` > Scope Discipline).
-- Schema management: `synchronize: false` is committed; the schema is applied manually
-  until TypeORM migrations are adopted ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)).
+- Schema management: `synchronize: false` is committed; schema changes ship as TypeORM
+  migrations — CLI DataSource `src/data-source.ts`, migrations in `src/migrations/`
+  (baseline `InitialSchema`), applied via `pnpm migration:run`
+  ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)).
 
 ## Configuration
 
@@ -192,4 +195,3 @@ protected controllers `@ApiBearerAuth`; Basic-token endpoints `@ApiBasicAuth`.
 
 - No CI workflow, no Dockerfile, no git hooks, no deploy target.
 - No logging infrastructure (no winston, no Nest `Logger` usage, no error tracking).
-- No TypeORM migration tooling yet (adoption is a decided roadmap item).

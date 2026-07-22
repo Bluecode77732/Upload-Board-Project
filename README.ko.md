@@ -56,11 +56,11 @@ cp .env.example .env        # DB 자격 증명과 토큰 시크릿을 채워 넣
 #      file/temp/    (임시 업로드)
 #      file/upload/  (승격된 파일)
 
-# 4. 데이터베이스 스키마 생성
-#    마이그레이션 도구가 아직 없습니다 (ADR 0006 참조): DB_DATABASE에 지정한
-#    데이터베이스를 만든 뒤, 스키마를 수동 적용하거나, 첫 로컬 부팅에서만
-#    src/app.module.ts의 synchronize를 true로 켰다가 다시 false로 되돌립니다.
-#    (과도기 지침 — 마이그레이션 도입과 함께 사라짐)
+# 4. 데이터베이스 생성 후 마이그레이션으로 스키마 적용 (ADR 0006)
+#    DB_DATABASE에 지정한 데이터베이스를 만든 뒤(createdb / pgAdmin):
+#      pnpm migration:run
+#    마이그레이션 도입 이전의 스키마를 이미 가진 데이터베이스라면:
+#      pnpm migration:run -- --fake     # 베이스라인을 적용 완료로 표시(1회)
 
 # 5. 개발 서버 실행 (포트 3000)
 pnpm run start:dev

@@ -17,7 +17,11 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "migration:generate": "pnpm build && typeorm migration:generate -d dist/data-source.js",
+    "migration:run": "pnpm build && typeorm migration:run -d dist/data-source.js",
+    "migration:revert": "pnpm build && typeorm migration:revert -d dist/data-source.js",
+    "migration:show": "pnpm build && typeorm migration:show -d dist/data-source.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -96,6 +100,8 @@
     ],
     "coveragePathIgnorePatterns": [
       "main.ts",
+      "data-source.ts",
+      "/migrations/",
       "module.ts",
       "dto.ts",
       "entity.ts",

@@ -41,7 +41,7 @@ Do not make any of the following unless explicitly requested:
 - Unrelated refactors or code cleanups
 - Architectural changes
 - New dependency additions — confirm via pnpm before installing; check license type (MIT/Apache-2/BSD preferred); runtime-bundled GPL/AGPL carries copyleft risk — note this before adding. Run `pnpm audit` for known CVEs.
-- Schema changes — if an entity change is needed, describe the required column/relation change in plain text and stop. Migration tooling adoption is a **decided roadmap item** (see Architecture Decisions > Database) but its introduction is its own explicit task — do not bootstrap `migration:*` scripts or a `DataSource` CLI config as a side effect of another change. Until it lands, the schema is applied manually.
+- Schema changes — if an entity change is needed, describe the required column/relation change in plain text and stop. Migration tooling exists (adopted 2026-07-22: `migration:*` scripts + `src/data-source.ts` + `src/migrations/`) — never run `migration:generate` without a prior plain-text description, and always review its output line-by-line before running. The baseline migration uses readable constraint names (not TypeORM hashes), so `generate` may emit spurious constraint-rename statements — strip them, keep only the intended change.
 - Large-scale formatting edits
 - Permanent data deletion paths (hard-delete service methods, cascade-delete relations) — `UserService.remove` and `FileService.deleteFile` are hard deletes; before adding another, describe the cascade depth (`FileEntity.creator` is `nullable: false` — deleting a user with files will hit an FK constraint) and confirm the operation is intentionally irreversible before writing any code
 
@@ -603,12 +603,16 @@ Do not suggest alternatives to these decisions without explicit request.
 
 ### Database (PostgreSQL + TypeORM)
 - `synchronize: false` is committed and stays that way
-- Schema policy (decided 2026-07-22): **TypeORM migrations will be adopted** —
-  `migration:generate`/`migration:run` scripts + `src/migrations/`. Until that task
-  lands, the schema is applied manually (the README's "temporarily flip `synchronize`
-  locally" guidance is transitional and dies with migration adoption). Once migrations
-  exist: entity change requests are described in plain text first (Scope Discipline),
-  and `migration:generate` output is always reviewed line-by-line before running
+- Schema policy: **TypeORM migrations adopted 2026-07-22** — `migration:generate` /
+  `migration:run` / `migration:revert` / `migration:show` scripts run against the
+  compiled `dist/data-source.js` (each script builds first). `src/data-source.ts` is
+  the CLI DataSource — the one sanctioned place env vars are read directly (outside
+  the Nest DI container, so no ConfigService; see its header comment).
+  Baseline: `src/migrations/1784678400000-InitialSchema.ts` captures the previously
+  manual schema — fresh DB: `pnpm migration:run`; a pre-existing manually-created DB:
+  `pnpm migration:run -- --fake` once to mark it applied. Entity change requests are
+  described in plain text first (Scope Discipline), and `migration:generate` output is
+  always reviewed line-by-line before running
 - Entities registered explicitly in `app.module.ts` (`entities: [...]`) AND
   `autoLoadEntities: true` — keep both in sync when adding an entity (requires
   approval: high-blast-radius)
@@ -635,7 +639,9 @@ Do not suggest alternatives to these decisions without explicit request.
 ### Config
 - All env vars Joi-validated at startup (`app.module.ts`); missing vars throw on boot
 - Access via `ConfigService` only — `getOrThrow` for required values, `get` with
-  default for optional (`BASE_URL`)
+  default for optional (`BASE_URL`). Sole exception: `src/data-source.ts` (TypeORM
+  CLI, runs outside the DI container) reads `process.env` directly — documented in
+  its header; do not add a second exception
 - `DB_TYPE` must be `"postgres"`; `ENV` is `'dev' | 'prod'`
 - New env var = Joi schema entry + `.env.example` entry, in the same change
 
@@ -645,9 +651,11 @@ Documented deviations between the rules above and the current code. Do not repli
 these patterns in new code; fixing them is explicit-request work, not drive-by cleanup.
 
 **Decided roadmap items** (each lands as its own dedicated task — decided 2026-07-22):
-- TypeORM migration adoption (`migration:generate`/`migration:run` + `src/migrations/`)
-  — see Architecture Decisions > Database
-- RBAC (role column + role-aware guard) — see Architecture Decisions > Auth
+- ~~TypeORM migration adoption~~ — **landed 2026-07-22**: `migration:*` scripts,
+  `src/data-source.ts`, baseline `InitialSchema` migration — see Architecture
+  Decisions > Database
+- RBAC (role column + role-aware guard) — see Architecture Decisions > Auth;
+  now unblocked (the `role` column ships as a reviewed migration)
 - ~~Ownership checks~~ — **landed 2026-07-22** (commit `0549ca4`): user writes self-only,
   file writes creator-only
 - Chat-project remnant handling — docs audited clean 2026-07-22; pending git-history
@@ -697,6 +705,10 @@ pnpm run format       # Prettier over src/ and test/
 pnpm test             # Unit tests (Jest, config in package.json)
 pnpm run test:cov     # Coverage report (./coverage)
 pnpm run test:e2e     # E2E tests (test/jest-e2e.json)
+pnpm migration:run    # Apply pending migrations (builds first, runs dist/data-source.js)
+pnpm migration:generate -- src/migrations/Name   # Diff entities vs DB (review output line-by-line)
+pnpm migration:revert # Revert the last applied migration
+pnpm migration:show   # List applied/pending migrations
 ```
 
 ### Targeting a single test file

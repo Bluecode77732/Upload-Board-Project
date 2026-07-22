@@ -83,7 +83,7 @@ AppModule
   (`createQueryRunner → connect → startTransaction → commit/rollback → release`,
   `release()`는 항상 `finally`). 비-DB 부수효과(물리 `rename`)가 트랜잭션 경계 안에
   들어가야 하기 때문입니다 ([ADR 0004](ADR/0004-transaction-pattern-selection.ko.md)).
-- 응답은 `FileService.toResponse()`가 `FileResponseDto`로 성형하며, `fileUrl`은
+- 응답은 `FileService.toResponse()`가 `FileResponseDto`로 변환하며, `fileUrl`은
   `ConfigService`를 통해 `{BASE_URL}/{filePath}`로 조합됩니다. 엔티티에는 표현 로직이
   없습니다(엔티티의 구 `@Transform` URL은 의도적으로 제거됨).
 
@@ -95,8 +95,9 @@ AppModule
 
 - 컨트롤러 전용 모듈: 서비스도 DB 접근도 없음 — 설계상 물리 파일 관심사는
   메타데이터 관심사와 섞이지 않습니다.
-- 알려진 공백: 크기만 검증하며 mimetype/확장자 허용 목록이 아직 없습니다
-  ([ROADMAP.ko.md](ROADMAP.ko.md) 참조).
+- 업로드는 Multer `fileFilter`로 mp4/mov/webm의 mimetype **및** 확장자 허용 목록을
+  강제합니다(두 값 모두 클라이언트가 보내는 것이므로, 오남용을 걸러내는 허용
+  목록이지 내용물 보증은 아닙니다).
 
 ## 요청 흐름
 
@@ -137,7 +138,7 @@ enableImplicitConversion`을 실행합니다 — DTO에 선언되지 않은 요�
    API 응답에서는 FileResponseDto의 fileUrl로 노출.
 ```
 
-접두사는 상태 기계입니다: `temp_` = "업로드됐지만 미소유", `granted_` = "DB 행이 소유".
+접두사는 상태 머신입니다: `temp_` = "업로드됐지만 미소유", `granted_` = "DB 행이 소유".
 정적 서빙이 두 폴더 모두를 노출하므로, 접두사가 파일 수명주기 상태의 유일한 표식입니다.
 `UpdateFileDto.filePath`는 `temp_` 값을 거부하고 `granted_` 값만 허용합니다. 파일명은
 서버가 생성(uuid + timestamp)하며 클라이언트는 그것을 되돌려줄 뿐이므로, 클라이언트가
@@ -160,8 +161,9 @@ UserEntity                          FileEntity
 - 공유 베이스 엔티티는 없으며 타임스탬프는 엔티티별로 선언됩니다.
 - `FileEntity.creator`는 `nullable: false`입니다 — 파일을 소유한 사용자를 삭제하면
   FK 제약에 걸립니다(문서화된 하드 삭제 주의점, `CLAUDE.md` > Scope Discipline 참조).
-- 스키마 관리: `synchronize: false`가 커밋되어 있으며, TypeORM 마이그레이션 도입
-  전까지 스키마는 수동 적용합니다
+- 스키마 관리: `synchronize: false`가 커밋되어 있으며, 스키마 변경은 TypeORM
+  마이그레이션으로 배포합니다 — CLI DataSource `src/data-source.ts`,
+  `src/migrations/`(베이스라인 `InitialSchema`), 적용은 `pnpm migration:run`
   ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)).
 
 ## 설정
@@ -194,4 +196,3 @@ REST 전용이며 `/doc`의 Swagger로 문서화됩니다(`persistAuthorization:
 
 - CI 워크플로, Dockerfile, git hook, 배포 대상 없음.
 - 로깅 인프라 없음(winston 없음, Nest `Logger` 미사용, 에러 트래킹 없음).
-- TypeORM 마이그레이션 도구 아직 없음(도입은 확정된 로드맵 항목).

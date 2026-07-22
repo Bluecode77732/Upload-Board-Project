@@ -13,6 +13,13 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- TypeORM migration adoption ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)):
+  `migration:generate`/`run`/`revert`/`show` scripts (run against the compiled
+  `dist/data-source.js`), CLI DataSource `src/data-source.ts` (env via Node's
+  built-in `process.loadEnvFile()` — no dotenv dependency), and baseline
+  `src/migrations/1784678400000-InitialSchema.ts`. Fresh DB: `pnpm migration:run`;
+  pre-existing manually-created DB: `pnpm migration:run -- --fake` once.
+  Replaces the manual "flip `synchronize` locally" workflow; unblocks RBAC.
 - Documentation set: rewritten `README.md`, new `ARCHITECTURE.md`, `CHANGELOG.md`,
   `ROADMAP.md`, `CONTRIBUTING.md`, `ADR/` (9 records) — each with a Korean `.ko.md`
   sibling.

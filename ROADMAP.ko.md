@@ -8,37 +8,31 @@ Upload Board Project의 결정된 다음 단계와 알려진 미해결 지점. �
 
 ## 결정된 로드맵 항목
 
-### 1. TypeORM 마이그레이션 도입
-- **내용**: `migration:generate` / `migration:run` 스크립트, `src/data-source.ts`,
-  `src/migrations/` — 수동 "`synchronize` 임시 전환" 워크플로 대체.
-- **지금인 이유**: RBAC의 `role` 컬럼을 포함한 모든 스키마 변경의 선행 조건.
-- **참고**: 기존 dev DB는 수동 생성됐으므로 베이스라인 전략(초기 마이그레이션을
-  적용 완료로 표시)을 첫 `migration:run` 전에 결정해야 한다.
-
-### 2. RBAC
+### 1. RBAC
 - **내용**: `UserEntity.role` 컬럼 + role 인식 가드/데코레이터.
 - **결정된 설계 (2026-07-22)**: Chat-project 방식 — 3단계
   (`user` / `admin` / `superadmin`) + superadmin 전용 `PATCH /user/:id/role`
   엔드포인트. 소유권 검사(2026-07-22 완료)는 "본인 **또는** admin"으로 확장.
-- **의존**: 마이그레이션 도입 (`role` 컬럼 필요).
+- **의존**: 마이그레이션 도입 — **2026-07-22 충족**; `role` 컬럼은
+  `src/migrations/`의 검토된 마이그레이션으로 배포한다.
 
 ## 빠른 수정 (소규모, 미일정)
 
 - 파일을 보유한 사용자의 `DELETE /user/:id` cascade/소유권 이전 정책 결정 —
-  `FileEntity.creator`가 `nullable: false`라 현재는 혼란스러운 FK 제약 500으로
-  드러난다.
-- 라이선스 결정: `package.json`은 `UNLICENSED`, 재작성 전 README는 MIT 주장.
-  저장소 공개 전에 필요하다.
+  `FileEntity.creator`가 `nullable: false`라 현재는 원인을 알기 어려운 FK 제약
+  500 오류로 나타난다.
+- 라이선스 결정: `package.json`은 `UNLICENSED`인데 재작성 전 README는 MIT라고
+  표기했었다. 저장소 공개 전에 결정이 필요하다.
 
 ## 규모 있는 미일정 작업
 
 - **E2E 테스트 재작성** — `test/app.e2e-spec.ts`는 Nest 템플릿 그대로
-  (존재하지 않는 `GET /` 대상)이며 AppModule 부팅에 실DB가 필요하다.
+  (존재하지 않는 `GET /` 대상)이며 AppModule 부팅에 실제 DB가 필요하다.
   의미 있는 스위트라면 인증 흐름, 소유권 403, 페이지네이션,
   `temp_` → `granted_` 승격을 커버해야 한다.
-- **dev 전이 의존성 audit 지적** — handlebars(ts-jest 경유),
+- **dev 전이 의존성 audit 경고** — handlebars(ts-jest 경유),
   glob/minimatch(jest·@nestjs/cli 경유)가 남아 있다. 빌드/테스트 시점 전용이며
-  업스트림 릴리스 대기. 런타임 지적(jws, validator)은 2026-07-22에
+  업스트림 릴리스 대기. 런타임 경고(jws, validator)는 2026-07-22에
   `pnpm.overrides`로 핀 고정 완료.
 - **Chat 프로젝트 잔재 처리** ([계획서](CHAT-REMNANT-REMOVAL-PLAN.ko.md)) —
   2026-07-22 전체 추적 문서 검토 완료: 잔재 0건(검색 결과는 의도적 부정문,
@@ -59,3 +53,4 @@ Upload Board Project의 결정된 다음 단계와 알려진 미해결 지점. �
 | 문서 동기화 | README 엔드포인트/제약, CLAUDE.md gaps, `.env.example` (`BASE_URL`, `CORS_ORIGIN`) |
 | `@nestjs/jwt` dependencies 이동 | 런타임 사용인데 devDependencies에 있던 문제 — `--prod` 설치가 더는 깨지지 않음 |
 | `saved!`/`updated!` 제거 | `FileService` 커밋 후 재조회를 `try` 밖으로 이동 + null 가드 |
+| TypeORM 마이그레이션 도입 | `migration:*` 스크립트, `src/data-source.ts`, 베이스라인 `InitialSchema`; 기존 DB는 `pnpm migration:run -- --fake` 1회 ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)) |

@@ -8,22 +8,14 @@ as its own dedicated, designed change (see [CLAUDE.md](CLAUDE.md) — Scope Disc
 
 ## Decided roadmap items
 
-### 1. TypeORM migration adoption
-- **What**: `migration:generate` / `migration:run` scripts, `src/data-source.ts`,
-  `src/migrations/` — replacing the manual "flip `synchronize` locally" workflow.
-- **Why now**: it is the prerequisite for any schema change, including RBAC's `role`
-  column below.
-- **Notes**: the existing dev DB was created manually, so adoption needs a baseline
-  strategy (initial migration marked as applied) — decide it before the first
-  `migration:run`.
-
-### 2. RBAC
+### 1. RBAC
 - **What**: `UserEntity.role` column + role-aware guard/decorator.
 - **Decided design (2026-07-22)**: Chat-project style — three tiers
   (`user` / `admin` / `superadmin`) plus a `PATCH /user/:id/role` endpoint restricted
   to superadmin. Ownership checks (landed 2026-07-22) extend to
   "self **or** admin".
-- **Depends on**: migration adoption (needs the `role` column).
+- **Depends on**: migration adoption — **satisfied 2026-07-22**; the `role` column
+  ships as a reviewed migration in `src/migrations/`.
 
 ## Quick fixes (small, unscheduled)
 
@@ -63,3 +55,4 @@ as its own dedicated, designed change (see [CLAUDE.md](CLAUDE.md) — Scope Disc
 | Doc sync | README endpoints/limitations, CLAUDE.md gaps, `.env.example` (`BASE_URL`, `CORS_ORIGIN`) |
 | `@nestjs/jwt` to `dependencies` | Was in devDependencies despite runtime use — `--prod` installs no longer break |
 | `saved!`/`updated!` removed | `FileService` post-commit re-reads moved outside the `try` with a null guard |
+| TypeORM migration adoption | `migration:*` scripts, `src/data-source.ts`, baseline `InitialSchema`; pre-existing DBs: `pnpm migration:run -- --fake` once ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)) |

@@ -1,6 +1,6 @@
 # ADR 0006: `synchronize: false` + Manual Schema, Migrations to Be Adopted
 
-- Status: Accepted
+- Status: Accepted — implemented 2026-07-22
 - Date: 2026-07-22 (`synchronize: false` committed 2026-04-14)
 - 한국어: [0006-schema-policy-and-migration-adoption.ko.md](0006-schema-policy-and-migration-adoption.ko.md)
 
@@ -32,3 +32,20 @@ migration tooling replaced it, leaving schema changes without any managed path.
   migrations land — this is the top roadmap item ([ROADMAP.md](../ROADMAP.md)).
 - `CLAUDE.md` Scope Discipline forbids running `migration:generate` as a drive-by;
   schema changes are always described in plain text and approved first.
+
+## Implementation note (2026-07-22)
+
+Adopted as designed, with these specifics:
+
+- CLI DataSource: `src/data-source.ts`, executed from its compiled `dist/` output
+  (`typeorm ... -d dist/data-source.js`; each `migration:*` script builds first).
+  It is the one sanctioned place env vars are read directly — Nest's `ConfigService`
+  does not exist outside the DI container. Env loading uses Node's built-in
+  `process.loadEnvFile()` (no dotenv dependency).
+- Baseline: `src/migrations/1784678400000-InitialSchema.ts` captures the previously
+  manual schema. Fresh database → `pnpm migration:run`. A database already carrying
+  the manual-era schema → `pnpm migration:run -- --fake` once, marking the baseline
+  as applied without re-creating tables.
+- The baseline uses readable constraint names rather than TypeORM's hashed defaults;
+  future `migration:generate` output may propose spurious constraint renames — strip
+  them during the mandatory line-by-line review.

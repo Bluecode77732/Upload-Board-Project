@@ -13,6 +13,13 @@
 ## [Unreleased]
 
 ### 추가
+- TypeORM 마이그레이션 도입 ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)):
+  `migration:generate`/`run`/`revert`/`show` 스크립트(컴파일된
+  `dist/data-source.js` 대상 실행), CLI DataSource `src/data-source.ts`(환경변수는
+  Node 내장 `process.loadEnvFile()` — dotenv 의존성 없음), 베이스라인
+  `src/migrations/1784678400000-InitialSchema.ts`. 새 DB: `pnpm migration:run`;
+  수동 생성된 기존 DB: `pnpm migration:run -- --fake` 1회.
+  수동 "`synchronize` 임시 전환" 워크플로를 대체하며 RBAC의 선행 조건 해소.
 - 문서 세트: `README.md` 재작성, 신규 `ARCHITECTURE.md`, `CHANGELOG.md`,
   `ROADMAP.md`, `CONTRIBUTING.md`, `ADR/`(9건) — 각각 한국어 `.ko.md` 동반.
 
@@ -22,9 +29,9 @@
 - **보안**: 런타임 CVE 지적을 `pnpm.overrides`로 핀 고정(`jws ^3.2.3`,
   `validator ^13.15.22`); `POST /upload/attach`에 mp4/mov/webm mimetype + 확장자
   허용 목록 강제 (`da676c0`).
-- **수정**: 0 오류 lint 기준선 도달(unsafe-`any` 체인 타입 지정, spec 파일에
-  `unbound-method` 비활성); `GET /file` 목록이 `creator`를 조인해
-  `GET /file/:id`와 일치 (`063ca14`).
+- **수정**: lint 오류 0건 기준선 도달(unsafe-`any` 체인에 타입 지정, spec
+  파일에서는 `unbound-method` 규칙 비활성화); `GET /file` 목록이 `creator`를
+  조인해 `GET /file/:id`와 일치 (`063ca14`).
 - **수정**: `@nestjs/jwt`를 `devDependencies`에서 `dependencies`로 이동 —
   AuthModule의 런타임 의존성이며 `--prod` 설치가 더는 깨지지 않음 (`44a0ac9`).
 - **리팩터**: `FileService.uploadFile`/`updateFile` 커밋 후 재조회를 트랜잭션
@@ -39,7 +46,7 @@
   `DELETE /user/:id`는 본인만, `PATCH /file/patch/:id`·`DELETE /file/delete/:id`는
   작성자만 가능(불일치 시 `ForbiddenException`).
 - **추가**: 새 `GetFilesDto`를 통한 `GET /file` 페이지네이션 — `take` 1–100
-  (기본 20), `skip` ≥ 0(기본 0); 무페이지네이션 목록이라는 알려진 공백 해소.
+  (기본 20), `skip` ≥ 0(기본 0); "목록에 페이지네이션이 없다"는 알려진 공백 해소.
 - **추가**: opt-in CORS ([ADR 0008](ADR/0008-opt-in-cors.ko.md)): 선택적
   `CORS_ORIGIN` 환경변수(콤마 구분 허용 목록); 미설정 시 CORS 비활성 유지.
   Joi 스키마와 `.env.example`에 추가.
@@ -54,7 +61,7 @@
   `CLAUDE.md` 로드맵 동기화(소유권 검사 완료 표시).
 
 ### 2026-07-22 — `f3fff1c`
-- `CLAUDE.md`를 저장소 특화 운영 계약으로 재작성(이전에는 범용).
+- `CLAUDE.md`를 이 저장소에 특화된 운영 규약으로 재작성(이전에는 범용).
 - **수정**: `@UserId` 데코레이터가 이제 JWT가 채운 `request.user.id`를 읽고, 인증된
   사용자가 없으면 `UnauthorizedException`을 던짐 — 요청 페이로드로 신원을 위장할
   수 없게 됨.
@@ -95,7 +102,8 @@
 - README 편집(한 줄).
 
 ### 2025-12-19 — `283e9ab`, `88b327a`
-- **수정**: 파일 제목 중복 오류 — `updateFile`이 적용 전에 기존 제목 존재를 확인.
+- **수정**: 파일 제목 중복 오류 — `updateFile`이 변경 적용 전에 동일 제목이 이미
+  있는지 확인.
 - `FileEntity`에 `@IsString`/`@IsNotEmpty` 검증 데코레이터 추가; `FileService`
   주석 정리.
 - `file/temp` / `file/upload`에 커밋됐던 샘플 미디어 제거(참고: `88b327a`의
@@ -111,6 +119,7 @@
   - `UserModule`: `JwtAuthGuard` 뒤의 사용자 CRUD, bcrypt 해싱, `@Exclude` 비밀번호.
   - `FileModule`: 파일 메타데이터 CRUD; 수동 QueryRunner 트랜잭션 안의 2단계
     `temp_` → `granted_` 승격.
-  - `UploadModule`: 서버 생성 이름의 `file/temp` Multer diskStorage, 100 MB 제한.
+  - `UploadModule`: 서버가 생성한 파일명으로 `file/temp`에 저장하는 Multer
+    diskStorage, 100 MB 제한.
   - Joi 검증 설정, `file/` 위의 `ServeStaticModule`, `/doc`의 Swagger, 세 서비스의
     Jest 단위 테스트.
