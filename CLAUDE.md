@@ -401,10 +401,10 @@ Principle Conflict Protocol.
 ### Performance & Security
 - Secure by Default, Protect Sensitive Data, Fail Securely — covered by Never Do
   Group 3 and the serialization conventions
-- Principle of Least Privilege — no role or ownership system exists yet; ownership
-  checks + RBAC are decided roadmap items (see Architecture Decisions > Auth). Flag
-  endpoints where the gap is user-visible, but implement the fix only as the dedicated
-  roadmap task
+- Principle of Least Privilege — ownership checks landed 2026-07-22 (user writes are
+  self-only; file writes are creator-only); RBAC is still a decided roadmap item
+  (see Architecture Decisions > Auth). Flag endpoints where the remaining gap is
+  user-visible, but implement RBAC only as the dedicated roadmap task
 - Avoid Premature Optimization / Measure Before Optimizing — same principle, treat as one
 - Resource Efficiency — covered by the pagination/N+1 rules and the Multer size limit
 - Minimize Attack Surface — every non-auth endpoint sits behind `JwtAuthGuard`; new
@@ -565,10 +565,12 @@ Do not suggest alternatives to these decisions without explicit request.
   for `POST /auth/signin/local` only
 - Refresh: `POST /auth/token/refreshaccess` takes the refresh token as a Bearer header
   and returns a new access token
-- Authorization roadmap (decided 2026-07-22): **ownership checks and RBAC will both be
-  introduced** as their own explicit tasks. Until they land, all authenticated users
-  are equal (see Known Gaps & Roadmap) — do not bolt partial ownership checks onto
-  unrelated changes; the introduction happens as a designed, dedicated change
+- Authorization roadmap (decided 2026-07-22): **ownership checks landed 2026-07-22**
+  as a dedicated task — `PATCH/DELETE /user/:id` are self-only (controller-level
+  check via `@UserId`), `PATCH /file/patch/:id` and `DELETE /file/delete/:id` are
+  creator-only (service-level check, `creator` relation loaded). **RBAC is still
+  pending** as its own explicit task (see Known Gaps & Roadmap) — do not bolt role
+  logic onto unrelated changes; the introduction happens as a designed, dedicated change
 - **Never suggest**: session-based auth, a single shared JWT secret, storing tokens
   server-side
 
@@ -618,23 +620,28 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
 **Decided roadmap items** (each lands as its own dedicated task — decided 2026-07-22):
 - TypeORM migration adoption (`migration:generate`/`migration:run` + `src/migrations/`)
   — see Architecture Decisions > Database
-- Ownership checks (a user may modify/delete only their own account and files)
 - RBAC (role column + role-aware guard) — see Architecture Decisions > Auth
+- ~~Ownership checks~~ — **landed 2026-07-22** (commit `0549ca4`): user writes self-only,
+  file writes creator-only
 
 **Known gaps** (documented, not yet scheduled):
-- `pnpm lint` is currently broken: `eslint.config.mjs` imports the unified
-  `typescript-eslint` package, which is missing from `devDependencies` (only granular
-  `@eslint/*` packages are installed) — lint exits with `ERR_MODULE_NOT_FOUND`
+- `pnpm lint` runs (the missing `typescript-eslint` devDependency was added
+  2026-07-22) but reports ~45 pre-existing errors: unsafe-`any` chains in
+  `auth.service.ts` / `auth.controller.ts` / `userId.decorator.ts` /
+  `test/app.e2e-spec.ts`, and `unbound-method` on the `expect(mock.method)` pattern
+  used throughout the spec files. Cleanup is explicit-request work — new code must
+  not add new violations, but matching an existing spec-mock pattern is acceptable
 - `POST /upload/attach` validates size only — no mimetype/extension allowlist despite
   the "video" intent (any file type is accepted; the extension is trusted from
   `originalname`)
-- `FileService.getFiles()` is unpaginated and does not join `creator`
-- No CORS configuration (`enableCors` is never called) — fine for same-origin/Swagger
-  use, must be revisited before any browser frontend consumes this API
+- `FileService.getFiles()` does not join `creator` (pagination landed 2026-07-22:
+  `take` 1–100 default 20 / `skip` default 0 via `GetFilesDto`)
+- CORS is opt-in via the optional `CORS_ORIGIN` env var (added 2026-07-22): unset =
+  CORS disabled (same-origin/Swagger use); a browser frontend sets a comma-separated
+  origin allowlist
 - `.env.example` lacks `BASE_URL` (optional, defaults to `http://localhost:3000`)
-- README endpoint list drifts from real routes (e.g. actual routes are
-  `POST /upload/attach`, `POST /file/uploadFile`, `PATCH /file/patch/:id`,
-  `DELETE /file/delete/:id`; there is no `POST /user`)
+- README "Key Endpoints" omits `POST /auth/signin/local` (User/File sections were
+  aligned with real routes 2026-07-22)
 - `upload.controller.ts` comment says "300MB" while the limit is 100MB
 
 ## Project Overview
