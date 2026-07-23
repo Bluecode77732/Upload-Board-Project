@@ -19,7 +19,8 @@ AppModule
 ├── AuthModule          — 토큰 전담: Basic 파싱, JWT 발급/검증, Passport 전략
 ├── UserModule          — 사용자 CRUD 전담; UserService export (JwtStrategy가 소비)
 ├── FileModule          — 파일 *메타데이터* 전담: FileEntity 행 + temp 승격 트랜잭션
-└── UploadModule        — *물리* 파일 전담: Multer diskStorage; 컨트롤러 전용, DB 접근 없음
+├── UploadModule        — *물리* 파일 전담: Multer diskStorage; 컨트롤러 전용, DB 접근 없음
+└── APP_FILTER          — AllExceptionsFilter (src/common/filter/): 모든 에러를 ErrorBody 계약으로 성형 (ADR 0011)
 ```
 
 모듈 책임은 의도적인 SRP 분리입니다(`CLAUDE.md` > Module Responsibility 참조):
@@ -122,6 +123,19 @@ AppModule
 enableImplicitConversion`을 실행합니다 — DTO에 선언되지 않은 요청 필드는 서비스에
 도달하지 않습니다. 서비스는 검증된 입력을 신뢰합니다(경계 전용 검증).
 
+### 에러 응답 (`ErrorBody`)
+
+던져진 모든 에러는 — `HttpException`이든 아니든 — 전역
+`AllExceptionsFilter`(`src/common/filter/all-exceptions.filter.ts`, `app.module.ts`의
+`APP_FILTER`로 등록)를 거쳐 동결된 `ErrorBody` 계약(`src/common/error-code.ts`)으로
+성형됩니다: `{ statusCode, code, message, timestamp, path }` + `ENV=dev`일 때만
+`stack`. 스로우 지점은 `{ code: ErrorCode.X, message }`를 실어 던지고, 코드 없이
+던져진 예외는 상태 기반 폴백을 받으며, `message`가 배열인 400은
+`VALIDATION_FAILED`(ValidationPipe의 시그니처)로 분류되고, `HttpException`이 아닌
+오류는 바깥으로 `"Internal server error"`만 남깁니다
+([ADR 0011](ADR/0011-error-code-contract.ko.md)). 클라이언트 분기는 `code`로만 —
+`message`는 언제든 바뀔 수 있습니다.
+
 ### 2단계 업로드 (`temp_` → `granted_`)
 
 ```
@@ -185,8 +199,9 @@ REST 전용이며 `/doc`의 Swagger로 문서화됩니다(`persistAuthorization:
 ## 테스트
 
 - 단위 테스트는 소스 옆의 `*.spec.ts`이며, Jest 설정은 `package.json`에 내장
-  (`roots: ["src"]`). 커버리지는 **서비스만** 측정합니다(컨트롤러·가드·전략·DTO·엔티티·
-  모듈은 `coveragePathIgnorePatterns`로 제외).
+  (`roots: ["src"]`). 커버리지는 **서비스와 `src/common/`**(예외 필터·에러 코드
+  카탈로그)을 측정합니다(컨트롤러·가드·전략·DTO·엔티티·모듈은
+  `coveragePathIgnorePatterns`로 제외).
 - `fs/promises`는 `jest.mock('fs/promises')`, `bcrypt`는 `jest.mock('bcrypt')`로 모킹.
 - QueryRunner는 `jest.fn()`으로 이루어진 평범한 객체로 모킹하고, 모킹된 `DataSource`가
   이를 반환합니다.

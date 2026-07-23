@@ -30,7 +30,10 @@ API 표면은 동결되었고([ADR 0010](0010-frontend-split-and-api-surface-fre
 
   계약의 핵심은 `code`다: 안정적이고 기계 판독 가능하며, 클라이언트가 분기해도
   되는 유일한 필드다. `message`는 사람을 위한 것으로 언제든 바뀔 수 있다.
-  `stack`은 `ENV=dev`일 때만 붙는다.
+  `stack`은 `ENV=dev`일 때만 붙는다. `timestamp`와 `path`를 포함한 것은 아직
+  로깅 인프라가 없기 때문이다(ROADMAP Stage 1) — 로깅이 자리 잡기 전까지는
+  응답 본문이 에러 발생 지점을 사후에 특정할 수 있는 유일한 단서이며, 두 필드
+  모두 내부 구조를 노출하지 않는다.
 - **문자열 enum 카탈로그** — `ErrorCode`는 현재 18개 코드를 정의한다:
   도메인 코드(`AUTH_BAD_TOKEN_FORMAT`, `AUTH_INVALID_CREDENTIALS`,
   `AUTH_EMAIL_TAKEN`, `AUTH_TOKEN_INVALID`, `AUTH_UNAUTHORIZED`,
@@ -69,6 +72,9 @@ API 표면은 동결되었고([ADR 0010](0010-frontend-split-and-api-surface-fre
   문구를 다듬을 때마다 클라이언트 분기가 조용히 깨진다.
 - **숫자 코드 체계** (예: `40001`) — 읽으려면 대조표가 필요하다; 문자열 코드는
   로그와 네트워크 탭에서 그 자체로 설명된다.
+- **최소형** (`statusCode`/`code`/`message`만) — 로깅 인프라가 없는 동안은
+  기각: `timestamp`/`path`를 빼면 신고된 에러를 사후에 특정할 방법이 없다.
+  Stage 1 로깅이 자리 잡은 뒤 두 필드가 불필요해지면 재검토한다.
 
 ## 결과
 

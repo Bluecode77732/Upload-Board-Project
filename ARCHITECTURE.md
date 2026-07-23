@@ -19,7 +19,8 @@ AppModule
 ├── AuthModule          — tokens only: Basic parsing, JWT issue/verify, Passport strategies
 ├── UserModule          — user CRUD only; exports UserService (consumed by JwtStrategy)
 ├── FileModule          — file *metadata* only: FileEntity rows + promote-from-temp transaction
-└── UploadModule        — *physical* files only: Multer diskStorage; controller-only, no DB
+├── UploadModule        — *physical* files only: Multer diskStorage; controller-only, no DB
+└── APP_FILTER          — AllExceptionsFilter (src/common/filter/): shapes every error into the ErrorBody contract (ADR 0011)
 ```
 
 Module responsibility is a deliberate SRP split (see `CLAUDE.md` > Module Responsibility):
@@ -122,6 +123,19 @@ The global `ValidationPipe` (`src/main.ts`) runs `transform + whitelist +
 forbidNonWhitelisted + enableImplicitConversion` — a request field not declared on a DTO
 never reaches a service. Services trust validated input (boundary-only validation).
 
+### Error responses (`ErrorBody`)
+
+Every thrown error — `HttpException` or not — exits through the global
+`AllExceptionsFilter` (`src/common/filter/all-exceptions.filter.ts`, registered via
+`APP_FILTER` in `app.module.ts`) and is shaped into the frozen `ErrorBody` contract
+(`src/common/error-code.ts`): `{ statusCode, code, message, timestamp, path }`, plus
+`stack` when `ENV=dev`. Throw sites attach `{ code: ErrorCode.X, message }`; exceptions
+thrown without a code get a status-based fallback, a 400 carrying a message array is
+labeled `VALIDATION_FAILED` (the ValidationPipe signature), and non-`HttpException`
+errors leave only `"Internal server error"` outward
+([ADR 0011](ADR/0011-error-code-contract.md)). Clients branch on `code` only — `message`
+is free to change.
+
 ### Two-phase upload (`temp_` → `granted_`)
 
 ```
@@ -185,8 +199,9 @@ protected controllers `@ApiBearerAuth`; Basic-token endpoints `@ApiBasicAuth`.
 ## Testing
 
 - Unit tests live alongside source as `*.spec.ts`; Jest config is embedded in `package.json`
-  (`roots: ["src"]`). Coverage measures **services only** (controllers, guards, strategies,
-  DTOs, entities, modules are ignored via `coveragePathIgnorePatterns`).
+  (`roots: ["src"]`). Coverage measures **services and `src/common/`** (the exception
+  filter and error-code catalog); controllers, guards, strategies, DTOs, entities, and
+  modules are ignored via `coveragePathIgnorePatterns`.
 - `fs/promises` is mocked with `jest.mock('fs/promises')`; `bcrypt` with `jest.mock('bcrypt')`.
 - QueryRunner is mocked as a plain object of `jest.fn()`s returned by a mocked `DataSource`.
 - Direct DB access in tests is forbidden — repository mocks only.

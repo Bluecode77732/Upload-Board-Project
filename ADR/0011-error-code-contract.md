@@ -31,7 +31,10 @@ same reason the routes were.
 
   `code` is the contract: stable, machine-readable, the only field a client may
   branch on. `message` is human-readable and free to change. `stack` is appended
-  only when `ENV=dev`.
+  only when `ENV=dev`. `timestamp` and `path` are included because no logging
+  infrastructure exists yet (ROADMAP Stage 1) — until it lands, the response
+  body is the only place an error occurrence can be located after the fact;
+  neither field exposes internal structure.
 - **String-enum catalog** — `ErrorCode` currently defines 18 codes:
   domain codes (`AUTH_BAD_TOKEN_FORMAT`, `AUTH_INVALID_CREDENTIALS`,
   `AUTH_EMAIL_TAKEN`, `AUTH_TOKEN_INVALID`, `AUTH_UNAUTHORIZED`,
@@ -70,6 +73,10 @@ same reason the routes were.
   prose; every message rewording silently breaks client branching.
 - **Numeric code ranges** (e.g. `40001`) — needs a lookup table to be readable;
   string codes are self-documenting in logs and network tabs.
+- **Minimal shape** (`statusCode`/`code`/`message` only) — rejected while no
+  logging infrastructure exists: dropping `timestamp`/`path` would leave a
+  reported error impossible to locate after the fact. Revisit once Stage 1
+  logging lands if the fields prove redundant.
 
 ## Consequences
 
