@@ -17,6 +17,8 @@ export enum ErrorCode {
   // 401
   AUTH_TOKEN_INVALID = 'AUTH_TOKEN_INVALID',
   AUTH_UNAUTHORIZED = 'AUTH_UNAUTHORIZED',
+  // A rotated-out refresh token was replayed — the whole session is invalidated (ADR 0012).
+  AUTH_REFRESH_REUSED = 'AUTH_REFRESH_REUSED',
 
   // 403
   FORBIDDEN_NOT_OWNER = 'FORBIDDEN_NOT_OWNER',

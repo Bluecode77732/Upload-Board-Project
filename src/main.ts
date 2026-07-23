@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -18,6 +19,9 @@ async function bootstrap() {
       allowedHeaders: ['Content-Type', 'Authorization'],
     });
   }
+
+  // Parses the httpOnly refresh cookie for POST /auth/token/refresh (ADR 0012).
+  app.use(cookieParser());
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -38,6 +42,7 @@ async function bootstrap() {
     .setVersion('1.0')
     .addBearerAuth()
     .addBasicAuth()
+    .addCookieAuth('refreshToken')
     .build();
 
   const documentFactory = () => SwaggerModule.createDocument(app, config);

@@ -8,16 +8,5 @@ export class bearerTokenType {
   accessToken: string;
 }
 
-export class tokenType {
-  @ApiProperty({
-    description: 'JWT refresh token',
-    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-  })
-  refreshToken: string;
-
-  @ApiProperty({
-    description: 'JWT access token',
-    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-  })
-  accessToken: string;
-}
+// The former tokenType ({ refreshToken, accessToken }) was removed with ADR 0012:
+// the refresh token now travels only as an httpOnly cookie, never in a body.

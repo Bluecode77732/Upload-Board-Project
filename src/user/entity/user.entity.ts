@@ -28,6 +28,12 @@ export class UserEntity {
   @Exclude({ toPlainOnly: true })
   password!: string;
 
+  // SHA-256 of the current refresh token (rotation/reuse detection — ADR 0012); null = no active session.
+  @Column({ type: 'varchar', nullable: true })
+  @Exclude({ toPlainOnly: true })
+  @ApiHideProperty()
+  refreshTokenHash!: string | null;
+
   @OneToMany(() => FileEntity, (file) => file.creator)
   creator!: FileEntity[];
 

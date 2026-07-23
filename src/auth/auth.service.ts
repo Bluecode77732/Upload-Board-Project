@@ -7,6 +7,7 @@ import { UserEntity } from 'src/user/entity/user.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
+import { createHash } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Payload } from './interface/payload-interface';
@@ -124,64 +125,90 @@ export class AuthService {
     });
   }
 
-  async parseBearerToken(rawToken: string, isRefreshToken: boolean) {
+  // Verifies a bare JWT with the matching secret AND the type claim — never one
+  // without the other (Dual Token Authority). Any failure surfaces as a generic 401.
+  async verifyToken(token: string, isRefreshToken: boolean) {
     try {
-      const bearerToken = rawToken.split(' ');
-
-      if (bearerToken.length !== 2) {
-        throw new BadRequestException({
-          code: ErrorCode.AUTH_BAD_TOKEN_FORMAT,
-          message: 'Bad token format.',
-        });
-      }
-
-      const [bearer, token] = bearerToken;
-
-      if (bearer.toLowerCase() !== 'bearer') {
-        throw new BadRequestException({
-          code: ErrorCode.AUTH_BAD_TOKEN_FORMAT,
-          message: 'Bad token format.',
-        });
-      }
-
       const payload = await this.jwtService.verifyAsync<Payload>(token, {
         secret: this.configService.getOrThrow<string>(
           isRefreshToken ? 'REFRESH_TOKEN_SECRET' : 'ACCESS_TOKEN_SECRET',
         ),
       });
 
-      if (isRefreshToken) {
-        if (payload.type !== 'refresh') {
-          throw new BadRequestException({
-            code: ErrorCode.AUTH_TOKEN_INVALID,
-            message: 'Insert refresh token.',
-          });
-        }
-      } else {
-        if (payload.type !== 'access') {
-          throw new BadRequestException({
-            code: ErrorCode.AUTH_TOKEN_INVALID,
-            message: 'Insert access token.',
-          });
-        }
+      if (payload.type !== (isRefreshToken ? 'refresh' : 'access')) {
+        throw new Error('Token type mismatch.');
       }
 
       return payload;
     } catch {
       throw new UnauthorizedException({
         code: ErrorCode.AUTH_TOKEN_INVALID,
-        message: 'Token expired.',
+        message: 'Invalid or expired token.',
       });
     }
+  }
+
+  private hashRefreshToken(token: string) {
+    // SHA-256, not bcrypt: JWT strings exceed bcrypt's 72-byte input limit and
+    // are high-entropy — a fast hash is sufficient (ADR 0012).
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  // Issues a fresh access/refresh pair and anchors the refresh token server-side
+  // (single write — plain repository call, no transaction needed).
+  async issueTokenPair(user: Pick<UserEntity, 'id'>) {
+    const refreshToken = await this.issueToken(user, true);
+    const accessToken = await this.issueToken(user, false);
+
+    await this.userRepository.update(user.id, {
+      refreshTokenHash: this.hashRefreshToken(refreshToken),
+    });
+
+    return { refreshToken, accessToken };
+  }
+
+  // Rotation with reuse detection: the presented token must match the stored
+  // hash; a mismatch means a rotated-out token was replayed — kill the session.
+  async rotateRefreshToken(rawToken: string | undefined) {
+    if (!rawToken) {
+      throw new UnauthorizedException({
+        code: ErrorCode.AUTH_TOKEN_INVALID,
+        message: 'No refresh token.',
+      });
+    }
+
+    const payload = await this.verifyToken(rawToken, true);
+
+    const user = await this.userRepository.findOne({
+      where: { id: payload.sub },
+    });
+
+    if (!user || !user.refreshTokenHash) {
+      throw new UnauthorizedException({
+        code: ErrorCode.AUTH_TOKEN_INVALID,
+        message: 'No active session.',
+      });
+    }
+
+    if (user.refreshTokenHash !== this.hashRefreshToken(rawToken)) {
+      await this.userRepository.update(user.id, { refreshTokenHash: null });
+      throw new UnauthorizedException({
+        code: ErrorCode.AUTH_REFRESH_REUSED,
+        message: 'Refresh token reuse detected.',
+      });
+    }
+
+    return this.issueTokenPair(user);
+  }
+
+  async signOut(userId: number) {
+    await this.userRepository.update(userId, { refreshTokenHash: null });
   }
 
   async signIn(rawToken: string) {
     const { email, password } = this.parseBasicToken(rawToken);
     const user = await this.validateUser(email, password);
 
-    return {
-      refreshToken: await this.issueToken(user, true),
-      accessToken: await this.issueToken(user, false),
-    };
+    return this.issueTokenPair(user);
   }
 }
