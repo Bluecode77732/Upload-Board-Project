@@ -24,13 +24,13 @@
     "migration:show": "pnpm build && typeorm migration:show -d dist/data-source.js"
   },
   "dependencies": {
-    "@nestjs/common": "^11.0.1",
+    "@nestjs/common": "^11.1.28",
     "@nestjs/config": "^4.0.2",
-    "@nestjs/core": "^11.0.1",
+    "@nestjs/core": "^11.1.28",
     "@nestjs/jwt": "^11.0.1",
     "@nestjs/mapped-types": "*",
     "@nestjs/passport": "^11.0.5",
-    "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/platform-express": "^11.1.28",
     "@nestjs/serve-static": "^5.0.4",
     "@nestjs/swagger": "^11.2.3",
     "@nestjs/typeorm": "^11.0.0",
@@ -38,15 +38,16 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "cookie-parser": "^1.4.7",
-    "joi": "^18.0.1",
+    "joi": "^18.2.3",
+    "multer": "^2.2.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm": "^0.3.27",
-    "uuid": "^13.0.0"
+    "typeorm": "^0.3.31",
+    "uuid": "^13.0.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -81,7 +82,14 @@
   "pnpm": {
     "overrides": {
       "jws": "^3.2.3",
-      "validator": "^13.15.22"
+      "validator": "^13.15.22",
+      "multer": "^2.2.0",
+      "body-parser": "^2.3.0",
+      "path-to-regexp": "^8.4.0",
+      "file-type": "^21.3.2",
+      "@nestjs/swagger>js-yaml": "^4.3.0",
+      "lodash": "^4.18.0",
+      "diff": "^4.0.4"
     }
   },
   "jest": {
