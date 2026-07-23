@@ -90,11 +90,16 @@ pnpm run test:cov      # 커버리지 (서비스만 측정)
 
 `/auth/*`를 제외한 모든 엔드포인트는 Bearer 액세스 토큰이 필요합니다.
 
-**인증**
+**인증** — 리프레시 토큰은 httpOnly 쿠키(`SameSite=Strict`,
+`Path=/auth/token`)로만 이동합니다; 브라우저는 refresh/signout 호출에
+`credentials: 'include'`가 필요합니다
+([ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md))
 - `POST /auth/register` — Basic 토큰으로 등록 (`base64(email:password)`)
-- `POST /auth/signin` — `{ refreshToken, accessToken }` 발급 (Basic 토큰)
+- `POST /auth/signin` — `{ accessToken }` + 리프레시 쿠키 발급 (Basic 토큰)
 - `POST /auth/signin/local` — body 자격 증명으로 동일 발급 (Passport local 전략)
-- `POST /auth/token/refresh` — 새 액세스 토큰 (Bearer 리프레시 토큰)
+- `POST /auth/token/refresh` — 리프레시 쿠키를 회전시키고 새 액세스 토큰 반환;
+  회수된 토큰을 재사용하면 세션이 무효화됩니다(`AUTH_REFRESH_REUSED`)
+- `POST /auth/signout` — 서버 측 세션 앵커 무효화 + 쿠키 삭제 (Bearer 액세스 토큰)
 
 **사용자** — 사용자 생성은 `POST /auth/register`이며 `POST /user`는 없습니다
 - `GET /user` — 사용자 목록
@@ -114,7 +119,7 @@ pnpm run test:cov      # 커버리지 (서비스만 측정)
 
 ```
 POST /auth/register   (Basic)          → 사용자 생성
-POST /auth/signin     (Basic)          → { refreshToken, accessToken }
+POST /auth/signin     (Basic)          → { accessToken } + Set-Cookie: refreshToken (httpOnly)
 POST /upload/attach   (Bearer, video)  → { filename: "temp_..." }
 POST /file            (Bearer, { title, filePath: "temp_..." })
                                        → 승격; {BASE_URL}/file/upload/granted_... 로 서빙

@@ -13,6 +13,15 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- Refresh-token httpOnly cookie + rotation/reuse detection
+  ([ADR 0012](ADR/0012-refresh-cookie-rotation.md), Stage F task 3 —
+  **Stage F complete**): the refresh token now travels only as an httpOnly
+  cookie (`SameSite=Strict`, `Path=/auth/token`, `Secure` in prod); its SHA-256
+  is anchored in the new nullable `user_entity.refreshTokenHash` column
+  (migration `AddUserRefreshTokenHash`); replaying a rotated-out token
+  invalidates the session with 401 `AUTH_REFRESH_REUSED` (new code); new
+  `POST /auth/signout` clears the anchor and the cookie. New runtime dependency
+  `cookie-parser` (MIT).
 - Machine-readable error-code contract
   ([ADR 0011](ADR/0011-error-code-contract.md), Stage F task 2): frozen
   `ErrorBody` response shape (`statusCode`/`code`/`message`/`timestamp`/`path`,
@@ -37,6 +46,13 @@ development line (package.json version).
   sibling.
 
 ### Changed
+- **Breaking** — auth transport (ADR 0012, pre-declared Stage F task with zero
+  consumers): `POST /auth/signin` and `POST /auth/signin/local` response bodies
+  shrink to `{ accessToken }` (refresh token moves to the Set-Cookie header);
+  `POST /auth/token/refresh` reads the httpOnly cookie instead of a Bearer
+  header. Browsers must send `credentials: 'include'` on refresh/signout.
+  `AuthService.parseBearerToken` decomposed — the bare `verifyToken` core
+  (secret + `type` claim) survives; the Bearer-splitting wrapper was removed.
 - **Breaking** — route canonicalization before the API surface freeze
   ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md), Stage F
   task 1), decorator arguments only, guards/DTOs/handlers unchanged:

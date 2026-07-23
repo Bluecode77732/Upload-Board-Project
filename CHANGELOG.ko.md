@@ -13,6 +13,15 @@
 ## [Unreleased]
 
 ### 추가
+- Refresh 토큰 httpOnly 쿠키 + 회전/재사용 감지
+  ([ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md), Stage F 작업 3 —
+  **Stage F 완결**): 리프레시 토큰은 이제 httpOnly 쿠키(`SameSite=Strict`,
+  `Path=/auth/token`, prod에서 `Secure`)로만 이동하고, 그 SHA-256이 신규
+  nullable 컬럼 `user_entity.refreshTokenHash`에 앵커로
+  저장된다(마이그레이션 `AddUserRefreshTokenHash`). 회수된 토큰을 재사용하면
+  401 `AUTH_REFRESH_REUSED`(신규 코드)와 함께 세션이 무효화된다. 신규
+  `POST /auth/signout`이 앵커와 쿠키를 삭제한다. 신규 런타임 의존성
+  `cookie-parser`(MIT).
 - 기계 판독 가능한 에러 코드 계약
   ([ADR 0011](ADR/0011-error-code-contract.ko.md), Stage F 작업 2): 동결된
   `ErrorBody` 응답 형태(`statusCode`/`code`/`message`/`timestamp`/`path`,
@@ -35,6 +44,13 @@
   `ROADMAP.md`, `CONTRIBUTING.md`, `ADR/`(9건) — 각각 한국어 `.ko.md` 동반.
 
 ### 변경
+- **Breaking** — 인증 전송 방식(ADR 0012, 소비자 0명 상태의 사전 결정 Stage F
+  작업): `POST /auth/signin`·`POST /auth/signin/local` 응답 body가
+  `{ accessToken }`으로 축소(리프레시 토큰은 Set-Cookie 헤더로 이동);
+  `POST /auth/token/refresh`는 Bearer 헤더 대신 httpOnly 쿠키를 읽는다.
+  브라우저는 refresh/signout에 `credentials: 'include'`가 필요하다.
+  `AuthService.parseBearerToken`은 분해 — 순수 `verifyToken` 코어(시크릿 +
+  `type` 클레임)는 존속, "Bearer " 분리 래퍼는 제거.
 - **Breaking** — API 표면 동결에 앞선 라우트 정규화
   ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md), Stage F
   작업 1). 데코레이터 인자만 변경했으며 가드/DTO/핸들러는 그대로:

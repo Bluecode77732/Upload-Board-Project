@@ -17,7 +17,7 @@ lands as its own dedicated, designed change
 > actually lands (with its own ADR), the current Architecture Decisions remain
 > operative.
 
-## Current position (as of 2026-07-23)
+## Current position (as of 2026-07-24)
 
 - The 2026-07-22 hardening run is fully landed: security quick-wins, the
   zero-error lint baseline, the documentation rewrite, and TypeORM migration
@@ -35,7 +35,12 @@ lands as its own dedicated, designed change
 - The error-code contract landed 2026-07-23
   ([ADR 0011](ADR/0011-error-code-contract.md)): every error response carries a
   stable machine-readable `code`, shaped by the global exception filter.
-- **Next dedicated task: refresh-token httpOnly-cookie move + rotation (Stage F)**.
+- The refresh-token httpOnly-cookie move + rotation/reuse detection landed
+  2026-07-24 ([ADR 0012](ADR/0012-refresh-cookie-rotation.md)) — **Stage F is
+  complete**: the API surface, error contract, and auth transport a frontend
+  depends on are all settled. The frontend repository can start; RBAC proceeds
+  in parallel (it changes no API surface).
+- **Next dedicated backend task: RBAC (Stage 0)**.
 
 ## 1. Vision & essence
 
@@ -222,6 +227,12 @@ candidate under the CI task).
 | Frontend split decision + Stage F pipeline | Separate frontend repo, admin as `/admin` route, contract freeze; RBAC re-sequenced after Stage F ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)) |
 | Route cleanup & API contract freeze | `POST /file`, `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` — surface frozen with zero consumers (Stage F task 1) |
 | Error-code contract | Frozen `ErrorBody` shape + 18-code catalog + global `AllExceptionsFilter` via `APP_FILTER` (Stage F task 2, [ADR 0011](ADR/0011-error-code-contract.md)) |
+
+### 2026-07-24
+
+| Item | Notes |
+|---|---|
+| Refresh-token httpOnly cookie + rotation/reuse detection | `refreshTokenHash` anchor column, `SameSite=Strict` cookie, `POST /auth/signout`; Stage F task 3 — **Stage F complete** ([ADR 0012](ADR/0012-refresh-cookie-rotation.md)) |
 
 ### 2026-07-22
 

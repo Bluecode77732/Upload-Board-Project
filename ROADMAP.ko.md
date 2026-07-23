@@ -15,7 +15,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 > 이 계획에 편입되었다. 각 전용 작업이 실제로 완료되기 전까지는(각자의 ADR 포함)
 > 현행 Architecture Decisions가 그대로 유효하다.
 
-## 현재 위치 (2026-07-23 기준)
+## 현재 위치 (2026-07-24 기준)
 
 - 2026-07-22 하드닝 런은 모두 반영 완료됐다: 보안 quick-win, lint 0 오류
   베이스라인, 문서 재작성, TypeORM 마이그레이션 도입(`79603ad`,
@@ -33,7 +33,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 - 에러 코드 계약은 2026-07-23에 완료되었다
   ([ADR 0011](ADR/0011-error-code-contract.ko.md)): 모든 에러 응답이 전역 예외
   필터를 거쳐 안정적인 기계 판독 가능 `code`를 싣는다.
-- **다음 전용 작업: refresh 토큰 httpOnly 쿠키 이동 + 회전 (Stage F)**.
+- refresh 토큰 httpOnly 쿠키 전환 + 회전/재사용 감지는 2026-07-24 반영
+  완료([ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md)) — **Stage F 완결**:
+  프론트엔드가 의존할 API 표면·에러 계약·인증 전송이 모두 확정되었다.
+  frontend repository를 시작할 수 있으며, RBAC은 API 표면을 바꾸지 않으므로
+  병행 가능하다.
+- **다음 백엔드 전용 작업: RBAC (Stage 0)**.
 
 ## 1. 비전과 본질
 
@@ -208,6 +213,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | 프론트엔드 분리 결정 + Stage F 파이프라인 | 별도 프론트엔드 repo, admin은 `/admin` 라우트, 계약 동결; RBAC은 Stage F 뒤로 재배치 ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)) |
 | 라우트 정리 및 API 계약 동결 | `POST /file`, `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` — 소비자 0명 상태에서 표면 동결 (Stage F 작업 1) |
 | 에러 코드 계약 | 동결된 `ErrorBody` 형태 + 18개 코드 카탈로그 + `APP_FILTER`로 등록한 전역 `AllExceptionsFilter` (Stage F 작업 2, [ADR 0011](ADR/0011-error-code-contract.ko.md)) |
+
+### 2026-07-24
+
+| 항목 | 비고 |
+|---|---|
+| Refresh 토큰 httpOnly 쿠키 + 회전/재사용 감지 | `refreshTokenHash` 앵커 컬럼, `SameSite=Strict` 쿠키, `POST /auth/signout` 신설; Stage F 작업 3 — **Stage F 완결** ([ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md)) |
 
 ### 2026-07-22
 

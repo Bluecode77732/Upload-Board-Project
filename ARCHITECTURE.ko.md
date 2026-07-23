@@ -31,16 +31,23 @@ AppModule
 | 라우트 | 인증 | 동작 |
 |---|---|---|
 | `POST /auth/register` | Basic 토큰 | `Basic base64(email:password)` 파싱, 중복 이메일 거부, `HASH_ROUNDS`로 bcrypt 해싱 후 저장 |
-| `POST /auth/signin` | Basic 토큰 | 자격 증명 검증 후 `{ refreshToken, accessToken }` 반환 |
-| `POST /auth/signin/local` | Body 자격 증명 | Passport `local-auth-guard` 전략으로 동일한 토큰 쌍 발급 |
-| `POST /auth/token/refresh` | Bearer 리프레시 토큰 | 리프레시 토큰 검증 후 새 액세스 토큰 반환 |
+| `POST /auth/signin` | Basic 토큰 | 자격 증명 검증 후 `{ accessToken }` 반환 + httpOnly 리프레시 쿠키 설정 |
+| `POST /auth/signin/local` | Body 자격 증명 | Passport `local-auth-guard` 전략으로 동일 |
+| `POST /auth/token/refresh` | httpOnly 리프레시 쿠키 | 쌍을 회전(재사용 감지) — 새 쿠키 + 새 액세스 토큰 |
+| `POST /auth/signout` | Bearer 액세스 토큰 | 저장된 리프레시 토큰 해시와 쿠키를 삭제 |
 
-- `AuthService` (`src/auth/auth.service.ts`): `parseBasicToken`, `parseBearerToken(rawToken, isRefreshToken)`,
-  `validateUser`, `issueToken(user: Pick<UserEntity, 'id'>, isRefreshToken)`, `register`, `signIn`.
+- `AuthService` (`src/auth/auth.service.ts`): `parseBasicToken`, `verifyToken(token, isRefreshToken)`,
+  `validateUser`, `issueToken(user: Pick<UserEntity, 'id'>, isRefreshToken)`, `issueTokenPair`,
+  `rotateRefreshToken`, `signOut`, `register`, `signIn`.
 - 액세스·리프레시 토큰은 **별도 시크릿**(`ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET`)으로
-  서명되며 `payload.type: 'access' | 'refresh'`를 담습니다. `parseBearerToken`은 대응하는
+  서명되며 `payload.type: 'access' | 'refresh'`를 담습니다. `verifyToken`은 대응하는
   시크릿으로 검증하고 **동시에** `type` 클레임을 확인하므로, 리프레시 토큰을 액세스 토큰으로
   재사용할 수 없습니다 ([ADR 0002](ADR/0002-dual-secret-token-pair.ko.md)).
+- 리프레시 토큰은 httpOnly 쿠키(`refreshToken`: `SameSite=Strict`, `Path=/auth/token`,
+  prod에서 `Secure`, `Max-Age` = 리프레시 만료)로만 이동합니다. 그 SHA-256이
+  `UserEntity.refreshTokenHash`에 앵커로 저장되고 `POST /auth/token/refresh`가 회전시킵니다 —
+  회수된 토큰을 재사용하면 세션 전체가 401 `AUTH_REFRESH_REUSED`로 무효화됩니다
+  ([ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md)). 계정당 1세션입니다.
 - 전략: `JwtStrategy`(이름 `"jwt-auth-guard"`, 액세스 토큰 검증, `UserService.findOne`으로
   사용자 로드 후 `password` 제거), `LocalStrategy`(이름 `"local-auth-guard"`).
 - `JwtModule.register({})`가 비어 있는 것은 의도된 것입니다 — 두 개의 시크릿이 쓰이므로
@@ -166,6 +173,7 @@ UserEntity                          FileEntity
 ├── id          PK                  ├── id        PK
 ├── email       unique              ├── title     unique
 ├── password    @Exclude(toPlain)   ├── filePath  ("file/upload/granted_...")
+├── refreshTokenHash  @Exclude, nullable (회전 앵커 — ADR 0012)
 ├── creator     OneToMany ────────► ├── creator   ManyToOne (nullable: false, cascade: true)
 ├── createdAt                       ├── createdAt
 └── updatedAt                       └── updatedAt

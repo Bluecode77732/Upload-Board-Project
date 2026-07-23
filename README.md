@@ -89,11 +89,16 @@ Optional: `BASE_URL` (default `http://localhost:3000`; composes public file URLs
 
 All endpoints except `/auth/*` require a Bearer access token.
 
-**Authentication**
+**Authentication** — the refresh token travels only as an httpOnly cookie
+(`SameSite=Strict`, `Path=/auth/token`); browsers must call refresh/signout with
+`credentials: 'include'` ([ADR 0012](ADR/0012-refresh-cookie-rotation.md))
 - `POST /auth/register` — register with a Basic token (`base64(email:password)`)
-- `POST /auth/signin` — get `{ refreshToken, accessToken }` (Basic token)
+- `POST /auth/signin` — get `{ accessToken }` + refresh cookie (Basic token)
 - `POST /auth/signin/local` — same, via body credentials (Passport local strategy)
-- `POST /auth/token/refresh` — new access token (Bearer refresh token)
+- `POST /auth/token/refresh` — rotates the refresh cookie, returns a new access
+  token; replaying a rotated-out token invalidates the session (`AUTH_REFRESH_REUSED`)
+- `POST /auth/signout` — invalidates the server-side session anchor and clears
+  the cookie (Bearer access token)
 
 **User** — user creation is `POST /auth/register`; there is no `POST /user`
 - `GET /user` — list users
@@ -113,7 +118,7 @@ All endpoints except `/auth/*` require a Bearer access token.
 
 ```
 POST /auth/register   (Basic)          → user created
-POST /auth/signin     (Basic)          → { refreshToken, accessToken }
+POST /auth/signin     (Basic)          → { accessToken } + Set-Cookie: refreshToken (httpOnly)
 POST /upload/attach   (Bearer, video)  → { filename: "temp_..." }
 POST /file            (Bearer, { title, filePath: "temp_..." })
                                        → promoted; served at {BASE_URL}/file/upload/granted_...

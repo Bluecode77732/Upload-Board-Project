@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Before making any change:
 1. Inspect the codebase thoroughly — read the relevant files, grep for symbols, trace the actual call chain.
    Concern-to-entrypoint map (check these first):
-   - Auth flow change      → read `src/auth/auth.service.ts` (`parseBasicToken` / `parseBearerToken` / `issueToken`) and `src/auth/strategy/`; grep `JwtAuthGuard`, `LocalAuthGuard`
+   - Auth flow change      → read `src/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `src/auth/strategy/`; grep `JwtAuthGuard`, `LocalAuthGuard`
    - File metadata change  → trace `src/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract)
    - Physical upload change→ read `src/upload/upload.module.ts` (Multer diskStorage, `temp_{uuid}_{timestamp}` naming) and `upload.controller.ts` (100MB size limit)
    - Env var change        → read the Joi schema in `src/app.module.ts` AND `.env.example` — both must stay in sync
@@ -101,7 +101,7 @@ For each change being made, explicitly state:
 
   Service-level impact:
   - `FileService` change → check `file.service.spec.ts` (QueryRunner mock, `jest.mock('fs/promises')`)
-  - `AuthService` change → check `auth.service.spec.ts`; verify Basic/Bearer parsing invariants and the access/refresh `type` check still hold
+  - `AuthService` change → check `auth.service.spec.ts`; verify Basic parsing, the access/refresh `type` check (`verifyToken`), and the rotation hash-anchor invariants (`issueTokenPair`/`rotateRefreshToken`) still hold
   - `UserService` change → check `user.service.spec.ts`; `JwtStrategy.validate` depends on `userService.findOne` — a signature change breaks token validation
 
 ### Result Review (결과 검토)
@@ -540,15 +540,19 @@ effect), choose the pattern explicitly from this table — state the choice and 
 
 - Breakdown: access and refresh tokens are signed with **separate secrets**
   (`ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET`) and carry `payload.type`
-  (`'access' | 'refresh'`); `parseBearerToken(rawToken, isRefreshToken)` verifies with
+  (`'access' | 'refresh'`); `verifyToken(token, isRefreshToken)` verifies with
   the matching secret AND checks `payload.type` (`auth.service.ts`). `JwtStrategy`
-  validates access tokens only (`ACCESS_TOKEN_SECRET`).
+  validates access tokens only (`ACCESS_TOKEN_SECRET`). The refresh token travels
+  only as an httpOnly cookie and is anchored server-side as a SHA-256 hash
+  (`UserEntity.refreshTokenHash`) for rotation/reuse detection — ADR 0012.
 - Rationale: the type check prevents a refresh token from being replayed as an access
-  token even though both are structurally valid JWTs.
+  token even though both are structurally valid JWTs; the stored hash makes a
+  rotated-out token's replay detectable and the session revocable.
 - Goal: any new token consumer verifies both the secret and the `type` claim — never
   one without the other. `issueToken` takes `Pick<UserEntity, 'id'>` so a bare JWT
   payload (`{ id: payload.sub }`) can be re-tokenized without a DB round trip — keep
-  that signature.
+  that signature. New refresh-token consumers must also preserve the hash-anchor
+  contract (`issueTokenPair` stores, `rotateRefreshToken` compares, `signOut` clears).
 
 ### Boundary Validation & Response Shaping
 
@@ -590,16 +594,22 @@ Do not suggest alternatives to these decisions without explicit request.
 - Guards: `JwtAuthGuard` (Passport strategy name `"jwt-auth-guard"`) protects all
   non-auth controllers at class level; `LocalAuthGuard` (`"local-auth-guard"`) exists
   for `POST /auth/signin/local` only
-- Refresh: `POST /auth/token/refresh` takes the refresh token as a Bearer header
-  and returns a new access token
+- Refresh (ADR 0012): the refresh token travels only as an httpOnly cookie
+  (`refreshToken`: `SameSite=Strict`, `Path=/auth/token`, `Secure` in prod);
+  `POST /auth/token/refresh` reads the cookie, rotates the pair (SHA-256 anchor
+  in `UserEntity.refreshTokenHash`; replay of a rotated-out token invalidates
+  the session — 401 `AUTH_REFRESH_REUSED`), and returns a new access token.
+  `POST /auth/signout` clears the anchor and the cookie. One session per account
 - Authorization roadmap (decided 2026-07-22): **ownership checks landed 2026-07-22**
   as a dedicated task — `PATCH/DELETE /user/:id` are self-only (controller-level
   check via `@UserId`), `PATCH /file/:id` and `DELETE /file/:id` are
   creator-only (service-level check, `creator` relation loaded). **RBAC is still
   pending** as its own explicit task (see Known Gaps & Roadmap) — do not bolt role
   logic onto unrelated changes; the introduction happens as a designed, dedicated change
-- **Never suggest**: session-based auth, a single shared JWT secret, storing tokens
-  server-side
+- **Never suggest**: session-based auth, a single shared JWT secret, storing raw
+  tokens server-side (the sanctioned server-side state is exactly one SHA-256
+  *hash* of the current refresh token — the ADR 0012 rotation anchor; a token
+  table or raw-token storage still requires its own explicit decision)
 
 ### Database (PostgreSQL + TypeORM)
 - `synchronize: false` is committed and stays that way
@@ -756,9 +766,11 @@ pnpm test -- file.service
 
 **AuthModule** (`src/auth/`)
 - REST: `POST /auth/register`, `POST /auth/signin` (both Basic token),
-  `POST /auth/token/refresh` (Bearer refresh token),
-  `POST /auth/signin/local` (Passport local strategy, body credentials)
-- `AuthService`: `parseBasicToken`, `parseBearerToken`, `validateUser`, `issueToken`, `register`, `signIn`
+  `POST /auth/token/refresh` (httpOnly refresh cookie — rotation),
+  `POST /auth/signin/local` (Passport local strategy, body credentials),
+  `POST /auth/signout` (Bearer access token — clears anchor + cookie)
+- `AuthService`: `parseBasicToken`, `verifyToken`, `validateUser`, `issueToken`,
+  `issueTokenPair`, `rotateRefreshToken`, `signOut`, `register`, `signIn`
 - Strategies: `JwtStrategy` (`"jwt-auth-guard"`, validates access tokens, loads the user
   via `UserService.findOne`, strips `password`), `LocalStrategy` (`"local-auth-guard"`,
   email/password fields)

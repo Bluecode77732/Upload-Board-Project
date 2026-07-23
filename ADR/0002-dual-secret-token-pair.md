@@ -29,6 +29,13 @@ window. Session-based auth was ruled out (stateless API, no session store).
 
 **Never**: a single shared JWT secret, session-based auth, storing tokens server-side.
 
+> 2026-07-24: the "storing tokens server-side" clause is amended by
+> [ADR 0012](0012-refresh-cookie-rotation.md) — a SHA-256 *hash* of the current
+> refresh token is stored as a rotation/reuse-detection anchor (not a token
+> store). The dual-secret + `type`-claim decision is unchanged; the refresh
+> token now travels as an httpOnly cookie and `parseBearerToken`'s bare
+> verification core lives on as `verifyToken`.
+
 ## Consequences
 
 - Refresh-as-access replay is structurally impossible: wrong secret fails verification,

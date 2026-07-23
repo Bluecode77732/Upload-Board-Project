@@ -31,16 +31,23 @@ a change spanning "physical file" and "file metadata" is two modules' work by de
 | Route | Auth | Behavior |
 |---|---|---|
 | `POST /auth/register` | Basic token | Parses `Basic base64(email:password)`, rejects duplicate email, bcrypt-hashes with `HASH_ROUNDS`, saves user |
-| `POST /auth/signin` | Basic token | Validates credentials, returns `{ refreshToken, accessToken }` |
-| `POST /auth/signin/local` | Body credentials | Same token pair via Passport `local-auth-guard` strategy |
-| `POST /auth/token/refresh` | Bearer refresh token | Verifies refresh token, returns a new access token |
+| `POST /auth/signin` | Basic token | Validates credentials, returns `{ accessToken }` and sets the httpOnly refresh cookie |
+| `POST /auth/signin/local` | Body credentials | Same via Passport `local-auth-guard` strategy |
+| `POST /auth/token/refresh` | httpOnly refresh cookie | Rotates the pair (reuse detection) — new cookie + new access token |
+| `POST /auth/signout` | Bearer access token | Clears the stored refresh-token hash and the cookie |
 
-- `AuthService` (`src/auth/auth.service.ts`): `parseBasicToken`, `parseBearerToken(rawToken, isRefreshToken)`,
-  `validateUser`, `issueToken(user: Pick<UserEntity, 'id'>, isRefreshToken)`, `register`, `signIn`.
+- `AuthService` (`src/auth/auth.service.ts`): `parseBasicToken`, `verifyToken(token, isRefreshToken)`,
+  `validateUser`, `issueToken(user: Pick<UserEntity, 'id'>, isRefreshToken)`, `issueTokenPair`,
+  `rotateRefreshToken`, `signOut`, `register`, `signIn`.
 - Access and refresh tokens are signed with **separate secrets** (`ACCESS_TOKEN_SECRET` /
-  `REFRESH_TOKEN_SECRET`) and carry `payload.type: 'access' | 'refresh'`; `parseBearerToken`
+  `REFRESH_TOKEN_SECRET`) and carry `payload.type: 'access' | 'refresh'`; `verifyToken`
   verifies with the matching secret **and** checks the `type` claim, so a refresh token can
   never be replayed as an access token ([ADR 0002](ADR/0002-dual-secret-token-pair.md)).
+- The refresh token travels only as an httpOnly cookie (`refreshToken`: `SameSite=Strict`,
+  `Path=/auth/token`, `Secure` in prod, `Max-Age` = refresh expiry); its SHA-256 is anchored
+  in `UserEntity.refreshTokenHash`, and `POST /auth/token/refresh` rotates it — replaying a
+  rotated-out token invalidates the whole session with 401 `AUTH_REFRESH_REUSED`
+  ([ADR 0012](ADR/0012-refresh-cookie-rotation.md)). One session per account.
 - Strategies: `JwtStrategy` (name `"jwt-auth-guard"`, validates access tokens, loads the user
   via `UserService.findOne`, strips `password`), `LocalStrategy` (name `"local-auth-guard"`).
 - `JwtModule.register({})` is intentionally empty — secrets are supplied per call in
@@ -166,6 +173,7 @@ UserEntity                          FileEntity
 ├── id          PK                  ├── id        PK
 ├── email       unique              ├── title     unique
 ├── password    @Exclude(toPlain)   ├── filePath  ("file/upload/granted_...")
+├── refreshTokenHash  @Exclude, nullable (rotation anchor — ADR 0012)
 ├── creator     OneToMany ────────► ├── creator   ManyToOne (nullable: false, cascade: true)
 ├── createdAt                       ├── createdAt
 └── updatedAt                       └── updatedAt
