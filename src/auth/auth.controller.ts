@@ -1,4 +1,5 @@
 import {
+  ClassSerializerInterceptor,
   Controller,
   Post,
   Headers,
@@ -6,6 +7,7 @@ import {
   Req,
   Res,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guard/local-auth.guard';
@@ -31,6 +33,9 @@ const REFRESH_TOKEN_COOKIE = 'refreshToken';
 
 @Controller('auth')
 @ApiTags('Authentication API')
+// register returns a UserEntity — without this, @Exclude fields (password,
+// refreshTokenHash) leak in the response (Never Do Group 3).
+@UseInterceptors(ClassSerializerInterceptor)
 export class AuthController {
   constructor(
     private readonly authService: AuthService,

@@ -242,7 +242,9 @@ describe('AuthService', () => {
       const result = await authService.issueToken(user, true);
 
       expect(jwtService.signAsync).toHaveBeenCalledWith(
-        { sub: user.id, type: 'refresh' },
+        // jti: every refresh token is unique so reuse detection can tell
+        // rotated-out tokens apart (ADR 0012).
+        { sub: user.id, type: 'refresh', jti: expect.any(String) as string },
         { secret: 'refresh_secret', expiresIn: 3600 },
       );
       expect(result).toBe(token);

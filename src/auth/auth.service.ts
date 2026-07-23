@@ -7,7 +7,7 @@ import { UserEntity } from 'src/user/entity/user.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Payload } from './interface/payload-interface';
@@ -111,6 +111,9 @@ export class AuthService {
     const payload: Payload = {
       sub: user.id,
       type: isRefreshToken ? 'refresh' : 'access',
+      // jti makes every refresh token unique — same-second issuance would
+      // otherwise produce identical signatures, blinding reuse detection.
+      ...(isRefreshToken ? { jti: randomUUID() } : {}),
     };
 
     return this.jwtService.signAsync(payload, {
