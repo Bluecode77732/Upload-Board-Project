@@ -193,16 +193,21 @@ settled while zero consumers exist.
   MIT — decide before the repo is published.
 - Chat-project remnant handling ([plan](CHAT-REMNANT-REMOVAL-PLAN.md)):
   git-history decision + re-verification trigger for new or pasted-in docs.
-- Dev-transitive `pnpm audit` findings (handlebars via ts-jest; glob/minimatch
-  via jest and @nestjs/cli) — build/test-time only; waiting on upstream
-  releases.
+- Dev-transitive `pnpm audit` findings (handlebars via ts-jest;
+  glob/minimatch/webpack via jest and @nestjs/cli) — build/test-time only;
+  waiting on upstream releases. (`pnpm audit --prod` is clean as of 2026-07-24.)
 - API versioning timing — the consumer is now decided; versioning activates
   when a post-freeze breaking change actually needs it (see Design criteria).
-- Frontend stack choice (framework, build tool, hosting) — a frontend-repo
-  decision; nothing in this repo depends on it.
-- Whether `POST /auth/signin/local` stays as a second signin path long-term —
-  it survives the Stage F freeze; the frontend will pick one canonical signin
-  route, and the other's fate is decided then.
+- Frontend stack — **decided 2026-07-24: React + Vite** (SPA consuming this
+  REST API; Next.js rejected as SSR/API-route overlap with this backend, Vue as
+  runner-up). Repo name "frontend", separate repository (ADR 0010); hosting is a
+  frontend-repo decision.
+- Canonical signin path — **decided 2026-07-24: `POST /auth/signin` (Basic)**,
+  chosen for lowest risk / lightest maintenance (reuses `parseBasicToken` that
+  `register` needs anyway; RFC 7617 protocol standard; backed by ADR 0001).
+  `POST /auth/signin/local` (+ `LocalStrategy` + `LocalAuthGuard`) is therefore
+  a **removal candidate** — retiring it is its own dedicated task under Scope
+  Discipline, not a drive-by; it stays until then.
 - Doc-wording sync (deferred 2026-07-23): three pre-plan "candidate" phrasings
   are now superseded by this plan — ADR 0003 ("candidate roadmap item" → decided
   Stage 2), ADR 0006 Consequences ("top roadmap item" → landed),

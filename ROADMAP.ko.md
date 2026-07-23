@@ -181,15 +181,20 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   저장소 공개 전 결정 필요.
 - Chat 프로젝트 잔재 처리 ([계획서](CHAT-REMNANT-REMOVAL-PLAN.ko.md)): git
   히스토리 결정 + 신규/붙여넣기 문서 재검증 트리거.
-- dev 전이 의존성 `pnpm audit` 지적(handlebars — ts-jest 경유; glob/minimatch —
-  jest·@nestjs/cli 경유) — 빌드/테스트 시점 전용; 업스트림 릴리스 대기.
+- dev 전이 의존성 `pnpm audit` 지적(handlebars — ts-jest 경유;
+  glob/minimatch/webpack — jest·@nestjs/cli 경유) — 빌드/테스트 시점 전용;
+  업스트림 릴리스 대기. (`pnpm audit --prod`는 2026-07-24 기준 클린.)
 - API 버저닝 시점 — 소비자는 이제 결정되었다; 버저닝은 동결 이후 실제 breaking
   변경이 필요해질 때 활성화한다(설계 기준 참조).
-- 프론트엔드 스택 선정(프레임워크, 빌드 도구, 호스팅) — 프론트엔드 repo의
-  결정 사항; 이 repo의 어떤 것도 여기에 의존하지 않는다.
-- `POST /auth/signin/local`의 장기 존치 여부 — Stage F 동결에서는 일단
-  생존한다; 프론트엔드가 공식 로그인 경로 하나를 고르는 시점에 나머지의 운명을
-  결정한다.
+- 프론트엔드 스택 — **2026-07-24 결정: React + Vite** (이 REST API를 소비하는
+  SPA; Next.js는 SSR/API 라우트가 이 백엔드와 역할 중복이라 기각, Vue는 차순위).
+  repo 이름 "frontend", 별도 저장소(ADR 0010); 호스팅은 프론트엔드 repo의 결정.
+- 공식 로그인 경로 — **2026-07-24 결정: `POST /auth/signin` (Basic)**. 리스크·
+  유지보수 최소 기준으로 선택(`register`가 어차피 쓰는 `parseBasicToken`을
+  재사용; RFC 7617 프로토콜 표준; ADR 0001로 뒷받침). 따라서
+  `POST /auth/signin/local`(+ `LocalStrategy` + `LocalAuthGuard`)은 **제거
+  후보** — 제거는 Scope Discipline상 별도 전용 작업이며 부수 작업이 아니다;
+  그때까지는 존치한다.
 - 문서 문구 동기화 (2026-07-23 유예 결정): 계획 수립 이전의 "후보(candidate)"
   표현 3곳이 이 계획으로 대체됨 — ADR 0003("candidate roadmap item" → Stage 2
   확정), ADR 0006 Consequences("top roadmap item" → 완료),
