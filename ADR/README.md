@@ -18,6 +18,7 @@ each ADR records the *why* behind those rules.
 | [0007](0007-ownership-checks-without-rbac.md) | Ownership checks without RBAC | Accepted | 2026-07-22 |
 | [0008](0008-opt-in-cors.md) | Opt-in CORS via `CORS_ORIGIN` | Accepted | 2026-07-22 |
 | [0009](0009-rest-only-api-with-swagger.md) | REST-only API layer documented with Swagger | Accepted | 2025-12-17 |
+| [0010](0010-frontend-split-and-api-surface-freeze.md) | Frontend split and API surface freeze | Accepted | 2026-07-23 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

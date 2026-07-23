@@ -10,7 +10,8 @@
 A NestJS REST API where authenticated users upload and manage video files.
 JWT auth (Passport), PostgreSQL via TypeORM, Multer disk storage, transaction-safe
 file promotion, Swagger documentation. A local/portfolio backend project — no
-frontend, no deploy pipeline.
+deploy pipeline; a browser frontend is decided as a separate repository
+([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)) but not yet built.
 
 - Timeline: 6 weeks (initial build), ongoing refinement
 - Skills: TypeORM, PostgreSQL, transactions, DTO validation, Passport, guards, Jest, Swagger
@@ -135,10 +136,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full request and data flow.
 ## Known Limitations
 
 Tracked in [ROADMAP.md](ROADMAP.md) — since 2026-07-23 the full staged project
-plan. Highlights: no RBAC yet (ownership checks only; RBAC is the next dedicated
-task), the e2e suite is still the untouched Nest template, and no CI/Docker/logging
-infrastructure exists yet (decided Stage 1 roadmap items). Uploads enforce an
-mp4/mov/webm allowlist and `pnpm lint` is clean as of 2026-07-22.
+plan. Highlights: no RBAC yet (ownership checks only; RBAC follows the Stage F
+frontend-preparation pipeline), the e2e suite is still the untouched Nest
+template, and no CI/Docker/logging infrastructure exists yet (decided Stage 1
+roadmap items). **Uploaded files are served unauthenticated at public URLs**
+(`{BASE_URL}/file/upload/granted_...`) until the Stage 4 VOD access-control task
+— anyone with the link can fetch them ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)).
+Uploads enforce an mp4/mov/webm allowlist and `pnpm lint` is clean as of
+2026-07-22.
 
 ## Author
 

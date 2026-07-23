@@ -13,6 +13,10 @@
 ## [Unreleased]
 
 ### 추가
+- [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md) — 프론트엔드
+  분리와 API 표면 동결(2026-07-23): 프론트엔드는 별도 저장소로 만들고 admin은
+  그 안의 `/admin` 라우트 구역으로 시작; 비표준 라우트 4건을 리네임한 뒤 API
+  표면을 동결; 모노레포와 즉시 3분리는 시기상조로 기각.
 - TypeORM 마이그레이션 도입 ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)):
   `migration:generate`/`run`/`revert`/`show` 스크립트(컴파일된
   `dist/data-source.js` 대상 실행), CLI DataSource `src/data-source.ts`(환경변수는
@@ -31,6 +35,12 @@
   향후 아키텍처 목표로 선언. 관련 문서 동기화: `CLAUDE.md`(로드맵/CI/스토리지
   주석), `README.md`(낡은 알려진 한계 수정), `CONTRIBUTING.md`(마이그레이션
   기반 설정).
+- `ROADMAP.md`를 프론트엔드 분리 결정으로 개정(ADR 0010, 2026-07-23): Stage 0
+  앞에 **Stage F — 프론트엔드 준비**(라우트 정리·계약 동결, 에러 코드 체계,
+  refresh 토큰 cookie 전환 + 회전) 신설; RBAC은 Stage F 뒤로 재배치(API 표면을
+  바꾸지 않으므로); refresh 토큰 회전은 Stage 2에서 앞당김; 정적 파일 무인증
+  서빙을 Stage 4까지 감수하는 알려진 제약으로 명문화. 관련 문서 동기화:
+  `CLAUDE.md`, `README.md`.
 
 ## [0.0.1] — 개발 라인
 

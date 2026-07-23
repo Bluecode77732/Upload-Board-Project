@@ -13,6 +13,11 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) — frontend split
+  and API surface freeze (2026-07-23): the frontend lands as a separate
+  repository with admin as an `/admin` route section inside it; four
+  non-canonical routes are renamed then the API surface is frozen; monorepo and
+  an immediate three-way split rejected as premature.
 - TypeORM migration adoption ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)):
   `migration:generate`/`run`/`revert`/`show` scripts (run against the compiled
   `dist/data-source.js`), CLI DataSource `src/data-source.ts` (env via Node's
@@ -33,6 +38,13 @@ development line (package.json version).
   storage port-adapter declared as a future architecture goal. Related docs
   synced: `CLAUDE.md` (roadmap/CI/storage notes), `README.md` (stale
   known-limitations fixed), `CONTRIBUTING.md` (migration-based setup).
+- `ROADMAP.md` amended for the frontend split (ADR 0010, 2026-07-23): new
+  **Stage F — Frontend preparation** (route cleanup & contract freeze,
+  error-code system, refresh-token cookie move + rotation) inserted ahead of
+  Stage 0; RBAC re-sequenced after Stage F (it changes no API surface);
+  refresh-token rotation pulled forward out of Stage 2; unauthenticated static
+  file serving documented as an accepted known constraint until Stage 4.
+  Related docs synced: `CLAUDE.md`, `README.md`.
 
 ## [0.0.1] — development line
 

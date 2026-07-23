@@ -659,7 +659,8 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
   `src/data-source.ts`, baseline `InitialSchema` migration — see Architecture
   Decisions > Database
 - RBAC (role column + role-aware guard) — see Architecture Decisions > Auth;
-  now unblocked (the `role` column ships as a reviewed migration)
+  sequenced after Stage F (frontend preparation — decided 2026-07-23, ADR 0010);
+  the `role` column ships as a reviewed migration
 - ~~Ownership checks~~ — **landed 2026-07-22** (commit `0549ca4`): user writes self-only,
   file writes creator-only
 - Chat-project remnant handling — docs audited clean 2026-07-22; pending git-history
@@ -667,10 +668,13 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
   ROADMAP.md > Unscheduled / open decisions
 
 **Full roadmap plan (decided 2026-07-23)**: an 11-axis decision review fixed the
-overall plan in ROADMAP.md — staged dedicated tasks: Stage 0 RBAC → Stage 1
-foundation (Node/pnpm pinning, Docker/compose, CI, logging conventions, E2E
-rewrite) → Stage 2 mechanism hardening (orphan temp-file cleanup, deletion policy,
-refresh-token rotation, upload idempotency) → Stage 3 board-domain expansion
+overall plan in ROADMAP.md — staged dedicated tasks: Stage F frontend
+preparation (route cleanup & contract freeze, error-code system, refresh-token
+cookie move + rotation — decided 2026-07-23, ADR 0010: frontend lands as a
+separate repository, admin as an `/admin` route section inside it) → Stage 0
+RBAC → Stage 1 foundation (Node/pnpm pinning, Docker/compose, CI, logging
+conventions, E2E rewrite) → Stage 2 mechanism hardening (orphan temp-file
+cleanup, deletion policy, upload idempotency) → Stage 3 board-domain expansion
 (search/filter/sort, post/comment modules) → Stage 4 production transition (AWS
 container deploy, VOD playback access control, storage port-adapter, performance
 criteria). ROADMAP.md is the single source for the plan; items there that this
@@ -707,7 +711,9 @@ paginated; `.env.example` documents `BASE_URL`; the "300MB" comment is fixed;
 
 Single-package NestJS REST API for authenticated video-file upload and management.
 JWT auth (Passport), PostgreSQL via TypeORM, Multer disk storage, Swagger documentation.
-No frontend, no monorepo, no deployment pipeline — a local/portfolio backend project.
+No frontend, no monorepo, no deployment pipeline — a local/portfolio backend
+project. (A frontend was decided 2026-07-23 as a *separate* repository —
+ADR 0010; it is not yet built, and this repo stays backend-only.)
 
 ## Commands
 

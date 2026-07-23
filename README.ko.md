@@ -10,7 +10,9 @@
 인증된 사용자가 동영상 파일을 업로드하고 관리하는 NestJS REST API.
 JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, 트랜잭션으로
 보호되는 파일 승격, Swagger 문서화를 갖춘 로컬/포트폴리오 백엔드 프로젝트입니다 —
-프론트엔드와 배포 파이프라인은 없습니다.
+배포 파이프라인은 없으며, 브라우저 프론트엔드는 별도 저장소로 만들기로
+결정되었지만([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md))
+아직 구축 전입니다.
 
 - 기간: 6주(초기 구축), 이후 지속 개선
 - 기술: TypeORM, PostgreSQL, 트랜잭션, DTO 검증, Passport, 가드, Jest, Swagger
@@ -135,10 +137,13 @@ POST /file/uploadFile (Bearer, { title, filePath: "temp_..." })
 ## 알려진 한계
 
 [ROADMAP.ko.md](ROADMAP.ko.md)에서 추적하며, 2026-07-23부터는 단계별 전체
-프로젝트 계획이기도 합니다. 요점: RBAC 미도입(소유권 검사만 — RBAC이 다음 전용
-작업), e2e 스위트는 아직 Nest 템플릿 그대로, CI/Docker/로깅 인프라 부재(Stage 1
-확정 로드맵 항목). 업로드는 mp4/mov/webm 허용 목록을 강제하며 `pnpm lint`는
-2026-07-22 기준 클린.
+프로젝트 계획이기도 합니다. 요점: RBAC 미도입(소유권 검사만 — RBAC은 Stage F
+프론트엔드 준비 파이프라인 이후 진행), e2e 스위트는 아직 Nest 템플릿 그대로,
+CI/Docker/로깅 인프라 부재(Stage 1 확정 로드맵 항목). **업로드된 파일은 무인증
+공개 URL**(`{BASE_URL}/file/upload/granted_...`)**로 서빙됩니다** — Stage 4의
+VOD 접근 제어 작업 전까지는 링크를 아는 사람은 누구나 접근할 수
+있습니다([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)).
+업로드는 mp4/mov/webm 허용 목록을 강제하며 `pnpm lint`는 2026-07-22 기준 클린.
 
 ## 작성자
 

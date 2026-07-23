@@ -5,8 +5,11 @@
 The full project plan for the Upload Board Project, established through an
 11-axis decision review on 2026-07-23 (essence → methodology → design criteria →
 architecture → modules → domain → mechanisms → data handling → platform →
-infrastructure → deployment). Every item below lands as its own dedicated,
-designed change ([CLAUDE.md](CLAUDE.md) > Scope Discipline).
+infrastructure → deployment). Amended the same day by the frontend-split
+decision ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)),
+which inserts Stage F (frontend preparation) ahead of Stage 0. Every item below
+lands as its own dedicated, designed change
+([CLAUDE.md](CLAUDE.md) > Scope Discipline).
 
 > **Consistency note**: items in this plan that CLAUDE.md marks "never suggest
 > unless explicitly requested" (CI, Docker, cloud storage/deployment) entered
@@ -21,20 +24,27 @@ designed change ([CLAUDE.md](CLAUDE.md) > Scope Discipline).
   adoption (`79603ad`, [ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)),
   followed by the Korean fluency pass over the `.ko.md` docs (`dc1ad72`).
 - This plan itself was established on 2026-07-23 through the 11-axis review.
-- **Next dedicated task: RBAC (Stage 0)** — no remaining dependencies.
+- Frontend split decided 2026-07-23 ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)):
+  a separate frontend repository will consume this API; admin starts as an
+  `/admin` route section inside it. RBAC is re-sequenced after Stage F — it
+  adds permissions without changing the API surface, so deferring it costs the
+  frontend no rework, while freezing the surface first saves it real rework.
+- **Next dedicated task: route cleanup & API contract freeze (Stage F)**.
 
 ## 1. Vision & essence
 
 - **Today**: a portfolio/learning backend — the point is demonstrable
   engineering discipline (design, documentation, tests) on a small but complete
   API.
-- **Target**: a production-oriented backend. The later stages (foundation
-  infrastructure, AWS deployment, playback access control) exist to make that
-  transition real rather than aspirational.
+- **Target**: a production-oriented backend with a browser frontend as its
+  decided consumer (separate repository, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)).
+  The later stages (foundation infrastructure, AWS deployment, playback access
+  control) exist to make that transition real rather than aspirational.
 - **Priority axis** (supersedes the previous "security → decided architecture
-  work → hygiene → docs/tests"): security → decided architecture work (RBAC) →
-  foundation (reproducibility · observability · test reliability) → mechanism
-  hardening → domain expansion → production transition.
+  work → hygiene → docs/tests"): security → frontend preparation (API surface
+  freeze) → decided architecture work (RBAC) → foundation (reproducibility ·
+  observability · test reliability) → mechanism hardening → domain expansion →
+  production transition.
 
 ## 2. Methodology
 
@@ -56,7 +66,7 @@ work must pass them; they are not themselves roadmap subjects.
 |---|---|
 | Observability | Logging infrastructure is currently zero. A backend that cannot be diagnosed cannot be operated — the first prerequisite of the production target. |
 | Reproducibility / portability | Node/pnpm versions unpinned, DB provisioned by hand. Environment drift becomes a direct failure source the moment a deploy target exists. |
-| API contract stability | No consumer exists today (Swagger only). Versioning and error-code conventions activate when a frontend or external consumer appears — deliberately deferred, not ignored. |
+| API contract stability | The consumer is now decided (frontend, 2026-07-23) — Stage F is this axis activating: routes canonicalized and frozen while zero consumers exist, error codes delivered as Stage F work. URI versioning stays deferred until a post-freeze breaking change actually needs it. |
 | Test reliability | The e2e suite is the untouched Nest template; unit tests alone cannot guarantee the auth flow or the `temp_` → `granted_` path end to end. |
 | Performance / capacity | Board-domain expansion raises list-query complexity, and video serving is disk/bandwidth-heavy. Response-time targets, index policy, and disk ceilings become explicit criteria. |
 
@@ -81,6 +91,16 @@ work must pass them; they are not themselves roadmap subjects.
   revisiting ADR 0005 and passing the ISP rule ("no service-interface layer
   until a real second implementation exists") through the Principle Conflict
   Protocol.
+- **Frontend split (decided 2026-07-23, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md))**:
+  a separate frontend repository consumes this API over HTTP; admin starts as
+  an `/admin` route section inside that frontend and is promoted to its own
+  app only after RBAC lands and real admin requirements exist. A pnpm-workspace
+  monorepo and an immediate three-way split (frontend/backend/admin) were
+  considered and rejected as premature.
+- **Known constraint (accepted)**: static file serving stays unauthenticated
+  until the Stage 4 VOD playback access-control task revisits
+  [ADR 0005](ADR/0005-local-disk-storage.md) — `{BASE_URL}/file/...` URLs are
+  public, and the frontend must treat them as such.
 - Considered and set aside in the review: event-driven reinforcement (only one
   side effect exists to decouple, and moving the rename out of the transaction
   would break `temp_`/`granted_` atomicity) and CQRS-lite (the read model is
@@ -105,11 +125,22 @@ work must pass them; they are not themselves roadmap subjects.
 
 Ordering is by dependency. Each row is one dedicated task.
 
-### Stage 0 — current entry point
+### Stage F — Frontend preparation (decided 2026-07-23, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md))
+
+The pre-frontend backend pipeline — everything a browser client will depend on,
+settled while zero consumers exist.
 
 | Task | Rationale / dependencies |
 |---|---|
-| **RBAC** — `role` column + role-aware guard | Decided 2026-07-22; design fixed: three tiers (`user`/`admin`/`superadmin`), `PATCH /user/:id/role` superadmin-only, ownership checks extend to "self **or** admin". Unblocked — the `role` column ships as a reviewed migration. |
+| Route cleanup & API contract freeze | Canonicalize `POST /file`, `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh`; freeze the surface while breaking changes are still free (plural rename and auth action-route changes considered and rejected — ADR 0010). |
+| Error-code system (global exception filter) | A machine-readable error contract before the frontend hardcodes message strings or status-only branching. |
+| Refresh-token httpOnly-cookie move + rotation / reuse detection | **Pulled forward from Stage 2 (2026-07-23)** — a browser frontend makes token storage a real XSS surface. Requires its own ADR amending [ADR 0002](ADR/0002-dual-secret-token-pair.md)'s "no server-side token storage" stance, plus a reviewed schema migration. |
+
+### Stage 0 — decided architecture work (RBAC)
+
+| Task | Rationale / dependencies |
+|---|---|
+| **RBAC** — `role` column + role-aware guard | Decided 2026-07-22; design fixed: three tiers (`user`/`admin`/`superadmin`), `PATCH /user/:id/role` superadmin-only, ownership checks extend to "self **or** admin". Deferred behind Stage F (2026-07-23) — RBAC adds permissions without changing the API surface, so no frontend rework results. The `role` column ships as a reviewed migration. |
 
 ### Stage 1 — Foundation (reproducibility · observability · test reliability)
 
@@ -127,7 +158,6 @@ Ordering is by dependency. Each row is one dedicated task.
 |---|---|
 | Orphan temp-file cleanup | `temp_` files accumulate forever when `/file/uploadFile` is never called — the only unmanaged resource leak today. |
 | Deletion policy design (soft delete + FK) | One design task uniting the soft-delete question with the `DELETE /user/:id` FK-constraint 500 (`FileEntity.creator` is `nullable: false`). |
-| Refresh-token rotation / reuse detection | A stolen refresh token is currently replayable until expiry. The tension with [ADR 0002](ADR/0002-dual-secret-token-pair.md)'s "no server-side token storage" must be resolved at design time. |
 | Upload idempotency / duplicate policy | CLAUDE.md requires new write endpoints to state their duplicate-submission behavior — settle the frame before board expansion multiplies write endpoints. |
 
 ### Stage 3 — Domain expansion
@@ -155,8 +185,13 @@ Ordering is by dependency. Each row is one dedicated task.
 - Dev-transitive `pnpm audit` findings (handlebars via ts-jest; glob/minimatch
   via jest and @nestjs/cli) — build/test-time only; waiting on upstream
   releases.
-- API versioning timing — activates when a consumer appears (see Design
-  criteria).
+- API versioning timing — the consumer is now decided; versioning activates
+  when a post-freeze breaking change actually needs it (see Design criteria).
+- Frontend stack choice (framework, build tool, hosting) — a frontend-repo
+  decision; nothing in this repo depends on it.
+- Whether `POST /auth/signin/local` stays as a second signin path long-term —
+  it survives the Stage F freeze; the frontend will pick one canonical signin
+  route, and the other's fate is decided then.
 - Doc-wording sync (deferred 2026-07-23): three pre-plan "candidate" phrasings
   are now superseded by this plan — ADR 0003 ("candidate roadmap item" → decided
   Stage 2), ADR 0006 Consequences ("top roadmap item" → landed),
@@ -178,6 +213,7 @@ candidate under the CI task).
 | Item | Notes |
 |---|---|
 | Full roadmap plan established | 11-axis decision review; this document is its record |
+| Frontend split decision + Stage F pipeline | Separate frontend repo, admin as `/admin` route, contract freeze; RBAC re-sequenced after Stage F ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)) |
 
 ### 2026-07-22
 
