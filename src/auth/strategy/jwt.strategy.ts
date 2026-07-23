@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { Payload } from '../interface/payload-interface';
 import { UserEntity } from 'src/user/entity/user.entity';
 import { UserService } from 'src/user/user.service';
+import { ErrorCode } from 'src/common/error-code';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt-auth-guard') {
@@ -24,7 +25,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt-auth-guard') {
     const user = await this.userService.findOne(payload.sub);
 
     if (!user) {
-      throw new UnauthorizedException('User Not Found.');
+      throw new UnauthorizedException({
+        code: ErrorCode.AUTH_UNAUTHORIZED,
+        message: 'User Not Found.',
+      });
     }
 
     const { password, ...rest } = user;

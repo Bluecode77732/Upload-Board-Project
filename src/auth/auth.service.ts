@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Payload } from './interface/payload-interface';
+import { ErrorCode } from 'src/common/error-code';
 
 @Injectable()
 export class AuthService {
@@ -24,20 +25,29 @@ export class AuthService {
     const basicToken = rawToken.split(' ');
 
     if (basicToken.length !== 2) {
-      throw new BadRequestException('Bad token format.');
+      throw new BadRequestException({
+        code: ErrorCode.AUTH_BAD_TOKEN_FORMAT,
+        message: 'Bad token format.',
+      });
     }
 
     const [basic, token] = basicToken;
 
     if (basic.toLowerCase() !== 'basic') {
-      throw new BadRequestException('Bad token format.');
+      throw new BadRequestException({
+        code: ErrorCode.AUTH_BAD_TOKEN_FORMAT,
+        message: 'Bad token format.',
+      });
     }
 
     const decoded = Buffer.from(token, 'base64').toString('utf-8');
     const tokenSplit = decoded.split(':');
 
     if (tokenSplit.length !== 2) {
-      throw new BadRequestException('Bad token format.');
+      throw new BadRequestException({
+        code: ErrorCode.AUTH_BAD_TOKEN_FORMAT,
+        message: 'Bad token format.',
+      });
     }
 
     const [email, password] = tokenSplit;
@@ -51,7 +61,10 @@ export class AuthService {
     const user = await this.userRepository.findOne({ where: { email } });
 
     if (user) {
-      throw new BadRequestException('User already exists.');
+      throw new BadRequestException({
+        code: ErrorCode.AUTH_EMAIL_TAKEN,
+        message: 'User already exists.',
+      });
     }
 
     const hash = await bcrypt.hash(
@@ -68,13 +81,19 @@ export class AuthService {
     const user = await this.userRepository.findOne({ where: { email } });
 
     if (!user) {
-      throw new BadRequestException('Invalid credentials.');
+      throw new BadRequestException({
+        code: ErrorCode.AUTH_INVALID_CREDENTIALS,
+        message: 'Invalid credentials.',
+      });
     }
 
     const match = await bcrypt.compare(password, user.password);
 
     if (!match) {
-      throw new BadRequestException('Invalid credentials.');
+      throw new BadRequestException({
+        code: ErrorCode.AUTH_INVALID_CREDENTIALS,
+        message: 'Invalid credentials.',
+      });
     }
 
     return user;
@@ -110,13 +129,19 @@ export class AuthService {
       const bearerToken = rawToken.split(' ');
 
       if (bearerToken.length !== 2) {
-        throw new BadRequestException('Bad token format.');
+        throw new BadRequestException({
+          code: ErrorCode.AUTH_BAD_TOKEN_FORMAT,
+          message: 'Bad token format.',
+        });
       }
 
       const [bearer, token] = bearerToken;
 
       if (bearer.toLowerCase() !== 'bearer') {
-        throw new BadRequestException('Bad token format.');
+        throw new BadRequestException({
+          code: ErrorCode.AUTH_BAD_TOKEN_FORMAT,
+          message: 'Bad token format.',
+        });
       }
 
       const payload = await this.jwtService.verifyAsync<Payload>(token, {
@@ -127,17 +152,26 @@ export class AuthService {
 
       if (isRefreshToken) {
         if (payload.type !== 'refresh') {
-          throw new BadRequestException('Insert refresh token.');
+          throw new BadRequestException({
+            code: ErrorCode.AUTH_TOKEN_INVALID,
+            message: 'Insert refresh token.',
+          });
         }
       } else {
         if (payload.type !== 'access') {
-          throw new BadRequestException('Insert access token.');
+          throw new BadRequestException({
+            code: ErrorCode.AUTH_TOKEN_INVALID,
+            message: 'Insert access token.',
+          });
         }
       }
 
       return payload;
     } catch {
-      throw new UnauthorizedException('Token expired.');
+      throw new UnauthorizedException({
+        code: ErrorCode.AUTH_TOKEN_INVALID,
+        message: 'Token expired.',
+      });
     }
   }
 

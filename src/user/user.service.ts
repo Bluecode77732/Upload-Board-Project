@@ -5,6 +5,7 @@ import { UserEntity } from './entity/user.entity';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
+import { ErrorCode } from 'src/common/error-code';
 
 @Injectable()
 export class UserService {
@@ -23,7 +24,10 @@ export class UserService {
     const user = await this.userRepository.findOne({ where: { id } });
 
     if (!user) {
-      throw new NotFoundException(`User not found.`);
+      throw new NotFoundException({
+        code: ErrorCode.USER_NOT_FOUND,
+        message: 'User not found.',
+      });
     }
 
     return user;
@@ -35,7 +39,10 @@ export class UserService {
     const user = await this.userRepository.findOne({ where: { id } });
 
     if (!user) {
-      throw new NotFoundException('User not found.');
+      throw new NotFoundException({
+        code: ErrorCode.USER_NOT_FOUND,
+        message: 'User not found.',
+      });
     }
 
     if (password) {
@@ -60,7 +67,10 @@ export class UserService {
     const user = await this.userRepository.findOne({ where: { id } });
 
     if (!user) {
-      throw new NotFoundException(`User not found.`);
+      throw new NotFoundException({
+        code: ErrorCode.USER_NOT_FOUND,
+        message: 'User not found.',
+      });
     }
 
     await this.userRepository.delete(id);

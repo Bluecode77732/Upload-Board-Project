@@ -16,6 +16,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
 import { UserId } from './decorator/userId.decorator';
+import { ErrorCode } from 'src/common/error-code';
 
 @Controller('user')
 @ApiTags('User API')
@@ -43,7 +44,10 @@ export class UserController {
   ) {
     // No RBAC exists — every authenticated user is equal, so writes are self-only.
     if (userId !== id) {
-      throw new ForbiddenException('You can only update your own account.');
+      throw new ForbiddenException({
+        code: ErrorCode.FORBIDDEN_NOT_OWNER,
+        message: 'You can only update your own account.',
+      });
     }
     return this.userService.update(id, updateUserDto);
   }
@@ -51,7 +55,10 @@ export class UserController {
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @UserId() userId: number) {
     if (userId !== id) {
-      throw new ForbiddenException('You can only delete your own account.');
+      throw new ForbiddenException({
+        code: ErrorCode.FORBIDDEN_NOT_OWNER,
+        message: 'You can only delete your own account.',
+      });
     }
     return this.userService.remove(id);
   }

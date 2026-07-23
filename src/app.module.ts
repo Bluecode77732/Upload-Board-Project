@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
 import { FileModule } from './file/file.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { AllExceptionsFilter } from './common/filter/all-exceptions.filter';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
@@ -54,6 +56,14 @@ import { join } from 'node:path';
     UserModule,
     AuthModule,
     UploadModule,
+  ],
+  providers: [
+    // Global error-contract filter (ADR 0011) — APP_FILTER keeps it DI-managed
+    // so ConfigService can drive the dev-only stack field.
+    {
+      provide: APP_FILTER,
+      useClass: AllExceptionsFilter,
+    },
   ],
 })
 export class AppModule {}

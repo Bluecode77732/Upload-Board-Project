@@ -15,6 +15,7 @@ import path, { join } from 'path';
 import { UpdateFileDto } from './dto/update-uploadFile.dto';
 import { FileResponseDto } from './dto/file-response.dto';
 import { ConfigService } from '@nestjs/config';
+import { ErrorCode } from 'src/common/error-code';
 
 @Injectable()
 export class FileService {
@@ -70,7 +71,10 @@ export class FileService {
       .getOne();
 
     if (!file) {
-      throw new NotFoundException('No file found.');
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
     }
 
     return this.toResponse(file);
@@ -105,7 +109,10 @@ export class FileService {
 
       const insertedId: unknown = upload.identifiers[0]?.id;
       if (typeof insertedId !== 'number') {
-        throw new InternalServerErrorException('Transaction aborted.');
+        throw new InternalServerErrorException({
+          code: ErrorCode.INTERNAL_ERROR,
+          message: 'Transaction aborted.',
+        });
       }
       fileId = insertedId;
       const newFilePath = uploadFileDto.filePath.replace('temp_', 'granted_');
@@ -118,7 +125,10 @@ export class FileService {
       await queryRunner.commitTransaction();
     } catch {
       await queryRunner.rollbackTransaction();
-      throw new InternalServerErrorException('Transaction aborted.');
+      throw new InternalServerErrorException({
+        code: ErrorCode.INTERNAL_ERROR,
+        message: 'Transaction aborted.',
+      });
     } finally {
       await queryRunner.release();
     }
@@ -127,7 +137,10 @@ export class FileService {
     // attempt a rollback of the already-committed transaction.
     const saved = await this.fileRepository.findOne({ where: { id: fileId } });
     if (!saved) {
-      throw new NotFoundException('No file found.');
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
     }
     return this.toResponse(saved);
   }
@@ -148,14 +161,18 @@ export class FileService {
       });
 
       if (!file) {
-        throw new NotFoundException('No file found.');
+        throw new NotFoundException({
+          code: ErrorCode.FILE_NOT_FOUND,
+          message: 'No file found.',
+        });
       }
 
       // No RBAC exists — only the file's creator may modify it (including reassigning ownership).
       if (file.creator.id !== requesterId) {
-        throw new ForbiddenException(
-          'Only the file creator can update this file.',
-        );
+        throw new ForbiddenException({
+          code: ErrorCode.FORBIDDEN_NOT_OWNER,
+          message: 'Only the file creator can update this file.',
+        });
       }
 
       const { title, userId, filePath } = updateFileDto;
@@ -166,19 +183,28 @@ export class FileService {
           where: { title },
         });
         if (duplicatedTitle) {
-          throw new BadRequestException('Title already in use.');
+          throw new BadRequestException({
+            code: ErrorCode.FILE_TITLE_TAKEN,
+            message: 'Title already in use.',
+          });
         }
         updateFields.title = title;
       }
 
       if (filePath) {
         if (filePath.startsWith('temp_')) {
-          throw new BadRequestException('File must be in the upload folder.');
+          throw new BadRequestException({
+            code: ErrorCode.FILE_INVALID_PATH,
+            message: 'File must be in the upload folder.',
+          });
         }
         if (filePath.startsWith('granted_')) {
           updateFields.filePath = filePath;
         } else {
-          throw new BadRequestException('Attach the file again.');
+          throw new BadRequestException({
+            code: ErrorCode.FILE_INVALID_PATH,
+            message: 'Attach the file again.',
+          });
         }
       }
 
@@ -187,7 +213,10 @@ export class FileService {
           where: { id: userId },
         });
         if (!creator) {
-          throw new NotFoundException('No user found.');
+          throw new NotFoundException({
+            code: ErrorCode.USER_NOT_FOUND,
+            message: 'No user found.',
+          });
         }
         updateFields.creator = creator;
       }
@@ -214,7 +243,10 @@ export class FileService {
       relations: ['creator'],
     });
     if (!updated) {
-      throw new NotFoundException('No file found.');
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
     }
     return this.toResponse(updated);
   }
@@ -226,13 +258,17 @@ export class FileService {
     });
 
     if (!file) {
-      throw new NotFoundException('No file found.');
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
     }
 
     if (file.creator.id !== requesterId) {
-      throw new ForbiddenException(
-        'Only the file creator can delete this file.',
-      );
+      throw new ForbiddenException({
+        code: ErrorCode.FORBIDDEN_NOT_OWNER,
+        message: 'Only the file creator can delete this file.',
+      });
     }
 
     await this.fileRepository.delete(id);

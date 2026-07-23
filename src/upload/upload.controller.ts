@@ -15,6 +15,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
+import { ErrorCode } from 'src/common/error-code';
 
 @Controller('upload')
 @ApiTags('Upload API')
@@ -66,9 +67,10 @@ export class UploadController {
           cb(null, true);
         } else {
           cb(
-            new BadRequestException(
-              'Only video files are allowed (mp4, mov, webm).',
-            ),
+            new BadRequestException({
+              code: ErrorCode.UPLOAD_INVALID_TYPE,
+              message: 'Only video files are allowed (mp4, mov, webm).',
+            }),
             false,
           );
         }
@@ -78,7 +80,10 @@ export class UploadController {
   uploadVideo(@UploadedFile() file: Express.Multer.File) {
     // Throw error if there's no file.
     if (!file) {
-      throw new BadRequestException('Attach File.');
+      throw new BadRequestException({
+        code: ErrorCode.UPLOAD_FILE_REQUIRED,
+        message: 'Attach File.',
+      });
     }
 
     return {
