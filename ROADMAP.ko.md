@@ -27,7 +27,10 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   구역으로 시작한다. RBAC은 Stage F 뒤로 재배치 — RBAC은 API 표면을 바꾸지
   않고 권한만 더하므로 미뤄도 프론트엔드 재작업이 없고, 표면 동결을 먼저 하면
   실제 재작업을 아낀다.
-- **다음 전용 작업: 라우트 정리 및 API 계약 동결 (Stage F)**.
+- 라우트 정리·계약 동결은 2026-07-23 반영 완료: `POST /file`, `PATCH /file/:id`,
+  `DELETE /file/:id`, `POST /auth/token/refresh`가 정식 라우트이며, API 표면은
+  이제 동결 상태다(ADR 0010).
+- **다음 전용 작업: 에러 코드 체계 (Stage F)**.
 
 ## 1. 비전과 본질
 
@@ -144,7 +147,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 
 | 작업 | 근거 / 의존성 |
 |---|---|
-| 고아 temp 파일 정리 | `/file/uploadFile`이 끝내 호출되지 않으면 `temp_` 파일이 영구 누적된다 — 현재 유일한 무관리 리소스 누수. |
+| 고아 temp 파일 정리 | `POST /file`이 끝내 호출되지 않으면 `temp_` 파일이 영구 누적된다 — 현재 유일한 무관리 리소스 누수. |
 | 삭제 정책 설계 (soft delete + FK) | soft delete 채택 여부와 `DELETE /user/:id`의 FK 제약 500(`FileEntity.creator`가 `nullable: false`)을 하나의 설계 작업으로 통합. |
 | 업로드 멱등성/중복 정책 명문화 | CLAUDE.md 규약상 새 쓰기 엔드포인트는 중복 제출 동작을 명시해야 한다 — 게시판 확장으로 쓰기 엔드포인트가 늘기 전에 틀을 확정. |
 
@@ -200,6 +203,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 |---|---|
 | 전체 로드맵 계획 수립 | 11축 결정 검토; 이 문서가 그 기록 |
 | 프론트엔드 분리 결정 + Stage F 파이프라인 | 별도 프론트엔드 repo, admin은 `/admin` 라우트, 계약 동결; RBAC은 Stage F 뒤로 재배치 ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)) |
+| 라우트 정리 및 API 계약 동결 | `POST /file`, `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` — 소비자 0명 상태에서 표면 동결 (Stage F 작업 1) |
 
 ### 2026-07-22
 

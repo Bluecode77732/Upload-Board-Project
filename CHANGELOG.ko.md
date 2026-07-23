@@ -28,6 +28,13 @@
   `ROADMAP.md`, `CONTRIBUTING.md`, `ADR/`(9건) — 각각 한국어 `.ko.md` 동반.
 
 ### 변경
+- **Breaking** — API 표면 동결에 앞선 라우트 정규화
+  ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md), Stage F
+  작업 1). 데코레이터 인자만 변경했으며 가드/DTO/핸들러는 그대로:
+  - `POST /file/uploadFile` → `POST /file`
+  - `PATCH /file/patch/:id` → `PATCH /file/:id`
+  - `DELETE /file/delete/:id` → `DELETE /file/:id`
+  - `POST /auth/token/refreshaccess` → `POST /auth/token/refresh`
 - `ROADMAP.md`를 전체 프로젝트 계획서로 전면 개편(11축 결정 검토, 2026-07-23):
   실서비스 지향 목표, 신규 설계 기준 5축(관측성, 재현성, API 계약 안정성,
   테스트 신뢰성, 성능/용량), 단계별 전용 작업 목록(RBAC → 기반 → 메커니즘

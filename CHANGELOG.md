@@ -30,6 +30,13 @@ development line (package.json version).
   sibling.
 
 ### Changed
+- **Breaking** — route canonicalization before the API surface freeze
+  ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md), Stage F
+  task 1), decorator arguments only, guards/DTOs/handlers unchanged:
+  - `POST /file/uploadFile` → `POST /file`
+  - `PATCH /file/patch/:id` → `PATCH /file/:id`
+  - `DELETE /file/delete/:id` → `DELETE /file/:id`
+  - `POST /auth/token/refreshaccess` → `POST /auth/token/refresh`
 - `ROADMAP.md` overhauled into the full project plan (11-axis decision review,
   2026-07-23): production-oriented target, five new design-criteria axes
   (observability, reproducibility, API contract stability, test reliability,

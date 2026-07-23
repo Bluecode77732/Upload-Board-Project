@@ -20,9 +20,11 @@ Upload is two requests with a prefix state machine:
 1. `POST /upload/attach` — Multer diskStorage writes
    `file/temp/temp_{uuid}_{timestamp}.{ext}` and returns only the generated filename.
    `temp_` means "uploaded but unclaimed".
-2. `POST /file/uploadFile` — inside one QueryRunner transaction, inserts the
+2. `POST /file` — inside one QueryRunner transaction, inserts the
    `FileEntity` row with `filePath = file/upload/granted_...` and physically renames
    the file from `file/temp` to `file/upload`. `granted_` means "owned by a DB row".
+   (2026-07-23: metadata route canonicalized to `POST /file` —
+   [ADR 0010](0010-frontend-split-and-api-surface-freeze.md).)
 
 `UpdateFileDto.filePath` rejects `temp_` values and accepts only `granted_` ones.
 Filenames are always server-generated (uuid + timestamp); the client only echoes them

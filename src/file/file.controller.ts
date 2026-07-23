@@ -38,12 +38,12 @@ export class FileController {
     return this.fileService.getFileById(id);
   }
 
-  @Post('uploadFile')
+  @Post()
   uploadVideo(@Body() body: UploadFileDto, @UserId() userId: number) {
     return this.fileService.uploadFile(body, userId);
   }
 
-  @Patch('patch/:id')
+  @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateFileDto: UpdateFileDto,
@@ -52,7 +52,7 @@ export class FileController {
     return this.fileService.updateFile(id, updateFileDto, userId);
   }
 
-  @Delete('delete/:id')
+  @Delete(':id')
   delete(@Param('id', ParseIntPipe) id: number, @UserId() userId: number) {
     return this.fileService.deleteFile(id, userId);
   }

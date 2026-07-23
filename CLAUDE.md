@@ -504,7 +504,7 @@ one of these is violated, follow Principle Conflict Protocol.
 ### Two-Phase Upload Contract (temp_ → granted_)
 
 - Breakdown: `POST /upload/attach` writes `file/temp/temp_{uuid}_{timestamp}.{ext}` and
-  returns only the filename (`upload.module.ts` diskStorage). `POST /file/uploadFile`
+  returns only the filename (`upload.module.ts` diskStorage). `POST /file`
   then, inside a transaction, inserts the `FileEntity` row with
   `filePath = file/upload/granted_...` and physically renames the file from `file/temp`
   to `file/upload` (`file.service.ts` `uploadFile`). `UpdateFileDto.filePath` rejects
@@ -590,11 +590,11 @@ Do not suggest alternatives to these decisions without explicit request.
 - Guards: `JwtAuthGuard` (Passport strategy name `"jwt-auth-guard"`) protects all
   non-auth controllers at class level; `LocalAuthGuard` (`"local-auth-guard"`) exists
   for `POST /auth/signin/local` only
-- Refresh: `POST /auth/token/refreshaccess` takes the refresh token as a Bearer header
+- Refresh: `POST /auth/token/refresh` takes the refresh token as a Bearer header
   and returns a new access token
 - Authorization roadmap (decided 2026-07-22): **ownership checks landed 2026-07-22**
   as a dedicated task — `PATCH/DELETE /user/:id` are self-only (controller-level
-  check via `@UserId`), `PATCH /file/patch/:id` and `DELETE /file/delete/:id` are
+  check via `@UserId`), `PATCH /file/:id` and `DELETE /file/:id` are
   creator-only (service-level check, `creator` relation loaded). **RBAC is still
   pending** as its own explicit task (see Known Gaps & Roadmap) — do not bolt role
   logic onto unrelated changes; the introduction happens as a designed, dedicated change
@@ -750,7 +750,7 @@ pnpm test -- file.service
 
 **AuthModule** (`src/auth/`)
 - REST: `POST /auth/register`, `POST /auth/signin` (both Basic token),
-  `POST /auth/token/refreshaccess` (Bearer refresh token),
+  `POST /auth/token/refresh` (Bearer refresh token),
   `POST /auth/signin/local` (Passport local strategy, body credentials)
 - `AuthService`: `parseBasicToken`, `parseBearerToken`, `validateUser`, `issueToken`, `register`, `signIn`
 - Strategies: `JwtStrategy` (`"jwt-auth-guard"`, validates access tokens, loads the user
@@ -766,8 +766,8 @@ pnpm test -- file.service
 - Exports `UserService`
 
 **FileModule** (`src/file/`)
-- REST (all behind `JwtAuthGuard`): `GET /file`, `GET /file/:id`, `POST /file/uploadFile`,
-  `PATCH /file/patch/:id`, `DELETE /file/delete/:id`
+- REST (all behind `JwtAuthGuard`): `GET /file`, `GET /file/:id`, `POST /file`,
+  `PATCH /file/:id`, `DELETE /file/:id`
 - `FileService` — metadata CRUD; `uploadFile`/`updateFile` use the manual QueryRunner
   transaction pattern; `toResponse()` shapes `FileResponseDto` with `BASE_URL`
 
@@ -780,7 +780,7 @@ pnpm test -- file.service
 ### Data Flow for Uploading a File
 1. `POST /upload/attach` (multipart, field `video`) → Multer writes
    `file/temp/temp_{uuid}_{ts}.{ext}` → responds with the generated filename
-2. Client calls `POST /file/uploadFile` with `{ title, filePath: <that filename> }`
+2. Client calls `POST /file` with `{ title, filePath: <that filename> }`
 3. `FileService.uploadFile()` opens a QueryRunner transaction: inserts `FileEntity`
    (`filePath` rewritten to `file/upload/granted_...`), renames the physical file from
    `file/temp` to `file/upload`, commits; rollback on failure, `release()` in `finally`

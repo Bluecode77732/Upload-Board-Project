@@ -20,10 +20,12 @@
 1. `POST /upload/attach` — Multer diskStorage가
    `file/temp/temp_{uuid}_{timestamp}.{ext}`를 기록하고 생성된 파일명만 반환합니다.
    `temp_`는 "업로드됐지만 미소유"를 의미합니다.
-2. `POST /file/uploadFile` — 하나의 QueryRunner 트랜잭션 안에서
+2. `POST /file` — 하나의 QueryRunner 트랜잭션 안에서
    `filePath = file/upload/granted_...`로 `FileEntity` 행을 insert하고 파일을
    `file/temp`에서 `file/upload`로 물리적으로 rename합니다. `granted_`는
    "DB 행이 소유"를 의미합니다.
+   (2026-07-23: 메타데이터 라우트를 `POST /file`로 정규화 —
+   [ADR 0010](0010-frontend-split-and-api-surface-freeze.ko.md).)
 
 `UpdateFileDto.filePath`는 `temp_` 값을 거부하고 `granted_` 값만 허용합니다.
 파일명은 항상 서버가 생성(uuid + timestamp)하며 클라이언트는 그것을 되돌려줄

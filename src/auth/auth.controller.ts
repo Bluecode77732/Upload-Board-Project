@@ -48,7 +48,7 @@ export class AuthController {
     return this.authService.signIn(rawToken);
   }
 
-  @Post('token/refreshaccess')
+  @Post('token/refresh')
   @ApiBearerAuth()
   @ApiResponse({
     status: 201,

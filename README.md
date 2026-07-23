@@ -93,7 +93,7 @@ All endpoints except `/auth/*` require a Bearer access token.
 - `POST /auth/register` — register with a Basic token (`base64(email:password)`)
 - `POST /auth/signin` — get `{ refreshToken, accessToken }` (Basic token)
 - `POST /auth/signin/local` — same, via body credentials (Passport local strategy)
-- `POST /auth/token/refreshaccess` — new access token (Bearer refresh token)
+- `POST /auth/token/refresh` — new access token (Bearer refresh token)
 
 **User** — user creation is `POST /auth/register`; there is no `POST /user`
 - `GET /user` — list users
@@ -105,9 +105,9 @@ All endpoints except `/auth/*` require a Bearer access token.
 - `POST /upload/attach` — upload a video to temp storage (multipart field `video`, 100 MB limit)
 - `GET /file` — list files (paginated: `take` 1–100, default 20 / `skip` default 0)
 - `GET /file/:id` — get file metadata
-- `POST /file/uploadFile` — promote a temp file to permanent storage (transactional)
-- `PATCH /file/patch/:id` — update file metadata (creator only)
-- `DELETE /file/delete/:id` — delete file metadata (creator only)
+- `POST /file` — promote a temp file to permanent storage (transactional)
+- `PATCH /file/:id` — update file metadata (creator only)
+- `DELETE /file/:id` — delete file metadata (creator only)
 
 ### Typical flow
 
@@ -115,7 +115,7 @@ All endpoints except `/auth/*` require a Bearer access token.
 POST /auth/register   (Basic)          → user created
 POST /auth/signin     (Basic)          → { refreshToken, accessToken }
 POST /upload/attach   (Bearer, video)  → { filename: "temp_..." }
-POST /file/uploadFile (Bearer, { title, filePath: "temp_..." })
+POST /file            (Bearer, { title, filePath: "temp_..." })
                                        → promoted; served at {BASE_URL}/file/upload/granted_...
 ```
 

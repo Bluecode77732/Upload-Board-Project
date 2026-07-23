@@ -29,7 +29,10 @@ lands as its own dedicated, designed change
   `/admin` route section inside it. RBAC is re-sequenced after Stage F — it
   adds permissions without changing the API surface, so deferring it costs the
   frontend no rework, while freezing the surface first saves it real rework.
-- **Next dedicated task: route cleanup & API contract freeze (Stage F)**.
+- Route cleanup & contract freeze landed 2026-07-23: `POST /file`,
+  `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` are the
+  canonical routes; the API surface is now frozen (ADR 0010).
+- **Next dedicated task: error-code system (Stage F)**.
 
 ## 1. Vision & essence
 
@@ -156,7 +159,7 @@ settled while zero consumers exist.
 
 | Task | Rationale / dependencies |
 |---|---|
-| Orphan temp-file cleanup | `temp_` files accumulate forever when `/file/uploadFile` is never called — the only unmanaged resource leak today. |
+| Orphan temp-file cleanup | `temp_` files accumulate forever when `POST /file` is never called — the only unmanaged resource leak today. |
 | Deletion policy design (soft delete + FK) | One design task uniting the soft-delete question with the `DELETE /user/:id` FK-constraint 500 (`FileEntity.creator` is `nullable: false`). |
 | Upload idempotency / duplicate policy | CLAUDE.md requires new write endpoints to state their duplicate-submission behavior — settle the frame before board expansion multiplies write endpoints. |
 
@@ -214,6 +217,7 @@ candidate under the CI task).
 |---|---|
 | Full roadmap plan established | 11-axis decision review; this document is its record |
 | Frontend split decision + Stage F pipeline | Separate frontend repo, admin as `/admin` route, contract freeze; RBAC re-sequenced after Stage F ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)) |
+| Route cleanup & API contract freeze | `POST /file`, `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` — surface frozen with zero consumers (Stage F task 1) |
 
 ### 2026-07-22
 

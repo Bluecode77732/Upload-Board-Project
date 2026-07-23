@@ -32,7 +32,7 @@ a change spanning "physical file" and "file metadata" is two modules' work by de
 | `POST /auth/register` | Basic token | Parses `Basic base64(email:password)`, rejects duplicate email, bcrypt-hashes with `HASH_ROUNDS`, saves user |
 | `POST /auth/signin` | Basic token | Validates credentials, returns `{ refreshToken, accessToken }` |
 | `POST /auth/signin/local` | Body credentials | Same token pair via Passport `local-auth-guard` strategy |
-| `POST /auth/token/refreshaccess` | Bearer refresh token | Verifies refresh token, returns a new access token |
+| `POST /auth/token/refresh` | Bearer refresh token | Verifies refresh token, returns a new access token |
 
 - `AuthService` (`src/auth/auth.service.ts`): `parseBasicToken`, `parseBearerToken(rawToken, isRefreshToken)`,
   `validateUser`, `issueToken(user: Pick<UserEntity, 'id'>, isRefreshToken)`, `register`, `signIn`.
@@ -75,9 +75,9 @@ All routes behind `JwtAuthGuard`.
 |---|---|
 | `GET /file` | Paginated list — `GetFilesDto`: `take` 1–100 (default 20), `skip` ≥ 0 (default 0) |
 | `GET /file/:id` | Metadata + creator join, or 404 |
-| `POST /file/uploadFile` | Promotes a temp file: DB insert + physical rename in one transaction |
-| `PATCH /file/patch/:id` | **Creator only** — title (duplicate-checked), `granted_` filePath, ownership reassignment |
-| `DELETE /file/delete/:id` | **Creator only** — hard delete of the metadata row |
+| `POST /file` | Promotes a temp file: DB insert + physical rename in one transaction |
+| `PATCH /file/:id` | **Creator only** — title (duplicate-checked), `granted_` filePath, ownership reassignment |
+| `DELETE /file/:id` | **Creator only** — hard delete of the metadata row |
 
 - `FileService.uploadFile` / `updateFile` use the **manual QueryRunner** transaction pattern
   (`createQueryRunner → connect → startTransaction → commit/rollback → release`, `release()`
@@ -128,7 +128,7 @@ never reaches a service. Services trust validated input (boundary-only validatio
 1. POST /upload/attach   (multipart "video")
       └─ Multer writes  file/temp/temp_{uuid}_{ts}.{ext}   → returns { filename }
 
-2. POST /file/uploadFile { title, filePath: <that filename> }
+2. POST /file  { title, filePath: <that filename> }
       └─ FileService.uploadFile, inside one QueryRunner transaction:
            a. INSERT FileEntity  (filePath rewritten to file/upload/granted_...)
            b. rename file/temp/temp_...  →  file/upload/granted_...

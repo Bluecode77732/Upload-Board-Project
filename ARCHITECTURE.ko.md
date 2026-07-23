@@ -32,7 +32,7 @@ AppModule
 | `POST /auth/register` | Basic 토큰 | `Basic base64(email:password)` 파싱, 중복 이메일 거부, `HASH_ROUNDS`로 bcrypt 해싱 후 저장 |
 | `POST /auth/signin` | Basic 토큰 | 자격 증명 검증 후 `{ refreshToken, accessToken }` 반환 |
 | `POST /auth/signin/local` | Body 자격 증명 | Passport `local-auth-guard` 전략으로 동일한 토큰 쌍 발급 |
-| `POST /auth/token/refreshaccess` | Bearer 리프레시 토큰 | 리프레시 토큰 검증 후 새 액세스 토큰 반환 |
+| `POST /auth/token/refresh` | Bearer 리프레시 토큰 | 리프레시 토큰 검증 후 새 액세스 토큰 반환 |
 
 - `AuthService` (`src/auth/auth.service.ts`): `parseBasicToken`, `parseBearerToken(rawToken, isRefreshToken)`,
   `validateUser`, `issueToken(user: Pick<UserEntity, 'id'>, isRefreshToken)`, `register`, `signIn`.
@@ -75,9 +75,9 @@ AppModule
 |---|---|
 | `GET /file` | 페이지네이션 목록 — `GetFilesDto`: `take` 1–100(기본 20), `skip` ≥ 0(기본 0) |
 | `GET /file/:id` | 메타데이터 + creator 조인, 없으면 404 |
-| `POST /file/uploadFile` | temp 파일 승격: DB insert + 물리 rename을 한 트랜잭션에서 수행 |
-| `PATCH /file/patch/:id` | **작성자만** — 제목(중복 검사), `granted_` filePath, 소유권 재할당 |
-| `DELETE /file/delete/:id` | **작성자만** — 메타데이터 행 하드 삭제 |
+| `POST /file` | temp 파일 승격: DB insert + 물리 rename을 한 트랜잭션에서 수행 |
+| `PATCH /file/:id` | **작성자만** — 제목(중복 검사), `granted_` filePath, 소유권 재할당 |
+| `DELETE /file/:id` | **작성자만** — 메타데이터 행 하드 삭제 |
 
 - `FileService.uploadFile` / `updateFile`은 **수동 QueryRunner** 트랜잭션 패턴을 사용합니다
   (`createQueryRunner → connect → startTransaction → commit/rollback → release`,
@@ -128,7 +128,7 @@ enableImplicitConversion`을 실행합니다 — DTO에 선언되지 않은 요�
 1. POST /upload/attach   (multipart "video")
       └─ Multer가 file/temp/temp_{uuid}_{ts}.{ext} 기록  → { filename } 반환
 
-2. POST /file/uploadFile { title, filePath: <그 파일명> }
+2. POST /file  { title, filePath: <그 파일명> }
       └─ FileService.uploadFile, 하나의 QueryRunner 트랜잭션 안에서:
            a. FileEntity INSERT (filePath를 file/upload/granted_... 로 재작성)
            b. file/temp/temp_...  →  file/upload/granted_...  물리 rename

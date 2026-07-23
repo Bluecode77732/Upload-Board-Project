@@ -19,8 +19,10 @@
   (`src/auth/interface/payload-interface.ts`).
 - `parseBearerToken(rawToken, isRefreshToken)`은 대응하는 시크릿으로 검증하고
   **동시에** `payload.type`을 확인합니다 — 둘 중 하나만 하는 일은 없습니다.
-- `JwtStrategy`는 액세스 토큰만 검증합니다. `POST /auth/token/refreshaccess`는
+- `JwtStrategy`는 액세스 토큰만 검증합니다. `POST /auth/token/refresh`는
   리프레시 토큰을 Bearer 헤더로 받아 새 액세스 토큰을 반환합니다.
+  (2026-07-23: 리프레시 라우트를 `POST /auth/token/refresh`로 정규화 —
+  [ADR 0010](0010-frontend-split-and-api-surface-freeze.ko.md).)
 - `issueToken`은 `Pick<UserEntity, 'id'>`를 받으므로 순수 JWT 페이로드
   (`{ id: payload.sub }`)를 DB 왕복 없이 재토큰화할 수 있습니다.
 - `JwtModule.register({})`가 비어 있는 것은 의도입니다 — 호출별 시크릿이 핵심입니다.

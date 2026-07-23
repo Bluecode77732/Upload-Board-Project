@@ -19,8 +19,10 @@ window. Session-based auth was ruled out (stateless API, no session store).
   (`src/auth/interface/payload-interface.ts`).
 - `parseBearerToken(rawToken, isRefreshToken)` verifies with the matching secret
   **and** checks `payload.type` — never one without the other.
-- `JwtStrategy` validates access tokens only; `POST /auth/token/refreshaccess` takes
+- `JwtStrategy` validates access tokens only; `POST /auth/token/refresh` takes
   the refresh token as a Bearer header and returns a new access token.
+  (2026-07-23: refresh route canonicalized to `POST /auth/token/refresh` —
+  [ADR 0010](0010-frontend-split-and-api-surface-freeze.md).)
 - `issueToken` takes `Pick<UserEntity, 'id'>` so a bare JWT payload
   (`{ id: payload.sub }`) can be re-tokenized without a DB round trip.
 - `JwtModule.register({})` is deliberately empty — per-call secrets are the point.
