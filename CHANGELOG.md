@@ -24,6 +24,16 @@ development line (package.json version).
   `ROADMAP.md`, `CONTRIBUTING.md`, `ADR/` (9 records) — each with a Korean `.ko.md`
   sibling.
 
+### Changed
+- `ROADMAP.md` overhauled into the full project plan (11-axis decision review,
+  2026-07-23): production-oriented target, five new design-criteria axes
+  (observability, reproducibility, API contract stability, test reliability,
+  performance/capacity), staged dedicated-task list (RBAC → foundation →
+  mechanism hardening → board-domain expansion → AWS production transition),
+  storage port-adapter declared as a future architecture goal. Related docs
+  synced: `CLAUDE.md` (roadmap/CI/storage notes), `README.md` (stale
+  known-limitations fixed), `CONTRIBUTING.md` (migration-based setup).
+
 ## [0.0.1] — development line
 
 ### 2026-07-22 — `da676c0` … `d97916d` (hardening & quick fixes)

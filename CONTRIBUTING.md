@@ -26,8 +26,10 @@ first.
 ## Development Setup
 
 See [README.md](README.md) > Quick Start. Summary: `pnpm install`, copy
-`.env.example` → `.env`, ensure `file/temp/` and `file/upload/` exist, create the DB
-schema manually (no migrations yet — [ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)),
+`.env.example` → `.env`, ensure `file/temp/` and `file/upload/` exist, create the
+database and apply the schema with `pnpm migration:run` (a pre-existing
+manually-created DB: `pnpm migration:run -- --fake` once —
+[ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)),
 `pnpm run start:dev`.
 
 ## Branches

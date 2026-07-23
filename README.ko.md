@@ -22,7 +22,7 @@ JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, 트랜
 | [ARCHITECTURE.ko.md](ARCHITECTURE.ko.md) | 모듈 구성, 요청 흐름, 엔티티, 관례 |
 | [ADR/](ADR/README.ko.md) | 아키텍처 결정 기록 — 설계 이면의 *이유* |
 | [CHANGELOG.ko.md](CHANGELOG.ko.md) | 버전 이력 |
-| [ROADMAP.ko.md](ROADMAP.ko.md) | 확정된 다음 단계와 알려진 공백 |
+| [ROADMAP.ko.md](ROADMAP.ko.md) | 단계별 전체 프로젝트 계획과 알려진 공백 |
 | [CONTRIBUTING.ko.md](CONTRIBUTING.ko.md) | 개발 워크플로와 관례 |
 | [CLAUDE.md](CLAUDE.md) | AI 협업 개발을 위한 운영 규약 |
 
@@ -134,9 +134,11 @@ POST /file/uploadFile (Bearer, { title, filePath: "temp_..." })
 
 ## 알려진 한계
 
-[ROADMAP.ko.md](ROADMAP.ko.md)에서 추적합니다. 요점: 마이그레이션 도구 부재,
-RBAC 없음(소유권 검사만), e2e 스위트는 아직 Nest 템플릿 그대로.
-업로드는 mp4/mov/webm 허용 목록을 강제하며 `pnpm lint`는 2026-07-22 기준 클린.
+[ROADMAP.ko.md](ROADMAP.ko.md)에서 추적하며, 2026-07-23부터는 단계별 전체
+프로젝트 계획이기도 합니다. 요점: RBAC 미도입(소유권 검사만 — RBAC이 다음 전용
+작업), e2e 스위트는 아직 Nest 템플릿 그대로, CI/Docker/로깅 인프라 부재(Stage 1
+확정 로드맵 항목). 업로드는 mp4/mov/webm 허용 목록을 강제하며 `pnpm lint`는
+2026-07-22 기준 클린.
 
 ## 작성자
 

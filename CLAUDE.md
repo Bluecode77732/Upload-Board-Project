@@ -629,6 +629,10 @@ Do not suggest alternatives to these decisions without explicit request.
   public URLs composed as `{BASE_URL}/{filePath}` in `toResponse()`
 - Upload constraint: single field `video`, `fileSize` limit 100,000,000 bytes (100MB)
 - **Never suggest**: S3/cloud storage, streaming/chunked upload, CDN — unless explicitly requested
+  (2026-07-23: AWS deployment, VOD playback access control, and a storage
+  port-adapter are now explicitly decided roadmap items — ROADMAP.md Stage 4.
+  Local disk stays the operative decision until those dedicated tasks land,
+  each with its own ADR)
 
 ### API Layer
 - REST only, documented via Swagger at `/doc` (`persistAuthorization: true`)
@@ -660,7 +664,19 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
   file writes creator-only
 - Chat-project remnant handling — docs audited clean 2026-07-22; pending git-history
   decision + re-verification trigger. See `CHAT-REMNANT-REMOVAL-PLAN.md` and
-  ROADMAP.md > Larger unscheduled work
+  ROADMAP.md > Unscheduled / open decisions
+
+**Full roadmap plan (decided 2026-07-23)**: an 11-axis decision review fixed the
+overall plan in ROADMAP.md — staged dedicated tasks: Stage 0 RBAC → Stage 1
+foundation (Node/pnpm pinning, Docker/compose, CI, logging conventions, E2E
+rewrite) → Stage 2 mechanism hardening (orphan temp-file cleanup, deletion policy,
+refresh-token rotation, upload idempotency) → Stage 3 board-domain expansion
+(search/filter/sort, post/comment modules) → Stage 4 production transition (AWS
+container deploy, VOD playback access control, storage port-adapter, performance
+criteria). ROADMAP.md is the single source for the plan; items there that this
+file marks "never suggest" entered the plan by that explicit decision, but each
+still lands only as its own dedicated task with its own ADR — until then, the
+Architecture Decisions above remain operative.
 
 **Known gaps** (documented, not yet scheduled):
 - `pnpm audit` still flags dev-transitive vulnerabilities (handlebars via ts-jest;
@@ -824,4 +840,7 @@ const mockFileRepository = {
 
 None. There is no GitHub Actions workflow, no Dockerfile, no deploy target, and no git
 hooks. Do not reference or assume any pipeline; introducing one is an explicit-request
-task under Scope Discipline.
+task under Scope Discipline. CI (GitHub Actions lint+test), Docker/docker-compose,
+and AWS deployment are decided roadmap items as of 2026-07-23 (ROADMAP.md Stages 1
+and 4) — but until those dedicated tasks land, this section stays true: reference
+no pipeline.

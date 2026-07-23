@@ -22,7 +22,7 @@ frontend, no deploy pipeline.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Module map, request flow, entities, conventions |
 | [ADR/](ADR/README.md) | Architecture decision records — the *why* behind the design |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
-| [ROADMAP.md](ROADMAP.md) | Decided next steps and known gaps |
+| [ROADMAP.md](ROADMAP.md) | Full staged project plan and known gaps |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and conventions |
 | [CLAUDE.md](CLAUDE.md) | Operating contract for AI-assisted development |
 
@@ -134,9 +134,11 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full request and data flow.
 
 ## Known Limitations
 
-Tracked in [ROADMAP.md](ROADMAP.md). Highlights: no migration tooling yet, no RBAC
-(ownership checks only), and the e2e suite is still the untouched Nest template.
-Uploads enforce an mp4/mov/webm allowlist and `pnpm lint` is clean as of 2026-07-22.
+Tracked in [ROADMAP.md](ROADMAP.md) — since 2026-07-23 the full staged project
+plan. Highlights: no RBAC yet (ownership checks only; RBAC is the next dedicated
+task), the e2e suite is still the untouched Nest template, and no CI/Docker/logging
+infrastructure exists yet (decided Stage 1 roadmap items). Uploads enforce an
+mp4/mov/webm allowlist and `pnpm lint` is clean as of 2026-07-22.
 
 ## Author
 
