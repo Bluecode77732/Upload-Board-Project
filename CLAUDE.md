@@ -638,6 +638,12 @@ Do not suggest alternatives to these decisions without explicit request.
 - REST only, documented via Swagger at `/doc` (`persistAuthorization: true`)
 - Every endpoint carries `@ApiTags` and response decorators; auth-protected endpoints
   carry `@ApiBearerAuth` (or `@ApiBasicAuth` for the Basic-token endpoints)
+- Error responses follow the frozen `ErrorBody` contract (ADR 0011): every
+  HttpException is thrown as `{ code: ErrorCode.X, message: '...' }`
+  (`src/common/error-code.ts`) and shaped by the global `AllExceptionsFilter`
+  (`APP_FILTER` in `app.module.ts`). New throw sites must attach a code — the
+  status-based fallbacks cover framework-originated throws only. Renaming or
+  removing a code is a breaking change; adding one is free
 - **Never suggest**: GraphQL, WebSocket, gRPC
 
 ### Config

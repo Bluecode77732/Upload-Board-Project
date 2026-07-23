@@ -30,7 +30,10 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 - 라우트 정리·계약 동결은 2026-07-23 반영 완료: `POST /file`, `PATCH /file/:id`,
   `DELETE /file/:id`, `POST /auth/token/refresh`가 정식 라우트이며, API 표면은
   이제 동결 상태다(ADR 0010).
-- **다음 전용 작업: 에러 코드 체계 (Stage F)**.
+- 에러 코드 계약은 2026-07-23에 완료되었다
+  ([ADR 0011](ADR/0011-error-code-contract.ko.md)): 모든 에러 응답이 전역 예외
+  필터를 거쳐 안정적인 기계 판독 가능 `code`를 싣는다.
+- **다음 전용 작업: refresh 토큰 httpOnly 쿠키 이동 + 회전 (Stage F)**.
 
 ## 1. 비전과 본질
 
@@ -204,6 +207,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | 전체 로드맵 계획 수립 | 11축 결정 검토; 이 문서가 그 기록 |
 | 프론트엔드 분리 결정 + Stage F 파이프라인 | 별도 프론트엔드 repo, admin은 `/admin` 라우트, 계약 동결; RBAC은 Stage F 뒤로 재배치 ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)) |
 | 라우트 정리 및 API 계약 동결 | `POST /file`, `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` — 소비자 0명 상태에서 표면 동결 (Stage F 작업 1) |
+| 에러 코드 계약 | 동결된 `ErrorBody` 형태 + 18개 코드 카탈로그 + `APP_FILTER`로 등록한 전역 `AllExceptionsFilter` (Stage F 작업 2, [ADR 0011](ADR/0011-error-code-contract.ko.md)) |
 
 ### 2026-07-22
 

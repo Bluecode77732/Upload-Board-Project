@@ -18,6 +18,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0008](0008-opt-in-cors.ko.md) | `CORS_ORIGIN`을 통한 opt-in CORS | 승인됨 | 2026-07-22 |
 | [0009](0009-rest-only-api-with-swagger.ko.md) | Swagger로 문서화된 REST 전용 API 계층 | 승인됨 | 2025-12-17 |
 | [0010](0010-frontend-split-and-api-surface-freeze.ko.md) | 프론트엔드 분리와 API 표면 동결 | 승인됨 | 2026-07-23 |
+| [0011](0011-error-code-contract.ko.md) | 기계 판독 가능한 에러 코드 계약 | 승인됨 | 2026-07-23 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

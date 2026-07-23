@@ -119,6 +119,25 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
                                        → promoted; served at {BASE_URL}/file/upload/granted_...
 ```
 
+### Error responses
+
+Every error follows a frozen machine-readable shape
+([ADR 0011](ADR/0011-error-code-contract.md)):
+
+```json
+{
+  "statusCode": 400,
+  "code": "FILE_TITLE_TAKEN",
+  "message": "Title already in use.",
+  "timestamp": "2026-07-23T09:00:00.000Z",
+  "path": "/file/1"
+}
+```
+
+Branch on `code` (stable contract — see `src/common/error-code.ts`), never on
+`message` (free to change). Validation failures use `code: "VALIDATION_FAILED"`
+with a `message` array; when `ENV=dev` a `stack` field is included.
+
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full request and data flow.
 
 ## Stack

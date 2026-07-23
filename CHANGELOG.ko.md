@@ -13,6 +13,13 @@
 ## [Unreleased]
 
 ### 추가
+- 기계 판독 가능한 에러 코드 계약
+  ([ADR 0011](ADR/0011-error-code-contract.ko.md), Stage F 작업 2): 동결된
+  `ErrorBody` 응답 형태(`statusCode`/`code`/`message`/`timestamp`/`path`,
+  `stack`은 dev 전용), 18개 코드의 문자열 enum 카탈로그
+  (`src/common/error-code.ts`), `APP_FILTER`로 등록한 전역
+  `AllExceptionsFilter` — 스로우 지점 23곳이 `{ code, message }`를 싣는다.
+  클라이언트 분기는 `message`가 아니라 `code`로만.
 - [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md) — 프론트엔드
   분리와 API 표면 동결(2026-07-23): 프론트엔드는 별도 저장소로 만들고 admin은
   그 안의 `/admin` 라우트 구역으로 시작; 비표준 라우트 4건을 리네임한 뒤 API

@@ -32,7 +32,10 @@ lands as its own dedicated, designed change
 - Route cleanup & contract freeze landed 2026-07-23: `POST /file`,
   `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` are the
   canonical routes; the API surface is now frozen (ADR 0010).
-- **Next dedicated task: error-code system (Stage F)**.
+- The error-code contract landed 2026-07-23
+  ([ADR 0011](ADR/0011-error-code-contract.md)): every error response carries a
+  stable machine-readable `code`, shaped by the global exception filter.
+- **Next dedicated task: refresh-token httpOnly-cookie move + rotation (Stage F)**.
 
 ## 1. Vision & essence
 
@@ -218,6 +221,7 @@ candidate under the CI task).
 | Full roadmap plan established | 11-axis decision review; this document is its record |
 | Frontend split decision + Stage F pipeline | Separate frontend repo, admin as `/admin` route, contract freeze; RBAC re-sequenced after Stage F ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)) |
 | Route cleanup & API contract freeze | `POST /file`, `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` — surface frozen with zero consumers (Stage F task 1) |
+| Error-code contract | Frozen `ErrorBody` shape + 18-code catalog + global `AllExceptionsFilter` via `APP_FILTER` (Stage F task 2, [ADR 0011](ADR/0011-error-code-contract.md)) |
 
 ### 2026-07-22
 

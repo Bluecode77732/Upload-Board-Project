@@ -13,6 +13,13 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- Machine-readable error-code contract
+  ([ADR 0011](ADR/0011-error-code-contract.md), Stage F task 2): frozen
+  `ErrorBody` response shape (`statusCode`/`code`/`message`/`timestamp`/`path`,
+  `stack` in dev only), an 18-code string-enum catalog
+  (`src/common/error-code.ts`), and a global `AllExceptionsFilter` registered
+  via `APP_FILTER` — 23 throw sites now attach `{ code, message }`; clients
+  branch on `code`, never on `message`.
 - [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) — frontend split
   and API surface freeze (2026-07-23): the frontend lands as a separate
   repository with admin as an `/admin` route section inside it; four

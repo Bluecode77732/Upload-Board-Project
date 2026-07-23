@@ -120,6 +120,26 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
                                        → 승격; {BASE_URL}/file/upload/granted_... 로 서빙
 ```
 
+### 에러 응답
+
+모든 에러는 동결된 기계 판독 가능 형태를 따릅니다
+([ADR 0011](ADR/0011-error-code-contract.ko.md)):
+
+```json
+{
+  "statusCode": 400,
+  "code": "FILE_TITLE_TAKEN",
+  "message": "Title already in use.",
+  "timestamp": "2026-07-23T09:00:00.000Z",
+  "path": "/file/1"
+}
+```
+
+분기는 반드시 `code`(안정 계약 — `src/common/error-code.ts` 참조)로만 하고,
+`message`(언제든 변경 가능)로는 하지 마세요. 검증 실패는
+`code: "VALIDATION_FAILED"`에 `message` 배열이 오고, `ENV=dev`에서는 `stack`
+필드가 추가됩니다.
+
 전체 요청·데이터 흐름은 [ARCHITECTURE.ko.md](ARCHITECTURE.ko.md)를 참조하세요.
 
 ## 스택
