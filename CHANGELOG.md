@@ -76,6 +76,27 @@ development line (package.json version).
   file serving documented as an accepted known constraint until Stage 4.
   Related docs synced: `CLAUDE.md`, `README.md`.
 
+### Fixed
+- Auth responses are now serialized: `AuthController` lacked
+  `ClassSerializerInterceptor`, so `POST /auth/register` leaked the bcrypt
+  `password` hash (pre-existing) and the new `refreshTokenHash` — `@Exclude`
+  is inert without the interceptor. Found by live verification of the
+  ADR 0012 flow.
+- Refresh tokens now carry a random `jti` claim: two tokens issued within the
+  same second were byte-identical (same `sub`/`type`/`iat`/`exp` → same
+  signature), which blinded rotation reuse detection.
+
+### Security
+- `pnpm audit --prod` is clean (2026-07-24): `multer` promoted to a direct
+  dependency (it is imported directly by `upload.module.ts` but was only a
+  phantom transitive dep — crashed `node dist/main` under pnpm's strict
+  layout) and pinned `^2.2.0`; runtime-reachable advisories pinned via
+  `pnpm.overrides` (`body-parser`, `path-to-regexp`, `file-type`, `lodash`,
+  `diff`, scoped `@nestjs/swagger>js-yaml`); in-range updates for
+  `@nestjs/common`/`core`/`platform-express` (11.1.28), `typeorm` (0.3.31),
+  `joi` (18.2.3), `uuid` (13.0.2). Dev-transitive findings intentionally
+  remain (build/test-time only).
+
 ## [0.0.1] — development line
 
 ### 2026-07-22 — `da676c0` … `d97916d` (hardening & quick fixes)

@@ -699,10 +699,14 @@ still lands only as its own dedicated task with its own ADR — until then, the
 Architecture Decisions above remain operative.
 
 **Known gaps** (documented, not yet scheduled):
-- `pnpm audit` still flags dev-transitive vulnerabilities (handlebars via ts-jest;
-  glob/minimatch via jest and @nestjs/cli) — build/test-time only, waiting on
-  upstream releases. The two runtime findings (jws, validator) were pinned via
-  `pnpm.overrides` 2026-07-22
+- `pnpm audit --prod` is **clean as of 2026-07-24**: multer was promoted to a
+  direct dependency (upload.module.ts imports it directly — was a phantom
+  transitive dep that crashed `node dist/main`), runtime-reachable advisories
+  pinned via `pnpm.overrides` (multer, body-parser, path-to-regexp, file-type,
+  lodash, diff, scoped `@nestjs/swagger>js-yaml`; jws/validator since
+  2026-07-22), and Nest/typeorm/joi/uuid updated in-range. Dev-transitive
+  findings remain (handlebars via ts-jest; glob/minimatch/webpack via
+  jest/@nestjs/cli/eslint) — build/test-time only, waiting on upstream releases
 - `test/app.e2e-spec.ts` is the untouched Nest template: it targets `GET /`, which
   does not exist in this app, and booting AppModule needs a live DB — the e2e suite
   needs a real rewrite before it verifies anything

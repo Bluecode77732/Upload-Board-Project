@@ -72,6 +72,25 @@
   서빙을 Stage 4까지 감수하는 알려진 제약으로 명문화. 관련 문서 동기화:
   `CLAUDE.md`, `README.md`.
 
+### 수정
+- Auth 응답 직렬화: `AuthController`에 `ClassSerializerInterceptor`가 없어
+  `POST /auth/register`가 bcrypt `password` 해시(기존 결함)와 신규
+  `refreshTokenHash`를 노출했다 — 인터셉터 없이는 `@Exclude`가 동작하지
+  않는다. ADR 0012 플로 라이브 검증에서 발견.
+- Refresh 토큰에 무작위 `jti` 클레임 추가: 같은 초에 발급된 두 토큰이
+  바이트 단위로 동일해(`sub`/`type`/`iat`/`exp` 동일 → 서명 동일) 회전
+  재사용 감지가 무력화되던 문제.
+
+### 보안
+- `pnpm audit --prod` 클린(2026-07-24): `multer`를 직접 의존성으로
+  승격(`upload.module.ts`가 직접 import하는데 팬텀 전이 의존성이라 pnpm 엄격
+  레이아웃에서 `node dist/main`이 크래시) 후 `^2.2.0` 핀; 런타임 도달
+  지적들을 `pnpm.overrides`로 핀(`body-parser`, `path-to-regexp`,
+  `file-type`, `lodash`, `diff`, 스코프 지정 `@nestjs/swagger>js-yaml`);
+  범위 내 업데이트 `@nestjs/common`/`core`/`platform-express`(11.1.28),
+  `typeorm`(0.3.31), `joi`(18.2.3), `uuid`(13.0.2). dev 전이 지적은
+  의도적으로 유지(빌드/테스트 시점 전용).
+
 ## [0.0.1] — 개발 라인
 
 ### 2026-07-22 — `da676c0` … `d97916d` (하드닝 & 빠른 수정)
