@@ -10,9 +10,9 @@
 인증된 사용자가 동영상 파일을 업로드하고 관리하는 NestJS REST API.
 JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, 트랜잭션으로
 보호되는 파일 승격, Swagger 문서화를 갖춘 로컬/포트폴리오 백엔드 프로젝트입니다 —
-배포 파이프라인은 없으며, 브라우저 프론트엔드는 별도 저장소로 만들기로
-결정되었지만([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md))
-아직 구축 전입니다.
+배포 파이프라인은 없습니다. React + Vite 브라우저 프론트엔드는 이 저장소의
+`frontend/` 하위 폴더에 있으며([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)),
+이 README는 저장소 루트의 백엔드를 다룹니다.
 
 - 기간: 6주(초기 구축), 이후 지속 개선
 - 기술: TypeORM, PostgreSQL, 트랜잭션, DTO 검증, Passport, 가드, Jest, Swagger

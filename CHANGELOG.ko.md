@@ -30,9 +30,14 @@
   `AllExceptionsFilter` — 스로우 지점 23곳이 `{ code, message }`를 싣는다.
   클라이언트 분기는 `message`가 아니라 `code`로만.
 - [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md) — 프론트엔드
-  분리와 API 표면 동결(2026-07-23): 프론트엔드는 별도 저장소로 만들고 admin은
-  그 안의 `/admin` 라우트 구역으로 시작; 비표준 라우트 4건을 리네임한 뒤 API
-  표면을 동결; 모노레포와 즉시 3분리는 시기상조로 기각.
+  분리와 API 표면 동결(2026-07-23; 구조 2026-07-24 개정): 프론트엔드는 이 저장소
+  안의 `frontend/` 하위 폴더(백엔드는 루트에 그대로)로 두고 admin은 그 안의
+  `/admin` 라우트 구역으로 시작; 비표준 라우트 4건을 리네임한 뒤 API 표면을
+  동결; pnpm workspace 모노레포와 즉시 3분리는 기각.
+- `frontend/` 하위 폴더 생성 2026-07-24: React 19 + Vite + TypeScript SPA로 API를
+  소비(Basic 로그인, 메모리 내 access 토큰, httpOnly refresh 쿠키 회전),
+  자체 스코프 `frontend/CLAUDE.md`·`docs/API-CONTRACT.md`와 Vite dev 프록시 포함 —
+  인증 플로를 백엔드와 E2E 검증.
 - TypeORM 마이그레이션 도입 ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)):
   `migration:generate`/`run`/`revert`/`show` 스크립트(컴파일된
   `dist/data-source.js` 대상 실행), CLI DataSource `src/data-source.ts`(환경변수는

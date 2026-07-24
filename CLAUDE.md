@@ -686,8 +686,9 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
 **Full roadmap plan (decided 2026-07-23)**: an 11-axis decision review fixed the
 overall plan in ROADMAP.md — staged dedicated tasks: Stage F frontend
 preparation (route cleanup & contract freeze, error-code system, refresh-token
-cookie move + rotation — decided 2026-07-23, ADR 0010: frontend lands as a
-separate repository, admin as an `/admin` route section inside it) → Stage 0
+cookie move + rotation — decided 2026-07-23, ADR 0010: frontend lives as an
+in-repo `frontend/` subfolder [structure amended 2026-07-24], admin as an
+`/admin` route section inside it) → Stage 0
 RBAC → Stage 1 foundation (Node/pnpm pinning, Docker/compose, CI, logging
 conventions, E2E rewrite) → Stage 2 mechanism hardening (orphan temp-file
 cleanup, deletion policy, upload idempotency) → Stage 3 board-domain expansion
@@ -729,11 +730,15 @@ paginated; `.env.example` documents `BASE_URL`; the "300MB" comment is fixed;
 
 ## Project Overview
 
-Single-package NestJS REST API for authenticated video-file upload and management.
-JWT auth (Passport), PostgreSQL via TypeORM, Multer disk storage, Swagger documentation.
-No frontend, no monorepo, no deployment pipeline — a local/portfolio backend
-project. (A frontend was decided 2026-07-23 as a *separate* repository —
-ADR 0010; it is not yet built, and this repo stays backend-only.)
+NestJS REST API for authenticated video-file upload and management. JWT auth
+(Passport), PostgreSQL via TypeORM, Multer disk storage, Swagger documentation.
+A local/portfolio project, no deployment pipeline. **This CLAUDE.md governs the
+backend at the repo root** (`src/`, `ADR/`, `test/`). A React + Vite frontend
+was added 2026-07-24 as the `frontend/` subfolder (ADR 0010) — it has its own
+scoped `frontend/CLAUDE.md` and tooling, and is not a pnpm-workspace monorepo:
+the backend at the root is untouched (its Jest roots, migration paths, and lint
+globs do not include `frontend/`). Do not edit backend files from a frontend
+task or vice versa.
 
 ## Commands
 

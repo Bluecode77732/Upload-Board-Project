@@ -23,10 +23,11 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   `.ko.md` 문서 전반의 한국어 유창성 패스(`dc1ad72`)까지.
 - 이 계획서 자체는 2026-07-23의 11축 결정 검토로 수립되었다.
 - 2026-07-23 프론트엔드 분리 결정([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)):
-  별도 프론트엔드 repo가 이 API를 소비하며, admin은 그 안의 `/admin` 라우트
-  구역으로 시작한다. RBAC은 Stage F 뒤로 재배치 — RBAC은 API 표면을 바꾸지
-  않고 권한만 더하므로 미뤄도 프론트엔드 재작업이 없고, 표면 동결을 먼저 하면
-  실제 재작업을 아낀다.
+  프론트엔드는 이 저장소 안의 `frontend/` 하위 폴더로 두어(백엔드는 루트에
+  그대로) HTTP로 이 API를 소비하며, admin은 그 안의 `/admin` 라우트 구역으로
+  시작한다. RBAC은 Stage F 뒤로 재배치 — RBAC은 API 표면을 바꾸지 않고 권한만
+  더하므로 미뤄도 프론트엔드 재작업이 없고, 표면 동결을 먼저 하면 실제 재작업을
+  아낀다. (구조는 2026-07-24 개정: 별도 저장소 → 저장소 내 하위 폴더.)
 - 라우트 정리·계약 동결은 2026-07-23 반영 완료: `POST /file`, `PATCH /file/:id`,
   `DELETE /file/:id`, `POST /auth/token/refresh`가 정식 라우트이며, API 표면은
   이제 동결 상태다(ADR 0010).
@@ -36,15 +37,15 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 - refresh 토큰 httpOnly 쿠키 전환 + 회전/재사용 감지는 2026-07-24 반영
   완료([ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md)) — **Stage F 완결**:
   프론트엔드가 의존할 API 표면·에러 계약·인증 전송이 모두 확정되었다.
-  frontend repository를 시작할 수 있으며, RBAC은 API 표면을 바꾸지 않으므로
-  병행 가능하다.
+  `frontend/` 하위 폴더는 2026-07-24 생성됨(React + Vite, 인증 수직 슬라이스
+  E2E 검증). RBAC은 API 표면을 바꾸지 않으므로 병행 가능하다.
 - **다음 백엔드 전용 작업: RBAC (Stage 0)**.
 
 ## 1. 비전과 본질
 
 - **현재**: 포트폴리오/학습용 백엔드 — 작지만 완결된 API 위에서 엔지니어링
   규율(설계·문서·테스트)을 증명하는 것이 목적이다.
-- **목표**: 브라우저 프론트엔드(별도 repo,
+- **목표**: 브라우저 프론트엔드(저장소 내 `frontend/` 하위 폴더,
   [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md))를 결정된
   소비자로 두는 실서비스 지향 백엔드. 후반 단계(기반 인프라, AWS 배포, 재생
   접근 제어)는 이 전환을 구호가 아닌 실체로 만들기 위해 존재한다.
@@ -95,11 +96,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   교체할 수 있게 한다. 착수 시 ADR 0005 재검토와, ISP 규약("실제 두 번째 구현체가
   생기기 전에는 서비스 인터페이스 계층 금지")을 Principle Conflict Protocol로
   통과시키는 절차가 필요하다.
-- **프론트엔드 분리 (2026-07-23 결정, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md))**:
-  별도 프론트엔드 repo가 HTTP로 이 API를 소비한다. admin은 그 프론트엔드 안의
-  `/admin` 라우트 구역으로 시작하며, RBAC이 랜딩하고 실제 admin 요구사항이
-  쌓인 뒤에만 별도 앱으로 승격한다. pnpm workspace 모노레포와 즉시
-  3분리(frontend/backend/admin)는 검토 후 시기상조로 기각.
+- **프론트엔드 분리 (2026-07-23 결정, 구조 2026-07-24 개정, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md))**:
+  프론트엔드는 이 저장소 안의 `frontend/` 하위 폴더(백엔드는 루트에 그대로)로
+  두어 HTTP로 이 API를 소비한다. admin은 그 프론트엔드 안의 `/admin` 라우트
+  구역으로 시작하며, RBAC이 랜딩하고 실제 admin 요구사항이 쌓인 뒤에만 별도
+  앱으로 승격한다. pnpm workspace 모노레포(백엔드를 `apps/backend`로 재배치)와
+  즉시 3분리(frontend/backend/admin)는 검토 후 기각.
 - **알려진 제약 (감수)**: 정적 파일 서빙은 Stage 4의 VOD 재생 접근 제어 작업이
   [ADR 0005](ADR/0005-local-disk-storage.ko.md)를 재검토할 때까지 무인증으로
   유지된다 — `{BASE_URL}/file/...` URL은 공개이며, 프론트엔드도 그렇게 다뤄야
@@ -188,7 +190,8 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   변경이 필요해질 때 활성화한다(설계 기준 참조).
 - 프론트엔드 스택 — **2026-07-24 결정: React + Vite** (이 REST API를 소비하는
   SPA; Next.js는 SSR/API 라우트가 이 백엔드와 역할 중복이라 기각, Vue는 차순위).
-  repo 이름 "frontend", 별도 저장소(ADR 0010); 호스팅은 프론트엔드 repo의 결정.
+  저장소 내 `frontend/` 하위 폴더(ADR 0010, 구조 2026-07-24 개정)로 존재하며
+  2026-07-24 생성·E2E 검증 완료; 호스팅은 이후 배포 결정.
 - 공식 로그인 경로 — **2026-07-24 결정: `POST /auth/signin` (Basic)**. 리스크·
   유지보수 최소 기준으로 선택(`register`가 어차피 쓰는 `parseBasicToken`을
   재사용; RFC 7617 프로토콜 표준; ADR 0001로 뒷받침). 따라서
@@ -215,7 +218,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | 항목 | 비고 |
 |---|---|
 | 전체 로드맵 계획 수립 | 11축 결정 검토; 이 문서가 그 기록 |
-| 프론트엔드 분리 결정 + Stage F 파이프라인 | 별도 프론트엔드 repo, admin은 `/admin` 라우트, 계약 동결; RBAC은 Stage F 뒤로 재배치 ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)) |
+| 프론트엔드 분리 결정 + Stage F 파이프라인 | 저장소 내 `frontend/` 하위 폴더(구조 2026-07-24 개정), admin은 `/admin` 라우트, 계약 동결; RBAC은 Stage F 뒤로 재배치 ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)) |
 | 라우트 정리 및 API 계약 동결 | `POST /file`, `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` — 소비자 0명 상태에서 표면 동결 (Stage F 작업 1) |
 | 에러 코드 계약 | 동결된 `ErrorBody` 형태 + 18개 코드 카탈로그 + `APP_FILTER`로 등록한 전역 `AllExceptionsFilter` (Stage F 작업 2, [ADR 0011](ADR/0011-error-code-contract.ko.md)) |
 

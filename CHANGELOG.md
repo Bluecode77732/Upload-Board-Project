@@ -30,10 +30,15 @@ development line (package.json version).
   via `APP_FILTER` — 23 throw sites now attach `{ code, message }`; clients
   branch on `code`, never on `message`.
 - [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) — frontend split
-  and API surface freeze (2026-07-23): the frontend lands as a separate
-  repository with admin as an `/admin` route section inside it; four
-  non-canonical routes are renamed then the API surface is frozen; monorepo and
-  an immediate three-way split rejected as premature.
+  and API surface freeze (2026-07-23; structure amended 2026-07-24): the frontend
+  lives as a `frontend/` subfolder in this same repository (backend stays at the
+  root, untouched) with admin as an `/admin` route section inside it; four
+  non-canonical routes are renamed then the API surface is frozen; a
+  pnpm-workspace monorepo and an immediate three-way split were rejected.
+- `frontend/` subfolder created 2026-07-24: React 19 + Vite + TypeScript SPA
+  consuming the API (Basic signin, in-memory access token, httpOnly refresh
+  cookie rotation), with its own scoped `frontend/CLAUDE.md`, `docs/API-CONTRACT.md`,
+  and a Vite dev proxy — auth flow E2E-verified against the backend.
 - TypeORM migration adoption ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)):
   `migration:generate`/`run`/`revert`/`show` scripts (run against the compiled
   `dist/data-source.js`), CLI DataSource `src/data-source.ts` (env via Node's

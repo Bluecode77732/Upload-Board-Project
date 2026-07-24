@@ -4,7 +4,10 @@
 
 Single-package NestJS REST API for authenticated video-file upload and management.
 JWT auth (Passport), PostgreSQL via TypeORM, Multer disk storage, Swagger documentation.
-No frontend, no monorepo, no deployment pipeline — a local/portfolio backend project.
+No deployment pipeline — a local/portfolio backend project. This document
+describes the backend at the repo root; a React + Vite frontend lives in the
+`frontend/` subfolder (ADR 0010) and is not a pnpm-workspace monorepo — the
+backend layout below is unaffected by it.
 
 Design decisions and their rationale are recorded in [ADR/](ADR/). This document
 describes the *current* structure; planned work lives in [ROADMAP.md](ROADMAP.md).

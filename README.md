@@ -10,8 +10,9 @@
 A NestJS REST API where authenticated users upload and manage video files.
 JWT auth (Passport), PostgreSQL via TypeORM, Multer disk storage, transaction-safe
 file promotion, Swagger documentation. A local/portfolio backend project — no
-deploy pipeline; a browser frontend is decided as a separate repository
-([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)) but not yet built.
+deploy pipeline. A React + Vite browser frontend lives in the `frontend/`
+subfolder of this repository ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md));
+this README covers the backend at the repo root.
 
 - Timeline: 6 weeks (initial build), ongoing refinement
 - Skills: TypeORM, PostgreSQL, transactions, DTO validation, Passport, guards, Jest, Swagger

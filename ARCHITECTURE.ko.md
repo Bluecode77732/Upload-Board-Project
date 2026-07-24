@@ -4,7 +4,10 @@
 
 인증된 사용자의 동영상 파일 업로드·관리를 위한 단일 패키지 NestJS REST API.
 JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, Swagger 문서화.
-프론트엔드·모노레포·배포 파이프라인 없음 — 로컬/포트폴리오 백엔드 프로젝트.
+배포 파이프라인 없음 — 로컬/포트폴리오 백엔드 프로젝트. 이 문서는 저장소
+루트의 백엔드를 설명하며, React + Vite 프론트엔드는 `frontend/` 하위
+폴더(ADR 0010)에 있고 pnpm workspace 모노레포가 아니다 — 아래 백엔드 구성은
+그 영향을 받지 않는다.
 
 설계 결정과 그 근거는 [ADR/](ADR/)에 기록되어 있습니다. 이 문서는 *현재* 구조를
 설명하며, 예정된 작업은 [ROADMAP.ko.md](ROADMAP.ko.md)에 있습니다.

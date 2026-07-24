@@ -16,13 +16,23 @@ consumers** — every breaking API change is still free. Opt-in CORS
 
 ## Decision
 
-- **Separate frontend repository.** This repo stays backend-only; the frontend
-  is a new repo consuming the API over HTTP. A pnpm-workspace monorepo was
-  rejected for now: its benefits (atomic contract changes, direct type sharing)
-  require shared code and frequent contract churn that do not yet exist, while
-  its cost (relocating this repo into `apps/backend`, rewriting Jest/migration
-  paths and the CLAUDE.md rule set) is immediate and certain. Converting later
-  remains possible at similar cost.
+> **Amended 2026-07-24**: the "where the frontend lives" decision is corrected
+> from *separate repository* to a **`frontend/` subfolder in this same
+> repository** — the originally intended structure. Everything else in this ADR
+> (API surface freeze, admin as an `/admin` route, RBAC deferral, static-serving
+> constraint) stands unchanged. The first bullet below reflects the correction;
+> the pnpm-workspace monorepo remains rejected because in-repo ≠ workspace
+> restructure (see below).
+
+- **Frontend in the same repository, as a `frontend/` subfolder.** The backend
+  stays at the repo root, untouched; the frontend lives beside it under
+  `frontend/` and is tracked in the same git history. This is *not* a
+  pnpm-workspace monorepo — the backend is **not** relocated into `apps/backend`
+  and its Jest/migration paths, tooling, and root `CLAUDE.md` are unaffected;
+  the `frontend/` folder simply carries its own `package.json`, tooling, and
+  scoped `CLAUDE.md`. It consumes the backend over HTTP (dev: a Vite proxy;
+  prod: `CORS_ORIGIN`). Keeping both in one repo makes an API-contract change
+  and its client update land in one commit, at near-zero structural cost.
 - **Admin starts as a route section (`/admin/*`) inside the frontend**, not as
   a third application. Promotion to a dedicated admin app is reconsidered only
   after RBAC lands and real admin requirements exist. A three-way split today
@@ -49,9 +59,11 @@ consumers** — every breaking API change is still free. Opt-in CORS
 
 ## Alternatives rejected
 
-- **Monorepo (pnpm workspace)** — benefit conditions not yet met (no shared
-  code, no frequent contract churn, fewer than three apps); certain relocation
-  cost today.
+- **Monorepo (pnpm workspace)** — relocating the backend into `apps/backend`
+  and rewriting its tooling is unnecessary cost; the chosen in-repo `frontend/`
+  subfolder gets single-repo atomic commits without that restructure. (A fully
+  *separate* repository was also considered and set aside 2026-07-24 in favor of
+  the one-repo subfolder — see the amendment above.)
 - **Three-way split (frontend / backend / admin)** — premature: no roles on the
   backend, no admin requirements written down; ordering problem, not a wrong
   target.

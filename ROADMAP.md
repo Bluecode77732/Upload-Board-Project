@@ -24,10 +24,12 @@ lands as its own dedicated, designed change
   adoption (`79603ad`, [ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)),
   followed by the Korean fluency pass over the `.ko.md` docs (`dc1ad72`).
 - This plan itself was established on 2026-07-23 through the 11-axis review.
-- Frontend split decided 2026-07-23 ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)):
-  a separate frontend repository will consume this API; admin starts as an
-  `/admin` route section inside it. RBAC is re-sequenced after Stage F — it
-  adds permissions without changing the API surface, so deferring it costs the
+- Frontend split decided 2026-07-23, structure amended 2026-07-24
+  ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)): the frontend
+  lives as a `frontend/` subfolder in this same repository (backend stays at the
+  root, untouched) and consumes this API over HTTP; admin starts as an `/admin`
+  route section inside it. RBAC is re-sequenced after Stage F — it adds
+  permissions without changing the API surface, so deferring it costs the
   frontend no rework, while freezing the surface first saves it real rework.
 - Route cleanup & contract freeze landed 2026-07-23: `POST /file`,
   `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` are the
@@ -38,8 +40,9 @@ lands as its own dedicated, designed change
 - The refresh-token httpOnly-cookie move + rotation/reuse detection landed
   2026-07-24 ([ADR 0012](ADR/0012-refresh-cookie-rotation.md)) — **Stage F is
   complete**: the API surface, error contract, and auth transport a frontend
-  depends on are all settled. The frontend repository can start; RBAC proceeds
-  in parallel (it changes no API surface).
+  depends on are all settled. The `frontend/` subfolder was created 2026-07-24
+  (React + Vite, auth vertical slice E2E-verified); RBAC proceeds in parallel
+  (it changes no API surface).
 - **Next dedicated backend task: RBAC (Stage 0)**.
 
 ## 1. Vision & essence
@@ -48,7 +51,7 @@ lands as its own dedicated, designed change
   engineering discipline (design, documentation, tests) on a small but complete
   API.
 - **Target**: a production-oriented backend with a browser frontend as its
-  decided consumer (separate repository, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)).
+  decided consumer (in-repo `frontend/` subfolder, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)).
   The later stages (foundation infrastructure, AWS deployment, playback access
   control) exist to make that transition real rather than aspirational.
 - **Priority axis** (supersedes the previous "security → decided architecture
@@ -102,12 +105,13 @@ work must pass them; they are not themselves roadmap subjects.
   revisiting ADR 0005 and passing the ISP rule ("no service-interface layer
   until a real second implementation exists") through the Principle Conflict
   Protocol.
-- **Frontend split (decided 2026-07-23, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md))**:
-  a separate frontend repository consumes this API over HTTP; admin starts as
-  an `/admin` route section inside that frontend and is promoted to its own
-  app only after RBAC lands and real admin requirements exist. A pnpm-workspace
-  monorepo and an immediate three-way split (frontend/backend/admin) were
-  considered and rejected as premature.
+- **Frontend split (decided 2026-07-23, structure amended 2026-07-24, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md))**:
+  the frontend lives as a `frontend/` subfolder in this same repository (backend
+  at the root, untouched) and consumes this API over HTTP; admin starts as an
+  `/admin` route section inside that frontend and is promoted to its own app
+  only after RBAC lands and real admin requirements exist. A pnpm-workspace
+  monorepo (relocating the backend into `apps/backend`) and an immediate
+  three-way split (frontend/backend/admin) were considered and rejected.
 - **Known constraint (accepted)**: static file serving stays unauthenticated
   until the Stage 4 VOD playback access-control task revisits
   [ADR 0005](ADR/0005-local-disk-storage.md) — `{BASE_URL}/file/...` URLs are
@@ -200,8 +204,9 @@ settled while zero consumers exist.
   when a post-freeze breaking change actually needs it (see Design criteria).
 - Frontend stack — **decided 2026-07-24: React + Vite** (SPA consuming this
   REST API; Next.js rejected as SSR/API-route overlap with this backend, Vue as
-  runner-up). Repo name "frontend", separate repository (ADR 0010); hosting is a
-  frontend-repo decision.
+  runner-up). Lives as the in-repo `frontend/` subfolder (ADR 0010, structure
+  amended 2026-07-24); created and E2E-verified 2026-07-24; hosting is a
+  later deployment decision.
 - Canonical signin path — **decided 2026-07-24: `POST /auth/signin` (Basic)**,
   chosen for lowest risk / lightest maintenance (reuses `parseBasicToken` that
   `register` needs anyway; RFC 7617 protocol standard; backed by ADR 0001).
@@ -229,7 +234,7 @@ candidate under the CI task).
 | Item | Notes |
 |---|---|
 | Full roadmap plan established | 11-axis decision review; this document is its record |
-| Frontend split decision + Stage F pipeline | Separate frontend repo, admin as `/admin` route, contract freeze; RBAC re-sequenced after Stage F ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)) |
+| Frontend split decision + Stage F pipeline | In-repo `frontend/` subfolder (structure amended 2026-07-24), admin as `/admin` route, contract freeze; RBAC re-sequenced after Stage F ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)) |
 | Route cleanup & API contract freeze | `POST /file`, `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` — surface frozen with zero consumers (Stage F task 1) |
 | Error-code contract | Frozen `ErrorBody` shape + 18-code catalog + global `AllExceptionsFilter` via `APP_FILTER` (Stage F task 2, [ADR 0011](ADR/0011-error-code-contract.md)) |
 
