@@ -49,6 +49,10 @@ async function parseError(response: Response): Promise<ErrorBody | undefined> {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, headers = {}, skipAuthRefresh = false } = options
 
+  // For multipart the browser must set Content-Type itself (with the boundary),
+  // so we neither set the header nor JSON-stringify the body.
+  const isFormData = body instanceof FormData
+
   const doFetch = () => {
     const token = getAccessToken()
     return fetch(`${BASE}${path}`, {
@@ -56,11 +60,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       // Send the httpOnly refresh cookie on every call (harmless where unused).
       credentials: 'include',
       headers: {
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(body !== undefined && !isFormData ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...headers,
       },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      ...(body !== undefined ? { body: isFormData ? body : JSON.stringify(body) } : {}),
     })
   }
 
@@ -143,6 +147,8 @@ export async function signout(): Promise<void> {
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
+  // Multipart POST — pass a FormData; the browser sets the boundary Content-Type.
+  postForm: <T>(path: string, form: FormData) => request<T>(path, { method: 'POST', body: form }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 }

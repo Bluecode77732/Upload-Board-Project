@@ -16,11 +16,26 @@ export interface User {
   updatedAt: string
 }
 
-// GET /file, GET /file/:id — FileResponseDto
+// GET /file, GET /file/:id — FileResponseDto. `creator` is present when the
+// backend joins the relation (list + detail); `fileUrl` is a public URL (ADR 0010,
+// unauthenticated until the backend's Stage 4 VOD access-control task).
 export interface FileResponse {
   id: number
   title: string
   fileUrl: string
+  creator?: {
+    id: number
+    email: string
+  }
   createdAt: string
   updatedAt: string
+}
+
+// GET /file?take=&skip= — the backend returns a [rows, total] tuple (getManyAndCount),
+// not a bare array; `total` drives client pagination.
+export type FileListResponse = [FileResponse[], number]
+
+// POST /upload/attach — returns the server-generated temp_ filename to hand to POST /file.
+export interface AttachResponse {
+  filename: string
 }

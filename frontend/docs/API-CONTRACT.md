@@ -99,5 +99,9 @@ Every error is the frozen `ErrorBody` shape:
 | `GET` | `/user`, `/user/:id` | |
 | `PATCH`/`DELETE` | `/user/:id` | self-only |
 
+Uploading is two-phase: `POST /upload/attach` (multipart field `video`, sent via
+`api.postForm` so the browser sets the boundary `Content-Type`) returns `{ filename }`,
+then `POST /file` `{ title, filePath: filename }` promotes it (backend `temp_`→`granted_`).
+
 Uploaded files are served at public URLs (`fileUrl` in responses) — unauthenticated
 until the backend's Stage 4 VOD access-control task. Treat those URLs as public.
