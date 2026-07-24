@@ -91,7 +91,9 @@ When a new tool, library, or concept is being introduced, always cover the follo
 - Implementation purpose: what specific goal it serves in this context
 - Practical disadvantages if not implemented, and the root causes of those disadvantages
 
-Do not write excessive code during this phase.
+Do not write excessive code during this phase — the goal is to decide *whether and how*
+to introduce the thing before committing to an implementation, and premature code biases
+that decision toward "keep what's already written."
 
 ### Structure Analysis (구조)
 When planning an implementation, answer the following before proceeding:
@@ -657,7 +659,9 @@ Do not suggest alternatives to these decisions without explicit request.
 - Local disk only: Multer `diskStorage` into `file/temp`, promoted to `file/upload`
 - Served statically by `ServeStaticModule` (`rootPath: file/`, `serveRoot: 'file'`);
   public URLs composed as `{BASE_URL}/{filePath}` in `toResponse()`
-- Upload constraint: single field `video`, `fileSize` limit 100,000,000 bytes (100MB)
+- Upload constraint: single field `video`, `fileSize` limit 100,000,000 bytes (100MB) —
+  a single-video domain needs exactly one field, and the 100MB ceiling caps disk usage and
+  bounds an upload-based denial-of-service
 - **Never suggest**: S3/cloud storage, streaming/chunked upload, CDN — unless explicitly requested
   (2026-07-23: AWS deployment, VOD playback access control, and a storage
   port-adapter are now explicitly decided roadmap items — ROADMAP.md Stage 4.
@@ -665,7 +669,8 @@ Do not suggest alternatives to these decisions without explicit request.
   each with its own ADR)
 
 ### API Layer
-- REST only, documented via Swagger at `/doc` (`persistAuthorization: true`)
+- REST only, documented via Swagger at `/doc` (`persistAuthorization: true` keeps the
+  entered Bearer token across `/doc` reloads, so manual testing survives a page refresh)
 - Every endpoint carries `@ApiTags` and response decorators; auth-protected endpoints
   carry `@ApiBearerAuth` (or `@ApiBasicAuth` for the Basic-token endpoints)
 - Error responses follow the frozen `ErrorBody` contract (ADR 0011): every
@@ -843,7 +848,8 @@ pnpm test -- file.service
   `creator: FileEntity[]` (OneToMany), timestamps
 - `FileEntity` — title (unique), `filePath`, `creator: UserEntity` (ManyToOne,
   `nullable: false`, `cascade: true`), timestamps
-- No shared base entity; timestamps declared per entity
+- No shared base entity; timestamps declared per entity — with only two entities a shared
+  base would be premature abstraction (YAGNI) and add inheritance coupling for no reuse
 
 ## Key Conventions
 
@@ -874,7 +880,9 @@ const mockFileRepository = {
 ### Environment Variables
 - Copy `.env.example` to `.env` for local dev
 - All vars validated at startup via Joi; missing vars throw on boot
-- Never access `process.env` directly — use `ConfigService` (`getOrThrow` for required)
+- Never access `process.env` directly — use `ConfigService` (`getOrThrow` for required);
+  reason in Never Do G2 (an unvalidated `process.env.X` propagates `undefined` silently),
+  full policy under Architecture Decisions > Config
 
 ### Code Style
 - ESLint flat config (`eslint.config.mjs`): `recommendedTypeChecked` + Prettier plugin
