@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **How to read the rules here.** Rules are stated as directives so they can be applied
+> without re-deriving them each time. The reasoning lives in one of three places, in
+> priority order: (1) *inline* — Never Do items carry `→ consequence`, Project-Specific
+> Principles carry a `Rationale:` line; (2) a *cited ADR or doc* — when a rule ends with
+> "(ADR 00NN)" or links a document, that citation is the full chain-of-reasoning, so follow
+> it whenever you need the *why* and not just the *what*; (3) *convention* — a rule with
+> neither an inline reason nor a citation exists for consistency (naming, layout, decorator
+> parity) and should be treated as such. If a directive's rationale is unclear and it cites
+> a source, read the source before deciding it is safe to deviate.
+
 ## Hallucination Prevention (환각 방지)
 
 Before making any change:
@@ -45,10 +55,14 @@ Do not make any of the following unless explicitly requested:
 - Large-scale formatting edits
 - Permanent data deletion paths (hard-delete service methods, cascade-delete relations) — `UserService.remove` and `FileService.deleteFile` are hard deletes; before adding another, describe the cascade depth (`FileEntity.creator` is `nullable: false` — deleting a user with files will hit an FK constraint) and confirm the operation is intentionally irreversible before writing any code
 
-High-blast-radius files — require explicit approval before any edit:
+High-blast-radius files — require explicit approval before any edit (a change here
+radiates repo-wide, so the blast radius is never "just this file": `app.module.ts` wires
+every module + the DB connection, `main.ts` is the global bootstrap/ValidationPipe/CORS,
+`*.entity.ts` defines the DB schema itself):
 `app.module.ts`, `main.ts`, `*.entity.ts`
 
-Touching any of the following always counts as "beyond the stated task":
+Touching any of the following always counts as "beyond the stated task" — each governs
+behavior for *every* request or endpoint, so a local-looking edit has global reach:
 the global `ValidationPipe` options in `main.ts`, the Joi validation schema in `app.module.ts`,
 shared guards (`src/auth/guard/`), the Multer storage config in `upload.module.ts`
 
@@ -164,7 +178,9 @@ import ...
 
 Keep it to three lines, one per field — no exceptions for "obvious" files. This is the
 one place a header comment is required regardless of how self-explanatory the file
-seems. Do not retroactively add this header to existing files being edited.
+seems, because "obvious now" decays: the header preserves *why the file was created* —
+and why an existing file could not absorb it — for a later reader who no longer has that
+context. Do not retroactively add this header to existing files being edited.
 
 ## Documentation Convention (.ko.md 문서 규약)
 
@@ -599,7 +615,9 @@ Do not suggest alternatives to these decisions without explicit request.
   `POST /auth/token/refresh` reads the cookie, rotates the pair (SHA-256 anchor
   in `UserEntity.refreshTokenHash`; replay of a rotated-out token invalidates
   the session — 401 `AUTH_REFRESH_REUSED`), and returns a new access token.
-  `POST /auth/signout` clears the anchor and the cookie. One session per account
+  `POST /auth/signout` clears the anchor and the cookie. One session per account (the
+  single `refreshTokenHash` column holds exactly one anchor, so a new sign-in or rotation
+  overwrites any prior session by construction)
 - Authorization roadmap (decided 2026-07-22): **ownership checks landed 2026-07-22**
   as a dedicated task — `PATCH/DELETE /user/:id` are self-only (controller-level
   check via `@UserId`), `PATCH /file/:id` and `DELETE /file/:id` are
@@ -607,9 +625,11 @@ Do not suggest alternatives to these decisions without explicit request.
   pending** as its own explicit task (see Known Gaps & Roadmap) — do not bolt role
   logic onto unrelated changes; the introduction happens as a designed, dedicated change
 - **Never suggest**: session-based auth, a single shared JWT secret, storing raw
-  tokens server-side (the sanctioned server-side state is exactly one SHA-256
-  *hash* of the current refresh token — the ADR 0012 rotation anchor; a token
-  table or raw-token storage still requires its own explicit decision)
+  tokens server-side (session-auth and single-secret rationale: ADR 0001/0002 — a
+  stateless API deliberately avoids a session store, and separate secrets stop a
+  refresh token being replayed as an access token. The sanctioned server-side state
+  is exactly one SHA-256 *hash* of the current refresh token — the ADR 0012 rotation
+  anchor; a token table or raw-token storage still requires its own explicit decision)
 
 ### Database (PostgreSQL + TypeORM)
 - `synchronize: false` is committed and stays that way
@@ -654,7 +674,9 @@ Do not suggest alternatives to these decisions without explicit request.
   (`APP_FILTER` in `app.module.ts`). New throw sites must attach a code — the
   status-based fallbacks cover framework-originated throws only. Renaming or
   removing a code is a breaking change; adding one is free
-- **Never suggest**: GraphQL, WebSocket, gRPC
+- **Never suggest**: GraphQL, WebSocket, gRPC — the small request/response CRUD surface
+  does not justify the schema layer, client story, or operational overhead each would add
+  (full reasoning: ADR 0009)
 
 ### Config
 - All env vars Joi-validated at startup (`app.module.ts`); missing vars throw on boot
@@ -662,7 +684,9 @@ Do not suggest alternatives to these decisions without explicit request.
   default for optional (`BASE_URL`). Sole exception: `src/data-source.ts` (TypeORM
   CLI, runs outside the DI container) reads `process.env` directly — documented in
   its header; do not add a second exception
-- `DB_TYPE` must be `"postgres"`; `ENV` is `'dev' | 'prod'`
+- `DB_TYPE` must be `"postgres"`; `ENV` is `'dev' | 'prod'` — the schema, migrations, and
+  `pg` driver are Postgres-specific, and `ENV` gates dev-only behavior (error `stack`
+  exposure, cookie `Secure`)
 - New env var = Joi schema entry + `.env.example` entry, in the same change
 
 ## Known Gaps & Roadmap (알려진 미해결 지점 및 로드맵)
@@ -827,12 +851,16 @@ pnpm test -- file.service
 - Tests live alongside source files as `*.spec.ts`; Jest config is embedded in
   `package.json` (`roots: ["src"]`)
 - Coverage ignores `main.ts`, modules, DTOs, entities, decorators, strategies, guards,
-  controllers — only services are measured
+  controllers — only services are measured, because services hold the business logic worth
+  asserting; the rest is thin framework glue best exercised through e2e, not unit coverage
 - `fs/promises` mocked via `jest.mock('fs/promises')` (FileService tests)
 - QueryRunner mocked as a plain object with jest.fn methods; DataSource mock returns it
   from `createQueryRunner`
-- `mockReturnValue` (sync) vs `mockResolvedValue` (async) — must not be confused
-- DB direct access in tests is forbidden — use repository mocks
+- `mockReturnValue` (sync) vs `mockResolvedValue` (async) — must not be confused: a sync
+  method returns a value while an async one returns a Promise, so the wrong helper makes the
+  mock resolve to the wrong shape and the assertion silently checks nothing
+- DB direct access in tests is forbidden — use repository mocks: unit tests must run with no
+  live DB provisioned, and mocks keep them deterministic and fast
 
 ```typescript
 // Standard repository mock pattern
@@ -863,8 +891,12 @@ const mockFileRepository = {
   new suppressions without documenting why
 - File naming: `{name}.{layer}.ts` (`file.service.ts`, `jwt-auth.guard.ts`); folders
   per concern: `dto/`, `entity/`, `guard/`, `strategy/`, `interface/`, `decorator/`
+  (convention, for consistency: the predictable `{name}.{layer}` shape keeps files
+  greppable and makes each file's layer obvious from its name alone)
 
 ### Swagger
+Swagger *is* the API documentation (ADR 0009), so these decorators are mandatory, not
+cosmetic — a missing or wrong one is a documentation bug caught in Result Review.
 - Every controller: `@ApiTags`; protected controllers: `@ApiBearerAuth` at class level
 - Endpoints document status codes via `@ApiResponse`; Basic-token endpoints use `@ApiBasicAuth`
 - Swagger UI at `/doc` with `persistAuthorization: true`
