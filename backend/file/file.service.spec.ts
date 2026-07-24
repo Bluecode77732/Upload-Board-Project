@@ -127,7 +127,11 @@ describe('FileService', () => {
         .fn()
         .mockReturnValue(mockInsertQueryBuilder);
       (fs.rename as jest.Mock).mockResolvedValue(undefined);
-      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
+      // First findOne is the duplicate-title pre-check (no match); second is the post-commit re-read.
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(mockFileEntity);
 
       const result = await fileService.uploadFile(uploadFileDto, 1);
 
@@ -182,6 +186,20 @@ describe('FileService', () => {
       );
       expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
       expect(queryRunner.release).toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException (FILE_TITLE_TAKEN) when the title already exists', async () => {
+      // Duplicate-title pre-check finds an existing row.
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
+
+      await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(
+        BadRequestException,
+      );
+      // The typed exception survives the catch (not collapsed to a generic 500),
+      // the transaction rolls back, and the connection is released.
+      expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+      expect(queryRunner.release).toHaveBeenCalled();
+      expect(fs.rename).not.toHaveBeenCalled();
     });
   });
 

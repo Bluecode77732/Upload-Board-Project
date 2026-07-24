@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -93,6 +94,18 @@ export class FileService {
       const temporaryFolder = join('file', 'temp');
       const uploadFolder = join('file', 'upload');
 
+      // Title is unique — pre-check so the DB constraint surfaces as a typed
+      // FILE_TITLE_TAKEN instead of being swallowed into a generic 500 (mirrors updateFile).
+      const duplicatedTitle = await this.fileRepository.findOne({
+        where: { title: uploadFileDto.title },
+      });
+      if (duplicatedTitle) {
+        throw new BadRequestException({
+          code: ErrorCode.FILE_TITLE_TAKEN,
+          message: 'Title already in use.',
+        });
+      }
+
       const upload = await queryRunner.manager
         .createQueryBuilder()
         .insert()
@@ -123,8 +136,11 @@ export class FileService {
       );
 
       await queryRunner.commitTransaction();
-    } catch {
+    } catch (error) {
       await queryRunner.rollbackTransaction();
+      // Preserve typed domain exceptions (e.g. FILE_TITLE_TAKEN); only opaque
+      // failures collapse to a generic message so no internal detail leaks out.
+      if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException({
         code: ErrorCode.INTERNAL_ERROR,
         message: 'Transaction aborted.',
