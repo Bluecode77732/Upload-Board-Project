@@ -23,14 +23,20 @@ API였다. 이제 브라우저 프론트엔드가 필요해졌고, 그 순간 �
 > 모노레포는 여전히 기각이다 — 저장소 내 분리 ≠ 워크스페이스 재구성이기
 > 때문이다(아래 참조).
 
-- **프론트엔드는 같은 저장소 안의 `frontend/` 하위 폴더로 둔다.** 백엔드는
-  저장소 루트에 그대로 유지하고, 프론트엔드는 그 옆 `frontend/`에 두어 같은 git
-  이력으로 추적한다. 이것은 pnpm workspace 모노레포가 *아니다* — 백엔드를
-  `apps/backend`로 재배치하지 않으며 Jest·마이그레이션 경로, 툴링, 루트
-  `CLAUDE.md`는 영향받지 않는다. `frontend/` 폴더는 자체 `package.json`, 툴링,
-  스코프 `CLAUDE.md`를 가질 뿐이다. HTTP로 백엔드를 소비한다(dev: Vite 프록시,
-  prod: `CORS_ORIGIN`). 한 저장소에 두면 API 계약 변경과 그 클라이언트 수정이 한
-  커밋에 담기며, 구조적 비용은 거의 0이다.
+> **2026-07-24 개정 (대칭성)**: 백엔드 소스 폴더를 `src/` → `backend/`로
+> 개명해, 저장소 루트가 대칭적 형제 폴더 `backend/` + `frontend/`로 읽히게
+> 했다. 이로써 소스 루트를 가리키는 백엔드 자체 툴링(`nest-cli.json`
+> sourceRoot, Jest `roots`/`moduleNameMapper`, lint glob, `tsconfig.build.json`,
+> e2e import)과 문서의 모든 `backend/…` 경로가 갱신되었다. 컴파일된 `dist/`
+> 구조와 `dist/data-source.js` 마이그레이션 경로는 그대로다. 이는 여전히 pnpm
+> workspace 모노레포가 **아니다** — 백엔드를 `apps/backend`로 재배치하지 않고
+> 자체 루트 `package.json`/툴링을 유지한다.
+
+- **프론트엔드는 같은 저장소 안의 `frontend/` 하위 폴더로 둔다** (백엔드 소스는
+  형제 폴더 `backend/`에). 둘 다 저장소 루트에 있으며 같은 git 이력으로
+  추적한다. 이것은 pnpm workspace 모노레포가 *아니다* — 백엔드는 자체
+  `package.json`·툴링·루트 `CLAUDE.md`를 유지하고, `frontend/` 폴더는 자체
+  `package.json`·툴링·스코프 `CLAUDE.md`를 가진다.
 - **admin은 프론트엔드 내부의 라우트 구역(`/admin/*`)으로 시작한다** — 세 번째
   애플리케이션이 아니다. 별도 admin 앱으로의 승격은 RBAC이 랜딩하고 실제 admin
   요구사항이 쌓인 뒤에만 재검토한다. 지금 3분리를 하면 백엔드가 구분조차 못

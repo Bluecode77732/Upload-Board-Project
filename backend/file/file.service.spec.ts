@@ -8,7 +8,7 @@ import {
   SelectQueryBuilder,
 } from 'typeorm';
 import { FileEntity } from './entity/file.entity';
-import { UserEntity } from 'src/user/entity/user.entity';
+import { UserEntity } from 'backend/user/entity/user.entity';
 import {
   NotFoundException,
   BadRequestException,

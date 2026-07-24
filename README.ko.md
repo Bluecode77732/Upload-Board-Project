@@ -140,7 +140,7 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
 }
 ```
 
-분기는 반드시 `code`(안정 계약 — `src/common/error-code.ts` 참조)로만 하고,
+분기는 반드시 `code`(안정 계약 — `backend/common/error-code.ts` 참조)로만 하고,
 `message`(언제든 변경 가능)로는 하지 마세요. 검증 실패는
 `code: "VALIDATION_FAILED"`에 `message` 배열이 오고, `ENV=dev`에서는 `stack`
 필드가 추가됩니다.

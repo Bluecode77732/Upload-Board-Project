@@ -5,7 +5,7 @@ import { UserEntity } from './entity/user.entity';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
-import { ErrorCode } from 'src/common/error-code';
+import { ErrorCode } from 'backend/common/error-code';
 
 @Injectable()
 export class UserService {

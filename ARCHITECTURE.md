@@ -23,13 +23,13 @@ AppModule
 ├── UserModule          — user CRUD only; exports UserService (consumed by JwtStrategy)
 ├── FileModule          — file *metadata* only: FileEntity rows + promote-from-temp transaction
 ├── UploadModule        — *physical* files only: Multer diskStorage; controller-only, no DB
-└── APP_FILTER          — AllExceptionsFilter (src/common/filter/): shapes every error into the ErrorBody contract (ADR 0011)
+└── APP_FILTER          — AllExceptionsFilter (backend/common/filter/): shapes every error into the ErrorBody contract (ADR 0011)
 ```
 
 Module responsibility is a deliberate SRP split (see `CLAUDE.md` > Module Responsibility):
 a change spanning "physical file" and "file metadata" is two modules' work by design.
 
-### AuthModule (`src/auth/`)
+### AuthModule (`backend/auth/`)
 
 | Route | Auth | Behavior |
 |---|---|---|
@@ -39,7 +39,7 @@ a change spanning "physical file" and "file metadata" is two modules' work by de
 | `POST /auth/token/refresh` | httpOnly refresh cookie | Rotates the pair (reuse detection) — new cookie + new access token |
 | `POST /auth/signout` | Bearer access token | Clears the stored refresh-token hash and the cookie |
 
-- `AuthService` (`src/auth/auth.service.ts`): `parseBasicToken`, `verifyToken(token, isRefreshToken)`,
+- `AuthService` (`backend/auth/auth.service.ts`): `parseBasicToken`, `verifyToken(token, isRefreshToken)`,
   `validateUser`, `issueToken(user: Pick<UserEntity, 'id'>, isRefreshToken)`, `issueTokenPair`,
   `rotateRefreshToken`, `signOut`, `register`, `signIn`.
 - Access and refresh tokens are signed with **separate secrets** (`ACCESS_TOKEN_SECRET` /
@@ -58,7 +58,7 @@ a change spanning "physical file" and "file metadata" is two modules' work by de
 - `AuthModule` imports `UserModule` for `UserService` (DI via `exports`/`imports`, never
   re-declaring another module's provider).
 
-### UserModule (`src/user/`)
+### UserModule (`backend/user/`)
 
 All routes behind `JwtAuthGuard`; controller carries `ClassSerializerInterceptor` so
 `UserEntity.password` (`@Exclude({ toPlainOnly: true })`) never leaves the API.
@@ -73,12 +73,12 @@ All routes behind `JwtAuthGuard`; controller carries `ClassSerializerInterceptor
 - There is deliberately **no `POST /user`** — registration is `POST /auth/register`.
 - Self-only enforcement compares `@UserId()` (JWT identity) against the path id and throws
   `ForbiddenException` on mismatch ([ADR 0007](ADR/0007-ownership-checks-without-rbac.md)).
-- The `@UserId` decorator (`src/user/decorator/userId.decorator.ts`) reads
+- The `@UserId` decorator (`backend/user/decorator/userId.decorator.ts`) reads
   `request.user.id` populated by `JwtStrategy.validate` — identity never comes from the body.
 - `UserModule` exports `UserService`; that export is the module's public contract
   (consumed by `JwtStrategy` for token validation).
 
-### FileModule (`src/file/`)
+### FileModule (`backend/file/`)
 
 All routes behind `JwtAuthGuard`.
 
@@ -98,7 +98,7 @@ All routes behind `JwtAuthGuard`.
   `fileUrl` as `{BASE_URL}/{filePath}` via `ConfigService`. Entities carry no presentation
   logic (the old `@Transform` URL on the entity was deliberately removed).
 
-### UploadModule (`src/upload/`)
+### UploadModule (`backend/upload/`)
 
 | Route | Behavior |
 |---|---|
@@ -129,16 +129,16 @@ ownership-based (self-only / creator-only) at the handler/service level
 
 ### Boundary validation
 
-The global `ValidationPipe` (`src/main.ts`) runs `transform + whitelist +
+The global `ValidationPipe` (`backend/main.ts`) runs `transform + whitelist +
 forbidNonWhitelisted + enableImplicitConversion` — a request field not declared on a DTO
 never reaches a service. Services trust validated input (boundary-only validation).
 
 ### Error responses (`ErrorBody`)
 
 Every thrown error — `HttpException` or not — exits through the global
-`AllExceptionsFilter` (`src/common/filter/all-exceptions.filter.ts`, registered via
+`AllExceptionsFilter` (`backend/common/filter/all-exceptions.filter.ts`, registered via
 `APP_FILTER` in `app.module.ts`) and is shaped into the frozen `ErrorBody` contract
-(`src/common/error-code.ts`): `{ statusCode, code, message, timestamp, path }`, plus
+(`backend/common/error-code.ts`): `{ statusCode, code, message, timestamp, path }`, plus
 `stack` when `ENV=dev`. Throw sites attach `{ code: ErrorCode.X, message }`; exceptions
 thrown without a code get a status-based fallback, a 400 carrying a message array is
 labeled `VALIDATION_FAILED` (the ValidationPipe signature), and non-`HttpException`
@@ -187,13 +187,13 @@ UserEntity                          FileEntity
 - `FileEntity.creator` is `nullable: false` — deleting a user who still owns files will
   hit an FK constraint (documented hard-delete caveat, see `CLAUDE.md` > Scope Discipline).
 - Schema management: `synchronize: false` is committed; schema changes ship as TypeORM
-  migrations — CLI DataSource `src/data-source.ts`, migrations in `src/migrations/`
+  migrations — CLI DataSource `backend/data-source.ts`, migrations in `backend/migrations/`
   (baseline `InitialSchema`), applied via `pnpm migration:run`
   ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)).
 
 ## Configuration
 
-- All env vars are Joi-validated at startup in `src/app.module.ts`; missing vars throw on boot.
+- All env vars are Joi-validated at startup in `backend/app.module.ts`; missing vars throw on boot.
 - Access is via `ConfigService` only (`getOrThrow` for required, `get` with default for
   optional) — never `process.env` directly.
 - Optional vars: `BASE_URL` (default `http://localhost:3000`), `CORS_ORIGIN`
@@ -210,7 +210,7 @@ protected controllers `@ApiBearerAuth`; Basic-token endpoints `@ApiBasicAuth`.
 ## Testing
 
 - Unit tests live alongside source as `*.spec.ts`; Jest config is embedded in `package.json`
-  (`roots: ["src"]`). Coverage measures **services and `src/common/`** (the exception
+  (`roots: ["src"]`). Coverage measures **services and `backend/common/`** (the exception
   filter and error-code catalog); controllers, guards, strategies, DTOs, entities, and
   modules are ignored via `coveragePathIgnorePatterns`.
 - `fs/promises` is mocked with `jest.mock('fs/promises')`; `bcrypt` with `jest.mock('bcrypt')`.

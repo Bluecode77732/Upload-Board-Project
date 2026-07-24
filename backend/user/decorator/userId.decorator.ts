@@ -3,7 +3,7 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ErrorCode } from 'src/common/error-code';
+import { ErrorCode } from 'backend/common/error-code';
 
 export const UserId = createParamDecorator(
   (data: unknown, context: ExecutionContext) => {

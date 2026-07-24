@@ -3,7 +3,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { UserEntity } from 'src/user/entity/user.entity';
+import { UserEntity } from 'backend/user/entity/user.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
@@ -11,7 +11,7 @@ import { createHash, randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Payload } from './interface/payload-interface';
-import { ErrorCode } from 'src/common/error-code';
+import { ErrorCode } from 'backend/common/error-code';
 
 @Injectable()
 export class AuthService {

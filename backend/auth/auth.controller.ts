@@ -22,10 +22,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import { CreateUserDto } from 'src/user/dto/create-user.dto';
-import { UserEntity } from 'src/user/entity/user.entity';
+import { CreateUserDto } from 'backend/user/dto/create-user.dto';
+import { UserEntity } from 'backend/user/entity/user.entity';
 import { bearerTokenType } from './dto/token-types.auth.dto';
-import { UserId } from 'src/user/decorator/userId.decorator';
+import { UserId } from 'backend/user/decorator/userId.decorator';
 import type { Request as ExpressRequest, Response } from 'express';
 
 // The refresh token travels only in this httpOnly cookie (ADR 0012) — never in a response body.

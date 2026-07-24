@@ -15,7 +15,7 @@ exercise in the full spectrum of HTTP auth mechanisms (Basic → Bearer → JWT)
 
 `POST /auth/register` and `POST /auth/signin` accept credentials **only** via the
 `Authorization: Basic` header, parsed by `AuthService.parseBasicToken`
-(`src/auth/auth.service.ts`) — not by body DTOs. A body-credential alternative exists
+(`backend/auth/auth.service.ts`) — not by body DTOs. A body-credential alternative exists
 solely as `POST /auth/signin/local` (Passport local strategy), kept to demonstrate the
 strategy pattern.
 

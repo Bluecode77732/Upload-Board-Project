@@ -18,10 +18,10 @@ handler/service level; RBAC remains a separate, decided roadmap item.
 
 - **Self-only user writes**: `PATCH /user/:id` and `DELETE /user/:id` compare
   `@UserId()` (JWT identity from `request.user.id`) against the path id and throw
-  `ForbiddenException` on mismatch (`src/user/user.controller.ts`).
+  `ForbiddenException` on mismatch (`backend/user/user.controller.ts`).
 - **Creator-only file writes**: `FileService.updateFile`/`deleteFile` load the
   `creator` relation and reject requesters who are not the file's creator
-  (`src/file/file.service.ts`). Ownership *reassignment* via `UpdateFileDto.userId`
+  (`backend/file/file.service.ts`). Ownership *reassignment* via `UpdateFileDto.userId`
   is likewise creator-only.
 - Identity always comes from the validated JWT — never from the request payload
   (`@UserId` decorator is the sanctioned accessor).

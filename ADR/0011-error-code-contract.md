@@ -17,7 +17,7 @@ same reason the routes were.
 ## Decision
 
 - **Frozen wire shape** — every error response is an `ErrorBody`
-  (`src/common/error-code.ts`):
+  (`backend/common/error-code.ts`):
 
   ```json
   {
@@ -53,7 +53,7 @@ same reason the routes were.
   object bodies, and the repo's conventions forbid new abstractions where a
   framework idiom suffices.
 - **One global filter** — `AllExceptionsFilter`
-  (`src/common/filter/all-exceptions.filter.ts`), registered via `APP_FILTER` in
+  (`backend/common/filter/all-exceptions.filter.ts`), registered via `APP_FILTER` in
   `app.module.ts` so it stays DI-managed (ConfigService drives the dev-only
   stack). It extracts `code` from the exception body and falls back by status for
   exceptions thrown without one (framework 404s, passport 401s, Multer 413s).

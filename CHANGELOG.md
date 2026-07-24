@@ -26,7 +26,7 @@ development line (package.json version).
   ([ADR 0011](ADR/0011-error-code-contract.md), Stage F task 2): frozen
   `ErrorBody` response shape (`statusCode`/`code`/`message`/`timestamp`/`path`,
   `stack` in dev only), an 18-code string-enum catalog
-  (`src/common/error-code.ts`), and a global `AllExceptionsFilter` registered
+  (`backend/common/error-code.ts`), and a global `AllExceptionsFilter` registered
   via `APP_FILTER` — 23 throw sites now attach `{ code, message }`; clients
   branch on `code`, never on `message`.
 - [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) — frontend split
@@ -41,9 +41,9 @@ development line (package.json version).
   and a Vite dev proxy — auth flow E2E-verified against the backend.
 - TypeORM migration adoption ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)):
   `migration:generate`/`run`/`revert`/`show` scripts (run against the compiled
-  `dist/data-source.js`), CLI DataSource `src/data-source.ts` (env via Node's
+  `dist/data-source.js`), CLI DataSource `backend/data-source.ts` (env via Node's
   built-in `process.loadEnvFile()` — no dotenv dependency), and baseline
-  `src/migrations/1784678400000-InitialSchema.ts`. Fresh DB: `pnpm migration:run`;
+  `backend/migrations/1784678400000-InitialSchema.ts`. Fresh DB: `pnpm migration:run`;
   pre-existing manually-created DB: `pnpm migration:run -- --fake` once.
   Replaces the manual "flip `synchronize` locally" workflow; unblocks RBAC.
 - Documentation set: rewritten `README.md`, new `ARCHITECTURE.md`, `CHANGELOG.md`,
@@ -51,6 +51,13 @@ development line (package.json version).
   sibling.
 
 ### Changed
+- Backend source folder renamed `src/` → `backend/` for root symmetry with the
+  `frontend/` subfolder (ADR 0010 amendment 2026-07-24): updated `nest-cli.json`
+  sourceRoot, Jest `roots`/`moduleNameMapper`, the lint glob, `tsconfig.build.json`
+  (now excludes `frontend`), the e2e import, all `backend/…` absolute imports,
+  and every doc path. Compiled `dist/` layout and the `dist/data-source.js`
+  migration path are unchanged; backend build/test(43)/lint and migrations
+  re-verified.
 - **Breaking** — auth transport (ADR 0012, pre-declared Stage F task with zero
   consumers): `POST /auth/signin` and `POST /auth/signin/local` response bodies
   shrink to `{ accessToken }` (refresh token moves to the Set-Cookie header);

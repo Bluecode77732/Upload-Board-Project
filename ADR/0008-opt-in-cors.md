@@ -14,7 +14,7 @@ domain drive authenticated requests).
 ## Decision
 
 CORS stays **off by default** and is enabled only when the optional `CORS_ORIGIN` env
-var is set (`src/main.ts`):
+var is set (`backend/main.ts`):
 
 - `CORS_ORIGIN` holds a comma-separated allowlist of origins, split and trimmed at
   bootstrap; it is declared optional in the Joi schema and documented in `.env.example`.

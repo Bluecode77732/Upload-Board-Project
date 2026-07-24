@@ -24,13 +24,22 @@ consumers** — every breaking API change is still free. Opt-in CORS
 > the pnpm-workspace monorepo remains rejected because in-repo ≠ workspace
 > restructure (see below).
 
-- **Frontend in the same repository, as a `frontend/` subfolder.** The backend
-  stays at the repo root, untouched; the frontend lives beside it under
-  `frontend/` and is tracked in the same git history. This is *not* a
-  pnpm-workspace monorepo — the backend is **not** relocated into `apps/backend`
-  and its Jest/migration paths, tooling, and root `CLAUDE.md` are unaffected;
-  the `frontend/` folder simply carries its own `package.json`, tooling, and
-  scoped `CLAUDE.md`. It consumes the backend over HTTP (dev: a Vite proxy;
+> **Amended 2026-07-24 (symmetry)**: the backend source folder was renamed
+> `src/` → `backend/` so the repo root reads as symmetric sibling folders
+> `backend/` + `frontend/`. This updated the backend's own tooling that points
+> at the source root (`nest-cli.json` sourceRoot, Jest `roots`/`moduleNameMapper`,
+> the lint glob, `tsconfig.build.json`, and the e2e import) and every `backend/…`
+> path in the docs; the compiled `dist/` layout and the `dist/data-source.js`
+> migration path are unchanged. This is still **not** a pnpm-workspace monorepo —
+> the backend is not relocated into `apps/backend` and keeps its own root
+> `package.json`/tooling.
+
+- **Frontend in the same repository, as a `frontend/` subfolder** (with the
+  backend source in a sibling `backend/` folder). Both live at the repo root and
+  are tracked in the same git history. This is *not* a pnpm-workspace monorepo —
+  the backend keeps its own `package.json`, tooling, and root `CLAUDE.md`; the
+  `frontend/` folder carries its own `package.json`, tooling, and scoped
+  `CLAUDE.md`. It consumes the backend over HTTP (dev: a Vite proxy;
   prod: `CORS_ORIGIN`). Keeping both in one repo makes an API-contract change
   and its client update land in one commit, at near-zero structural cost.
 - **Admin starts as a route section (`/admin/*`) inside the frontend**, not as

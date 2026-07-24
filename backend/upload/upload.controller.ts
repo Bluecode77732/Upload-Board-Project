@@ -14,8 +14,8 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
-import { ErrorCode } from 'src/common/error-code';
+import { JwtAuthGuard } from 'backend/auth/guard/jwt-auth.guard';
+import { ErrorCode } from 'backend/common/error-code';
 
 @Controller('upload')
 @ApiTags('Upload API')

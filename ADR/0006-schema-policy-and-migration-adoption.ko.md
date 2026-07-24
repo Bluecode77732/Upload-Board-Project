@@ -16,7 +16,7 @@ drop + add가 됨). 플래그는 2026-04-14(커밋 `2f2fc99`)에 `false`로 바�
 
 - `synchronize: false`는 커밋되어 있으며 그대로 유지됩니다.
 - **TypeORM 마이그레이션을 도입합니다**(`migration:generate`/`migration:run` 스크립트
-  + `src/migrations/`) — 전용 로드맵 작업으로 진행하며, 다른 변경의 부수효과로
+  + `backend/migrations/`) — 전용 로드맵 작업으로 진행하며, 다른 변경의 부수효과로
   부트스트랩하지 않습니다.
 - 그 작업이 완료되기 전까지 스키마는 수동으로 적용합니다(로컬 개발 환경에서
   `synchronize`를 일시적으로 켜는 것은 마이그레이션 도입과 함께 사라질 과도기
@@ -39,12 +39,12 @@ drop + add가 됨). 플래그는 2026-04-14(커밋 `2f2fc99`)에 `false`로 바�
 
 설계대로 도입했으며, 구체 사항은 다음과 같습니다:
 
-- CLI DataSource: `src/data-source.ts`를 컴파일된 `dist/` 출력으로 실행
+- CLI DataSource: `backend/data-source.ts`를 컴파일된 `dist/` 출력으로 실행
   (`typeorm ... -d dist/data-source.js`; 각 `migration:*` 스크립트가 먼저 빌드).
   Nest의 `ConfigService`는 DI 컨테이너 밖에 존재하지 않으므로, 이 파일이 환경변수를
   직접 읽는 유일하게 공인된 위치입니다. 환경 로딩은 Node 내장
   `process.loadEnvFile()`을 사용합니다(dotenv 의존성 없음).
-- 베이스라인: `src/migrations/1784678400000-InitialSchema.ts`가 기존 수동 스키마를
+- 베이스라인: `backend/migrations/1784678400000-InitialSchema.ts`가 기존 수동 스키마를
   담습니다. 새 데이터베이스 → `pnpm migration:run`. 수동 시대 스키마를 이미 가진
   데이터베이스 → `pnpm migration:run -- --fake`를 한 번 실행해 테이블 재생성 없이
   베이스라인을 적용 완료로 표시합니다.

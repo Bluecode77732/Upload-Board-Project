@@ -140,7 +140,7 @@ Every error follows a frozen machine-readable shape
 }
 ```
 
-Branch on `code` (stable contract — see `src/common/error-code.ts`), never on
+Branch on `code` (stable contract — see `backend/common/error-code.ts`), never on
 `message` (free to change). Validation failures use `code: "VALIDATION_FAILED"`
 with a `message` array; when `ENV=dev` a `stack` field is included.
 

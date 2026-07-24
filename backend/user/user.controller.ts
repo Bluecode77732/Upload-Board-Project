@@ -14,9 +14,9 @@ import {
 import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
+import { JwtAuthGuard } from 'backend/auth/guard/jwt-auth.guard';
 import { UserId } from './decorator/userId.decorator';
-import { ErrorCode } from 'src/common/error-code';
+import { ErrorCode } from 'backend/common/error-code';
 
 @Controller('user')
 @ApiTags('User API')

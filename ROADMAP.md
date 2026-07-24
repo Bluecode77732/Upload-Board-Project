@@ -258,4 +258,4 @@ candidate under the CI task).
 | Doc sync | README endpoints/limitations, CLAUDE.md gaps, `.env.example` (`BASE_URL`, `CORS_ORIGIN`) |
 | `@nestjs/jwt` to `dependencies` | Was in devDependencies despite runtime use — `--prod` installs no longer break |
 | `saved!`/`updated!` removed | `FileService` post-commit re-reads moved outside the `try` with a null guard |
-| TypeORM migration adoption | `migration:*` scripts, `src/data-source.ts`, baseline `InitialSchema`; pre-existing DBs: `pnpm migration:run -- --fake` once ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)) |
+| TypeORM migration adoption | `migration:*` scripts, `backend/data-source.ts`, baseline `InitialSchema`; pre-existing DBs: `pnpm migration:run -- --fake` once ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)) |

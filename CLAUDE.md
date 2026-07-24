@@ -17,11 +17,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Before making any change:
 1. Inspect the codebase thoroughly — read the relevant files, grep for symbols, trace the actual call chain.
    Concern-to-entrypoint map (check these first):
-   - Auth flow change      → read `src/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `src/auth/strategy/`; grep `JwtAuthGuard`, `LocalAuthGuard`
-   - File metadata change  → trace `src/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract)
-   - Physical upload change→ read `src/upload/upload.module.ts` (Multer diskStorage, `temp_{uuid}_{timestamp}` naming) and `upload.controller.ts` (100MB size limit)
-   - Env var change        → read the Joi schema in `src/app.module.ts` AND `.env.example` — both must stay in sync
-   - Entity/relation change→ read both `src/file/entity/file.entity.ts` and `src/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides
+   - Auth flow change      → read `backend/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `backend/auth/strategy/`; grep `JwtAuthGuard`, `LocalAuthGuard`
+   - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract)
+   - Physical upload change→ read `backend/upload/upload.module.ts` (Multer diskStorage, `temp_{uuid}_{timestamp}` naming) and `upload.controller.ts` (100MB size limit)
+   - Env var change        → read the Joi schema in `backend/app.module.ts` AND `.env.example` — both must stay in sync
+   - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides
    - Static file serving   → read the `ServeStaticModule` block in `app.module.ts` (`rootPath: file/`, `serveRoot: 'file'`)
 2. Never invent APIs, files, functions, or types that you have not confirmed exist in the codebase.
 3. Reuse existing patterns only; do not introduce new abstractions unless explicitly asked.
@@ -51,7 +51,7 @@ Do not make any of the following unless explicitly requested:
 - Unrelated refactors or code cleanups
 - Architectural changes
 - New dependency additions — confirm via pnpm before installing; check license type (MIT/Apache-2/BSD preferred); runtime-bundled GPL/AGPL carries copyleft risk — note this before adding. Run `pnpm audit` for known CVEs.
-- Schema changes — if an entity change is needed, describe the required column/relation change in plain text and stop. Migration tooling exists (adopted 2026-07-22: `migration:*` scripts + `src/data-source.ts` + `src/migrations/`) — never run `migration:generate` without a prior plain-text description, and always review its output line-by-line before running. The baseline migration uses readable constraint names (not TypeORM hashes), so `generate` may emit spurious constraint-rename statements — strip them, keep only the intended change.
+- Schema changes — if an entity change is needed, describe the required column/relation change in plain text and stop. Migration tooling exists (adopted 2026-07-22: `migration:*` scripts + `backend/data-source.ts` + `backend/migrations/`) — never run `migration:generate` without a prior plain-text description, and always review its output line-by-line before running. The baseline migration uses readable constraint names (not TypeORM hashes), so `generate` may emit spurious constraint-rename statements — strip them, keep only the intended change.
 - Large-scale formatting edits
 - Permanent data deletion paths (hard-delete service methods, cascade-delete relations) — `UserService.remove` and `FileService.deleteFile` are hard deletes; before adding another, describe the cascade depth (`FileEntity.creator` is `nullable: false` — deleting a user with files will hit an FK constraint) and confirm the operation is intentionally irreversible before writing any code
 
@@ -64,7 +64,7 @@ every module + the DB connection, `main.ts` is the global bootstrap/ValidationPi
 Touching any of the following always counts as "beyond the stated task" — each governs
 behavior for *every* request or endpoint, so a local-looking edit has global reach:
 the global `ValidationPipe` options in `main.ts`, the Joi validation schema in `app.module.ts`,
-shared guards (`src/auth/guard/`), the Multer storage config in `upload.module.ts`
+shared guards (`backend/auth/guard/`), the Multer storage config in `upload.module.ts`
 
 If a change requires touching files beyond the stated task, list all affected files first and wait for approval.
 Stick strictly to the stated task.
@@ -326,7 +326,7 @@ async update(@Body() dto: UpdateFileDto)  // global ValidationPipe: whitelist + 
 // ❌ Identity or ownership from client body → impersonation
 const userId = request.body.userId
 // ✅ Identity comes from the validated JWT (request.user), never from the request payload —
-//    the @UserId decorator (src/user/decorator/userId.decorator.ts) is the sanctioned accessor
+//    the @UserId decorator (backend/user/decorator/userId.decorator.ts) is the sanctioned accessor
 
 // ❌ Stack trace in error response → internal structure exposed
 throw new InternalServerErrorException(err.stack)
@@ -595,7 +595,7 @@ effect), choose the pattern explicitly from this table — state the choice and 
 - Rationale: client-supplied identity is impersonation by construction (Never Do
   Group 3).
 - Goal: new authenticated endpoints derive "who is acting" from `request.user` only —
-  via the `@UserId` decorator (`src/user/decorator/userId.decorator.ts`), which reads
+  via the `@UserId` decorator (`backend/user/decorator/userId.decorator.ts`), which reads
   `request.user.id` and throws `UnauthorizedException` if no authenticated user exists.
 
 ## Architecture Decisions
@@ -635,10 +635,10 @@ Do not suggest alternatives to these decisions without explicit request.
 - `synchronize: false` is committed and stays that way
 - Schema policy: **TypeORM migrations adopted 2026-07-22** — `migration:generate` /
   `migration:run` / `migration:revert` / `migration:show` scripts run against the
-  compiled `dist/data-source.js` (each script builds first). `src/data-source.ts` is
+  compiled `dist/data-source.js` (each script builds first). `backend/data-source.ts` is
   the CLI DataSource — the one sanctioned place env vars are read directly (outside
   the Nest DI container, so no ConfigService; see its header comment).
-  Baseline: `src/migrations/1784678400000-InitialSchema.ts` captures the previously
+  Baseline: `backend/migrations/1784678400000-InitialSchema.ts` captures the previously
   manual schema — fresh DB: `pnpm migration:run`; a pre-existing manually-created DB:
   `pnpm migration:run -- --fake` once to mark it applied. Entity change requests are
   described in plain text first (Scope Discipline), and `migration:generate` output is
@@ -670,7 +670,7 @@ Do not suggest alternatives to these decisions without explicit request.
   carry `@ApiBearerAuth` (or `@ApiBasicAuth` for the Basic-token endpoints)
 - Error responses follow the frozen `ErrorBody` contract (ADR 0011): every
   HttpException is thrown as `{ code: ErrorCode.X, message: '...' }`
-  (`src/common/error-code.ts`) and shaped by the global `AllExceptionsFilter`
+  (`backend/common/error-code.ts`) and shaped by the global `AllExceptionsFilter`
   (`APP_FILTER` in `app.module.ts`). New throw sites must attach a code — the
   status-based fallbacks cover framework-originated throws only. Renaming or
   removing a code is a breaking change; adding one is free
@@ -681,7 +681,7 @@ Do not suggest alternatives to these decisions without explicit request.
 ### Config
 - All env vars Joi-validated at startup (`app.module.ts`); missing vars throw on boot
 - Access via `ConfigService` only — `getOrThrow` for required values, `get` with
-  default for optional (`BASE_URL`). Sole exception: `src/data-source.ts` (TypeORM
+  default for optional (`BASE_URL`). Sole exception: `backend/data-source.ts` (TypeORM
   CLI, runs outside the DI container) reads `process.env` directly — documented in
   its header; do not add a second exception
 - `DB_TYPE` must be `"postgres"`; `ENV` is `'dev' | 'prod'` — the schema, migrations, and
@@ -696,7 +696,7 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
 
 **Decided roadmap items** (each lands as its own dedicated task — decided 2026-07-22):
 - ~~TypeORM migration adoption~~ — **landed 2026-07-22**: `migration:*` scripts,
-  `src/data-source.ts`, baseline `InitialSchema` migration — see Architecture
+  `backend/data-source.ts`, baseline `InitialSchema` migration — see Architecture
   Decisions > Database
 - RBAC (role column + role-aware guard) — see Architecture Decisions > Auth;
   sequenced after Stage F (frontend preparation — decided 2026-07-23, ADR 0010);
@@ -757,7 +757,7 @@ paginated; `.env.example` documents `BASE_URL`; the "300MB" comment is fixed;
 NestJS REST API for authenticated video-file upload and management. JWT auth
 (Passport), PostgreSQL via TypeORM, Multer disk storage, Swagger documentation.
 A local/portfolio project, no deployment pipeline. **This CLAUDE.md governs the
-backend at the repo root** (`src/`, `ADR/`, `test/`). A React + Vite frontend
+backend at the repo root** (`backend/`, `ADR/`, `test/`). A React + Vite frontend
 was added 2026-07-24 as the `frontend/` subfolder (ADR 0010) — it has its own
 scoped `frontend/CLAUDE.md` and tooling, and is not a pnpm-workspace monorepo:
 the backend at the root is untouched (its Jest roots, migration paths, and lint
@@ -772,12 +772,12 @@ pnpm run start:dev    # Development server with hot reload (port 3000, Swagger a
 pnpm run build        # Compile to dist/
 pnpm run start:prod   # node dist/main
 pnpm lint             # ESLint with auto-fix
-pnpm run format       # Prettier over src/ and test/
+pnpm run format       # Prettier over backend/ and test/
 pnpm test             # Unit tests (Jest, config in package.json)
 pnpm run test:cov     # Coverage report (./coverage)
 pnpm run test:e2e     # E2E tests (test/jest-e2e.json)
 pnpm migration:run    # Apply pending migrations (builds first, runs dist/data-source.js)
-pnpm migration:generate -- src/migrations/Name   # Diff entities vs DB (review output line-by-line)
+pnpm migration:generate -- backend/migrations/Name   # Diff entities vs DB (review output line-by-line)
 pnpm migration:revert # Revert the last applied migration
 pnpm migration:show   # List applied/pending migrations
 ```
@@ -789,7 +789,7 @@ pnpm test -- file.service
 
 ## Architecture
 
-### Modules (`src/`)
+### Modules (`backend/`)
 
 **AppModule** wires together:
 - `ConfigModule` — global, Joi-validated env (see `.env.example`)
@@ -797,7 +797,7 @@ pnpm test -- file.service
 - `ServeStaticModule` — serves the `file/` directory at `/file`
 - `FileModule`, `UserModule`, `AuthModule`, `UploadModule`
 
-**AuthModule** (`src/auth/`)
+**AuthModule** (`backend/auth/`)
 - REST: `POST /auth/register`, `POST /auth/signin` (both Basic token),
   `POST /auth/token/refresh` (httpOnly refresh cookie — rotation),
   `POST /auth/signin/local` (Passport local strategy, body credentials),
@@ -810,19 +810,19 @@ pnpm test -- file.service
 - Imports `UserModule` for `UserService`; registers `JwtModule.register({})` (secrets
   supplied per-call, not module-level)
 
-**UserModule** (`src/user/`)
+**UserModule** (`backend/user/`)
 - REST (all behind `JwtAuthGuard`): `GET /user`, `GET /user/:id`, `PATCH /user/:id`,
   `DELETE /user/:id` — no `POST /user` by design (registration is `POST /auth/register`)
 - `UserService` — CRUD; re-hashes password on update via `HASH_ROUNDS`
 - Exports `UserService`
 
-**FileModule** (`src/file/`)
+**FileModule** (`backend/file/`)
 - REST (all behind `JwtAuthGuard`): `GET /file`, `GET /file/:id`, `POST /file`,
   `PATCH /file/:id`, `DELETE /file/:id`
 - `FileService` — metadata CRUD; `uploadFile`/`updateFile` use the manual QueryRunner
   transaction pattern; `toResponse()` shapes `FileResponseDto` with `BASE_URL`
 
-**UploadModule** (`src/upload/`)
+**UploadModule** (`backend/upload/`)
 - REST: `POST /upload/attach` (behind `JwtAuthGuard`) — multipart field `video`,
   Multer diskStorage to `file/temp` with `temp_{uuid}_{timestamp}.{ext}` naming,
   100MB size limit; returns `{ filename }`
@@ -884,7 +884,7 @@ const mockFileRepository = {
   convention (see Never Do Group 1)
 - `@typescript-eslint/unbound-method` is off for `*.spec.ts`/`test/` only — jest mocks
   are plain objects of `jest.fn()`s, so passing their methods unbound to `expect()` is
-  safe there; the rule stays on for `src/` production code
+  safe there; the rule stays on for `backend/` production code
 - `no-unused-vars` runs with `ignoreRestSiblings` — the `const { password, ...rest }`
   strip pattern (jwt.strategy.ts) is intentional
 - Lint is clean as of 2026-07-22 — `pnpm lint` must stay at 0 errors; do not introduce

@@ -16,7 +16,7 @@
 - 두 개의 시크릿: `ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET`, 별도의 숫자형
   만료 환경변수(`*_EXPIRES_IN`).
 - 페이로드 형태: `{ sub: userId, type: 'access' | 'refresh' }`
-  (`src/auth/interface/payload-interface.ts`).
+  (`backend/auth/interface/payload-interface.ts`).
 - `parseBearerToken(rawToken, isRefreshToken)`은 대응하는 시크릿으로 검증하고
   **동시에** `payload.type`을 확인합니다 — 둘 중 하나만 하는 일은 없습니다.
 - `JwtStrategy`는 액세스 토큰만 검증합니다. `POST /auth/token/refresh`는

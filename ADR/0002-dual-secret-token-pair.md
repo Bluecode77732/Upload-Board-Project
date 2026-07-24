@@ -16,7 +16,7 @@ window. Session-based auth was ruled out (stateless API, no session store).
 - Two secrets: `ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET`, with separate numeric
   expiry env vars (`*_EXPIRES_IN`).
 - Payload shape: `{ sub: userId, type: 'access' | 'refresh' }`
-  (`src/auth/interface/payload-interface.ts`).
+  (`backend/auth/interface/payload-interface.ts`).
 - `parseBearerToken(rawToken, isRefreshToken)` verifies with the matching secret
   **and** checks `payload.type` — never one without the other.
 - `JwtStrategy` validates access tokens only; `POST /auth/token/refresh` takes

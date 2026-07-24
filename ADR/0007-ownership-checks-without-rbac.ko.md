@@ -19,9 +19,9 @@ role 없이 지금 소유권 검사를 도입합니다. 스키마 변경이 필�
 
 - **본인만 사용자 쓰기**: `PATCH /user/:id`와 `DELETE /user/:id`는 `@UserId()`
   (`request.user.id`의 JWT 신원)와 경로 id를 비교해 불일치 시 `ForbiddenException`을
-  던집니다 (`src/user/user.controller.ts`).
+  던집니다 (`backend/user/user.controller.ts`).
 - **작성자만 파일 쓰기**: `FileService.updateFile`/`deleteFile`은 `creator` 관계를
-  로드해 파일 작성자가 아닌 요청자를 거부합니다 (`src/file/file.service.ts`).
+  로드해 파일 작성자가 아닌 요청자를 거부합니다 (`backend/file/file.service.ts`).
   `UpdateFileDto.userId`를 통한 소유권 *재할당*도 마찬가지로 작성자만 가능합니다.
 - 신원은 항상 검증된 JWT에서 옵니다 — 요청 페이로드에서 오는 일은 없습니다
   (`@UserId` 데코레이터가 공인된 접근자).

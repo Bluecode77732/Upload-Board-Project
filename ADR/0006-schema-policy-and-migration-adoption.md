@@ -15,7 +15,7 @@ migration tooling replaced it, leaving schema changes without any managed path.
 
 - `synchronize: false` is committed and stays that way.
 - **TypeORM migrations will be adopted** (`migration:generate`/`migration:run` scripts
-  + `src/migrations/`) as a dedicated roadmap task — not bootstrapped as a side effect
+  + `backend/migrations/`) as a dedicated roadmap task — not bootstrapped as a side effect
   of another change.
 - Until that task lands, the schema is applied manually (temporarily flipping
   `synchronize` in a local dev environment is transitional guidance that dies with
@@ -37,12 +37,12 @@ migration tooling replaced it, leaving schema changes without any managed path.
 
 Adopted as designed, with these specifics:
 
-- CLI DataSource: `src/data-source.ts`, executed from its compiled `dist/` output
+- CLI DataSource: `backend/data-source.ts`, executed from its compiled `dist/` output
   (`typeorm ... -d dist/data-source.js`; each `migration:*` script builds first).
   It is the one sanctioned place env vars are read directly — Nest's `ConfigService`
   does not exist outside the DI container. Env loading uses Node's built-in
   `process.loadEnvFile()` (no dotenv dependency).
-- Baseline: `src/migrations/1784678400000-InitialSchema.ts` captures the previously
+- Baseline: `backend/migrations/1784678400000-InitialSchema.ts` captures the previously
   manual schema. Fresh database → `pnpm migration:run`. A database already carrying
   the manual-era schema → `pnpm migration:run -- --fake` once, marking the baseline
   as applied without re-creating tables.

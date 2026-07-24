@@ -15,7 +15,7 @@ API 표면은 동결되었고([ADR 0010](0010-frontend-split-and-api-surface-fre
 
 ## 결정
 
-- **동결된 응답 형태** — 모든 에러 응답은 `ErrorBody`(`src/common/error-code.ts`)를
+- **동결된 응답 형태** — 모든 에러 응답은 `ErrorBody`(`backend/common/error-code.ts`)를
   따른다:
 
   ```json
@@ -52,7 +52,7 @@ API 표면은 동결되었고([ADR 0010](0010-frontend-split-and-api-surface-fre
   프레임워크 관용구로 충분한 곳에 새 추상화를 만들지 않는 것이 이 저장소의
   규약이다.
 - **전역 필터 하나** — `AllExceptionsFilter`
-  (`src/common/filter/all-exceptions.filter.ts`)를 `app.module.ts`의
+  (`backend/common/filter/all-exceptions.filter.ts`)를 `app.module.ts`의
   `APP_FILTER`로 등록해 DI 관리 하에 둔다(dev 전용 stack은 ConfigService가
   결정). 필터는 예외 본문에서 `code`를 추출하고, 코드 없이 던져진 예외
   (프레임워크 404, passport 401, Multer 413)는 상태 기반 폴백으로 처리한다.

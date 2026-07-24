@@ -16,9 +16,9 @@ import { FileService } from './file.service';
 import { UploadFileDto } from './dto/create-uploadFile.dto';
 import { UpdateFileDto } from './dto/update-uploadFile.dto';
 import { GetFilesDto } from './dto/get-files.dto';
-import { UserId } from 'src/user/decorator/userId.decorator';
+import { UserId } from 'backend/user/decorator/userId.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
+import { JwtAuthGuard } from 'backend/auth/guard/jwt-auth.guard';
 
 @Controller('file')
 @ApiTags('File API')

@@ -15,7 +15,7 @@ JSON body(DTO 검증) 또는 표준 `Authorization: Basic base64(email:password)
 
 `POST /auth/register`와 `POST /auth/signin`은 자격 증명을 **오직**
 `Authorization: Basic` 헤더로만 받으며, `AuthService.parseBasicToken`
-(`src/auth/auth.service.ts`)이 파싱합니다 — body DTO를 쓰지 않습니다. body 자격 증명
+(`backend/auth/auth.service.ts`)이 파싱합니다 — body DTO를 쓰지 않습니다. body 자격 증명
 대안은 전략 패턴 시연을 위해 유지한 `POST /auth/signin/local`(Passport local 전략)
 하나뿐입니다.
 

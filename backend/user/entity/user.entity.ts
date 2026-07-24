@@ -1,7 +1,7 @@
 import { ApiHideProperty } from '@nestjs/swagger';
 import { Exclude } from 'class-transformer';
 import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
-import { FileEntity } from 'src/file/entity/file.entity';
+import { FileEntity } from 'backend/file/entity/file.entity';
 import {
   Column,
   CreateDateColumn,

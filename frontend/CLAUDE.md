@@ -15,7 +15,7 @@ Before any change:
 2. The backend contract is authoritative and **frozen** — do not assume routes,
    error codes, or token behavior. Read [docs/API-CONTRACT.md](docs/API-CONTRACT.md)
    and `src/api/`; if something isn't there, it isn't part of the contract. The
-   backend lives at the repo root (`../src`, `../ADR/`) — but never edit backend
+   backend lives at the repo root (`../backend`, `../ADR/`) — but never edit backend
    files from a frontend task; that is the root CLAUDE.md's domain.
 3. Reuse existing patterns (the `src/api/client.ts` wrapper, `useAuth`, the
    feature-folder layout) rather than introducing new abstractions.

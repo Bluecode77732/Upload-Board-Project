@@ -14,7 +14,7 @@ API에는 CORS 설정이 전혀 없었습니다 — 동일 출처/Swagger 사용
 ## 결정
 
 CORS는 **기본적으로 꺼져** 있고, 선택적 환경변수 `CORS_ORIGIN`이 설정된 경우에만
-활성화됩니다 (`src/main.ts`):
+활성화됩니다 (`backend/main.ts`):
 
 - `CORS_ORIGIN`은 콤마로 구분된 출처 허용 목록이며, 부트스트랩에서 분리·트리밍됩니다.
   Joi 스키마에 선택적으로 선언되고 `.env.example`에 문서화되어 있습니다.

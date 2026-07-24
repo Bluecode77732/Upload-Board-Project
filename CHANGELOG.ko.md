@@ -26,7 +26,7 @@
   ([ADR 0011](ADR/0011-error-code-contract.ko.md), Stage F 작업 2): 동결된
   `ErrorBody` 응답 형태(`statusCode`/`code`/`message`/`timestamp`/`path`,
   `stack`은 dev 전용), 18개 코드의 문자열 enum 카탈로그
-  (`src/common/error-code.ts`), `APP_FILTER`로 등록한 전역
+  (`backend/common/error-code.ts`), `APP_FILTER`로 등록한 전역
   `AllExceptionsFilter` — 스로우 지점 23곳이 `{ code, message }`를 싣는다.
   클라이언트 분기는 `message`가 아니라 `code`로만.
 - [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md) — 프론트엔드
@@ -40,15 +40,21 @@
   인증 플로를 백엔드와 E2E 검증.
 - TypeORM 마이그레이션 도입 ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)):
   `migration:generate`/`run`/`revert`/`show` 스크립트(컴파일된
-  `dist/data-source.js` 대상 실행), CLI DataSource `src/data-source.ts`(환경변수는
+  `dist/data-source.js` 대상 실행), CLI DataSource `backend/data-source.ts`(환경변수는
   Node 내장 `process.loadEnvFile()` — dotenv 의존성 없음), 베이스라인
-  `src/migrations/1784678400000-InitialSchema.ts`. 새 DB: `pnpm migration:run`;
+  `backend/migrations/1784678400000-InitialSchema.ts`. 새 DB: `pnpm migration:run`;
   수동 생성된 기존 DB: `pnpm migration:run -- --fake` 1회.
   수동 "`synchronize` 임시 전환" 워크플로를 대체하며 RBAC의 선행 조건 해소.
 - 문서 세트: `README.md` 재작성, 신규 `ARCHITECTURE.md`, `CHANGELOG.md`,
   `ROADMAP.md`, `CONTRIBUTING.md`, `ADR/`(9건) — 각각 한국어 `.ko.md` 동반.
 
 ### 변경
+- 백엔드 소스 폴더를 `src/` → `backend/`로 개명 — `frontend/` 하위 폴더와의
+  루트 대칭성 목적(ADR 0010 2026-07-24 개정): `nest-cli.json` sourceRoot, Jest
+  `roots`/`moduleNameMapper`, lint glob, `tsconfig.build.json`(이제 `frontend`
+  제외), e2e import, 모든 `backend/…` 절대 import와 문서 경로를 갱신. 컴파일된
+  `dist/` 구조와 `dist/data-source.js` 마이그레이션 경로는 그대로; 백엔드
+  build/test(43)/lint와 마이그레이션 재검증 완료.
 - **Breaking** — 인증 전송 방식(ADR 0012, 소비자 0명 상태의 사전 결정 Stage F
   작업): `POST /auth/signin`·`POST /auth/signin/local` 응답 body가
   `{ accessToken }`으로 축소(리프레시 토큰은 Set-Cookie 헤더로 이동);

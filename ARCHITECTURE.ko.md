@@ -23,13 +23,13 @@ AppModule
 ├── UserModule          — 사용자 CRUD 전담; UserService export (JwtStrategy가 소비)
 ├── FileModule          — 파일 *메타데이터* 전담: FileEntity 행 + temp 승격 트랜잭션
 ├── UploadModule        — *물리* 파일 전담: Multer diskStorage; 컨트롤러 전용, DB 접근 없음
-└── APP_FILTER          — AllExceptionsFilter (src/common/filter/): 모든 에러를 ErrorBody 계약으로 성형 (ADR 0011)
+└── APP_FILTER          — AllExceptionsFilter (backend/common/filter/): 모든 에러를 ErrorBody 계약으로 성형 (ADR 0011)
 ```
 
 모듈 책임은 의도적인 SRP 분리입니다(`CLAUDE.md` > Module Responsibility 참조):
 "물리 파일"과 "파일 메타데이터"에 걸친 변경은 설계상 두 모듈의 작업입니다.
 
-### AuthModule (`src/auth/`)
+### AuthModule (`backend/auth/`)
 
 | 라우트 | 인증 | 동작 |
 |---|---|---|
@@ -39,7 +39,7 @@ AppModule
 | `POST /auth/token/refresh` | httpOnly 리프레시 쿠키 | 쌍을 회전(재사용 감지) — 새 쿠키 + 새 액세스 토큰 |
 | `POST /auth/signout` | Bearer 액세스 토큰 | 저장된 리프레시 토큰 해시와 쿠키를 삭제 |
 
-- `AuthService` (`src/auth/auth.service.ts`): `parseBasicToken`, `verifyToken(token, isRefreshToken)`,
+- `AuthService` (`backend/auth/auth.service.ts`): `parseBasicToken`, `verifyToken(token, isRefreshToken)`,
   `validateUser`, `issueToken(user: Pick<UserEntity, 'id'>, isRefreshToken)`, `issueTokenPair`,
   `rotateRefreshToken`, `signOut`, `register`, `signIn`.
 - 액세스·리프레시 토큰은 **별도 시크릿**(`ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET`)으로
@@ -58,7 +58,7 @@ AppModule
 - `AuthModule`은 `UserService`를 위해 `UserModule`을 import합니다 (`exports`/`imports`를
   통한 DI — 다른 모듈의 프로바이더를 재선언하지 않음).
 
-### UserModule (`src/user/`)
+### UserModule (`backend/user/`)
 
 모든 라우트는 `JwtAuthGuard` 뒤에 있으며, 컨트롤러에 `ClassSerializerInterceptor`가 있어
 `UserEntity.password`(`@Exclude({ toPlainOnly: true })`)는 API 밖으로 나가지 않습니다.
@@ -73,12 +73,12 @@ AppModule
 - **`POST /user`는 의도적으로 없습니다** — 등록은 `POST /auth/register`입니다.
 - 본인 확인은 `@UserId()`(JWT 신원)와 경로 id를 비교해 불일치 시 `ForbiddenException`을
   던집니다 ([ADR 0007](ADR/0007-ownership-checks-without-rbac.ko.md)).
-- `@UserId` 데코레이터(`src/user/decorator/userId.decorator.ts`)는 `JwtStrategy.validate`가
+- `@UserId` 데코레이터(`backend/user/decorator/userId.decorator.ts`)는 `JwtStrategy.validate`가
   채운 `request.user.id`를 읽습니다 — 신원은 절대 body에서 오지 않습니다.
 - `UserModule`은 `UserService`를 export하며, 이것이 모듈의 공개 계약입니다
   (`JwtStrategy`의 토큰 검증에 소비됨).
 
-### FileModule (`src/file/`)
+### FileModule (`backend/file/`)
 
 모든 라우트는 `JwtAuthGuard` 뒤에 있습니다.
 
@@ -98,7 +98,7 @@ AppModule
   `ConfigService`를 통해 `{BASE_URL}/{filePath}`로 조합됩니다. 엔티티에는 표현 로직이
   없습니다(엔티티의 구 `@Transform` URL은 의도적으로 제거됨).
 
-### UploadModule (`src/upload/`)
+### UploadModule (`backend/upload/`)
 
 | 라우트 | 동작 |
 |---|---|
@@ -129,15 +129,15 @@ AppModule
 
 ### 경계 검증
 
-전역 `ValidationPipe`(`src/main.ts`)는 `transform + whitelist + forbidNonWhitelisted +
+전역 `ValidationPipe`(`backend/main.ts`)는 `transform + whitelist + forbidNonWhitelisted +
 enableImplicitConversion`을 실행합니다 — DTO에 선언되지 않은 요청 필드는 서비스에
 도달하지 않습니다. 서비스는 검증된 입력을 신뢰합니다(경계 전용 검증).
 
 ### 에러 응답 (`ErrorBody`)
 
 던져진 모든 에러는 — `HttpException`이든 아니든 — 전역
-`AllExceptionsFilter`(`src/common/filter/all-exceptions.filter.ts`, `app.module.ts`의
-`APP_FILTER`로 등록)를 거쳐 동결된 `ErrorBody` 계약(`src/common/error-code.ts`)으로
+`AllExceptionsFilter`(`backend/common/filter/all-exceptions.filter.ts`, `app.module.ts`의
+`APP_FILTER`로 등록)를 거쳐 동결된 `ErrorBody` 계약(`backend/common/error-code.ts`)으로
 성형됩니다: `{ statusCode, code, message, timestamp, path }` + `ENV=dev`일 때만
 `stack`. 스로우 지점은 `{ code: ErrorCode.X, message }`를 실어 던지고, 코드 없이
 던져진 예외는 상태 기반 폴백을 받으며, `message`가 배열인 400은
@@ -187,13 +187,13 @@ UserEntity                          FileEntity
 - `FileEntity.creator`는 `nullable: false`입니다 — 파일을 소유한 사용자를 삭제하면
   FK 제약에 걸립니다(문서화된 하드 삭제 주의점, `CLAUDE.md` > Scope Discipline 참조).
 - 스키마 관리: `synchronize: false`가 커밋되어 있으며, 스키마 변경은 TypeORM
-  마이그레이션으로 배포합니다 — CLI DataSource `src/data-source.ts`,
-  `src/migrations/`(베이스라인 `InitialSchema`), 적용은 `pnpm migration:run`
+  마이그레이션으로 배포합니다 — CLI DataSource `backend/data-source.ts`,
+  `backend/migrations/`(베이스라인 `InitialSchema`), 적용은 `pnpm migration:run`
   ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)).
 
 ## 설정
 
-- 모든 환경변수는 `src/app.module.ts`에서 Joi로 시작 시 검증됩니다. 누락 시 부팅에서 throw.
+- 모든 환경변수는 `backend/app.module.ts`에서 Joi로 시작 시 검증됩니다. 누락 시 부팅에서 throw.
 - 접근은 `ConfigService`로만 합니다(필수는 `getOrThrow`, 선택은 기본값과 함께 `get`) —
   `process.env` 직접 접근 금지.
 - 선택 변수: `BASE_URL`(기본 `http://localhost:3000`), `CORS_ORIGIN`
@@ -210,7 +210,7 @@ REST 전용이며 `/doc`의 Swagger로 문서화됩니다(`persistAuthorization:
 ## 테스트
 
 - 단위 테스트는 소스 옆의 `*.spec.ts`이며, Jest 설정은 `package.json`에 내장
-  (`roots: ["src"]`). 커버리지는 **서비스와 `src/common/`**(예외 필터·에러 코드
+  (`roots: ["src"]`). 커버리지는 **서비스와 `backend/common/`**(예외 필터·에러 코드
   카탈로그)을 측정합니다(컨트롤러·가드·전략·DTO·엔티티·모듈은
   `coveragePathIgnorePatterns`로 제외).
 - `fs/promises`는 `jest.mock('fs/promises')`, `bcrypt`는 `jest.mock('bcrypt')`로 모킹.

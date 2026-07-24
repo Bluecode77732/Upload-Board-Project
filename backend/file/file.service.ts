@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { UploadFileDto } from './dto/create-uploadFile.dto';
 import { DataSource, Repository } from 'typeorm';
-import { UserEntity } from 'src/user/entity/user.entity';
+import { UserEntity } from 'backend/user/entity/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FileEntity } from './entity/file.entity';
 import { rename } from 'fs/promises';
@@ -15,7 +15,7 @@ import path, { join } from 'path';
 import { UpdateFileDto } from './dto/update-uploadFile.dto';
 import { FileResponseDto } from './dto/file-response.dto';
 import { ConfigService } from '@nestjs/config';
-import { ErrorCode } from 'src/common/error-code';
+import { ErrorCode } from 'backend/common/error-code';
 
 @Injectable()
 export class FileService {
