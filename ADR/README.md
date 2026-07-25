@@ -22,6 +22,7 @@ each ADR records the *why* behind those rules.
 | [0011](0011-error-code-contract.md) | Machine-readable error-code contract | Accepted | 2026-07-23 |
 | [0012](0012-refresh-cookie-rotation.md) | Refresh token as httpOnly cookie with rotation and reuse detection | Accepted | 2026-07-24 |
 | [0013](0013-rbac-and-audit-log.md) | Role-based access control and audit log | Accepted | 2026-07-25 |
+| [0014](0014-node-pnpm-version-pinning.md) | Node.js and pnpm version pinning | Accepted | 2026-07-25 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

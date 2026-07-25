@@ -13,6 +13,12 @@
 ## [Unreleased]
 
 ### 추가
+- Node/pnpm 툴체인 고정 (Stage 1 — 재현성;
+  [ADR 0014](ADR/0014-node-pnpm-version-pinning.ko.md)): `.nvmrc`(`24.8.0`, Node 24
+  "Krypton" LTS), `package.json`의 `engines` 하한(`node >=24`, `pnpm >=10` — 권고적,
+  `engine-strict`는 계속 끔), `packageManager` `pnpm@10.14.0`(Corepack). 문서화돼 있던
+  "버전 미고정" 공백을 해소하고, 곧 도입될 Docker 베이스 이미지 태그와 CI 툴체인에
+  단일 출처를 제공한다.
 - 백엔드 e2e 스위트 재작성 (Stage 1 — 테스트 신뢰성): `test/app.e2e-spec.ts`(18개
   케이스)와 신규 `test/e2e-utils.ts` 하네스가 실제 HTTP+DB로 요청→응답 전체 경로를
   검증한다 — register/signin, refresh 회전·재사용(`AUTH_REFRESH_REUSED`, ADR 0012),

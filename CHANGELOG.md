@@ -13,6 +13,12 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- Node/pnpm toolchain pinning (Stage 1 — reproducibility;
+  [ADR 0014](ADR/0014-node-pnpm-version-pinning.md)): `.nvmrc` (`24.8.0`, Node 24
+  "Krypton" LTS), a `package.json` `engines` floor (`node >=24`, `pnpm >=10` —
+  advisory, `engine-strict` stays off), and `packageManager` `pnpm@10.14.0`
+  (Corepack). Closes the documented "versions are NOT pinned" gap and gives the
+  upcoming Docker base-image tag and CI toolchain a single source of truth.
 - Backend e2e suite rewritten (Stage 1 — test reliability): `test/app.e2e-spec.ts`
   (18 cases) plus a new `test/e2e-utils.ts` harness verify full request→response paths
   over real HTTP+DB — register/signin, refresh rotation & reuse (`AUTH_REFRESH_REUSED`,

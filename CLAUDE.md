@@ -466,8 +466,11 @@ Principle Conflict Protocol.
 - Code Reviews, Version Control Discipline — out of scope for this file
 - Documentation as Code — Swagger decorators are the API documentation; the Change
   Summary requirement covers the rest. README endpoint lists must match real routes
-- Reproducible Builds — `pnpm-lock.yaml` is committed; Node/pnpm versions are NOT
-  pinned (no `.nvmrc`, no `engines` field) — state only this guarantee, do not imply more
+- Reproducible Builds — `pnpm-lock.yaml` is committed; the toolchain is pinned
+  (ADR 0014): `.nvmrc` `24.8.0`, an `engines` floor (`node >=24`, `pnpm >=10`), and
+  `packageManager` `pnpm@10.14.0`. `engines` is advisory — `engine-strict` stays off, so
+  it warns on a too-old toolchain, it does not block installs; state that scope, do not
+  imply enforcement
 - Observability — **no logging infrastructure exists** (no winston, no Nest Logger
   usage, no error tracking). Do not claim coverage; adding any of these is a new
   dependency requiring explicit request

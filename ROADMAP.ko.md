@@ -153,7 +153,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 
 | 작업 | 근거 / 의존성 |
 |---|---|
-| Node/pnpm 버전 고정 (`engines` + `.nvmrc`) | 비용이 거의 0; CLAUDE.md가 명시한 공백("버전 미고정")을 해소; 이후 Docker 베이스 이미지 태그의 단일 출처가 된다. |
+| ~~Node/pnpm 버전 고정 (`engines` + `.nvmrc`)~~ | **2026-07-25 반영** ([ADR 0014](ADR/0014-node-pnpm-version-pinning.ko.md)): `.nvmrc` `24.8.0`, `engines` 하한(`node >=24`, `pnpm >=10`, 권고적), `packageManager` `pnpm@10.14.0`. Docker 베이스 이미지 태그와 CI 툴체인이 파생될 단일 출처가 된다. |
 | Docker / docker-compose (앱 + 로컬 PostgreSQL) | DB 수동 구성 제거 — 온보딩과 E2E의 최대 장벽; AWS 단계의 선행 조건. |
 | CI — GitHub Actions (lint + test) | 0 오류 lint 베이스라인이 현재는 사람의 기억으로만 유지된다; 최소 파이프라인, 그 이상은 아님. |
 | 로깅 규약 (Nest Logger부터) | 관측성의 첫 증분; 외부 에러 추적(예: Sentry)은 배포 환경 확정 이후로 유예. |
