@@ -22,6 +22,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0012](0012-refresh-cookie-rotation.ko.md) | httpOnly 쿠키 기반 refresh 토큰과 회전·재사용 감지 | 승인됨 | 2026-07-24 |
 | [0013](0013-rbac-and-audit-log.ko.md) | 역할 기반 접근 제어와 감사 로그 | 승인됨 | 2026-07-25 |
 | [0014](0014-node-pnpm-version-pinning.ko.md) | Node.js·pnpm 버전 고정 | 승인됨 | 2026-07-25 |
+| [0015](0015-docker-and-compose.ko.md) | 로컬 개발용 Docker·docker-compose | 승인됨 | 2026-07-25 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

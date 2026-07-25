@@ -47,7 +47,8 @@ JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, 트랜
 
 ## 빠른 시작
 
-사전 요건: Node.js ≥ 18, PostgreSQL ≥ 14, pnpm.
+사전 요건: Node.js 24([.nvmrc](.nvmrc) 참고)와 Corepack 기반 pnpm 10, 그리고
+PostgreSQL 16 — 또는 그냥 Docker(아래 [Docker로 실행](#docker로-실행) 참고).
 
 ```bash
 # 1. 의존성 설치
@@ -76,6 +77,19 @@ pnpm run start:dev
 pnpm test              # 단위 테스트
 pnpm run test:cov      # 커버리지 (서비스만 측정)
 ```
+
+### Docker로 실행
+
+`docker compose`가 Postgres와 API를 함께 띄웁니다([ADR 0015](ADR/0015-docker-and-compose.ko.md)).
+호스트 포트 5435를 점유하는 레거시 `upload-board-pg` 컨테이너를 먼저 멈추세요.
+
+```bash
+cp .env.example .env        # 시크릿 채우기; DB_*는 compose용으로 그대로 둬도 됨
+docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 시 마이그레이션 실행
+```
+
+`db` 서비스가 `${DB_PORT}`(5435)를 노출하므로, 호스트에서 돌리는 `pnpm test:e2e`와
+`pnpm migration:*`도 같은 데이터베이스에 접속합니다.
 
 ### 환경변수
 
@@ -171,8 +185,9 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
 ## 알려진 한계
 
 [ROADMAP.ko.md](ROADMAP.ko.md)에서 추적하며, 2026-07-23부터는 단계별 전체
-프로젝트 계획이기도 합니다. 요점: e2e 스위트는 아직 Nest 템플릿 그대로,
-CI/Docker/로깅 인프라 부재(Stage 1 확정 로드맵 항목). **업로드된 파일은 무인증
+프로젝트 계획이기도 합니다. 요점: 툴체인 고정과 Docker/compose가 2026-07-25에
+반영되었고 e2e 스위트가 인증/소유권/페이지네이션/승격 경로를 커버하게 되었으며, CI와
+로깅 인프라는 아직 미도입(Stage 1 로드맵 항목). **업로드된 파일은 무인증
 공개 URL**(`{BASE_URL}/file/upload/granted_...`)**로 서빙됩니다** — Stage 4의
 VOD 접근 제어 작업 전까지는 링크를 아는 사람은 누구나 접근할 수
 있습니다([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)).

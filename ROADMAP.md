@@ -167,7 +167,7 @@ settled while zero consumers exist.
 | Task | Rationale / dependencies |
 |---|---|
 | ~~Pin Node/pnpm (`engines` + `.nvmrc`)~~ | **Landed 2026-07-25** ([ADR 0014](ADR/0014-node-pnpm-version-pinning.md)): `.nvmrc` `24.8.0`, `engines` floor (`node >=24`, `pnpm >=10`, advisory), `packageManager` `pnpm@10.14.0`. The single source the Docker base-image tag and CI toolchain now derive from. |
-| Docker / docker-compose (app + local PostgreSQL) | Removes manual DB provisioning — the biggest onboarding and E2E blocker; precondition of the AWS stage. |
+| ~~Docker / docker-compose (app + local PostgreSQL)~~ | **Landed 2026-07-25** ([ADR 0015](ADR/0015-docker-and-compose.md)): multi-stage `Dockerfile` (build `node:24.8.0` → `slim` runtime, migrations-on-boot) + `docker-compose.yml` (`db` postgres:16 + `api`). Supersedes the manual `upload-board-pg`; removes the e2e's manual-DB dependency. Precondition of the AWS stage met. |
 | CI — GitHub Actions (lint + test) | The 0-error lint baseline is only human-enforced today; a minimal pipeline, nothing more. |
 | Logging conventions (Nest Logger first) | First observability increment; external error tracking (e.g. Sentry) deferred until the deploy environment is fixed. |
 | ~~E2E rewrite~~ | **Landed 2026-07-25**: 18-case suite (`test/app.e2e-spec.ts` + a new `test/e2e-utils.ts` harness) over real HTTP+DB — auth flow, refresh rotation/reuse, ownership 403s, pagination, `temp_` → `granted_` promotion. Isolation: a throwaway `upload_board_e2e` DB built by the real migrations and truncated per test. Still needs the manual local Postgres (5435) until the Docker-compose task removes that dependency. |

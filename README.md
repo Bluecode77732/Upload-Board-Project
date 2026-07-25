@@ -47,7 +47,8 @@ Each document has a Korean sibling (`*.ko.md`).
 
 ## Quick Start
 
-Prerequisites: Node.js ≥ 18, PostgreSQL ≥ 14, pnpm.
+Prerequisites: Node.js 24 (see [.nvmrc](.nvmrc)) and pnpm 10 via Corepack, plus
+PostgreSQL 16 — or just Docker (see [With Docker](#with-docker) below).
 
 ```bash
 # 1. Install dependencies
@@ -76,6 +77,19 @@ pnpm run start:dev
 pnpm test              # unit tests
 pnpm run test:cov      # coverage (only services are measured)
 ```
+
+### With Docker
+
+`docker compose` brings up Postgres and the API together ([ADR 0015](ADR/0015-docker-and-compose.md)).
+Stop the legacy `upload-board-pg` container first — it holds host port 5435.
+
+```bash
+cp .env.example .env        # fill in secrets; DB_* can stay as-is for compose
+docker compose up --build   # db (postgres:16) + api on :3000; migrations run on boot
+```
+
+The `db` service publishes `${DB_PORT}` (5435), so host-run `pnpm test:e2e` and
+`pnpm migration:*` reach the same database.
 
 ### Environment variables
 
@@ -170,8 +184,9 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full request and data flow.
 ## Known Limitations
 
 Tracked in [ROADMAP.md](ROADMAP.md) — since 2026-07-23 the full staged project
-plan. Highlights: the e2e suite is still the untouched Nest template, and no
-CI/Docker/logging infrastructure exists yet (decided Stage 1 roadmap items).
+plan. Highlights: toolchain pinning and Docker/compose landed 2026-07-25 and the
+e2e suite now covers the auth/ownership/pagination/promotion paths, while CI and
+logging infrastructure are still pending (Stage 1 roadmap items).
 **Uploaded files are served unauthenticated at public URLs**
 (`{BASE_URL}/file/upload/granted_...`) until the Stage 4 VOD access-control task
 — anyone with the link can fetch them ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)).

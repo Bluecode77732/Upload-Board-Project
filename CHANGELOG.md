@@ -13,6 +13,16 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- Docker + docker-compose (Stage 1 — reproducibility;
+  [ADR 0015](ADR/0015-docker-and-compose.md)): a multi-stage `Dockerfile` (build on
+  `node:24.8.0`, `pnpm prune --prod`, slim runtime; `CMD` runs committed migrations
+  then `node dist/main`) and a `docker-compose.yml` with a `db` service
+  (`postgres:16`, named volume, healthcheck) and an `api` service (builds the image,
+  waits on db health, `env_file: .env` with `DB_HOST=db` override, `./file` volume).
+  `.dockerignore` keeps secrets/deps/uploads out of the image. Supersedes the manual
+  `upload-board-pg` container and removes the e2e's manual-Postgres dependency. Base
+  image tags come from the ADR 0014 pin. Verified: image builds, `bcrypt`'s native
+  module runs in the slim runtime, `docker compose config` resolves.
 - Node/pnpm toolchain pinning (Stage 1 — reproducibility;
   [ADR 0014](ADR/0014-node-pnpm-version-pinning.md)): `.nvmrc` (`24.8.0`, Node 24
   "Krypton" LTS), a `package.json` `engines` floor (`node >=24`, `pnpm >=10` —

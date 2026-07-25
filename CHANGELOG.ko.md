@@ -13,6 +13,15 @@
 ## [Unreleased]
 
 ### 추가
+- Docker + docker-compose (Stage 1 — 재현성;
+  [ADR 0015](ADR/0015-docker-and-compose.ko.md)): 멀티 스테이지 `Dockerfile`(빌드는
+  `node:24.8.0`, `pnpm prune --prod`, slim 런타임; `CMD`가 커밋된 마이그레이션을 실행한
+  뒤 `node dist/main`)과 `docker-compose.yml`(`db` 서비스 — `postgres:16`, 명명 볼륨,
+  헬스체크; `api` 서비스 — 이미지 빌드, db 헬스 대기, `env_file: .env`에 `DB_HOST=db`
+  덮어쓰기, `./file` 볼륨). `.dockerignore`가 시크릿·의존성·업로드를 이미지에서 제외한다.
+  수동 `upload-board-pg` 컨테이너를 대체하고 e2e의 수동 Postgres 의존을 제거한다. 베이스
+  이미지 태그는 ADR 0014의 고정값에서 온다. 검증: 이미지 빌드 성공, slim 런타임에서
+  `bcrypt` 네이티브 모듈 동작, `docker compose config` 정상 해석.
 - Node/pnpm 툴체인 고정 (Stage 1 — 재현성;
   [ADR 0014](ADR/0014-node-pnpm-version-pinning.ko.md)): `.nvmrc`(`24.8.0`, Node 24
   "Krypton" LTS), `package.json`의 `engines` 하한(`node >=24`, `pnpm >=10` — 권고적,

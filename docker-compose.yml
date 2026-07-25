@@ -1,0 +1,41 @@
+# Local dev/build stack (ADR 0015). Supersedes the manually-created `upload-board-pg`
+# container: stop that one first (it holds host port 5435) before `docker compose up`.
+# DB credentials, port, and secrets are read from .env — the same values the app uses.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_DATABASE:-postgres}
+    ports:
+      # Same host port the app's .env expects (DB_PORT), so host-run e2e/migrations hit it too.
+      - "${DB_PORT:-5435}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-postgres}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      # Inside the compose network the DB is reachable as `db:5432`, not localhost:5435.
+      DB_HOST: db
+      DB_PORT: 5432
+    ports:
+      - '3000:3000'
+    volumes:
+      # Persist uploaded files (temp_/granted_) across container restarts.
+      - ./file:/app/file
+
+volumes:
+  db-data:

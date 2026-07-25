@@ -1,0 +1,30 @@
+# Build artifacts and deps (reinstalled/recompiled inside the image)
+node_modules
+dist
+coverage
+.nyc_output
+
+# VCS / editor
+.git
+.gitignore
+.vscode
+.idea
+
+# Not part of the backend image
+frontend
+test
+
+# Secrets never get baked into the image (compose injects env at runtime)
+.env
+.env.*
+
+# Uploaded files are a runtime volume, not image content
+file
+
+# Docker/meta
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Logs
+*.log
