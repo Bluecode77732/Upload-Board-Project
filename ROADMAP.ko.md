@@ -157,7 +157,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | Docker / docker-compose (앱 + 로컬 PostgreSQL) | DB 수동 구성 제거 — 온보딩과 E2E의 최대 장벽; AWS 단계의 선행 조건. |
 | CI — GitHub Actions (lint + test) | 0 오류 lint 베이스라인이 현재는 사람의 기억으로만 유지된다; 최소 파이프라인, 그 이상은 아님. |
 | 로깅 규약 (Nest Logger부터) | 관측성의 첫 증분; 외부 에러 추적(예: Sentry)은 배포 환경 확정 이후로 유예. |
-| E2E 재작성 | 인증 흐름, 소유권 403, 페이지네이션, `temp_` → `granted_` 승격. Docker DB에 의존. |
+| ~~E2E 재작성~~ | **2026-07-25 반영**: 실제 HTTP+DB 위에서 도는 18개 케이스 스위트(`test/app.e2e-spec.ts` + 신규 `test/e2e-utils.ts` 하네스) — 인증 흐름, refresh 회전/재사용, 소유권 403, 페이지네이션, `temp_` → `granted_` 승격. 격리는 실제 마이그레이션으로 생성한 일회용 `upload_board_e2e` DB를 테스트마다 truncate하는 방식. Docker-compose 작업이 이 의존을 없앨 때까지는 로컬 Postgres(5435) 수동 기동이 여전히 필요하다. |
 
 ### Stage 2 — 메커니즘 보강
 

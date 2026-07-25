@@ -42,4 +42,16 @@ export default tseslint.config(
       '@typescript-eslint/unbound-method': 'off',
     },
   },
+  {
+    // e2e only: supertest types `res.body` and `getHttpServer()` as `any`, so the
+    // unsafe-* family is unavoidable noise here — the safety comes from the runtime
+    // assertions, not compile-time types. Scoped to test/ so unit-spec strictness holds.
+    files: ['test/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
 );

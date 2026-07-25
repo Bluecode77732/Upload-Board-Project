@@ -170,7 +170,7 @@ settled while zero consumers exist.
 | Docker / docker-compose (app + local PostgreSQL) | Removes manual DB provisioning — the biggest onboarding and E2E blocker; precondition of the AWS stage. |
 | CI — GitHub Actions (lint + test) | The 0-error lint baseline is only human-enforced today; a minimal pipeline, nothing more. |
 | Logging conventions (Nest Logger first) | First observability increment; external error tracking (e.g. Sentry) deferred until the deploy environment is fixed. |
-| E2E rewrite | Auth flow, ownership 403s, pagination, `temp_` → `granted_` promotion. Depends on the Docker DB. |
+| ~~E2E rewrite~~ | **Landed 2026-07-25**: 18-case suite (`test/app.e2e-spec.ts` + a new `test/e2e-utils.ts` harness) over real HTTP+DB — auth flow, refresh rotation/reuse, ownership 403s, pagination, `temp_` → `granted_` promotion. Isolation: a throwaway `upload_board_e2e` DB built by the real migrations and truncated per test. Still needs the manual local Postgres (5435) until the Docker-compose task removes that dependency. |
 
 ### Stage 2 — Mechanism hardening
 

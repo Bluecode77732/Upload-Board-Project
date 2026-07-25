@@ -13,6 +13,17 @@
 ## [Unreleased]
 
 ### 추가
+- 백엔드 e2e 스위트 재작성 (Stage 1 — 테스트 신뢰성): `test/app.e2e-spec.ts`(18개
+  케이스)와 신규 `test/e2e-utils.ts` 하네스가 실제 HTTP+DB로 요청→응답 전체 경로를
+  검증한다 — register/signin, refresh 회전·재사용(`AUTH_REFRESH_REUSED`, ADR 0012),
+  RBAC 소유권 403(`FORBIDDEN_NOT_OWNER`/`FORBIDDEN`), 목록 페이지네이션,
+  `temp_` → `granted_` 물리 승격. 격리 전략: 일회용 `upload_board_e2e` 데이터베이스를
+  실제 마이그레이션으로 만들고 테스트마다 truncate하며 종료 시 drop — 개발용 DB는 전혀
+  건드리지 않는다. 존재하지 않는 `GET /`를 치던 기존 Nest 템플릿을 대체한다.
+  `test/jest-e2e.json`에는 `backend/*` 모듈 매퍼와 uuid ESM 변환 허용을 추가했고,
+  `eslint.config.mjs`는 `test/**`에 한해 `no-unsafe-*` 계열을 완화한다(supertest 응답
+  본문 타입이 `any`이기 때문). 로컬 Postgres(5435)가 필요하며, Docker-compose
+  프로비저닝은 별도의 미완료 Stage 1 작업으로 남는다.
 - RBAC + 감사 로그 ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md), Stage 0 —
   **Stage 0 완결**): `user`/`admin`/`superadmin` 역할(신규 `user_entity.role`
   컬럼의 문자열 enum, 마이그레이션 `AddUserRoleAndAuditLog`); `RolesGuard` +

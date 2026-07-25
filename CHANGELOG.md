@@ -13,6 +13,17 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- Backend e2e suite rewritten (Stage 1 — test reliability): `test/app.e2e-spec.ts`
+  (18 cases) plus a new `test/e2e-utils.ts` harness verify full request→response paths
+  over real HTTP+DB — register/signin, refresh rotation & reuse (`AUTH_REFRESH_REUSED`,
+  ADR 0012), RBAC ownership 403s (`FORBIDDEN_NOT_OWNER`/`FORBIDDEN`), list pagination,
+  and the `temp_` → `granted_` physical promotion. Isolation strategy: a throwaway
+  `upload_board_e2e` database, built by the real migrations and truncated between tests,
+  dropped on teardown — the dev DB is never touched. Replaces the untouched Nest template
+  (which targeted a nonexistent `GET /`). `test/jest-e2e.json` gains a `backend/*` module
+  mapper and a uuid ESM-transform allowance; `eslint.config.mjs` relaxes the `no-unsafe-*`
+  family for `test/**` only (supertest response bodies are `any`). Requires a local
+  Postgres on 5435 — Docker-compose provisioning remains its own pending Stage 1 task.
 - RBAC + audit log ([ADR 0013](ADR/0013-rbac-and-audit-log.md), Stage 0 —
   **Stage 0 complete**): `user`/`admin`/`superadmin` roles (string enum on the new
   `user_entity.role` column, migration `AddUserRoleAndAuditLog`); `RolesGuard` +
