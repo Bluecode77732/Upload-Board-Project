@@ -13,9 +13,13 @@ import {
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'backend/auth/guard/jwt-auth.guard';
-import { UserId } from './decorator/userId.decorator';
+import { RolesGuard } from 'backend/auth/guard/roles.guard';
+import { Roles } from 'backend/auth/decorator/roles.decorator';
+import { AuthUser } from 'backend/auth/decorator/auth-user.decorator';
+import { ROLE_RANK, UserRole } from 'backend/auth/role/role';
 import { ErrorCode } from 'backend/common/error-code';
 
 @Controller('user')
@@ -26,7 +30,10 @@ import { ErrorCode } from 'backend/common/error-code';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
+  // Listing exposes every user's email — admin-only (RBAC, ADR 0013).
   @Get()
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.admin)
   findAll() {
     return this.userService.findAll();
   }
@@ -40,10 +47,10 @@ export class UserController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateUserDto: UpdateUserDto,
-    @UserId() userId: number,
+    @AuthUser() actor: AuthUser,
   ) {
-    // No RBAC exists — every authenticated user is equal, so writes are self-only.
-    if (userId !== id) {
+    // Self, or an admin acting on another account (RBAC ownership extension).
+    if (actor.id !== id && ROLE_RANK[actor.role] < ROLE_RANK[UserRole.admin]) {
       throw new ForbiddenException({
         code: ErrorCode.FORBIDDEN_NOT_OWNER,
         message: 'You can only update your own account.',
@@ -52,14 +59,26 @@ export class UserController {
     return this.userService.update(id, updateUserDto);
   }
 
+  // superadmin-only role assignment; the sole path that mutates UserEntity.role.
+  @Patch(':id/role')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.superadmin)
+  updateRole(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateRoleDto: UpdateRoleDto,
+    @AuthUser() actor: AuthUser,
+  ) {
+    return this.userService.updateRole(actor.id, id, updateRoleDto.role);
+  }
+
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number, @UserId() userId: number) {
-    if (userId !== id) {
+  remove(@Param('id', ParseIntPipe) id: number, @AuthUser() actor: AuthUser) {
+    if (actor.id !== id && ROLE_RANK[actor.role] < ROLE_RANK[UserRole.admin]) {
       throw new ForbiddenException({
         code: ErrorCode.FORBIDDEN_NOT_OWNER,
         message: 'You can only delete your own account.',
       });
     }
-    return this.userService.remove(id);
+    return this.userService.remove(actor.id, id);
   }
 }

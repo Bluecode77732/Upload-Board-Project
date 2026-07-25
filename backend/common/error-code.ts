@@ -13,6 +13,8 @@ export enum ErrorCode {
   FILE_INVALID_PATH = 'FILE_INVALID_PATH',
   UPLOAD_FILE_REQUIRED = 'UPLOAD_FILE_REQUIRED',
   UPLOAD_INVALID_TYPE = 'UPLOAD_INVALID_TYPE',
+  // Refused: demoting the last remaining superadmin would lock the role system (ADR 0013).
+  AUTH_LAST_SUPERADMIN = 'AUTH_LAST_SUPERADMIN',
 
   // 401
   AUTH_TOKEN_INVALID = 'AUTH_TOKEN_INVALID',

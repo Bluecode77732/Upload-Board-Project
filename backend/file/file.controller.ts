@@ -17,6 +17,7 @@ import { UploadFileDto } from './dto/create-uploadFile.dto';
 import { UpdateFileDto } from './dto/update-uploadFile.dto';
 import { GetFilesDto } from './dto/get-files.dto';
 import { UserId } from 'backend/user/decorator/userId.decorator';
+import { AuthUser } from 'backend/auth/decorator/auth-user.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'backend/auth/guard/jwt-auth.guard';
 
@@ -47,13 +48,13 @@ export class FileController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateFileDto: UpdateFileDto,
-    @UserId() userId: number,
+    @AuthUser() actor: AuthUser,
   ) {
-    return this.fileService.updateFile(id, updateFileDto, userId);
+    return this.fileService.updateFile(id, updateFileDto, actor);
   }
 
   @Delete(':id')
-  delete(@Param('id', ParseIntPipe) id: number, @UserId() userId: number) {
-    return this.fileService.deleteFile(id, userId);
+  delete(@Param('id', ParseIntPipe) id: number, @AuthUser() actor: AuthUser) {
+    return this.fileService.deleteFile(id, actor);
   }
 }

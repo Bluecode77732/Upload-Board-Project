@@ -4,9 +4,10 @@ import { FileController } from './file.controller';
 import { UserEntity } from 'backend/user/entity/user.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FileEntity } from './entity/file.entity';
+import { AuditLogModule } from 'backend/audit-log/audit-log.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([FileEntity, UserEntity])],
+  imports: [TypeOrmModule.forFeature([FileEntity, UserEntity]), AuditLogModule],
   controllers: [FileController],
   providers: [FileService],
 })

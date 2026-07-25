@@ -9,6 +9,8 @@ import { UserModule } from './user/user.module';
 import * as Joi from 'joi';
 import { FileEntity } from './file/entity/file.entity';
 import { UserEntity } from './user/entity/user.entity';
+import { AuditLogEntity } from './audit-log/audit-log.entity';
+import { AuditLogModule } from './audit-log/audit-log.module';
 import { UploadModule } from './upload/upload.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'node:path';
@@ -31,6 +33,8 @@ import { join } from 'node:path';
         ACCESS_TOKEN_SECRET_EXPIRES_IN: Joi.number().required(),
         BASE_URL: Joi.string().default('http://localhost:3000'),
         CORS_ORIGIN: Joi.string(),
+        // Optional: email of the account auto-promoted to superadmin on boot (ADR 0013).
+        SUPERADMIN_EMAIL: Joi.string().email(),
       }),
       isGlobal: true,
     }),
@@ -42,7 +46,7 @@ import { join } from 'node:path';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        entities: [FileEntity, UserEntity],
+        entities: [FileEntity, UserEntity, AuditLogEntity],
         synchronize: false,
         autoLoadEntities: true,
       }),
@@ -56,6 +60,7 @@ import { join } from 'node:path';
     UserModule,
     AuthModule,
     UploadModule,
+    AuditLogModule,
   ],
   providers: [
     // Global error-contract filter (ADR 0011) — APP_FILTER keeps it DI-managed

@@ -17,6 +17,14 @@ import { UpdateFileDto } from './dto/update-uploadFile.dto';
 import { FileResponseDto } from './dto/file-response.dto';
 import { ConfigService } from '@nestjs/config';
 import { ErrorCode } from 'backend/common/error-code';
+import { ROLE_RANK, UserRole } from 'backend/auth/role/role';
+import { AuditLogService } from 'backend/audit-log/audit-log.service';
+
+// The acting user's identity + role (from the JWT), enough for creator-OR-admin checks.
+interface Requester {
+  id: number;
+  role: UserRole;
+}
 
 @Injectable()
 export class FileService {
@@ -29,7 +37,17 @@ export class FileService {
 
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
+
+    private readonly auditLogService: AuditLogService,
   ) {}
+
+  // A file is manageable by its creator, or by an admin/superadmin (RBAC, ADR 0013).
+  private canManage(creatorId: number, requester: Requester): boolean {
+    return (
+      creatorId === requester.id ||
+      ROLE_RANK[requester.role] >= ROLE_RANK[UserRole.admin]
+    );
+  }
 
   private toResponse(file: FileEntity): FileResponseDto {
     const baseUrl = this.configService.get<string>(
@@ -164,7 +182,7 @@ export class FileService {
   async updateFile(
     id: number,
     updateFileDto: UpdateFileDto,
-    requesterId: number,
+    requester: Requester,
   ): Promise<FileResponseDto> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -183,11 +201,11 @@ export class FileService {
         });
       }
 
-      // No RBAC exists — only the file's creator may modify it (including reassigning ownership).
-      if (file.creator.id !== requesterId) {
+      // Creator or admin may modify (including reassigning ownership via UpdateFileDto.userId).
+      if (!this.canManage(file.creator.id, requester)) {
         throw new ForbiddenException({
           code: ErrorCode.FORBIDDEN_NOT_OWNER,
-          message: 'Only the file creator can update this file.',
+          message: 'Only the file creator or an admin can update this file.',
         });
       }
 
@@ -267,7 +285,7 @@ export class FileService {
     return this.toResponse(updated);
   }
 
-  async deleteFile(id: number, requesterId: number): Promise<string> {
+  async deleteFile(id: number, requester: Requester): Promise<string> {
     const file = await this.fileRepository.findOne({
       where: { id },
       relations: ['creator'],
@@ -280,14 +298,17 @@ export class FileService {
       });
     }
 
-    if (file.creator.id !== requesterId) {
+    if (!this.canManage(file.creator.id, requester)) {
       throw new ForbiddenException({
         code: ErrorCode.FORBIDDEN_NOT_OWNER,
-        message: 'Only the file creator can delete this file.',
+        message: 'Only the file creator or an admin can delete this file.',
       });
     }
 
     await this.fileRepository.delete(id);
+
+    // Audit after the delete succeeds (side effect isolated from the delete).
+    await this.auditLogService.log(requester.id, id, 'FILE_DELETE');
 
     return `File ${id} deleted.`;
   }
