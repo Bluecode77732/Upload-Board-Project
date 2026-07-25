@@ -51,6 +51,8 @@ Stage 1 작업](../ROADMAP.ko.md))가 이제 살아있는 Postgres를 요구하�
 
 ## 결과
 
+- 2026-07-26 런타임 검증: `docker compose up`이 API를 부팅하고 기동 시 마이그레이션 3건을
+  적용하며 서빙한다(`GET /doc` → 200, `POST /auth/register` → 201).
 - `docker compose up`이 Postgres + API를 로컬에 띄운다. e2e의 "수동 기동 Postgres 필요"
   의존성이 compose 사용자에게는 사라진다.
 - 새 compose 볼륨은 수동 마이그레이션 없이 스키마가 준비된다(부팅이 적용). 기존 볼륨은

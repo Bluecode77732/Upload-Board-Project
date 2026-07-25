@@ -29,7 +29,8 @@
 데이터베이스 생성 후 `pnpm migration:run`으로 스키마 적용(수동 생성된 기존
 DB라면 `pnpm migration:run -- --fake` 1회 —
 [ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)),
-`pnpm run start:dev`.
+`pnpm run start:dev`. 또는 `docker compose up --build`로 Postgres + API를 함께
+띄우면 부팅 시 마이그레이션이 적용된다([ADR 0015](ADR/0015-docker-and-compose.ko.md)).
 
 ## 브랜치
 
@@ -62,8 +63,13 @@ Verb: 짧은 설명
 pnpm test          # 통과 필수 — 리포지토리/QueryRunner 모킹만, DB 접근 없음
 pnpm lint          # 통과 필수 — 2026-07-22부터 오류 0건 클린 기준선;
                    # 새 lint 오류를 만들지 말고 클린 상태 유지
+pnpm run test:e2e  # 로컬에선 선택 — 라이브 Postgres 필요(docker compose `db` 또는
+                   # 5435의 수동 인스턴스); 전용 throwaway DB 사용, 아래 참조
 ```
 
+- CI([ADR 0016](ADR/0016-github-actions-ci.ko.md))가 `main`/`dev`의 모든 push·PR에서
+  `lint:ci`(`--fix` 없는 eslint) + `pnpm test`와 별도 e2e 잡(Postgres 서비스)을
+  실행하므로, 위 두 명령은 자동으로도 강제된다.
 - 새로 만들거나 변경한 서비스 로직에는 대응하는 `*.spec.ts` 커버리지가 필요합니다
   (커버리지는 서비스 계층만 측정합니다).
 - 커밋 전에 diff를 `CLAUDE.md` Never Do 그룹 1–3과 대조합니다.

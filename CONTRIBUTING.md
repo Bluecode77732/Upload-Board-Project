@@ -30,7 +30,8 @@ See [README.md](README.md) > Quick Start. Summary: `pnpm install`, copy
 database and apply the schema with `pnpm migration:run` (a pre-existing
 manually-created DB: `pnpm migration:run -- --fake` once —
 [ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)),
-`pnpm run start:dev`.
+`pnpm run start:dev`. Alternatively, `docker compose up --build` runs Postgres +
+the API together and applies migrations on boot ([ADR 0015](ADR/0015-docker-and-compose.md)).
 
 ## Branches
 
@@ -63,8 +64,13 @@ Verb: short description
 pnpm test          # must pass — repository/QueryRunner mocks only, no DB access
 pnpm lint          # must pass — clean 0-error baseline since 2026-07-22;
                    # keep it clean, introduce no new lint errors
+pnpm run test:e2e  # optional locally — needs a live Postgres (docker compose `db`
+                   # or a manual one on 5435); owns a throwaway DB, see below
 ```
 
+- CI ([ADR 0016](ADR/0016-github-actions-ci.md)) runs `lint:ci` (eslint without
+  `--fix`) + `pnpm test` and a separate e2e job (Postgres service) on every push/PR
+  to `main`/`dev` — so the two commands above are enforced automatically too.
 - New/changed service logic needs matching `*.spec.ts` coverage (services are the
   only measured layer).
 - Scan the diff against `CLAUDE.md` Never Do Groups 1–3 before committing.

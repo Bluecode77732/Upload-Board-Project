@@ -49,6 +49,9 @@ nothing more.
 
 ## Consequences
 
+- Verified green 2026-07-26: both jobs (`lint-and-unit`, `e2e`) pass in CI on `dev`.
+  (The first run also proved its worth — it caught a real e2e defect masked locally by
+  the dev DB already having the schema; fixed in `test/e2e-env.ts`.)
 - lint (0-error) and the unit + e2e suites are enforced on every push/PR, not by
   memory. The baseline CLAUDE.md documents is now machine-checked.
 - No dependency caching yet — each run reinstalls (acceptable for a minimal

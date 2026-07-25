@@ -54,6 +54,8 @@ was done first precisely so the image base tag has a single source.
 
 ## Consequences
 
+- Runtime-verified 2026-07-26: `docker compose up` boots the API, applies the three
+  migrations on start, and serves (`GET /doc` → 200, `POST /auth/register` → 201).
 - `docker compose up` brings up Postgres + the API locally; the e2e's
   "needs a manually-started Postgres" dependency is removed for anyone on compose.
 - A fresh compose volume is schema-ready without a manual migration step (boot

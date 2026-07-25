@@ -149,7 +149,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 |---|---|
 | ~~**RBAC** — `role` 컬럼 + role 인식 가드~~ | **2026-07-25 반영** ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)): 3단계(`user`/`admin`/`superadmin`), `PATCH /user/:id/role`은 superadmin 전용, 소유권을 "본인 **또는** admin"으로 확장, 감사 로그 포함. 검토된 마이그레이션으로 배포. |
 
-### Stage 1 — 기반 (재현성 · 관측성 · 테스트 신뢰성)
+### Stage 1 — 기반 (재현성 · 관측성 · 테스트 신뢰성) — ✅ 2026-07-25 완결
 
 | 작업 | 근거 / 의존성 |
 |---|---|
@@ -186,6 +186,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 
 ## 7. 미일정 / 미결 사항
 
+- e2e용 Testcontainers (2026-07-26 기록): e2e 스위트는 throwaway DB와 jest
+  `setupFiles` env 오버라이드([ADR 0016](ADR/0016-github-actions-ci.ko.md),
+  `test/e2e-env.ts`)를 쓴다 — 유효하지만 env-before-import 타이밍과 사전 프로비저닝된
+  Postgres에 의존한다. Testcontainers(실행마다 격리 컨테이너를 Nest provider
+  override로 주입)는 둘 다 제거한다. 유예: 새 dev 의존성과 CI 변경을 수반하므로 배포
+  환경(Stage 4) 확정 시 재검토.
 - 라이선스: `package.json`은 `UNLICENSED`인데 재작성 전 README는 MIT로 표기 —
   저장소 공개 전 결정 필요.
 - Chat 프로젝트 잔재 처리 ([계획서](CHAT-REMNANT-REMOVAL-PLAN.ko.md)): git

@@ -866,7 +866,7 @@ pnpm test -- file.service
 
 ### Testing
 - Tests live alongside source files as `*.spec.ts`; Jest config is embedded in
-  `package.json` (`roots: ["src"]`)
+  `package.json` (`roots: ["backend"]`)
 - Coverage ignores `main.ts`, modules, DTOs, entities, decorators, strategies, guards,
   controllers — only services are measured, because services hold the business logic worth
   asserting; the rest is thin framework glue best exercised through e2e, not unit coverage
@@ -887,6 +887,15 @@ const mockFileRepository = {
   delete: jest.fn(),
 };
 ```
+
+- **E2E (`test/*.e2e-spec.ts`, `pnpm test:e2e`)** — unlike unit tests, these hit a real
+  Postgres (docker compose `db` or a manual one on 5435; CI uses a Postgres service). Isolation:
+  a throwaway `upload_board_e2e` database, built by the real migrations and truncated between
+  tests, dropped on teardown — the dev DB is never touched (`test/e2e-utils.ts`). The
+  `DB_DATABASE` override lives in `test/e2e-env.ts`, wired as jest `setupFiles`, because
+  `ConfigModule.forRoot` snapshots env at **AppModule import time** — setting it in `beforeAll`
+  is too late (the app would hit the real DB while migrations populate the throwaway one). Any
+  new env-dependent test setup must run in `setupFiles`, not `beforeAll`.
 
 ### Environment Variables
 - Copy `.env.example` to `.env` for local dev

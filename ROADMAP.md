@@ -162,7 +162,7 @@ settled while zero consumers exist.
 |---|---|
 | ~~**RBAC** — `role` column + role-aware guard~~ | **Landed 2026-07-25** ([ADR 0013](ADR/0013-rbac-and-audit-log.md)): three tiers (`user`/`admin`/`superadmin`), `PATCH /user/:id/role` superadmin-only, ownership extended to "self **or** admin", plus an audit log. Shipped as a reviewed migration. |
 
-### Stage 1 — Foundation (reproducibility · observability · test reliability)
+### Stage 1 — Foundation (reproducibility · observability · test reliability) — ✅ complete 2026-07-25
 
 | Task | Rationale / dependencies |
 |---|---|
@@ -199,6 +199,12 @@ settled while zero consumers exist.
 
 ## 7. Unscheduled / open decisions
 
+- Testcontainers for e2e (recorded 2026-07-26): the e2e suite uses a throwaway DB
+  plus a jest `setupFiles` env override ([ADR 0016](ADR/0016-github-actions-ci.md),
+  `test/e2e-env.ts`) — valid, but it relies on env-before-import timing and a
+  pre-provisioned Postgres. Testcontainers (an ephemeral per-run container injected via
+  a Nest provider override) would remove both. Deferred: a new dev dependency plus a CI
+  change; revisit when the deploy environment (Stage 4) is set.
 - License: `package.json` says `UNLICENSED`; the pre-rewrite README claimed
   MIT — decide before the repo is published.
 - Chat-project remnant handling ([plan](CHAT-REMNANT-REMOVAL-PLAN.md)):
