@@ -17,7 +17,7 @@ lands as its own dedicated, designed change
 > actually lands (with its own ADR), the current Architecture Decisions remain
 > operative.
 
-## Current position (as of 2026-07-24)
+## Current position (as of 2026-07-25)
 
 - The 2026-07-22 hardening run is fully landed: security quick-wins, the
   zero-error lint baseline, the documentation rewrite, and TypeORM migration
@@ -43,7 +43,12 @@ lands as its own dedicated, designed change
   depends on are all settled. The `frontend/` subfolder was created 2026-07-24
   (React + Vite, auth vertical slice E2E-verified); RBAC proceeds in parallel
   (it changes no API surface).
-- **Next dedicated backend task: RBAC (Stage 0)**.
+- RBAC + audit log landed 2026-07-25 ([ADR 0013](ADR/0013-rbac-and-audit-log.md))
+  — **Stage 0 is complete**: `user`/`admin`/`superadmin` roles, RolesGuard,
+  ownership extended to "self or admin", superadmin-only role assignment, and an
+  append-only audit trail. The role system backs the frontend `/admin` section.
+- **Next dedicated backend task: Stage 1 Foundation** (Node/pnpm pinning →
+  Docker/compose → CI → logging conventions → E2E rewrite).
 
 ## 1. Vision & essence
 
@@ -151,11 +156,11 @@ settled while zero consumers exist.
 | Error-code system (global exception filter) | A machine-readable error contract before the frontend hardcodes message strings or status-only branching. |
 | Refresh-token httpOnly-cookie move + rotation / reuse detection | **Pulled forward from Stage 2 (2026-07-23)** — a browser frontend makes token storage a real XSS surface. Requires its own ADR amending [ADR 0002](ADR/0002-dual-secret-token-pair.md)'s "no server-side token storage" stance, plus a reviewed schema migration. |
 
-### Stage 0 — decided architecture work (RBAC)
+### Stage 0 — decided architecture work (RBAC) — ✅ complete 2026-07-25
 
 | Task | Rationale / dependencies |
 |---|---|
-| **RBAC** — `role` column + role-aware guard | Decided 2026-07-22; design fixed: three tiers (`user`/`admin`/`superadmin`), `PATCH /user/:id/role` superadmin-only, ownership checks extend to "self **or** admin". Deferred behind Stage F (2026-07-23) — RBAC adds permissions without changing the API surface, so no frontend rework results. The `role` column ships as a reviewed migration. |
+| ~~**RBAC** — `role` column + role-aware guard~~ | **Landed 2026-07-25** ([ADR 0013](ADR/0013-rbac-and-audit-log.md)): three tiers (`user`/`admin`/`superadmin`), `PATCH /user/:id/role` superadmin-only, ownership extended to "self **or** admin", plus an audit log. Shipped as a reviewed migration. |
 
 ### Stage 1 — Foundation (reproducibility · observability · test reliability)
 
@@ -228,6 +233,12 @@ ordering), docs-as-code enforcement (automated README/endpoint consistency — a
 candidate under the CI task).
 
 ## 9. Completed
+
+### 2026-07-25
+
+| Item | Notes |
+|---|---|
+| RBAC + audit log | `user`/`admin`/`superadmin` roles, RolesGuard/@Roles, ownership "self or admin", superadmin-only `PATCH /user/:id/role` (last-superadmin guard + session invalidation), append-only audit log with `GET /audit-log`, `SUPERADMIN_EMAIL` seed — **Stage 0 complete** ([ADR 0013](ADR/0013-rbac-and-audit-log.md)) |
 
 ### 2026-07-23
 

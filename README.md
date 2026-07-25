@@ -37,8 +37,10 @@ Each document has a Korean sibling (`*.ko.md`).
 - **Two-phase upload** — `temp_` → `granted_` prefix state machine; the DB insert and
   the physical file move commit or roll back together
   ([ADR 0003](ADR/0003-two-phase-upload-contract.md))
-- **Ownership checks** — user writes are self-only; file writes are creator-only
-  ([ADR 0007](ADR/0007-ownership-checks-without-rbac.md))
+- **RBAC + audit log** — `user`/`admin`/`superadmin` roles; ownership checks
+  extend to "self or admin"; role changes and deletes are audited
+  ([ADR 0013](ADR/0013-rbac-and-audit-log.md), layered on
+  [ADR 0007](ADR/0007-ownership-checks-without-rbac.md))
 - **Boundary validation** — global `ValidationPipe` (`whitelist` +
   `forbidNonWhitelisted`); serialized entities never leak `password`
 - **Swagger** — full API documentation and manual test bench at `/doc`
@@ -84,7 +86,9 @@ Required (Joi-validated at boot — missing vars fail fast): `ENV`, `DB_TYPE`
 
 Optional: `BASE_URL` (default `http://localhost:3000`; composes public file URLs),
 `CORS_ORIGIN` (unset = CORS disabled; comma-separated allowlist —
-[ADR 0008](ADR/0008-opt-in-cors.md)), `PORT` (default 3000).
+[ADR 0008](ADR/0008-opt-in-cors.md)), `PORT` (default 3000),
+`SUPERADMIN_EMAIL` (unset = disabled; promotes that account to superadmin on boot —
+[ADR 0013](ADR/0013-rbac-and-audit-log.md)).
 
 ## API Endpoints
 
@@ -101,19 +105,24 @@ All endpoints except `/auth/*` require a Bearer access token.
 - `POST /auth/signout` — invalidates the server-side session anchor and clears
   the cookie (Bearer access token)
 
-**User** — user creation is `POST /auth/register`; there is no `POST /user`
-- `GET /user` — list users
+**User** — user creation is `POST /auth/register`; there is no `POST /user`.
+Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.md))
+- `GET /user` — list users (admin only)
 - `GET /user/:id` — get a user
-- `PATCH /user/:id` — update a user (self only)
-- `DELETE /user/:id` — delete a user (self only)
+- `PATCH /user/:id` — update a user (self or admin)
+- `PATCH /user/:id/role` — assign a role (superadmin only; the last superadmin cannot be demoted)
+- `DELETE /user/:id` — delete a user (self or admin)
 
 **File**
 - `POST /upload/attach` — upload a video to temp storage (multipart field `video`, 100 MB limit)
 - `GET /file` — list files (paginated: `take` 1–100, default 20 / `skip` default 0)
 - `GET /file/:id` — get file metadata
 - `POST /file` — promote a temp file to permanent storage (transactional)
-- `PATCH /file/:id` — update file metadata (creator only)
-- `DELETE /file/:id` — delete file metadata (creator only)
+- `PATCH /file/:id` — update file metadata (creator or admin)
+- `DELETE /file/:id` — delete file metadata (creator or admin)
+
+**Audit log**
+- `GET /audit-log` — review ROLE_CHANGE / USER_DELETE / FILE_DELETE records (admin only; paginated, `?action` filter)
 
 ### Typical flow
 
@@ -161,10 +170,9 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full request and data flow.
 ## Known Limitations
 
 Tracked in [ROADMAP.md](ROADMAP.md) — since 2026-07-23 the full staged project
-plan. Highlights: no RBAC yet (ownership checks only; RBAC follows the Stage F
-frontend-preparation pipeline), the e2e suite is still the untouched Nest
-template, and no CI/Docker/logging infrastructure exists yet (decided Stage 1
-roadmap items). **Uploaded files are served unauthenticated at public URLs**
+plan. Highlights: the e2e suite is still the untouched Nest template, and no
+CI/Docker/logging infrastructure exists yet (decided Stage 1 roadmap items).
+**Uploaded files are served unauthenticated at public URLs**
 (`{BASE_URL}/file/upload/granted_...`) until the Stage 4 VOD access-control task
 — anyone with the link can fetch them ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)).
 Uploads enforce an mp4/mov/webm allowlist and `pnpm lint` is clean as of

@@ -20,6 +20,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0010](0010-frontend-split-and-api-surface-freeze.ko.md) | 프론트엔드 분리와 API 표면 동결 | 승인됨 | 2026-07-23 |
 | [0011](0011-error-code-contract.ko.md) | 기계 판독 가능한 에러 코드 계약 | 승인됨 | 2026-07-23 |
 | [0012](0012-refresh-cookie-rotation.ko.md) | httpOnly 쿠키 기반 refresh 토큰과 회전·재사용 감지 | 승인됨 | 2026-07-24 |
+| [0013](0013-rbac-and-audit-log.ko.md) | 역할 기반 접근 제어와 감사 로그 | 승인됨 | 2026-07-25 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

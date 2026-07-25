@@ -17,12 +17,13 @@ JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, Swagge
 ```
 AppModule
 ├── ConfigModule        — 전역, Joi 검증 환경변수 (.env.example이 기준)
-├── TypeOrmModule       — PostgreSQL, synchronize: false, 엔티티: FileEntity, UserEntity
+├── TypeOrmModule       — PostgreSQL, synchronize: false, 엔티티: FileEntity, UserEntity, AuditLogEntity
 ├── ServeStaticModule   — ./file 폴더를 URL 접두사 /file 로 정적 서빙
-├── AuthModule          — 토큰 전담: Basic 파싱, JWT 발급/검증, Passport 전략
-├── UserModule          — 사용자 CRUD 전담; UserService export (JwtStrategy가 소비)
+├── AuthModule          — 토큰 전담: Basic 파싱, JWT 발급/검증, Passport 전략; RBAC RolesGuard/@Roles + role enum (ADR 0013)
+├── UserModule          — 사용자 CRUD 전담; 역할 부여(superadmin) + 부팅 superadmin 시드; UserService export
 ├── FileModule          — 파일 *메타데이터* 전담: FileEntity 행 + temp 승격 트랜잭션
 ├── UploadModule        — *물리* 파일 전담: Multer diskStorage; 컨트롤러 전용, DB 접근 없음
+├── AuditLogModule      — append-only 특권 행위 기록; AuditLogService export (User/File이 소비); admin 전용 GET /audit-log (ADR 0013)
 └── APP_FILTER          — AllExceptionsFilter (backend/common/filter/): 모든 에러를 ErrorBody 계약으로 성형 (ADR 0011)
 ```
 

@@ -13,6 +13,16 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- RBAC + audit log ([ADR 0013](ADR/0013-rbac-and-audit-log.md), Stage 0 —
+  **Stage 0 complete**): `user`/`admin`/`superadmin` roles (string enum on the new
+  `user_entity.role` column, migration `AddUserRoleAndAuditLog`); `RolesGuard` +
+  `@Roles` and the `@AuthUser` decorator; ownership checks extended to "self/creator
+  OR admin"; superadmin-only `PATCH /user/:id/role` (SERIALIZABLE tx, refuses to
+  demote the last superadmin via new `AUTH_LAST_SUPERADMIN`, clears the target's
+  refresh session). New append-only `audit_log_entity` (no FKs) records
+  `ROLE_CHANGE`/`USER_DELETE`/`FILE_DELETE` after commit, exposed via admin-only
+  paginated `GET /audit-log`. `GET /user` is now admin-only. `SuperadminSeedService`
+  promotes the optional `SUPERADMIN_EMAIL` account on boot. No new dependencies.
 - Refresh-token httpOnly cookie + rotation/reuse detection
   ([ADR 0012](ADR/0012-refresh-cookie-rotation.md), Stage F task 3 —
   **Stage F complete**): the refresh token now travels only as an httpOnly

@@ -15,7 +15,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 > 이 계획에 편입되었다. 각 전용 작업이 실제로 완료되기 전까지는(각자의 ADR 포함)
 > 현행 Architecture Decisions가 그대로 유효하다.
 
-## 현재 위치 (2026-07-24 기준)
+## 현재 위치 (2026-07-25 기준)
 
 - 2026-07-22 하드닝 런은 모두 반영 완료됐다: 보안 quick-win, lint 0 오류
   베이스라인, 문서 재작성, TypeORM 마이그레이션 도입(`79603ad`,
@@ -39,7 +39,13 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   프론트엔드가 의존할 API 표면·에러 계약·인증 전송이 모두 확정되었다.
   `frontend/` 하위 폴더는 2026-07-24 생성됨(React + Vite, 인증 수직 슬라이스
   E2E 검증). RBAC은 API 표면을 바꾸지 않으므로 병행 가능하다.
-- **다음 백엔드 전용 작업: RBAC (Stage 0)**.
+- RBAC + 감사 로그는 2026-07-25 반영 완료
+  ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)) — **Stage 0 완결**:
+  `user`/`admin`/`superadmin` 역할, RolesGuard, 소유권을 "본인 또는 admin"으로
+  확장, superadmin 전용 역할 부여, append-only 감사 로그. 역할 체계가 프론트엔드
+  `/admin` 구역을 받친다.
+- **다음 백엔드 전용 작업: Stage 1 기반** (Node/pnpm 고정 → Docker/compose →
+  CI → 로깅 규약 → E2E 재작성).
 
 ## 1. 비전과 본질
 
@@ -137,11 +143,11 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | 에러 코드 체계 (전역 exception filter) | 프론트엔드가 메시지 문자열이나 status 단독 분기에 의존하기 전에 기계 판독 가능한 에러 계약을 마련한다. |
 | Refresh 토큰 httpOnly cookie 전환 + 회전/재사용 감지 | **Stage 2에서 앞당김 (2026-07-23)** — 브라우저 프론트엔드가 생기면 토큰 저장이 실제 XSS 표면이 된다. [ADR 0002](ADR/0002-dual-secret-token-pair.ko.md)의 "토큰 서버 미저장" 스탠스를 개정하는 자체 ADR과 검토된 스키마 마이그레이션이 필요하다. |
 
-### Stage 0 — 결정된 아키텍처 작업 (RBAC)
+### Stage 0 — 결정된 아키텍처 작업 (RBAC) — ✅ 2026-07-25 완결
 
 | 작업 | 근거 / 의존성 |
 |---|---|
-| **RBAC** — `role` 컬럼 + role 인식 가드 | 2026-07-22 결정; 설계 확정: 3단계(`user`/`admin`/`superadmin`), `PATCH /user/:id/role`은 superadmin 전용, 소유권 검사는 "본인 **또는** admin"으로 확장. Stage F 뒤로 유예(2026-07-23) — RBAC은 API 표면을 바꾸지 않으므로 프론트엔드 재작업이 생기지 않는다. `role` 컬럼은 검토된 마이그레이션으로 배포. |
+| ~~**RBAC** — `role` 컬럼 + role 인식 가드~~ | **2026-07-25 반영** ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)): 3단계(`user`/`admin`/`superadmin`), `PATCH /user/:id/role`은 superadmin 전용, 소유권을 "본인 **또는** admin"으로 확장, 감사 로그 포함. 검토된 마이그레이션으로 배포. |
 
 ### Stage 1 — 기반 (재현성 · 관측성 · 테스트 신뢰성)
 
@@ -212,6 +218,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 (README/엔드포인트 일치의 자동 검증 — CI 작업 아래의 후보).
 
 ## 9. 완료
+
+### 2026-07-25
+
+| 항목 | 비고 |
+|---|---|
+| RBAC + 감사 로그 | `user`/`admin`/`superadmin` 역할, RolesGuard/@Roles, 소유권 "본인 또는 admin", superadmin 전용 `PATCH /user/:id/role`(마지막 superadmin 방지 + 세션 무효화), append-only 감사 로그와 `GET /audit-log`, `SUPERADMIN_EMAIL` 시드 — **Stage 0 완결** ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)) |
 
 ### 2026-07-23
 

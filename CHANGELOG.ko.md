@@ -13,6 +13,16 @@
 ## [Unreleased]
 
 ### 추가
+- RBAC + 감사 로그 ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md), Stage 0 —
+  **Stage 0 완결**): `user`/`admin`/`superadmin` 역할(신규 `user_entity.role`
+  컬럼의 문자열 enum, 마이그레이션 `AddUserRoleAndAuditLog`); `RolesGuard` +
+  `@Roles`와 `@AuthUser` 데코레이터; 소유권 검사를 "본인/작성자 또는 admin"으로
+  확장; superadmin 전용 `PATCH /user/:id/role`(SERIALIZABLE 트랜잭션, 신규
+  `AUTH_LAST_SUPERADMIN`으로 마지막 superadmin 강등 거부, 대상자 refresh 세션
+  무효화). 신규 append-only `audit_log_entity`(외래 키 없음)가 커밋 후
+  `ROLE_CHANGE`/`USER_DELETE`/`FILE_DELETE`를 기록하고 admin 전용 페이지네이션
+  `GET /audit-log`로 노출된다. `GET /user`는 이제 admin 전용. `SuperadminSeedService`가
+  선택적 `SUPERADMIN_EMAIL` 계정을 부팅 시 승격한다. 신규 의존성 없음.
 - Refresh 토큰 httpOnly 쿠키 + 회전/재사용 감지
   ([ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md), Stage F 작업 3 —
   **Stage F 완결**): 리프레시 토큰은 이제 httpOnly 쿠키(`SameSite=Strict`,

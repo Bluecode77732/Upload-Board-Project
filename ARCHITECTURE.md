@@ -17,12 +17,13 @@ describes the *current* structure; planned work lives in [ROADMAP.md](ROADMAP.md
 ```
 AppModule
 ├── ConfigModule        — global, Joi-validated env (.env.example is the reference)
-├── TypeOrmModule       — PostgreSQL, synchronize: false, entities: FileEntity, UserEntity
+├── TypeOrmModule       — PostgreSQL, synchronize: false, entities: FileEntity, UserEntity, AuditLogEntity
 ├── ServeStaticModule   — serves ./file at URL prefix /file
-├── AuthModule          — tokens only: Basic parsing, JWT issue/verify, Passport strategies
-├── UserModule          — user CRUD only; exports UserService (consumed by JwtStrategy)
+├── AuthModule          — tokens only: Basic parsing, JWT issue/verify, Passport strategies; RBAC RolesGuard/@Roles + role enum (ADR 0013)
+├── UserModule          — user CRUD only; role assignment (superadmin) + boot superadmin seed; exports UserService
 ├── FileModule          — file *metadata* only: FileEntity rows + promote-from-temp transaction
 ├── UploadModule        — *physical* files only: Multer diskStorage; controller-only, no DB
+├── AuditLogModule      — append-only privileged-action trail; exports AuditLogService (consumed by User/File); admin-only GET /audit-log (ADR 0013)
 └── APP_FILTER          — AllExceptionsFilter (backend/common/filter/): shapes every error into the ErrorBody contract (ADR 0011)
 ```
 

@@ -446,10 +446,11 @@ Principle Conflict Protocol.
 ### Performance & Security
 - Secure by Default, Protect Sensitive Data, Fail Securely — covered by Never Do
   Group 3 and the serialization conventions
-- Principle of Least Privilege — ownership checks landed 2026-07-22 (user writes are
-  self-only; file writes are creator-only); RBAC is still a decided roadmap item
-  (see Architecture Decisions > Auth). Flag endpoints where the remaining gap is
-  user-visible, but implement RBAC only as the dedicated roadmap task
+- Principle of Least Privilege — ownership checks (2026-07-22) plus RBAC
+  (2026-07-25, ADR 0013): writes are "self/creator OR admin", role assignment is
+  superadmin-only, `GET /user` and `GET /audit-log` are admin-only. `role` is
+  server-controlled (not on any update DTO). New privileged endpoints follow the
+  same `@Roles` + rank-check pattern
 - Avoid Premature Optimization / Measure Before Optimizing — same principle, treat as one
 - Resource Efficiency — covered by the pagination/N+1 rules and the Multer size limit
 - Minimize Attack Surface — every non-auth endpoint sits behind `JwtAuthGuard`; new
@@ -620,12 +621,14 @@ Do not suggest alternatives to these decisions without explicit request.
   `POST /auth/signout` clears the anchor and the cookie. One session per account (the
   single `refreshTokenHash` column holds exactly one anchor, so a new sign-in or rotation
   overwrites any prior session by construction)
-- Authorization roadmap (decided 2026-07-22): **ownership checks landed 2026-07-22**
-  as a dedicated task — `PATCH/DELETE /user/:id` are self-only (controller-level
-  check via `@UserId`), `PATCH /file/:id` and `DELETE /file/:id` are
-  creator-only (service-level check, `creator` relation loaded). **RBAC is still
-  pending** as its own explicit task (see Known Gaps & Roadmap) — do not bolt role
-  logic onto unrelated changes; the introduction happens as a designed, dedicated change
+- Authorization: ownership checks (2026-07-22) + **RBAC landed 2026-07-25**
+  (ADR 0013). Roles `user`/`admin`/`superadmin` (string enum, `ROLE_RANK` map);
+  `RolesGuard` + `@Roles(min)` enforce a minimum role (unmarked handler passes);
+  `@AuthUser` yields `{ id, role }`. Ownership checks extended to "self/creator
+  OR admin"; `PATCH /user/:id/role` is superadmin-only (SERIALIZABLE tx, refuses
+  to demote the last superadmin, clears the target refresh session). Deletes and
+  role changes are recorded in the append-only `audit_log_entity` (no FKs; written
+  after the primary commit). `SUPERADMIN_EMAIL` seeds the first superadmin on boot
 - **Never suggest**: session-based auth, a single shared JWT secret, storing raw
   tokens server-side (session-auth and single-secret rationale: ADR 0001/0002 — a
   stateless API deliberately avoids a session store, and separate secrets stop a
@@ -703,9 +706,9 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
 - ~~TypeORM migration adoption~~ — **landed 2026-07-22**: `migration:*` scripts,
   `backend/data-source.ts`, baseline `InitialSchema` migration — see Architecture
   Decisions > Database
-- RBAC (role column + role-aware guard) — see Architecture Decisions > Auth;
-  sequenced after Stage F (frontend preparation — decided 2026-07-23, ADR 0010);
-  the `role` column ships as a reviewed migration
+- ~~RBAC (role column + role-aware guard)~~ — **landed 2026-07-25** (ADR 0013):
+  `user`/`admin`/`superadmin`, `RolesGuard`/`@Roles`, audit log — see Architecture
+  Decisions > Auth
 - ~~Ownership checks~~ — **landed 2026-07-22** (commit `0549ca4`): user writes self-only,
   file writes creator-only
 - Chat-project remnant handling — docs audited clean 2026-07-22; pending git-history

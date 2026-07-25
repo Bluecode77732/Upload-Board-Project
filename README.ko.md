@@ -37,8 +37,10 @@ JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, 트랜
 - **2단계 업로드** — `temp_` → `granted_` 접두사 상태 머신; DB insert와 물리 파일
   이동이 함께 커밋되거나 함께 롤백됨
   ([ADR 0003](ADR/0003-two-phase-upload-contract.ko.md))
-- **소유권 검사** — 사용자 쓰기는 본인만, 파일 쓰기는 작성자만
-  ([ADR 0007](ADR/0007-ownership-checks-without-rbac.ko.md))
+- **RBAC + 감사 로그** — `user`/`admin`/`superadmin` 역할; 소유권 검사가 "본인
+  또는 admin"으로 확장되고, 역할 변경·삭제가 감사된다
+  ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md),
+  [ADR 0007](ADR/0007-ownership-checks-without-rbac.ko.md) 위에 얹힘)
 - **경계 검증** — 전역 `ValidationPipe`(`whitelist` + `forbidNonWhitelisted`);
   직렬화된 엔티티는 `password`를 유출하지 않음
 - **Swagger** — `/doc`에서 전체 API 문서 열람과 수동 테스트 가능
@@ -84,7 +86,9 @@ pnpm run test:cov      # 커버리지 (서비스만 측정)
 
 선택: `BASE_URL`(기본 `http://localhost:3000`; 공개 파일 URL 조합에 사용),
 `CORS_ORIGIN`(미설정 = CORS 비활성; 콤마 구분 허용 목록 —
-[ADR 0008](ADR/0008-opt-in-cors.ko.md)), `PORT`(기본 3000).
+[ADR 0008](ADR/0008-opt-in-cors.ko.md)), `PORT`(기본 3000),
+`SUPERADMIN_EMAIL`(미설정 = 비활성; 부팅 시 해당 계정을 superadmin으로 승격 —
+[ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)).
 
 ## API 엔드포인트
 
@@ -101,19 +105,24 @@ pnpm run test:cov      # 커버리지 (서비스만 측정)
   회수된 토큰을 재사용하면 세션이 무효화됩니다(`AUTH_REFRESH_REUSED`)
 - `POST /auth/signout` — 서버 측 세션 앵커 무효화 + 쿠키 삭제 (Bearer 액세스 토큰)
 
-**사용자** — 사용자 생성은 `POST /auth/register`이며 `POST /user`는 없습니다
-- `GET /user` — 사용자 목록
+**사용자** — 사용자 생성은 `POST /auth/register`이며 `POST /user`는 없습니다.
+역할: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md))
+- `GET /user` — 사용자 목록 (admin만)
 - `GET /user/:id` — 사용자 조회
-- `PATCH /user/:id` — 사용자 수정 (본인만)
-- `DELETE /user/:id` — 사용자 삭제 (본인만)
+- `PATCH /user/:id` — 사용자 수정 (본인 또는 admin)
+- `PATCH /user/:id/role` — 역할 부여 (superadmin만; 마지막 superadmin은 강등 불가)
+- `DELETE /user/:id` — 사용자 삭제 (본인 또는 admin)
 
 **파일**
 - `POST /upload/attach` — 동영상을 임시 저장소로 업로드 (multipart 필드 `video`, 100 MB 제한)
 - `GET /file` — 파일 목록 (페이지네이션: `take` 1–100, 기본 20 / `skip` 기본 0)
 - `GET /file/:id` — 파일 메타데이터 조회
 - `POST /file` — 임시 파일을 영구 저장소로 승격 (트랜잭션)
-- `PATCH /file/:id` — 파일 메타데이터 수정 (작성자만)
-- `DELETE /file/:id` — 파일 메타데이터 삭제 (작성자만)
+- `PATCH /file/:id` — 파일 메타데이터 수정 (작성자 또는 admin)
+- `DELETE /file/:id` — 파일 메타데이터 삭제 (작성자 또는 admin)
+
+**감사 로그**
+- `GET /audit-log` — ROLE_CHANGE / USER_DELETE / FILE_DELETE 기록 조회 (admin만; 페이지네이션, `?action` 필터)
 
 ### 일반적인 흐름
 
@@ -162,8 +171,7 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
 ## 알려진 한계
 
 [ROADMAP.ko.md](ROADMAP.ko.md)에서 추적하며, 2026-07-23부터는 단계별 전체
-프로젝트 계획이기도 합니다. 요점: RBAC 미도입(소유권 검사만 — RBAC은 Stage F
-프론트엔드 준비 파이프라인 이후 진행), e2e 스위트는 아직 Nest 템플릿 그대로,
+프로젝트 계획이기도 합니다. 요점: e2e 스위트는 아직 Nest 템플릿 그대로,
 CI/Docker/로깅 인프라 부재(Stage 1 확정 로드맵 항목). **업로드된 파일은 무인증
 공개 URL**(`{BASE_URL}/file/upload/granted_...`)**로 서빙됩니다** — Stage 4의
 VOD 접근 제어 작업 전까지는 링크를 아는 사람은 누구나 접근할 수
