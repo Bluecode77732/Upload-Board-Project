@@ -13,7 +13,9 @@ import { AddUserRoleAndAuditLog1784912790431 } from '../backend/migrations/17849
 
 // A dedicated database, never the dev one — dropped and recreated every run so the
 // suite owns its data. New migrations must be appended here or boot fails loudly.
-const TEST_DB_NAME = 'upload_board_e2e';
+// The name is set by test/e2e-env.ts before AppModule is imported (so ConfigModule
+// captures it); reading it back here keeps a single source of truth.
+const TEST_DB_NAME = process.env.DB_DATABASE ?? 'upload_board_e2e';
 const MIGRATIONS = [
   InitialSchema1784678400000,
   AddUserRefreshTokenHash1784851200000,
@@ -22,19 +24,6 @@ const MIGRATIONS = [
 
 // Every table the app writes; truncated between tests for per-test isolation.
 const TABLES = ['user_entity', 'file_entity', 'audit_log_entity'];
-
-// Mirrors data-source.ts: Node's built-in .env loader, no dotenv dependency.
-// Called before AppModule compiles so ConfigModule sees the DB_DATABASE override.
-function loadTestEnv(): void {
-  try {
-    process.loadEnvFile();
-  } catch {
-    // .env is optional — a CI/prod context may inject real environment variables.
-  }
-  // process.env already holding a key wins (loadEnvFile does not override), so this
-  // redirect to the throwaway DB sticks even though .env names the dev database.
-  process.env.DB_DATABASE = TEST_DB_NAME;
-}
 
 function connectionBase() {
   return {
@@ -98,7 +87,8 @@ async function bootstrapTestApp(): Promise<INestApplication> {
 }
 
 export async function setupE2E(): Promise<INestApplication> {
-  loadTestEnv();
+  // Env (incl. the DB_DATABASE override) is set by test/e2e-env.ts before AppModule
+  // is imported — see that file's rationale.
   await recreateTestDatabase();
   await runMigrations();
   return bootstrapTestApp();
