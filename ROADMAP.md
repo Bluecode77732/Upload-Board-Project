@@ -192,6 +192,7 @@ settled while zero consumers exist.
 | Task | Rationale / dependencies |
 |---|---|
 | AWS container deployment | Local: Docker (compose); deploy: AWS, container-based. New deployment ADR; depends on Stage 1 Docker + CI. |
+| Container & deploy hardening | Surfaced by [ADR 0015](ADR/0015-docker-and-compose.md): the Stage 1 image is deploy-*capable* but not production-grade. Non-root `USER` (runs as root today), a distroless runtime base (drop the shell/apt attack surface), a health/readiness endpoint (for LB/orchestrator probes), migrations as a **separate deploy step** rather than on container boot (avoids multi-instance migration races), secrets via a manager instead of `.env`/`env_file`, HTTPS termination (the `Secure` refresh cookie requires it when `ENV=prod`), and a target-arch build (x64 prebuilt `bcrypt` today; ARM/Graviton needs a matching prebuild or `pnpm.onlyBuiltDependencies`). Depends on the AWS deployment task. |
 | VOD playback access control | Uploaded files are currently public URLs — anyone with the link can watch. An authenticated playback path; includes revisiting ADR 0005's static-serving decision. (Playback of uploaded files, not live streaming.) |
 | Storage port-adapter | Only if/when the S3 need is confirmed — see Architecture direction (section 4). |
 | Performance / capacity criteria | Index policy, response-time targets, disk ceilings — measured before optimized. |
