@@ -13,6 +13,13 @@
 ## [Unreleased]
 
 ### 추가
+- GitHub Actions CI (Stage 1 — 자동 품질 게이트;
+  [ADR 0016](ADR/0016-github-actions-ci.ko.md)): `.github/workflows/ci.yml`가
+  `main`/`dev`의 push·PR에서 두 잡으로 실행된다 — `lint-and-unit`(신규 `lint:ci`
+  스크립트 = `--fix` 없는 `eslint`, 이어서 `pnpm test`)과 `e2e`(`pg_isready`
+  헬스체크를 갖춘 `postgres:16` 서비스 대상 스위트, 환경 변수는 인라인 주입). 툴체인은
+  ADR 0014 고정값(`actions/setup-node` + `.nvmrc` + Corepack pnpm)에서 온다. 0-오류
+  lint 베이스라인과 단위 + e2e 스위트가 이제 기억이 아니라 매 push/PR에서 강제된다.
 - Docker + docker-compose (Stage 1 — 재현성;
   [ADR 0015](ADR/0015-docker-and-compose.ko.md)): 멀티 스테이지 `Dockerfile`(빌드는
   `node:24.8.0`, `pnpm prune --prod`, slim 런타임; `CMD`가 커밋된 마이그레이션을 실행한

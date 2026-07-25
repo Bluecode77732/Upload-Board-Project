@@ -13,6 +13,14 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- GitHub Actions CI (Stage 1 — automated quality gate;
+  [ADR 0016](ADR/0016-github-actions-ci.md)): `.github/workflows/ci.yml` runs on
+  push/PR to `main`/`dev` with two jobs — `lint-and-unit` (new `lint:ci` script =
+  `eslint` without `--fix`, then `pnpm test`) and `e2e` (the suite against a
+  `postgres:16` service with a `pg_isready` healthcheck, env supplied inline). The
+  toolchain comes from the ADR 0014 pin (`actions/setup-node` + `.nvmrc` + Corepack
+  pnpm). The 0-error lint baseline and the unit + e2e suites are now enforced on
+  every push/PR instead of by memory.
 - Docker + docker-compose (Stage 1 — reproducibility;
   [ADR 0015](ADR/0015-docker-and-compose.md)): a multi-stage `Dockerfile` (build on
   `node:24.8.0`, `pnpm prune --prod`, slim runtime; `CMD` runs committed migrations

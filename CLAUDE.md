@@ -35,8 +35,10 @@ Before making any change:
 9. This applies to *recommendations*, not just edits: before proposing a new script, guard,
    tool, component, or dependency, first inspect the existing infrastructure (ESLint config
    `eslint.config.mjs`, the Jest config embedded in `package.json`, existing utilities)
-   and prefer extending it. This repo has **no CI workflow, no Dockerfile, no git hooks** —
-   do not reference or assume any. An unverified "let's build X" is the same unfounded
+   and prefer extending it. This repo has a GitHub Actions CI workflow
+   (`.github/workflows/ci.yml`, ADR 0016) and Docker/compose (ADR 0015) to extend rather
+   than reinvent, but **no git hooks and no deploy pipeline** — do not reference or assume
+   those. An unverified "let's build X" is the same unfounded
    inference as inventing an API — advisory answers get the same inspect-first rigor as
    file edits.
 10. Evidence expires: a grep/read/test result is a snapshot of the moment it ran, not of the
@@ -462,7 +464,7 @@ Principle Conflict Protocol.
 - Consistent Naming, Coding Standards — covered by Code Style and the existing
   file-naming pattern (`{name}.{layer}.ts`, folders per concern: `dto/`, `entity/`,
   `guard/`, `strategy/`, `interface/`, `decorator/`)
-- Automated Testing — covered by Testing conventions; no CI exists (see CI/CD)
+- Automated Testing — covered by Testing conventions; CI runs lint + unit + e2e on push/PR (see CI/CD)
 - Code Reviews, Version Control Discipline — out of scope for this file
 - Documentation as Code — Swagger decorators are the API documentation; the Change
   Summary requirement covers the rest. README endpoint lists must match real routes
@@ -917,9 +919,10 @@ cosmetic — a missing or wrong one is a documentation bug caught in Result Revi
 
 ## CI/CD
 
-None. There is no GitHub Actions workflow, no Dockerfile, no deploy target, and no git
-hooks. Do not reference or assume any pipeline; introducing one is an explicit-request
-task under Scope Discipline. CI (GitHub Actions lint+test), Docker/docker-compose,
-and AWS deployment are decided roadmap items as of 2026-07-23 (ROADMAP.md Stages 1
-and 4) — but until those dedicated tasks land, this section stays true: reference
-no pipeline.
+CI: GitHub Actions (`.github/workflows/ci.yml`, ADR 0016) runs lint (`lint:ci` — the
+0-error gate, no `--fix`) + unit tests and a separate e2e job (against a `postgres:16`
+service) on push/PR to `main`/`dev`. Local containerization: a multi-stage `Dockerfile`
++ `docker-compose.yml` (ADR 0015). There is **no deploy target and no git hooks** — AWS
+container deployment is a Stage 4 roadmap item (ROADMAP.md), and no git-hook tooling is
+installed. Do not assume a deploy pipeline or hooks; adding either is explicit-request
+work under Scope Discipline.

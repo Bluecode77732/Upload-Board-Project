@@ -1,0 +1,70 @@
+# Minimal CI (ADR 0016): lint + unit tests, plus e2e against a Postgres service.
+# Toolchain comes from the ADR 0014 pin (.nvmrc + packageManager via Corepack);
+# the e2e DB image matches ADR 0015 (postgres:16).
+
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      # Corepack activates the pnpm version pinned in package.json (packageManager).
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint:ci
+      - run: pnpm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # No .env in CI — the suite reads these from the environment (e2e-utils
+      # overrides DB_DATABASE to its throwaway DB at runtime).
+      ENV: dev
+      DB_TYPE: postgres
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: postgres
+      HASH_ROUNDS: 10
+      ACCESS_TOKEN_SECRET: ci-access-secret
+      REFRESH_TOKEN_SECRET: ci-refresh-secret
+      ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
+      REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      # Upload folders are runtime dirs (untracked); the promotion test needs both.
+      - run: mkdir -p file/temp file/upload
+      - run: pnpm run test:e2e

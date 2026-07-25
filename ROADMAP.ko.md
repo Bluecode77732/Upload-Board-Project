@@ -155,7 +155,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 |---|---|
 | ~~Node/pnpm 버전 고정 (`engines` + `.nvmrc`)~~ | **2026-07-25 반영** ([ADR 0014](ADR/0014-node-pnpm-version-pinning.ko.md)): `.nvmrc` `24.8.0`, `engines` 하한(`node >=24`, `pnpm >=10`, 권고적), `packageManager` `pnpm@10.14.0`. Docker 베이스 이미지 태그와 CI 툴체인이 파생될 단일 출처가 된다. |
 | ~~Docker / docker-compose (앱 + 로컬 PostgreSQL)~~ | **2026-07-25 반영** ([ADR 0015](ADR/0015-docker-and-compose.ko.md)): 멀티 스테이지 `Dockerfile`(빌드 `node:24.8.0` → `slim` 런타임, 부팅 시 마이그레이션) + `docker-compose.yml`(`db` postgres:16 + `api`). 수동 `upload-board-pg`를 대체하고 e2e의 수동 DB 의존을 제거한다. AWS 단계의 선행 조건 충족. |
-| CI — GitHub Actions (lint + test) | 0 오류 lint 베이스라인이 현재는 사람의 기억으로만 유지된다; 최소 파이프라인, 그 이상은 아님. |
+| ~~CI — GitHub Actions (lint + test)~~ | **2026-07-25 반영** ([ADR 0016](ADR/0016-github-actions-ci.ko.md)): main/dev의 push·PR에서 도는 `.github/workflows/ci.yml` — `lint-and-unit` 잡(`--fix` 없는 `lint:ci` + 단위 테스트)과 `postgres:16` 서비스 대상 `e2e` 잡. 툴체인은 ADR 0014 고정값(Corepack + `.nvmrc`)에서. 0-오류 베이스라인이 이제 기계로 검증된다. |
 | 로깅 규약 (Nest Logger부터) | 관측성의 첫 증분; 외부 에러 추적(예: Sentry)은 배포 환경 확정 이후로 유예. |
 | ~~E2E 재작성~~ | **2026-07-25 반영**: 실제 HTTP+DB 위에서 도는 18개 케이스 스위트(`test/app.e2e-spec.ts` + 신규 `test/e2e-utils.ts` 하네스) — 인증 흐름, refresh 회전/재사용, 소유권 403, 페이지네이션, `temp_` → `granted_` 승격. 격리는 실제 마이그레이션으로 생성한 일회용 `upload_board_e2e` DB를 테스트마다 truncate하는 방식. Docker-compose 작업이 이 의존을 없앨 때까지는 로컬 Postgres(5435) 수동 기동이 여전히 필요하다. |
 
