@@ -473,9 +473,12 @@ Principle Conflict Protocol.
   `packageManager` `pnpm@10.14.0`. `engines` is advisory — `engine-strict` stays off, so
   it warns on a too-old toolchain, it does not block installs; state that scope, do not
   imply enforcement
-- Observability — **no logging infrastructure exists** (no winston, no Nest Logger
-  usage, no error tracking). Do not claim coverage; adding any of these is a new
-  dependency requiring explicit request
+- Observability — Nest's built-in `Logger` is used in `AllExceptionsFilter` (ADR 0017):
+  5xx logged at `error` with the stack, 4xx at `debug`; convention is `error`=server
+  fault, `warn`=degraded, `log`=lifecycle, `debug`/`verbose`=diagnostics, and never log
+  bodies/headers/tokens (Never Do Group 3). No structured/JSON output, request-logging
+  middleware, or external error tracking (winston/Sentry) yet — those are a Stage 4
+  concern and adding a logging *dependency* still requires explicit request
 - Privacy & Compliance — advisory: PII log prohibition is mandatory (Never Do Group 3);
   right-to-erasure is covered by `DELETE /user/:id`. Flag gaps rather than asserting coverage
 

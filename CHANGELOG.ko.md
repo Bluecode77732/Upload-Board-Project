@@ -13,6 +13,13 @@
 ## [Unreleased]
 
 ### 추가
+- 로깅 규약 (Stage 1 — 관측성;
+  [ADR 0017](ADR/0017-logging-conventions.ko.md)): `AllExceptionsFilter`에서 Nest 내장
+  `Logger`를 사용한다 — 5xx는 클라이언트 응답에서 빠지는(Never Do Group 3) 스택과 함께
+  `error`로, 4xx는 `debug`로 기록해 일상적인 인증/검증 실패를 조용히 둔다. `status code
+  method url`만 기록하고 본문·헤더·토큰은 절대 기록하지 않는다. 새 코드를 위한 레벨
+  규약(`error`/`warn`/`log`/`debug`)을 정립하며, 구조적/JSON 출력과 외부 에러
+  추적(Sentry)은 Stage 4로 유예한다. 새 의존성 없음(Nest `Logger`는 내장).
 - GitHub Actions CI (Stage 1 — 자동 품질 게이트;
   [ADR 0016](ADR/0016-github-actions-ci.ko.md)): `.github/workflows/ci.yml`가
   `main`/`dev`의 push·PR에서 두 잡으로 실행된다 — `lint-and-unit`(신규 `lint:ci`

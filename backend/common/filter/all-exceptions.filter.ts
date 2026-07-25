@@ -9,6 +9,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
@@ -27,6 +28,8 @@ const FALLBACK_CODES: Partial<Record<number, ErrorCode>> = {
 @Injectable()
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
+  private readonly logger = new Logger(AllExceptionsFilter.name);
+
   constructor(private readonly configService: ConfigService) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
@@ -86,5 +89,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
     };
 
     response.status(status).json(body);
+
+    // Observability (ADR 0017): a 5xx is a server fault — log it with the stack we
+    // deliberately withhold from the client (Never Do Group 3); a 4xx is a client
+    // error, logged at debug so routine auth/validation failures don't flood the log.
+    // Only status/code/method/url are logged — never bodies, headers, or tokens.
+    const logLine = `${status} ${code} ${request.method} ${request.url}`;
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      this.logger.error(logLine, stack);
+    } else {
+      this.logger.debug(logLine);
+    }
   }
 }

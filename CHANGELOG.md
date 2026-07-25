@@ -13,6 +13,14 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- Logging conventions (Stage 1 — observability;
+  [ADR 0017](ADR/0017-logging-conventions.md)): Nest's built-in `Logger` is now used
+  in `AllExceptionsFilter` — a 5xx is logged at `error` **with the stack** that stays
+  out of the client response (Never Do Group 3), a 4xx at `debug` so routine
+  auth/validation failures stay quiet. Only `status code method url` is logged, never
+  bodies/headers/tokens. Establishes the level convention (`error`/`warn`/`log`/`debug`)
+  for new code; structured/JSON output and external error tracking (Sentry) are deferred
+  to Stage 4. No new dependency (Nest `Logger` is built in).
 - GitHub Actions CI (Stage 1 — automated quality gate;
   [ADR 0016](ADR/0016-github-actions-ci.md)): `.github/workflows/ci.yml` runs on
   push/PR to `main`/`dev` with two jobs — `lint-and-unit` (new `lint:ci` script =

@@ -5,6 +5,7 @@
 import {
   ArgumentsHost,
   BadRequestException,
+  Logger,
   NotFoundException,
   PayloadTooLargeException,
   UnauthorizedException,
@@ -19,6 +20,8 @@ describe('AllExceptionsFilter', () => {
   let mockHost: ArgumentsHost;
   let mockConfigService: { get: jest.Mock };
   let filter: AllExceptionsFilter;
+  let errorSpy: jest.SpyInstance;
+  let debugSpy: jest.SpyInstance;
 
   beforeEach(() => {
     mockJson = jest.fn();
@@ -26,9 +29,13 @@ describe('AllExceptionsFilter', () => {
     mockHost = {
       switchToHttp: () => ({
         getResponse: () => ({ status: mockStatus }),
-        getRequest: () => ({ url: '/test' }),
+        getRequest: () => ({ url: '/test', method: 'GET' }),
       }),
     } as unknown as ArgumentsHost;
+
+    // Silence the filter's own logging and let the tests assert on it.
+    errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    debugSpy = jest.spyOn(Logger.prototype, 'debug').mockImplementation();
 
     mockConfigService = { get: jest.fn().mockReturnValue('prod') };
     filter = new AllExceptionsFilter(
@@ -37,7 +44,7 @@ describe('AllExceptionsFilter', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   it('should pass through an explicit code and message', () => {
@@ -135,5 +142,22 @@ describe('AllExceptionsFilter', () => {
       unknown
     >;
     expect(typeof body.stack).toBe('string');
+  });
+
+  it('should log a 5xx at error with the stack (kept out of the response)', () => {
+    filter.catch(new Error('boom'), mockHost);
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(debugSpy).not.toHaveBeenCalled();
+    // The withheld stack is the second arg to logger.error — logged server-side only.
+    const stackArg = (errorSpy.mock.calls[0] as unknown[])[1];
+    expect(typeof stackArg).toBe('string');
+  });
+
+  it('should log a 4xx at debug, never at error', () => {
+    filter.catch(new NotFoundException('No file found.'), mockHost);
+
+    expect(debugSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 });
