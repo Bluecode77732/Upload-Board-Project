@@ -185,9 +185,11 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
 ## 알려진 한계
 
 [ROADMAP.ko.md](ROADMAP.ko.md)에서 추적하며, 2026-07-23부터는 단계별 전체
-프로젝트 계획이기도 합니다. 요점: 툴체인 고정과 Docker/compose가 2026-07-25에
-반영되었고 e2e 스위트가 인증/소유권/페이지네이션/승격 경로를 커버하게 되었으며, CI와
-로깅 인프라는 아직 미도입(Stage 1 로드맵 항목). **업로드된 파일은 무인증
+프로젝트 계획이기도 합니다. 요점: **Stage 1 기반이 완료**되었습니다 — 툴체인 고정,
+Docker/compose, CI(GitHub Actions), 로깅 규약, e2e 재작성이 2026-07-25에 모두
+반영되었고(ADR 0014–0017) e2e 스위트가 인증/소유권/페이지네이션/승격 경로를 커버합니다.
+**Stage 2가 시작**되었습니다 — 고아 temp 파일 정리가 2026-07-26에 반영되었습니다
+([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)). **업로드된 파일은 무인증
 공개 URL**(`{BASE_URL}/file/upload/granted_...`)**로 서빙됩니다** — Stage 4의
 VOD 접근 제어 작업 전까지는 링크를 아는 사람은 누구나 접근할 수
 있습니다([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)).

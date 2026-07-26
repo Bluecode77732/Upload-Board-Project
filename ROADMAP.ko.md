@@ -215,12 +215,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   `POST /auth/signin/local`(+ `LocalStrategy` + `LocalAuthGuard`)은 **제거
   후보** — 제거는 Scope Discipline상 별도 전용 작업이며 부수 작업이 아니다;
   그때까지는 존치한다.
-- 문서 문구 동기화 (2026-07-23 유예 결정): 계획 수립 이전의 "후보(candidate)"
-  표현 3곳이 이 계획으로 대체됨 — ADR 0003("candidate roadmap item" → Stage 2
-  확정), ADR 0006 Consequences("top roadmap item" → 완료),
-  CHAT-REMNANT-REMOVAL-PLAN("ROADMAP's CI candidate" → Stage 1 확정). 다음 문서
-  정리 패스에서 처리: ADR은 날짜 병기 한 줄 주석(ADR 0006 implementation-note
-  선례), 살아있는 계획 문서는 문구 직접 수정.
+- 문서 문구 동기화 (2026-07-23 유예 결정; ADR 수정 2026-07-27 완료): 계획 수립 이전의
+  "후보(candidate)" 표현을 이 계획에 맞춰 정리. **완료**: ADR 0003("candidate roadmap
+  item")은 이제 반영된 [ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)을 가리키고,
+  ADR 0006 Consequences("top roadmap item")에는 날짜 병기 완료 주석이 붙음.
+  **남음**: `CHAT-REMNANT-REMOVAL-PLAN`("ROADMAP's CI candidate" → Stage 1 확정) —
+  그 파일을 건드리는 다음 패스에서 처리.
 
 ## 8. Advisory 노트
 

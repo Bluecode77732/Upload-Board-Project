@@ -184,9 +184,11 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full request and data flow.
 ## Known Limitations
 
 Tracked in [ROADMAP.md](ROADMAP.md) — since 2026-07-23 the full staged project
-plan. Highlights: toolchain pinning and Docker/compose landed 2026-07-25 and the
-e2e suite now covers the auth/ownership/pagination/promotion paths, while CI and
-logging infrastructure are still pending (Stage 1 roadmap items).
+plan. Highlights: **Stage 1 foundation is complete** — toolchain pinning,
+Docker/compose, CI (GitHub Actions), logging conventions, and the e2e rewrite all
+landed 2026-07-25 (ADR 0014–0017), and the e2e suite covers the
+auth/ownership/pagination/promotion paths. **Stage 2 has begun** — orphan temp-file
+cleanup landed 2026-07-26 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)).
 **Uploaded files are served unauthenticated at public URLs**
 (`{BASE_URL}/file/upload/granted_...`) until the Stage 4 VOD access-control task
 — anyone with the link can fetch them ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)).
