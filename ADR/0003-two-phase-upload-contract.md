@@ -34,8 +34,8 @@ back — no client-chosen path segment ever reaches the filesystem.
 
 - The prefix is the only lifecycle marker visible to static serving; every consumer of
   `filePath` must preserve the state machine end to end.
-- Orphaned `temp_` files (attached but never claimed) accumulate; there is no cleanup
-  job yet — a candidate roadmap item.
+- Orphaned `temp_` files (attached but never claimed) accumulate. (2026-07-26: resolved
+  — a scheduled sweep deletes `temp_` files past a TTL, [ADR 0018](0018-orphan-temp-file-cleanup.md).)
 - The DB insert + rename pairing is why `FileService` uses the manual QueryRunner
   pattern (see [ADR 0004](0004-transaction-pattern-selection.md)).
 - Path traversal is prevented by construction, not by sanitization.

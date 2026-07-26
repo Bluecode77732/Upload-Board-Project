@@ -47,6 +47,9 @@ lerna-debug.log*
 .temp
 .tmp
 
+# Uploaded media — runtime artifacts under file/temp and file/upload, never committed
+/file/
+
 # Runtime data
 pids
 *.pid

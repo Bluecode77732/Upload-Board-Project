@@ -13,6 +13,20 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- Orphan temp-file cleanup (Stage 2 — mechanism hardening;
+  [ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)): a new operational `TempCleanupModule`
+  (`backend/temp-cleanup/`) runs a scheduled sweep that deletes unclaimed `temp_` files left
+  in `file/temp` when `POST /file` is never called — the only unmanaged resource leak
+  (ADR 0003). Uses `@nestjs/schedule` (new runtime dep, MIT; `cron@4.4.0` promoted to a
+  direct dep under pnpm, the `multer` phantom-transitive precedent) with **imperative**
+  `SchedulerRegistry` registration so the schedule, TTL, dry-run, and enable flag all come
+  from config. Safety: only `temp_`-prefixed files past the TTL are deleted (double prefix
+  guard: service skip + pure `selectExpiredTempFiles` re-check), `granted_`/`file/upload`
+  never touched, `fs/promises` only, batched unlink, per-file failure isolated, `ENOENT`
+  no-op, dry-run mode. Config (Joi + `.env.example`, all defaulted): `TEMP_SWEEP_ENABLED`
+  (`true`), `TEMP_SWEEP_CRON` (`0 * * * *`, hourly), `TEMP_SWEEP_TTL_HOURS` (`24`),
+  `TEMP_SWEEP_DRY_RUN` (`false`); e2e sets `TEMP_SWEEP_ENABLED=false`. `ScheduleModule.forRoot()`
+  added to `AppModule`. Amends the module policy to admit operational/cross-cutting modules.
 - Logging conventions (Stage 1 — observability;
   [ADR 0017](ADR/0017-logging-conventions.md)): Nest's built-in `Logger` is now used
   in `AllExceptionsFilter` — a 5xx is logged at `error` **with the stack** that stays

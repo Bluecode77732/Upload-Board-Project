@@ -13,6 +13,21 @@
 ## [Unreleased]
 
 ### 추가
+- 미청구 temp 파일 정리 (Stage 2 — 메커니즘 강화;
+  [ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)): 새 운영 모듈 `TempCleanupModule`
+  (`backend/temp-cleanup/`)이 스케줄 스윕을 돌려, `POST /file`이 끝내 호출되지 않아
+  `file/temp`에 남은 미청구 `temp_` 파일을 삭제한다 — 시스템에서 유일하게 관리되지 않던
+  리소스 누수(ADR 0003)다. `@nestjs/schedule`(새 런타임 의존성, MIT; `cron@4.4.0`은 pnpm
+  아래에서 direct 의존성으로 승격 — `multer` phantom-transitive 선례)을 쓰고, 주기·TTL·
+  dry-run·활성 플래그가 모두 config에서 오도록 **명령형** `SchedulerRegistry` 등록을 사용한다.
+  안전성: TTL을 넘은 `temp_` 접두 파일만 삭제하고(이중 접두 가드: service 스킵 + 순수 함수
+  `selectExpiredTempFiles` 재확인), `granted_`/`file/upload`는 결코 건드리지 않으며,
+  `fs/promises`만 사용, unlink 배치 처리, 개별 파일 실패 격리, `ENOENT` no-op, dry-run 모드를
+  갖춘다. 설정(Joi + `.env.example`, 모두 기본값 보유): `TEMP_SWEEP_ENABLED`(`true`),
+  `TEMP_SWEEP_CRON`(`0 * * * *`, 매시간), `TEMP_SWEEP_TTL_HOURS`(`24`),
+  `TEMP_SWEEP_DRY_RUN`(`false`); e2e는 `TEMP_SWEEP_ENABLED=false`로 둔다. `AppModule`에
+  `ScheduleModule.forRoot()`를 추가했다. 운영/cross-cutting 모듈을 허용하도록 모듈 정책을
+  개정한다.
 - 로깅 규약 (Stage 1 — 관측성;
   [ADR 0017](ADR/0017-logging-conventions.ko.md)): `AllExceptionsFilter`에서 Nest 내장
   `Logger`를 사용한다 — 5xx는 클라이언트 응답에서 빠지는(Never Do Group 3) 스택과 함께

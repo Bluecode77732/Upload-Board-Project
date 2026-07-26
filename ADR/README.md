@@ -26,6 +26,7 @@ each ADR records the *why* behind those rules.
 | [0015](0015-docker-and-compose.md) | Docker and docker-compose for local development | Accepted | 2026-07-25 |
 | [0016](0016-github-actions-ci.md) | Continuous integration with GitHub Actions | Accepted | 2026-07-25 |
 | [0017](0017-logging-conventions.md) | Logging conventions with Nest's built-in Logger | Accepted | 2026-07-25 |
+| [0018](0018-orphan-temp-file-cleanup.md) | Scheduled orphan temp-file cleanup | Accepted | 2026-07-26 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

@@ -13,3 +13,7 @@ try {
 // The suite owns a throwaway database (dropped/recreated per run). This must run
 // before AppModule is imported; e2e-utils reads this same value back for TEST_DB_NAME.
 process.env.DB_DATABASE = 'upload_board_e2e';
+
+// Keep the orphan temp-file sweep (ADR 0018) from registering its cron during e2e:
+// the tests exercise the two-phase upload directly and never need the background sweep.
+process.env.TEMP_SWEEP_ENABLED = 'false';

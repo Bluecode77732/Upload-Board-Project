@@ -17,7 +17,7 @@ lands as its own dedicated, designed change
 > actually lands (with its own ADR), the current Architecture Decisions remain
 > operative.
 
-## Current position (as of 2026-07-25)
+## Current position (as of 2026-07-26)
 
 - The 2026-07-22 hardening run is fully landed: security quick-wins, the
   zero-error lint baseline, the documentation rewrite, and TypeORM migration
@@ -47,8 +47,12 @@ lands as its own dedicated, designed change
   — **Stage 0 is complete**: `user`/`admin`/`superadmin` roles, RolesGuard,
   ownership extended to "self or admin", superadmin-only role assignment, and an
   append-only audit trail. The role system backs the frontend `/admin` section.
-- **Next dedicated backend task: Stage 1 Foundation** (Node/pnpm pinning →
-  Docker/compose → CI → logging conventions → E2E rewrite).
+- **Stage 1 Foundation is complete** (2026-07-25): Node/pnpm pinning, Docker/compose,
+  CI, logging conventions, and the E2E rewrite all landed (ADR 0014–0017).
+- **Stage 2 has started**: orphan temp-file cleanup landed 2026-07-26
+  ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)) — a scheduled `@nestjs/schedule`
+  sweep in a new operational `TempCleanupModule`. **Next Stage 2 tasks**: deletion policy
+  design (soft delete + the `DELETE /user/:id` FK-constraint 500) and upload idempotency.
 
 ## 1. Vision & essence
 
@@ -176,7 +180,7 @@ settled while zero consumers exist.
 
 | Task | Rationale / dependencies |
 |---|---|
-| Orphan temp-file cleanup | `temp_` files accumulate forever when `POST /file` is never called — the only unmanaged resource leak today. |
+| ~~Orphan temp-file cleanup~~ — ✅ landed 2026-07-26 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)) | `temp_` files accumulated forever when `POST /file` was never called — the only unmanaged resource leak. A scheduled `@nestjs/schedule` sweep (new `TempCleanupModule`) deletes `temp_` files in `file/temp` past a TTL (default 24h, hourly). |
 | Deletion policy design (soft delete + FK) | One design task uniting the soft-delete question with the `DELETE /user/:id` FK-constraint 500 (`FileEntity.creator` is `nullable: false`). |
 | Upload idempotency / duplicate policy | CLAUDE.md requires new write endpoints to state their duplicate-submission behavior — settle the frame before board expansion multiplies write endpoints. |
 
@@ -240,6 +244,12 @@ ordering), docs-as-code enforcement (automated README/endpoint consistency — a
 candidate under the CI task).
 
 ## 9. Completed
+
+### 2026-07-26
+
+| Item | Notes |
+|---|---|
+| Orphan temp-file cleanup | Scheduled `@nestjs/schedule` sweep in a new operational `TempCleanupModule` deletes `temp_` files left in `file/temp` past a TTL (`TEMP_SWEEP_TTL_HOURS`, default 24h; hourly cron); `granted_`/`file/upload` never touched, dry-run + enable toggles, `cron` promoted to a direct dep — **first Stage 2 task** ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)) |
 
 ### 2026-07-25
 

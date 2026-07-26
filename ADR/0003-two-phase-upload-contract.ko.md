@@ -35,8 +35,8 @@
 
 - 접두사는 정적 서빙에 보이는 유일한 수명주기 표식입니다. `filePath`의 모든 소비자는
   상태 머신을 끝까지 보존해야 합니다.
-- 고아 `temp_` 파일(첨부됐지만 미소유)이 누적됩니다. 정리 작업은 아직 없으며
-  로드맵 후보 항목입니다.
+- 고아 `temp_` 파일(첨부됐지만 미소유)이 누적됩니다. (2026-07-26 해소 — 스케줄 스윕이
+  TTL을 넘은 `temp_` 파일을 삭제합니다, [ADR 0018](0018-orphan-temp-file-cleanup.ko.md).)
 - DB insert + rename의 결합이 `FileService`가 수동 QueryRunner 패턴을 쓰는
   이유입니다 ([ADR 0004](0004-transaction-pattern-selection.ko.md) 참조).
 - 경로 조작(path traversal)은 정제(sanitization)가 아니라 구조적으로 차단됩니다.

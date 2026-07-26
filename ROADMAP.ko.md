@@ -15,7 +15,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 > 이 계획에 편입되었다. 각 전용 작업이 실제로 완료되기 전까지는(각자의 ADR 포함)
 > 현행 Architecture Decisions가 그대로 유효하다.
 
-## 현재 위치 (2026-07-25 기준)
+## 현재 위치 (2026-07-26 기준)
 
 - 2026-07-22 하드닝 런은 모두 반영 완료됐다: 보안 quick-win, lint 0 오류
   베이스라인, 문서 재작성, TypeORM 마이그레이션 도입(`79603ad`,
@@ -44,8 +44,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   `user`/`admin`/`superadmin` 역할, RolesGuard, 소유권을 "본인 또는 admin"으로
   확장, superadmin 전용 역할 부여, append-only 감사 로그. 역할 체계가 프론트엔드
   `/admin` 구역을 받친다.
-- **다음 백엔드 전용 작업: Stage 1 기반** (Node/pnpm 고정 → Docker/compose →
-  CI → 로깅 규약 → E2E 재작성).
+- **Stage 1 기반은 완결됐다** (2026-07-25): Node/pnpm 고정, Docker/compose, CI,
+  로깅 규약, E2E 재작성이 모두 반영됐다 (ADR 0014–0017).
+- **Stage 2가 시작됐다**: 고아 temp 파일 정리가 2026-07-26 반영됐다
+  ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)) — 신규 운영 모듈
+  `TempCleanupModule`의 스케줄 `@nestjs/schedule` 스윕. **다음 Stage 2 작업**: 삭제 정책
+  설계(소프트 삭제 + `DELETE /user/:id` FK 제약 500)와 업로드 멱등성.
 
 ## 1. 비전과 본질
 
@@ -163,7 +167,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 
 | 작업 | 근거 / 의존성 |
 |---|---|
-| 고아 temp 파일 정리 | `POST /file`이 끝내 호출되지 않으면 `temp_` 파일이 영구 누적된다 — 현재 유일한 무관리 리소스 누수. |
+| ~~고아 temp 파일 정리~~ — ✅ 2026-07-26 반영 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)) | `POST /file`이 끝내 호출되지 않으면 `temp_` 파일이 영구 누적됐다 — 유일한 무관리 리소스 누수. 스케줄 `@nestjs/schedule` 스윕(신규 `TempCleanupModule`)이 TTL(기본 24시간, 매시간)을 넘은 `file/temp`의 `temp_` 파일을 삭제한다. |
 | 삭제 정책 설계 (soft delete + FK) | soft delete 채택 여부와 `DELETE /user/:id`의 FK 제약 500(`FileEntity.creator`가 `nullable: false`)을 하나의 설계 작업으로 통합. |
 | 업로드 멱등성/중복 정책 명문화 | CLAUDE.md 규약상 새 쓰기 엔드포인트는 중복 제출 동작을 명시해야 한다 — 게시판 확장으로 쓰기 엔드포인트가 늘기 전에 틀을 확정. |
 
@@ -225,6 +229,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 (README/엔드포인트 일치의 자동 검증 — CI 작업 아래의 후보).
 
 ## 9. 완료
+
+### 2026-07-26
+
+| 항목 | 비고 |
+|---|---|
+| 고아 temp 파일 정리 | 신규 운영 모듈 `TempCleanupModule`의 스케줄 `@nestjs/schedule` 스윕이 TTL(`TEMP_SWEEP_TTL_HOURS`, 기본 24시간; 매시간 cron)을 넘어 `file/temp`에 남은 `temp_` 파일을 삭제한다. `granted_`/`file/upload`는 건드리지 않으며, dry-run·활성 토글 제공, `cron`은 direct 의존성으로 승격 — **Stage 2 첫 작업** ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)) |
 
 ### 2026-07-25
 
