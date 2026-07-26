@@ -20,6 +20,7 @@ Before making any change:
    - Auth flow change      → read `backend/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `backend/auth/strategy/`; grep `JwtAuthGuard`, `LocalAuthGuard`
    - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract)
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer diskStorage, `temp_{uuid}_{timestamp}` naming) and `upload.controller.ts` (100MB size limit)
+   - Orphan temp cleanup   → read `backend/temp-cleanup/temp-cleanup.service.ts` (`@nestjs/schedule` `SchedulerRegistry` cron, `temp_`-prefix + TTL sweep of `file/temp`, ADR 0018) and its `selectExpiredTempFiles` pure core
    - Env var change        → read the Joi schema in `backend/app.module.ts` AND `.env.example` — both must stay in sync
    - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides
    - Static file serving   → read the `ServeStaticModule` block in `app.module.ts` (`rootPath: file/`, `serveRoot: 'file'`)
@@ -181,10 +182,33 @@ import ...
 ```
 
 Keep it to three lines, one per field — no exceptions for "obvious" files. This is the
-one place a header comment is required regardless of how self-explanatory the file
+one place a file header comment is required regardless of how self-explanatory the file
 seems, because "obvious now" decays: the header preserves *why the file was created* —
 and why an existing file could not absorb it — for a later reader who no longer has that
-context. Do not retroactively add this header to existing files being edited.
+context. Do not retroactively add this file header to existing files being edited.
+
+### Function Comments — mandatory 목적/이유/방법 (Purpose / Reason / Method)
+
+Every function or method you **newly implement or modify** (a change to its body or
+behavior — not a rename, move, or reformat) carries a comment block directly above its
+signature, one line per field:
+- **목적 (Purpose)**: the job it does for its caller — the goal, not the mechanics
+- **이유 (Reason)**: why it exists, or why this change was needed — the need behind it
+- **방법 (Method)**: how it reaches the goal — the approach, key steps, or ordering that matter
+
+```typescript
+// 목적: promote a temp upload to an owned file together with its DB row.
+// 이유: a bare save + rename can leave a DB row pointing at a file that never moved.
+// 방법: one QueryRunner tx — insert FileEntity, rename temp_→granted_, commit; rollback + release() in finally.
+async uploadFile(dto: UploadFileDto, userId: number) { ... }
+```
+
+Unlike the file header above, this **applies to modified functions too**, not only new
+ones: changing a function's behavior means re-checking that its block still describes what
+it now does, and updating it in the same change. The block is mandatory even when the
+function looks self-evident — the same "obvious now decays" reason as the file header.
+This mandate governs the function-level block specifically; it overrides the general
+"WHY-only" comment stance for that block (Engineering Principles > Maintainability).
 
 ## Documentation Convention (.ko.md 문서 규약)
 
@@ -424,13 +448,16 @@ Principle Conflict Protocol.
   and Never Do Groups 1–3
 - Idempotence — `register` guards against duplicate email; new write endpoints must
   state their duplicate-submission behavior rather than assuming idempotency
-- Comments — WHY only; never restate what the code already says
+- Comments — every new or modified function carries the mandatory 목적/이유/방법 block
+  (File Creation Convention > Function Comments). *Beyond* that block, comments stay
+  WHY-only and never restate what the code already says
 - Dead code — unused relations, decorators, and imports are removed immediately
   (within the files already being touched — repo-wide sweeps need explicit request)
 - Unreachable guards — do not add condition checks that can never fire
   (e.g. `if (!result)` after an `insert().execute()` that throws on failure)
 - Self-Documenting Code, Readability over Cleverness, Keep Functions Small,
-  Minimize Cognitive Load — judgment calls
+  Minimize Cognitive Load — judgment calls; they shape the code but do not waive the
+  mandatory per-function 목적/이유/방법 block (File Creation Convention > Function Comments)
 
 ### Reliability
 - Input Validation, Fail Securely — covered by Never Do Group 3; validation happens
@@ -525,6 +552,14 @@ one of these is violated, follow Principle Conflict Protocol.
   and the transaction that promotes a temp file.
 - **UploadModule** owns the *physical* file only: Multer disk storage into `file/temp`,
   size limit, temp naming. It has no service and no DB access — keep it that way.
+- **TempCleanupModule** (ADR 0018) is an *operational* module, not a domain one: it hosts
+  the scheduled sweep that deletes orphaned `temp_` files from `file/temp` past a TTL
+  (`@nestjs/schedule`, imperative `SchedulerRegistry` registration; no DB). It is the
+  **sanctioned exception** to "the module set maps to the four domain concerns" —
+  operational / cross-cutting maintenance gets its own module rather than being bolted
+  onto a domain module. It deliberately does **not** live in UploadModule: keeping
+  UploadModule controller-only (above) was chosen over co-locating the sweep with the
+  `file/temp` writer (Principle Conflict Protocol resolution, ADR 0018).
 - Goal: a change request that spans "physical file" and "file metadata" is two modules'
   work by design; do not merge the concerns into one service for convenience.
 
@@ -543,6 +578,12 @@ one of these is violated, follow Principle Conflict Protocol.
 - Goal: any new code that touches `filePath` preserves the prefix state machine end to
   end. Never construct a `filePath` from client-supplied path segments — the server
   generates names (uuid + timestamp); the client only echoes them back.
+- Orphan cleanup (ADR 0018): a `temp_` file that is never claimed (`POST /file` never
+  called) is deleted by the scheduled sweep in `TempCleanupModule` once it exceeds
+  `TEMP_SWEEP_TTL_HOURS` (default 24h, hourly cron). The sweep only ever deletes
+  `temp_`-prefixed files in `file/temp`; `granted_` / `file/upload` are never candidates
+  — the prefix state machine above is exactly what makes "still in `file/temp` with a
+  `temp_` prefix ⇒ unclaimed orphan" a safe, DB-free identification.
 
 ### Transaction Boundary per Multi-Write (트랜잭션 패턴 선택 기준)
 
