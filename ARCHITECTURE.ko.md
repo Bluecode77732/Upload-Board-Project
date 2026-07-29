@@ -87,7 +87,7 @@ AppModule
 |---|---|
 | `GET /file` | 페이지네이션 목록 — `GetFilesDto`: `take` 1–100(기본 20), `skip` ≥ 0(기본 0) |
 | `GET /file/:id` | 메타데이터 + creator 조인, 없으면 404 |
-| `POST /file` | temp 파일 승격: DB insert + 물리 rename을 한 트랜잭션에서 수행 |
+| `POST /file` | temp 파일 승격: DB insert + 물리 rename을 한 트랜잭션에서 수행. 파일명은 1회용 청구 토큰이라, 재제출 시 청구자 본인에게는 replay(200), 타인에게는 409 `FILE_ALREADY_CLAIMED` (ADR 0019) |
 | `PATCH /file/:id` | **작성자만** — 제목(중복 검사), `granted_` filePath, 소유권 재할당 |
 | `DELETE /file/:id` | **작성자만** — 메타데이터 행 하드 삭제 |
 
@@ -154,10 +154,16 @@ enableImplicitConversion`을 실행합니다 — DTO에 선언되지 않은 요�
       └─ Multer가 file/temp/temp_{uuid}_{ts}.{ext} 기록  → { filename } 반환
 
 2. POST /file  { title, filePath: <그 파일명> }
-      └─ FileService.uploadFile, 하나의 QueryRunner 트랜잭션 안에서:
+      └─ FileService.uploadFile, 트랜잭션을 열기 전에 (ADR 0019):
+           0a. 이 사용자가 이미 청구  → 기존 행을 200으로 replay
+               다른 사용자가 청구     → 409 FILE_ALREADY_CLAIMED
+           0b. 뒤를 받쳐 줄 temp 없음 → 400 FILE_INVALID_PATH
+         미청구 파일명일 때만, 하나의 QueryRunner 트랜잭션 안에서:
            a. FileEntity INSERT (filePath를 file/upload/granted_... 로 재작성)
            b. file/temp/temp_...  →  file/upload/granted_...  물리 rename
            c. commit  (실패 시 rollback; release()는 finally)
+              23505 경합 시: 승자가 같은 파일명을 가져갔으면 replay,
+              아니면 400 FILE_TITLE_TAKEN
 
 3. 파일은 {BASE_URL}/file/upload/granted_... 로 공개 서빙 (ServeStaticModule)
    API 응답에서는 FileResponseDto의 fileUrl로 노출.
@@ -168,7 +174,11 @@ enableImplicitConversion`을 실행합니다 — DTO에 선언되지 않은 요�
 `UpdateFileDto.filePath`는 `temp_` 값을 거부하고 `granted_` 값만 허용합니다. 파일명은
 서버가 생성(uuid + timestamp)하며 클라이언트는 그것을 되돌려줄 뿐이므로, 클라이언트가
 선택한 경로 조각이 파일시스템에 닿는 일이 없습니다
-([ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)).
+([ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)). 이 "되돌려주기"는
+`UploadFileDto.filePath`의 `@Matches(TEMP_FILENAME_PATTERN)`으로 강제되어, 형식이 어긋난
+값은 경계에서 `VALIDATION_FAILED`로 거절됩니다
+([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)). 끝내 청구되지 않은 `temp_` 파일은
+스케줄 스윕이 회수합니다([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)).
 
 ## 엔티티 (TypeORM)
 

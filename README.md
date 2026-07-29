@@ -131,7 +131,10 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.m
 - `POST /upload/attach` — upload a video to temp storage (multipart field `video`, 100 MB limit)
 - `GET /file` — list files (paginated: `take` 1–100, default 20 / `skip` default 0)
 - `GET /file/:id` — get file metadata
-- `POST /file` — promote a temp file to permanent storage (transactional)
+- `POST /file` — promote a temp file to permanent storage (transactional). The attached
+  filename is a one-shot claim token: resubmitting it returns the existing file with 200
+  (idempotent retry) for the user who claimed it, and 409 `FILE_ALREADY_CLAIMED` for
+  anyone else ([ADR 0019](ADR/0019-upload-claim-idempotency.md))
 - `PATCH /file/:id` — update file metadata (creator or admin)
 - `DELETE /file/:id` — delete file metadata (creator or admin)
 

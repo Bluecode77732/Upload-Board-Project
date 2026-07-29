@@ -131,7 +131,10 @@ docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 �
 - `POST /upload/attach` — 동영상을 임시 저장소로 업로드 (multipart 필드 `video`, 100 MB 제한)
 - `GET /file` — 파일 목록 (페이지네이션: `take` 1–100, 기본 20 / `skip` 기본 0)
 - `GET /file/:id` — 파일 메타데이터 조회
-- `POST /file` — 임시 파일을 영구 저장소로 승격 (트랜잭션)
+- `POST /file` — 임시 파일을 영구 저장소로 승격 (트랜잭션). attach로 받은 파일명은 1회용 청구
+  토큰이라, 다시 제출하면 청구한 본인에게는 기존 파일을 200으로 돌려주고(멱등 재시도), 다른
+  사용자에게는 409 `FILE_ALREADY_CLAIMED`를 반환합니다
+  ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md))
 - `PATCH /file/:id` — 파일 메타데이터 수정 (작성자 또는 admin)
 - `DELETE /file/:id` — 파일 메타데이터 삭제 (작성자 또는 admin)
 

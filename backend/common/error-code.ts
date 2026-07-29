@@ -31,6 +31,11 @@ export enum ErrorCode {
   FILE_NOT_FOUND = 'FILE_NOT_FOUND',
   NOT_FOUND = 'NOT_FOUND',
 
+  // 409
+  // The referenced temp upload was already promoted by a different user — the
+  // one-shot claim token is spent (ADR 0019).
+  FILE_ALREADY_CLAIMED = 'FILE_ALREADY_CLAIMED',
+
   // 413
   PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',
 

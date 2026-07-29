@@ -5,6 +5,7 @@ import {
   DataSource,
   Repository,
   QueryRunner,
+  QueryFailedError,
   SelectQueryBuilder,
 } from 'typeorm';
 import { FileEntity } from './entity/file.entity';
@@ -12,6 +13,7 @@ import { UserEntity } from 'backend/user/entity/user.entity';
 import {
   NotFoundException,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   InternalServerErrorException,
 } from '@nestjs/common';
@@ -128,30 +130,58 @@ describe('FileService', () => {
   describe('uploadFile', () => {
     const uploadFileDto = {
       title: 'New Video',
-      filePath: 'temp_video.mp4',
+      filePath: 'temp_67ff0c79-a1f0-4d4f-865c-681af920378d_1764581241716.mp4',
+    };
+    // The row a first, successful claim of that filename leaves behind.
+    const claimedFile: FileEntity = {
+      ...mockFileEntity,
+      filePath:
+        'file/upload/granted_67ff0c79-a1f0-4d4f-865c-681af920378d_1764581241716.mp4',
     };
 
-    it('should successfully upload a file', async () => {
-      const mockInsertQueryBuilder = {
-        insert: jest.fn().mockReturnThis(),
-        into: jest.fn().mockReturnThis(),
-        values: jest.fn().mockReturnThis(),
-        execute: jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
-      };
+    const insertQueryBuilder = (
+      execute: jest.Mock,
+    ): Record<string, jest.Mock> => ({
+      insert: jest.fn().mockReturnThis(),
+      into: jest.fn().mockReturnThis(),
+      values: jest.fn().mockReturnThis(),
+      execute,
+    });
 
+    // Postgres unique_violation as TypeORM surfaces it (driverError.code).
+    const uniqueViolation = () =>
+      new QueryFailedError(
+        'INSERT',
+        [],
+        Object.assign(new Error('duplicate key'), { code: '23505' }),
+      );
+
+    beforeEach(() => {
+      // fs/promises is automocked; make the temp-file existence check pass by default
+      // (mock implementations survive clearAllMocks, so it is set per test run).
+      (fs.access as jest.Mock).mockResolvedValue(undefined);
+      (fs.rename as jest.Mock).mockResolvedValue(undefined);
+    });
+
+    it('should successfully upload a file', async () => {
       queryRunner.manager.createQueryBuilder = jest
         .fn()
-        .mockReturnValue(mockInsertQueryBuilder);
-      (fs.rename as jest.Mock).mockResolvedValue(undefined);
-      // First findOne is the duplicate-title pre-check (no match); second is the post-commit re-read.
+        .mockReturnValue(
+          insertQueryBuilder(
+            jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
+          ),
+        );
+      // findOne order: claim pre-check (unclaimed), duplicate-title pre-check, post-commit re-read.
       jest
         .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(mockFileEntity);
 
       const result = await fileService.uploadFile(uploadFileDto, 1);
 
-      expect(result).toMatchObject({
+      expect(result.replayed).toBe(false);
+      expect(result.file).toMatchObject({
         id: 1,
         title: 'Test File',
         fileUrl: 'http://localhost:3000/file/upload/granted_test.mp4',
@@ -163,18 +193,49 @@ describe('FileService', () => {
       expect(fs.rename).toHaveBeenCalled();
     });
 
-    it('should throw NotFoundException without rollback when the post-commit re-read finds nothing', async () => {
-      const mockInsertQueryBuilder = {
-        insert: jest.fn().mockReturnThis(),
-        into: jest.fn().mockReturnThis(),
-        values: jest.fn().mockReturnThis(),
-        execute: jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
-      };
+    it('should replay the existing file when the same user resubmits a claimed filename', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValueOnce(claimedFile);
 
+      const result = await fileService.uploadFile(uploadFileDto, 1);
+
+      expect(result.replayed).toBe(true);
+      expect(result.file).toMatchObject({ id: 1, title: 'Test File' });
+      // A retry of an already-succeeded request opens no transaction and moves no file.
+      expect(queryRunner.connect).not.toHaveBeenCalled();
+      expect(queryRunner.startTransaction).not.toHaveBeenCalled();
+      expect(fs.rename).not.toHaveBeenCalled();
+    });
+
+    it('should throw ConflictException (FILE_ALREADY_CLAIMED) when another user claimed the filename', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValueOnce(claimedFile);
+
+      await expect(fileService.uploadFile(uploadFileDto, 2)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(queryRunner.startTransaction).not.toHaveBeenCalled();
+      expect(fs.rename).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException (FILE_INVALID_PATH) when the temp file no longer exists', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValueOnce(null);
+      (fs.access as jest.Mock).mockRejectedValue(new Error('ENOENT'));
+
+      await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(
+        BadRequestException,
+      );
+      // Nothing was written: the precondition fails before the transaction opens.
+      expect(queryRunner.startTransaction).not.toHaveBeenCalled();
+      expect(fs.rename).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException without rollback when the post-commit re-read finds nothing', async () => {
       queryRunner.manager.createQueryBuilder = jest
         .fn()
-        .mockReturnValue(mockInsertQueryBuilder);
-      (fs.rename as jest.Mock).mockResolvedValue(undefined);
+        .mockReturnValue(
+          insertQueryBuilder(
+            jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
+          ),
+        );
       jest.spyOn(fileRepository, 'findOne').mockResolvedValue(null);
 
       await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(
@@ -186,16 +247,14 @@ describe('FileService', () => {
     });
 
     it('should rollback transaction on error', async () => {
-      const mockInsertQueryBuilder = {
-        insert: jest.fn().mockReturnThis(),
-        into: jest.fn().mockReturnThis(),
-        values: jest.fn().mockReturnThis(),
-        execute: jest.fn().mockRejectedValue(new Error('DB Error')),
-      };
-
       queryRunner.manager.createQueryBuilder = jest
         .fn()
-        .mockReturnValue(mockInsertQueryBuilder);
+        .mockReturnValue(
+          insertQueryBuilder(
+            jest.fn().mockRejectedValue(new Error('DB Error')),
+          ),
+        );
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(null);
 
       await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(
         InternalServerErrorException,
@@ -205,8 +264,11 @@ describe('FileService', () => {
     });
 
     it('should throw BadRequestException (FILE_TITLE_TAKEN) when the title already exists', async () => {
-      // Duplicate-title pre-check finds an existing row.
-      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
+      // Unclaimed filename, but the duplicate-title pre-check finds an existing row.
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(mockFileEntity);
 
       await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(
         BadRequestException,
@@ -216,6 +278,43 @@ describe('FileService', () => {
       expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
       expect(queryRunner.release).toHaveBeenCalled();
       expect(fs.rename).not.toHaveBeenCalled();
+    });
+
+    it('should replay instead of failing when a concurrent submit wins the unique constraint', async () => {
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(
+          insertQueryBuilder(jest.fn().mockRejectedValue(uniqueViolation())),
+        );
+      // Claim pre-check and title pre-check both pass (the race is still open), then the
+      // post-rollback lookup finds the row the winning submit committed.
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(claimedFile);
+
+      const result = await fileService.uploadFile(uploadFileDto, 1);
+
+      expect(result.replayed).toBe(true);
+      expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+      expect(queryRunner.release).toHaveBeenCalled();
+    });
+
+    it('should map a unique violation to FILE_TITLE_TAKEN when the collision is another file', async () => {
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(
+          insertQueryBuilder(jest.fn().mockRejectedValue(uniqueViolation())),
+        );
+      // No row claims this filename afterwards, so the collision was on the title alone.
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(null);
+
+      await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+      expect(queryRunner.release).toHaveBeenCalled();
     });
   });
 

@@ -13,6 +13,20 @@
 ## [Unreleased]
 
 ### 추가
+- 업로드 중복 제출 정책 (Stage 2 — 메커니즘 강화;
+  [ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)): `POST /upload/attach`가 발급하는
+  파일명을 **1회용 청구 토큰**으로 삼아, 새 저장소도 스키마 변경도 없이 `POST /file`의
+  재시도 계약을 확정했다. 이미 청구된 파일명을 다시 제출하면, 그 청구자 본인에게는 기존
+  파일을 **replay**한다 — 두 번째 201이 아니라 HTTP **200**으로 원래 리소스를 돌려준다 —
+  그 외 사용자에게는 신규 **409 `FILE_ALREADY_CLAIMED`**를 낸다(역할이 아니라 신원만 본다:
+  관리자가 타인의 파일명을 다시 제출하는 것은 재시도가 아니라 충돌이다). 형식은 맞지만 뒤를
+  받쳐 줄 temp 파일이 없으면(발급된 적 없거나 [ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)
+  스윕이 TTL 초과로 회수) 어떤 쓰기보다 먼저 400 `FILE_INVALID_PATH`로 실패한다.
+  `POST /upload/attach`는 의도적으로 비멱등을 유지한다 — 호출마다 새 토큰을 발급하고, 청구되지
+  않은 토큰은 스윕이 회수한다. `FileService.uploadFile`의 반환 타입은 `{ replayed, file }`로
+  바뀌었고, `FileController`가 `@Res({ passthrough: true })`(기존 `AuthController` 패턴)로
+  `replayed`를 상태 코드에 반영한다. E2E는 2회 제출, 타 사용자 충돌, 거절되는 두 경로를
+  모두 커버한다.
 - 미청구 temp 파일 정리 (Stage 2 — 메커니즘 강화;
   [ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)): 새 운영 모듈 `TempCleanupModule`
   (`backend/temp-cleanup/`)이 스케줄 스윕을 돌려, `POST /file`이 끝내 호출되지 않아
@@ -149,6 +163,13 @@
   `CLAUDE.md`, `README.md`.
 
 ### 수정
+- `POST /file`이 예측 가능한 클라이언트 시퀀스에 500을 내지 않는다
+  ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)): 이미 청구된 파일명을 다른 title로
+  다시 제출하면 행을 insert한 뒤 `rename`이 `ENOENT`로 실패해 `INTERNAL_ERROR`로 무너졌고,
+  동시 제출 2건은 락 없는 title 사전검사를 둘 다 통과해 패자의 `QueryFailedError`(
+  `HttpException`이 아님)도 500이 됐다. 이제 unique 위반(`23505`)을 다시 해석한다 — 승자가
+  같은 파일명을 청구했다면 패자는 같은 요청의 두 번째 사본이므로 replay하고, 아니면 진짜 title
+  충돌이므로 400 `FILE_TITLE_TAKEN`을 낸다.
 - Auth 응답 직렬화: `AuthController`에 `ClassSerializerInterceptor`가 없어
   `POST /auth/register`가 bcrypt `password` 해시(기존 결함)와 신규
   `refreshTokenHash`를 노출했다 — 인터셉터 없이는 `@Exclude`가 동작하지
@@ -158,6 +179,13 @@
   재사용 감지가 무력화되던 문제.
 
 ### 보안
+- `UploadFileDto.filePath`를 attach 발급 형식으로 고정
+  (`^temp_{uuid}_{ms}\.(mp4|mov|webm)$`, [ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)).
+  이전에는 형식 검증 없이 `join(cwd, 'file/temp', filePath)`의 `rename` 소스로 들어가서,
+  클라이언트가 `../` 세그먼트를 넣으면 타인의 `granted_` 파일을 가리키는 `FileEntity` 행을
+  만들 수 있었다. "filePath는 서버가 생성한다"는 전제(Never Do Group 3)를 이제 DTO 경계에서
+  강제한다. `UpdateFileDto`는 이 필드를 omit 후 재선언한다 — PATCH는 반대편 생명주기 상태인
+  `granted_` 이름을 받기 때문이다.
 - `pnpm audit --prod` 클린(2026-07-24): `multer`를 직접 의존성으로
   승격(`upload.module.ts`가 직접 import하는데 팬텀 전이 의존성이라 pnpm 엄격
   레이아웃에서 `node dist/main`이 크래시) 후 `^2.2.0` 핀; 런타임 도달

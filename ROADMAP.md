@@ -49,10 +49,13 @@ lands as its own dedicated, designed change
   append-only audit trail. The role system backs the frontend `/admin` section.
 - **Stage 1 Foundation is complete** (2026-07-25): Node/pnpm pinning, Docker/compose,
   CI, logging conventions, and the E2E rewrite all landed (ADR 0014–0017).
-- **Stage 2 has started**: orphan temp-file cleanup landed 2026-07-26
+- **Stage 2 is under way**: orphan temp-file cleanup landed 2026-07-26
   ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)) — a scheduled `@nestjs/schedule`
-  sweep in a new operational `TempCleanupModule`. **Next Stage 2 tasks**: deletion policy
-  design (soft delete + the `DELETE /user/:id` FK-constraint 500) and upload idempotency.
+  sweep in a new operational `TempCleanupModule` — and the upload duplicate-submission
+  policy landed 2026-07-27 ([ADR 0019](ADR/0019-upload-claim-idempotency.md)): the
+  attach-issued filename is a one-shot claim token, so a retry replays (200) instead of
+  erroring. **Next Stage 2 task**: deletion policy design (soft delete + the
+  `DELETE /user/:id` FK-constraint 500).
 
 ## 1. Vision & essence
 
@@ -182,7 +185,7 @@ settled while zero consumers exist.
 |---|---|
 | ~~Orphan temp-file cleanup~~ — ✅ landed 2026-07-26 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)) | `temp_` files accumulated forever when `POST /file` was never called — the only unmanaged resource leak. A scheduled `@nestjs/schedule` sweep (new `TempCleanupModule`) deletes `temp_` files in `file/temp` past a TTL (default 24h, hourly). |
 | Deletion policy design (soft delete + FK) | One design task uniting the soft-delete question with the `DELETE /user/:id` FK-constraint 500 (`FileEntity.creator` is `nullable: false`). |
-| Upload idempotency / duplicate policy | CLAUDE.md requires new write endpoints to state their duplicate-submission behavior — settle the frame before board expansion multiplies write endpoints. |
+| ~~Upload idempotency / duplicate policy~~ — ✅ landed 2026-07-27 ([ADR 0019](ADR/0019-upload-claim-idempotency.md)) | The attach-issued `temp_{uuid}_{ts}` filename is a one-shot claim token: resubmitting it replays the existing file (200) for its claimant, conflicts (409 `FILE_ALREADY_CLAIMED`) for anyone else, and a concurrent double-submit resolves through the unique constraint instead of a 500. `filePath` is pinned to the issued shape at the DTO boundary, which also closes a path-traversal gap. No schema change. |
 
 ### Stage 3 — Domain expansion
 
@@ -244,6 +247,12 @@ ordering), docs-as-code enforcement (automated README/endpoint consistency — a
 candidate under the CI task).
 
 ## 9. Completed
+
+### 2026-07-27
+
+| Item | Notes |
+|---|---|
+| Upload duplicate-submission policy | The attach-issued filename is a one-shot claim token: a resubmit replays the existing file (200) for its claimant, 409 `FILE_ALREADY_CLAIMED` for anyone else, 400 `FILE_INVALID_PATH` when no temp file backs it, and a concurrent double-submit is resolved by the unique constraint instead of a 500. `filePath` pinned to the issued shape on `UploadFileDto` (closes a path-traversal gap); no schema change — **second Stage 2 task** ([ADR 0019](ADR/0019-upload-claim-idempotency.md)) |
 
 ### 2026-07-26
 

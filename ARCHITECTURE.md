@@ -87,7 +87,7 @@ All routes behind `JwtAuthGuard`.
 |---|---|
 | `GET /file` | Paginated list — `GetFilesDto`: `take` 1–100 (default 20), `skip` ≥ 0 (default 0) |
 | `GET /file/:id` | Metadata + creator join, or 404 |
-| `POST /file` | Promotes a temp file: DB insert + physical rename in one transaction |
+| `POST /file` | Promotes a temp file: DB insert + physical rename in one transaction. The filename is a one-shot claim token — a resubmit replays (200) for its claimant, 409 `FILE_ALREADY_CLAIMED` for others (ADR 0019) |
 | `PATCH /file/:id` | **Creator only** — title (duplicate-checked), `granted_` filePath, ownership reassignment |
 | `DELETE /file/:id` | **Creator only** — hard delete of the metadata row |
 
@@ -154,10 +154,16 @@ is free to change.
       └─ Multer writes  file/temp/temp_{uuid}_{ts}.{ext}   → returns { filename }
 
 2. POST /file  { title, filePath: <that filename> }
-      └─ FileService.uploadFile, inside one QueryRunner transaction:
+      └─ FileService.uploadFile, before any transaction (ADR 0019):
+           0a. already claimed by this user → 200 replay of the existing row
+               claimed by someone else     → 409 FILE_ALREADY_CLAIMED
+           0b. no temp file behind it      → 400 FILE_INVALID_PATH
+         then, for an unclaimed filename, inside one QueryRunner transaction:
            a. INSERT FileEntity  (filePath rewritten to file/upload/granted_...)
            b. rename file/temp/temp_...  →  file/upload/granted_...
            c. commit   (rollback on failure; release() in finally)
+              on a 23505 race: replay if the winner took the same filename,
+              else 400 FILE_TITLE_TAKEN
 
 3. File served publicly at {BASE_URL}/file/upload/granted_...  (ServeStaticModule)
    API responses expose it as fileUrl in FileResponseDto.
@@ -168,7 +174,11 @@ a DB row". Static serving exposes both folders, so the prefix is the only marker
 file's lifecycle state. `UpdateFileDto.filePath` rejects `temp_` values and accepts only
 `granted_` ones. Filenames are server-generated (uuid + timestamp) — the client only
 echoes them back, so no client-chosen path segment ever reaches the filesystem
-([ADR 0003](ADR/0003-two-phase-upload-contract.md)).
+([ADR 0003](ADR/0003-two-phase-upload-contract.md)); that echo is enforced by
+`@Matches(TEMP_FILENAME_PATTERN)` on `UploadFileDto.filePath`, so a malformed value is
+rejected as `VALIDATION_FAILED` at the boundary ([ADR 0019](ADR/0019-upload-claim-idempotency.md)).
+An unclaimed `temp_` file is reclaimed by the scheduled sweep
+([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)).
 
 ## Entities (TypeORM)
 

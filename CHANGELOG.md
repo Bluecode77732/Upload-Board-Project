@@ -13,6 +13,21 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- Upload duplicate-submission policy (Stage 2 — mechanism hardening;
+  [ADR 0019](ADR/0019-upload-claim-idempotency.md)): the filename `POST /upload/attach`
+  issues is now a **one-shot claim token**, so `POST /file` has a defined retry contract
+  with no new storage and no schema change. Resubmitting a claimed filename **replays**
+  the existing file — HTTP **200** (not a second 201) with the original resource — for the
+  user who claimed it, and returns the new **409 `FILE_ALREADY_CLAIMED`** for anyone else
+  (identity-only: an admin re-posting someone else's filename is a conflict, not a retry).
+  A well-formed filename with no temp file behind it (never issued, or swept past its TTL
+  under [ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)) fails as 400 `FILE_INVALID_PATH`
+  before any write. `POST /upload/attach` stays deliberately non-idempotent — each call
+  issues a new token and the unclaimed one is reclaimed by the sweep.
+  `FileService.uploadFile` now returns `{ replayed, file }`; `FileController` maps
+  `replayed` to the status via `@Res({ passthrough: true })` (the existing
+  `AuthController` pattern). E2E covers submit-twice, the cross-user conflict, and both
+  rejected-path cases.
 - Orphan temp-file cleanup (Stage 2 — mechanism hardening;
   [ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)): a new operational `TempCleanupModule`
   (`backend/temp-cleanup/`) runs a scheduled sweep that deletes unclaimed `temp_` files left
@@ -156,6 +171,14 @@ development line (package.json version).
   Related docs synced: `CLAUDE.md`, `README.md`.
 
 ### Fixed
+- `POST /file` no longer answers 500 on foreseeable client sequences
+  ([ADR 0019](ADR/0019-upload-claim-idempotency.md)): resubmitting a claimed filename with
+  a different title used to insert the row, fail the `rename` with `ENOENT` and collapse to
+  `INTERNAL_ERROR`, and two simultaneous submits both passed the unlocked title pre-check
+  so the loser's `QueryFailedError` (not an `HttpException`) also became a 500. The unique
+  violation (`23505`) is now inspected: if the winner claimed the same filename the loser
+  is the same request twice and is replayed, otherwise it is a genuine 400
+  `FILE_TITLE_TAKEN`.
 - Auth responses are now serialized: `AuthController` lacked
   `ClassSerializerInterceptor`, so `POST /auth/register` leaked the bcrypt
   `password` hash (pre-existing) and the new `refreshTokenHash` — `@Exclude`
@@ -166,6 +189,14 @@ development line (package.json version).
   signature), which blinded rotation reuse detection.
 
 ### Security
+- `UploadFileDto.filePath` is pinned to the attach-issued shape
+  (`^temp_{uuid}_{ms}\.(mp4|mov|webm)$`, [ADR 0019](ADR/0019-upload-claim-idempotency.md)).
+  It previously had no format validation while flowing into
+  `join(cwd, 'file/temp', filePath)` as a `rename` source, so a client-supplied `../`
+  segment could register a `FileEntity` row pointing at another user's `granted_` file.
+  The "filePath values are server-constructed" premise (Never Do Group 3) is now enforced
+  at the DTO boundary. `UpdateFileDto` omits and redeclares the field — PATCH takes
+  `granted_` names, the opposite lifecycle state.
 - `pnpm audit --prod` is clean (2026-07-24): `multer` promoted to a direct
   dependency (it is imported directly by `upload.module.ts` but was only a
   phantom transitive dep — crashed `node dist/main` under pnpm's strict

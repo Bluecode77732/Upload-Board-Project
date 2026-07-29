@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   HttpException,
   Injectable,
@@ -7,11 +8,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UploadFileDto } from './dto/create-uploadFile.dto';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { UserEntity } from 'backend/user/entity/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FileEntity } from './entity/file.entity';
-import { rename } from 'fs/promises';
+import { access, rename } from 'fs/promises';
 import path, { join } from 'path';
 import { UpdateFileDto } from './dto/update-uploadFile.dto';
 import { FileResponseDto } from './dto/file-response.dto';
@@ -25,6 +26,17 @@ interface Requester {
   id: number;
   role: UserRole;
 }
+
+// Outcome of a claim attempt: `replayed` marks a retry that found its own earlier
+// success, so the controller can answer 200 instead of a second 201 (ADR 0019).
+export interface FileClaimResult {
+  replayed: boolean;
+  file: FileResponseDto;
+}
+
+// Postgres unique_violation. A concurrent double-submit loses this race by design;
+// it is a client-side duplicate, not a server fault, so it must not surface as 500.
+const UNIQUE_VIOLATION = '23505';
 
 @Injectable()
 export class FileService {
@@ -99,19 +111,94 @@ export class FileService {
     return this.toResponse(file);
   }
 
+  // 목적: attach가 발급한 temp 파일명을 승격 후 저장 경로(file/upload/granted_...)로 변환한다.
+  // 이유: 청구 여부 판정과 실제 insert가 서로 다른 경로 문자열을 쓰면 재시도 판정이 어긋난다.
+  // 방법: temp_ → granted_ 치환 후 upload 폴더에 결합하고, DB 저장 형식대로 구분자를 '/'로 통일한다.
+  private toStoredPath(tempFilename: string): string {
+    return path
+      .normalize(join('file', 'upload', tempFilename))
+      .replace('temp_', 'granted_')
+      .replace(/\\/g, '/');
+  }
+
+  // 목적: 해당 저장 경로를 이미 점유한 FileEntity 행을 찾는다.
+  // 이유: 서버 발급 파일명은 1회용 청구 토큰이므로, 그 행의 존재 자체가 "이미 청구됨"의 증거다.
+  // 방법: filePath 정확 일치로 조회하되 creator를 함께 로드해 재제출자 본인 여부를 판정할 수 있게 한다.
+  private findClaim(storedPath: string): Promise<FileEntity | null> {
+    return this.fileRepository.findOne({
+      where: { filePath: storedPath },
+      relations: ['creator'],
+    });
+  }
+
+  // 목적: 이미 청구된 업로드의 재제출을 멱등 replay 또는 409로 판정한다.
+  // 이유: 네트워크 재시도는 최초 성공과 같은 결과를 받아야 하고, 타인의 청구는 가로챌 수 없어야 한다.
+  // 방법: 행의 creator와 요청자 id를 비교 — 일치하면 기존 리소스를 replayed로 반환, 아니면 FILE_ALREADY_CLAIMED.
+  private resolveClaim(claim: FileEntity, userId: number): FileClaimResult {
+    // Deliberately identity-only: replay belongs to the original submitter, so an
+    // admin re-posting someone else's filename is a conflict, not a retry.
+    if (claim.creator.id !== userId) {
+      throw new ConflictException({
+        code: ErrorCode.FILE_ALREADY_CLAIMED,
+        message: 'This upload was already claimed.',
+      });
+    }
+
+    return { replayed: true, file: this.toResponse(claim) };
+  }
+
+  // 목적: 잡힌 에러가 Postgres unique 위반인지 판별한다.
+  // 이유: 동시 제출 경합으로 인한 제약 위반은 클라이언트 중복이지 서버 결함이 아니므로 500과 분리해야 한다.
+  // 방법: QueryFailedError로 좁힌 뒤 driverError.code를 캐스팅 없이 in 연산자로 확인해 '23505'와 비교한다.
+  private isUniqueViolation(error: unknown): boolean {
+    if (!(error instanceof QueryFailedError)) return false;
+
+    const driverError: unknown = error.driverError;
+    return (
+      typeof driverError === 'object' &&
+      driverError !== null &&
+      'code' in driverError &&
+      driverError.code === UNIQUE_VIOLATION
+    );
+  }
+
+  // 목적: temp 업로드를 소유 파일로 승격하고, 같은 요청의 재제출을 멱등하게 처리한다.
+  // 이유: DB 저장과 물리 rename이 따로 실패하면 행이 없는 파일을 가리키고, 재시도는 모호한 400이나 500을 받는다.
+  // 방법: 서버 발급 파일명을 1회용 청구 토큰으로 삼아 선청구 여부를 먼저 판정(replay/409)하고, 미청구일 때만
+  //       QueryRunner 트랜잭션 하나로 insert → rename → commit; 실패 시 rollback, release()는 finally.
   async uploadFile(
     uploadFileDto: UploadFileDto,
     userId: number,
-  ): Promise<FileResponseDto> {
+  ): Promise<FileClaimResult> {
+    const temporaryFolder = join('file', 'temp');
+    const uploadFolder = join('file', 'upload');
+    const storedPath = this.toStoredPath(uploadFileDto.filePath);
+
+    // A retry of an already-succeeded request must not open a transaction at all.
+    const existingClaim = await this.findClaim(storedPath);
+    if (existingClaim) {
+      return this.resolveClaim(existingClaim, userId);
+    }
+
+    // Nothing claims the filename and no temp file backs it: never issued, or swept
+    // past its TTL (ADR 0018). That is a client precondition failure, not a 500.
+    try {
+      await access(
+        join(process.cwd(), temporaryFolder, uploadFileDto.filePath),
+      );
+    } catch {
+      throw new BadRequestException({
+        code: ErrorCode.FILE_INVALID_PATH,
+        message: 'Attach the file again.',
+      });
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     let fileId: number;
     try {
-      const temporaryFolder = join('file', 'temp');
-      const uploadFolder = join('file', 'upload');
-
       // Title is unique — pre-check so the DB constraint surfaces as a typed
       // FILE_TITLE_TAKEN instead of being swallowed into a generic 500 (mirrors updateFile).
       const duplicatedTitle = await this.fileRepository.findOne({
@@ -131,10 +218,7 @@ export class FileService {
         .values({
           title: uploadFileDto.title,
           creator: { id: userId },
-          filePath: path
-            .normalize(join(uploadFolder, uploadFileDto.filePath))
-            .replace('temp_', 'granted_')
-            .replace(/\\/g, '/'),
+          filePath: storedPath,
         })
         .execute();
 
@@ -159,6 +243,21 @@ export class FileService {
       // Preserve typed domain exceptions (e.g. FILE_TITLE_TAKEN); only opaque
       // failures collapse to a generic message so no internal detail leaks out.
       if (error instanceof HttpException) throw error;
+
+      // The title pre-check is an unlocked read, so simultaneous submits can both pass
+      // it and let the unique constraint pick the winner. If the winner claimed this same
+      // filename, the loser is the same request twice — replay it instead of erroring.
+      if (this.isUniqueViolation(error)) {
+        const winner = await this.findClaim(storedPath);
+        if (winner) {
+          return this.resolveClaim(winner, userId);
+        }
+        throw new BadRequestException({
+          code: ErrorCode.FILE_TITLE_TAKEN,
+          message: 'Title already in use.',
+        });
+      }
+
       throw new InternalServerErrorException({
         code: ErrorCode.INTERNAL_ERROR,
         message: 'Transaction aborted.',
@@ -176,7 +275,7 @@ export class FileService {
         message: 'No file found.',
       });
     }
-    return this.toResponse(saved);
+    return { replayed: false, file: this.toResponse(saved) };
   }
 
   async updateFile(

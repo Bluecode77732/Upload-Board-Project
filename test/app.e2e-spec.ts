@@ -311,6 +311,120 @@ describe('Upload Board API (e2e)', () => {
       expect(existsSync(tempPath)).toBe(false);
     });
 
+    // Duplicate-submission contract (ADR 0019): the attach-issued filename is a
+    // one-shot claim token, so resubmitting it replays instead of erroring.
+    it('replays the same file when the identical claim is submitted twice', async () => {
+      const user = await createUser('idem@e.com');
+
+      const attach = await request(server)
+        .post('/upload/attach')
+        .set(auth(user.accessToken))
+        .attach('video', Buffer.from('fake-mp4-bytes'), {
+          filename: 'sample.mp4',
+          contentType: 'video/mp4',
+        })
+        .expect(201);
+
+      const filename = attach.body.filename as string;
+      createdFiles.push(
+        join(process.cwd(), 'file', 'temp', filename),
+        join(
+          process.cwd(),
+          'file',
+          'upload',
+          filename.replace('temp_', 'granted_'),
+        ),
+      );
+
+      const body = { title: 'retried-clip', filePath: filename };
+      const first = await request(server)
+        .post('/file')
+        .set(auth(user.accessToken))
+        .send(body)
+        .expect(201);
+
+      // The retry answers 200 (nothing new was created) with the same resource.
+      const retry = await request(server)
+        .post('/file')
+        .set(auth(user.accessToken))
+        .send(body)
+        .expect(200);
+
+      expect(retry.body.id).toBe(first.body.id);
+      expect(retry.body.fileUrl).toBe(first.body.fileUrl);
+
+      // Exactly one row exists — the retry created nothing.
+      const list = await request(server)
+        .get('/file')
+        .set(auth(user.accessToken))
+        .expect(200);
+      expect(list.body[1]).toBe(1);
+    });
+
+    it('rejects another user resubmitting a claimed filename (FILE_ALREADY_CLAIMED)', async () => {
+      const owner = await createUser('claim-owner@e.com');
+      const other = await createUser('claim-other@e.com');
+
+      const attach = await request(server)
+        .post('/upload/attach')
+        .set(auth(owner.accessToken))
+        .attach('video', Buffer.from('fake-mp4-bytes'), {
+          filename: 'sample.mp4',
+          contentType: 'video/mp4',
+        })
+        .expect(201);
+
+      const filename = attach.body.filename as string;
+      createdFiles.push(
+        join(process.cwd(), 'file', 'temp', filename),
+        join(
+          process.cwd(),
+          'file',
+          'upload',
+          filename.replace('temp_', 'granted_'),
+        ),
+      );
+
+      await request(server)
+        .post('/file')
+        .set(auth(owner.accessToken))
+        .send({ title: 'owned-clip', filePath: filename })
+        .expect(201);
+
+      const stolen = await request(server)
+        .post('/file')
+        .set(auth(other.accessToken))
+        .send({ title: 'stolen-clip', filePath: filename })
+        .expect(409);
+      expect(stolen.body.code).toBe('FILE_ALREADY_CLAIMED');
+    });
+
+    it('rejects a filePath the attach step never issued', async () => {
+      const user = await createUser('badpath@e.com');
+
+      const res = await request(server)
+        .post('/file')
+        .set(auth(user.accessToken))
+        .send({ title: 'traversal', filePath: '../upload/granted_other.mp4' })
+        .expect(400);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('rejects a well-formed filePath with no temp file behind it (FILE_INVALID_PATH)', async () => {
+      const user = await createUser('gone@e.com');
+
+      const res = await request(server)
+        .post('/file')
+        .set(auth(user.accessToken))
+        .send({
+          title: 'expired',
+          filePath:
+            'temp_67ff0c79-a1f0-4d4f-865c-681af920378d_1764581241716.mp4',
+        })
+        .expect(400);
+      expect(res.body.code).toBe('FILE_INVALID_PATH');
+    });
+
     it('rejects a non-video attachment with UPLOAD_INVALID_TYPE', async () => {
       const user = await createUser('upload-bad@e.com');
       const res = await request(server)

@@ -18,7 +18,7 @@ Before making any change:
 1. Inspect the codebase thoroughly — read the relevant files, grep for symbols, trace the actual call chain.
    Concern-to-entrypoint map (check these first):
    - Auth flow change      → read `backend/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `backend/auth/strategy/`; grep `JwtAuthGuard`, `LocalAuthGuard`
-   - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract)
+   - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract, one-shot claim resolution in `uploadFile` — ADR 0019)
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer diskStorage, `temp_{uuid}_{timestamp}` naming) and `upload.controller.ts` (100MB size limit)
    - Orphan temp cleanup   → read `backend/temp-cleanup/temp-cleanup.service.ts` (`@nestjs/schedule` `SchedulerRegistry` cron, `temp_`-prefix + TTL sweep of `file/temp`, ADR 0018) and its `selectExpiredTempFiles` pure core
    - Env var change        → read the Joi schema in `backend/app.module.ts` AND `.env.example` — both must stay in sync
@@ -83,6 +83,7 @@ Before implementing anything non-trivial, ask the one question that applies:
 | New env var                              | Is it added to **both** the Joi schema (`app.module.ts`) and `.env.example`, and accessed via `ConfigService` only? |
 | Any change touching `filePath`           | Does the `temp_` → `granted_` prefix contract between `UploadModule` and `FileService.uploadFile` still hold end to end? |
 | New DTO field                            | The global pipe runs `whitelist + forbidNonWhitelisted` — is the field declared on the DTO, or will the request be rejected/stripped? |
+| New write endpoint                       | What happens when the identical request arrives twice (network retry, double-click)? Name the natural idempotency key (a server-issued token, a unique column) and the typed outcome of a repeat — replay, or which `ErrorCode` (ADR 0019). |
 
 Ask one focused question rather than a list. Do not proceed on assumptions when intent is ambiguous.
 
@@ -446,8 +447,15 @@ Principle Conflict Protocol.
 ### Maintainability
 - DRY, Fail Fast, Testability, Input Validation — covered by Testing conventions
   and Never Do Groups 1–3
-- Idempotence — `register` guards against duplicate email; new write endpoints must
-  state their duplicate-submission behavior rather than assuming idempotency
+- Idempotence — `register` guards against duplicate email; `POST /file` replays a
+  claimed upload for its claimant and 409s for anyone else (ADR 0019). New write
+  endpoints must state their duplicate-submission behavior rather than assuming
+  idempotency: prefer a **server-issued token or an existing unique column** as the
+  natural idempotency key over a client-supplied one (a client value is identification
+  only, never authority — Never Do Group 3), and make the repeat a typed outcome, never
+  a 500. A client-key store (`Idempotency-Key` + response snapshot table) was considered
+  and rejected for the upload flow; it stays available for a future endpoint that has no
+  natural token, but it is a schema change and needs its own ADR
 - Comments — every new or modified function carries the mandatory 목적/이유/방법 block
   (File Creation Convention > Function Comments). *Beyond* that block, comments stay
   WHY-only and never restate what the code already says
@@ -577,7 +585,21 @@ one of these is violated, follow Principle Conflict Protocol.
   state.
 - Goal: any new code that touches `filePath` preserves the prefix state machine end to
   end. Never construct a `filePath` from client-supplied path segments — the server
-  generates names (uuid + timestamp); the client only echoes them back.
+  generates names (uuid + timestamp); the client only echoes them back. That echo is
+  enforced, not assumed: `UploadFileDto.filePath` carries
+  `@Matches(TEMP_FILENAME_PATTERN)` (ADR 0019), so a malformed value is rejected at the
+  boundary as `VALIDATION_FAILED` and never reaches the `rename`. `UpdateFileDto`
+  deliberately **omits** the inherited `filePath` and redeclares it — the two endpoints
+  sit on opposite sides of the state machine, so the pattern must not be inherited.
+- Duplicate submission (ADR 0019): the attach-issued filename is a **one-shot claim
+  token**. `FileService.uploadFile` resolves the claim *before* opening a transaction —
+  already claimed by the same user ⇒ replay the existing row (`{ replayed: true }`, the
+  controller answers 200); claimed by another user ⇒ 409 `FILE_ALREADY_CLAIMED`
+  (identity-only — RBAC governs managing a file, never claiming one); well-formed but
+  no temp file behind it ⇒ 400 `FILE_INVALID_PATH`. A concurrent double-submit is
+  settled by the unique constraint: a `23505` whose winner claimed the same filename is
+  replayed, otherwise it is 400 `FILE_TITLE_TAKEN`. New code on this path keeps every
+  duplicate outcome typed — a foreseeable client repeat must never surface as a 500.
 - Orphan cleanup (ADR 0018): a `temp_` file that is never claimed (`POST /file` never
   called) is deleted by the scheduled sweep in `TempCleanupModule` once it exceeds
   `TEMP_SWEEP_TTL_HOURS` (default 24h, hourly cron). The sweep only ever deletes
@@ -877,7 +899,9 @@ pnpm test -- file.service
 - REST (all behind `JwtAuthGuard`): `GET /file`, `GET /file/:id`, `POST /file`,
   `PATCH /file/:id`, `DELETE /file/:id`
 - `FileService` — metadata CRUD; `uploadFile`/`updateFile` use the manual QueryRunner
-  transaction pattern; `toResponse()` shapes `FileResponseDto` with `BASE_URL`
+  transaction pattern; `toResponse()` shapes `FileResponseDto` with `BASE_URL`.
+  `uploadFile` returns `{ replayed, file }` — the claim outcome (ADR 0019), which the
+  controller maps to 200 (replay) or 201 (fresh promotion)
 
 **UploadModule** (`backend/upload/`)
 - REST: `POST /upload/attach` (behind `JwtAuthGuard`) — multipart field `video`,
@@ -889,9 +913,12 @@ pnpm test -- file.service
 1. `POST /upload/attach` (multipart, field `video`) → Multer writes
    `file/temp/temp_{uuid}_{ts}.{ext}` → responds with the generated filename
 2. Client calls `POST /file` with `{ title, filePath: <that filename> }`
-3. `FileService.uploadFile()` opens a QueryRunner transaction: inserts `FileEntity`
-   (`filePath` rewritten to `file/upload/granted_...`), renames the physical file from
-   `file/temp` to `file/upload`, commits; rollback on failure, `release()` in `finally`
+3. `FileService.uploadFile()` first resolves the claim (ADR 0019) — a filename already
+   promoted by the same user replays (200), by another user 409s, and one with no temp
+   file behind it 400s — then, only for an unclaimed filename, opens a QueryRunner
+   transaction: inserts `FileEntity` (`filePath` rewritten to `file/upload/granted_...`),
+   renames the physical file from `file/temp` to `file/upload`, commits; rollback on
+   failure, `release()` in `finally`
 4. The file is now publicly served at `{BASE_URL}/file/upload/granted_...` via
    `ServeStaticModule`; API responses expose it as `fileUrl` in `FileResponseDto`
 

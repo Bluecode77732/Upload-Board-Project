@@ -46,10 +46,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   `/admin` 구역을 받친다.
 - **Stage 1 기반은 완결됐다** (2026-07-25): Node/pnpm 고정, Docker/compose, CI,
   로깅 규약, E2E 재작성이 모두 반영됐다 (ADR 0014–0017).
-- **Stage 2가 시작됐다**: 고아 temp 파일 정리가 2026-07-26 반영됐다
+- **Stage 2가 진행 중이다**: 고아 temp 파일 정리가 2026-07-26 반영됐고
   ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)) — 신규 운영 모듈
-  `TempCleanupModule`의 스케줄 `@nestjs/schedule` 스윕. **다음 Stage 2 작업**: 삭제 정책
-  설계(소프트 삭제 + `DELETE /user/:id` FK 제약 500)와 업로드 멱등성.
+  `TempCleanupModule`의 스케줄 `@nestjs/schedule` 스윕 — 업로드 중복 제출 정책이
+  2026-07-27 반영됐다 ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)): attach가
+  발급한 파일명이 1회용 청구 토큰이라, 재시도는 에러 대신 replay(200)로 응답한다.
+  **다음 Stage 2 작업**: 삭제 정책 설계(소프트 삭제 + `DELETE /user/:id` FK 제약 500).
 
 ## 1. 비전과 본질
 
@@ -169,7 +171,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 |---|---|
 | ~~고아 temp 파일 정리~~ — ✅ 2026-07-26 반영 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)) | `POST /file`이 끝내 호출되지 않으면 `temp_` 파일이 영구 누적됐다 — 유일한 무관리 리소스 누수. 스케줄 `@nestjs/schedule` 스윕(신규 `TempCleanupModule`)이 TTL(기본 24시간, 매시간)을 넘은 `file/temp`의 `temp_` 파일을 삭제한다. |
 | 삭제 정책 설계 (soft delete + FK) | soft delete 채택 여부와 `DELETE /user/:id`의 FK 제약 500(`FileEntity.creator`가 `nullable: false`)을 하나의 설계 작업으로 통합. |
-| 업로드 멱등성/중복 정책 명문화 | CLAUDE.md 규약상 새 쓰기 엔드포인트는 중복 제출 동작을 명시해야 한다 — 게시판 확장으로 쓰기 엔드포인트가 늘기 전에 틀을 확정. |
+| ~~업로드 멱등성/중복 정책 명문화~~ — ✅ 2026-07-27 반영 ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)) | attach가 발급한 `temp_{uuid}_{ts}` 파일명이 1회용 청구 토큰이다. 재제출 시 청구자 본인에게는 기존 파일을 replay(200)하고, 타인에게는 409 `FILE_ALREADY_CLAIMED`를 내며, 동시 제출 경합은 500이 아니라 unique 제약으로 정리된다. `filePath`를 DTO 경계에서 발급 형식으로 고정해 경로 탈출 공백도 함께 닫았다. 스키마 변경 없음. |
 
 ### Stage 3 — 도메인 확장
 
@@ -229,6 +231,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 (README/엔드포인트 일치의 자동 검증 — CI 작업 아래의 후보).
 
 ## 9. 완료
+
+### 2026-07-27
+
+| 항목 | 비고 |
+|---|---|
+| 업로드 중복 제출 정책 | attach가 발급한 파일명이 1회용 청구 토큰이다. 재제출 시 청구자 본인에게는 기존 파일을 replay(200)하고, 타인에게는 409 `FILE_ALREADY_CLAIMED`, 뒤를 받쳐 줄 temp 파일이 없으면 400 `FILE_INVALID_PATH`를 낸다. 동시 제출 경합은 500이 아니라 unique 제약으로 정리된다. `UploadFileDto.filePath`를 발급 형식으로 고정해 경로 탈출 공백도 닫았고, 스키마 변경은 없다 — **Stage 2 두 번째 작업** ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)) |
 
 ### 2026-07-26
 
