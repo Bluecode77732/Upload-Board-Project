@@ -89,4 +89,5 @@ grep -rniE "RbacGuard|GqlTransaction|QueryRunnerDecorator|RateLimitGuard|kickPre
 ## 완료 기준
 
 본 계획은 (1) Git 히스토리 결정이 내려져 이 문서에 기록되고, (2) 재검증 트리거가
-습관으로 정착하거나 자동화(ROADMAP의 "CI" 후보 하에서만)될 때 종료됩니다.
+습관으로 정착하거나 자동화(이제 착지된 Stage 1 CI 파이프라인의 잡으로,
+[ADR 0016](ADR/0016-github-actions-ci.ko.md))될 때 종료됩니다.

@@ -92,5 +92,5 @@ carried nothing over.
 ## Completion Criteria
 
 This plan closes when (1) the git-history decision is made and recorded here, and
-(2) the re-verification trigger is either adopted as a habit or automated (a CI job
-would land under ROADMAP's "CI" candidate — not before).
+(2) the re-verification trigger is either adopted as a habit or automated (as a job
+in the now-landed Stage 1 CI pipeline, [ADR 0016](ADR/0016-github-actions-ci.md)).

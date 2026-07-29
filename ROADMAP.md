@@ -232,12 +232,12 @@ settled while zero consumers exist.
   `POST /auth/signin/local` (+ `LocalStrategy` + `LocalAuthGuard`) is therefore
   a **removal candidate** — retiring it is its own dedicated task under Scope
   Discipline, not a drive-by; it stays until then.
-- Doc-wording sync (deferred 2026-07-23; ADR fixes done 2026-07-27): pre-plan
-  "candidate" phrasings reconciled with this plan. **Done**: ADR 0003 ("candidate
+- Doc-wording sync (deferred 2026-07-23; completed 2026-07-29): pre-plan
+  "candidate" phrasings reconciled with this plan. ADR 0003 ("candidate
   roadmap item") now points at the landed [ADR 0018](ADR/0018-orphan-temp-file-cleanup.md);
-  ADR 0006 Consequences ("top roadmap item") carries a dated landed note.
-  **Remaining**: `CHAT-REMNANT-REMOVAL-PLAN` ("ROADMAP's CI candidate" → decided
-  Stage 1) — fixed on the next pass that touches that file.
+  ADR 0006 Consequences ("top roadmap item") carries a dated landed note; and
+  `CHAT-REMNANT-REMOVAL-PLAN` ("ROADMAP's CI candidate") now points at the landed
+  Stage 1 CI ([ADR 0016](ADR/0016-github-actions-ci.md)). **Done.**
 
 ## 8. Advisory notes
 
