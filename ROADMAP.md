@@ -232,6 +232,15 @@ settled while zero consumers exist.
   `POST /auth/signin/local` (+ `LocalStrategy` + `LocalAuthGuard`) is therefore
   a **removal candidate** — retiring it is its own dedicated task under Scope
   Discipline, not a drive-by; it stays until then.
+- Frontend adoption of the upload claim contract (recorded 2026-07-27,
+  [ADR 0019](ADR/0019-upload-claim-idempotency.md)) — **owned by a frontend-scoped
+  task, not by backend work**. `POST /file` now answers 200 (idempotent replay) as
+  well as 201, and 409 `FILE_ALREADY_CLAIMED` is a status this API had never emitted
+  before. `frontend/docs/API-CONTRACT.md` and the client's upload flow must both be
+  updated; until then the frontend treats a replay as a fresh creation and has no
+  branch for 409. The backend change deliberately stopped at the repo boundary
+  ([CLAUDE.md](CLAUDE.md) > Project Overview: `frontend/` has its own scoped
+  CLAUDE.md and tooling — do not edit frontend files from a backend task).
 - Doc-wording sync (deferred 2026-07-23; completed 2026-07-29): pre-plan
   "candidate" phrasings reconciled with this plan. ADR 0003 ("candidate
   roadmap item") now points at the landed [ADR 0018](ADR/0018-orphan-temp-file-cleanup.md);

@@ -217,6 +217,15 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   `POST /auth/signin/local`(+ `LocalStrategy` + `LocalAuthGuard`)은 **제거
   후보** — 제거는 Scope Discipline상 별도 전용 작업이며 부수 작업이 아니다;
   그때까지는 존치한다.
+- 업로드 청구 계약의 프론트엔드 반영 (2026-07-27 기록,
+  [ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)) — **백엔드 작업이 아니라
+  프론트엔드 전용 과제가 담당한다.** `POST /file`은 이제 201뿐 아니라 200(멱등
+  replay)도 응답하고, 409 `FILE_ALREADY_CLAIMED`는 이 API가 처음 내보내는 상태
+  코드다. `frontend/docs/API-CONTRACT.md`와 클라이언트 업로드 흐름을 함께 갱신해야
+  하며, 그전까지 프론트엔드는 replay를 새 생성으로 취급하고 409 분기도 갖고 있지
+  않다. 백엔드 변경은 저장소 경계에서 의도적으로 멈췄다([CLAUDE.md](CLAUDE.md) >
+  Project Overview: `frontend/`는 자체 CLAUDE.md와 툴체인을 가지며, 백엔드 작업에서
+  프론트엔드 파일을 편집하지 않는다).
 - 문서 문구 동기화 (2026-07-23 유예 결정; 2026-07-29 완료): 계획 수립 이전의
   "후보(candidate)" 표현을 이 계획에 맞춰 정리. ADR 0003("candidate roadmap
   item")은 이제 반영된 [ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)을 가리키고,

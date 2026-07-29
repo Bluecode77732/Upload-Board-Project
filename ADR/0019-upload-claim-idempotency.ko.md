@@ -82,6 +82,12 @@ Group 3)를 강제하는 코드가 없었던 셈이다.
 - 동결된 에러 코드 카탈로그([ADR 0011](0011-error-code-contract.ko.md))에
   `FILE_ALREADY_CLAIMED`(409)가 추가된다. 코드 추가는 breaking 변경이 아니지만, 409는 이
   API가 처음 내보내는 상태 코드이므로 프론트엔드가 처리해야 한다.
+- **프론트엔드 반영은 프론트엔드 전용 과제이며, 이 변경의 범위 밖임을 명시한다.**
+  `frontend/docs/API-CONTRACT.md`와 클라이언트 업로드 흐름이 200 replay와 409를 받아들여야
+  하고, 그전까지 프론트엔드는 replay를 새 생성으로 읽으며 409 분기가 없다. 이 변경이 저장소
+  경계에서 멈춘 이유는 `frontend/`가 자체 CLAUDE.md와 툴체인을 갖기 때문이다(CLAUDE.md >
+  Project Overview: 백엔드 작업에서 프론트엔드 파일을 편집하지 않는다). ROADMAP 7절에
+  추적 항목으로 남겼다.
 - 형식이 잘못된 `filePath`는 서비스에 도달하기 전에 파이프에서 `VALIDATION_FAILED`로 실패한다.
   서비스가 던지는 `FILE_INVALID_PATH`와 코드가 다른데, 후자는 "형식은 맞지만 사용할 수 없는
   파일명"에만 쓴다.

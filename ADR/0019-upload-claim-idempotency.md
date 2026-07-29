@@ -86,6 +86,12 @@ record that the claim was spent.
 - `FILE_ALREADY_CLAIMED` (409) is added to the frozen error-code catalog
   ([ADR 0011](0011-error-code-contract.md)); adding a code is not a breaking change, but
   409 is a new status for this API and frontend clients must handle it.
+- **Frontend adoption is a frontend-scoped task, explicitly out of this change.**
+  `frontend/docs/API-CONTRACT.md` and the client upload flow must both take up the new
+  200-replay and 409 outcomes; until they do, the frontend reads a replay as a fresh
+  creation and has no 409 branch. This change stopped at the repo boundary because
+  `frontend/` carries its own scoped CLAUDE.md and tooling (CLAUDE.md > Project Overview:
+  do not edit frontend files from a backend task). Tracked in ROADMAP §7.
 - A malformed `filePath` now fails as `VALIDATION_FAILED` at the pipe rather than reaching
   the service — the error code differs from the service-thrown `FILE_INVALID_PATH`, which
   is reserved for a well-formed but unusable filename.
