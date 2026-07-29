@@ -111,6 +111,7 @@ When planning an implementation, answer the following before proceeding:
   - Does this add a NestJS provider? → which module's `providers[]` needs it? Cross-module use goes through `exports`/`imports` only — never re-declare another module's service in your own `providers[]`
   - Does this change transaction scope? → pick a row from the transaction-pattern table (Project-Specific Principles > Transaction Boundary) and state why
   - Does this add or change an endpoint? → Swagger decorators (`@ApiTags`, `@ApiResponse`, auth decorator) are required; verify `/doc` renders it correctly
+  - Does a new handler/service method act on a loaded relation? → *tell* the owning service, don't *ask-then-act* by reaching through it in the controller (Law of Demeter / Tell Don't Ask) — no `a.b.c` reach-through; follow the existing file-ownership-in-`FileService` pattern, not an inline `file.creator.id` check in the controller
 
 ### Modification Analysis (수정)
 For each change being made, explicitly state:
@@ -442,7 +443,8 @@ Principle Conflict Protocol.
   mechanism; no new rule needed
 - Command–Query Separation — reflected in the existing controller method split
 - Favor Explicit Interfaces — enforced via `any` ban / `unknown` narrowing
-- Law of Demeter, Tell Don't Ask — judgment calls, no current violation identified
+- Law of Demeter, Tell Don't Ask — enforced at planning time via the Structure Analysis
+  checklist (no `a.b.c` reach-through; tell the owning service rather than ask-then-act)
 
 ### Maintainability
 - DRY, Fail Fast, Testability, Input Validation — covered by Testing conventions
