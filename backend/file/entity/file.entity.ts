@@ -27,6 +27,7 @@ export class FileEntity {
 
   @Column()
   @IsNotEmpty()
+  @IsString()
   filePath!: string;
 
   @CreateDateColumn()

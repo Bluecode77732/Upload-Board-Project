@@ -3,6 +3,7 @@ import { FileService } from './file.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   DataSource,
+  EntityManager,
   Repository,
   QueryRunner,
   QueryFailedError,
@@ -21,6 +22,7 @@ import { ConfigService } from '@nestjs/config';
 import { UserRole } from 'backend/auth/role/role';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
 import * as fs from 'fs/promises';
+import { join } from 'path';
 
 jest.mock('fs/promises');
 
@@ -470,6 +472,10 @@ describe('FileService', () => {
   });
 
   describe('deleteFile', () => {
+    beforeEach(() => {
+      (fs.unlink as jest.Mock).mockResolvedValue(undefined);
+    });
+
     it('should delete a file owned by the requester and audit FILE_DELETE', async () => {
       jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
 
@@ -486,6 +492,42 @@ describe('FileService', () => {
         'FILE_DELETE',
       );
       expect(result).toBe('File 1 deleted.');
+    });
+
+    it('should unlink the stored file after the row is gone', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
+
+      await fileService.deleteFile(1, owner);
+
+      expect(fs.unlink).toHaveBeenCalledTimes(1);
+      expect(fs.unlink).toHaveBeenCalledWith(
+        join(process.cwd(), 'file/upload/granted_test.mp4'),
+      );
+    });
+
+    it('should still report success when the stored file cannot be unlinked', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
+      (fs.unlink as jest.Mock).mockRejectedValue(new Error('ENOENT'));
+
+      // The row is already gone; a failed unlink leaves an orphan, not an error path.
+      await expect(fileService.deleteFile(1, owner)).resolves.toBe(
+        'File 1 deleted.',
+      );
+      expect(mockAuditLogService.log).toHaveBeenCalled();
+    });
+
+    it('should refuse to unlink a stored path outside the upload folder', async () => {
+      // updateFile accepts a bare granted_ name, so a row can hold such a path —
+      // the unlink guard must not follow it out of file/upload.
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue({
+        ...mockFileEntity,
+        filePath: 'granted_loose.mp4',
+      });
+
+      await fileService.deleteFile(1, owner);
+
+      expect(fileRepository.delete).toHaveBeenCalledWith(1);
+      expect(fs.unlink).not.toHaveBeenCalled();
     });
 
     it('should allow an admin to delete a file they do not own', async () => {
@@ -518,6 +560,56 @@ describe('FileService', () => {
         ForbiddenException,
       );
       expect(fileRepository.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  // The account-deletion cascade (ADR 0020): UserService owns the transaction and
+  // passes its EntityManager in, so file rows still go through FileService.
+  describe('creator cascade helpers', () => {
+    const mockDeleteBuilder = {
+      delete: jest.fn().mockReturnThis(),
+      from: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected: 2 }),
+    };
+    const mockManager = {
+      find: jest.fn(),
+      createQueryBuilder: jest.fn().mockReturnValue(mockDeleteBuilder),
+    };
+
+    it('findStoredPathsOfCreator returns only the stored paths, deleting nothing', async () => {
+      mockManager.find.mockResolvedValue([
+        { filePath: 'file/upload/granted_a.mp4' },
+        { filePath: 'file/upload/granted_b.mp4' },
+      ]);
+
+      const paths = await fileService.findStoredPathsOfCreator(
+        mockManager as unknown as EntityManager,
+        7,
+      );
+
+      expect(mockManager.find).toHaveBeenCalledWith(FileEntity, {
+        where: { creator: { id: 7 } },
+      });
+      expect(mockManager.createQueryBuilder).not.toHaveBeenCalled();
+      expect(paths).toEqual([
+        'file/upload/granted_a.mp4',
+        'file/upload/granted_b.mp4',
+      ]);
+    });
+
+    it('deleteFilesOfCreator deletes by creatorId, not by a stale id list', async () => {
+      await fileService.deleteFilesOfCreator(
+        mockManager as unknown as EntityManager,
+        7,
+      );
+
+      expect(mockDeleteBuilder.from).toHaveBeenCalledWith(FileEntity);
+      expect(mockDeleteBuilder.where).toHaveBeenCalledWith(
+        '"creatorId" = :creatorId',
+        { creatorId: 7 },
+      );
+      expect(mockDeleteBuilder.execute).toHaveBeenCalled();
     });
   });
 });

@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   ParseIntPipe,
+  Query,
   UseInterceptors,
   ClassSerializerInterceptor,
   UseGuards,
@@ -14,7 +15,8 @@ import {
 import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { DeleteUserQueryDto } from './dto/delete-user-query.dto';
+import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'backend/auth/guard/jwt-auth.guard';
 import { RolesGuard } from 'backend/auth/guard/roles.guard';
 import { Roles } from 'backend/auth/decorator/roles.decorator';
@@ -72,13 +74,30 @@ export class UserController {
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number, @AuthUser() actor: AuthUser) {
+  @ApiResponse({
+    status: 200,
+    description:
+      'The account is gone. With deleteFiles=true its files (rows and stored files) are gone with it — irreversibly.',
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      'USER_HAS_FILES — the account still owns files and the request did not confirm the cascade. The message carries the file count so the client can warn before repeating with deleteFiles=true (ADR 0020).',
+  })
+  // 목적: 계정 삭제 요청을 권한 확인 후 서비스로 넘기고, 연쇄 삭제 동의 여부를 함께 전달한다.
+  // 이유: 파일까지 지우는 경로는 비가역이므로, 확인 신호가 프론트 경고창이 아니라 요청 자체에 실려야 한다.
+  // 방법: 검증된 쿼리 DTO의 문자열 리터럴을 boolean으로 좁혀 넘긴다 — 암묵 변환에 맡기지 않는다.
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: DeleteUserQueryDto,
+    @AuthUser() actor: AuthUser,
+  ) {
     if (actor.id !== id && ROLE_RANK[actor.role] < ROLE_RANK[UserRole.admin]) {
       throw new ForbiddenException({
         code: ErrorCode.FORBIDDEN_NOT_OWNER,
         message: 'You can only delete your own account.',
       });
     }
-    return this.userService.remove(actor.id, id);
+    return this.userService.remove(actor.id, id, query.deleteFiles === 'true');
   }
 }

@@ -10,5 +10,8 @@ import { AuditLogModule } from 'backend/audit-log/audit-log.module';
   imports: [TypeOrmModule.forFeature([FileEntity, UserEntity]), AuditLogModule],
   controllers: [FileController],
   providers: [FileService],
+  // Exported for UserModule: account deletion cascades into file rows, and those
+  // rows stay FileModule's responsibility (module boundary, ADR 0020).
+  exports: [FileService],
 })
 export class FileModule {}

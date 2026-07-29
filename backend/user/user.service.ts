@@ -1,6 +1,8 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -12,9 +14,13 @@ import { ConfigService } from '@nestjs/config';
 import { ErrorCode } from 'backend/common/error-code';
 import { UserRole } from 'backend/auth/role/role';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
+import { FileService } from 'backend/file/file.service';
+import { unlinkStoredFiles } from 'backend/common/unlink-stored-files';
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
@@ -22,6 +28,7 @@ export class UserService {
     private readonly configService: ConfigService,
     private readonly dataSource: DataSource,
     private readonly auditLogService: AuditLogService,
+    private readonly fileService: FileService,
   ) {}
 
   async findAll() {
@@ -127,19 +134,63 @@ export class UserService {
     return { id: targetId, role };
   }
 
-  async remove(actorId: number, id: number) {
-    const user = await this.userRepository.findOne({ where: { id } });
+  // 목적: 계정을 삭제하되, 그 계정이 소유한 파일까지 함께 지울지를 명시적 확인에 따라 결정한다.
+  // 이유: FileEntity.creator가 nullable:false라 파일 보유 계정의 단순 삭제는 FK 위반 500이었고,
+  //       연쇄 삭제는 되돌릴 수 없으므로 동의 없이 일어나서는 안 된다(ADR 0020).
+  // 방법: 트랜잭션 안에서 보유 파일 경로를 먼저 읽어 미확인이면 409로 거절하고, 확인 시 파일 행 → 유저 행
+  //       순서로 지운다. 물리 파일 unlink는 커밋 이후에만(롤백 불가), 감사 로그는 그 뒤에 남긴다.
+  async remove(actorId: number, id: number, deleteFiles = false) {
+    // Pure multi-DB-write — the filesystem side effect deliberately sits outside the
+    // boundary, so dataSource.transaction applies (Transaction Boundary table, row 3).
+    const storedPaths = await this.dataSource.transaction(async (manager) => {
+      const user = await manager.findOne(UserEntity, { where: { id } });
 
-    if (!user) {
-      throw new NotFoundException({
-        code: ErrorCode.USER_NOT_FOUND,
-        message: 'User not found.',
-      });
+      if (!user) {
+        throw new NotFoundException({
+          code: ErrorCode.USER_NOT_FOUND,
+          message: 'User not found.',
+        });
+      }
+
+      const paths = await this.fileService.findStoredPathsOfCreator(
+        manager,
+        id,
+      );
+
+      // The cascade is irreversible, so it needs an explicit confirmation; the count
+      // lets the client warn with the real number before asking for one.
+      if (paths.length > 0 && !deleteFiles) {
+        throw new ConflictException({
+          code: ErrorCode.USER_HAS_FILES,
+          message: `This account owns ${paths.length} file(s). Repeat with deleteFiles=true to delete them together.`,
+        });
+      }
+
+      // Files first — FK_file_entity_creator is ON DELETE NO ACTION, so the user row
+      // cannot go while any file still references it.
+      if (paths.length > 0) {
+        await this.fileService.deleteFilesOfCreator(manager, id);
+      }
+      await manager.delete(UserEntity, id);
+
+      return paths;
+    });
+
+    // Post-commit on purpose: unlink cannot be rolled back, so its failure leaves a
+    // recoverable orphan on disk rather than a row pointing at a missing file.
+    const { failures } = await unlinkStoredFiles(storedPaths);
+    for (const failure of failures) {
+      this.logger.warn(
+        `Stored file left on disk: ${failure.filePath} (${failure.reason})`,
+      );
     }
 
-    await this.userRepository.delete(id);
-
-    await this.auditLogService.log(actorId, id, 'USER_DELETE');
+    await this.auditLogService.log(
+      actorId,
+      id,
+      'USER_DELETE',
+      `files=${storedPaths.length}`,
+    );
 
     return `User ${id} deleted.`;
   }

@@ -35,6 +35,9 @@ export enum ErrorCode {
   // The referenced temp upload was already promoted by a different user — the
   // one-shot claim token is spent (ADR 0019).
   FILE_ALREADY_CLAIMED = 'FILE_ALREADY_CLAIMED',
+  // The account still owns files, and the request did not confirm the cascade —
+  // deleting it would irreversibly destroy those files too (ADR 0020).
+  USER_HAS_FILES = 'USER_HAS_FILES',
 
   // 413
   PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',

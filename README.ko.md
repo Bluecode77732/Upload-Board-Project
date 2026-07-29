@@ -125,7 +125,9 @@ docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 �
 - `GET /user/:id` — 사용자 조회
 - `PATCH /user/:id` — 사용자 수정 (본인 또는 admin)
 - `PATCH /user/:id/role` — 역할 부여 (superadmin만; 마지막 superadmin은 강등 불가)
-- `DELETE /user/:id` — 사용자 삭제 (본인 또는 admin)
+- `DELETE /user/:id` — 사용자 삭제 (본인 또는 admin). 파일을 보유한 계정은 409
+  `USER_HAS_FILES`로 거절되며, `?deleteFiles=true`로 연쇄 삭제를 확인해야 계정과 파일을
+  함께 삭제한다 — 되돌릴 수 없다 ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md))
 
 **파일**
 - `POST /upload/attach` — 동영상을 임시 저장소로 업로드 (multipart 필드 `video`, 100 MB 제한)
@@ -136,7 +138,7 @@ docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 �
   사용자에게는 409 `FILE_ALREADY_CLAIMED`를 반환합니다
   ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md))
 - `PATCH /file/:id` — 파일 메타데이터 수정 (작성자 또는 admin)
-- `DELETE /file/:id` — 파일 메타데이터 삭제 (작성자 또는 admin)
+- `DELETE /file/:id` — 파일 메타데이터와 저장된 물리 파일 삭제 (작성자 또는 admin)
 
 **감사 로그**
 - `GET /audit-log` — ROLE_CHANGE / USER_DELETE / FILE_DELETE 기록 조회 (admin만; 페이지네이션, `?action` 필터)

@@ -438,4 +438,130 @@ describe('Upload Board API (e2e)', () => {
       expect(res.body.code).toBe('UPLOAD_INVALID_TYPE');
     });
   });
+
+  // Deletion policy (ADR 0020): an account that owns files cannot be deleted by
+  // accident — the cascade needs an explicit confirmation and takes the stored
+  // files with it. Before this, the FK constraint surfaced as an opaque 500.
+  describe('Deletion policy (ADR 0020)', () => {
+    // Promote a real upload so the assertions can look at the actual file on disk.
+    async function promoteFile(accessToken: string, title: string) {
+      const attach = await request(server)
+        .post('/upload/attach')
+        .set(auth(accessToken))
+        .attach('video', Buffer.from('fake-mp4-bytes'), {
+          filename: 'sample.mp4',
+          contentType: 'video/mp4',
+        })
+        .expect(201);
+
+      const filename = attach.body.filename as string;
+      const grantedPath = join(
+        process.cwd(),
+        'file',
+        'upload',
+        filename.replace('temp_', 'granted_'),
+      );
+      createdFiles.push(
+        join(process.cwd(), 'file', 'temp', filename),
+        grantedPath,
+      );
+
+      const promote = await request(server)
+        .post('/file')
+        .set(auth(accessToken))
+        .send({ title, filePath: filename })
+        .expect(201);
+
+      return { id: promote.body.id as number, grantedPath };
+    }
+
+    it('deletes an account that owns nothing', async () => {
+      const user = await createUser('solo@e.com');
+
+      await request(server)
+        .delete(`/user/${user.id}`)
+        .set(auth(user.accessToken))
+        .expect(200);
+    });
+
+    it('refuses to delete an account that owns files (409 USER_HAS_FILES)', async () => {
+      const user = await createUser('owner@e.com');
+      await seedFile('kept-a', user.id);
+      await seedFile('kept-b', user.id);
+
+      const res = await request(server)
+        .delete(`/user/${user.id}`)
+        .set(auth(user.accessToken))
+        .expect(409);
+
+      expect(res.body.code).toBe('USER_HAS_FILES');
+      // The count is what the client's warning dialog quotes back to the user.
+      expect(res.body.message).toContain('2 file(s)');
+
+      // Nothing was destroyed by the refused attempt.
+      await request(server)
+        .get('/user/' + user.id)
+        .set(auth(user.accessToken))
+        .expect(200);
+    });
+
+    it('rejects a confirmation flag that is neither "true" nor "false"', async () => {
+      const user = await createUser('badflag@e.com');
+      await seedFile('kept-c', user.id);
+
+      const res = await request(server)
+        .delete(`/user/${user.id}?deleteFiles=yes`)
+        .set(auth(user.accessToken))
+        .expect(400);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('treats deleteFiles=false as no confirmation at all', async () => {
+      const user = await createUser('explicit-no@e.com');
+      await seedFile('kept-d', user.id);
+
+      const res = await request(server)
+        .delete(`/user/${user.id}?deleteFiles=false`)
+        .set(auth(user.accessToken))
+        .expect(409);
+      expect(res.body.code).toBe('USER_HAS_FILES');
+    });
+
+    it('cascades into file rows and stored files once confirmed', async () => {
+      const user = await createUser('cascade@e.com');
+      const file = await promoteFile(user.accessToken, 'doomed-clip');
+      expect(existsSync(file.grantedPath)).toBe(true);
+
+      await request(server)
+        .delete(`/user/${user.id}?deleteFiles=true`)
+        .set(auth(user.accessToken))
+        .expect(200);
+
+      expect(existsSync(file.grantedPath)).toBe(false);
+
+      // Both rows are gone: a second sign-in fails and the file row is unreachable.
+      await request(server)
+        .post('/auth/signin')
+        .set('Authorization', basic('cascade@e.com', PW))
+        .expect(401);
+
+      const rows = await app
+        .get(DataSource)
+        .getRepository(FileEntity)
+        .count({ where: { id: file.id } });
+      expect(rows).toBe(0);
+    });
+
+    it('removes the stored file when a single file is deleted', async () => {
+      const user = await createUser('single@e.com');
+      const file = await promoteFile(user.accessToken, 'single-clip');
+
+      await request(server)
+        .delete(`/file/${file.id}`)
+        .set(auth(user.accessToken))
+        .expect(200);
+
+      expect(existsSync(file.grantedPath)).toBe(false);
+    });
+  });
 });

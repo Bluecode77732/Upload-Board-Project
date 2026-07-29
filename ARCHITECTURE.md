@@ -69,7 +69,7 @@ All routes behind `JwtAuthGuard`; controller carries `ClassSerializerInterceptor
 | `GET /user` | List users (`findAndCount`) |
 | `GET /user/:id` | Single user or 404 |
 | `PATCH /user/:id` | **Self only** — re-hashes password via `HASH_ROUNDS` if provided |
-| `DELETE /user/:id` | **Self only** — hard delete |
+| `DELETE /user/:id` | **Self or admin** — hard delete. An account owning files needs `?deleteFiles=true`, which cascades into its file rows and stored files; without it, 409 `USER_HAS_FILES` (ADR 0020) |
 
 - There is deliberately **no `POST /user`** — registration is `POST /auth/register`.
 - Self-only enforcement compares `@UserId()` (JWT identity) against the path id and throws
@@ -89,7 +89,7 @@ All routes behind `JwtAuthGuard`.
 | `GET /file/:id` | Metadata + creator join, or 404 |
 | `POST /file` | Promotes a temp file: DB insert + physical rename in one transaction. The filename is a one-shot claim token — a resubmit replays (200) for its claimant, 409 `FILE_ALREADY_CLAIMED` for others (ADR 0019) |
 | `PATCH /file/:id` | **Creator only** — title (duplicate-checked), `granted_` filePath, ownership reassignment |
-| `DELETE /file/:id` | **Creator only** — hard delete of the metadata row |
+| `DELETE /file/:id` | **Creator or admin** — hard delete of the metadata row, then the stored `granted_` file is unlinked (ADR 0020) |
 
 - `FileService.uploadFile` / `updateFile` use the **manual QueryRunner** transaction pattern
   (`createQueryRunner → connect → startTransaction → commit/rollback → release`, `release()`

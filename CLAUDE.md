@@ -20,6 +20,7 @@ Before making any change:
    - Auth flow change      → read `backend/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `backend/auth/strategy/`; grep `JwtAuthGuard`, `LocalAuthGuard`
    - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract, one-shot claim resolution in `uploadFile` — ADR 0019)
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer diskStorage, `temp_{uuid}_{timestamp}` naming) and `upload.controller.ts` (100MB size limit)
+   - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`) and `backend/common/unlink-stored-files.ts` (post-commit unlink, ADR 0020)
    - Orphan temp cleanup   → read `backend/temp-cleanup/temp-cleanup.service.ts` (`@nestjs/schedule` `SchedulerRegistry` cron, `temp_`-prefix + TTL sweep of `file/temp`, ADR 0018) and its `selectExpiredTempFiles` pure core
    - Env var change        → read the Joi schema in `backend/app.module.ts` AND `.env.example` — both must stay in sync
    - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides
@@ -759,6 +760,29 @@ Do not suggest alternatives to these decisions without explicit request.
   does not justify the schema layer, client story, or operational overhead each would add
   (full reasoning: ADR 0009)
 
+### Deletion (ADR 0020)
+- **Soft delete is not adopted.** Every delete in this project is a hard delete; there is
+  no `@DeleteDateColumn`, no `withDeleted` policy, and no recovery path. Introducing soft
+  delete is a schema change on high-blast-radius entities and needs its own ADR
+- `DELETE /user/:id` cascades **only on an explicit `?deleteFiles=true`** (validated by
+  `DeleteUserQueryDto`): file rows → user row in one `dataSource.transaction()`, then the
+  stored files are unlinked. Unconfirmed against an account that owns files = 409
+  `USER_HAS_FILES` with the count in the message; `deleteFiles=false` counts as unconfirmed
+- The confirmation flag is a **string literal** (`'true' | 'false'`), never a boolean:
+  the global pipe's `enableImplicitConversion` truthiness-casts `"false"` to `true` before
+  any custom `@Transform` (measured, pinned by `delete-user-query.dto.spec.ts`). Any future
+  boolean-ish query flag on a destructive path follows the same shape
+- Physical deletion is **post-commit and best-effort** via
+  `unlinkStoredFiles` (`backend/common/`), which refuses paths outside `file/upload/` and
+  reports failures for the caller to log at `warn`. Nothing sweeps `file/upload` — a
+  `granted_` sweep would need a DB join (unlike ADR 0018's filename-only decision)
+- File rows stay `FileService`'s responsibility even during an account cascade:
+  `UserService` owns the transaction and passes its `EntityManager` to
+  `findStoredPathsOfCreator` / `deleteFilesOfCreator`
+- **Never suggest**: adding `ON DELETE CASCADE` to the `FileEntity.creator` FK (the cascade
+  is deliberately explicit in the service, where the paths to unlink are read), or an
+  unconfirmed account cascade
+
 ### Config
 - All env vars Joi-validated at startup (`app.module.ts`); missing vars throw on boot
 - Access via `ConfigService` only — `getOrThrow` for required values, `get` with
@@ -895,9 +919,11 @@ pnpm test -- file.service
 
 **UserModule** (`backend/user/`)
 - REST (all behind `JwtAuthGuard`): `GET /user`, `GET /user/:id`, `PATCH /user/:id`,
-  `DELETE /user/:id` — no `POST /user` by design (registration is `POST /auth/register`)
-- `UserService` — CRUD; re-hashes password on update via `HASH_ROUNDS`
-- Exports `UserService`
+  `DELETE /user/:id` (optional `?deleteFiles=true` — confirmed cascade, ADR 0020) — no
+  `POST /user` by design (registration is `POST /auth/register`)
+- `UserService` — CRUD; re-hashes password on update via `HASH_ROUNDS`; `remove` owns the
+  deletion transaction and delegates file rows to `FileService`
+- Exports `UserService`; imports `FileModule` for the account cascade
 
 **FileModule** (`backend/file/`)
 - REST (all behind `JwtAuthGuard`): `GET /file`, `GET /file/:id`, `POST /file`,
@@ -905,7 +931,10 @@ pnpm test -- file.service
 - `FileService` — metadata CRUD; `uploadFile`/`updateFile` use the manual QueryRunner
   transaction pattern; `toResponse()` shapes `FileResponseDto` with `BASE_URL`.
   `uploadFile` returns `{ replayed, file }` — the claim outcome (ADR 0019), which the
-  controller maps to 200 (replay) or 201 (fresh promotion)
+  controller maps to 200 (replay) or 201 (fresh promotion). `deleteFile` also unlinks the
+  stored file after the row is gone; `findStoredPathsOfCreator` / `deleteFilesOfCreator`
+  serve the account cascade inside `UserService`'s transaction (ADR 0020)
+- Exports `FileService` (consumed by `UserModule` for the account cascade)
 
 **UploadModule** (`backend/upload/`)
 - REST: `POST /upload/attach` (behind `JwtAuthGuard`) — multipart field `video`,

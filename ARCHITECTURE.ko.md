@@ -69,7 +69,7 @@ AppModule
 | `GET /user` | 사용자 목록 (`findAndCount`) |
 | `GET /user/:id` | 단일 사용자 또는 404 |
 | `PATCH /user/:id` | **본인만** — 비밀번호 제공 시 `HASH_ROUNDS`로 재해싱 |
-| `DELETE /user/:id` | **본인만** — 하드 삭제 |
+| `DELETE /user/:id` | **본인 또는 admin** — 하드 삭제. 파일을 보유한 계정은 `?deleteFiles=true`가 있어야 하며, 이때 파일 행과 물리 파일까지 연쇄 삭제된다. 없으면 409 `USER_HAS_FILES` (ADR 0020) |
 
 - **`POST /user`는 의도적으로 없습니다** — 등록은 `POST /auth/register`입니다.
 - 본인 확인은 `@UserId()`(JWT 신원)와 경로 id를 비교해 불일치 시 `ForbiddenException`을
@@ -89,7 +89,7 @@ AppModule
 | `GET /file/:id` | 메타데이터 + creator 조인, 없으면 404 |
 | `POST /file` | temp 파일 승격: DB insert + 물리 rename을 한 트랜잭션에서 수행. 파일명은 1회용 청구 토큰이라, 재제출 시 청구자 본인에게는 replay(200), 타인에게는 409 `FILE_ALREADY_CLAIMED` (ADR 0019) |
 | `PATCH /file/:id` | **작성자만** — 제목(중복 검사), `granted_` filePath, 소유권 재할당 |
-| `DELETE /file/:id` | **작성자만** — 메타데이터 행 하드 삭제 |
+| `DELETE /file/:id` | **작성자 또는 admin** — 메타데이터 행을 하드 삭제한 뒤 저장된 `granted_` 파일을 unlink한다 (ADR 0020) |
 
 - `FileService.uploadFile` / `updateFile`은 **수동 QueryRunner** 트랜잭션 패턴을 사용합니다
   (`createQueryRunner → connect → startTransaction → commit/rollback → release`,

@@ -13,6 +13,23 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- Deletion policy (Stage 2 — mechanism hardening;
+  [ADR 0020](ADR/0020-account-deletion-cascade.md)): **soft delete is not adopted** —
+  deletion stays hard, and the reasons are recorded in the ADR. `DELETE /user/:id` now
+  takes an optional `deleteFiles` confirmation: with `deleteFiles=true` the account is
+  deleted **together with every file it owns** (file rows → account row inside one
+  `dataSource.transaction`, then the stored files are unlinked **after** the commit, since
+  `unlink` cannot be rolled back). Without it, an account that still owns files is refused
+  with the new **409 `USER_HAS_FILES`**, whose message carries the file count for the
+  client's warning dialog — replacing the previous FK-violation **500** (`23503`, an opaque
+  "Internal server error"). `deleteFiles=false` counts as no confirmation; the flag is a
+  validated string literal (`'true' | 'false'`) rather than a boolean because the global
+  pipe's `enableImplicitConversion` measurably truthiness-casts `"false"` to `true` before
+  any custom `@Transform` — `delete-user-query.dto.spec.ts` pins that behavior. An account
+  owning no files deletes exactly as before. `USER_DELETE` audit rows now carry
+  `detail: files=N`. No schema change (the FK keeps `ON DELETE NO ACTION`; the cascade is
+  explicit in the service). E2E covers the refusal, the confirmed cascade, the invalid
+  flag, and `deleteFiles=false`.
 - Upload duplicate-submission policy (Stage 2 — mechanism hardening;
   [ADR 0019](ADR/0019-upload-claim-idempotency.md)): the filename `POST /upload/attach`
   issues is now a **one-shot claim token**, so `POST /file` has a defined retry contract
@@ -171,6 +188,13 @@ development line (package.json version).
   Related docs synced: `CLAUDE.md`, `README.md`.
 
 ### Fixed
+- `DELETE /file/:id` now removes the stored file, not just its row
+  ([ADR 0020](ADR/0020-account-deletion-cascade.md)): every file deletion used to leave its
+  `granted_` file in `file/upload` forever — still publicly served by `ServeStaticModule`,
+  and never reclaimed (the ADR 0018 sweep only ever touches `temp_` files in `file/temp`).
+  The unlink runs after the row is gone and is best-effort: a failure is logged at `warn`
+  and leaves an orphan rather than undoing a committed delete. Paths outside `file/upload/`
+  are refused — a reachable case, since `UpdateFileDto` accepts a bare `granted_` name.
 - `POST /file` no longer answers 500 on foreseeable client sequences
   ([ADR 0019](ADR/0019-upload-claim-idempotency.md)): resubmitting a claimed filename with
   a different title used to insert the row, fail the `rename` with `ENOENT` and collapse to

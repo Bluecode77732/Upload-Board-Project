@@ -13,6 +13,22 @@
 ## [Unreleased]
 
 ### 추가
+- 삭제 정책 (Stage 2 — 메커니즘 강화;
+  [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)): **soft delete는 채택하지 않는다** —
+  삭제는 hard delete로 유지하며, 그 근거는 ADR에 기록했다. `DELETE /user/:id`는 이제 선택적
+  `deleteFiles` 확인 값을 받는다. `deleteFiles=true`면 계정을 **그 계정이 소유한 모든 파일과
+  함께** 삭제한다(파일 행 → 계정 행을 하나의 `dataSource.transaction` 안에서 지우고, 물리
+  파일 unlink는 롤백이 불가능하므로 **커밋 이후에** 수행한다). 확인이 없으면 파일을 보유한
+  계정의 삭제를 신규 **409 `USER_HAS_FILES`**로 거절하며, 클라이언트 경고 문구에 쓸 파일
+  개수를 메시지에 담는다 — 기존의 FK 위반 **500**(`23503`, 원인을 알 수 없는 "Internal server
+  error")을 대체한다. `deleteFiles=false`는 확인하지 않은 것으로 취급한다. 이 플래그를 boolean이
+  아니라 검증된 문자열 리터럴(`'true' | 'false'`)로 받은 이유는, 전역 파이프의
+  `enableImplicitConversion`이 커스텀 `@Transform`보다 먼저 `"false"`를 truthiness로 `true`로
+  바꾸는 것이 실측으로 확인됐기 때문이다 — `delete-user-query.dto.spec.ts`가 이 동작을 고정한다.
+  파일이 없는 계정의 삭제는 기존과 완전히 동일하다. `USER_DELETE` 감사 기록에는
+  `detail: files=N`이 붙는다. 스키마 변경은 없다(FK는 `ON DELETE NO ACTION` 유지, 연쇄는
+  서비스에서 명시적으로 수행). E2E는 거절, 확인된 연쇄 삭제, 잘못된 플래그,
+  `deleteFiles=false`를 모두 커버한다.
 - 업로드 중복 제출 정책 (Stage 2 — 메커니즘 강화;
   [ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)): `POST /upload/attach`가 발급하는
   파일명을 **1회용 청구 토큰**으로 삼아, 새 저장소도 스키마 변경도 없이 `POST /file`의
@@ -163,6 +179,13 @@
   `CLAUDE.md`, `README.md`.
 
 ### 수정
+- `DELETE /file/:id`가 행뿐 아니라 저장된 물리 파일까지 지운다
+  ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)): 그동안 파일을 삭제해도 `granted_`
+  파일은 `file/upload`에 영구히 남았고, `ServeStaticModule`을 통해 계속 공개 서빙되면서
+  아무도 회수하지 않았다(ADR 0018 스윕은 `file/temp`의 `temp_` 파일만 건드린다). unlink는 행이
+  사라진 뒤에 best-effort로 수행한다 — 실패하면 `warn`으로 남기고 고아 파일을 남길 뿐, 이미
+  커밋된 삭제를 되돌리지 않는다. `file/upload/` 바깥 경로는 거부하며, 이는 `UpdateFileDto`가
+  폴더 없는 맨 `granted_` 이름을 허용하므로 실제로 도달 가능한 분기다.
 - `POST /file`이 예측 가능한 클라이언트 시퀀스에 500을 내지 않는다
   ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)): 이미 청구된 파일명을 다른 title로
   다시 제출하면 행을 insert한 뒤 `rename`이 `ENOENT`로 실패해 `INTERNAL_ERROR`로 무너졌고,

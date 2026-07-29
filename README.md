@@ -125,7 +125,10 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.m
 - `GET /user/:id` — get a user
 - `PATCH /user/:id` — update a user (self or admin)
 - `PATCH /user/:id/role` — assign a role (superadmin only; the last superadmin cannot be demoted)
-- `DELETE /user/:id` — delete a user (self or admin)
+- `DELETE /user/:id` — delete a user (self or admin). An account that owns files is
+  refused with 409 `USER_HAS_FILES` unless the request confirms the cascade with
+  `?deleteFiles=true`, which deletes the account together with its files — irreversibly
+  ([ADR 0020](ADR/0020-account-deletion-cascade.md))
 
 **File**
 - `POST /upload/attach` — upload a video to temp storage (multipart field `video`, 100 MB limit)
@@ -136,7 +139,7 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.m
   (idempotent retry) for the user who claimed it, and 409 `FILE_ALREADY_CLAIMED` for
   anyone else ([ADR 0019](ADR/0019-upload-claim-idempotency.md))
 - `PATCH /file/:id` — update file metadata (creator or admin)
-- `DELETE /file/:id` — delete file metadata (creator or admin)
+- `DELETE /file/:id` — delete file metadata and the stored file (creator or admin)
 
 **Audit log**
 - `GET /audit-log` — review ROLE_CHANGE / USER_DELETE / FILE_DELETE records (admin only; paginated, `?action` filter)

@@ -51,7 +51,9 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   `TempCleanupModule`의 스케줄 `@nestjs/schedule` 스윕 — 업로드 중복 제출 정책이
   2026-07-27 반영됐다 ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)): attach가
   발급한 파일명이 1회용 청구 토큰이라, 재시도는 에러 대신 replay(200)로 응답한다.
-  **다음 Stage 2 작업**: 삭제 정책 설계(소프트 삭제 + `DELETE /user/:id` FK 제약 500).
+  삭제 정책은 2026-07-30 반영됐다 ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)):
+  soft delete는 채택하지 않고, 계정은 명시적인 `deleteFiles=true`가 있을 때만 자기 파일까지
+  연쇄 삭제하며, 기존 FK 위반 500은 타입 있는 409가 됐다 — **Stage 2가 완결됐다**.
 
 ## 1. 비전과 본질
 
@@ -170,7 +172,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | 작업 | 근거 / 의존성 |
 |---|---|
 | ~~고아 temp 파일 정리~~ — ✅ 2026-07-26 반영 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)) | `POST /file`이 끝내 호출되지 않으면 `temp_` 파일이 영구 누적됐다 — 유일한 무관리 리소스 누수. 스케줄 `@nestjs/schedule` 스윕(신규 `TempCleanupModule`)이 TTL(기본 24시간, 매시간)을 넘은 `file/temp`의 `temp_` 파일을 삭제한다. |
-| 삭제 정책 설계 (soft delete + FK) | soft delete 채택 여부와 `DELETE /user/:id`의 FK 제약 500(`FileEntity.creator`가 `nullable: false`)을 하나의 설계 작업으로 통합. |
+| ~~삭제 정책 설계 (soft delete + FK)~~ — ✅ 2026-07-30 반영 ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) | soft delete는 **채택하지 않고** 삭제는 hard delete로 유지한다. `DELETE /user/:id?deleteFiles=true`는 계정의 파일 행과 물리 파일까지 연쇄 삭제하고, 확인 없는 요청이 파일 보유 계정에 들어오면 기존 FK 위반 500 대신 409 `USER_HAS_FILES`(메시지에 개수 포함)로 거절한다. 이번 과제에서 발견한 누수를 닫아 `DELETE /file/:id`도 이제 저장된 `granted_` 파일을 unlink한다. unlink는 커밋 이후에 수행하며(비가역 단계를 마지막에), 스키마 변경은 없다. |
 | ~~업로드 멱등성/중복 정책 명문화~~ — ✅ 2026-07-27 반영 ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)) | attach가 발급한 `temp_{uuid}_{ts}` 파일명이 1회용 청구 토큰이다. 재제출 시 청구자 본인에게는 기존 파일을 replay(200)하고, 타인에게는 409 `FILE_ALREADY_CLAIMED`를 내며, 동시 제출 경합은 500이 아니라 unique 제약으로 정리된다. `filePath`를 DTO 경계에서 발급 형식으로 고정해 경로 탈출 공백도 함께 닫았다. 스키마 변경 없음. |
 
 ### Stage 3 — 도메인 확장
@@ -240,6 +242,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 (README/엔드포인트 일치의 자동 검증 — CI 작업 아래의 후보).
 
 ## 9. 완료
+
+### 2026-07-30
+
+| 항목 | 비고 |
+|---|---|
+| 삭제 정책 설계 | soft delete는 근거를 남기고 기각했으며 삭제는 hard delete로 유지한다. `DELETE /user/:id?deleteFiles=true`는 파일 행 → 계정 행 → 물리 파일 순으로 연쇄 삭제하고(unlink는 커밋 이후), 확인 없이 파일 보유 계정을 지우려 하면 개수를 담은 신규 409 `USER_HAS_FILES`로 거절한다. `deleteFiles`를 boolean이 아닌 검증된 문자열 리터럴로 받은 이유는 암묵 Boolean 변환이 `"false"`를 `true`로 바꾸는 것이 실측으로 확인됐기 때문이다. 이번 과제에서 발견한 누수를 닫아 `DELETE /file/:id`도 저장된 `granted_` 파일을 unlink한다. 스키마 변경 없음 — **Stage 2 세 번째 작업이자 Stage 2 완결** ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) |
 
 ### 2026-07-27
 

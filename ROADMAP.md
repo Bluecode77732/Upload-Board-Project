@@ -54,8 +54,10 @@ lands as its own dedicated, designed change
   sweep in a new operational `TempCleanupModule` — and the upload duplicate-submission
   policy landed 2026-07-27 ([ADR 0019](ADR/0019-upload-claim-idempotency.md)): the
   attach-issued filename is a one-shot claim token, so a retry replays (200) instead of
-  erroring. **Next Stage 2 task**: deletion policy design (soft delete + the
-  `DELETE /user/:id` FK-constraint 500).
+  erroring. The deletion policy landed 2026-07-30
+  ([ADR 0020](ADR/0020-account-deletion-cascade.md)): soft delete is not adopted, an
+  account cascades into its files only on an explicit `deleteFiles=true`, and the old
+  FK-violation 500 is now a typed 409 — **Stage 2 is complete**.
 
 ## 1. Vision & essence
 
@@ -184,7 +186,7 @@ settled while zero consumers exist.
 | Task | Rationale / dependencies |
 |---|---|
 | ~~Orphan temp-file cleanup~~ — ✅ landed 2026-07-26 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)) | `temp_` files accumulated forever when `POST /file` was never called — the only unmanaged resource leak. A scheduled `@nestjs/schedule` sweep (new `TempCleanupModule`) deletes `temp_` files in `file/temp` past a TTL (default 24h, hourly). |
-| Deletion policy design (soft delete + FK) | One design task uniting the soft-delete question with the `DELETE /user/:id` FK-constraint 500 (`FileEntity.creator` is `nullable: false`). |
+| ~~Deletion policy design (soft delete + FK)~~ — ✅ landed 2026-07-30 ([ADR 0020](ADR/0020-account-deletion-cascade.md)) | Soft delete **not** adopted; deletion stays hard. `DELETE /user/:id?deleteFiles=true` cascades into the account's file rows and stored files, while an unconfirmed request against an account that owns files is refused with 409 `USER_HAS_FILES` (count in the message) instead of the old FK-violation 500. `DELETE /file/:id` now also unlinks the stored `granted_` file — a leak found during this task. Unlink runs post-commit (irreversible step last); no schema change. |
 | ~~Upload idempotency / duplicate policy~~ — ✅ landed 2026-07-27 ([ADR 0019](ADR/0019-upload-claim-idempotency.md)) | The attach-issued `temp_{uuid}_{ts}` filename is a one-shot claim token: resubmitting it replays the existing file (200) for its claimant, conflicts (409 `FILE_ALREADY_CLAIMED`) for anyone else, and a concurrent double-submit resolves through the unique constraint instead of a 500. `filePath` is pinned to the issued shape at the DTO boundary, which also closes a path-traversal gap. No schema change. |
 
 ### Stage 3 — Domain expansion
@@ -256,6 +258,12 @@ ordering), docs-as-code enforcement (automated README/endpoint consistency — a
 candidate under the CI task).
 
 ## 9. Completed
+
+### 2026-07-30
+
+| Item | Notes |
+|---|---|
+| Deletion policy design | Soft delete rejected with reasons recorded; deletion stays hard. `DELETE /user/:id?deleteFiles=true` cascades (file rows → account row → stored files, unlink post-commit), an unconfirmed delete of an account owning files returns the new 409 `USER_HAS_FILES` with the count, and `deleteFiles` is a validated string literal because implicit Boolean conversion measurably turns `"false"` into `true`. `DELETE /file/:id` now unlinks the stored `granted_` file — a leak found during this task. No schema change — **third Stage 2 task, Stage 2 complete** ([ADR 0020](ADR/0020-account-deletion-cascade.md)) |
 
 ### 2026-07-27
 

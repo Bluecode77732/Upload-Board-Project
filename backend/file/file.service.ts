@@ -5,10 +5,16 @@ import {
   HttpException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { UploadFileDto } from './dto/create-uploadFile.dto';
-import { DataSource, QueryFailedError, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  QueryFailedError,
+  Repository,
+} from 'typeorm';
 import { UserEntity } from 'backend/user/entity/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FileEntity } from './entity/file.entity';
@@ -20,6 +26,7 @@ import { ConfigService } from '@nestjs/config';
 import { ErrorCode } from 'backend/common/error-code';
 import { ROLE_RANK, UserRole } from 'backend/auth/role/role';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
+import { unlinkStoredFiles } from 'backend/common/unlink-stored-files';
 
 // The acting user's identity + role (from the JWT), enough for creator-OR-admin checks.
 interface Requester {
@@ -40,6 +47,8 @@ const UNIQUE_VIOLATION = '23505';
 
 @Injectable()
 export class FileService {
+  private readonly logger = new Logger(FileService.name);
+
   constructor(
     private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
@@ -384,6 +393,50 @@ export class FileService {
     return this.toResponse(updated);
   }
 
+  // 목적: 저장 경로 목록의 물리 파일을 지우고, 남은 것은 경고 로그로 드러낸다.
+  // 이유: unlink 실패가 이미 확정된 DB 삭제를 되돌릴 수는 없으므로, 조용히 새는 대신 관측 가능해야 한다.
+  // 방법: 공용 unlinkStoredFiles로 file/upload 하위만 best-effort 삭제하고, 실패분을 건별 warn으로 남긴다.
+  private async removeStoredFiles(filePaths: string[]): Promise<void> {
+    const { failures } = await unlinkStoredFiles(filePaths);
+    for (const failure of failures) {
+      this.logger.warn(
+        `Stored file left on disk: ${failure.filePath} (${failure.reason})`,
+      );
+    }
+  }
+
+  // 목적: 한 유저가 소유한 파일들의 저장 경로를 호출자의 트랜잭션 안에서 읽어 온다.
+  // 이유: 계정 삭제는 "파일이 몇 개 남아 있는가"를 먼저 알아야 연쇄 확인(409)을 판정할 수 있다.
+  // 방법: 호출자가 넘긴 EntityManager로 creator 기준 조회 후 filePath만 추출한다 — 삭제는 하지 않는다(CQS).
+  async findStoredPathsOfCreator(
+    manager: EntityManager,
+    creatorId: number,
+  ): Promise<string[]> {
+    const files = await manager.find(FileEntity, {
+      where: { creator: { id: creatorId } },
+    });
+    return files.map((file) => file.filePath);
+  }
+
+  // 목적: 한 유저가 소유한 파일 행 전부를 호출자의 트랜잭션 안에서 삭제한다.
+  // 이유: FK_file_entity_creator가 ON DELETE NO ACTION이라 유저 행보다 파일 행이 먼저 사라져야 하고,
+  //       파일 메타데이터의 삭제 규칙은 UserModule이 아니라 FileModule의 책임이다(모듈 책임 경계).
+  // 방법: id 목록이 아니라 creatorId 기준으로 지운다 — 조회 이후 끼어든 업로드까지 포함해야 FK 위반이 남지 않는다.
+  async deleteFilesOfCreator(
+    manager: EntityManager,
+    creatorId: number,
+  ): Promise<void> {
+    await manager
+      .createQueryBuilder()
+      .delete()
+      .from(FileEntity)
+      .where('"creatorId" = :creatorId', { creatorId })
+      .execute();
+  }
+
+  // 목적: 파일 메타데이터 행과 그에 대응하는 물리 파일을 함께 제거한다.
+  // 이유: 행만 지우던 기존 동작은 granted_ 파일을 영구 고아로 남기고, 그 URL이 계속 공개 서빙됐다(ADR 0020).
+  // 방법: 권한 확인 → 행 삭제 → 커밋된 뒤에만 unlink(실패는 warn 로그) → 감사 로그 순서로, 되돌릴 수 없는 작업을 맨 뒤에 둔다.
   async deleteFile(id: number, requester: Requester): Promise<string> {
     const file = await this.fileRepository.findOne({
       where: { id },
@@ -405,6 +458,10 @@ export class FileService {
     }
 
     await this.fileRepository.delete(id);
+
+    // Stored file goes only after the row is gone: unlink cannot be rolled back, so the
+    // recoverable failure (an orphan on disk) must be the only one reachable (ADR 0020).
+    await this.removeStoredFiles([file.filePath]);
 
     // Audit after the delete succeeds (side effect isolated from the delete).
     await this.auditLogService.log(requester.id, id, 'FILE_DELETE');
