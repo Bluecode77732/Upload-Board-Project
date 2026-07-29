@@ -42,6 +42,13 @@ same reason the routes were.
   `FILE_INVALID_PATH`, `UPLOAD_FILE_REQUIRED`, `UPLOAD_INVALID_TYPE`,
   `VALIDATION_FAILED`) and status fallbacks (`BAD_REQUEST`, `FORBIDDEN`,
   `NOT_FOUND`, `PAYLOAD_TOO_LARGE`, `INTERNAL_ERROR`).
+  (2026-07-27: the list above is the **snapshot at decision time**, not a live
+  index — `backend/common/error-code.ts` is the authoritative catalog and it has
+  grown since, e.g. `AUTH_REFRESH_REUSED` ([ADR 0012](0012-refresh-cookie-rotation.md)),
+  `AUTH_LAST_SUPERADMIN` ([ADR 0013](0013-rbac-and-audit-log.md)),
+  `FILE_ALREADY_CLAIMED` ([ADR 0019](0019-upload-claim-idempotency.md)). Adding a code
+  is free and is recorded in the ADR that introduces it; this ADR is not re-edited
+  per code.)
 - **Attachment at the throw site, no new exception classes** — codes ride on the
   standard Nest exceptions:
 
