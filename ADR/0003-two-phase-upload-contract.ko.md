@@ -30,6 +30,10 @@
 `UpdateFileDto.filePath`는 `temp_` 값을 거부하고 `granted_` 값만 허용합니다.
 파일명은 항상 서버가 생성(uuid + timestamp)하며 클라이언트는 그것을 되돌려줄
 뿐입니다 — 클라이언트가 선택한 경로 조각이 파일시스템에 닿는 일이 없습니다.
+(2026-07-27: 이 "되돌려주기"는 이제 가정이 아니라 *강제*됩니다 —
+`UploadFileDto.filePath`에 `@Matches(TEMP_FILENAME_PATTERN)`이 붙었고, 이 파일명은
+동시에 중복 제출 거동을 규정하는 1회용 청구 토큰 역할을 합니다 —
+[ADR 0019](0019-upload-claim-idempotency.ko.md).)
 
 ## 결과
 
@@ -40,3 +44,10 @@
 - DB insert + rename의 결합이 `FileService`가 수동 QueryRunner 패턴을 쓰는
   이유입니다 ([ADR 0004](0004-transaction-pattern-selection.ko.md) 참조).
 - 경로 조작(path traversal)은 정제(sanitization)가 아니라 구조적으로 차단됩니다.
+  (2026-07-27: *생성되는* 이름에는 이 말이 성립했지만, 되돌아 들어오는 값은 한 번도
+  검사하지 않았습니다 — 검증 없는 `filePath`가 `rename`의 소스로 들어가서 `../`
+  세그먼트로 타인의 `granted_` 파일을 가리키는 행을 만들 수 있었습니다.
+  [ADR 0019](0019-upload-claim-idempotency.ko.md)의 DTO 패턴으로 차단.)
+- 중복 제출 거동은 여기서 정의되지 않은 채 남았습니다. (2026-07-27 정의됨 —
+  [ADR 0019](0019-upload-claim-idempotency.ko.md)가 attach 발급 파일명을 1회용 청구
+  토큰으로 삼아, 재제출은 청구자 본인에게 replay, 그 외에는 409를 냅니다.)
