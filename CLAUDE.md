@@ -56,7 +56,7 @@ Do not make any of the following unless explicitly requested:
 - New dependency additions — confirm via pnpm before installing; check license type (MIT/Apache-2/BSD preferred); runtime-bundled GPL/AGPL carries copyleft risk — note this before adding. Run `pnpm audit` for known CVEs.
 - Schema changes — if an entity change is needed, describe the required column/relation change in plain text and stop. Migration tooling exists (adopted 2026-07-22: `migration:*` scripts + `backend/data-source.ts` + `backend/migrations/`) — never run `migration:generate` without a prior plain-text description, and always review its output line-by-line before running. The baseline migration uses readable constraint names (not TypeORM hashes), so `generate` may emit spurious constraint-rename statements — strip them, keep only the intended change.
 - Large-scale formatting edits
-- Permanent data deletion paths (hard-delete service methods, cascade-delete relations) — `UserService.remove` and `FileService.deleteFile` are hard deletes; before adding another, describe the cascade depth (`FileEntity.creator` is `nullable: false` — deleting a user with files will hit an FK constraint) and confirm the operation is intentionally irreversible before writing any code
+- Permanent data deletion paths (hard-delete service methods, cascade-delete relations) — soft delete is deliberately **not** adopted (ADR 0020), so every delete here is irreversible: `UserService.remove` hard-deletes and, on an explicit `deleteFiles=true`, cascades into the account's file rows **and their stored files**; `FileService.deleteFile` hard-deletes the row **and unlinks the stored file**. Before adding another, describe the cascade depth (DB rows *and* disk) and confirm the operation is intentionally irreversible before writing any code. Physical `unlink` always runs **after** the owning transaction commits — it cannot be rolled back, so the only reachable failure must be a recoverable orphan on disk, never a row pointing at a missing file
 
 High-blast-radius files — require explicit approval before any edit (a change here
 radiates repo-wide, so the blast radius is never "just this file": `app.module.ts` wires
@@ -111,7 +111,7 @@ When planning an implementation, answer the following before proceeding:
   - Does this add a NestJS provider? → which module's `providers[]` needs it? Cross-module use goes through `exports`/`imports` only — never re-declare another module's service in your own `providers[]`
   - Does this change transaction scope? → pick a row from the transaction-pattern table (Project-Specific Principles > Transaction Boundary) and state why
   - Does this add or change an endpoint? → Swagger decorators (`@ApiTags`, `@ApiResponse`, auth decorator) are required; verify `/doc` renders it correctly
-  - Does a new handler/service method act on a loaded relation? → *tell* the owning service, don't *ask-then-act* by reaching through it in the controller (Law of Demeter / Tell Don't Ask) — no `a.b.c` reach-through; follow the existing file-ownership-in-`FileService` pattern, not an inline `file.creator.id` check in the controller
+  - Does a new handler/service method decide identity/ownership, or act on a loaded relation? → the decision lives in the layer that owns the authoritative state, never re-derived by reaching through a loaded relation in an outer layer (Law of Demeter / Tell Don't Ask); no `a.b.c` reach-through — tell the owning service, don't ask-then-act
 
 ### Modification Analysis (수정)
 For each change being made, explicitly state:
@@ -816,9 +816,11 @@ Architecture Decisions above remain operative.
 - `test/app.e2e-spec.ts` is the untouched Nest template: it targets `GET /`, which
   does not exist in this app, and booting AppModule needs a live DB — the e2e suite
   needs a real rewrite before it verifies anything
-- Deleting a user who owns files hits an FK constraint (`FileEntity.creator` is
-  `nullable: false`; no cascade path on `DELETE /user/:id`) — surfaces as a
-  confusing 500; a cascade/ownership-transfer policy decision is needed first
+- ~~Deleting a user who owns files hits an FK constraint~~ — **resolved 2026-07-30**
+  (ADR 0020): `DELETE /user/:id?deleteFiles=true` cascades (file rows → user row →
+  stored files); unconfirmed, it is a typed 409 `USER_HAS_FILES`. Residual, accepted:
+  nothing sweeps `file/upload`, so a failed unlink (or a file inserted between the
+  path read and the delete) leaves an orphan on disk — logged at `warn`, not repaired
 - License mismatch: `package.json` says `UNLICENSED` while the pre-rewrite README
   claimed MIT — needs an explicit decision before the repo is published
 - CORS is opt-in via the optional `CORS_ORIGIN` env var (added 2026-07-22): unset =
