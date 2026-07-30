@@ -16,8 +16,9 @@ import {
 
 // End-to-end coverage of the paths unit tests cannot reach: the auth flow over real
 // HTTP+DB, refresh rotation/reuse (ADR 0012), RBAC ownership 403s, list pagination,
-// and the temp_ → granted_ physical promotion. Requires the local Postgres on 5435
-// (docker start upload-board-pg); the suite owns a throwaway DB (see e2e-utils).
+// the temp_ → granted_ physical promotion, and the deletion policy — confirmed account
+// cascade, its 409 refusal, and stored-file removal (ADR 0020). Requires the local
+// Postgres on 5435 (docker compose up -d db); the suite owns a throwaway DB (see e2e-utils).
 describe('Upload Board API (e2e)', () => {
   let app: INestApplication;
   let server: App;

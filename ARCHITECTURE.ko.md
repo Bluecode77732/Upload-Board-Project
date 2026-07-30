@@ -20,8 +20,8 @@ AppModule
 ├── TypeOrmModule       — PostgreSQL, synchronize: false, 엔티티: FileEntity, UserEntity, AuditLogEntity
 ├── ServeStaticModule   — ./file 폴더를 URL 접두사 /file 로 정적 서빙
 ├── AuthModule          — 토큰 전담: Basic 파싱, JWT 발급/검증, Passport 전략; RBAC RolesGuard/@Roles + role enum (ADR 0013)
-├── UserModule          — 사용자 CRUD 전담; 역할 부여(superadmin) + 부팅 superadmin 시드; UserService export
-├── FileModule          — 파일 *메타데이터* 전담: FileEntity 행 + temp 승격 트랜잭션
+├── UserModule          — 사용자 CRUD 전담; 역할 부여(superadmin) + 부팅 superadmin 시드; UserService export; 계정 삭제 연쇄를 위해 FileModule import (ADR 0020)
+├── FileModule          — 파일 *메타데이터* 전담: FileEntity 행 + temp 승격 트랜잭션 + 행·물리 파일 삭제; FileService export (UserModule이 소비)
 ├── UploadModule        — *물리* 파일 전담: Multer diskStorage; 컨트롤러 전용, DB 접근 없음
 ├── AuditLogModule      — append-only 특권 행위 기록; AuditLogService export (User/File이 소비); admin 전용 GET /audit-log (ADR 0013)
 └── APP_FILTER          — AllExceptionsFilter (backend/common/filter/): 모든 에러를 ErrorBody 계약으로 성형 (ADR 0011)
@@ -78,6 +78,10 @@ AppModule
   채운 `request.user.id`를 읽습니다 — 신원은 절대 body에서 오지 않습니다.
 - `UserModule`은 `UserService`를 export하며, 이것이 모듈의 공개 계약입니다
   (`JwtStrategy`의 토큰 검증에 소비됨).
+- 삭제 트랜잭션은 `UserService.remove`가 소유합니다 — 경계 안이 순수 DB 쓰기뿐이므로
+  `dataSource.transaction()`을 씁니다. 파일 행은 `FileEntity`를 직접 다루지 않고
+  `FileService`에 위임해, 파일 메타데이터가 FileModule의 책임으로 남습니다. 물리 파일
+  unlink는 커밋 **이후**에 실행됩니다 ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)).
 
 ### FileModule (`backend/file/`)
 
@@ -95,6 +99,16 @@ AppModule
   (`createQueryRunner → connect → startTransaction → commit/rollback → release`,
   `release()`는 항상 `finally`). 비-DB 부수효과(물리 `rename`)가 트랜잭션 경계 안에
   들어가야 하기 때문입니다 ([ADR 0004](ADR/0004-transaction-pattern-selection.ko.md)).
+- 삭제는 그 경계의 반대편에 섭니다: 물리 `unlink`는 행이 사라진 **뒤에** 실행합니다.
+  `unlink`는 롤백이 불가능하므로, 트랜잭션 안에 두면 커밋 실패 시 행 없는 파일이 남지만
+  바깥에 두면 실패해도 복구 가능한 고아 파일만 남습니다(`warn` 로그).
+  `unlinkStoredFiles`(`backend/common/unlink-stored-files.ts`)는 `file/upload/` 바깥
+  경로를 거부합니다.
+- `FileService.findStoredPathsOfCreator` / `deleteFilesOfCreator`는 호출자의
+  `EntityManager`를 받아, 계정 연쇄 삭제가 `UserService`의 트랜잭션 안에서 실행되면서도
+  파일 행 규칙은 이곳에 남게 합니다. 삭제는 미리 읽어 둔 id 목록이 아니라 `creatorId`
+  기준이므로, 연쇄와 경합한 업로드가 살아남아 FK 위반을 다시 일으킬 수 없습니다
+  ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)).
 - 응답은 `FileService.toResponse()`가 `FileResponseDto`로 변환하며, `fileUrl`은
   `ConfigService`를 통해 `{BASE_URL}/{filePath}`로 조합됩니다. 엔티티에는 표현 로직이
   없습니다(엔티티의 구 `@Transform` URL은 의도적으로 제거됨).

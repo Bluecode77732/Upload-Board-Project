@@ -243,6 +243,32 @@ settled while zero consumers exist.
   branch for 409. The backend change deliberately stopped at the repo boundary
   ([CLAUDE.md](CLAUDE.md) > Project Overview: `frontend/` has its own scoped
   CLAUDE.md and tooling — do not edit frontend files from a backend task).
+- Frontend adoption of the deletion contract (recorded 2026-07-30,
+  [ADR 0020](ADR/0020-account-deletion-cascade.md)) — **owned by a frontend-scoped task,
+  not by backend work**, exactly like the claim-contract item above. `DELETE /user/:id`
+  now needs `?deleteFiles=true` for an account that owns files, and answers 409
+  `USER_HAS_FILES` (count in the message) otherwise; the warning dialog, the confirmed
+  retry, and the 409 branch all live in `frontend/`. `frontend/docs/API-CONTRACT.md` and
+  the account-deletion flow must both take it up; until they do, the frontend has no path
+  that can pass the confirmation. The backend change stopped at the repo boundary
+  ([CLAUDE.md](CLAUDE.md) > Project Overview).
+- Reclaiming orphaned `granted_` files (recorded 2026-07-30,
+  [ADR 0020](ADR/0020-account-deletion-cascade.md)) — deletion now unlinks stored files
+  post-commit and best-effort, so two narrow cases can still leave bytes in `file/upload`
+  with no row: a failed `unlink` (logged at `warn`) and a file inserted between the path
+  read and the cascade delete. Nothing sweeps that folder. Deliberately **not** solved by
+  copying ADR 0018's sweep: "on disk without a row" cannot be decided from the filename
+  alone, so it needs a DB-joined reconciliation with its own ADR. Unscheduled — the
+  accepted residual is disk waste, never a broken record.
+- Documentation rot in `ARCHITECTURE.md` (+ko) (recorded 2026-07-30) — the Stage 1
+  landings were never reflected there: "Non-Existent Infrastructure" still claims no CI
+  workflow, no Dockerfile, and no Nest `Logger` usage (all three exist —
+  [ADR 0015](ADR/0015-docker-and-compose.md)/[0016](ADR/0016-github-actions-ci.md)/[0017](ADR/0017-logging-conventions.md)),
+  Jest `roots` is written as `["src"]` (actually `["backend"]`), the Testing section
+  describes no e2e suite, and `PATCH /user/:id` / `PATCH /file/:id` still read "Self only"
+  / "Creator only" from before RBAC ([ADR 0013](ADR/0013-rbac-and-audit-log.md)). A
+  dedicated doc-audit task, not a drive-by: mixing it into a feature commit would blur what
+  that commit decided.
 - Doc-wording sync (deferred 2026-07-23; completed 2026-07-29): pre-plan
   "candidate" phrasings reconciled with this plan. ADR 0003 ("candidate
   roadmap item") now points at the landed [ADR 0018](ADR/0018-orphan-temp-file-cleanup.md);

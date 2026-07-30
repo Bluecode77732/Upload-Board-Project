@@ -228,6 +228,29 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   않다. 백엔드 변경은 저장소 경계에서 의도적으로 멈췄다([CLAUDE.md](CLAUDE.md) >
   Project Overview: `frontend/`는 자체 CLAUDE.md와 툴체인을 가지며, 백엔드 작업에서
   프론트엔드 파일을 편집하지 않는다).
+- 삭제 계약의 프론트엔드 반영 (2026-07-30 기록,
+  [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — 위의 청구 계약 항목과 마찬가지로
+  **백엔드 작업이 아니라 프론트엔드 전용 과제가 담당한다.** `DELETE /user/:id`는 파일을
+  보유한 계정에 대해 `?deleteFiles=true`를 요구하고, 없으면 409 `USER_HAS_FILES`(메시지에
+  개수 포함)를 낸다. 경고 다이얼로그, 확인 후 재요청, 409 분기는 모두 `frontend/`의 몫이다.
+  `frontend/docs/API-CONTRACT.md`와 계정 삭제 흐름을 함께 갱신해야 하며, 그전까지 프론트엔드
+  에는 확인을 통과시킬 경로가 없다. 백엔드 변경은 저장소 경계에서 멈췄다
+  ([CLAUDE.md](CLAUDE.md) > Project Overview).
+- 고아 `granted_` 파일 회수 (2026-07-30 기록,
+  [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — 삭제는 이제 커밋 이후 best-effort로
+  물리 파일을 unlink하므로, 행 없이 `file/upload`에 바이트만 남는 경우가 두 가지 남는다:
+  `unlink` 실패(`warn` 로그), 그리고 경로 조회와 연쇄 삭제 사이에 삽입된 파일. 그 폴더를 훑는
+  장치는 없다. ADR 0018의 스윕을 복사해 해결하지 **않은** 것은 의도적이다 — "행 없이 디스크에
+  있다"는 판정을 파일명만으로 내릴 수 없어 DB 조인 기반 정합 작업과 자체 ADR이 필요하다.
+  일정 미배정 — 감수하는 잔여 위험은 디스크 낭비이며, 깨진 레코드는 발생하지 않는다.
+- `ARCHITECTURE.md`(+ko)의 문서 부패 (2026-07-30 기록) — Stage 1 착지 내용이 이 문서에
+  전혀 반영되지 않았다. "Non-Existent Infrastructure"는 여전히 CI 워크플로·Dockerfile·Nest
+  `Logger` 사용이 없다고 서술하지만 셋 다 존재하고
+  ([ADR 0015](ADR/0015-docker-and-compose.ko.md)/[0016](ADR/0016-github-actions-ci.ko.md)/[0017](ADR/0017-logging-conventions.ko.md)),
+  Jest `roots`는 `["src"]`로 적혀 있으며(실제는 `["backend"]`), Testing 섹션에 e2e 서술이
+  없고, `PATCH /user/:id`·`PATCH /file/:id`는 RBAC 이전의 "본인만"·"작성자만"로 남아 있다
+  ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)). 부수 작업이 아니라 전용 문서 감사 과제로
+  다룬다 — 기능 커밋에 섞으면 그 커밋이 무엇을 결정했는지가 흐려진다.
 - 문서 문구 동기화 (2026-07-23 유예 결정; 2026-07-29 완료): 계획 수립 이전의
   "후보(candidate)" 표현을 이 계획에 맞춰 정리. ADR 0003("candidate roadmap
   item")은 이제 반영된 [ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)을 가리키고,

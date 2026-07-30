@@ -20,8 +20,8 @@ AppModule
 ├── TypeOrmModule       — PostgreSQL, synchronize: false, entities: FileEntity, UserEntity, AuditLogEntity
 ├── ServeStaticModule   — serves ./file at URL prefix /file
 ├── AuthModule          — tokens only: Basic parsing, JWT issue/verify, Passport strategies; RBAC RolesGuard/@Roles + role enum (ADR 0013)
-├── UserModule          — user CRUD only; role assignment (superadmin) + boot superadmin seed; exports UserService
-├── FileModule          — file *metadata* only: FileEntity rows + promote-from-temp transaction
+├── UserModule          — user CRUD only; role assignment (superadmin) + boot superadmin seed; exports UserService; imports FileModule for the account-deletion cascade (ADR 0020)
+├── FileModule          — file *metadata* only: FileEntity rows + promote-from-temp transaction + deletion of rows and stored files; exports FileService (consumed by UserModule)
 ├── UploadModule        — *physical* files only: Multer diskStorage; controller-only, no DB
 ├── AuditLogModule      — append-only privileged-action trail; exports AuditLogService (consumed by User/File); admin-only GET /audit-log (ADR 0013)
 └── APP_FILTER          — AllExceptionsFilter (backend/common/filter/): shapes every error into the ErrorBody contract (ADR 0011)
@@ -78,6 +78,10 @@ All routes behind `JwtAuthGuard`; controller carries `ClassSerializerInterceptor
   `request.user.id` populated by `JwtStrategy.validate` — identity never comes from the body.
 - `UserModule` exports `UserService`; that export is the module's public contract
   (consumed by `JwtStrategy` for token validation).
+- `UserService.remove` owns the deletion transaction — `dataSource.transaction()`, since
+  the boundary holds pure DB writes — and delegates the file rows to `FileService` rather
+  than touching `FileEntity` itself, so file metadata stays FileModule's concern. The
+  stored files are unlinked **after** the commit ([ADR 0020](ADR/0020-account-deletion-cascade.md)).
 
 ### FileModule (`backend/file/`)
 
@@ -95,6 +99,16 @@ All routes behind `JwtAuthGuard`.
   (`createQueryRunner → connect → startTransaction → commit/rollback → release`, `release()`
   always in `finally`) because a non-DB side effect (the physical `rename`) must sit inside
   the transaction boundary ([ADR 0004](ADR/0004-transaction-pattern-selection.md)).
+- Deletion takes the opposite side of that boundary: the physical `unlink` runs **after**
+  the row is gone, because `unlink` cannot be rolled back — inside the transaction a commit
+  failure would leave a row-less file, while outside it a failed unlink only leaves a
+  recoverable orphan on disk (logged at `warn`). `unlinkStoredFiles`
+  (`backend/common/unlink-stored-files.ts`) refuses paths outside `file/upload/`.
+- `FileService.findStoredPathsOfCreator` / `deleteFilesOfCreator` take the caller's
+  `EntityManager`, so the account cascade runs inside `UserService`'s transaction while the
+  file-row rules stay here. Rows are deleted by `creatorId`, not by a previously read id
+  list, so an upload racing the cascade cannot survive and re-trigger the FK violation
+  ([ADR 0020](ADR/0020-account-deletion-cascade.md)).
 - Responses are shaped by `FileService.toResponse()` into `FileResponseDto`, composing
   `fileUrl` as `{BASE_URL}/{filePath}` via `ConfigService`. Entities carry no presentation
   logic (the old `@Transform` URL on the entity was deliberately removed).

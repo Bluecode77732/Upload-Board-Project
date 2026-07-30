@@ -617,9 +617,9 @@ effect), choose the pattern explicitly from this table — state the choice and 
 
 | 패턴 | Lifecycle 관리 | 적용 대상 | 이 프로젝트 상태 |
 |------|----------------|-----------|------------------|
-| Plain repository call (`repository.save/update/delete`) | TypeORM implicit (auto-commit) | 단일 쓰기, 부수효과 없음 | 기본값 — `UserService`, `FileService.deleteFile` |
+| Plain repository call (`repository.save/update/delete`) | TypeORM implicit (auto-commit) | 단일 쓰기 (비-DB 부수효과는 커밋 밖에서만) | 기본값 — `UserService.update`, `FileService.deleteFile`(행 삭제 후 커밋 밖 unlink, ADR 0020) |
 | Manual QueryRunner (`createQueryRunner → connect → startTransaction → commit/rollback → release`) | 개발자가 전 단계 직접 관리 | 다중 쓰기 **+ 트랜잭션 중간에 비-DB 부수효과**(파일 rename 등)를 끼워 넣어야 할 때 | 확립된 패턴 — `FileService.uploadFile` / `updateFile`. `release()`는 반드시 `finally`, rollback은 `catch`, 외부 노출 에러는 generic |
-| `dataSource.transaction(async manager => …)` | TypeORM이 begin/commit/rollback/release 자동 관리 | 순수 다중 DB 쓰기 (비-DB 부수효과 없음) | 허용 — 아직 사용처 없음; 새 코드에서 조건 충족 시 이쪽이 더 안전 (release 누락 불가능) |
+| `dataSource.transaction(async manager => …)` | TypeORM이 begin/commit/rollback/release 자동 관리 | 순수 다중 DB 쓰기 (비-DB 부수효과 없음 — 필요하면 커밋 밖으로 뺀다) | 확립된 패턴 — `UserService.updateRole`(SERIALIZABLE + row lock, ADR 0013), `UserService.remove`(계정 연쇄 삭제, unlink는 커밋 후, ADR 0020). 조건 충족 시 수동 QueryRunner보다 안전 (release 누락 불가능) |
 | `@Transaction()` decorator | — | — | **금지** — TypeORM 0.3에서 제거된 API |
 
 - Rationale: `uploadFile`의 DB insert와 물리 `rename`은 함께 성공/실패해야 하며, rename을
@@ -845,6 +845,13 @@ Architecture Decisions above remain operative.
   stored files); unconfirmed, it is a typed 409 `USER_HAS_FILES`. Residual, accepted:
   nothing sweeps `file/upload`, so a failed unlink (or a file inserted between the
   path read and the delete) leaves an orphan on disk — logged at `warn`, not repaired
+  (reclamation needs a DB-joined design; tracked in ROADMAP > Unscheduled)
+- `ARCHITECTURE.md` (+ko) lags the code: its "Non-Existent Infrastructure" section still
+  claims no CI workflow, no Dockerfile, and no Nest `Logger` usage (all three exist —
+  ADR 0015/0016/0017), Jest `roots` is written as `["src"]` (actually `["backend"]`), the
+  Testing section describes no e2e suite, and the `PATCH` rows still read "Self only" /
+  "Creator only" from before RBAC (ADR 0013). Verify against code, not against that file;
+  fixing it is a dedicated doc-audit task (tracked in ROADMAP > Unscheduled)
 - License mismatch: `package.json` says `UNLICENSED` while the pre-rewrite README
   claimed MIT — needs an explicit decision before the repo is published
 - CORS is opt-in via the optional `CORS_ORIGIN` env var (added 2026-07-22): unset =
