@@ -73,6 +73,42 @@ The removal phase completed implicitly with the `f3fff1c` CLAUDE.md rewrite; the
 2026-07-22 documentation set (`09d04a8`) was authored natively for this repo and
 carried nothing over.
 
+## Trigger Fired — `admin/` Import (2026-07-30)
+
+The re-verification trigger below ("content is pasted in from another project") fired for the
+first time. The Chat Project's admin console was imported wholesale as the top-level `admin/`
+folder ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) to save LLM tokens on
+scaffolding that already existed there.
+
+**Classification: bucket 4 (intentional design reference) — not a remnant.** The import is
+declared, dated, and attributed in two places that ship with it: ADR 0022 and
+`admin/README.md`(.ko). Bucket 4's condition — phrased as a reference to another project, never
+as a description of this repo's current state — is met by those documents rather than by a
+sentence's wording, because the import is **code, not prose**. If either document ever stops
+saying that `admin/` targets the Chat Project's API, this reclassifies as a remnant.
+
+**Two things this audit's Method could not have caught, now on the record:**
+
+1. **The grep sets are documentation-only.** Both cover `--include="*.md" *.md ADR/
+   .env.example`. The `admin/` import puts chat-project terms — `apollo`,
+   `graphql-operations`, `errorLink`, `zustand`, `session-guard`, `protected-route`, plus room,
+   presence, and nickname identifiers — into **tracked source code**, entirely outside that
+   scope. Set A and Set B would report clean while the terms sit in `admin/src/`. Any future
+   audit must state whether it covered code or only docs.
+2. **`admin/` carries live remnants by design, quarantined rather than fixed.**
+   `admin/vercel.json` pins a CSP `connect-src` to the Chat Project's Railway production host;
+   `rooms-page.tsx`, `logs-page.tsx`, and `graphql-operations.ts` describe the chat domain and a
+   `/graphql` endpoint this API does not have. They are committed **unmodified on purpose** so
+   the adaptation task diffs against the original. Every one is itemized in ADR 0022's
+   modification backlog and in `admin/README.md`. These are **not** bucket-1 remnants to remove
+   now — they are the input to a scheduled rewrite. They stop being acceptable the moment
+   `admin/` is wired into anything or deployed.
+
+Doc-side verification for this change: the terms added to `*.md` here (`admin/`, `apollo`,
+`graphql`, `zustand`, `vercel`, `railway`, `session-guard`, `protected-route`) all sit inside
+ADR 0022, `admin/README.md`(.ko), and this section, each phrased as a reference to the Chat
+Project's code. No hit describes this repository's own stack. **Remnants found: 0.**
+
 ## Remaining Work (Pending)
 
 1. **Git history decision** — commits up to `4d00bc2` still contain the chat-app
@@ -86,6 +122,9 @@ carried nothing over.
    - a new documentation file is added, or
    - content is pasted in from another project or an older branch, or
    - the repo is about to be published/tagged.
+
+   Fired once so far — the `admin/` import, recorded above. Note that the sets as written cover
+   documentation only; an import of *code* needs the scope widened by hand.
 3. **Memory hygiene** — out-of-repo memory files were clean on 2026-07-22; re-check
    whenever a memory entry is added that references project architecture.
 

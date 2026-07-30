@@ -42,6 +42,18 @@ consumers** — every breaking API change is still free. Opt-in CORS
   `CLAUDE.md`. It consumes the backend over HTTP (dev: a Vite proxy;
   prod: `CORS_ORIGIN`). Keeping both in one repo makes an API-contract change
   and its client update land in one commit, at near-zero structural cost.
+> **Amended 2026-07-30 (admin placement)** by
+> [ADR 0022](0022-admin-console-import-from-chat-project.md): the admin bullet below is
+> superseded. RBAC has since landed ([ADR 0013](0013-rbac-and-audit-log.md)), meeting this
+> ADR's own precondition for reconsideration, and an admin console targeting the same
+> three-tier role model was imported from the author's Chat Project as the top-level
+> `admin/` folder — a declared modification base, not working code. Admin therefore
+> **begins as a separate application at `admin/`**, not as an `/admin` route section.
+> Everything else in this ADR (the surface freeze, the in-repo non-workspace structure,
+> the static-serving constraint) stands. The `/admin` section this bullet produced
+> (`frontend/src/features/admin/AdminPage.tsx`) still exists; which of the two surfaces
+> survives is an open decision in ROADMAP > Unscheduled.
+
 - **Admin starts as a route section (`/admin/*`) inside the frontend**, not as
   a third application. Promotion to a dedicated admin app is reconsidered only
   after RBAC lands and real admin requirements exist. A three-way split today

@@ -301,6 +301,31 @@ settled while zero consumers exist.
   a `GetFilesDto` since [ADR 0021](ADR/0021-list-query-search-filter-sort.md). The *rule*
   (list endpoints must paginate) is unaffected; only the example text lags, and `CLAUDE.md`
   was outside that task's stated document scope.
+- Adapting the imported `admin/` console (recorded 2026-07-30,
+  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — the Chat Project's admin
+  console was imported wholesale as the top-level `admin/` folder and committed **unmodified**,
+  as a declared modification base rather than working code. The economic reason is the whole
+  point: the router, route guard, auth store, single-flight silent refresh, axios interceptors,
+  and Playwright/Vitest harnesses already existed there in tested form, so importing them costs
+  a fraction of the LLM tokens that regenerating them would. **It does not work against this
+  backend yet**, by design. ADR 0022 carries the verified 13-row modification backlog (Apollo
+  layer to delete, `refreshaccess`/`signOut` route names, numeric-vs-string roles, a `role`
+  claim the access token does not carry, chat-domain pages, ban/force-logout endpoints that do
+  not exist, `page`/`take` vs `take`/`skip`, the `/audit-log/export` route, the ADR 0020
+  deletion confirmation, `ErrorBody` code branching, and a `vercel.json` CSP pinned to the chat
+  project's Railway host). Several rows are **backend** questions with their own decisions to
+  make, not client edits — `GET /user` pagination, whether ban/force-logout should exist, and
+  how the client learns a user's role. Unscheduled: it is its own dedicated task, and the
+  folder is wired into no root tooling until then.
+- Which admin surface survives (recorded 2026-07-30,
+  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — **an open decision, not a
+  task.** Two admin surfaces now coexist: `frontend/src/features/admin/AdminPage.tsx` (the
+  `/admin` route section [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)
+  specified, whose admin-placement clause ADR 0022 amends) and the imported standalone
+  `admin/` app. Deliberately left unresolved: choosing now would be guessing, since how much of
+  the imported console is worth keeping only becomes visible once the adaptation above starts.
+  If it turns out mostly deletable, ADR 0010's original route-section plan is the better path
+  and this flips back to it.
 - Doc-wording sync (deferred 2026-07-23; completed 2026-07-29): pre-plan
   "candidate" phrasings reconciled with this plan. ADR 0003 ("candidate
   roadmap item") now points at the landed [ADR 0018](ADR/0018-orphan-temp-file-cleanup.md);

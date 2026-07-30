@@ -280,6 +280,30 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   `getFiles(take, skip)`로 적고 있는데, [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)
   이후로는 `GetFilesDto`를 받는다. *규칙*(목록 엔드포인트는 페이지네이션 필수)은 그대로
   유효하고 예시 문구만 낡았으며, `CLAUDE.md`는 그 과제의 문서 범위 밖이었다.
+- 이식된 `admin/` 콘솔의 적응 (2026-07-30 기록,
+  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)) — Chat Project의 admin
+  콘솔을 최상위 `admin/` 폴더로 통째로 가져와 **수정하지 않은 상태로** 커밋했다. 동작하는
+  코드가 아니라 선언된 수정 기반이다. 경제적 이유가 핵심 그 자체다: 라우터, 라우트 가드,
+  인증 스토어, 단일 비행 무음 갱신, axios 인터셉터, Playwright·Vitest 하네스가 이미 검증된
+  형태로 그쪽에 있었으므로, 가져오는 비용이 다시 생성하는 LLM 토큰의 극히 일부다.
+  **아직 이 백엔드에 대해 동작하지 않으며**, 그것이 설계된 상태다. 검증을 거친 13행 수정
+  백로그는 ADR 0022에 있다(삭제할 Apollo 계층, `refreshaccess`/`signOut` 라우트명, 숫자 대
+  문자열 역할, 액세스 토큰에 없는 `role` 클레임, 채팅 도메인 페이지, 존재하지 않는
+  ban/force-logout 엔드포인트, `page`/`take` 대 `take`/`skip`, `/audit-log/export` 라우트,
+  ADR 0020 삭제 확인 절차, `ErrorBody` 코드 분기, chat 프로젝트 Railway 호스트로 고정된
+  `vercel.json` CSP). 이 중 몇 행은 클라이언트 수정이 아니라 각자의 결정이 필요한 **백엔드**
+  사안이다 — `GET /user` 페이지네이션, ban/force-logout을 둘 것인지, 클라이언트가 사용자 역할을
+  어떻게 알게 할 것인지. 미예정: 별도의 전용 과제이며, 그때까지 이 폴더는 어떤 루트 도구
+  체계에도 연결하지 않는다.
+- 어느 admin 화면이 살아남는가 (2026-07-30 기록,
+  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)) — **과제가 아니라 미결
+  사항이다.** 지금 admin 화면이 두 개 공존한다:
+  `frontend/src/features/admin/AdminPage.tsx`(ADR 0022가 개정한 admin 배치 조항에 따라
+  [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)이 명세했던 `/admin` 라우트
+  구역)과 이식된 독립 `admin/` 앱. 의도적으로 미결로 둔다 — 이식된 콘솔에서 남길 가치가 있는
+  분량은 위 적응 작업을 시작해야 드러나므로, 지금 정하는 것은 추측이다. 대부분 버려야 한다는
+  결론이 나오면 ADR 0010의 원래 라우트 구역 계획이 더 나은 길이고, 이 항목은 그쪽으로
+  되돌아간다.
 - 문서 문구 동기화 (2026-07-23 유예 결정; 2026-07-29 완료): 계획 수립 이전의
   "후보(candidate)" 표현을 이 계획에 맞춰 정리. ADR 0003("candidate roadmap
   item")은 이제 반영된 [ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)을 가리키고,

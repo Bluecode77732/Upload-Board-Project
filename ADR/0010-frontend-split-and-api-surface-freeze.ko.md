@@ -37,6 +37,17 @@ API였다. 이제 브라우저 프론트엔드가 필요해졌고, 그 순간 �
   추적한다. 이것은 pnpm workspace 모노레포가 *아니다* — 백엔드는 자체
   `package.json`·툴링·루트 `CLAUDE.md`를 유지하고, `frontend/` 폴더는 자체
   `package.json`·툴링·스코프 `CLAUDE.md`를 가진다.
+> **2026-07-30 개정 (admin 배치)** —
+> [ADR 0022](0022-admin-console-import-from-chat-project.ko.md)에 의해 아래 admin 항목은
+> 대체된다. 그 사이 RBAC이 도입돼([ADR 0013](0013-rbac-and-audit-log.ko.md)) 이 ADR이
+> 스스로 걸어둔 재검토 조건이 충족됐고, 같은 3단계 역할 모델을 대상으로 만들어진 admin
+> 콘솔을 저자의 Chat Project에서 최상위 `admin/` 폴더로 가져왔다 — 동작하는 코드가 아니라
+> 선언된 수정 기반이다. 따라서 admin은 `/admin` 라우트 구역이 아니라
+> **`admin/`의 독립 애플리케이션으로 출발한다**. 이 ADR의 나머지(표면 동결, 저장소 내
+> 비워크스페이스 구조, 정적 서빙 제약)는 그대로다. 아래 항목이 만들어낸 `/admin` 구역
+> (`frontend/src/features/admin/AdminPage.tsx`)은 아직 남아 있으며, 두 화면 중 무엇이
+> 살아남을지는 ROADMAP > 미예정 항목의 미결 사항이다.
+
 - **admin은 프론트엔드 내부의 라우트 구역(`/admin/*`)으로 시작한다** — 세 번째
   애플리케이션이 아니다. 별도 admin 앱으로의 승격은 RBAC이 랜딩하고 실제 admin
   요구사항이 쌓인 뒤에만 재검토한다. 지금 3분리를 하면 백엔드가 구분조차 못

@@ -13,6 +13,33 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- **Imported admin console at `admin/`, documented as a modification base**
+  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — the author's other
+  project, the **Chat Project** (NestJS + GraphQL + Redis + Socket.IO), already contained a
+  working, tested admin console built against the same three-tier `user`/`admin`/`superadmin`
+  role model this project adopted in [ADR 0013](ADR/0013-rbac-and-audit-log.md). It was
+  imported wholesale as the top-level `admin/` folder and committed **unmodified**. The reason
+  is explicit and economic: **LLM token spend**. The router, route guard, Zustand auth store,
+  single-flight silent-refresh guard, axios interceptors, and Playwright/Vitest harnesses are
+  domain-independent scaffolding that already existed in proven form, so importing them costs a
+  fraction of the tokens that regenerating them prompt-by-prompt would — tokens then go to the
+  API delta instead. **This folder does not work against this backend, and is not meant to
+  yet**: every file in it still targets the Chat Project's API. `admin/README.md`(.ko) says so
+  at the folder itself, and ADR 0022 carries the verified 13-row modification backlog (Apollo
+  `/graphql` layer to delete, `refreshaccess`/`signOut` route names, numeric-vs-string roles, a
+  `role` claim the access token does not carry, chat-domain pages, ban/force-logout endpoints
+  that do not exist here, `page`/`take` vs `take`/`skip`, `/audit-log/export`, the
+  [ADR 0020](ADR/0020-account-deletion-cascade.md) deletion confirmation, `ErrorBody` code
+  branching, and a `vercel.json` CSP pinned to the chat project's Railway host — left untouched
+  on purpose so the adaptation task can diff against the original). Adapting it is **its own
+  dedicated task**, and several backlog rows are backend questions needing their own decisions.
+  **Nothing is wired up**: `admin/` sits outside the lint glob
+  (`{backend,apps,libs,test}/**/*.ts`), Jest `roots` (`["backend"]`),
+  `tsconfig.build.json`, `docker-compose.yml`, and CI, and carries its own
+  `package.json`/`node_modules` — not a pnpm workspace, the same precedent `frontend/` set. No
+  backend behavior, endpoint, schema, env var, or guard changed. No secrets are tracked
+  (`admin/.gitignore` already covers `.env`, `.env.local`, `e2e/.env`, `node_modules`, `dist`;
+  verified with `git check-ignore`).
 - List search / filter / sort on `GET /file` (Stage 3 — domain expansion;
   [ADR 0021](ADR/0021-list-query-search-filter-sort.md)): four optional query parameters,
   all declared on `GetFilesDto`, with the `[files, totalCount]` response shape unchanged.

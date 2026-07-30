@@ -878,6 +878,21 @@ the backend at the root is untouched (its Jest roots, migration paths, and lint
 globs do not include `frontend/`). Do not edit backend files from a frontend
 task or vice versa.
 
+`admin/` (added 2026-07-30, ADR 0022) is **imported code from a different
+project, not this project's admin client**. It is the author's Chat Project admin
+console, copied in wholesale and committed unmodified as a *modification base* —
+importing proven scaffolding costs a fraction of the LLM tokens that regenerating
+it would. Treat it as read-only reference material: it targets the Chat Project's
+API (Apollo/`/graphql`, `POST /auth/token/refreshaccess`, numeric roles, chat-room
+pages, ban/force-logout endpoints that do not exist here), so **nothing in it
+describes this repo's contracts** — verify against `backend/`, never against
+`admin/`. It is wired into no root tooling (outside the lint glob, Jest `roots`,
+`tsconfig.build.json`, compose, and CI) and carries its own `package.json` and
+tooling, like `frontend/`. Adapting it is its own dedicated task with its own
+approval; `admin/README.md` and ADR 0022 hold the modification backlog. Do not
+edit `admin/` from a backend task, and do not cite it as precedent for any
+pattern.
+
 ## Commands
 
 ```bash

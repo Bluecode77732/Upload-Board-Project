@@ -13,6 +13,31 @@
 ## [Unreleased]
 
 ### 추가
+- **`admin/`에 이식한 admin 콘솔 — 수정 기반으로 문서화**
+  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)) — 저자의 다른
+  프로젝트인 **Chat Project**(NestJS + GraphQL + Redis + Socket.IO)에는, 이 프로젝트가
+  [ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)에서 채택한 것과 같은 3단계
+  `user`/`admin`/`superadmin` 역할 모델을 대상으로 만들어 검증까지 끝낸 admin 콘솔이 이미
+  있었다. 이를 최상위 `admin/` 폴더로 통째로 가져와 **수정하지 않은 상태로** 커밋했다.
+  이유는 명시적이고 경제적이다 — **LLM 토큰 사용량**. 라우터, 라우트 가드, Zustand 인증
+  스토어, 단일 비행 무음 갱신 가드, axios 인터셉터, Playwright·Vitest 하네스는 도메인과
+  무관한 골격이고 이미 검증된 형태로 존재했으므로, 가져오는 비용이 프롬프트로 하나씩 다시
+  생성하는 토큰의 극히 일부다 — 아낀 토큰은 API 차이분에 쓴다. **이 폴더는 이 백엔드에 대해
+  동작하지 않으며, 아직 동작해야 하는 것도 아니다**: 그 안의 모든 파일이 여전히 Chat
+  Project의 API를 대상으로 한다. `admin/README.md`(.ko)가 폴더 현장에서 그 사실을 밝히고,
+  검증을 거친 13행 수정 백로그는 ADR 0022에 있다(삭제할 Apollo `/graphql` 계층,
+  `refreshaccess`/`signOut` 라우트명, 숫자 대 문자열 역할, 액세스 토큰에 없는 `role` 클레임,
+  채팅 도메인 페이지, 여기 없는 ban/force-logout 엔드포인트, `page`/`take` 대 `take`/`skip`,
+  `/audit-log/export`, [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)의 삭제 확인 절차,
+  `ErrorBody` 코드 분기, 그리고 chat 프로젝트 Railway 호스트로 고정된 `vercel.json` CSP —
+  적응 작업이 원본을 기준으로 diff를 뜰 수 있도록 의도적으로 손대지 않았다). 적응은 **별도의
+  전용 과제**이며, 백로그의 몇 행은 각자의 결정이 필요한 백엔드 사안이다. **어디에도 연결하지
+  않았다**: `admin/`은 린트 glob(`{backend,apps,libs,test}/**/*.ts`), Jest
+  `roots`(`["backend"]`), `tsconfig.build.json`, `docker-compose.yml`, CI 전부의 바깥에 있고,
+  자체 `package.json`/`node_modules`를 갖는다 — pnpm 워크스페이스가 아니며 `frontend/`가 세운
+  선례와 같다. 백엔드 동작·엔드포인트·스키마·환경변수·guard는 아무것도 바뀌지 않았다. 추적되는
+  비밀 값도 없다(`admin/.gitignore`가 이미 `.env`, `.env.local`, `e2e/.env`, `node_modules`,
+  `dist`를 포함하며 `git check-ignore`로 확인).
 - `GET /file` 목록 검색 / 필터 / 정렬 (Stage 3 — 도메인 확장;
   [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)): 선택적 쿼리 파라미터 네 개를
   모두 `GetFilesDto`에 선언해 추가했고, `[files, totalCount]` 응답 형태는 그대로다.

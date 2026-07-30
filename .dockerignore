@@ -12,6 +12,7 @@ coverage
 
 # Not part of the backend image
 frontend
+admin
 test
 
 # Secrets never get baked into the image (compose injects env at runtime)

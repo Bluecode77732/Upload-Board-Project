@@ -70,6 +70,42 @@ grep -rniE "RbacGuard|GqlTransaction|QueryRunnerDecorator|RateLimitGuard|kickPre
 제거 단계는 `f3fff1c` CLAUDE.md 재작성으로 사실상 완료되었으며, 2026-07-22 문서
 세트(`09d04a8`)는 이 저장소 기준으로 새로 작성되어 이월된 내용이 없습니다.
 
+## 트리거 발동 — `admin/` 이식 (2026-07-30)
+
+아래 재검증 트리거("다른 프로젝트에서 내용을 붙여넣을 때")가 처음으로 발동했습니다. Chat
+Project의 admin 콘솔을 최상위 `admin/` 폴더로 통째로 가져왔습니다
+([ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)) — 그쪽에 이미 있던 골격을
+다시 만드는 데 드는 LLM 토큰을 아끼기 위해서입니다.
+
+**분류: 버킷 4(의도적 설계 참조) — 잔재가 아닙니다.** 이 이식은 함께 배포되는 두 문서, 즉
+ADR 0022와 `admin/README.md`(.ko)에서 선언·날짜·출처가 모두 밝혀집니다. 버킷 4의 조건 — 다른
+프로젝트에 대한 참조로 표현하고 이 저장소의 현재 상태를 서술하지 않는다 — 은 문장 표현이 아니라
+그 문서들이 충족합니다. 이식된 것이 산문이 아니라 **코드**이기 때문입니다. 두 문서 중 어느
+하나라도 `admin/`이 Chat Project API를 대상으로 한다는 서술을 멈추면, 그 순간 잔재로 재분류됩니다.
+
+**이번 검토 방법으로는 잡을 수 없었던 두 가지를 기록해 둡니다:**
+
+1. **grep 세트는 문서만 대상으로 합니다.** 두 세트 모두 `--include="*.md" *.md ADR/
+   .env.example` 범위입니다. `admin/` 이식은 chat 프로젝트 용어 — `apollo`,
+   `graphql-operations`, `errorLink`, `zustand`, `session-guard`, `protected-route`, 그리고 방·
+   접속 상태·닉네임 식별자 — 를 그 범위 완전 바깥인 **추적되는 소스 코드**에 들여놓습니다.
+   용어가 `admin/src/`에 그대로 있는데도 세트 A와 세트 B는 "클린"이라고 보고합니다. 앞으로의
+   모든 검토는 코드까지 봤는지 문서만 봤는지 명시해야 합니다.
+2. **`admin/`은 살아 있는 잔재를 의도적으로 품고 있으며, 고치지 않고 격리했습니다.**
+   `admin/vercel.json`은 CSP `connect-src`를 Chat Project의 Railway 운영 호스트로 고정하고,
+   `rooms-page.tsx`·`logs-page.tsx`·`graphql-operations.ts`는 채팅 도메인과 이 API에 없는
+   `/graphql` 엔드포인트를 서술합니다. 적응 작업이 원본을 기준으로 diff를 뜰 수 있도록
+   **의도적으로 수정하지 않고** 커밋했습니다. 전부 ADR 0022의 수정 백로그와
+   `admin/README.md`에 항목으로 올라 있습니다. 이들은 지금 제거해야 할 버킷 1 잔재가
+   **아니며**, 예정된 재작성의 입력물입니다. `admin/`이 무언가에 연결되거나 배포되는 순간부터는
+   더 이상 용인되지 않습니다.
+
+이번 변경의 문서 측 검증: 여기서 `*.md`에 추가된 용어(`admin/`, `apollo`, `graphql`, `zustand`,
+`vercel`, `railway`, `session-guard`, `protected-route`)는 모두 ADR 0022,
+`admin/README.md`(.ko), 그리고 이 절 안에 있으며, 각각 Chat Project 코드에 대한 참조로
+표현되어 있습니다. 이 저장소 자체의 기술 스택을 서술하는 항목은 하나도 없습니다.
+**발견된 잔재: 0건.**
+
 ## 잔여 작업 (처리 예정)
 
 1. **Git 히스토리 결정** — `4d00bc2` 이전 커밋들에는 채팅 앱 `CLAUDE.md`가 여전히
@@ -83,6 +119,9 @@ grep -rniE "RbacGuard|GqlTransaction|QueryRunnerDecorator|RateLimitGuard|kickPre
    - 새 문서 파일이 추가될 때
    - 다른 프로젝트나 과거 브랜치에서 내용을 붙여넣을 때
    - 저장소를 공개/태깅하기 직전
+
+   지금까지 1회 발동 — 위에 기록한 `admin/` 이식. 현재 작성된 세트는 문서만 훑으므로,
+   *코드*를 이식할 때는 범위를 손으로 넓혀야 합니다.
 3. **메모리 위생** — 저장소 외부 메모리 파일은 2026-07-22 기준 클린; 프로젝트
    아키텍처를 언급하는 메모리 항목이 추가될 때마다 재확인.
 
