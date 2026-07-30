@@ -539,11 +539,13 @@ describe('Upload Board API (e2e)', () => {
 
       expect(existsSync(file.grantedPath)).toBe(false);
 
-      // Both rows are gone: a second sign-in fails and the file row is unreachable.
-      await request(server)
+      // Both rows are gone: the account can no longer sign in (credentials for a
+      // deleted account are simply invalid — 400, the same as a wrong password).
+      const signin = await request(server)
         .post('/auth/signin')
         .set('Authorization', basic('cascade@e.com', PW))
-        .expect(401);
+        .expect(400);
+      expect(signin.body.code).toBe('AUTH_INVALID_CREDENTIALS');
 
       const rows = await app
         .get(DataSource)
