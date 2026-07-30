@@ -399,7 +399,9 @@ neither, since resolving them is a decision, not an implementation detail:
    reassignment) but real, and **open**: it is tracked in ROADMAP > Unscheduled rather than
    fixed here, because every candidate fix is a decision — refusing reassignment of an
    attached file, widening the cascade to posts that merely *reference* the account's files,
-   or translating the `23503` into a typed refusal.
+   or translating the `23503` into a typed refusal. **Decide it before the comment task**:
+   the second candidate changes the account-cascade delete order, which the comment task
+   extends, so deciding afterwards means rewriting that order twice.
 
 **Verified**: `pnpm lint` clean, 121 unit tests, 52 e2e tests (14 new, covering post CRUD,
 the 403 ownership refusals, replay/409 on a repeated `fileId`, 409 `FILE_IN_USE`, and the

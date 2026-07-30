@@ -73,7 +73,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   — 클라이언트가 자기 역할을 어떻게 아는가 — 이 나머지를 막는 백엔드 결정이다.
   Stage 4에 의존하지 **않으며** 그보다 먼저 진행될 수도 있다.
 - **남은 작업의 실행 순번을 2026-07-31에 고정했다**(6절 > 실행 순번 참조):
-  #1 게시판 post/comment 모듈 → #2 `GET /user` 페이지네이션(Stage 5에서 앞당김) →
+  #1 게시판 comment 모듈 → #2 `GET /user` 페이지네이션(Stage 5에서 앞당김) →
   #3 Stage 5 admin 화면 → #4 Stage 4 배포(마지막). 이로써 Stage 5의 부동 위치가
   Stage 4 앞으로 확정되고, 독립적인 페이지네이션 부채가 둘보다 앞으로 당겨진다.
 
@@ -178,9 +178,10 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 실제 착수 순서를 여기서 고정한다(완결된 단계는 생략). 각 미완 항목은 자기 행에
 실행 번호를 함께 표기한다.
 
-1. **게시판 도메인 — post/comment 모듈** (Stage 3) — 가장 낮은 미완 단계에서 유일하게
+1. **게시판 도메인 — comment 모듈** (Stage 3) — 가장 낮은 미완 단계에서 유일하게
    의존성이 충족된 작업이다. 스키마 게이트([ADR 0023](ADR/0023-board-domain-schema.ko.md))가
-   끝났으므로 이것이 다음 전용 작업이다.
+   끝났고 post 절반은 2026-07-31에 착지했으므로 이것이 다음 전용 작업이다.
+   **post↔file 불변식 gap을 먼저 정리할 것** — Stage 3 행 참조.
 2. **`GET /user` 페이지네이션** (Stage 5에서 앞당김) — 콘솔과 무관하게 갚아야 할
    독립적인 Never Do Group 2 부채이며, admin 사용자 목록이 필요로 할 조회 계층의
    선행이기도 해서 조기 빠른수정으로 당긴다.
@@ -237,7 +238,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | ~~목록 검색/필터/정렬~~ — ✅ 2026-07-30 반영 ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) | `GET /file`에 `search`(제목에 이스케이프된 `ILIKE '%term%'`), `creatorId`, 그리고 완전한 `Record` 화이트리스트로 해석되는 `sortBy`/`order`가 추가됐다. 이 엔드포인트에 없던 `ORDER BY`도 함께 들어가 offset 페이징이 결정적이 됐다. 스키마 변경은 없고, 후보 인덱스 세 개는 도입 계기를 기록한 채 유보했다. post 목록이 확장해 쓸 조회 계층 패턴이다. |
 | ~~게시판 도메인 — 스키마 설계 게이트~~ — ✅ 2026-07-30 반영 ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) | 마이그레이션에 앞서 Scope Discipline이 요구하는 평문 스키마 기술이며, comment 작업이 post 스키마를 되돌리게 만들 수 없도록 두 엔티티를 한 번에 다뤘다. post ↔ file은 1:1·선택적·동일 작성자이고(unique FK가 `POST /post`의 idempotency 키를 겸한다), 댓글은 평면 구조로 FK에서 글과 함께 연쇄 삭제된다. 첨부된 파일에 대한 `DELETE /file/:id`는 409 `FILE_IN_USE`가 된다. ADR 0020 계정 연쇄 삭제는 글과 댓글을 확인 없이 가져가되 플래그는 여전히 파일만 지킨다. `canManage`와 ADR 0021 조회 계층은 그대로 재사용한다. 설계 전용 — 코드도 마이그레이션도 없다. |
 | ~~게시판 도메인 — post 모듈~~ — ✅ 2026-07-31 완료 ([ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) | ADR 0023의 전반부. comment가 post에 의존하지 그 반대가 아니어서 분리했다: `PostModule`(`JwtAuthGuard` 뒤 5개 라우트), FK 2개와 `UQ_post_entity_fileId`를 가진 `post_entity`(검토된 마이그레이션 — generate가 뱉은 제약 이름 변경 4문장은 걷어냄), 신규 에러 코드 3개, `DELETE /file/:id`의 `23503` → 409 `FILE_IN_USE` 번역, 그리고 ADR 0020 계정 연쇄에 게시글 합류(감사 detail의 `posts=N`). ADR 0021 조회 계층과 `canManage`는 다시 만들지 않고 재사용했다. |
-| 게시판 도메인 — comment 모듈 **(실행 #1 — 다음 전용 작업)** | [ADR 0023](ADR/0023-board-domain-schema.ko.md)의 후반부: `CommentModule`, `post_entity`로의 `ON DELETE CASCADE` FK와 `IDX_comment_entity_postId_createdAt`을 가진 `comment_entity`, `COMMENT_NOT_FOUND` 코드(소비자보다 먼저 만들지 않았다), `/post/:postId/comment` 라우트, 그리고 계정 연쇄에서 post보다 먼저 삭제되는 댓글. `*.entity.ts`를 건드리려면 승인이 필요하다. |
+| 게시판 도메인 — comment 모듈 **(실행 #1 — 다음 전용 작업)** | [ADR 0023](ADR/0023-board-domain-schema.ko.md)의 후반부: `CommentModule`, `post_entity`로의 `ON DELETE CASCADE` FK와 `IDX_comment_entity_postId_createdAt`을 가진 `comment_entity`, `COMMENT_NOT_FOUND` 코드(소비자보다 먼저 만들지 않았다), `/post/:postId/comment` 라우트, 그리고 계정 연쇄에서 post보다 먼저 삭제되는 댓글. `*.entity.ts`를 건드리려면 승인이 필요하다. **게이트 — 착수 전에 post↔file 불변식 gap을 먼저 결정한다**(아래 미배정 참조): 후보 처방 중 "연쇄 확대"가 이 작업이 딛고 설 삭제 순서를 바꾸므로, 나중에 결정하면 그 순서를 두 번 고쳐야 한다. |
 
 ### Stage 4 — 실서비스 전환 — 실행 순번상 **마지막** (2026-07-31)
 

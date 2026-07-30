@@ -78,7 +78,7 @@ lands as its own dedicated, designed change
   first row — how a client learns its own role — is a backend decision that blocks the rest.
   It does **not** depend on Stage 4 and may run before it.
 - **Execution order for the remaining work fixed 2026-07-31** (see section 6 >
-  Execution order): #1 board post/comment modules → #2 `GET /user` pagination (pulled
+  Execution order): #1 board comment module → #2 `GET /user` pagination (pulled
   forward from Stage 5) → #3 Stage 5 admin surface → #4 Stage 4 deployment, last. This
   resolves Stage 5's floating position (before Stage 4) and pulls the independent
   pagination debt ahead of both.
@@ -194,9 +194,10 @@ The stages below are grouped by dependency, but several ready items span stages,
 so the actual build sequence is fixed here (completed stages omitted). Each pending
 item carries its execution number in its own row.
 
-1. **Board domain — post/comment modules** (Stage 3) — the only dependency-ready
-   task in the lowest incomplete stage; its schema gate ([ADR 0023](ADR/0023-board-domain-schema.md))
-   is done, so this is the next dedicated task.
+1. **Board domain — comment module** (Stage 3) — the only dependency-ready task in the
+   lowest incomplete stage; its schema gate ([ADR 0023](ADR/0023-board-domain-schema.md))
+   is done and the post half landed 2026-07-31, so this is the next dedicated task.
+   **Settle the post↔file invariant gap first** — see the Stage 3 row.
 2. **`GET /user` pagination** (pulled forward from Stage 5) — an independent Never
    Do Group 2 debt, owed regardless of the console; taken as an early quick win and
    as the read-layer precursor the admin user list will need.
@@ -256,7 +257,7 @@ settled while zero consumers exist.
 | ~~List search / filter / sort~~ — ✅ landed 2026-07-30 ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) | `GET /file` gained `search` (escaped `ILIKE '%term%'` on the title), `creatorId`, and `sortBy`/`order` resolved through a total-`Record` whitelist — plus the `ORDER BY` the endpoint never had, so offset paging is deterministic. No schema change; the three candidate indexes are deferred with their triggers recorded. This is the read-layer pattern the post listing extends. |
 | ~~Board domain — schema design gate~~ — ✅ landed 2026-07-30 ([ADR 0023](ADR/0023-board-domain-schema.md)) | The plain-text schema description Scope Discipline requires before any migration, covering both entities at once so the comment task cannot force a post-schema rollback: post ↔ file is 1:1, optional, same-creator (the unique FK doubles as `POST /post`'s idempotency key); comments are flat and cascade with their post at the FK; `DELETE /file/:id` on an attached file becomes 409 `FILE_IN_USE`; the ADR 0020 account cascade takes posts and comments unconfirmed while the flag still guards files only; `canManage` and the ADR 0021 read layer are reused unchanged. Design only — no code, no migration. |
 | ~~Board domain — post module~~ — ✅ landed 2026-07-31 ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) | The first half of ADR 0023, split out because comment depends on post and not the reverse: `PostModule` (5 routes behind `JwtAuthGuard`), `post_entity` with 2 FKs and `UQ_post_entity_fileId` (reviewed migration — generate's four spurious constraint-rename statements stripped), 3 new error codes, the `DELETE /file/:id` `23503` → 409 `FILE_IN_USE` translation, and posts joining the ADR 0020 account cascade (`posts=N` in the audit detail). The ADR 0021 read layer and `canManage` were reused rather than restated. |
-| Board domain — comment module **(execution #1 — next dedicated task)** | The second half of [ADR 0023](ADR/0023-board-domain-schema.md): `CommentModule`, `comment_entity` with its `ON DELETE CASCADE` FK to `post_entity` and `IDX_comment_entity_postId_createdAt`, the `COMMENT_NOT_FOUND` code (deliberately not added ahead of its consumer), the `/post/:postId/comment` routes, and comments joining the account cascade ahead of posts. Needs approval to touch `*.entity.ts`. |
+| Board domain — comment module **(execution #1 — next dedicated task)** | The second half of [ADR 0023](ADR/0023-board-domain-schema.md): `CommentModule`, `comment_entity` with its `ON DELETE CASCADE` FK to `post_entity` and `IDX_comment_entity_postId_createdAt`, the `COMMENT_NOT_FOUND` code (deliberately not added ahead of its consumer), the `/post/:postId/comment` routes, and comments joining the account cascade ahead of posts. Needs approval to touch `*.entity.ts`. **Gate — decide the post↔file invariant gap before starting** (see Unscheduled below): its candidate fix "widen the cascade" changes the delete order this task builds on, so deciding afterwards means rewriting that order a second time. |
 
 ### Stage 4 — Production transition — sequenced **last** in the execution order (2026-07-31)
 
