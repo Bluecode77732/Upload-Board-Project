@@ -6,7 +6,11 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 기준 → 아키텍처 → 모듈 → 도메인 → 메커니즘 → 자료 처리 → 플랫폼 → 인프라 →
 배포 환경) 순서의 결정 검토를 거쳐 수립했다. 같은 날 프론트엔드 분리
 결정([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md))으로
-개정되어, Stage 0 앞에 Stage F(프론트엔드 준비)가 삽입되었다. 아래 모든 항목은
+개정되어, Stage 0 앞에 Stage F(프론트엔드 준비)가 삽입되었다. 2026-07-30에
+[ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)로 다시 개정되어
+**Stage 5(운영 화면 — admin 콘솔)가 추가되었다**: 11축 검토는 admin 화면에 어떤
+단계도 배정하지 않았는데, ADR 0010이 그 배치는 이미 결정해 뒀던 탓에 그 작업은
+"결정은 있으나 계획에는 자리가 없는" 상태로 남아 있었다. 아래 모든 항목은
 각각 독립된 설계·검토를 거치는 전용 작업으로 진행한다
 ([CLAUDE.md](CLAUDE.md) > Scope Discipline).
 
@@ -15,7 +19,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 > 이 계획에 편입되었다. 각 전용 작업이 실제로 완료되기 전까지는(각자의 ADR 포함)
 > 현행 Architecture Decisions가 그대로 유효하다.
 
-## 현재 위치 (2026-07-26 기준)
+## 현재 위치 (2026-07-30 기준)
 
 - 2026-07-22 하드닝 런은 모두 반영 완료됐다: 보안 quick-win, lint 0 오류
   베이스라인, 문서 재작성, TypeORM 마이그레이션 도입(`79603ad`,
@@ -59,6 +63,13 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   `creatorId`, `sortBy`, `order`를 받고, 정렬 키는 코드 내 화이트리스트로만 해석되며,
   이 엔드포인트에 없던 결정적 기본 정렬이 생겼다. 남은 Stage 3 작업은 게시판 도메인
   (post/comment 모듈)이다.
+- **Stage 5(운영 화면 — admin 콘솔)가 2026-07-30 추가됐다**
+  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)). 원래 계획의 공백을
+  닫은 것이다: ADR 0010은 2026-07-23에 admin이 어디에 살지 결정했지만, 그것을 만드는
+  작업을 어느 단계도 맡지 않았다. 같은 변경에서 Chat Project의 admin 콘솔을 미적응
+  수정 기반으로 `admin/`에 가져왔다. Stage 5는 아직 아무것도 시작하지 않았고, 첫 행
+  — 클라이언트가 자기 역할을 어떻게 아는가 — 이 나머지를 막는 백엔드 결정이다.
+  Stage 4에 의존하지 **않으며** 그보다 먼저 진행될 수도 있다.
 
 ## 1. 비전과 본질
 
@@ -199,6 +210,29 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | 스토리지 포트-어댑터 | S3 필요가 확정될 때만 — 아키텍처 방향(4절) 참조. |
 | 성능/용량 기준 적용 | 인덱스 정책, 응답시간 목표, 디스크 상한 — 최적화 전에 측정부터. |
 
+### Stage 5 — 운영 화면 (admin 콘솔) — 2026-07-30 추가
+
+**기존 단계의 한 행이 아니라 새 단계로 만든 이유.** admin 콘솔은 게시판 도메인(Stage 3)도,
+인프라(Stage 4)도 아니다. 그리고 지금까지 **어느 단계도 이것을 맡지 않았다** —
+[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)이 2026-07-23에 admin의
+*배치*는 결정했지만 작업을 스케줄한 적은 없어서, 다른 모든 결정 항목이 행을 가진 동안 이것만
+계획 밖에 있었다. 단계를 추가해 그 공백을 닫는다. 계기가 된 이식은
+[ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)다.
+
+**여기서 번호는 의존 순서가 아니다** — 이 절의 규칙에 대한 유일한 예외다. Stage 5는 Stage 4에
+의존하지 **않는다**. 확실한 선행 조건은 Stage 0(RBAC, 2026-07-25 완결)과 아래 첫 행의 역할 전달
+결정뿐이다. Stage 4보다 먼저, 나중에, 또는 병행해서 진행할 수 있다. 마지막 번호인 것은 마지막에
+추가됐기 때문이며, 마지막에 해야 하기 때문이 아니다. 오히려 Stage 4보다 **앞으로 당길** 근거도
+있다: 권한 계층을 Swagger로만 운영할 수 있는 시스템은 배포된 뒤에 운영하기가 어렵다.
+
+| 작업 | 근거 / 의존성 |
+|---|---|
+| **클라이언트가 사용자 역할을 어떻게 아는가** (백엔드 결정 — **이 단계의 나머지를 막는다**) | 액세스 토큰 페이로드는 `{ sub, type }`이며 `role` 클레임이 의도적으로 **없다**([ADR 0002](ADR/0002-dual-secret-token-pair.ko.md)). 그래서 클라이언트는 지금 자기 역할을 알 수 없는데, admin UI는 라우트 게이팅에 그것이 필요하다. 결정할 두 형태: 액세스 토큰에 `role` 클레임 추가(빠르지만 강등보다 오래 사는 토큰에 인가 사실을 싣는 셈 — 다만 `updateRole`이 이미 `refreshTokenHash`를 null로 만들어 그 창을 제한한다), 또는 요청 기반 조회(`GET /user/:id`, 혹은 신규 `GET /auth/me`). ADR 0002를 개정하는 자체 ADR이 필요하다. 이식된 콘솔은 현재 그 클레임이 있다고 가정하므로 모든 admin을 거부한다. |
+| 이식된 `admin/` 콘솔 적응 | [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의 이식본을 Chat Project API에서 이 API로 다시 쓴다. 그 ADR의 검증된 백로그가 작업 지시서다. **역할 관리 조각부터 시작한다** — `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`, `GET /audit-log`, `POST /auth/signin`은 이미 맞는 라우트이고 등급 값 `0/1/2`도 이미 `ROLE_RANK`와 일치하므로, 그 부분은 재설계가 아니라 라우트 수준 교정이다. 채팅 도메인 페이지(`rooms-page`, 접속/닉네임 위젯)와 Apollo/`/graphql` 계층 전체는 삭제다. 위 행에 의존. |
+| `GET /user` 페이지네이션 | admin 사용자 목록에 필요하고, 이 엔드포인트는 현재 `@Query()`를 **전혀 바인딩하지 않는다** — `findAll()`이 전체 사용자에 대한 `findAndCount()`를 반환한다. 이는 이 프로젝트 자체 페이지네이션 규칙([CLAUDE.md](CLAUDE.md) > Never Do Group 2)을 상시 위반하는 상태이므로, 콘솔과 무관하게도 갚아야 할 빚이다. 두 번째 패턴을 만들지 말고 `GetFilesDto` / [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)의 조회 계층 패턴을 확장한다. |
+| 중복된 admin 화면 정리 | 둘 중 지는 쪽을 삭제한다: `frontend/src/features/admin/AdminPage.tsx`(ADR 0010의 라우트 구역) 또는 독립 `admin/` 앱(ADR 0022). 이 단계 **이전이 아니라 진행 중에** 결정하도록 의도했다 — 이식본이 적응 후 얼마나 살아남는지가 그 선택의 입력값이다. 7절에 미결 사항으로 추적한다. |
+| 모더레이션 기능을 둘 것인지 결정 | 이식본은 `POST /user/:id/ban`, `/unban`, `/force-logout`을 호출하고, 이 프로젝트가 **절대 기록하지 않는** 감사 액션(`USER_BANNED`, `USER_MUTED`, `USER_UNBAN`, `FORCE_LOGOUT`)에 색을 지정한다 — `AUDIT_ACTIONS`는 정확히 `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`다. 기본 답은 "두지 않는다": 영상 업로드 게시판에 명시된 모더레이션 요구사항이 없으므로 삭제한다(YAGNI). 그중 하나라도 만드는 것은 자체 ADR이 필요한 신규 백엔드 표면이며, UI 적응의 부수 효과로 끼워 넣을 일이 아니다. |
+
 ## 7. 미일정 / 미결 사항
 
 - e2e용 Testcontainers (2026-07-26 기록): e2e 스위트는 throwaway DB와 jest
@@ -280,39 +314,25 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   `getFiles(take, skip)`로 적고 있는데, [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)
   이후로는 `GetFilesDto`를 받는다. *규칙*(목록 엔드포인트는 페이지네이션 필수)은 그대로
   유효하고 예시 문구만 낡았으며, `CLAUDE.md`는 그 과제의 문서 범위 밖이었다.
-- 이식된 `admin/` 콘솔의 적응 (2026-07-30 기록,
-  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)) — Chat Project의 admin
-  콘솔을 최상위 `admin/` 폴더로 통째로 가져와 **수정하지 않은 상태로** 커밋했다. 동작하는
-  코드가 아니라 선언된 수정 기반이다. **목적은 둘이다**: 요구사항은 **사용자 권한 계층
-  관리**다 — [ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)은 RBAC의 메커니즘은 냈지만 운영
-  화면은 내지 않았으므로, 지금 승격·강등은 직접 `PATCH /user/:id/role`을 쏘는 일이고, 계층을
-  보호하는 불변식(마지막 superadmin 강등 거부, 모든 역할 변경 시 세션 종료)은 그것을 실행하는
-  사람에게 보이지 않는다. ADR 0013의 마지막 문장 자체가 이 화면을 미뤄뒀다. 수단은 **토큰
-  절약**이다 — 이식된 콘솔은 바로 이 3단계 계층을 위해 만들어졌으므로 역할 컬럼, 배정 컨트롤,
-  감사 조각이 이미 있고, 라우터·라우트 가드·인증 스토어·단일 비행 무음 갱신·axios 인터셉터·
-  Playwright·Vitest 하네스도 함께 있다. 가져오는 비용은 다시 생성하는 LLM 토큰의 극히 일부다.
-  **적응은 역할 관리 조각에서 시작한다** — `PATCH /user/:id/role`, `GET /user`,
-  `GET /user/:id`, `DELETE /user/:id`, `GET /audit-log`, `POST /auth/signin`은 이 API에 실제로
-  있는 라우트이고 등급 값 `0/1/2`는 `ROLE_RANK`와 정확히 일치한다. 틀린 것은 인코딩(숫자 대
-  문자열 enum)과 가드 규칙(superadmin 전용)뿐이다.
-  **아직 이 백엔드에 대해 동작하지 않으며**, 그것이 설계된 상태다. 검증을 거친 수정
-  백로그는 ADR 0022에 있다(삭제할 Apollo 계층, `refreshaccess`/`signOut` 라우트명, 숫자 대
-  문자열 역할, 액세스 토큰에 없는 `role` 클레임, 채팅 도메인 페이지, 존재하지 않는
-  ban/force-logout 엔드포인트, `page`/`take` 대 `take`/`skip`, `/audit-log/export` 라우트,
-  ADR 0020 삭제 확인 절차, `ErrorBody` 코드 분기, chat 프로젝트 Railway 호스트로 고정된
-  `vercel.json` CSP). 이 중 몇 행은 클라이언트 수정이 아니라 각자의 결정이 필요한 **백엔드**
-  사안이다 — `GET /user` 페이지네이션, ban/force-logout을 둘 것인지, 클라이언트가 사용자 역할을
-  어떻게 알게 할 것인지. 미예정: 별도의 전용 과제이며, 그때까지 이 폴더는 어떤 루트 도구
-  체계에도 연결하지 않는다.
+- ~~이식된 `admin/` 콘솔의 적응~~ — **2026-07-30에
+  [Stage 5](#stage-5--운영-화면-admin-콘솔--2026-07-30-추가)로 스케줄됐으므로** 더 이상 미예정이
+  아니다. 이 항목이 원래 이 절에서 시작했기에 한 번만 남겨 둔다: Chat Project의 콘솔을
+  수정하지 않은 선언된 수정 기반으로 `admin/`에 가져왔고
+  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)), 목적은 둘이었다 —
+  [ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)이 만들지 않고 남긴 **권한 계층 운영 화면**을
+  공급하는 것, 그리고 같은 3단계 계층용으로 이미 만들어진 콘솔을 다시 생성하는 LLM 토큰의 극히
+  일부로 그것을 해내는 것. 검증된 수정 백로그는 ADR 0022에 있고, 작업 행과 순서, 그것이 의존하는
+  백엔드 결정은 이제 Stage 5의 것이다.
 - 어느 admin 화면이 살아남는가 (2026-07-30 기록,
-  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)) — **과제가 아니라 미결
-  사항이다.** 지금 admin 화면이 두 개 공존한다:
+  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)) — **미결 사항**이며, 작업이
+  스케줄된 뒤에도 그대로 미결이다:
+  [Stage 5](#stage-5--운영-화면-admin-콘솔--2026-07-30-추가)의 네 번째 행으로, 그 단계 이전이
+  아니라 **진행 중에** 정한다. 지금 admin 화면이 두 개 공존한다:
   `frontend/src/features/admin/AdminPage.tsx`(ADR 0022가 개정한 admin 배치 조항에 따라
   [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)이 명세했던 `/admin` 라우트
-  구역)과 이식된 독립 `admin/` 앱. 의도적으로 미결로 둔다 — 이식된 콘솔에서 남길 가치가 있는
-  분량은 위 적응 작업을 시작해야 드러나므로, 지금 정하는 것은 추측이다. 대부분 버려야 한다는
-  결론이 나오면 ADR 0010의 원래 라우트 구역 계획이 더 나은 길이고, 이 항목은 그쪽으로
-  되돌아간다.
+  구역)과 이식된 독립 `admin/` 앱. 지금 정하는 것은 추측이다 — 이식본이 적응 후 얼마나
+  살아남는지가 그 선택의 입력값이다. 대부분 버려야 한다는 결론이 나오면 ADR 0010의 원래 라우트
+  구역 계획이 더 나은 길이고, 이 항목은 그쪽으로 되돌아간다.
 - 문서 문구 동기화 (2026-07-23 유예 결정; 2026-07-29 완료): 계획 수립 이전의
   "후보(candidate)" 표현을 이 계획에 맞춰 정리. ADR 0003("candidate roadmap
   item")은 이제 반영된 [ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)을 가리키고,

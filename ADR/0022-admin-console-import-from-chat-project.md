@@ -93,7 +93,11 @@ case; together they select this specific import over the alternatives:
 2. **Committed as-is, adapted later.** This change adds the folder and the documentation around
    it, and changes not one line of the imported source. Adaptation is its own dedicated task
    under [CLAUDE.md](../CLAUDE.md) > Scope Discipline, with the modification backlog below as
-   its brief. Keeping the import pristine in one commit is what makes that later diff readable:
+   its brief. **Scheduled as ROADMAP Stage 5 (operational surface — admin console), appended
+   2026-07-30 by this ADR** — the 11-axis review had scheduled no stage for the admin surface
+   even though ADR 0010 decided its placement, so the work was a decision with no home in the
+   plan. Stage 5's first row is a **backend** decision that blocks the rest (how a client learns
+   its own role); its number is not dependency order — it does not depend on Stage 4. Keeping the import pristine in one commit is what makes that later diff readable:
    the adaptation shows up as "Chat → Upload Board", not tangled with the import itself.
 3. **Wired into nothing.** `admin/` is outside every piece of root tooling — the lint glob
    (`{backend,apps,libs,test}/**/*.ts`), Jest `roots` (`["backend"]`), `tsconfig.build.json`,

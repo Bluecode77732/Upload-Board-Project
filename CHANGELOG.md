@@ -12,6 +12,26 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Changed
+- **ROADMAP gains Stage 5 — operational surface (admin console)**
+  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — the second amendment to the
+  plan the 11-axis review fixed on 2026-07-23 (the first was Stage F, ADR 0010). It closes a gap
+  rather than adding scope: ADR 0010 decided *where* admin lives back on 2026-07-23, but **no
+  stage ever owned building it**, so the work sat outside the staged list while every other
+  decided item had a row — an admin console is neither board domain (Stage 3) nor infrastructure
+  (Stage 4). Five task rows: the blocking backend decision of **how a client learns its own role**
+  (the access token is `{ sub, type }` with no `role` claim, so no admin route can be gated
+  today — needs an ADR amending [ADR 0002](ADR/0002-dual-secret-token-pair.md)), adapting the
+  imported `admin/` console, **`GET /user` pagination** (owed regardless of the console —
+  `findAll()` binds no `@Query()` and returns every user, a standing violation of this project's
+  own Never Do Group 2 pagination rule), resolving the duplicate admin surface, and deciding
+  whether moderation actions (`ban`/`unban`/`force-logout`) should exist at all — default "no",
+  and building any of them would be new backend surface with its own ADR, not a side effect of
+  adapting a UI. **Stage 5's number is not dependency order** — the one documented exception in
+  that section: it depends only on Stage 0 (RBAC, complete) plus its own first row, not on
+  Stage 4, and there is a stated argument for pulling it *ahead* of Stage 4 since a deployed
+  system whose privilege hierarchy is operable only through Swagger is hard to run.
+
 ### Added
 - **Imported admin console at `admin/`, documented as a modification base**
   ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — imported wholesale from the

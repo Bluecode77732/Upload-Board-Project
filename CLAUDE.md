@@ -823,7 +823,12 @@ conventions, E2E rewrite) → Stage 2 mechanism hardening (orphan temp-file
 cleanup, deletion policy, upload idempotency) → Stage 3 board-domain expansion
 (search/filter/sort, post/comment modules) → Stage 4 production transition (AWS
 container deploy, VOD playback access control, storage port-adapter, performance
-criteria). ROADMAP.md is the single source for the plan; items there that this
+criteria) → **Stage 5 operational surface — admin console (appended 2026-07-30,
+ADR 0022**: role-delivery decision, adapting the imported `admin/` console,
+`GET /user` pagination, resolving the duplicate admin surface, and deciding whether
+moderation actions exist at all). Stage 5's number is **not** dependency order — it
+depends only on Stage 0 (RBAC) plus its own first row, not on Stage 4, and may run
+before it. ROADMAP.md is the single source for the plan; items there that this
 file marks "never suggest" entered the plan by that explicit decision, but each
 still lands only as its own dedicated task with its own ADR — until then, the
 Architecture Decisions above remain operative.

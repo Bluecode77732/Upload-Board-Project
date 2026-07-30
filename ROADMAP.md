@@ -7,7 +7,11 @@ The full project plan for the Upload Board Project, established through an
 architecture → modules → domain → mechanisms → data handling → platform →
 infrastructure → deployment). Amended the same day by the frontend-split
 decision ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)),
-which inserts Stage F (frontend preparation) ahead of Stage 0. Every item below
+which inserts Stage F (frontend preparation) ahead of Stage 0. Amended again on
+2026-07-30 by [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md),
+which **appends Stage 5 (operational surface — admin console)**: the 11-axis review
+scheduled no stage for the admin surface, even though ADR 0010 had decided its
+placement, so the work existed as a decision with no home in the plan. Every item below
 lands as its own dedicated, designed change
 ([CLAUDE.md](CLAUDE.md) > Scope Discipline).
 
@@ -17,7 +21,7 @@ lands as its own dedicated, designed change
 > actually lands (with its own ADR), the current Architecture Decisions remain
 > operative.
 
-## Current position (as of 2026-07-26)
+## Current position (as of 2026-07-30)
 
 - The 2026-07-22 hardening run is fully landed: security quick-wins, the
   zero-error lint baseline, the documentation rewrite, and TypeORM migration
@@ -63,6 +67,13 @@ lands as its own dedicated, designed change
   `search`, `creatorId`, `sortBy`, and `order`, with sort keys resolved through an in-code
   whitelist and a deterministic default order the endpoint previously lacked. The board
   domain (post/comment modules) is the remaining Stage 3 task.
+- **Stage 5 (operational surface — admin console) was appended 2026-07-30**
+  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)), closing a gap in the
+  original plan: ADR 0010 decided where admin lives back on 2026-07-23, but no stage ever
+  owned building it. The Chat Project's admin console was imported to `admin/` as an
+  unadapted modification base in the same change. Nothing in Stage 5 has started, and its
+  first row — how a client learns its own role — is a backend decision that blocks the rest.
+  It does **not** depend on Stage 4 and may run before it.
 
 ## 1. Vision & essence
 
@@ -212,6 +223,30 @@ settled while zero consumers exist.
 | Storage port-adapter | Only if/when the S3 need is confirmed — see Architecture direction (section 4). |
 | Performance / capacity criteria | Index policy, response-time targets, disk ceilings — measured before optimized. |
 
+### Stage 5 — Operational surface (admin console) — added 2026-07-30
+
+**Why a new stage rather than a row in an existing one.** An admin console is neither board
+domain (Stage 3) nor infrastructure (Stage 4), and until now **no stage owned it at all** —
+[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) decided admin's *placement* in
+2026-07-23 but never scheduled the work, so it sat outside the plan while every other decided
+item had a row. Adding the stage closes that gap; the import that prompted it is
+[ADR 0022](ADR/0022-admin-console-import-from-chat-project.md).
+
+**Numbering is not dependency order here** — the one exception to this section's rule. Stage 5
+does **not** depend on Stage 4: its only hard prerequisite is Stage 0 (RBAC, complete
+2026-07-25) plus the role-delivery decision in the first row below. It can run before, after, or
+alongside Stage 4. It is numbered last because it was added last, not because it must come last.
+There is a soft argument for pulling it *ahead* of Stage 4: a deployed system whose privilege
+hierarchy can only be operated through Swagger is hard to run in production.
+
+| Task | Rationale / dependencies |
+|---|---|
+| **How the client learns a user's role** (backend decision — **blocks the rest of this stage**) | The access-token payload is `{ sub, type }` — there is deliberately **no `role` claim** ([ADR 0002](ADR/0002-dual-secret-token-pair.md)), so a client cannot know its own role today. Any admin UI needs it for route gating. Two shapes to decide between: a `role` claim added to the access token (fast, but puts an authorization fact in a token that outlives a demotion — note `updateRole` already nulls `refreshTokenHash` to bound that window), or a request-based lookup (`GET /user/:id`, or a new `GET /auth/me`). Needs its own ADR amending ADR 0002; the imported console currently assumes the claim exists and therefore rejects every admin. |
+| Adapt the imported `admin/` console | Rewrite the [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md) import from the Chat Project's API to this one, using that ADR's verified backlog as the brief. **Start with the role-management slice** — `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`, `GET /audit-log`, and `POST /auth/signin` are already the right routes and the rank values `0/1/2` already match `ROLE_RANK`, so that part is route-level correction, not redesign. The chat-domain pages (`rooms-page`, presence/nickname widgets) and the whole Apollo/`/graphql` layer are deletions. Depends on the row above. |
+| `GET /user` pagination | The admin user list needs it, and the endpoint currently binds **no `@Query()` at all** — `findAll()` returns `findAndCount()` over every user. That is a standing violation of this project's own pagination rule ([CLAUDE.md](CLAUDE.md) > Never Do Group 2), so it is owed regardless of the console. Extend the `GetFilesDto` / [ADR 0021](ADR/0021-list-query-search-filter-sort.md) read-layer pattern rather than inventing a second one. |
+| Resolve the duplicate admin surface | Delete whichever of the two loses: `frontend/src/features/admin/AdminPage.tsx` (ADR 0010's route section) or the standalone `admin/` app (ADR 0022). Deliberately decided **during** this stage, not before it — how much of the import survives adaptation is the input to the choice. Tracked as an open decision in section 7. |
+| Decide whether moderation actions exist at all | The import calls `POST /user/:id/ban`, `/unban`, and `/force-logout`, and colors audit actions (`USER_BANNED`, `USER_MUTED`, `USER_UNBAN`, `FORCE_LOGOUT`) that **this project never emits** — `AUDIT_ACTIONS` is exactly `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`. Default answer is "no": delete them, since a video-upload board has no stated moderation requirement (YAGNI). Building any of them is new backend surface needing its own ADR — not a side effect of adapting a UI. |
+
 ## 7. Unscheduled / open decisions
 
 - Testcontainers for e2e (recorded 2026-07-26): the e2e suite uses a throwaway DB
@@ -301,39 +336,24 @@ settled while zero consumers exist.
   a `GetFilesDto` since [ADR 0021](ADR/0021-list-query-search-filter-sort.md). The *rule*
   (list endpoints must paginate) is unaffected; only the example text lags, and `CLAUDE.md`
   was outside that task's stated document scope.
-- Adapting the imported `admin/` console (recorded 2026-07-30,
-  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — the Chat Project's admin
-  console was imported wholesale as the top-level `admin/` folder and committed **unmodified**,
-  as a declared modification base rather than working code. **Two purposes**: the requirement is
-  **user privilege-hierarchy management** — [ADR 0013](ADR/0013-rbac-and-audit-log.md) shipped
-  RBAC's mechanism but no operator surface, so promotion/demotion is currently a raw
-  `PATCH /user/:id/role` and the invariants protecting the hierarchy (last-superadmin refusal,
-  session termination on any role change) are invisible to whoever triggers them; ADR 0013's own
-  closing line deferred this surface. The method is **token economy** — the imported console was
-  built for this same three-tier hierarchy, so its role column, assignment control, and audit
-  slice already exist, as do the router, route guard, auth store, single-flight silent refresh,
-  axios interceptors, and Playwright/Vitest harnesses; importing them costs a fraction of the LLM
-  tokens that regenerating them would. **Adaptation starts with the role-management slice** —
-  `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`, `GET /audit-log`, and
-  `POST /auth/signin` are routes this API actually has, and the rank values `0/1/2` match
-  `ROLE_RANK` exactly; only the encoding (numeric vs. string enum) and the guard rules
-  (superadmin-only) are wrong. **It does not work against this
-  backend yet**, by design. ADR 0022 carries the verified modification backlog (Apollo
-  layer to delete, `refreshaccess`/`signOut` route names, numeric-vs-string roles, a `role`
-  claim the access token does not carry, chat-domain pages, ban/force-logout endpoints that do
-  not exist, `page`/`take` vs `take`/`skip`, the `/audit-log/export` route, the ADR 0020
-  deletion confirmation, `ErrorBody` code branching, and a `vercel.json` CSP pinned to the chat
-  project's Railway host). Several rows are **backend** questions with their own decisions to
-  make, not client edits — `GET /user` pagination, whether ban/force-logout should exist, and
-  how the client learns a user's role. Unscheduled: it is its own dedicated task, and the
-  folder is wired into no root tooling until then.
+- ~~Adapting the imported `admin/` console~~ — **scheduled 2026-07-30 as
+  [Stage 5](#stage-5--operational-surface-admin-console--added-2026-07-30)**, no longer
+  unscheduled. Recorded here for one turn because the entry started life in this section: the
+  Chat Project's console was imported to `admin/` unmodified as a declared modification base
+  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) for two purposes — supplying
+  the **privilege-hierarchy operator surface** [ADR 0013](ADR/0013-rbac-and-audit-log.md) shipped
+  without, and doing it at a fraction of the LLM token cost of regenerating a console already
+  built for the same three-tier hierarchy. The verified modification backlog lives in ADR 0022;
+  the task rows, their ordering, and the backend decisions they depend on are now Stage 5's.
 - Which admin surface survives (recorded 2026-07-30,
-  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — **an open decision, not a
-  task.** Two admin surfaces now coexist: `frontend/src/features/admin/AdminPage.tsx` (the
-  `/admin` route section [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)
-  specified, whose admin-placement clause ADR 0022 amends) and the imported standalone
-  `admin/` app. Deliberately left unresolved: choosing now would be guessing, since how much of
-  the imported console is worth keeping only becomes visible once the adaptation above starts.
+  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — **an open decision**, and it
+  stays one even though the work is now scheduled: it is
+  [Stage 5](#stage-5--operational-surface-admin-console--added-2026-07-30)'s fourth row, to be
+  settled **during** that stage rather than before it. Two admin surfaces coexist:
+  `frontend/src/features/admin/AdminPage.tsx` (the `/admin` route section
+  [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) specified, whose
+  admin-placement clause ADR 0022 amends) and the imported standalone `admin/` app. Choosing
+  now would be guessing — how much of the import survives adaptation is the input to the choice.
   If it turns out mostly deletable, ADR 0010's original route-section plan is the better path
   and this flips back to it.
 - Doc-wording sync (deferred 2026-07-23; completed 2026-07-29): pre-plan

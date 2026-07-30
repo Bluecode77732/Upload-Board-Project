@@ -34,9 +34,12 @@ arrived as a copy instead of as new code.
 
 - Full decision, rejected alternatives, and consequences:
   [ADR 0022](../ADR/0022-admin-console-import-from-chat-project.md)
-- Adapting it is **its own dedicated task** ([CLAUDE.md](../CLAUDE.md) > Scope Discipline).
-  Do not treat it as a drive-by cleanup, and do not assume any line in it reflects this
-  project's contracts.
+- Adapting it is **its own dedicated task** ([CLAUDE.md](../CLAUDE.md) > Scope Discipline),
+  scheduled as **[ROADMAP](../ROADMAP.md) Stage 5 — operational surface (admin console)**.
+  Nothing in that stage has started, and its **first row blocks the rest**: how a client learns
+  its own role is a backend decision (the access token carries no `role` claim), so the console
+  cannot gate a single admin route until it is made. Do not treat this folder as a drive-by
+  cleanup, and do not assume any line in it reflects this project's contracts.
 
 ## Status
 
