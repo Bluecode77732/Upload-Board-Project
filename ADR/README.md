@@ -29,6 +29,7 @@ each ADR records the *why* behind those rules.
 | [0018](0018-orphan-temp-file-cleanup.md) | Scheduled orphan temp-file cleanup | Accepted | 2026-07-26 |
 | [0019](0019-upload-claim-idempotency.md) | Upload duplicate-submission policy — attach filename as a one-shot claim token | Accepted | 2026-07-27 |
 | [0020](0020-account-deletion-cascade.md) | Deletion policy — confirmed account cascade over soft delete | Accepted | 2026-07-30 |
+| [0021](0021-list-query-search-filter-sort.md) | List query — whitelisted sort, ILIKE title search, creator filter | Accepted | 2026-07-30 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

@@ -33,8 +33,21 @@ export class FileController {
   constructor(private readonly fileService: FileService) {}
 
   @Get()
+  @ApiResponse({
+    status: 200,
+    description:
+      'A [files, totalCount] tuple. Defaults to the 20 newest files (createdAt DESC); take/skip paginate, search matches the title, creatorId filters by author, sortBy/order sort (ADR 0021).',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'VALIDATION_FAILED — take is out of 1–100, skip is negative, search exceeds 100 characters, or sortBy/order is not one of the accepted values.',
+  })
+  // 목적: 검증된 목록 조회 조건을 DTO 한 덩어리로 서비스에 넘긴다.
+  // 이유: 조건이 take/skip에서 검색·정렬·필터까지 늘어나, 위치 인자로 풀면 호출부가 인자 순서 실수에 노출된다.
+  // 방법: @Query()로 바인딩된 GetFilesDto를 그대로 전달한다 — 컨트롤러는 조회 조건을 해석하지 않는다.
   getFiles(@Query() getFilesDto: GetFilesDto) {
-    return this.fileService.getFiles(getFilesDto.take, getFilesDto.skip);
+    return this.fileService.getFiles(getFilesDto);
   }
 
   @Get(':id')

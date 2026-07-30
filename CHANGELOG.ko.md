@@ -13,6 +13,19 @@
 ## [Unreleased]
 
 ### 추가
+- `GET /file` 목록 검색 / 필터 / 정렬 (Stage 3 — 도메인 확장;
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)): 선택적 쿼리 파라미터 네 개를
+  모두 `GetFilesDto`에 선언해 추가했고, `[files, totalCount]` 응답 형태는 그대로다.
+  **`search`**는 제목을 대소문자 구분 없이 부분일치로 찾는다(`ILIKE '%term%'`). LIKE
+  메타문자(`\`, `%`, `_`)를 이스케이프하고 `ESCAPE '\'`를 명시하므로, 검색어에 든 `%`는
+  결과를 조용히 넓히는 대신 문자 그대로 매칭된다. 공백뿐인 검색어는 미지정으로 취급하고,
+  길이는 100자로 제한한다. **`creatorId`**는 이미 존재하는 creator join을 통해 작성자로
+  필터링한다(추가 쿼리 없음). **`sortBy`**(`createdAt` | `title` | `id`)와
+  **`order`**(`DESC` | `ASC`)는 `FileService`의 완전한 `Record<FileSortField, string>`를
+  통해서만 해석되므로, 클라이언트 문자열이 컬럼명으로 쿼리에 도달하지 않고 정렬 키만
+  추가하고 컬럼 매핑을 빠뜨리면 컴파일 에러가 난다. `filePath`는 의도적으로 제공하지 않는다.
+  풀텍스트 검색, `pg_trgm`, 복합 `sort=field:dir` 문자열, `creatorEmail` 필터, keyset
+  페이지네이션은 모두 ADR에서 검토 후 배제했다.
 - 삭제 정책 (Stage 2 — 메커니즘 강화;
   [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)): **soft delete는 채택하지 않는다** —
   삭제는 hard delete로 유지하며, 그 근거는 ADR에 기록했다. `DELETE /user/:id`는 이제 선택적
@@ -179,6 +192,14 @@
   `CLAUDE.md`, `README.md`.
 
 ### 수정
+- `GET /file` 페이지네이션이 결정적으로 동작한다
+  ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)). 이 쿼리에는 **`ORDER BY`가
+  아예 없었고**, PostgreSQL에서 정렬되지 않은 쿼리에 `OFFSET`/`LIMIT`을 얹으면 행 순서가
+  미정의다 — 페이지를 넘기다 어떤 행은 중복되고 어떤 행은 건너뛰어질 수 있었다. 이제 기본
+  정렬이 `createdAt DESC`이고 `file.id`를 tiebreaker로 덧붙이므로(이미 유일한 `id`로 정렬할
+  때는 생략), 정렬 컬럼 값이 같은 행들이 두 번의 페이지 요청 사이에 순서를 바꿀 수 없다.
+  기존 호출자는 이전에 임의 순서로 받던 결과를 이제 정렬된 순서로 받는다. 응답 형태와 기존
+  파라미터는 모두 그대로다.
 - `DELETE /file/:id`가 행뿐 아니라 저장된 물리 파일까지 지운다
   ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)): 그동안 파일을 삭제해도 `granted_`
   파일은 `file/upload`에 영구히 남았고, `ServeStaticModule`을 통해 계속 공개 서빙되면서

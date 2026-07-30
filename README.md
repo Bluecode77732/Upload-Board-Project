@@ -132,7 +132,19 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.m
 
 **File**
 - `POST /upload/attach` — upload a video to temp storage (multipart field `video`, 100 MB limit)
-- `GET /file` — list files (paginated: `take` 1–100, default 20 / `skip` default 0)
+- `GET /file` — list files. All query parameters are optional and combinable; an undeclared
+  one is rejected as 400 `VALIDATION_FAILED` ([ADR 0021](ADR/0021-list-query-search-filter-sort.md))
+
+  | Parameter | Values | Default |
+  |---|---|---|
+  | `take` | 1–100 | `20` |
+  | `skip` | ≥ 0 | `0` |
+  | `search` | title substring, case-insensitive, ≤100 chars (`%` and `_` match literally) | — |
+  | `sortBy` | `createdAt` \| `title` \| `id` | `createdAt` |
+  | `order` | `DESC` \| `ASC` | `DESC` |
+  | `creatorId` | user id | — |
+
+  Example: `GET /file?search=holiday&creatorId=3&sortBy=title&order=ASC&take=10`
 - `GET /file/:id` — get file metadata
 - `POST /file` — promote a temp file to permanent storage (transactional). The attached
   filename is a one-shot claim token: resubmitting it returns the existing file with 200

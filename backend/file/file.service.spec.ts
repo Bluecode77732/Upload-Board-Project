@@ -10,6 +10,7 @@ import {
   SelectQueryBuilder,
 } from 'typeorm';
 import { FileEntity } from './entity/file.entity';
+import { GetFilesDto } from './dto/get-files.dto';
 import { UserEntity } from 'backend/user/entity/user.entity';
 import {
   NotFoundException,
@@ -445,9 +446,23 @@ describe('FileService', () => {
   });
 
   describe('getFiles', () => {
-    it('should apply take and skip to the query', async () => {
-      const mockListQueryBuilder = {
+    // The DTO instance the global pipe would hand the controller for a bare `GET /file`.
+    const listQuery = (overrides: Partial<GetFilesDto> = {}): GetFilesDto => ({
+      take: 20,
+      skip: 0,
+      sortBy: 'createdAt',
+      order: 'DESC',
+      ...overrides,
+    });
+
+    let listQueryBuilder: Record<string, jest.Mock>;
+
+    beforeEach(() => {
+      listQueryBuilder = {
         leftJoinAndSelect: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
         take: jest.fn().mockReturnThis(),
         skip: jest.fn().mockReturnThis(),
         getManyAndCount: jest.fn().mockResolvedValue([[mockFileEntity], 1]),
@@ -455,19 +470,98 @@ describe('FileService', () => {
       jest
         .spyOn(fileRepository, 'createQueryBuilder')
         .mockReturnValue(
-          mockListQueryBuilder as unknown as SelectQueryBuilder<FileEntity>,
+          listQueryBuilder as unknown as SelectQueryBuilder<FileEntity>,
         );
+    });
 
-      const [files, count] = await fileService.getFiles(20, 0);
+    it('should apply take and skip to the query', async () => {
+      const [files, count] = await fileService.getFiles(listQuery());
 
-      expect(mockListQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
+      expect(listQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
         'file.creator',
         'creator',
       );
-      expect(mockListQueryBuilder.take).toHaveBeenCalledWith(20);
-      expect(mockListQueryBuilder.skip).toHaveBeenCalledWith(0);
+      expect(listQueryBuilder.take).toHaveBeenCalledWith(20);
+      expect(listQueryBuilder.skip).toHaveBeenCalledWith(0);
       expect(count).toBe(1);
       expect(files[0]).toMatchObject({ id: 1, title: 'Test File' });
+    });
+
+    it('should default to newest first with id as a tiebreaker', async () => {
+      await fileService.getFiles(listQuery());
+
+      expect(listQueryBuilder.orderBy).toHaveBeenCalledWith(
+        'file.createdAt',
+        'DESC',
+      );
+      // Without a unique tiebreaker, rows tying on createdAt could repeat or vanish
+      // across pages (offset order is undefined for ties).
+      expect(listQueryBuilder.addOrderBy).toHaveBeenCalledWith(
+        'file.id',
+        'DESC',
+      );
+    });
+
+    it('should map an allowed sort key to its column instead of interpolating it', async () => {
+      await fileService.getFiles(listQuery({ sortBy: 'title', order: 'ASC' }));
+
+      expect(listQueryBuilder.orderBy).toHaveBeenCalledWith(
+        'file.title',
+        'ASC',
+      );
+      expect(listQueryBuilder.addOrderBy).toHaveBeenCalledWith(
+        'file.id',
+        'ASC',
+      );
+    });
+
+    it('should not duplicate the tiebreaker when sorting by id', async () => {
+      await fileService.getFiles(listQuery({ sortBy: 'id' }));
+
+      expect(listQueryBuilder.orderBy).toHaveBeenCalledWith('file.id', 'DESC');
+      expect(listQueryBuilder.addOrderBy).not.toHaveBeenCalled();
+    });
+
+    it('should search the title with a case-insensitive partial match', async () => {
+      await fileService.getFiles(listQuery({ search: 'holiday' }));
+
+      expect(listQueryBuilder.andWhere).toHaveBeenCalledWith(
+        "file.title ILIKE :term ESCAPE '\\'",
+        { term: '%holiday%' },
+      );
+    });
+
+    it('should escape LIKE wildcards so they match literally', async () => {
+      await fileService.getFiles(listQuery({ search: '100%_a\\b' }));
+
+      // Unescaped, `%` and `_` would widen the match far beyond what was typed.
+      expect(listQueryBuilder.andWhere).toHaveBeenCalledWith(
+        "file.title ILIKE :term ESCAPE '\\'",
+        { term: '%100\\%\\_a\\\\b%' },
+      );
+    });
+
+    it('should ignore a whitespace-only search term', async () => {
+      await fileService.getFiles(listQuery({ search: '   ' }));
+
+      expect(listQueryBuilder.andWhere).not.toHaveBeenCalled();
+    });
+
+    it('should filter by creator through the existing join', async () => {
+      await fileService.getFiles(listQuery({ creatorId: 7 }));
+
+      expect(listQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'creator.id = :creatorId',
+        { creatorId: 7 },
+      );
+      // The creator is joined once, not queried per row (N+1).
+      expect(listQueryBuilder.leftJoinAndSelect).toHaveBeenCalledTimes(1);
+    });
+
+    it('should combine search and creator filter', async () => {
+      await fileService.getFiles(listQuery({ search: 'trip', creatorId: 3 }));
+
+      expect(listQueryBuilder.andWhere).toHaveBeenCalledTimes(2);
     });
   });
 

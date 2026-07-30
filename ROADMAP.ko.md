@@ -54,6 +54,11 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   삭제 정책은 2026-07-30 반영됐다 ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)):
   soft delete는 채택하지 않고, 계정은 명시적인 `deleteFiles=true`가 있을 때만 자기 파일까지
   연쇄 삭제하며, 기존 FK 위반 500은 타입 있는 409가 됐다 — **Stage 2가 완결됐다**.
+- **Stage 3이 진행 중이다**: 목록 검색/필터/정렬이 2026-07-30 반영됐다
+  ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) — `GET /file`이 `search`,
+  `creatorId`, `sortBy`, `order`를 받고, 정렬 키는 코드 내 화이트리스트로만 해석되며,
+  이 엔드포인트에 없던 결정적 기본 정렬이 생겼다. 남은 Stage 3 작업은 게시판 도메인
+  (post/comment 모듈)이다.
 
 ## 1. 비전과 본질
 
@@ -134,7 +139,9 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   post/comment 도메인. 엔티티 관계(post ↔ `FileEntity`, comment ↔ post/user)는
   먼저 평문으로 기술한 뒤 검토된 마이그레이션으로 반영한다
   ([CLAUDE.md](CLAUDE.md) > Scope Discipline의 스키마 변경 규약).
-- 목록 검색/필터/정렬(Stage 3)이 게시판 목록의 데이터 계층 선행 조건이다.
+- 목록 검색/필터/정렬(Stage 3)이 게시판 목록의 데이터 계층 선행 조건이며, 2026-07-30
+  반영됐다 ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)). post 목록은 이
+  조회 계층을 새로 정의하지 않고 확장한다.
 
 ## 6. 단계별 작업 목록
 
@@ -179,7 +186,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 
 | 작업 | 근거 / 의존성 |
 |---|---|
-| 목록 검색/필터/정렬 | 게시판 목록의 선행 조건; `GET /file`이 QueryBuilder 기반이라 확장 경로는 이미 있다. |
+| ~~목록 검색/필터/정렬~~ — ✅ 2026-07-30 반영 ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) | `GET /file`에 `search`(제목에 이스케이프된 `ILIKE '%term%'`), `creatorId`, 그리고 완전한 `Record` 화이트리스트로 해석되는 `sortBy`/`order`가 추가됐다. 이 엔드포인트에 없던 `ORDER BY`도 함께 들어가 offset 페이징이 결정적이 됐다. 스키마 변경은 없고, 후보 인덱스 세 개는 도입 계기를 기록한 채 유보했다. post 목록이 확장해 쓸 조회 계층 패턴이다. |
 | 게시판 도메인 — post/comment 모듈 | 신규 도메인 모듈(모듈 방침이 승인한 사례); 평문 스키마 기술 → 검토된 마이그레이션 순서를 지키고, RBAC·소유권·페이지네이션 패턴을 처음부터 적용. |
 
 ### Stage 4 — 실서비스 전환
@@ -243,6 +250,24 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   장치는 없다. ADR 0018의 스윕을 복사해 해결하지 **않은** 것은 의도적이다 — "행 없이 디스크에
   있다"는 판정을 파일명만으로 내릴 수 없어 DB 조인 기반 정합 작업과 자체 ADR이 필요하다.
   일정 미배정 — 감수하는 잔여 위험은 디스크 낭비이며, 깨진 레코드는 발생하지 않는다.
+- 유보한 목록 조회 인덱스 (2026-07-30 기록,
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) — 검색/필터/정렬 과제는
+  의도적으로 **인덱스를 하나도 추가하지 않고** 마무리했다. 이 테이블 규모에서 후보 셋 다
+  측정 없는 추측이기 때문이다. 각각은 측정을 기다리는 평문 기술 상태이며, 도입할 때는 승인과
+  `migration:generate` 출력의 라인단위 검토를 거쳐야 한다. `("createdAt" DESC, "id" DESC)`는
+  기본 정렬과 페이지 경계용(대략 10⁴행 이상에서 정당화된다), `pg_trgm` GIN on `lower(title)`은
+  `ILIKE '%term%'`가 인덱스를 쓸 수 있게 되는 *전제 조건*이라 확장 + 인덱스의 2단계
+  마이그레이션이 되고, `("creatorId")`는 Postgres가 자동 생성하지 않는 인덱스로 새 필터와 계정
+  연쇄 삭제([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) 양쪽에 쓰인다. 그때까지
+  `search`/`creatorId`는 순차 스캔이고 정렬은 전체 정렬이다 — 이 규모에서 감수하는 트레이드다.
+  뒤집는 근거는 직관이 아니라 측정이어야 한다.
+- 목록 조회 파라미터의 프론트엔드 반영 (2026-07-30 기록,
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) — 위의 청구 계약·삭제 계약 항목과
+  마찬가지로 **백엔드 작업이 아니라 프론트엔드 전용 과제가 담당한다.** `GET /file`이 이제
+  `search`, `sortBy`, `order`, `creatorId`를 받고, 이전에는 임의였던 순서를 기본 최신순으로
+  돌려준다. `frontend/docs/API-CONTRACT.md`와 목록 화면(검색창, 정렬 컨트롤, 작성자 필터)을
+  함께 갱신해야 하며, 그전까지 프론트엔드는 기존처럼 `take`/`skip`만 보내면서 결정적 정렬만
+  그대로 얻는다. 백엔드 변경은 저장소 경계에서 멈췄다([CLAUDE.md](CLAUDE.md) > Project Overview).
 - `ARCHITECTURE.md`(+ko)의 문서 부패 (2026-07-30 기록) — Stage 1 착지 내용이 이 문서에
   전혀 반영되지 않았다. "Non-Existent Infrastructure"는 여전히 CI 워크플로·Dockerfile·Nest
   `Logger` 사용이 없다고 서술하지만 셋 다 존재하고
@@ -250,7 +275,11 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   Jest `roots`는 `["src"]`로 적혀 있으며(실제는 `["backend"]`), Testing 섹션에 e2e 서술이
   없고, `PATCH /user/:id`·`PATCH /file/:id`는 RBAC 이전의 "본인만"·"작성자만"로 남아 있다
   ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)). 부수 작업이 아니라 전용 문서 감사 과제로
-  다룬다 — 기능 커밋에 섞으면 그 커밋이 무엇을 결정했는지가 흐려진다.
+  다룬다 — 기능 커밋에 섞으면 그 커밋이 무엇을 결정했는지가 흐려진다. **같은 과제에 2026-07-30
+  추가**: `CLAUDE.md`의 Never Do Group 2 페이지네이션 예시가 현재 시그니처를
+  `getFiles(take, skip)`로 적고 있는데, [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)
+  이후로는 `GetFilesDto`를 받는다. *규칙*(목록 엔드포인트는 페이지네이션 필수)은 그대로
+  유효하고 예시 문구만 낡았으며, `CLAUDE.md`는 그 과제의 문서 범위 밖이었다.
 - 문서 문구 동기화 (2026-07-23 유예 결정; 2026-07-29 완료): 계획 수립 이전의
   "후보(candidate)" 표현을 이 계획에 맞춰 정리. ADR 0003("candidate roadmap
   item")은 이제 반영된 [ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)을 가리키고,
@@ -270,6 +299,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 
 | 항목 | 비고 |
 |---|---|
+| 목록 검색/필터/정렬 | `GET /file`에 선택적 파라미터 네 개가 추가됐다 — `search`(제목 `ILIKE '%term%'`, LIKE 메타문자 이스케이프, 100자 이하), `creatorId`(이미 있는 creator join 활용), 그리고 완전한 `Record<FileSortField, string>`로 컬럼에 매핑되는 `sortBy`/`order` — 덕분에 클라이언트 문자열이 컬럼명이 되는 일이 없다. 기본 정렬은 `createdAt DESC` + `file.id` tiebreaker다. 이 엔드포인트에는 **`ORDER BY`가 아예 없어** offset 페이징이 비결정적이었다. 응답 형태 불변, 신규 에러 코드 없음(잘못된 값은 경계 파이프가 `VALIDATION_FAILED`로 거절), 스키마 변경 없음. `createdAt`/`pg_trgm`/`creatorId` 인덱스는 도입 계기를 기록한 채 유보 — **Stage 3 첫 작업** ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) |
 | 삭제 정책 설계 | soft delete는 근거를 남기고 기각했으며 삭제는 hard delete로 유지한다. `DELETE /user/:id?deleteFiles=true`는 파일 행 → 계정 행 → 물리 파일 순으로 연쇄 삭제하고(unlink는 커밋 이후), 확인 없이 파일 보유 계정을 지우려 하면 개수를 담은 신규 409 `USER_HAS_FILES`로 거절한다. `deleteFiles`를 boolean이 아닌 검증된 문자열 리터럴로 받은 이유는 암묵 Boolean 변환이 `"false"`를 `true`로 바꾸는 것이 실측으로 확인됐기 때문이다. 이번 과제에서 발견한 누수를 닫아 `DELETE /file/:id`도 저장된 `granted_` 파일을 unlink한다. 스키마 변경 없음 — **Stage 2 세 번째 작업이자 Stage 2 완결** ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) |
 
 ### 2026-07-27

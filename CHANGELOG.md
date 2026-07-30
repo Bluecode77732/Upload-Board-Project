@@ -13,6 +13,20 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- List search / filter / sort on `GET /file` (Stage 3 — domain expansion;
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.md)): four optional query parameters,
+  all declared on `GetFilesDto`, with the `[files, totalCount]` response shape unchanged.
+  **`search`** matches the title case-insensitively as a substring (`ILIKE '%term%'`) with
+  LIKE metacharacters (`\`, `%`, `_`) escaped and `ESCAPE '\'` stated, so a `%` in the term
+  matches literally instead of silently widening the result; a whitespace-only term is
+  treated as absent, and the term is capped at 100 characters. **`creatorId`** filters by
+  author through the creator join that already exists (no extra query). **`sortBy`**
+  (`createdAt` | `title` | `id`) and **`order`** (`DESC` | `ASC`) are resolved through a
+  total `Record<FileSortField, string>` in `FileService`, so a client string never reaches
+  the query as a column name and adding a sort key without a column mapping is a compile
+  error; `filePath` is deliberately not offered. Full-text search, `pg_trgm`, a compound
+  `sort=field:dir` string, a `creatorEmail` filter, and keyset pagination were all
+  considered and rejected in the ADR.
 - Deletion policy (Stage 2 — mechanism hardening;
   [ADR 0020](ADR/0020-account-deletion-cascade.md)): **soft delete is not adopted** —
   deletion stays hard, and the reasons are recorded in the ADR. `DELETE /user/:id` now
@@ -188,6 +202,14 @@ development line (package.json version).
   Related docs synced: `CLAUDE.md`, `README.md`.
 
 ### Fixed
+- `GET /file` pagination is now deterministic ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)).
+  The query had **no `ORDER BY` at all**, and `OFFSET`/`LIMIT` over an unordered query has
+  undefined row order in PostgreSQL — paging could repeat a row on one page and skip another.
+  The default is now `createdAt DESC` with `file.id` appended as a tiebreaker (omitted when
+  sorting by `id`, which is already unique), so rows tying on the sort column cannot reorder
+  between two page requests. Existing callers now receive ordered results where they
+  previously received arbitrary ones; the response shape and every existing parameter are
+  untouched.
 - `DELETE /file/:id` now removes the stored file, not just its row
   ([ADR 0020](ADR/0020-account-deletion-cascade.md)): every file deletion used to leave its
   `granted_` file in `file/upload` forever — still publicly served by `ServeStaticModule`,

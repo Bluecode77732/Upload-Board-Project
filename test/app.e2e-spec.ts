@@ -279,6 +279,148 @@ describe('Upload Board API (e2e)', () => {
     });
   });
 
+  describe('Search / filter / sort (GET /file)', () => {
+    // supertest types the body as `any`; the [files, count] tuple shape is asserted once
+    // here so each expectation reads titles off a typed value.
+    const titlesOf = (body: unknown): string[] =>
+      (body as [{ title: string }[], number])[0].map((f) => f.title);
+
+    it('defaults to newest first (createdAt DESC, id as tiebreaker)', async () => {
+      const user = await createUser('sort-default@e.com');
+      await seedFile('sort-1', user.id);
+      await seedFile('sort-2', user.id);
+      await seedFile('sort-3', user.id);
+
+      const res = await request(server)
+        .get('/file')
+        .set(auth(user.accessToken))
+        .expect(200);
+
+      expect(titlesOf(res.body)).toEqual(['sort-3', 'sort-2', 'sort-1']);
+    });
+
+    it('sorts by an allowed field in the requested direction', async () => {
+      const user = await createUser('sort-title@e.com');
+      await seedFile('charlie', user.id);
+      await seedFile('alpha', user.id);
+      await seedFile('bravo', user.id);
+
+      const res = await request(server)
+        .get('/file?sortBy=title&order=ASC')
+        .set(auth(user.accessToken))
+        .expect(200);
+
+      expect(titlesOf(res.body)).toEqual(['alpha', 'bravo', 'charlie']);
+    });
+
+    it('rejects a sort field outside the whitelist with VALIDATION_FAILED', async () => {
+      const user = await createUser('sort-bad@e.com');
+      // A column that exists but is not offered — the whitelist, not the schema, decides.
+      const res = await request(server)
+        .get('/file?sortBy=filePath')
+        .set(auth(user.accessToken))
+        .expect(400);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('rejects an unknown sort direction with VALIDATION_FAILED', async () => {
+      const user = await createUser('order-bad@e.com');
+      const res = await request(server)
+        .get('/file?order=DROP')
+        .set(auth(user.accessToken))
+        .expect(400);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('searches the title by case-insensitive partial match', async () => {
+      const user = await createUser('search@e.com');
+      await seedFile('Summer Holiday Trip', user.id);
+      await seedFile('Work Video', user.id);
+
+      const res = await request(server)
+        .get('/file?search=holiday')
+        .set(auth(user.accessToken))
+        .expect(200);
+
+      expect(res.body[1]).toBe(1);
+      expect(titlesOf(res.body)).toEqual(['Summer Holiday Trip']);
+    });
+
+    it('treats a LIKE wildcard in the search term literally', async () => {
+      const user = await createUser('search-wild@e.com');
+      await seedFile('100% wool', user.id);
+      await seedFile('plain cotton', user.id);
+
+      // Unescaped, '%' would match every row instead of the one containing it.
+      const res = await request(server)
+        .get('/file?search=%25')
+        .set(auth(user.accessToken))
+        .expect(200);
+
+      expect(res.body[1]).toBe(1);
+      expect(titlesOf(res.body)).toEqual(['100% wool']);
+    });
+
+    it('returns an empty page for a search that matches nothing', async () => {
+      const user = await createUser('search-none@e.com');
+      await seedFile('only-file', user.id);
+
+      const res = await request(server)
+        .get('/file?search=nothing-matches-this')
+        .set(auth(user.accessToken))
+        .expect(200);
+
+      expect(res.body[0]).toHaveLength(0);
+      expect(res.body[1]).toBe(0);
+    });
+
+    it('filters by creator', async () => {
+      const owner = await createUser('filter-owner@e.com');
+      const other = await createUser('filter-other@e.com');
+      await seedFile('owned-1', owner.id);
+      await seedFile('owned-2', owner.id);
+      await seedFile('other-1', other.id);
+
+      const res = await request(server)
+        .get(`/file?creatorId=${owner.id}&sortBy=title&order=ASC`)
+        .set(auth(owner.accessToken))
+        .expect(200);
+
+      expect(res.body[1]).toBe(2);
+      expect(titlesOf(res.body)).toEqual(['owned-1', 'owned-2']);
+    });
+
+    it('combines search, filter, sort and pagination in one query', async () => {
+      const owner = await createUser('combo-owner@e.com');
+      const other = await createUser('combo-other@e.com');
+      await seedFile('trip alpha', owner.id);
+      await seedFile('trip bravo', owner.id);
+      await seedFile('trip charlie', owner.id);
+      await seedFile('trip delta', other.id);
+      await seedFile('unrelated', owner.id);
+
+      const res = await request(server)
+        .get(
+          `/file?search=trip&creatorId=${owner.id}&sortBy=title&order=ASC&take=2&skip=1`,
+        )
+        .set(auth(owner.accessToken))
+        .expect(200);
+
+      // Count is the filtered total, not the page length.
+      expect(res.body[1]).toBe(3);
+      expect(titlesOf(res.body)).toEqual(['trip bravo', 'trip charlie']);
+    });
+
+    it('rejects an undeclared query parameter with VALIDATION_FAILED', async () => {
+      const user = await createUser('extra-param@e.com');
+      const res = await request(server)
+        .get('/file?orderBy=title')
+        .set(auth(user.accessToken))
+        .expect(400);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
   describe('Two-phase upload promotion (temp_ → granted_)', () => {
     it('attaches a video then promotes it, moving the file to file/upload', async () => {
       const user = await createUser('upload@e.com');

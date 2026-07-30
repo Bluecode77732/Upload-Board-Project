@@ -22,6 +22,7 @@ import { access, rename } from 'fs/promises';
 import path, { join } from 'path';
 import { UpdateFileDto } from './dto/update-uploadFile.dto';
 import { FileResponseDto } from './dto/file-response.dto';
+import { FileSortField, GetFilesDto } from './dto/get-files.dto';
 import { ConfigService } from '@nestjs/config';
 import { ErrorCode } from 'backend/common/error-code';
 import { ROLE_RANK, UserRole } from 'backend/auth/role/role';
@@ -44,6 +45,23 @@ export interface FileClaimResult {
 // Postgres unique_violation. A concurrent double-submit loses this race by design;
 // it is a client-side duplicate, not a server fault, so it must not surface as 500.
 const UNIQUE_VIOLATION = '23505';
+
+// The sole bridge from a client sort key to a column (ADR 0021). Typed as a total Record
+// over FileSortField, so a key added to FILE_SORT_FIELDS without a column here fails to
+// compile — the whitelist cannot silently drift out of sync with the query.
+const SORT_COLUMN: Record<FileSortField, string> = {
+  createdAt: 'file.createdAt',
+  title: 'file.title',
+  id: 'file.id',
+};
+
+// 목적: 검색어에 든 LIKE 메타문자를 리터럴로 만든다.
+// 이유: 값은 파라미터로 바인딩되어 주입 위험은 없지만, 이스케이프하지 않은 %나 _는 사용자가 입력한
+//       것보다 훨씬 넓은 범위를 조용히 매칭시킨다(예: '_' 하나가 임의의 한 글자가 된다).
+// 방법: 이스케이프 문자 자신(\)까지 포함해 \, %, _ 앞에 \를 붙인다 — 쿼리는 ESCAPE '\'를 명시한다.
+function escapeLikePattern(term: string): string {
+  return term.replace(/[\\%_]/g, '\\$&');
+}
 
 @Injectable()
 export class FileService {
@@ -90,13 +108,38 @@ export class FileService {
     };
   }
 
-  async getFiles(
-    take: number,
-    skip: number,
-  ): Promise<[FileResponseDto[], number]> {
-    const [files, count] = await this.fileRepository
+  // 목적: 목록 조회에 제목 검색·작성자 필터·화이트리스트 정렬을 기존 페이지네이션 위에 얹는다.
+  // 이유: take/skip만으로는 최신순 조회도 검색도 불가능했고, ORDER BY가 아예 없어 페이지 간 행
+  //       중복·누락까지 가능했다(정렬 없는 OFFSET은 순서가 미정의).
+  // 방법: 기존 QueryBuilder에 조건만 조립 — 검색어는 와일드카드를 이스케이프한 ILIKE, 정렬 컬럼은
+  //       SORT_COLUMN 매핑으로만 결정하고, id를 tiebreaker로 덧붙여 페이징을 안정화한다.
+  async getFiles(query: GetFilesDto): Promise<[FileResponseDto[], number]> {
+    const { take, skip, search, sortBy, order, creatorId } = query;
+
+    const queryBuilder = this.fileRepository
       .createQueryBuilder('file')
-      .leftJoinAndSelect('file.creator', 'creator')
+      .leftJoinAndSelect('file.creator', 'creator');
+
+    const term = search?.trim();
+    if (term) {
+      queryBuilder.andWhere("file.title ILIKE :term ESCAPE '\\'", {
+        term: `%${escapeLikePattern(term)}%`,
+      });
+    }
+
+    // The creator join already exists, so the filter costs one predicate and no extra query.
+    if (creatorId !== undefined) {
+      queryBuilder.andWhere('creator.id = :creatorId', { creatorId });
+    }
+
+    queryBuilder.orderBy(SORT_COLUMN[sortBy], order);
+    // A unique tiebreaker makes the page boundary deterministic when the sort column ties;
+    // sorting by id already is one, so adding it twice would only duplicate the clause.
+    if (sortBy !== 'id') {
+      queryBuilder.addOrderBy('file.id', order);
+    }
+
+    const [files, count] = await queryBuilder
       .take(take)
       .skip(skip)
       .getManyAndCount();

@@ -58,6 +58,11 @@ lands as its own dedicated, designed change
   ([ADR 0020](ADR/0020-account-deletion-cascade.md)): soft delete is not adopted, an
   account cascades into its files only on an explicit `deleteFiles=true`, and the old
   FK-violation 500 is now a typed 409 — **Stage 2 is complete**.
+- **Stage 3 is under way**: list search / filter / sort landed 2026-07-30
+  ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — `GET /file` now takes
+  `search`, `creatorId`, `sortBy`, and `order`, with sort keys resolved through an in-code
+  whitelist and a deterministic default order the endpoint previously lacked. The board
+  domain (post/comment modules) is the remaining Stage 3 task.
 
 ## 1. Vision & essence
 
@@ -148,7 +153,8 @@ work must pass them; they are not themselves roadmap subjects.
   reviewed migrations, per [CLAUDE.md](CLAUDE.md) > Scope Discipline (schema
   changes).
 - List search/filter/sort (Stage 3) is the data-layer prerequisite for board
-  listings.
+  listings — landed 2026-07-30 ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)),
+  so the post listing extends that read layer rather than defining its own.
 
 ## 6. Staged task list
 
@@ -193,7 +199,7 @@ settled while zero consumers exist.
 
 | Task | Rationale / dependencies |
 |---|---|
-| List search / filter / sort | Prerequisite for board listings; `GET /file` is QueryBuilder-based, so the extension path exists. |
+| ~~List search / filter / sort~~ — ✅ landed 2026-07-30 ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) | `GET /file` gained `search` (escaped `ILIKE '%term%'` on the title), `creatorId`, and `sortBy`/`order` resolved through a total-`Record` whitelist — plus the `ORDER BY` the endpoint never had, so offset paging is deterministic. No schema change; the three candidate indexes are deferred with their triggers recorded. This is the read-layer pattern the post listing extends. |
 | Board domain — post/comment modules | New domain modules (sanctioned by module policy); plain-text schema description first, then reviewed migrations; RBAC, ownership, and pagination patterns apply from day one. |
 
 ### Stage 4 — Production transition
@@ -260,6 +266,28 @@ settled while zero consumers exist.
   copying ADR 0018's sweep: "on disk without a row" cannot be decided from the filename
   alone, so it needs a DB-joined reconciliation with its own ADR. Unscheduled — the
   accepted residual is disk waste, never a broken record.
+- Deferred list-query indexes (recorded 2026-07-30,
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — the search/filter/sort task
+  deliberately shipped **no index**: at this table's size all three candidates are
+  unmeasured speculation. Each is a plain-text description awaiting a measurement, and each
+  needs approval plus line-by-line review of `migration:generate` output before it lands:
+  `("createdAt" DESC, "id" DESC)` for the default sort and page boundary (justified around
+  ~10⁴+ rows); `pg_trgm` GIN on `lower(title)`, which is the *precondition* for
+  `ILIKE '%term%'` to use an index at all and therefore a two-part migration (extension +
+  index); and `("creatorId")`, which Postgres does not create automatically and which would
+  serve both the new filter and the account cascade
+  ([ADR 0020](ADR/0020-account-deletion-cascade.md)). Until then `search`/`creatorId` are
+  sequential scans and the sort is a full sort — the accepted trade at this scale. Reverse it
+  on measurement, not intuition.
+- Frontend adoption of the list-query parameters (recorded 2026-07-30,
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — **owned by a frontend-scoped
+  task, not by backend work**, like the claim- and deletion-contract items above.
+  `GET /file` now accepts `search`, `sortBy`, `order`, and `creatorId`, and returns results
+  ordered newest-first by default where the order was previously arbitrary.
+  `frontend/docs/API-CONTRACT.md` and the list view (search box, sort control, author
+  filter) must both take it up; until they do, the frontend simply keeps sending
+  `take`/`skip` and gets the new deterministic ordering for free. The backend change stopped
+  at the repo boundary ([CLAUDE.md](CLAUDE.md) > Project Overview).
 - Documentation rot in `ARCHITECTURE.md` (+ko) (recorded 2026-07-30) — the Stage 1
   landings were never reflected there: "Non-Existent Infrastructure" still claims no CI
   workflow, no Dockerfile, and no Nest `Logger` usage (all three exist —
@@ -268,7 +296,11 @@ settled while zero consumers exist.
   describes no e2e suite, and `PATCH /user/:id` / `PATCH /file/:id` still read "Self only"
   / "Creator only" from before RBAC ([ADR 0013](ADR/0013-rbac-and-audit-log.md)). A
   dedicated doc-audit task, not a drive-by: mixing it into a feature commit would blur what
-  that commit decided.
+  that commit decided. **Same task, added 2026-07-30**: `CLAUDE.md`'s Never Do Group 2
+  pagination example still cites `getFiles(take, skip)` as the current signature — it takes
+  a `GetFilesDto` since [ADR 0021](ADR/0021-list-query-search-filter-sort.md). The *rule*
+  (list endpoints must paginate) is unaffected; only the example text lags, and `CLAUDE.md`
+  was outside that task's stated document scope.
 - Doc-wording sync (deferred 2026-07-23; completed 2026-07-29): pre-plan
   "candidate" phrasings reconciled with this plan. ADR 0003 ("candidate
   roadmap item") now points at the landed [ADR 0018](ADR/0018-orphan-temp-file-cleanup.md);
@@ -289,6 +321,7 @@ candidate under the CI task).
 
 | Item | Notes |
 |---|---|
+| List search / filter / sort | `GET /file` gained four optional parameters — `search` (title `ILIKE '%term%'`, LIKE metacharacters escaped, ≤100 chars), `creatorId` (through the existing creator join), and `sortBy`/`order` mapped to columns by a total `Record<FileSortField, string>` so a client string never becomes a column name. Default `createdAt DESC` with `file.id` as a tiebreaker — the endpoint previously had **no `ORDER BY` at all**, making offset paging non-deterministic. Response shape unchanged, no new error codes (the boundary pipe rejects bad values as `VALIDATION_FAILED`), no schema change; the `createdAt`/`pg_trgm`/`creatorId` indexes are deferred with their triggers recorded — **first Stage 3 task** ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) |
 | Deletion policy design | Soft delete rejected with reasons recorded; deletion stays hard. `DELETE /user/:id?deleteFiles=true` cascades (file rows → account row → stored files, unlink post-commit), an unconfirmed delete of an account owning files returns the new 409 `USER_HAS_FILES` with the count, and `deleteFiles` is a validated string literal because implicit Boolean conversion measurably turns `"false"` into `true`. `DELETE /file/:id` now unlinks the stored `granted_` file — a leak found during this task. No schema change — **third Stage 2 task, Stage 2 complete** ([ADR 0020](ADR/0020-account-deletion-cascade.md)) |
 
 ### 2026-07-27
