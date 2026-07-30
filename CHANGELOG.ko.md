@@ -14,18 +14,30 @@
 
 ### 추가
 - **`admin/`에 이식한 admin 콘솔 — 수정 기반으로 문서화**
-  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)) — 저자의 다른
-  프로젝트인 **Chat Project**(NestJS + GraphQL + Redis + Socket.IO)에는, 이 프로젝트가
-  [ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)에서 채택한 것과 같은 3단계
-  `user`/`admin`/`superadmin` 역할 모델을 대상으로 만들어 검증까지 끝낸 admin 콘솔이 이미
-  있었다. 이를 최상위 `admin/` 폴더로 통째로 가져와 **수정하지 않은 상태로** 커밋했다.
-  이유는 명시적이고 경제적이다 — **LLM 토큰 사용량**. 라우터, 라우트 가드, Zustand 인증
-  스토어, 단일 비행 무음 갱신 가드, axios 인터셉터, Playwright·Vitest 하네스는 도메인과
-  무관한 골격이고 이미 검증된 형태로 존재했으므로, 가져오는 비용이 프롬프트로 하나씩 다시
-  생성하는 토큰의 극히 일부다 — 아낀 토큰은 API 차이분에 쓴다. **이 폴더는 이 백엔드에 대해
+  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)) — 저자의 다른 프로젝트인
+  **Chat Project**(NestJS + GraphQL + Redis + Socket.IO)에서 최상위 `admin/` 폴더로 통째로
+  가져와 **수정하지 않은 상태로** 커밋했다. **명시한 목적은 둘이며, 둘 다 실제로 무게를
+  지탱한다.** *(1) 사용자 권한 계층 관리* — 요구사항.
+  [ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)은 RBAC의 메커니즘(`ROLE_RANK` 순위를 가진 3단계,
+  superadmin 전용 `PATCH /user/:id/role`, `ROLE_CHANGE` 감사 행)은 냈지만 그것을 운영할 수단은
+  내지 않았다. 첫 superadmin은 `SUPERADMIN_EMAIL` 부팅 시딩에서 나오고, 그 이후의 모든
+  승격·강등은 직접 요청이나 Swagger 폼이며, 계층을 보호하는 두 불변식 — 마지막 superadmin 강등
+  거부(400 `AUTH_LAST_SUPERADMIN`)와 모든 역할 변경이 유발하는 세션 종료(`refreshTokenHash`
+  null) — 은 그것을 실행하는 사람에게 보이지 않는다. ADR 0013의 마지막 문장이 이 화면을 미뤄뒀고,
+  ADR 0022가 그것에 답한다. *(2) 토큰 절약* — 수단. Chat Project의 콘솔은 **같은** 3단계 계층을
+  대상으로 만들어졌기에(ROADMAP은 이 프로젝트의 RBAC 설계를 "Chat-project style"로 기록해 뒀다),
+  그 사용자 페이지에 역할 컬럼, 배정 컨트롤, 사용자별 상세 패널, 사용자별 감사 조각이 이미 다
+  있다. 여기에 도메인 무관 골격(라우터, 라우트 가드, Zustand 인증 스토어, 단일 비행 무음 갱신
+  가드, axios 인터셉터, Playwright·Vitest 하네스)까지 얹힌다. 이를 가져오는 비용은 프롬프트로
+  하나씩 다시 생성하는 토큰의 극히 일부다 — 아낀 토큰은 API 차이분에 쓴다. **적응은 역할 관리
+  조각에서 시작한다**: `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`,
+  `GET /audit-log`, `POST /auth/signin`은 모두 이 API에 실제로 있는 라우트이고, 이식된 등급 값
+  `0/1/2`는 `ROLE_RANK`와 정확히 일치한다 — 계층 *모델*은 그대로 이전되고, 그 *인코딩*(숫자 대
+  `UserRole` 문자열 enum)과 *가드 규칙*(콘솔은 admin이면 누구에게나 역할 컨트롤을 보여주지만
+  엔드포인트는 superadmin 전용)만 이전되지 않는다. **이 폴더는 이 백엔드에 대해
   동작하지 않으며, 아직 동작해야 하는 것도 아니다**: 그 안의 모든 파일이 여전히 Chat
   Project의 API를 대상으로 한다. `admin/README.md`(.ko)가 폴더 현장에서 그 사실을 밝히고,
-  검증을 거친 13행 수정 백로그는 ADR 0022에 있다(삭제할 Apollo `/graphql` 계층,
+  검증을 거친 수정 백로그는 ADR 0022에 있다(삭제할 Apollo `/graphql` 계층,
   `refreshaccess`/`signOut` 라우트명, 숫자 대 문자열 역할, 액세스 토큰에 없는 `role` 클레임,
   채팅 도메인 페이지, 여기 없는 ban/force-logout 엔드포인트, `page`/`take` 대 `take`/`skip`,
   `/audit-log/export`, [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)의 삭제 확인 절차,

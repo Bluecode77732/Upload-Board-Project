@@ -3,27 +3,50 @@
 - 상태: 승인됨
 - 날짜: 2026-07-30
 - 개정 대상: [ADR 0010](0010-frontend-split-and-api-surface-freeze.ko.md) (admin 배치 조항에 한정)
+- 관련: [ADR 0013](0013-rbac-and-audit-log.ko.md) (그 역할 계층을 운영하기 위한 화면이 이것이다)
 - English: [0022-admin-console-import-from-chat-project.md](0022-admin-console-import-from-chat-project.md)
 
 ## 맥락
 
 이 시점에 두 가지 전제 조건이 동시에 갖춰졌다.
 
-**백엔드가 드디어 admin과 일반 사용자를 구분할 수 있게 됐다.** RBAC과 감사 로그가
-2026-07-25에 도입됐다([ADR 0013](0013-rbac-and-audit-log.ko.md)) — 3단계 역할 체계,
-`RolesGuard`/`@Roles`, admin 전용 `GET /user`, superadmin 전용 `PATCH /user/:id/role`,
-그리고 추가 전용(append-only) `GET /audit-log`.
-[ADR 0010](0010-frontend-split-and-api-surface-freeze.ko.md)은 admin을 독립 애플리케이션으로
-승격하는 판단을 정확히 이 조건에 걸어뒀다 — "RBAC이 도입되고 실제 admin 요구사항이 생긴
-뒤에야 재검토한다". 역할 체계가 없는 상태에서 3분할을 하면 "백엔드가 구분조차 못 하는 앱을
-내놓는 셈"이기 때문이었다.
+**RBAC은 역할 계층을 만들었지만, 그것을 운영할 수단은 만들지 않았다.** RBAC과 감사 로그가
+2026-07-25에 도입됐다([ADR 0013](0013-rbac-and-audit-log.ko.md)) — `ROLE_RANK` 순위를 가진
+3단계 역할 체계, `RolesGuard`/`@Roles`, admin 전용 `GET /user`, superadmin 전용
+`PATCH /user/:id/role`, 그리고 추가 전용(append-only) `GET /audit-log`. 그 ADR은 스스로
+이렇게 끝맺으며 빈 구멍을 남겼다 — "역할 체계는 프론트엔드 `/admin` 구역을 받을 준비가 됐고,
+전용 admin 앱으로의 승격은 ADR 0010의 향후 결정으로 남는다". 이 ADR이 바로 그 결정이다.
 
-**그리고 같은 역할 모델을 쓰는 admin 콘솔이 이미 존재한다 — 다른 프로젝트에.** 저자의 다른
+"운영할 수단이 없다"가 구체적으로 무엇인지, 코드로 확인한 내용:
+
+| 역할 계층 기능 | 백엔드 메커니즘 | 운영 화면 |
+|---|---|---|
+| 첫 superadmin 부트스트랩 | `SUPERADMIN_EMAIL` + `superadmin-seed.service.ts`가 부팅 시 승격 — 요청으로는 만들 수 없으므로 **유일한** 경로 | 부팅 시점 환경변수뿐 |
+| 사용자 승격/강등 | `PATCH /user/:id/role`, superadmin 전용, 행 잠금이 걸린 SERIALIZABLE 트랜잭션 | **없음** — 직접 HTTP 요청 또는 Swagger `/doc` |
+| 누가 어떤 역할인지 확인 | `GET /user`, admin 전용 | **없음** — 페이지네이션 없는 JSON |
+| 강등이 실제로 적용됐는지 확인 | `updateRole`이 `refreshTokenHash`를 null로 만들어 대상 세션을 즉시 끊는다 | **없음** — 운영자에게 보이지 않는다 |
+| 역할 체계를 잠가버리는 실수 방지 | 마지막 superadmin 강등을 거부 — 400 `AUTH_LAST_SUPERADMIN` | **없음** — 부딪혀 보고서야 알게 되는 불변식 |
+| 누가 누구의 역할을 바꿨는지 감사 | 추가 전용 감사 로그의 `ROLE_CHANGE` 행, 주 커밋 이후 기록 | **없음** — `GET /audit-log`를 볼 화면이 없다 |
+
+각 행의 오른쪽 열이 이번 이식의 실제 요구사항이다. 권한 계층을 손으로 조립한 `PATCH` 요청으로
+관리하는 것은 단순히 불편한 수준이 아니다. 계층을 지키는 두 불변식(마지막 superadmin 거부,
+강등 시 세션 종료)이 바로, 그것을 드러내주는 화면 없이는 운영자가 볼 수 없는 것들이다.
+[ADR 0010](0010-frontend-split-and-api-surface-freeze.ko.md)은 admin을 독립 애플리케이션으로
+승격하는 판단을 정확히 이 조건에 걸어뒀다 — "RBAC이 도입되고 **실제 admin 요구사항이 생긴**
+뒤에야 재검토한다". 역할 체계가 없는 상태에서 3분할을 하면 "백엔드가 구분조차 못 하는 앱을
+내놓는 셈"이기 때문이었다. 이제 그 조건의 양쪽이 모두 충족됐다.
+
+**그리고 같은 역할 계층을 위한 콘솔이 이미 존재한다 — 다른 프로젝트에.** 저자의 다른
 프로젝트인 **Chat Project**(NestJS + GraphQL + Redis + Socket.IO)에는, 여기
 [ADR 0013](0013-rbac-and-audit-log.ko.md)이 채택한 것과 같은 3단계
-`user`/`admin`/`superadmin` 설계를 대상으로 만들어 검증까지 끝낸 admin 콘솔이 있다(ROADMAP은
-이 설계를 이미 "Chat-project style"로 기록해 뒀다). 그 콘솔의 대부분은 **도메인과 무관한
-골격**이다 — 관리 대상이 채팅방이든 업로드된 파일이든 똑같이 필요한 부분이다.
+`user`/`admin`/`superadmin` 설계를 대상으로 만들어 검증까지 끝낸 admin 콘솔이 있다. 실제로
+ROADMAP은 이 프로젝트의 RBAC 설계를 "Chat-project style"로 기록해 뒀으니, 그 콘솔은 위 표가
+서술하는 바로 그 계층 모델을 위해 작성된 것이다. 이 점이 결정적이다: 이것은 우연히 재사용
+가능한 범용 골격이 아니라, **이 프로젝트가 이미 구현한 계층을 관리하는 역할 계층 콘솔**이다.
+사용자 페이지가 역할 컬럼, 역할 배정 동작, 사용자별 상세 패널, 사용자별 감사 로그 조각을
+중심으로 구성돼 있다 — 위 빈 구멍 표의 각 행에 대응하는 컨트롤이 하나씩 있는 셈이다. 그와
+더불어 **도메인과 무관한 골격**도 함께 들어온다 — 관리 대상이 채팅방이든 업로드된 파일이든
+똑같이 필요한 부분이다.
 
 | 이식된 자산 | 내용 |
 |---|---|
@@ -41,12 +64,23 @@
 차이나는 부분 — 이 프로젝트 API에 진짜로 특수한 부분 — 에만 쓴다. 이것이 "admin 콘솔을
 만든다"는 작업이 아니라 이 ADR이 존재하는 이유 전부다.
 
-이 ADR은 *이식 사실과 그 출처*를 기록한다. 코드를 적응시키는 일은 의도적으로 하지 **않는다**.
+이 ADR은 *이식 사실, 두 가지 목적, 그리고 그 출처*를 기록한다. 코드를 적응시키는 일은
+의도적으로 하지 **않는다**.
 
 ## 결정
 
 **Chat Project의 admin 콘솔을 최상위 `admin/` 폴더로 이 저장소에 통째로 가져오고, 수정하지 않은
 상태로 커밋한다. 이것은 명시적으로 선언된 수정 기반이며, 동작하는 코드가 아니다.**
+
+**두 가지 목적을 명시하며, 둘 다 실제로 무게를 지탱한다.** 어느 하나만으로는 근거가 약했을
+것이고, 둘이 함께여야 다른 대안들 대신 이 특정 이식이 선택된다.
+
+1. **사용자 권한 계층 관리** — [ADR 0013](0013-rbac-and-audit-log.ko.md)의 RBAC이 만들지 않고
+   남겨둔 운영 화면을 공급한다: 누가 어떤 역할인지 조회, `PATCH /user/:id/role`을 통한 승격·강등,
+   그리고 `ROLE_CHANGE` 감사 기록 열람. 이것이 *요구사항*이며, admin 콘솔이 애초에 필요한 이유다.
+2. **토큰 절약** — 그 요구사항을 충족하는 방법으로, 같은 3단계 계층을 위해 이미 작성된 콘솔을
+   프롬프트로 새로 생성하는 대신 가져온다. 이것이 *수단*이며, 콘솔이 새 코드가 아니라 사본으로
+   도착한 이유다.
 
 1. **출처는 문서화하며, 절대 감추지 않는다.** `admin/`은 다른 프로젝트 애플리케이션의 사본이다.
    전용 적응 작업이 다시 쓸 때까지, 그 안의 모든 파일은 이 프로젝트가 아니라 **Chat Project의**
@@ -85,15 +119,41 @@
 | 기준 | A. Chat admin 이식 후 수정 (**선택**) | B. `frontend/`에 `/admin` 구역을 새로 구현 | C. 독립 admin 앱을 새로 구현 |
 |---|---|---|---|
 | 토큰 비용 | **최저** — API 차이분에만 지출 | 높음 — 라우터·가드·스토어·갱신·e2e 하네스를 재생성 | 최고 — B 전체 + 두 번째 앱 도구 체계 |
+| 역할 계층 화면 | **같은 3단계 모델을 위해 이미 작성돼 있음** — 역할 컬럼, 배정 컨트롤, 감사 조각 | ADR 0013을 보고 처음부터 설계 | ADR 0013을 보고 처음부터 설계 |
 | 골격 재사용 | 전부(라우터, 가드, 인증 스토어, 단일 비행 갱신, Playwright 하네스) | 일부 — `frontend/`의 기존 인증 배관을 재사용 | 없음 |
 | 잘못된 API를 겨냥한 코드 위험 | **높음 — 이 선택의 결정적 비용** | 없음 | 없음 |
 | ADR 0010 원문과의 정합성 | 위 개정이 필요 | 정확히 부합 | 위 개정이 필요 |
 | 리뷰 부담 | 이후 적응 작업 한 곳에 집중 | 일반 리뷰에 분산 | 일반 리뷰에 분산 |
 
-A안은 저자가 최적화하려는 기준(토큰 비용)에서 이기고, 정확히 하나에서 진다 — 잘못된 API를
-겨냥한 이식 코드다. 그 위험을 얼버무리지 않는다. 검증을 거쳐 문서화한 백로그(다음 절)로
+A안은 명시한 두 목적에서 동시에 이긴다 — 토큰이 가장 싸고, 이 역할 계층을 위해 이미 만들어진
+콘솔에서 출발하는 유일한 선택지다 — 그리고 정확히 하나의 기준에서 진다: 잘못된 API를 겨냥한
+이식 코드라는 점이다. 그 위험을 얼버무리지 않는다. 검증을 거쳐 문서화한 백로그(다음 절)로
 전환하고, 결정 3(어디에도 연결하지 않음)으로 격리한다. 그래서 실패 양상은 항상 "이 폴더가
 아직 동작하지 않는다"이며, "백엔드가 이상하게 동작한다"가 될 수 없다.
+
+## 이미 맞물리는 부분 — 적응은 역할 계층 관리에서 시작한다
+
+이식본이 전부 똑같이 틀린 것은 아니다. **역할 관리 조각은 이 API에 실제로 존재하는 라우트를
+향한다**. 두 프로젝트가 같은 계층을 구현했기 때문에 따라온 직접적 결과다. 2026-07-30에
+`backend/`를 확인해 작성했다.
+
+| 이식 코드의 호출 | 이 프로젝트의 라우트 | 상태 |
+|---|---|---|
+| `api.patch('/user/:id/role', { role })` | `PATCH /user/:id/role` — superadmin 전용([ADR 0013](0013-rbac-and-audit-log.ko.md)) | **라우트 일치**. 본문 인코딩은 불일치(백로그 참조) |
+| `api.get('/user', …)` | `GET /user` — admin 전용 | **라우트 일치**. 쿼리 파라미터는 무시되고 응답에 페이지네이션이 없다 |
+| `api.get('/user/:id')` | `GET /user/:id` | **라우트 일치**. `nickname`/`status`/`bannedUntil` 필드는 여기 없다 |
+| `api.delete('/user/:id')` | `DELETE /user/:id` ([ADR 0020](0020-account-deletion-cascade.ko.md)) | **라우트 일치**. `?deleteFiles=true` 확인 절차가 빠졌다 |
+| `api.get('/audit-log', …)` | `GET /audit-log` — admin 전용, 추가 전용 | **라우트 일치**. 필터 집합이 다르고 `/export`는 없다 |
+| `api.post('/auth/signin', …)` (Basic) | `POST /auth/signin` — Basic 토큰([ADR 0001](0001-basic-token-authentication.ko.md)) | **일치** — 정규 로그인 경로 |
+| 역할 등급 `0 / 1 / 2` (`ROLE_LABEL`) | `ROLE_RANK` = `user: 0, admin: 1, superadmin: 2` | **등급이 완전히 동일** — 계층 모델이 그대로 이전된다 |
+
+이와 대비되는 것이 `rooms-page.tsx`, 접속/닉네임 위젯, Apollo 계층이다. 이쪽은 대응물이 아예
+없다. 작업 순서에 주는 실질적 결론: **적응은 역할 관리 조각에서 시작한다.** 그쪽은 재설계가
+아니라 라우트 수준 교정으로 끝나고, 채팅 도메인 페이지는 재작성이 아니라 삭제다. 골격만
+가져오는 것보다 콘솔 전체를 가져오는 편이 더 값어치가 있었던 이유가 이 순서다.
+
+계층의 *모델*은 이전되지만, 그 *인코딩*과 *가드 규칙*은 이전되지 않는다. 아래 백로그의 앞쪽
+행들이 바로 그것이다.
 
 ## 수정 백로그 — `admin/`이 동작하기 전에 바꿔야 할 것
 
@@ -105,8 +165,13 @@ A안은 저자가 최적화하려는 기준(토큰 비용)에서 이기고, 정�
 | 전송 계층 | `${VITE_API_URL}/graphql`을 향한 Apollo Client — `src/api/apollo.ts`, `src/api/graphql-operations.ts`, 그리고 `dashboard-page`·`rooms-page`·`logs-page`의 Apollo `useQuery`/`useMutation` | **REST 전용이며 `/graphql` 라우트가 없다**([ADR 0009](0009-rest-only-api-with-swagger.ko.md)) | Apollo 계층을 삭제하고 모든 조회를 `src/api/axios.ts`로 통일 |
 | 갱신 라우트 | `POST /auth/token/refreshaccess` (`src/auth/session-guard.ts`) | `POST /auth/token/refresh` ([ADR 0012](0012-refresh-cookie-rotation.ko.md), ADR 0010에서 동결) | 경로명 수정 |
 | 로그아웃 라우트 | `POST /auth/signOut` (네 페이지 전부) | `POST /auth/signout` (소문자) | 대소문자 수정 |
-| 역할 표현 | `role: number`이고 게이트가 `(role ?? -1) < 1` (`auth.store.ts`, `protected-route.tsx`) | `UserRole` **문자열 enum** + `ROLE_RANK` 맵 ([ADR 0013](0013-rbac-and-audit-log.ko.md)) | 문자열 enum으로 타입을 바꾸고 등급 맵으로 비교 |
-| 역할 출처 | `jwtDecode<{ sub, role }>(accessToken)` — 액세스 토큰에서 `role`을 읽는다 | 액세스 토큰 페이로드는 `{ sub, type }`이며 **`role` 클레임이 없다**(`auth.service.ts`의 `issueToken`) | `role`을 디코딩이 아니라 조회로 얻어야 한다(예: `GET /user/:id`). 그때까지 가드는 `undefined`를 보고 모든 admin을 거부한다 |
+| 전송되는 역할 인코딩 | `role: number`. `{ role: 1 }`을 보내고 `ROLE_LABEL: Record<number, string>`으로 라벨을 만든다 | `UserRole` **문자열 enum**. `UpdateRoleDto`가 `@IsEnum(UserRole)`로 검증한다 | `1`이 아니라 `'admin'`을 보내야 한다 — 숫자 본문은 경계에서 400 `VALIDATION_FAILED`로 거절된다. **등급 자체는 이미 맞다**(0/1/2가 `ROLE_RANK`와 동일). 틀린 것은 인코딩뿐이다 |
+| 역할 출처 | `jwtDecode<{ sub, role }>(accessToken)` — 액세스 토큰에서 `role`을 읽는다 | 액세스 토큰 페이로드는 `{ sub, type }`이며 **`role` 클레임이 없다**(`auth.service.ts`의 `issueToken`) | `role`을 디코딩이 아니라 조회로 얻어야 한다(예: `GET /user/:id`). 그때까지 가드는 `undefined`를 보고 모든 admin을 거부한다. **먼저 백엔드 사안이다**: 클라이언트가 자기 역할을 요청으로 알게 할지 새 클레임으로 알게 할지는 클라이언트 수정이 아니라 결정 사항이다 |
+| 누가 역할을 배정할 수 있는가 | 로그인한 admin이면 누구나 역할 컨트롤을 본다. UI에 superadmin 게이트가 없다 | `PATCH /user/:id/role`은 **superadmin 전용**이며, 일반 admin에게는 `RolesGuard`가 403 `FORBIDDEN`("Insufficient role.")을 던진다 | 컨트롤을 `superadmin`으로 제한하고, 성공할 수 없는 동작을 노출하는 대신 403을 처리한다 |
+| 계층을 보호하는 불변식 | 어느 쪽도 분기가 없다 | **마지막 superadmin** 강등은 400 `AUTH_LAST_SUPERADMIN`으로 거부된다. **모든** 역할 변경은 `refreshTokenHash`를 null로 만들어 대상 세션을 즉시 끊는다 | 둘 다 화면에 드러낸다 — 마지막 superadmin 거부에는 별도 메시지를, 역할 변경에는 대상이 로그아웃된다는 경고를 |
+| 역할 변경 안내 문구 | `role === 1 ? 'admin' : 'user'` — 세 번째 등급을 표현할 수 없다 | 3단계이며 `superadmin`도 배정 가능하다 | 라벨을 enum에서 파생시켜 `superadmin` 승격이 조용히 잘못 표기되지 않게 한다 |
+| 감사 액션 어휘 | `ROLE_CHANGE`, `USER_DELETE`, `FORCE_LOGOUT`, `USER_BANNED`, `USER_MUTED`, `USER_UNBAN`에 색을 지정 | `AUDIT_ACTIONS`는 정확히 `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE` | 겹치는 둘은 유지하고 `FILE_DELETE`를 추가하며, 이 프로젝트가 절대 기록하지 않는 모더레이션 액션 네 개는 제거 |
+| superadmin 부트스트랩 문서 | `e2e/.env.example`과 `e2e/seed-superadmin.mjs`가 "CLAUDE.md의 **Role Population Invariants**"를 인용한다 | 이 저장소 `CLAUDE.md`에 **그런 절은 없다** — Chat Project의 절 이름이다. 실제 메커니즘은 부팅 시 승격하는 `SUPERADMIN_EMAIL` + `superadmin-seed.service.ts`다 | 두 참조를 `SUPERADMIN_EMAIL` / [ADR 0013](0013-rbac-and-audit-log.ko.md)으로 돌린다. 그 문장이 하는 *주장*("앱 내 흐름으로는 superadmin을 만들 수 없다")은 **여기서도 참이다**. 인용만 틀렸다 |
 | 도메인 페이지 | `rooms-page.tsx`(`getAllRooms`, `deleteRoom`), 대시보드의 `getOnlineUser`·`getUserNicknames` | 채팅방도, 접속 상태도, 닉네임도 없다 — 이 도메인은 **업로드된 영상 파일**이다 | 방 페이지와 접속/닉네임 위젯을 삭제하고 파일 화면으로 대체 |
 | 사용자 관리 엔드포인트 | `POST /user/:id/ban`, `/unban`, `/force-logout`; `GET /user?humanOnly`, `?status` | **하나도 없다.** 사용자 표면은 `GET /user`, `GET /user/:id`, `PATCH /user/:id`, `PATCH /user/:id/role`, `DELETE /user/:id` | 백엔드가 받쳐주지 않는 동작을 제거하거나, 별도 ADR을 갖는 백엔드 작업으로 명세화 |
 | 사용자 목록 조회 | `GET /user?page&take&sort&sortBy&search&status` | `findAll()`은 `@Query()`를 **전혀 바인딩하지 않는다** — 전체 사용자에 대한 `findAndCount()`를 반환하며, 모르는 쿼리 파라미터는 거부되지 않고 조용히 무시된다 | 파라미터를 없애거나, `GET /user` 페이지네이션을 백엔드 작업으로 추진 |
@@ -151,6 +216,21 @@ A안은 저자가 최적화하려는 기준(토큰 비용)에서 이기고, 정�
   항목에서 추적한다.
 - **`.ko.md` 형제 문서 규약이 `admin/` 안까지 확장된다.** `admin/README.md`는 추적되는 문서이므로
   [CLAUDE.md](../CLAUDE.md) > 문서 규약에 따라 `admin/README.ko.md`가 함께 존재한다.
+- **[ADR 0013](0013-rbac-and-audit-log.ko.md)이 남긴 빈 구멍은 닫힌 것이 아니라 담당자가
+  정해진 것이다.** 그 ADR은 역할 체계가 "프론트엔드 `/admin` 구역을 받을 준비가 됐다"며 전용 앱
+  여부를 ADR 0010으로 미뤘다. 이 ADR이 그 질문에 답하고(`admin/`의 전용 앱) 화면의 담당자를
+  지정하지만, 적응이 끝나기 전까지 **계층은 여전히 UI로 운영할 수 없다**. 그때까지
+  `PATCH /user/:id/role`은 이전과 똑같이 Swagger나 직접 요청으로만 도달 가능하다.
+- **이식된 콘솔의 `superadmin` 부트스트랩 주석이, 여기에 존재하지 않는 `CLAUDE.md` 절을
+  인용한다.** `admin/e2e/.env.example`과 `admin/e2e/seed-superadmin.mjs`가 둘 다 "CLAUDE.md의
+  Role Population Invariants"를 가리키는데, 이는 Chat Project의 절 이름이다. 그 문장이 담은
+  *주장*("앱 내 흐름으로는 superadmin을 만들 수 없다")은 `SUPERADMIN_EMAIL`과
+  `superadmin-seed.service.ts`를 통해 이 프로젝트에서도 참이며, 인용만 틀렸다. 이식본의 나머지와
+  함께 고치지 않고 두되 백로그에 올려, 그 절을 찾아 헤매는 사람이 왜 찾을 수 없는지를 이 ADR에서
+  알게 했다.
+- **역할 관리 조각이 작업 순서의 지렛대다.** 라우트가 이미 맞는 유일한 부분이므로, 가장 값싼 첫
+  적응 대상이면서 동시에 명시된 권한 계층 목적을 실제로 달성하는 부분이다. 다른 곳에서 시작하는
+  작업은 이번 이식을 촉발한 요구사항에 닿지 못한 채 공을 들이게 된다.
 - **chat 잔재 감사의 사각지대가 기록됐다.** 그 계획의 grep 세트는 `*.md`, `ADR/`,
   `.env.example`만 — 즉 문서만 — 훑는다. 이번 이식은 chat 프로젝트 용어(`apollo`,
   `graphql-operations`, `errorLink`, `zustand`, `session-guard`, `protected-route`, 방·닉네임
@@ -172,7 +252,7 @@ A안은 저자가 최적화하려는 기준(토큰 비용)에서 이기고, 정�
   판단을 넘겨준다.
 - **이식하면서 곧바로 적응 — 동작하는 admin 앱을 한 커밋에 넣기** — 저장소가 동작하지 않는
   코드를 품는 구간이 없다. 두 가지 이유로 기각한다. 첫째, "이게 어디서 왔는가"와 "우리가 무엇을
-  바꿨는가"를 하나의 읽을 수 없는 diff로 뭉갠다. 둘째, 적응은 13행 백로그의 모든 행을 건드리는데,
+  바꿨는가"를 하나의 읽을 수 없는 diff로 뭉갠다. 둘째, 적응은 백로그의 모든 행을 건드리는데,
   그중 몇 가지(없는 `role` 클레임, 존재하지 않는 ban/force-logout 엔드포인트, `GET /user`
   페이지네이션)는 클라이언트 수정이 아니라 **백엔드** 사안이고 각자의 결정을 요구한다.
 - **`admin/`을 추적하지 않고 디스크에만 두기** — git 이력에 chat 프로젝트 코드가 전혀 남지 않는다.

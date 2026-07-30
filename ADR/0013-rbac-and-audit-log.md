@@ -80,3 +80,15 @@ and deferred behind Stage F so the API surface froze first.
   + `canManage`.
 - Stage 0 is complete. The role system is ready for the frontend `/admin`
   section; admin promotion to a dedicated app remains an ADR 0010 future decision.
+
+> **Note added 2026-07-30** — the deferred question in the bullet above is answered by
+> [ADR 0022](0022-admin-console-import-from-chat-project.md): admin becomes a dedicated app at
+> `admin/`, imported from the author's Chat Project (which implements this same three-tier
+> hierarchy) rather than written from scratch. **This decision does not change anything in this
+> ADR** — no role, guard, endpoint, or audit behavior is affected. It matters here only because
+> it names the owner of the operator surface this ADR deliberately did not ship: role listing,
+> promotion/demotion through `PATCH /user/:id/role`, and a viewer for `ROLE_CHANGE` audit rows.
+> Until that import is adapted, the hierarchy remains operable **only** through Swagger or a raw
+> request, and the two invariants defined here — the last-superadmin refusal
+> (`AUTH_LAST_SUPERADMIN`) and session termination on any role change — stay invisible to
+> whoever exercises them. ADR 0022 records both as required UI behavior.

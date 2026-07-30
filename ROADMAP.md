@@ -304,11 +304,21 @@ settled while zero consumers exist.
 - Adapting the imported `admin/` console (recorded 2026-07-30,
   [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — the Chat Project's admin
   console was imported wholesale as the top-level `admin/` folder and committed **unmodified**,
-  as a declared modification base rather than working code. The economic reason is the whole
-  point: the router, route guard, auth store, single-flight silent refresh, axios interceptors,
-  and Playwright/Vitest harnesses already existed there in tested form, so importing them costs
-  a fraction of the LLM tokens that regenerating them would. **It does not work against this
-  backend yet**, by design. ADR 0022 carries the verified 13-row modification backlog (Apollo
+  as a declared modification base rather than working code. **Two purposes**: the requirement is
+  **user privilege-hierarchy management** — [ADR 0013](ADR/0013-rbac-and-audit-log.md) shipped
+  RBAC's mechanism but no operator surface, so promotion/demotion is currently a raw
+  `PATCH /user/:id/role` and the invariants protecting the hierarchy (last-superadmin refusal,
+  session termination on any role change) are invisible to whoever triggers them; ADR 0013's own
+  closing line deferred this surface. The method is **token economy** — the imported console was
+  built for this same three-tier hierarchy, so its role column, assignment control, and audit
+  slice already exist, as do the router, route guard, auth store, single-flight silent refresh,
+  axios interceptors, and Playwright/Vitest harnesses; importing them costs a fraction of the LLM
+  tokens that regenerating them would. **Adaptation starts with the role-management slice** —
+  `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`, `GET /audit-log`, and
+  `POST /auth/signin` are routes this API actually has, and the rank values `0/1/2` match
+  `ROLE_RANK` exactly; only the encoding (numeric vs. string enum) and the guard rules
+  (superadmin-only) are wrong. **It does not work against this
+  backend yet**, by design. ADR 0022 carries the verified modification backlog (Apollo
   layer to delete, `refreshaccess`/`signOut` route names, numeric-vs-string roles, a `role`
   claim the access token does not carry, chat-domain pages, ban/force-logout endpoints that do
   not exist, `page`/`take` vs `take`/`skip`, the `/audit-log/export` route, the ADR 0020

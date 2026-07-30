@@ -14,18 +14,32 @@ development line (package.json version).
 
 ### Added
 - **Imported admin console at `admin/`, documented as a modification base**
-  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — the author's other
-  project, the **Chat Project** (NestJS + GraphQL + Redis + Socket.IO), already contained a
-  working, tested admin console built against the same three-tier `user`/`admin`/`superadmin`
-  role model this project adopted in [ADR 0013](ADR/0013-rbac-and-audit-log.md). It was
-  imported wholesale as the top-level `admin/` folder and committed **unmodified**. The reason
-  is explicit and economic: **LLM token spend**. The router, route guard, Zustand auth store,
-  single-flight silent-refresh guard, axios interceptors, and Playwright/Vitest harnesses are
-  domain-independent scaffolding that already existed in proven form, so importing them costs a
-  fraction of the tokens that regenerating them prompt-by-prompt would — tokens then go to the
-  API delta instead. **This folder does not work against this backend, and is not meant to
+  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — imported wholesale from the
+  author's other project, the **Chat Project** (NestJS + GraphQL + Redis + Socket.IO), as the
+  top-level `admin/` folder and committed **unmodified**. **Two stated purposes, both
+  load-bearing.** *(1) User privilege-hierarchy management* — the requirement.
+  [ADR 0013](ADR/0013-rbac-and-audit-log.md) shipped RBAC's mechanism (three tiers with a
+  `ROLE_RANK` ordering, superadmin-only `PATCH /user/:id/role`, `ROLE_CHANGE` audit rows) but no
+  way to operate it: the first superadmin comes from the `SUPERADMIN_EMAIL` boot seed, every
+  promotion or demotion after that is a raw request or a Swagger form, and the two invariants
+  protecting the hierarchy — the last-superadmin refusal (400 `AUTH_LAST_SUPERADMIN`) and the
+  session termination every role change causes (`refreshTokenHash` nulled) — are invisible to
+  whoever triggers them. ADR 0013's own closing line deferred this surface; ADR 0022 answers it.
+  *(2) Token economy* — the method. The Chat Project's console was built against the **same**
+  three-tier hierarchy (ROADMAP records this project's RBAC design as "Chat-project style"), so
+  its users page already carries the role column, the assignment control, the per-user detail
+  panel, and the per-user audit slice, on top of domain-independent scaffolding (router, route
+  guard, Zustand auth store, single-flight silent-refresh guard, axios interceptors,
+  Playwright/Vitest harnesses). Importing that costs a fraction of the tokens regenerating it
+  prompt-by-prompt would — tokens then go to the API delta instead. **The role-management slice
+  is where adaptation starts**: `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`,
+  `DELETE /user/:id`, `GET /audit-log`, and `POST /auth/signin` are all routes this API actually
+  has, and the imported rank values `0/1/2` match `ROLE_RANK` exactly — the hierarchy *model*
+  transfers unchanged, only its *encoding* (numeric vs. the `UserRole` string enum) and its
+  *guard rules* (the console shows the role control to any admin, but the endpoint is
+  superadmin-only) do not. **This folder does not work against this backend, and is not meant to
   yet**: every file in it still targets the Chat Project's API. `admin/README.md`(.ko) says so
-  at the folder itself, and ADR 0022 carries the verified 13-row modification backlog (Apollo
+  at the folder itself, and ADR 0022 carries the verified modification backlog (Apollo
   `/graphql` layer to delete, `refreshaccess`/`signOut` route names, numeric-vs-string roles, a
   `role` claim the access token does not carry, chat-domain pages, ban/force-logout endpoints
   that do not exist here, `page`/`take` vs `take`/`skip`, `/audit-log/export`, the

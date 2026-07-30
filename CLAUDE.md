@@ -880,9 +880,13 @@ task or vice versa.
 
 `admin/` (added 2026-07-30, ADR 0022) is **imported code from a different
 project, not this project's admin client**. It is the author's Chat Project admin
-console, copied in wholesale and committed unmodified as a *modification base* —
-importing proven scaffolding costs a fraction of the LLM tokens that regenerating
-it would. Treat it as read-only reference material: it targets the Chat Project's
+console, copied in wholesale and committed unmodified as a *modification base*,
+for two stated purposes: (1) to become the **operator surface for the RBAC role
+hierarchy** that ADR 0013 shipped without one — role listing, promotion/demotion
+via superadmin-only `PATCH /user/:id/role`, and a `ROLE_CHANGE` audit viewer;
+(2) **token economy** — that console was already built for this same three-tier
+hierarchy, so importing it costs a fraction of the LLM tokens regenerating it
+would. Treat it as read-only reference material: it targets the Chat Project's
 API (Apollo/`/graphql`, `POST /auth/token/refreshaccess`, numeric roles, chat-room
 pages, ban/force-logout endpoints that do not exist here), so **nothing in it
 describes this repo's contracts** — verify against `backend/`, never against
