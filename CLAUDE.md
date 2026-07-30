@@ -858,11 +858,27 @@ Architecture Decisions above remain operative.
   does not exist in this app, and booting AppModule needs a live DB — the e2e suite
   needs a real rewrite before it verifies anything
 - ~~Deleting a user who owns files hits an FK constraint~~ — **resolved 2026-07-30**
-  (ADR 0020): `DELETE /user/:id?deleteFiles=true` cascades (file rows → user row →
-  stored files); unconfirmed, it is a typed 409 `USER_HAS_FILES`. Residual, accepted:
+  (ADR 0020): `DELETE /user/:id?deleteFiles=true` cascades (post rows → file rows →
+  user row → stored files; posts joined the order 2026-07-31, ADR 0023); unconfirmed,
+  it is a typed 409 `USER_HAS_FILES`. Residual, accepted:
   nothing sweeps `file/upload`, so a failed unlink (or a file inserted between the
   path read and the delete) leaves an orphan on disk — logged at `warn`, not repaired
-  (reclamation needs a DB-joined design; tracked in ROADMAP > Unscheduled)
+  (reclamation needs a DB-joined design; tracked in ROADMAP > Unscheduled).
+  **That resolution is not total** — see the next entry
+- File ownership reassignment can still produce an FK-violation 500 on account deletion
+  (2026-07-31, ADR 0023 > Implementation notes). ADR 0023 D1 argues a post can only
+  reference *its own author's* file, and that invariant is what the entry above relies on
+  to be FK-safe. It holds at creation — `FileService.assertAttachableBy` enforces it — but
+  `PATCH /file/:id { userId }` reassigns file ownership *afterwards*, so a post can end up
+  referencing a stranger's file. Consequence: `DELETE /user/:id?deleteFiles=true` can still
+  raise `23503` inside its transaction and surface as exactly the opaque 500 ADR 0020 set
+  out to remove. Narrow (a prior reassignment is required) but reachable, and **the reason
+  `PostService.resolveAttachment` carries an author-identity check** — that branch is
+  reachable, not an unreachable guard. Do not "simplify" it away. Fixing the underlying
+  gap is explicit-request work needing its own ADR: the three candidates (refuse
+  reassignment of an attached file, widen the cascade to posts that merely *reference* the
+  account's files, or translate the `23503` into a typed refusal) are in ROADMAP >
+  Unscheduled
 - `ARCHITECTURE.md` (+ko) lags the code: its "Non-Existent Infrastructure" section still
   claims no CI workflow, no Dockerfile, and no Nest `Logger` usage (all three exist —
   ADR 0015/0016/0017), Jest `roots` is written as `["src"]` (actually `["backend"]`), the
