@@ -66,7 +66,10 @@ lands as its own dedicated, designed change
   ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — `GET /file` now takes
   `search`, `creatorId`, `sortBy`, and `order`, with sort keys resolved through an in-code
   whitelist and a deterministic default order the endpoint previously lacked. The board
-  domain (post/comment modules) is the remaining Stage 3 task.
+  domain's **schema design gate** followed on 2026-07-30
+  ([ADR 0023](ADR/0023-board-domain-schema.md)) — post and comment settled together in
+  plain text, with no code — leaving the post/comment implementation as the remaining
+  Stage 3 task.
 - **Stage 5 (operational surface — admin console) was appended 2026-07-30**
   ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)), closing a gap in the
   original plan: ADR 0010 decided where admin lives back on 2026-07-23, but no stage ever
@@ -160,9 +163,18 @@ work must pass them; they are not themselves roadmap subjects.
   the project name is unimplemented.
 - **Decided**: expand into an actual upload board — a post/comment domain whose
   posts reference uploaded files. Entity relations (post ↔ `FileEntity`,
-  comment ↔ post/user) will be described in plain text first and land as
-  reviewed migrations, per [CLAUDE.md](CLAUDE.md) > Scope Discipline (schema
-  changes).
+  comment ↔ post/user) were described in plain text first, per
+  [CLAUDE.md](CLAUDE.md) > Scope Discipline (schema changes), and land as
+  reviewed migrations in the follow-up implementation task.
+- **Schema settled 2026-07-30** ([ADR 0023](ADR/0023-board-domain-schema.md)) —
+  the design gate ahead of that implementation, with no code: a post references
+  at most one file (unique, nullable FK) that its own creator uploaded, which is
+  also its idempotency key; comments are flat (no threading) and die with their
+  post through the schema's one and only `ON DELETE CASCADE`; deleting a file a
+  post references is refused with 409 `FILE_IN_USE` via the FK rather than a
+  pre-check; the account cascade ([ADR 0020](ADR/0020-account-deletion-cascade.md))
+  absorbs posts and comments while `deleteFiles=true` keeps confirming files
+  only; ownership stays "creator or admin" with no new authorization axis.
 - List search/filter/sort (Stage 3) is the data-layer prerequisite for board
   listings — landed 2026-07-30 ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)),
   so the post listing extends that read layer rather than defining its own.
@@ -170,6 +182,32 @@ work must pass them; they are not themselves roadmap subjects.
 ## 6. Staged task list
 
 Ordering is by dependency. Each row is one dedicated task.
+
+### Execution order for remaining work (decided 2026-07-31)
+
+The stages below are grouped by dependency, but several ready items span stages,
+so the actual build sequence is fixed here (completed stages omitted). Each pending
+item carries its execution number in its own row.
+
+1. **Board domain — post/comment modules** (Stage 3) — the only dependency-ready
+   task in the lowest incomplete stage; its schema gate ([ADR 0023](ADR/0023-board-domain-schema.md))
+   is done, so this is the next dedicated task.
+2. **`GET /user` pagination** (pulled forward from Stage 5) — an independent Never
+   Do Group 2 debt, owed regardless of the console; taken as an early quick win and
+   as the read-layer precursor the admin user list will need.
+3. **Stage 5 — operational surface (admin console)**, sequenced **before Stage 4**:
+   role-delivery decision (blocks the rest) → adapt the imported console →
+   moderation-existence decision → resolve the duplicate admin surface. Rationale
+   (already recorded in the Stage 5 note): a deployed system whose privilege
+   hierarchy is operable only through Swagger is hard to run, so the operational
+   surface precedes deployment.
+4. **Stage 4 — production transition (deployment)**, sequenced **last**: AWS
+   deployment → container/deploy hardening → VOD access control → storage
+   port-adapter (conditional) → performance/capacity criteria.
+
+This resolves Stage 5's "numbering is not dependency order" note in favor of Stage 5
+before Stage 4, and pulls the one independent debt item (#2) ahead of both. Within a
+stage, the internal dependency order in its table still holds.
 
 ### Stage F — Frontend preparation (decided 2026-07-23, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md))
 
@@ -211,7 +249,8 @@ settled while zero consumers exist.
 | Task | Rationale / dependencies |
 |---|---|
 | ~~List search / filter / sort~~ — ✅ landed 2026-07-30 ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) | `GET /file` gained `search` (escaped `ILIKE '%term%'` on the title), `creatorId`, and `sortBy`/`order` resolved through a total-`Record` whitelist — plus the `ORDER BY` the endpoint never had, so offset paging is deterministic. No schema change; the three candidate indexes are deferred with their triggers recorded. This is the read-layer pattern the post listing extends. |
-| Board domain — post/comment modules | New domain modules (sanctioned by module policy); plain-text schema description first, then reviewed migrations; RBAC, ownership, and pagination patterns apply from day one. |
+| ~~Board domain — schema design gate~~ — ✅ landed 2026-07-30 ([ADR 0023](ADR/0023-board-domain-schema.md)) | The plain-text schema description Scope Discipline requires before any migration, covering both entities at once so the comment task cannot force a post-schema rollback: post ↔ file is 1:1, optional, same-creator (the unique FK doubles as `POST /post`'s idempotency key); comments are flat and cascade with their post at the FK; `DELETE /file/:id` on an attached file becomes 409 `FILE_IN_USE`; the ADR 0020 account cascade takes posts and comments unconfirmed while the flag still guards files only; `canManage` and the ADR 0021 read layer are reused unchanged. Design only — no code, no migration. |
+| Board domain — post/comment modules **(execution #1 — next dedicated task)** | Implements [ADR 0023](ADR/0023-board-domain-schema.md): two new modules (sanctioned by module policy), one reviewed migration (2 tables, 4 FKs, 1 unique constraint, 1 index), 4 new error codes, and the `DELETE /file/:id` `23503` translation. Needs approval to touch `*.entity.ts`. RBAC, ownership, and pagination patterns apply from day one. |
 
 ### Stage 4 — Production transition
 
@@ -377,6 +416,7 @@ candidate under the CI task).
 | Item | Notes |
 |---|---|
 | List search / filter / sort | `GET /file` gained four optional parameters — `search` (title `ILIKE '%term%'`, LIKE metacharacters escaped, ≤100 chars), `creatorId` (through the existing creator join), and `sortBy`/`order` mapped to columns by a total `Record<FileSortField, string>` so a client string never becomes a column name. Default `createdAt DESC` with `file.id` as a tiebreaker — the endpoint previously had **no `ORDER BY` at all**, making offset paging non-deterministic. Response shape unchanged, no new error codes (the boundary pipe rejects bad values as `VALIDATION_FAILED`), no schema change; the `createdAt`/`pg_trgm`/`creatorId` indexes are deferred with their triggers recorded — **first Stage 3 task** ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) |
+| Board domain schema design | Design gate only — plain-text schema for **both** board entities at once, no code and no migration. post ↔ file is 1:1, optional, and same-creator (the unique nullable FK doubles as `POST /post`'s idempotency key: identical resubmit replays 200, differing payload 409 `POST_FILE_TAKEN`); comments are flat, with threading deferred as an additive migration; `comment.postId` carries the schema's **only** `ON DELETE CASCADE`, argued against ADR 0020's service-cascade rule rather than assumed; `DELETE /file/:id` on an attached file becomes 409 `FILE_IN_USE` by translating `23503` (a pre-check would have created a `File ↔ Post` module cycle **and** left a race); the ADR 0020 account cascade absorbs posts and comments while `deleteFiles=true` keeps guarding files only; ownership stays `canManage` with no third axis, and the post listing inherits the ADR 0021 read layer — **second Stage 3 task** ([ADR 0023](ADR/0023-board-domain-schema.md)) |
 | Deletion policy design | Soft delete rejected with reasons recorded; deletion stays hard. `DELETE /user/:id?deleteFiles=true` cascades (file rows → account row → stored files, unlink post-commit), an unconfirmed delete of an account owning files returns the new 409 `USER_HAS_FILES` with the count, and `deleteFiles` is a validated string literal because implicit Boolean conversion measurably turns `"false"` into `true`. `DELETE /file/:id` now unlinks the stored `granted_` file — a leak found during this task. No schema change — **third Stage 2 task, Stage 2 complete** ([ADR 0020](ADR/0020-account-deletion-cascade.md)) |
 
 ### 2026-07-27

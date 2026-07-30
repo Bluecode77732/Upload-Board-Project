@@ -61,8 +61,10 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 - **Stage 3이 진행 중이다**: 목록 검색/필터/정렬이 2026-07-30 반영됐다
   ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) — `GET /file`이 `search`,
   `creatorId`, `sortBy`, `order`를 받고, 정렬 키는 코드 내 화이트리스트로만 해석되며,
-  이 엔드포인트에 없던 결정적 기본 정렬이 생겼다. 남은 Stage 3 작업은 게시판 도메인
-  (post/comment 모듈)이다.
+  이 엔드포인트에 없던 결정적 기본 정렬이 생겼다. 이어서 2026-07-30에 게시판 도메인의
+  **스키마 설계 게이트**가 반영됐다 ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) —
+  post와 comment를 코드 없이 평문으로 함께 확정한 것이며, 남은 Stage 3 작업은
+  post/comment 구현이다.
 - **Stage 5(운영 화면 — admin 콘솔)가 2026-07-30 추가됐다**
   ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)). 원래 계획의 공백을
   닫은 것이다: ADR 0010은 2026-07-23에 admin이 어디에 살지 결정했지만, 그것을 만드는
@@ -148,8 +150,16 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   미구현이다.
 - **결정**: 실제 업로드 게시판으로 확장 — 게시글이 업로드 파일을 참조하는
   post/comment 도메인. 엔티티 관계(post ↔ `FileEntity`, comment ↔ post/user)는
-  먼저 평문으로 기술한 뒤 검토된 마이그레이션으로 반영한다
-  ([CLAUDE.md](CLAUDE.md) > Scope Discipline의 스키마 변경 규약).
+  ([CLAUDE.md](CLAUDE.md) > Scope Discipline의 스키마 변경 규약에 따라) 먼저 평문으로
+  기술했고, 검토된 마이그레이션은 후속 구현 과제에서 반영한다.
+- **스키마는 2026-07-30 확정됐다** ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) —
+  구현에 앞선 설계 게이트이며 코드는 없다. 글은 자기 작성자가 올린 파일 하나만
+  참조하고(unique·nullable FK), 그 제약이 곧 idempotency 키가 된다. 댓글은 평면
+  구조이고 이 스키마의 유일한 `ON DELETE CASCADE`로 글과 함께 사라진다. 글이 참조 중인
+  파일 삭제는 사전 검사가 아니라 FK를 통해 409 `FILE_IN_USE`로 거부한다. 계정 연쇄
+  삭제([ADR 0020](ADR/0020-account-deletion-cascade.ko.md))는 글과 댓글까지 흡수하되
+  `deleteFiles=true`는 여전히 파일만 확인받는다. 소유권은 "작성자 또는 admin"
+  그대로이며 새로운 인가 축을 만들지 않는다.
 - 목록 검색/필터/정렬(Stage 3)이 게시판 목록의 데이터 계층 선행 조건이며, 2026-07-30
   반영됐다 ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)). post 목록은 이
   조회 계층을 새로 정의하지 않고 확장한다.
@@ -198,7 +208,8 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | 작업 | 근거 / 의존성 |
 |---|---|
 | ~~목록 검색/필터/정렬~~ — ✅ 2026-07-30 반영 ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) | `GET /file`에 `search`(제목에 이스케이프된 `ILIKE '%term%'`), `creatorId`, 그리고 완전한 `Record` 화이트리스트로 해석되는 `sortBy`/`order`가 추가됐다. 이 엔드포인트에 없던 `ORDER BY`도 함께 들어가 offset 페이징이 결정적이 됐다. 스키마 변경은 없고, 후보 인덱스 세 개는 도입 계기를 기록한 채 유보했다. post 목록이 확장해 쓸 조회 계층 패턴이다. |
-| 게시판 도메인 — post/comment 모듈 | 신규 도메인 모듈(모듈 방침이 승인한 사례); 평문 스키마 기술 → 검토된 마이그레이션 순서를 지키고, RBAC·소유권·페이지네이션 패턴을 처음부터 적용. |
+| ~~게시판 도메인 — 스키마 설계 게이트~~ — ✅ 2026-07-30 반영 ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) | 마이그레이션에 앞서 Scope Discipline이 요구하는 평문 스키마 기술이며, comment 작업이 post 스키마를 되돌리게 만들 수 없도록 두 엔티티를 한 번에 다뤘다. post ↔ file은 1:1·선택적·동일 작성자이고(unique FK가 `POST /post`의 idempotency 키를 겸한다), 댓글은 평면 구조로 FK에서 글과 함께 연쇄 삭제된다. 첨부된 파일에 대한 `DELETE /file/:id`는 409 `FILE_IN_USE`가 된다. ADR 0020 계정 연쇄 삭제는 글과 댓글을 확인 없이 가져가되 플래그는 여전히 파일만 지킨다. `canManage`와 ADR 0021 조회 계층은 그대로 재사용한다. 설계 전용 — 코드도 마이그레이션도 없다. |
+| 게시판 도메인 — post/comment 모듈 | [ADR 0023](ADR/0023-board-domain-schema.ko.md)의 구현: 신규 모듈 둘(모듈 방침이 승인한 사례), 검토된 마이그레이션 하나(테이블 2, FK 4, unique 제약 1, 인덱스 1), 신규 에러 코드 4개, 그리고 `DELETE /file/:id`의 `23503` 번역. `*.entity.ts`를 건드리려면 승인이 필요하다. RBAC·소유권·페이지네이션 패턴은 처음부터 적용한다. |
 
 ### Stage 4 — 실서비스 전환
 
@@ -353,6 +364,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | 항목 | 비고 |
 |---|---|
 | 목록 검색/필터/정렬 | `GET /file`에 선택적 파라미터 네 개가 추가됐다 — `search`(제목 `ILIKE '%term%'`, LIKE 메타문자 이스케이프, 100자 이하), `creatorId`(이미 있는 creator join 활용), 그리고 완전한 `Record<FileSortField, string>`로 컬럼에 매핑되는 `sortBy`/`order` — 덕분에 클라이언트 문자열이 컬럼명이 되는 일이 없다. 기본 정렬은 `createdAt DESC` + `file.id` tiebreaker다. 이 엔드포인트에는 **`ORDER BY`가 아예 없어** offset 페이징이 비결정적이었다. 응답 형태 불변, 신규 에러 코드 없음(잘못된 값은 경계 파이프가 `VALIDATION_FAILED`로 거절), 스키마 변경 없음. `createdAt`/`pg_trgm`/`creatorId` 인덱스는 도입 계기를 기록한 채 유보 — **Stage 3 첫 작업** ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) |
+| 게시판 도메인 스키마 설계 | 설계 게이트 전용 — 게시판 엔티티 **둘**을 한 번에 평문으로 기술했고, 코드도 마이그레이션도 없다. post ↔ file은 1:1·선택적·동일 작성자이며 unique·nullable FK가 `POST /post`의 idempotency 키를 겸한다(동일 재전송은 200 replay, 내용이 다르면 409 `POST_FILE_TAKEN`). 댓글은 평면 구조이고 대댓글은 가산적 마이그레이션으로 유보했다. `comment.postId`가 이 스키마의 **유일한** `ON DELETE CASCADE`이며, ADR 0020의 서비스 연쇄 규칙에 대해 당연시하지 않고 근거를 밝혔다. 첨부된 파일에 대한 `DELETE /file/:id`는 `23503`을 번역해 409 `FILE_IN_USE`가 된다(사전 검사는 `File ↔ Post` 모듈 순환을 만들고 경합도 남긴다). ADR 0020 계정 연쇄 삭제는 글과 댓글을 흡수하되 `deleteFiles=true`는 계속 파일만 지킨다. 소유권은 세 번째 축 없이 `canManage` 그대로이고, post 목록은 ADR 0021 조회 계층을 물려받는다 — **Stage 3 두 번째 작업** ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) |
 | 삭제 정책 설계 | soft delete는 근거를 남기고 기각했으며 삭제는 hard delete로 유지한다. `DELETE /user/:id?deleteFiles=true`는 파일 행 → 계정 행 → 물리 파일 순으로 연쇄 삭제하고(unlink는 커밋 이후), 확인 없이 파일 보유 계정을 지우려 하면 개수를 담은 신규 409 `USER_HAS_FILES`로 거절한다. `deleteFiles`를 boolean이 아닌 검증된 문자열 리터럴로 받은 이유는 암묵 Boolean 변환이 `"false"`를 `true`로 바꾸는 것이 실측으로 확인됐기 때문이다. 이번 과제에서 발견한 누수를 닫아 `DELETE /file/:id`도 저장된 `granted_` 파일을 unlink한다. 스키마 변경 없음 — **Stage 2 세 번째 작업이자 Stage 2 완결** ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) |
 
 ### 2026-07-27

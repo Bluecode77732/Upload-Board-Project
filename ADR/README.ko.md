@@ -30,6 +30,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0020](0020-account-deletion-cascade.ko.md) | 삭제 정책 — soft delete 대신 확인 기반 계정 연쇄 삭제 | 승인됨 | 2026-07-30 |
 | [0021](0021-list-query-search-filter-sort.ko.md) | 목록 조회 — 화이트리스트 정렬, ILIKE 제목 검색, 작성자 필터 | 승인됨 | 2026-07-30 |
 | [0022](0022-admin-console-import-from-chat-project.ko.md) | Chat Project에서 가져온 admin 콘솔 — 수정 기반으로서의 이식 | 승인됨 | 2026-07-30 |
+| [0023](0023-board-domain-schema.ko.md) | Board 도메인 스키마 — post와 comment | 승인됨 | 2026-07-30 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고
