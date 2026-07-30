@@ -12,6 +12,8 @@ import { UserEntity } from './user/entity/user.entity';
 import { AuditLogEntity } from './audit-log/audit-log.entity';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { UploadModule } from './upload/upload.module';
+import { PostModule } from './post/post.module';
+import { PostEntity } from './post/entity/post.entity';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TempCleanupModule } from './temp-cleanup/temp-cleanup.module';
@@ -53,7 +55,7 @@ import { join } from 'node:path';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        entities: [FileEntity, UserEntity, AuditLogEntity],
+        entities: [FileEntity, UserEntity, AuditLogEntity, PostEntity],
         synchronize: false,
         autoLoadEntities: true,
       }),
@@ -66,6 +68,7 @@ import { join } from 'node:path';
     ScheduleModule.forRoot(),
     FileModule,
     UserModule,
+    PostModule,
     AuthModule,
     UploadModule,
     AuditLogModule,

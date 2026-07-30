@@ -655,6 +655,58 @@ describe('FileService', () => {
       );
       expect(fileRepository.delete).not.toHaveBeenCalled();
     });
+
+    it('should translate a post reference (23503) into a 409 instead of a 500', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
+      jest.spyOn(fileRepository, 'delete').mockRejectedValue(
+        new QueryFailedError(
+          'DELETE',
+          [],
+          Object.assign(new Error('violates foreign key constraint'), {
+            code: '23503',
+          }),
+        ),
+      );
+
+      // No pre-check query exists by design (module cycle + race) — the FK is the
+      // authority, and its violation is a client outcome, not a server fault (ADR 0023 D4).
+      await expect(fileService.deleteFile(1, owner)).rejects.toThrow(
+        ConflictException,
+      );
+      // The row survived, so its stored file must not be unlinked.
+      expect(fs.unlink).not.toHaveBeenCalled();
+      expect(mockAuditLogService.log).not.toHaveBeenCalled();
+    });
+  });
+
+  // Asked by PostService before it attaches a file: the ownership decision belongs to
+  // the layer that owns file state, never to a reach-through on file.creator (ADR 0023 D1).
+  describe('assertAttachableBy', () => {
+    it('passes for the file creator', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
+
+      await expect(
+        fileService.assertAttachableBy(1, owner.id),
+      ).resolves.toBeUndefined();
+    });
+
+    it('throws NotFoundException for a missing file', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(null);
+
+      await expect(fileService.assertAttachableBy(1, owner.id)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('refuses an admin attaching a file they did not create', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
+
+      // Identity-only on purpose, unlike canManage: "a post references only its own
+      // author's file" is what makes the account cascade FK-safe.
+      await expect(fileService.assertAttachableBy(1, admin.id)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
   });
 
   // The account-deletion cascade (ADR 0020): UserService owns the transaction and

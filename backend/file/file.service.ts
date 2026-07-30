@@ -28,6 +28,7 @@ import { ErrorCode } from 'backend/common/error-code';
 import { ROLE_RANK, UserRole } from 'backend/auth/role/role';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
 import { unlinkStoredFiles } from 'backend/common/unlink-stored-files';
+import { escapeLikePattern } from 'backend/common/escape-like-pattern';
 
 // The acting user's identity + role (from the JWT), enough for creator-OR-admin checks.
 interface Requester {
@@ -46,6 +47,10 @@ export interface FileClaimResult {
 // it is a client-side duplicate, not a server fault, so it must not surface as 500.
 const UNIQUE_VIOLATION = '23505';
 
+// Postgres foreign_key_violation. Raised when a post still references the file row
+// being deleted — a legitimate client outcome (409), not a server fault (ADR 0023 D4).
+const FOREIGN_KEY_VIOLATION = '23503';
+
 // The sole bridge from a client sort key to a column (ADR 0021). Typed as a total Record
 // over FileSortField, so a key added to FILE_SORT_FIELDS without a column here fails to
 // compile — the whitelist cannot silently drift out of sync with the query.
@@ -54,14 +59,6 @@ const SORT_COLUMN: Record<FileSortField, string> = {
   title: 'file.title',
   id: 'file.id',
 };
-
-// 목적: 검색어에 든 LIKE 메타문자를 리터럴로 만든다.
-// 이유: 값은 파라미터로 바인딩되어 주입 위험은 없지만, 이스케이프하지 않은 %나 _는 사용자가 입력한
-//       것보다 훨씬 넓은 범위를 조용히 매칭시킨다(예: '_' 하나가 임의의 한 글자가 된다).
-// 방법: 이스케이프 문자 자신(\)까지 포함해 \, %, _ 앞에 \를 붙인다 — 쿼리는 ESCAPE '\'를 명시한다.
-function escapeLikePattern(term: string): string {
-  return term.replace(/[\\%_]/g, '\\$&');
-}
 
 @Injectable()
 export class FileService {
@@ -88,7 +85,10 @@ export class FileService {
     );
   }
 
-  private toResponse(file: FileEntity): FileResponseDto {
+  // 목적: FileEntity를 공개 URL이 붙은 응답 DTO로 변환한다.
+  // 이유: BASE_URL 합성은 한 곳에만 있어야 하는데, 게시글 응답도 첨부 파일 URL을 담아야 한다(ADR 0023).
+  // 방법: private에서 public으로만 올린다 — PostService가 자기 쪽에서 URL을 다시 조립하지 않고 이 메서드에 위임한다.
+  toResponse(file: FileEntity): FileResponseDto {
     const baseUrl = this.configService.get<string>(
       'BASE_URL',
       'http://localhost:3000',
@@ -199,10 +199,11 @@ export class FileService {
     return { replayed: true, file: this.toResponse(claim) };
   }
 
-  // 목적: 잡힌 에러가 Postgres unique 위반인지 판별한다.
-  // 이유: 동시 제출 경합으로 인한 제약 위반은 클라이언트 중복이지 서버 결함이 아니므로 500과 분리해야 한다.
-  // 방법: QueryFailedError로 좁힌 뒤 driverError.code를 캐스팅 없이 in 연산자로 확인해 '23505'와 비교한다.
-  private isUniqueViolation(error: unknown): boolean {
+  // 목적: 잡힌 에러가 지정한 Postgres SQLSTATE 코드인지 판별한다.
+  // 이유: 제약 위반(중복 23505, 참조 중 23503)은 클라이언트 측 사유이지 서버 결함이 아니므로 500과 분리해야 하고,
+  //       판별 대상이 둘로 늘면서 코드별로 같은 좁히기 로직을 복제할 이유가 없어졌다.
+  // 방법: QueryFailedError로 좁힌 뒤 driverError.code를 캐스팅 없이 in 연산자로 확인해 인자로 받은 코드와 비교한다.
+  private isPgErrorCode(error: unknown, code: string): boolean {
     if (!(error instanceof QueryFailedError)) return false;
 
     const driverError: unknown = error.driverError;
@@ -210,8 +211,36 @@ export class FileService {
       typeof driverError === 'object' &&
       driverError !== null &&
       'code' in driverError &&
-      driverError.code === UNIQUE_VIOLATION
+      driverError.code === code
     );
+  }
+
+  // 목적: 특정 파일을 요청자가 게시글에 첨부해도 되는지 판정한다.
+  // 이유: 첨부 가능 여부는 파일 소유권 판정이므로 그 상태를 소유한 FileModule이 답해야 하고,
+  //       PostService가 file.creator.id를 직접 들여다보는 것은 디미터 법칙 위반이다.
+  // 방법: creator를 함께 로드해 없으면 404, 생성자 본인이 아니면 403을 던진다 — 값 반환 없이 판정만 한다.
+  async assertAttachableBy(fileId: number, requesterId: number): Promise<void> {
+    const file = await this.fileRepository.findOne({
+      where: { id: fileId },
+      relations: ['creator'],
+    });
+
+    if (!file) {
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
+    }
+
+    // Deliberately identity-only, not canManage: "a post references only its own
+    // author's file" is what makes the account cascade FK-safe (ADR 0023 D1), and an
+    // admin attaching someone else's file would break that invariant, not enforce it.
+    if (file.creator.id !== requesterId) {
+      throw new ForbiddenException({
+        code: ErrorCode.FORBIDDEN_NOT_OWNER,
+        message: 'You can only attach a file you created.',
+      });
+    }
   }
 
   // 목적: temp 업로드를 소유 파일로 승격하고, 같은 요청의 재제출을 멱등하게 처리한다.
@@ -299,7 +328,7 @@ export class FileService {
       // The title pre-check is an unlocked read, so simultaneous submits can both pass
       // it and let the unique constraint pick the winner. If the winner claimed this same
       // filename, the loser is the same request twice — replay it instead of erroring.
-      if (this.isUniqueViolation(error)) {
+      if (this.isPgErrorCode(error, UNIQUE_VIOLATION)) {
         const winner = await this.findClaim(storedPath);
         if (winner) {
           return this.resolveClaim(winner, userId);
@@ -477,9 +506,11 @@ export class FileService {
       .execute();
   }
 
-  // 목적: 파일 메타데이터 행과 그에 대응하는 물리 파일을 함께 제거한다.
-  // 이유: 행만 지우던 기존 동작은 granted_ 파일을 영구 고아로 남기고, 그 URL이 계속 공개 서빙됐다(ADR 0020).
-  // 방법: 권한 확인 → 행 삭제 → 커밋된 뒤에만 unlink(실패는 warn 로그) → 감사 로그 순서로, 되돌릴 수 없는 작업을 맨 뒤에 둔다.
+  // 목적: 파일 메타데이터 행과 그에 대응하는 물리 파일을 함께 제거하되, 게시글이 참조 중이면 거절한다.
+  // 이유: 행만 지우던 기존 동작은 granted_ 파일을 영구 고아로 남겼고(ADR 0020), 이제는 post가 이 행을
+  //       참조할 수 있어 FK 위반이 그대로 500으로 새어 나갈 수 있다(ADR 0023 D4).
+  // 방법: 권한 확인 → 행 삭제(23503이면 409 FILE_IN_USE로 번역, 사전 조회는 하지 않는다 — 경합이 남으므로)
+  //       → 커밋된 뒤에만 unlink(실패는 warn 로그) → 감사 로그 순서로, 되돌릴 수 없는 작업을 맨 뒤에 둔다.
   async deleteFile(id: number, requester: Requester): Promise<string> {
     const file = await this.fileRepository.findOne({
       where: { id },
@@ -500,7 +531,20 @@ export class FileService {
       });
     }
 
-    await this.fileRepository.delete(id);
+    // No pre-check query: asking post_entity here would make FileModule depend on
+    // PostModule (a cycle, since PostService already asks this service about ownership)
+    // and would still leave a race window. The database is the authority (ADR 0023 D4).
+    try {
+      await this.fileRepository.delete(id);
+    } catch (error) {
+      if (this.isPgErrorCode(error, FOREIGN_KEY_VIOLATION)) {
+        throw new ConflictException({
+          code: ErrorCode.FILE_IN_USE,
+          message: 'This file is attached to a post. Delete the post first.',
+        });
+      }
+      throw error;
+    }
 
     // Stored file goes only after the row is gone: unlink cannot be rolled back, so the
     // recoverable failure (an orphan on disk) must be the only one reachable (ADR 0020).

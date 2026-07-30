@@ -9,6 +9,7 @@ export const AUDIT_ACTIONS = [
   'ROLE_CHANGE',
   'USER_DELETE',
   'FILE_DELETE',
+  'POST_DELETE',
 ] as const;
 
 export class AuditLogQueryDto {

@@ -20,10 +20,11 @@ Before making any change:
    - Auth flow change      → read `backend/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `backend/auth/strategy/`; grep `JwtAuthGuard`, `LocalAuthGuard`
    - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract, one-shot claim resolution in `uploadFile` — ADR 0019)
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer diskStorage, `temp_{uuid}_{timestamp}` naming) and `upload.controller.ts` (100MB size limit)
-   - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`) and `backend/common/unlink-stored-files.ts` (post-commit unlink, ADR 0020)
+   - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `backend/common/unlink-stored-files.ts` (post-commit unlink, ADR 0020/0023)
+   - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
    - Orphan temp cleanup   → read `backend/temp-cleanup/temp-cleanup.service.ts` (`@nestjs/schedule` `SchedulerRegistry` cron, `temp_`-prefix + TTL sweep of `file/temp`, ADR 0018) and its `selectExpiredTempFiles` pure core
    - Env var change        → read the Joi schema in `backend/app.module.ts` AND `.env.example` — both must stay in sync
-   - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides
+   - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides. `backend/post/entity/post.entity.ts` is deliberately **unidirectional** (no inverse property on User/File) — do not "fix" that (ADR 0023)
    - Static file serving   → read the `ServeStaticModule` block in `app.module.ts` (`rootPath: file/`, `serveRoot: 'file'`)
 2. Never invent APIs, files, functions, or types that you have not confirmed exist in the codebase.
 3. Reuse existing patterns only; do not introduce new abstractions unless explicitly asked.
@@ -560,7 +561,12 @@ one of these is violated, follow Principle Conflict Protocol.
 - **UserModule** owns user CRUD only. It exports `UserService` (consumed by
   `JwtStrategy` for token validation) — that export is the module's public contract.
 - **FileModule** owns file *metadata* only: the `FileEntity` row, title/creator/filePath,
-  and the transaction that promotes a temp file.
+  and the transaction that promotes a temp file. It also answers two questions for
+  PostModule — may this user attach this file (`assertAttachableBy`, identity-only) and what
+  is its public URL (`toResponse`) — and never imports PostModule in return (ADR 0023 D4).
+- **PostModule** owns board post content only: the `PostEntity` row, its optional 1:1
+  reference to a file, and post CRUD. It never reads `file.creator` — attachability is
+  FileModule's judgment to make. It exports `PostService` for the account cascade.
 - **UploadModule** owns the *physical* file only: Multer disk storage into `file/temp`,
   size limit, temp naming. It has no service and no DB access — keep it that way.
 - **TempCleanupModule** (ADR 0018) is an *operational* module, not a domain one: it hosts
@@ -765,9 +771,15 @@ Do not suggest alternatives to these decisions without explicit request.
   no `@DeleteDateColumn`, no `withDeleted` policy, and no recovery path. Introducing soft
   delete is a schema change on high-blast-radius entities and needs its own ADR
 - `DELETE /user/:id` cascades **only on an explicit `?deleteFiles=true`** (validated by
-  `DeleteUserQueryDto`): file rows → user row in one `dataSource.transaction()`, then the
-  stored files are unlinked. Unconfirmed against an account that owns files = 409
-  `USER_HAS_FILES` with the count in the message; `deleteFiles=false` counts as unconfirmed
+  `DeleteUserQueryDto`): post rows → file rows → user row in one `dataSource.transaction()`,
+  then the stored files are unlinked. Unconfirmed against an account that owns files = 409
+  `USER_HAS_FILES` with the count in the message; `deleteFiles=false` counts as unconfirmed.
+  **Posts are deleted unconditionally** — the flag deliberately guards media bytes only, and
+  widening it (or adding a second flag) was rejected (ADR 0023 D5)
+- `DELETE /post/:id` hard-deletes the post row and **leaves its attached file untouched** — a
+  post references a file, it never owns it. `DELETE /file/:id` on a file a post references is
+  refused with 409 `FILE_IN_USE`, translated from the FK's `23503` with no pre-check query
+  (a pre-check would create a `File ↔ Post` module cycle *and* still race — ADR 0023 D4)
 - The confirmation flag is a **string literal** (`'true' | 'false'`), never a boolean:
   the global pipe's `enableImplicitConversion` truthiness-casts `"false"` to `true` before
   any custom `@Transform` (measured, pinned by `delete-user-query.dto.spec.ts`). Any future
@@ -931,9 +943,10 @@ pnpm test -- file.service
 
 **AppModule** wires together:
 - `ConfigModule` — global, Joi-validated env (see `.env.example`)
-- `TypeOrmModule` — PostgreSQL, `synchronize: false`, entities `FileEntity` + `UserEntity`
+- `TypeOrmModule` — PostgreSQL, `synchronize: false`, entities `FileEntity`, `UserEntity`,
+  `AuditLogEntity`, `PostEntity`
 - `ServeStaticModule` — serves the `file/` directory at `/file`
-- `FileModule`, `UserModule`, `AuthModule`, `UploadModule`
+- `FileModule`, `UserModule`, `PostModule`, `AuthModule`, `UploadModule`
 
 **AuthModule** (`backend/auth/`)
 - REST: `POST /auth/register`, `POST /auth/signin` (both Basic token),
@@ -953,8 +966,20 @@ pnpm test -- file.service
   `DELETE /user/:id` (optional `?deleteFiles=true` — confirmed cascade, ADR 0020) — no
   `POST /user` by design (registration is `POST /auth/register`)
 - `UserService` — CRUD; re-hashes password on update via `HASH_ROUNDS`; `remove` owns the
-  deletion transaction and delegates file rows to `FileService`
-- Exports `UserService`; imports `FileModule` for the account cascade
+  deletion transaction and delegates post rows to `PostService` and file rows to `FileService`
+  (posts first — both post FKs are `ON DELETE NO ACTION`)
+- Exports `UserService`; imports `FileModule` and `PostModule` for the account cascade
+
+**PostModule** (`backend/post/`)
+- REST (all behind `JwtAuthGuard`): `GET /post`, `GET /post/:id`, `POST /post`,
+  `PATCH /post/:id`, `DELETE /post/:id` (ADR 0023)
+- `PostService` — post CRUD; every write is a single DB write (transaction table row 1).
+  `create` resolves the `fileId` claim before writing — identical resubmission replays
+  (`{ replayed: true }` → 200), differing text 409s `POST_FILE_TAKEN`; the listing reuses
+  the ADR 0021 read layer. `deletePostsOfCreator` serves the account cascade inside
+  `UserService`'s transaction
+- Imports `FileModule` (attachability + URL composition) and `AuditLogModule`
+  (`POST_DELETE`); exports `PostService`
 
 **FileModule** (`backend/file/`)
 - REST (all behind `JwtAuthGuard`): `GET /file`, `GET /file/:id`, `POST /file`,
@@ -991,8 +1016,14 @@ pnpm test -- file.service
   `creator: FileEntity[]` (OneToMany), timestamps
 - `FileEntity` — title (unique), `filePath`, `creator: UserEntity` (ManyToOne,
   `nullable: false`, `cascade: true`), timestamps
-- No shared base entity; timestamps declared per entity — with only two entities a shared
-  base would be premature abstraction (YAGNI) and add inheritance coupling for no reuse
+- `PostEntity` — title (**not** unique — deliberately unlike `FileEntity.title`), `body`
+  (text), `creator: UserEntity` (ManyToOne, `nullable: false`), `file: FileEntity | null`
+  (OneToOne + `@JoinColumn`, unique + nullable — the idempotency key for `POST /post`),
+  timestamps. Relations are **unidirectional**: neither `UserEntity` nor `FileEntity` gains
+  an inverse collection, because the one inverse that exists (`UserEntity.creator`) is read
+  by zero queries (ADR 0023)
+- No shared base entity; timestamps declared per entity — a shared base would be premature
+  abstraction (YAGNI) and add inheritance coupling for no reuse
 
 ## Key Conventions
 

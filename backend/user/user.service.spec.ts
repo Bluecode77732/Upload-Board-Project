@@ -14,6 +14,7 @@ import { DataSource } from 'typeorm';
 import { UserRole } from 'backend/auth/role/role';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
 import { FileService } from 'backend/file/file.service';
+import { PostService } from 'backend/post/post.service';
 import * as fs from 'fs/promises';
 
 jest.mock('bcrypt');
@@ -65,6 +66,11 @@ describe('UserService', () => {
     deleteFilesOfCreator: jest.fn(),
   };
 
+  // Same boundary for post rows during the cascade (ADR 0023 D5).
+  const mockPostService = {
+    deletePostsOfCreator: jest.fn().mockResolvedValue(0),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -73,10 +79,26 @@ describe('UserService', () => {
           provide: getRepositoryToken(UserEntity),
           useValue: mockUserRepository,
         },
-        { provide: ConfigService, useValue: mockConfigService },
-        { provide: DataSource, useValue: mockDataSource },
-        { provide: AuditLogService, useValue: mockAuditLogService },
-        { provide: FileService, useValue: mockFileService },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
+        },
+        {
+          provide: DataSource,
+          useValue: mockDataSource,
+        },
+        {
+          provide: AuditLogService,
+          useValue: mockAuditLogService,
+        },
+        {
+          provide: FileService,
+          useValue: mockFileService,
+        },
+        {
+          provide: PostService,
+          useValue: mockPostService,
+        },
       ],
     }).compile();
 
@@ -215,9 +237,34 @@ describe('UserService', () => {
         1,
         2,
         'USER_DELETE',
-        'files=0',
+        'files=0 posts=0',
       );
       expect(result).toBe('User 2 deleted.');
+    });
+
+    it('should delete posts unconfirmed, before files, and count them in the audit detail', async () => {
+      mockFileService.findStoredPathsOfCreator.mockResolvedValue(storedPaths);
+      mockPostService.deletePostsOfCreator.mockResolvedValueOnce(4);
+
+      await userService.remove(1, 2, true);
+
+      // Posts go first: FK_post_entity_file/creator are ON DELETE NO ACTION, so a
+      // remaining post row would block both the file rows and the user row (ADR 0023 D5).
+      expect(
+        mockPostService.deletePostsOfCreator.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        mockFileService.deleteFilesOfCreator.mock.invocationCallOrder[0],
+      );
+      expect(mockPostService.deletePostsOfCreator).toHaveBeenCalledWith(
+        mockManager,
+        2,
+      );
+      expect(mockAuditLogService.log).toHaveBeenCalledWith(
+        1,
+        2,
+        'USER_DELETE',
+        'files=2 posts=4',
+      );
     });
 
     it('should refuse with ConflictException when files exist and the cascade is unconfirmed', async () => {
@@ -246,7 +293,7 @@ describe('UserService', () => {
         1,
         2,
         'USER_DELETE',
-        'files=2',
+        'files=2 posts=0',
       );
       expect(result).toBe('User 2 deleted.');
     });
@@ -265,7 +312,7 @@ describe('UserService', () => {
         1,
         2,
         'USER_DELETE',
-        'files=2',
+        'files=2 posts=0',
       );
     });
 

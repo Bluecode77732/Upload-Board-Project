@@ -127,7 +127,9 @@ docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 �
 - `PATCH /user/:id/role` — 역할 부여 (superadmin만; 마지막 superadmin은 강등 불가)
 - `DELETE /user/:id` — 사용자 삭제 (본인 또는 admin). 파일을 보유한 계정은 409
   `USER_HAS_FILES`로 거절되며, `?deleteFiles=true`로 연쇄 삭제를 확인해야 계정과 파일을
-  함께 삭제한다 — 되돌릴 수 없다 ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md))
+  함께 삭제한다 — 되돌릴 수 없다 ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)).
+  해당 계정의 **게시글은 별도 확인 없이 항상 함께 삭제된다** — 이 플래그가 지키는 대상은
+  미디어 바이트뿐이기 때문이다 ([ADR 0023](ADR/0023-board-domain-schema.ko.md))
 
 **파일**
 - `POST /upload/attach` — 동영상을 임시 저장소로 업로드 (multipart 필드 `video`, 100 MB 제한)
@@ -151,10 +153,27 @@ docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 �
   사용자에게는 409 `FILE_ALREADY_CLAIMED`를 반환합니다
   ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md))
 - `PATCH /file/:id` — 파일 메타데이터 수정 (작성자 또는 admin)
-- `DELETE /file/:id` — 파일 메타데이터와 저장된 물리 파일 삭제 (작성자 또는 admin)
+- `DELETE /file/:id` — 파일 메타데이터와 저장된 물리 파일 삭제 (작성자 또는 admin). 게시글이
+  참조 중인 파일은 409 `FILE_IN_USE`로 거절되므로 게시글을 먼저 지워야 한다
+  ([ADR 0023](ADR/0023-board-domain-schema.ko.md))
+
+**게시글** — 게시판 본체 ([ADR 0023](ADR/0023-board-domain-schema.ko.md)). 게시글은 본문과 함께
+작성자 본인이 올린 파일 **하나**를 선택적으로 참조한다. 참조일 뿐 소유가 아니므로 게시글을 지워도
+파일은 그대로 남는다
+- `GET /post` — 게시글 목록. 쿼리 파라미터 규약은 위 `GET /file`과 동일하다
+  (`take` / `skip` / `search` / `sortBy` / `order` / `creatorId`, 기본값도 같음)
+- `GET /post/:id` — 작성자와 첨부 파일을 포함한 게시글 조회
+- `POST /post` — 게시글 작성 (`{ title, body, fileId? }`). `fileId`는 요청자 본인이 만든 파일이어야
+  하고(아니면 403 `FORBIDDEN_NOT_OWNER`, 없는 id면 404 `FILE_NOT_FOUND`), 다른 게시글이 이미
+  점유하지 않은 것이어야 한다. 이 제약이 곧 멱등 키 역할을 한다 — **완전히 동일한** 본문으로 다시
+  제출하면 기존 게시글을 200으로 돌려주고, 같은 `fileId`에 본문이 다르면 409 `POST_FILE_TAKEN`이다.
+  `fileId` 없는 게시글은 자연 키가 없어 재제출 시 새 글이 만들어진다
+- `PATCH /post/:id` — `title` / `body` 수정 (작성자 또는 admin). 첨부는 작성 시점에 고정되므로,
+  영상을 떼려면 게시글을 삭제해야 한다
+- `DELETE /post/:id` — 게시글 삭제 (작성자 또는 admin), 되돌릴 수 없다
 
 **감사 로그**
-- `GET /audit-log` — ROLE_CHANGE / USER_DELETE / FILE_DELETE 기록 조회 (admin만; 페이지네이션, `?action` 필터)
+- `GET /audit-log` — ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE 기록 조회 (admin만; 페이지네이션, `?action` 필터)
 
 ### 일반적인 흐름
 

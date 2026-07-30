@@ -7,6 +7,7 @@ import { DataSource } from 'typeorm';
 import { FileEntity } from './file/entity/file.entity';
 import { UserEntity } from './user/entity/user.entity';
 import { AuditLogEntity } from './audit-log/audit-log.entity';
+import { PostEntity } from './post/entity/post.entity';
 
 try {
   // Node >= 20.12 built-in .env loader — avoids a dotenv dependency.
@@ -31,7 +32,7 @@ export default new DataSource({
   username: required('DB_USERNAME'),
   password: required('DB_PASSWORD'),
   database: required('DB_DATABASE'),
-  entities: [FileEntity, UserEntity, AuditLogEntity],
+  entities: [FileEntity, UserEntity, AuditLogEntity, PostEntity],
   // __dirname-relative so the compiled dist/data-source.js finds dist/migrations/*.js.
   migrations: [join(__dirname, 'migrations', '*.js')],
   synchronize: false,

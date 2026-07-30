@@ -352,3 +352,55 @@ ADR 0021 deferred its three:
   delete, no soft delete, explicit service cascade, post-commit unlink, delete by
   `creatorId`), ADR 0021 (read-layer reuse) — with no contradiction found. The one apparent
   conflict, D3's database cascade, is scoped and argued rather than assumed.
+
+## Implementation notes (post module, 2026-07-31)
+
+The decision above is unchanged. These notes record how it landed and what it left open;
+they add no new decision.
+
+**Split into two tasks.** The design covers post *and* comment, but the implementation runs
+as post first, comment second — comment depends on post, not the reverse. So the migration
+landed in two parts rather than the one this ADR's Consequences describe: this task created
+`post_entity` (2 FKs, `UQ_post_entity_fileId`), and `comment_entity` plus
+`IDX_comment_entity_postId_createdAt` belong to the comment task. Nothing else about the
+schema changed. The three error codes this task needs (`POST_NOT_FOUND`, `POST_FILE_TAKEN`,
+`FILE_IN_USE`) exist; `COMMENT_NOT_FOUND` was deliberately **not** added ahead of its
+consumer, since an unreachable code is dead surface.
+
+`migration:generate` behaved exactly as [ADR 0006](0006-schema-policy-and-migration-adoption.md)
+predicted: alongside the four intended statements it emitted four spurious ones, dropping and
+re-adding `FK_file_entity_creator` and `IDX_audit_log_entity_action_createdAt` purely to
+rename them from the baseline's readable names to TypeORM hashes. Those were stripped; the new
+constraints carry readable names (`PK_post_entity`, `UQ_post_entity_fileId`,
+`FK_post_entity_creator`, `FK_post_entity_file`).
+
+**Two shapes the design implied but did not name.**
+
+- `FileService.toResponse` went from private to public. D1 says the `BASE_URL` composition
+  stays in `FileService` and is reused; making the mapper public is how `PostService`
+  reuses it instead of recomposing the URL. `PostService` never touches `file.creator`.
+- `FileService.assertAttachableBy(fileId, requesterId)` is the "asks `FileService`" of D1,
+  as a judgment rather than a getter. It is **identity-only, deliberately not `canManage`** —
+  an admin attaching another user's file would break the very invariant that makes the
+  account cascade FK-safe, so RBAC does not widen this check.
+
+**One reachable case the design treats as structurally impossible.** D1 argues the
+same-creator rule makes a post-referencing-a-stranger's-file unreachable. It is unreachable
+at *creation*, but `PATCH /file/:id { userId }` reassigns file ownership afterwards, which
+can produce exactly that state. Two consequences follow, and this task deliberately changed
+neither, since resolving them is a decision, not an implementation detail:
+
+1. `resolveAttachment` carries an author-identity check before replaying. Without it, the
+   file's new owner could be handed the previous owner's post as a "retry". This guard is
+   *reachable* precisely because of reassignment, so it is not an unreachable guard.
+2. `DELETE /user/:id?deleteFiles=true` can still raise `23503` inside its transaction — if
+   the account's files were reassigned *from* another user whose post still references
+   one — surfacing as the opaque 500 ADR 0020 set out to remove. Narrow (it needs a prior
+   reassignment) but real, and **open**: it is tracked in ROADMAP > Unscheduled rather than
+   fixed here, because every candidate fix is a decision — refusing reassignment of an
+   attached file, widening the cascade to posts that merely *reference* the account's files,
+   or translating the `23503` into a typed refusal.
+
+**Verified**: `pnpm lint` clean, 121 unit tests, 52 e2e tests (14 new, covering post CRUD,
+the 403 ownership refusals, replay/409 on a repeated `fileId`, 409 `FILE_IN_USE`, and the
+account cascade's `posts=N` audit detail).

@@ -10,6 +10,7 @@ import { AppModule } from '../backend/app.module';
 import { InitialSchema1784678400000 } from '../backend/migrations/1784678400000-InitialSchema';
 import { AddUserRefreshTokenHash1784851200000 } from '../backend/migrations/1784851200000-AddUserRefreshTokenHash';
 import { AddUserRoleAndAuditLog1784912790431 } from '../backend/migrations/1784912790431-AddUserRoleAndAuditLog';
+import { AddPostEntity1785428640007 } from '../backend/migrations/1785428640007-AddPostEntity';
 
 // A dedicated database, never the dev one — dropped and recreated every run so the
 // suite owns its data. New migrations must be appended here or boot fails loudly.
@@ -20,10 +21,16 @@ const MIGRATIONS = [
   InitialSchema1784678400000,
   AddUserRefreshTokenHash1784851200000,
   AddUserRoleAndAuditLog1784912790431,
+  AddPostEntity1785428640007,
 ];
 
 // Every table the app writes; truncated between tests for per-test isolation.
-const TABLES = ['user_entity', 'file_entity', 'audit_log_entity'];
+const TABLES = [
+  'user_entity',
+  'file_entity',
+  'audit_log_entity',
+  'post_entity',
+];
 
 function connectionBase() {
   return {

@@ -13,6 +13,88 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **ROADMAP execution order for the remaining work fixed** (2026-07-31) — the staged
+  plan groups tasks by dependency, but several ready items span stages, so the actual
+  build sequence is now pinned in [ROADMAP.md](ROADMAP.md) §6: #1 board post/comment
+  modules → #2 `GET /user` pagination (pulled forward from Stage 5 as an independent
+  Never Do Group 2 debt, owed regardless of the console) → #3 Stage 5 admin surface →
+  #4 Stage 4 deployment (last). This resolves Stage 5's documented "numbering is not
+  dependency order" floating position in favor of Stage 5 **before** Stage 4, and pulls
+  the pagination debt ahead of both. Documentation only — no code or plan-scope change.
+
+### Added
+- **Board post module — the board domain's first module**
+  ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) — implements the first
+  half of the schema gate settled a day earlier. `PostModule` ships five routes behind
+  `JwtAuthGuard` (`GET /post`, `GET /post/:id`, `POST /post`, `PATCH /post/:id`,
+  `DELETE /post/:id`) over a new `post_entity`: `title` (deliberately **not** unique, unlike
+  `FileEntity.title` — a board where a title can be used once globally is a defect), `body`,
+  a `creatorId` FK, and a **unique, nullable** `fileId` FK. **Split from the comment module**
+  because comment depends on post and not the reverse, so the migration landed in two parts
+  rather than the one the ADR describes; `comment_entity` is the next task. The migration was
+  reviewed line by line as [ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)
+  requires — `generate` emitted four spurious statements dropping and re-adding
+  `FK_file_entity_creator` and `IDX_audit_log_entity_action_createdAt` purely to rename them
+  to TypeORM hashes, which were stripped in favor of the baseline's readable naming.
+  **The unique `fileId` is the endpoint's idempotency key**, which `title` cannot be: an
+  identical resubmission replays the existing post with 200, the same `fileId` with different
+  author-written text is 409 `POST_FILE_TAKEN`, and a concurrent double-submit that loses the
+  unique constraint re-resolves through the same path instead of becoming a 500. That is
+  [ADR 0019](ADR/0019-upload-claim-idempotency.md)'s mechanism with one deliberate difference
+  — ADR 0019 replays unconditionally, but a post carries text a file promotion does not, so
+  replaying a *different* title/body would answer a genuinely new submission with somebody's
+  earlier post. Ownership reuses `canManage` unchanged (author **or** admin+,
+  [ADR 0013](ADR/0013-rbac-and-audit-log.md)), and the listing reuses the
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.md) read layer — escaped ILIKE, the total
+  `Record` sort whitelist, the `id` tiebreaker — rather than restating it (the escaping helper
+  moved to `backend/common/escape-like-pattern.ts` so both endpoints share one copy).
+  Attaching a file is **identity-only, not `canManage`**: `FileService.assertAttachableBy`
+  refuses even an admin attaching another user's file, because "a post references only its own
+  author's file" is exactly what keeps the account cascade FK-safe. Three new error codes
+  (`POST_NOT_FOUND`, `POST_FILE_TAKEN`, `FILE_IN_USE`); `COMMENT_NOT_FOUND` was deliberately
+  **not** added ahead of its consumer.
+
+### Changed
+- **`DELETE /file/:id` on a file a post references is now 409 `FILE_IN_USE`**
+  ([ADR 0023](ADR/0023-board-domain-schema.md) D4) — the new FK makes the delete raise
+  `23503`, which without translation is the same opaque 500 that
+  [ADR 0020](ADR/0020-account-deletion-cascade.md) removed from `DELETE /user/:id`. **No
+  pre-check query was added**, on two independent grounds: it would make `FileService` read
+  `post_entity` while `PostService` already asks `FileService` about ownership (a module cycle
+  needing `forwardRef`, with no precedent here), and a post created between the check and the
+  delete would still hit the constraint — the 500 would become rarer, not impossible. The
+  database is the authority. `ON DELETE SET NULL` was rejected outright: it makes the delete
+  always succeed by silently stripping the video out of a published post. Deleting a post
+  leaves its file alone — a post *references* a file, it never owns it.
+- **The account cascade now takes posts, unconfirmed** ([ADR 0023](ADR/0023-board-domain-schema.md)
+  D5) — `UserService.remove` deletes the account's posts inside its existing
+  `dataSource.transaction()`, **before** the file rows (`FK_post_entity_file` and
+  `FK_post_entity_creator` are both `ON DELETE NO ACTION`), keyed by `creatorId` rather than an
+  id list read moments earlier. `?deleteFiles=true` keeps its exact meaning: it confirms the
+  destruction of **file rows and stored bytes**, and 409 `USER_HAS_FILES` still fires only for
+  files. Widening it was rejected — the parameter name and error code would then describe
+  something narrower than what they gate, and a second flag would add a query parameter to a
+  frozen route ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)). The honest
+  cost is recorded rather than papered over: deleting an account destroys its posts with no
+  confirmation step. The audit detail gains the count (`files=N posts=N`), and `POST_DELETE`
+  joins `AUDIT_ACTIONS`.
+- **`FileService.toResponse` is public** — ADR 0023 D1 requires the `BASE_URL` composition to
+  stay in `FileService` and be reused, so `PostService` delegates the attached file's URL to it
+  rather than recomposing one. `PostService` never reads `file.creator` (Law of Demeter).
+
+### Known issue
+- **File ownership reassignment can break the post↔file same-creator invariant** — ADR 0023 D1
+  argues a post can only reference its own author's file, and that is what makes the account
+  cascade FK-safe. It holds at creation, but `PATCH /file/:id { userId }` reassigns ownership
+  afterwards. Two consequences, both left deliberately unchanged because resolving them is a
+  decision rather than an implementation detail: `resolveAttachment` carries an author-identity
+  check so a file's new owner is never handed the previous owner's post as a "retry" (reachable
+  precisely because of reassignment, hence not an unreachable guard); and
+  `DELETE /user/:id?deleteFiles=true` can still raise `23503` in the narrow case where the
+  account's files were reassigned from a user whose post still references one. Tracked in
+  ROADMAP > Unscheduled with the three candidate fixes, each needing its own ADR.
+
+### Changed
 - **ROADMAP gains Stage 5 — operational surface (admin console)**
   ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — the second amendment to the
   plan the 11-axis review fixed on 2026-07-23 (the first was Stage F, ADR 0010). It closes a gap

@@ -21,7 +21,7 @@ lands as its own dedicated, designed change
 > actually lands (with its own ADR), the current Architecture Decisions remain
 > operative.
 
-## Current position (as of 2026-07-30)
+## Current position (as of 2026-07-31)
 
 - The 2026-07-22 hardening run is fully landed: security quick-wins, the
   zero-error lint baseline, the documentation rewrite, and TypeORM migration
@@ -77,6 +77,11 @@ lands as its own dedicated, designed change
   unadapted modification base in the same change. Nothing in Stage 5 has started, and its
   first row — how a client learns its own role — is a backend decision that blocks the rest.
   It does **not** depend on Stage 4 and may run before it.
+- **Execution order for the remaining work fixed 2026-07-31** (see section 6 >
+  Execution order): #1 board post/comment modules → #2 `GET /user` pagination (pulled
+  forward from Stage 5) → #3 Stage 5 admin surface → #4 Stage 4 deployment, last. This
+  resolves Stage 5's floating position (before Stage 4) and pulls the independent
+  pagination debt ahead of both.
 
 ## 1. Vision & essence
 
@@ -250,9 +255,13 @@ settled while zero consumers exist.
 |---|---|
 | ~~List search / filter / sort~~ — ✅ landed 2026-07-30 ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) | `GET /file` gained `search` (escaped `ILIKE '%term%'` on the title), `creatorId`, and `sortBy`/`order` resolved through a total-`Record` whitelist — plus the `ORDER BY` the endpoint never had, so offset paging is deterministic. No schema change; the three candidate indexes are deferred with their triggers recorded. This is the read-layer pattern the post listing extends. |
 | ~~Board domain — schema design gate~~ — ✅ landed 2026-07-30 ([ADR 0023](ADR/0023-board-domain-schema.md)) | The plain-text schema description Scope Discipline requires before any migration, covering both entities at once so the comment task cannot force a post-schema rollback: post ↔ file is 1:1, optional, same-creator (the unique FK doubles as `POST /post`'s idempotency key); comments are flat and cascade with their post at the FK; `DELETE /file/:id` on an attached file becomes 409 `FILE_IN_USE`; the ADR 0020 account cascade takes posts and comments unconfirmed while the flag still guards files only; `canManage` and the ADR 0021 read layer are reused unchanged. Design only — no code, no migration. |
-| Board domain — post/comment modules **(execution #1 — next dedicated task)** | Implements [ADR 0023](ADR/0023-board-domain-schema.md): two new modules (sanctioned by module policy), one reviewed migration (2 tables, 4 FKs, 1 unique constraint, 1 index), 4 new error codes, and the `DELETE /file/:id` `23503` translation. Needs approval to touch `*.entity.ts`. RBAC, ownership, and pagination patterns apply from day one. |
+| ~~Board domain — post module~~ — ✅ landed 2026-07-31 ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) | The first half of ADR 0023, split out because comment depends on post and not the reverse: `PostModule` (5 routes behind `JwtAuthGuard`), `post_entity` with 2 FKs and `UQ_post_entity_fileId` (reviewed migration — generate's four spurious constraint-rename statements stripped), 3 new error codes, the `DELETE /file/:id` `23503` → 409 `FILE_IN_USE` translation, and posts joining the ADR 0020 account cascade (`posts=N` in the audit detail). The ADR 0021 read layer and `canManage` were reused rather than restated. |
+| Board domain — comment module **(execution #1 — next dedicated task)** | The second half of [ADR 0023](ADR/0023-board-domain-schema.md): `CommentModule`, `comment_entity` with its `ON DELETE CASCADE` FK to `post_entity` and `IDX_comment_entity_postId_createdAt`, the `COMMENT_NOT_FOUND` code (deliberately not added ahead of its consumer), the `/post/:postId/comment` routes, and comments joining the account cascade ahead of posts. Needs approval to touch `*.entity.ts`. |
 
-### Stage 4 — Production transition
+### Stage 4 — Production transition — sequenced **last** in the execution order (2026-07-31)
+
+Deployment comes after the board domain, the pagination debt, and the Stage 5 admin surface
+(see Execution order above). The rows below keep their internal dependency order.
 
 | Task | Rationale / dependencies |
 |---|---|
@@ -278,11 +287,16 @@ alongside Stage 4. It is numbered last because it was added last, not because it
 There is a soft argument for pulling it *ahead* of Stage 4: a deployed system whose privilege
 hierarchy can only be operated through Swagger is hard to run in production.
 
+**Resolved 2026-07-31 — Stage 5 runs before Stage 4** (see Execution order above). The soft
+argument won: the operational surface precedes deployment. Stage 5's internal order is
+role-delivery → adapt console → moderation decision → resolve duplicate surface; its
+`GET /user` pagination row was pulled out to execution #2 as an early quick win.
+
 | Task | Rationale / dependencies |
 |---|---|
 | **How the client learns a user's role** (backend decision — **blocks the rest of this stage**) | The access-token payload is `{ sub, type }` — there is deliberately **no `role` claim** ([ADR 0002](ADR/0002-dual-secret-token-pair.md)), so a client cannot know its own role today. Any admin UI needs it for route gating. Two shapes to decide between: a `role` claim added to the access token (fast, but puts an authorization fact in a token that outlives a demotion — note `updateRole` already nulls `refreshTokenHash` to bound that window), or a request-based lookup (`GET /user/:id`, or a new `GET /auth/me`). Needs its own ADR amending ADR 0002; the imported console currently assumes the claim exists and therefore rejects every admin. |
 | Adapt the imported `admin/` console | Rewrite the [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md) import from the Chat Project's API to this one, using that ADR's verified backlog as the brief. **Start with the role-management slice** — `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`, `GET /audit-log`, and `POST /auth/signin` are already the right routes and the rank values `0/1/2` already match `ROLE_RANK`, so that part is route-level correction, not redesign. The chat-domain pages (`rooms-page`, presence/nickname widgets) and the whole Apollo/`/graphql` layer are deletions. Depends on the row above. |
-| `GET /user` pagination | The admin user list needs it, and the endpoint currently binds **no `@Query()` at all** — `findAll()` returns `findAndCount()` over every user. That is a standing violation of this project's own pagination rule ([CLAUDE.md](CLAUDE.md) > Never Do Group 2), so it is owed regardless of the console. Extend the `GetFilesDto` / [ADR 0021](ADR/0021-list-query-search-filter-sort.md) read-layer pattern rather than inventing a second one. |
+| `GET /user` pagination **(execution #2 — pulled forward from Stage 5, 2026-07-31)** | The admin user list needs it, and the endpoint currently binds **no `@Query()` at all** — `findAll()` returns `findAndCount()` over every user. That is a standing violation of this project's own pagination rule ([CLAUDE.md](CLAUDE.md) > Never Do Group 2), so it is owed regardless of the console — hence pulled ahead of the rest of Stage 5 as an early quick win. Extend the `GetFilesDto` / [ADR 0021](ADR/0021-list-query-search-filter-sort.md) read-layer pattern rather than inventing a second one. |
 | Resolve the duplicate admin surface | Delete whichever of the two loses: `frontend/src/features/admin/AdminPage.tsx` (ADR 0010's route section) or the standalone `admin/` app (ADR 0022). Deliberately decided **during** this stage, not before it — how much of the import survives adaptation is the input to the choice. Tracked as an open decision in section 7. |
 | Decide whether moderation actions exist at all | The import calls `POST /user/:id/ban`, `/unban`, and `/force-logout`, and colors audit actions (`USER_BANNED`, `USER_MUTED`, `USER_UNBAN`, `FORCE_LOGOUT`) that **this project never emits** — `AUDIT_ACTIONS` is exactly `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`. Default answer is "no": delete them, since a video-upload board has no stated moderation requirement (YAGNI). Building any of them is new backend surface needing its own ADR — not a side effect of adapting a UI. |
 
@@ -340,6 +354,17 @@ hierarchy can only be operated through Swagger is hard to run in production.
   copying ADR 0018's sweep: "on disk without a row" cannot be decided from the filename
   alone, so it needs a DB-joined reconciliation with its own ADR. Unscheduled — the
   accepted residual is disk waste, never a broken record.
+- File ownership reassignment can break the post↔file same-creator invariant (recorded
+  2026-07-31, [ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) — D1 argues
+  a post can only reference its own author's file, which is what makes the account cascade
+  FK-safe. That holds at creation, but `PATCH /file/:id { userId }` reassigns ownership
+  afterwards, so a post can end up referencing a stranger's file. Consequence:
+  `DELETE /user/:id?deleteFiles=true` can still raise `23503` inside its transaction and
+  surface as the opaque 500 [ADR 0020](ADR/0020-account-deletion-cascade.md) removed. Narrow
+  (a prior reassignment is required) but real. Unscheduled because every fix is a decision,
+  not a patch: refuse reassignment of an attached file, widen the cascade to posts that merely
+  *reference* the account's files, or translate the `23503` into a typed refusal. Needs its
+  own ADR.
 - Deferred list-query indexes (recorded 2026-07-30,
   [ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — the search/filter/sort task
   deliberately shipped **no index**: at this table's size all three candidates are

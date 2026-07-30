@@ -29,6 +29,7 @@ export enum ErrorCode {
   // 404
   USER_NOT_FOUND = 'USER_NOT_FOUND',
   FILE_NOT_FOUND = 'FILE_NOT_FOUND',
+  POST_NOT_FOUND = 'POST_NOT_FOUND',
   NOT_FOUND = 'NOT_FOUND',
 
   // 409
@@ -38,6 +39,12 @@ export enum ErrorCode {
   // The account still owns files, and the request did not confirm the cascade —
   // deleting it would irreversibly destroy those files too (ADR 0020).
   USER_HAS_FILES = 'USER_HAS_FILES',
+  // The file is already attached to one of the requester's posts, and the repeated
+  // submission carries different text — so it is a new post, not a retry (ADR 0023 D1).
+  POST_FILE_TAKEN = 'POST_FILE_TAKEN',
+  // The file is referenced by a post, so its row cannot be deleted. Raised from the
+  // FK violation itself rather than a pre-check, which would race (ADR 0023 D4).
+  FILE_IN_USE = 'FILE_IN_USE',
 
   // 413
   PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',

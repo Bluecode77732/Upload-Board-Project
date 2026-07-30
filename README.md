@@ -128,7 +128,9 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.m
 - `DELETE /user/:id` — delete a user (self or admin). An account that owns files is
   refused with 409 `USER_HAS_FILES` unless the request confirms the cascade with
   `?deleteFiles=true`, which deletes the account together with its files — irreversibly
-  ([ADR 0020](ADR/0020-account-deletion-cascade.md))
+  ([ADR 0020](ADR/0020-account-deletion-cascade.md)). The account's **posts are always
+  deleted with it**, with no confirmation of their own: the flag deliberately guards
+  media bytes only ([ADR 0023](ADR/0023-board-domain-schema.md))
 
 **File**
 - `POST /upload/attach` — upload a video to temp storage (multipart field `video`, 100 MB limit)
@@ -151,10 +153,28 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.m
   (idempotent retry) for the user who claimed it, and 409 `FILE_ALREADY_CLAIMED` for
   anyone else ([ADR 0019](ADR/0019-upload-claim-idempotency.md))
 - `PATCH /file/:id` — update file metadata (creator or admin)
-- `DELETE /file/:id` — delete file metadata and the stored file (creator or admin)
+- `DELETE /file/:id` — delete file metadata and the stored file (creator or admin). A file
+  attached to a post is refused with 409 `FILE_IN_USE` — delete the post first
+  ([ADR 0023](ADR/0023-board-domain-schema.md))
+
+**Post** — the board itself ([ADR 0023](ADR/0023-board-domain-schema.md)). A post carries
+text plus an optional reference to **one** file the author created; the file is *referenced*,
+never owned, so deleting a post leaves it intact
+- `GET /post` — list posts. Same query-parameter contract as `GET /file` above
+  (`take` / `skip` / `search` / `sortBy` / `order` / `creatorId`), with the same defaults
+- `GET /post/:id` — get a post with its author and attached file
+- `POST /post` — create a post (`{ title, body, fileId? }`). `fileId` must be a file the
+  requester created (403 `FORBIDDEN_NOT_OWNER` otherwise, 404 `FILE_NOT_FOUND` if it does not
+  exist) and one no other post holds. It doubles as the idempotency key: resubmitting the
+  **identical** payload returns the existing post with 200, while the same `fileId` with
+  different text is 409 `POST_FILE_TAKEN`. A post without `fileId` has no natural key, so a
+  repeat creates a second post
+- `PATCH /post/:id` — update `title` / `body` (author or admin). The attachment is fixed at
+  creation; detaching a video means deleting the post
+- `DELETE /post/:id` — delete a post (author or admin), irreversibly
 
 **Audit log**
-- `GET /audit-log` — review ROLE_CHANGE / USER_DELETE / FILE_DELETE records (admin only; paginated, `?action` filter)
+- `GET /audit-log` — review ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE records (admin only; paginated, `?action` filter)
 
 ### Typical flow
 

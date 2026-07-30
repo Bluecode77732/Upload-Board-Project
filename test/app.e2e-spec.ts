@@ -6,6 +6,8 @@ import { existsSync } from 'fs';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { FileEntity } from '../backend/file/entity/file.entity';
+import { UserEntity } from '../backend/user/entity/user.entity';
+import { UserRole } from '../backend/auth/role/role';
 import {
   setupE2E,
   teardownE2E,
@@ -60,6 +62,16 @@ describe('Upload Board API (e2e)', () => {
         creator: { id: creatorId },
       });
     return result.identifiers[0].id as number;
+  }
+
+  // Promote directly in the DB: PATCH /user/:id/role is superadmin-only, and every
+  // request re-reads the role via JwtStrategy.validate, so the existing token picks
+  // the new rank up immediately (no re-sign-in needed).
+  async function promoteToAdmin(id: number): Promise<void> {
+    await app
+      .get(DataSource)
+      .getRepository(UserEntity)
+      .update({ id }, { role: UserRole.admin });
   }
 
   beforeAll(async () => {
@@ -707,6 +719,289 @@ describe('Upload Board API (e2e)', () => {
         .expect(200);
 
       expect(existsSync(file.grantedPath)).toBe(false);
+    });
+  });
+
+  // The board post domain (ADR 0023): CRUD, the fileId claim/replay rules, the
+  // creator-OR-admin ownership shape, and the two cross-module consequences —
+  // DELETE /file/:id on an attached file, and the account cascade taking posts.
+  describe('Post module (ADR 0023)', () => {
+    const createPost = (
+      token: string,
+      body: Record<string, unknown>,
+    ): request.Test =>
+      request(server).post('/post').set(auth(token)).send(body);
+
+    it('creates a text-only post and reads it back', async () => {
+      const user = await createUser('poster@e.com');
+
+      const created = await createPost(user.accessToken, {
+        title: 'Hello board',
+        body: 'No video attached.',
+      }).expect(201);
+
+      expect(created.body.creator.email).toBe('poster@e.com');
+      expect(created.body.file).toBeUndefined();
+
+      const fetched = await request(server)
+        .get(`/post/${created.body.id}`)
+        .set(auth(user.accessToken))
+        .expect(200);
+      expect(fetched.body.body).toBe('No video attached.');
+    });
+
+    it('allows two posts to share a title (unlike file titles)', async () => {
+      const user = await createUser('dupetitle@e.com');
+
+      await createPost(user.accessToken, { title: 'Same', body: 'a' }).expect(
+        201,
+      );
+      await createPost(user.accessToken, { title: 'Same', body: 'b' }).expect(
+        201,
+      );
+    });
+
+    it('attaches a file the author created and exposes its public URL', async () => {
+      const user = await createUser('attach@e.com');
+      const fileId = await seedFile('attached-clip', user.id);
+
+      const created = await createPost(user.accessToken, {
+        title: 'With video',
+        body: 'Watch this.',
+        fileId,
+      }).expect(201);
+
+      expect(created.body.file.id).toBe(fileId);
+      expect(created.body.file.fileUrl).toContain(
+        'file/upload/granted_attached-clip.mp4',
+      );
+    });
+
+    it("refuses to attach another user's file (FORBIDDEN_NOT_OWNER)", async () => {
+      const owner = await createUser('fileowner@e.com');
+      const other = await createUser('otherposter@e.com');
+      const fileId = await seedFile('not-yours', owner.id);
+
+      const res = await createPost(other.accessToken, {
+        title: 'Stolen',
+        body: 'Not mine.',
+        fileId,
+      }).expect(403);
+      expect(res.body.code).toBe('FORBIDDEN_NOT_OWNER');
+    });
+
+    it('rejects a fileId that does not exist (FILE_NOT_FOUND)', async () => {
+      const user = await createUser('nofile@e.com');
+
+      const res = await createPost(user.accessToken, {
+        title: 'Ghost',
+        body: 'Nothing behind it.',
+        fileId: 9999,
+      }).expect(404);
+      expect(res.body.code).toBe('FILE_NOT_FOUND');
+    });
+
+    it('replays the identical submission and 409s a differing one', async () => {
+      const user = await createUser('replay@e.com');
+      const fileId = await seedFile('replay-clip', user.id);
+      const payload = { title: 'Once', body: 'Only once.', fileId };
+
+      const first = await createPost(user.accessToken, payload).expect(201);
+      // A network retry must return the same post, not a second one.
+      const retry = await createPost(user.accessToken, payload).expect(200);
+      expect(retry.body.id).toBe(first.body.id);
+
+      // Different author-written text is a new submission, not a retry — and the
+      // file is spent, so it is a typed conflict rather than a 500.
+      const conflict = await createPost(user.accessToken, {
+        ...payload,
+        body: 'Rewritten.',
+      }).expect(409);
+      expect(conflict.body.code).toBe('POST_FILE_TAKEN');
+    });
+
+    it('rejects an undeclared body field with VALIDATION_FAILED', async () => {
+      const user = await createUser('whitelist@e.com');
+
+      const res = await createPost(user.accessToken, {
+        title: 'Sneaky',
+        body: 'Extra field.',
+        creatorId: 999,
+      }).expect(400);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('paginates, searches and sorts the listing', async () => {
+      const user = await createUser('lister@e.com');
+      for (const title of ['alpha trip', 'beta trip', 'gamma stay']) {
+        await createPost(user.accessToken, { title, body: 'x' }).expect(201);
+      }
+
+      const search = await request(server)
+        .get('/post?search=trip&sortBy=title&order=ASC')
+        .set(auth(user.accessToken))
+        .expect(200);
+      const [posts, count] = search.body;
+      expect(count).toBe(2);
+      expect(posts.map((p: { title: string }) => p.title)).toEqual([
+        'alpha trip',
+        'beta trip',
+      ]);
+
+      const paged = await request(server)
+        .get('/post?take=2&skip=0')
+        .set(auth(user.accessToken))
+        .expect(200);
+      expect(paged.body[0]).toHaveLength(2);
+      expect(paged.body[1]).toBe(3);
+    });
+
+    it('rejects a sort field outside the whitelist', async () => {
+      const user = await createUser('badsort@e.com');
+
+      const res = await request(server)
+        .get('/post?sortBy=body')
+        .set(auth(user.accessToken))
+        .expect(400);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('lets the author edit, but forbids a stranger (403) and allows an admin', async () => {
+      const author = await createUser('author@e.com');
+      const stranger = await createUser('stranger@e.com');
+      const created = await createPost(author.accessToken, {
+        title: 'Original',
+        body: 'v1',
+      }).expect(201);
+      const id = created.body.id as number;
+
+      const edited = await request(server)
+        .patch(`/post/${id}`)
+        .set(auth(author.accessToken))
+        .send({ body: 'v2' })
+        .expect(200);
+      expect(edited.body.body).toBe('v2');
+
+      const forbidden = await request(server)
+        .patch(`/post/${id}`)
+        .set(auth(stranger.accessToken))
+        .send({ body: 'hijacked' })
+        .expect(403);
+      expect(forbidden.body.code).toBe('FORBIDDEN_NOT_OWNER');
+
+      // RBAC extends ownership to admin+ (ADR 0013) — the same shape as files.
+      await promoteToAdmin(stranger.id);
+      await request(server)
+        .patch(`/post/${id}`)
+        .set(auth(stranger.accessToken))
+        .send({ body: 'moderated' })
+        .expect(200);
+    });
+
+    it('forbids a stranger from deleting a post and lets the author do it', async () => {
+      const author = await createUser('deleter@e.com');
+      const stranger = await createUser('nosy@e.com');
+      const created = await createPost(author.accessToken, {
+        title: 'Doomed',
+        body: 'bye',
+      }).expect(201);
+      const id = created.body.id as number;
+
+      const forbidden = await request(server)
+        .delete(`/post/${id}`)
+        .set(auth(stranger.accessToken))
+        .expect(403);
+      expect(forbidden.body.code).toBe('FORBIDDEN_NOT_OWNER');
+
+      await request(server)
+        .delete(`/post/${id}`)
+        .set(auth(author.accessToken))
+        .expect(200);
+
+      await request(server)
+        .get(`/post/${id}`)
+        .set(auth(author.accessToken))
+        .expect(404);
+    });
+
+    it('leaves the attached file alone when the post is deleted', async () => {
+      const user = await createUser('keepfile@e.com');
+      const fileId = await seedFile('survives', user.id);
+      const created = await createPost(user.accessToken, {
+        title: 'Temporary',
+        body: 'The file outlives me.',
+        fileId,
+      }).expect(201);
+
+      await request(server)
+        .delete(`/post/${created.body.id}`)
+        .set(auth(user.accessToken))
+        .expect(200);
+
+      // A post references a file; it never owns it.
+      await request(server)
+        .get(`/file/${fileId}`)
+        .set(auth(user.accessToken))
+        .expect(200);
+    });
+
+    it('refuses to delete a file a post references (409 FILE_IN_USE)', async () => {
+      const user = await createUser('inuse@e.com');
+      const fileId = await seedFile('locked-clip', user.id);
+      const created = await createPost(user.accessToken, {
+        title: 'Holder',
+        body: 'Holding the file.',
+        fileId,
+      }).expect(201);
+
+      // The FK is the authority — no pre-check, and never an opaque 500 (D4).
+      const res = await request(server)
+        .delete(`/file/${fileId}`)
+        .set(auth(user.accessToken))
+        .expect(409);
+      expect(res.body.code).toBe('FILE_IN_USE');
+
+      // Deleting the post first releases the file.
+      await request(server)
+        .delete(`/post/${created.body.id}`)
+        .set(auth(user.accessToken))
+        .expect(200);
+      await request(server)
+        .delete(`/file/${fileId}`)
+        .set(auth(user.accessToken))
+        .expect(200);
+    });
+
+    it('takes posts with the account, unconfirmed, and counts them in the audit log', async () => {
+      const admin = await createUser('cascadeadmin@e.com');
+      await promoteToAdmin(admin.id);
+      const adminToken = admin.accessToken;
+
+      const victim = await createUser('cascadeposts@e.com');
+      await createPost(victim.accessToken, { title: 'p1', body: 'a' }).expect(
+        201,
+      );
+      await createPost(victim.accessToken, { title: 'p2', body: 'b' }).expect(
+        201,
+      );
+
+      // The confirmation flag guards files only; posts go unconfirmed (D5).
+      await request(server)
+        .delete(`/user/${victim.id}`)
+        .set(auth(adminToken))
+        .expect(200);
+
+      const list = await request(server)
+        .get('/post')
+        .set(auth(adminToken))
+        .expect(200);
+      expect(list.body[1]).toBe(0);
+
+      const log = await request(server)
+        .get('/audit-log?action=USER_DELETE')
+        .set(auth(adminToken))
+        .expect(200);
+      expect(log.body[0][0].detail).toBe('files=0 posts=2');
     });
   });
 });

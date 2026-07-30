@@ -13,6 +13,82 @@
 ## [Unreleased]
 
 ### 변경
+- **남은 작업의 ROADMAP 실행 순번 고정** (2026-07-31) — 단계별 계획은 작업을 의존
+  관계로 묶지만, 준비된 항목 몇 개가 단계를 가로질러 있어 실제 착수 순서를
+  [ROADMAP.ko.md](ROADMAP.ko.md) 6절에 고정했다: #1 게시판 post/comment 모듈 →
+  #2 `GET /user` 페이지네이션(콘솔과 무관하게 갚아야 할 독립적 Never Do Group 2
+  부채라 Stage 5에서 앞당김) → #3 Stage 5 admin 화면 → #4 Stage 4 배포(마지막).
+  이로써 Stage 5의 "번호는 의존 순서가 아니다" 부동 위치가 Stage 4 **앞**으로
+  확정되고, 페이지네이션 부채가 둘보다 앞으로 당겨진다. 문서 전용 — 코드나 계획
+  범위 변경은 없다.
+
+### 추가
+- **게시판 post 모듈 — 게시판 도메인의 첫 모듈**
+  ([ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) — 하루 전 확정한 스키마 게이트의
+  전반부를 구현했다. `PostModule`은 `JwtAuthGuard` 뒤에 다섯 개 라우트(`GET /post`,
+  `GET /post/:id`, `POST /post`, `PATCH /post/:id`, `DELETE /post/:id`)를 신규 `post_entity`
+  위에 올린다: `title`(`FileEntity.title`과 달리 **유니크가 아니다** — 제목을 전 사용자 통틀어 한
+  번만 쓸 수 있는 게시판은 기능이 아니라 결함이다), `body`, `creatorId` FK, 그리고 **유니크이면서
+  nullable인** `fileId` FK. comment가 post에 의존하지 그 반대가 아니어서 **comment 모듈과 분리**
+  했고, 그래서 마이그레이션도 ADR이 적은 한 벌이 아니라 두 벌로 나뉘었다. `comment_entity`는 다음
+  과제다. 마이그레이션은 [ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)이 요구한
+  대로 라인단위로 검토했다 — `generate`가 `FK_file_entity_creator`와
+  `IDX_audit_log_entity_action_createdAt`을 TypeORM 해시 이름으로 바꾸기만 하는 drop/재생성 네
+  문장을 뱉었고, 베이스라인의 읽기 쉬운 이름을 지키기 위해 전부 걷어냈다.
+  **유니크한 `fileId`가 이 엔드포인트의 멱등 키다** — `title`은 될 수 없는 역할이다. 동일한 본문을
+  다시 제출하면 기존 게시글을 200으로 replay하고, 같은 `fileId`에 본문이 다르면 409
+  `POST_FILE_TAKEN`이며, 유니크 제약 경합에서 진 동시 제출은 500이 아니라 같은 판정 경로로
+  되돌아온다. [ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)의 기법을 재사용하되 한 가지를
+  의도적으로 달리했다 — ADR 0019는 조건 없이 replay하지만, 게시글에는 파일 승격에 없는 사용자
+  작성 텍스트가 있어서, *다른* 제목·본문에 replay로 답하면 새 글을 쓴 사람에게 남의 옛 글을
+  돌려주게 된다. 소유권은 `canManage`를 그대로 재사용했고(작성자 **또는** admin+,
+  [ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)), 목록은
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)의 조회 계층 — 이스케이프한 ILIKE, 전체
+  `Record` 정렬 화이트리스트, `id` tiebreaker — 을 다시 쓰지 않고 재사용했다(이스케이프 헬퍼는
+  `backend/common/escape-like-pattern.ts`로 옮겨 두 엔드포인트가 한 벌을 공유한다). 파일 첨부는
+  **`canManage`가 아니라 신원 일치만** 본다: `FileService.assertAttachableBy`는 admin이라도 남의
+  파일을 첨부하려 하면 거절한다. "게시글은 자기 작성자의 파일만 참조한다"가 곧 계정 연쇄를 FK
+  안전하게 만드는 근거이기 때문이다. 신규 에러 코드는 셋(`POST_NOT_FOUND`, `POST_FILE_TAKEN`,
+  `FILE_IN_USE`)이며, `COMMENT_NOT_FOUND`는 소비자보다 먼저 만들지 **않았다**.
+
+### 변경
+- **게시글이 참조 중인 파일에 대한 `DELETE /file/:id`는 이제 409 `FILE_IN_USE`**
+  ([ADR 0023](ADR/0023-board-domain-schema.ko.md) D4) — 새 FK 때문에 삭제가 `23503`을 내는데,
+  번역하지 않으면 [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)이 `DELETE /user/:id`에서
+  없앤 것과 같은 불투명한 500이 된다. **사전 확인 쿼리는 넣지 않았다.** 이유는 둘이고 서로
+  독립적이다: `PostService`가 이미 `FileService`에 소유권을 묻는 상황에서 `FileService`가
+  `post_entity`를 읽으면 `forwardRef`가 필요한 모듈 순환이 생기고(이 코드베이스에 선례가 없다),
+  확인과 삭제 사이에 생성된 게시글은 어차피 제약에 걸리므로 500이 드물어질 뿐 사라지지 않는다.
+  판정 권한은 DB에 둔다. `ON DELETE SET NULL`은 아예 기각했다 — 삭제가 항상 성공하는 대신, 공개된
+  게시글에서 영상만 조용히 빠져나간다. 게시글을 지워도 파일은 남는다 — 게시글은 파일의 *참조*이지
+  소유자가 아니다.
+- **계정 연쇄 삭제가 이제 게시글까지 확인 없이 가져간다**
+  ([ADR 0023](ADR/0023-board-domain-schema.ko.md) D5) — `UserService.remove`가 기존
+  `dataSource.transaction()` 안에서, 파일 행보다 **먼저**(`FK_post_entity_file`과
+  `FK_post_entity_creator` 모두 `ON DELETE NO ACTION`) 계정의 게시글을 지운다. 기준은 직전에 읽은
+  id 목록이 아니라 `creatorId`다. `?deleteFiles=true`의 의미는 그대로다 — **파일 행과 저장된
+  바이트**의 파괴를 확인하는 플래그이고, 409 `USER_HAS_FILES`도 여전히 파일에 대해서만 뜬다.
+  확대는 기각했다 — 그러면 파라미터 이름과 에러 코드가 실제로 통제하는 것보다 좁은 것을 가리키게
+  되고, 두 번째 플래그는 동결된 라우트에 쿼리 파라미터를 더하는 일이다
+  ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)). 대가는 감추지 않고 기록한다:
+  계정을 지우면 그 글도 확인 절차 없이 사라진다. 감사 detail에 건수가 붙고(`files=N posts=N`),
+  `POST_DELETE`가 `AUDIT_ACTIONS`에 추가됐다.
+- **`FileService.toResponse`가 public이 됐다** — ADR 0023 D1은 `BASE_URL` 합성이 `FileService`에
+  남아 재사용되기를 요구하므로, `PostService`는 첨부 파일 URL을 직접 조립하지 않고 이 메서드에
+  위임한다. `PostService`는 `file.creator`를 읽지 않는다(디미터 법칙).
+
+### 알려진 문제
+- **파일 소유권 이전이 post↔file 같은-작성자 불변식을 깰 수 있다** — ADR 0023 D1은 게시글이 자기
+  작성자의 파일만 참조할 수 있다고 논증하며, 그것이 계정 연쇄를 FK 안전하게 만드는 근거다. 작성
+  시점에는 성립하지만 `PATCH /file/:id { userId }`가 사후에 소유권을 넘긴다. 결과는 둘이고, 해결이
+  구현 세부가 아니라 결정이므로 둘 다 의도적으로 손대지 않았다: `resolveAttachment`는 replay 전에
+  작성자 신원을 확인해 파일의 새 소유자가 이전 소유자의 글을 "재시도" 결과로 받지 않게 한다(소유권
+  이전 때문에 도달 가능한 분기이므로 금지된 "도달 불가능한 가드"가 아니다). 그리고
+  `DELETE /user/:id?deleteFiles=true`는 그 계정의 파일이 다른 사용자로부터 이전됐고 그 사용자의
+  글이 아직 참조 중인 좁은 경우에 여전히 `23503`을 낼 수 있다. 후보 처방 셋과 함께 ROADMAP >
+  미배정에 올렸으며, 각각 자체 ADR이 필요하다.
+
+### 변경
 - **ROADMAP에 Stage 5 — 운영 화면(admin 콘솔) 추가**
   ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)) — 2026-07-23 11축 검토로
   확정한 계획에 대한 두 번째 개정이다(첫 번째는 Stage F, ADR 0010). 범위를 늘린 것이 아니라 공백을

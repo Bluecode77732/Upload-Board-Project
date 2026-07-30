@@ -323,3 +323,52 @@ full-text / `pg_trgm` 트리거를 그대로 물려받으며 여기서 열지 �
   타입 있는 결과로), ADR 0020(하드 삭제, soft delete 미채택, 서비스 명시 연쇄, 커밋 후 unlink,
   `creatorId` 기준 삭제), ADR 0021(조회 계층 재사용) — 모순은 발견되지 않았다. 유일하게 충돌로
   보이는 D3의 DB 캐스케이드는 범위를 한정하고 근거를 밝혔다.
+
+## 구현 노트 (post 모듈, 2026-07-31)
+
+위 결정은 그대로다. 아래는 실제로 어떻게 착지했고 무엇이 열린 채 남았는지에 대한 기록이며,
+새로운 결정을 추가하지 않는다.
+
+**두 과제로 쪼갰다.** 설계는 post와 comment를 함께 다루지만 구현은 post가 먼저다 — comment가
+post에 의존하지 그 반대가 아니기 때문이다. 그래서 마이그레이션도 이 ADR의 Consequences가 적은
+한 벌이 아니라 두 벌로 나뉘었다. 이번 과제는 `post_entity`(FK 2개, `UQ_post_entity_fileId`)를
+만들었고, `comment_entity`와 `IDX_comment_entity_postId_createdAt`은 comment 과제 몫이다.
+스키마 자체는 달라진 것이 없다. 이번에 필요한 에러 코드 셋(`POST_NOT_FOUND`, `POST_FILE_TAKEN`,
+`FILE_IN_USE`)은 추가했고, `COMMENT_NOT_FOUND`는 소비자보다 먼저 만들지 **않았다** — 도달할 수
+없는 코드는 죽은 표면이기 때문이다.
+
+`migration:generate`는 [ADR 0006](0006-schema-policy-and-migration-adoption.ko.md)이 예고한
+그대로 동작했다. 의도한 네 문장 옆에, `FK_file_entity_creator`와
+`IDX_audit_log_entity_action_createdAt`을 베이스라인의 읽기 쉬운 이름에서 TypeORM 해시 이름으로
+바꾸기만 하는 drop/재생성 네 문장이 딸려 나왔다. 이는 걷어냈고, 새 제약은 읽기 쉬운 이름을
+그대로 따랐다(`PK_post_entity`, `UQ_post_entity_fileId`, `FK_post_entity_creator`,
+`FK_post_entity_file`).
+
+**설계가 함의했지만 이름 붙이지 않았던 두 가지.**
+
+- `FileService.toResponse`를 private에서 public으로 올렸다. D1은 `BASE_URL` 합성이
+  `FileService`에 남고 재사용된다고 못박았는데, 매퍼를 공개하는 것이 곧 `PostService`가 URL을
+  다시 조립하지 않고 재사용하는 방법이다. `PostService`는 `file.creator`를 건드리지 않는다.
+- `FileService.assertAttachableBy(fileId, requesterId)`는 D1의 "FileService에게 묻는다"를
+  게터가 아니라 판정으로 구현한 것이다. **의도적으로 `canManage`가 아닌 신원 일치만** 본다 —
+  admin이 남의 파일을 첨부할 수 있게 하면 계정 연쇄를 FK 안전하게 만드는 바로 그 불변식이
+  깨지므로, RBAC로 이 검사를 넓히지 않는다.
+
+**설계가 구조적으로 불가능하다고 본 경우 중 실제로는 도달 가능한 것 하나.** D1은 같은 작성자
+규칙 덕분에 "남의 파일을 참조하는 게시글"이 나올 수 없다고 논증한다. *작성 시점*에는 맞지만,
+`PATCH /file/:id { userId }`가 사후에 파일 소유권을 넘길 수 있어 정확히 그 상태를 만들 수 있다.
+여기서 두 가지가 따라오며, 이번 과제는 둘 다 의도적으로 손대지 않았다 — 해결은 구현 세부가 아니라
+결정이기 때문이다.
+
+1. `resolveAttachment`는 replay 전에 작성자 신원을 확인한다. 이것이 없으면 파일의 새 소유자가
+   이전 소유자의 게시글을 "재시도" 결과로 받게 된다. 소유권 이전 때문에 *도달 가능한* 분기이므로
+   금지된 "도달 불가능한 가드"에 해당하지 않는다.
+2. `DELETE /user/:id?deleteFiles=true`는 여전히 트랜잭션 안에서 `23503`을 낼 수 있다 — 그 계정의
+   파일이 다른 사용자로부터 이전된 것이고 그 사용자의 게시글이 아직 참조 중일 때 — 그리고 이는
+   ADR 0020이 없애려 한 바로 그 불투명한 500으로 드러난다. 사전 이전이 있어야 하니 좁은 경로지만
+   실재하며, **미해결**로 둔다. 여기서 고치지 않고 ROADMAP > 미배정에 올린 이유는 가능한 처방이
+   전부 결정이기 때문이다 — 첨부된 파일의 소유권 이전을 거절할지, 연쇄를 "그 계정의 파일을 *참조만*
+   하는 게시글"까지 넓힐지, 아니면 `23503`을 타입 있는 거절로 번역할지.
+
+**검증**: `pnpm lint` 무결, 단위 테스트 121개, e2e 52개(신규 14개 — post CRUD, 소유권 403 거절,
+같은 `fileId` 재제출의 replay/409, 409 `FILE_IN_USE`, 계정 연쇄의 `posts=N` 감사 detail).
