@@ -370,7 +370,25 @@ role-delivery → adapt console → moderation decision → resolve duplicate su
   in that ADR as the shape to adopt if the property is ever needed as a guarantee rather
   than merely handled. What remains is deliberate, not residual: the same-creator rule is
   now a **creation-time rule**, so an account whose file sits in a stranger's post cannot be
-  deleted until that post is (409, and any admin can clear it).
+  deleted until that post is (409, and any admin can clear it). **The feature underneath it
+  is still undecided** — see the next entry.
+- **Whether `PATCH /file/:id { userId }` should exist at all** (recorded 2026-07-31,
+  [ADR 0024](ADR/0024-account-cascade-fk-refusal.md)) — the field on `UpdateFileDto`
+  reassigns `file_entity.creatorId`, transferring a file to another account outright: the
+  previous owner loses every write right, and the recipient never consents.
+  [ADR 0007](ADR/0007-ownership-checks-without-rbac.md) is the only ADR that mentions it, and
+  only to say the *guard* is creator-only — **no decision anywhere argues why a user needs to
+  hand a file to someone else.** It arrived as a field on the original CRUD DTO and every
+  later decision has treated it as given, which is exactly how it came to be the sole cause of
+  the invariant break ADR 0024 had to absorb. Three candidate outcomes, each a decision rather
+  than a patch: keep it with a stated rationale; keep it but add recipient consent (a
+  pending-transfer row — a schema change); or drop the field, after which the global pipe's
+  `forbidNonWhitelisted` turns any client still sending `userId` into a 400
+  `VALIDATION_FAILED` rather than a silent no-op. **Dropping it is not free**: with no
+  reassignment the same-creator rule becomes a true invariant again, which would make ADR
+  0024's `23503` branch *and* `PostService.resolveAttachment`'s author-identity check
+  unreachable guards — both would have to be removed in the same change, so that option
+  supersedes ADR 0024 rather than sitting beside it. Needs its own ADR.
 - Deferred list-query indexes (recorded 2026-07-30,
   [ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — the search/filter/sort task
   deliberately shipped **no index**: at this table's size all three candidates are

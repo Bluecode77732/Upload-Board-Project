@@ -133,7 +133,14 @@ revisited.
   consequence of the same break, already correct, and it must not be simplified away as an
   unreachable guard.
 - **The `PATCH /file/:id { userId }` surface is unchanged** — no new refusal, no new
-  validation. The endpoint keeps behaving exactly as ADR 0007 described it.
+  validation. The endpoint keeps behaving exactly as ADR 0007 described it. **Whether it
+  should exist at all is now tracked as its own open question** (ROADMAP > Unscheduled):
+  writing this ADR surfaced that no decision anywhere argues why a user needs to hand a file
+  to another account — ADR 0007 mentions the field only to say its guard is creator-only, and
+  every later decision inherited it as given. This ADR deliberately does not settle that; it
+  absorbs the consequence, which is a different thing. Note the coupling: **removing the
+  field would make this ADR's `23503` branch an unreachable guard**, so that option
+  supersedes this decision rather than extending it.
 - **The comment-module gate is released**: `UserService.remove`'s delete order is untouched by
   this decision, so comments may join it ahead of posts as ADR 0023 D5 specifies.
 - **No schema change, no migration.** The fix is one `try`/`catch` in a method that already had

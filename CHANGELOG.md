@@ -71,7 +71,12 @@ development line (package.json version).
   with `USER_HAS_FILES` on the same route. No schema change, no migration. **Two things
   deliberately unchanged**: the post↔file rule is now a creation-time rule rather than an
   invariant, and `PostService.resolveAttachment`'s author-identity check stays reachable, so
-  it must not be simplified away.
+  it must not be simplified away. Writing this ADR also surfaced a prior question it does
+  **not** answer: **no decision anywhere argues why `PATCH /file/:id { userId }` should exist**
+  — it transfers a file outright, the recipient never consents, and ADR 0007 mentions the field
+  only to say its guard is creator-only. That is now tracked in ROADMAP > Unscheduled, with the
+  coupling recorded: dropping the field would make this fix's `23503` branch an unreachable
+  guard, so it would supersede ADR 0024 rather than extend it.
 
 ### Changed
 - **ROADMAP execution order for the remaining work fixed** (2026-07-31) — the staged

@@ -904,6 +904,15 @@ Architecture Decisions above remain operative.
   consequence of the same break, so do not "simplify" it away as an unreachable guard.
   Accepted residual: an account whose file is attached to *another user's* post cannot be
   deleted until that post is removed (409, actionable — any admin can delete the blocking post)
+- **`PATCH /file/:id { userId }` has never been justified by any decision** (recorded
+  2026-07-31, ADR 0024 > Consequences). The field transfers a file to another account
+  outright — the previous owner loses every write right, the recipient never consents, and
+  `canManage` lets an admin transfer a third party's file. ADR 0007 mentions it only to say
+  the guard is creator-only; nothing argues why the capability exists. It is the sole cause of
+  the invariant break above. Do not build on it as though it were a settled feature, and do
+  not remove it as drive-by cleanup: dropping it would turn ADR 0024's `23503` branch **and**
+  `PostService.resolveAttachment`'s author check into unreachable guards, so that is an ADR
+  that supersedes 0024, not a patch. Candidates are in ROADMAP > Unscheduled
 - `ARCHITECTURE.md` (+ko) lags the code: its "Non-Existent Infrastructure" section still
   claims no CI workflow, no Dockerfile, and no Nest `Logger` usage (all three exist —
   ADR 0015/0016/0017), Jest `roots` is written as `["src"]` (actually `["backend"]`), the
