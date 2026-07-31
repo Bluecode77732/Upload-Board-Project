@@ -32,6 +32,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0022](0022-admin-console-import-from-chat-project.ko.md) | Chat Project에서 가져온 admin 콘솔 — 수정 기반으로서의 이식 | 승인됨 | 2026-07-30 |
 | [0023](0023-board-domain-schema.ko.md) | Board 도메인 스키마 — post와 comment | 승인됨 | 2026-07-30 |
 | [0024](0024-account-cascade-fk-refusal.ko.md) | 계정 연쇄 삭제 — FK 위반 500 대신 타입 있는 거절 | 승인됨 | 2026-07-31 |
+| [0025](0025-file-visibility-and-media-expansion.ko.md) | 파일 가시성, 접근 제어 서빙, 미디어 타입 확장 | 승인됨 — 설계 게이트 | 2026-07-31 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

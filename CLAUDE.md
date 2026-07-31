@@ -25,7 +25,7 @@ Before making any change:
    - Comment/thread change → read `backend/comment/comment.service.ts` (fixed `createdAt ASC` order, `canManage`, `deleteCommentsOfCreator`) and `PostService.assertPostExists` — the one thing CommentModule asks PostModule for. Routes live in **two** controllers (`post-comment.controller.ts` for `/post/:postId/comment`, `comment.controller.ts` for `/comment/:id`); post deletion removes comments via the FK, not the service (ADR 0023 D3)
    - Orphan temp cleanup   → read `backend/temp-cleanup/temp-cleanup.service.ts` (`@nestjs/schedule` `SchedulerRegistry` cron, `temp_`-prefix + TTL sweep of `file/temp`, ADR 0018) and its `selectExpiredTempFiles` pure core
    - Env var change        → read the Joi schema in `backend/app.module.ts` AND `.env.example` — both must stay in sync
-   - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides. `backend/post/entity/post.entity.ts` and `backend/comment/entity/comment.entity.ts` are deliberately **unidirectional** (no inverse property on User/File/Post) — do not "fix" that (ADR 0023). A new entity must be registered in **three** places or migrations silently omit it: `app.module.ts` `entities[]`, `backend/data-source.ts` `entities[]` (the CLI DataSource — `migration:generate` reads only this one), and `test/e2e-utils.ts` (`MIGRATIONS` + `TABLES`)
+   - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides. `backend/post/entity/post.entity.ts` and `backend/comment/entity/comment.entity.ts` are deliberately **unidirectional** (no inverse property on User/File/Post) — do not "fix" that (ADR 0023). A new entity is registered in **`backend/entities.ts` and nowhere else** — `app.module.ts` and `backend/data-source.ts` both import that one `ENTITIES` array, so an entity cannot be live in the app but invisible to `migration:generate` (it was two hand-maintained lists until 2026-07-31, and that divergence made `generate` report success while omitting a whole table). The e2e suite still needs its own line: `test/e2e-utils.ts` (`MIGRATIONS` + `TABLES`) — but omitting it fails loudly on the next run
    - Static file serving   → read the `ServeStaticModule` block in `app.module.ts` (`rootPath: file/`, `serveRoot: 'file'`)
 2. Never invent APIs, files, functions, or types that you have not confirmed exist in the codebase.
 3. Reuse existing patterns only; do not introduce new abstractions unless explicitly asked.
@@ -734,9 +734,12 @@ Do not suggest alternatives to these decisions without explicit request.
   `pnpm migration:run -- --fake` once to mark it applied. Entity change requests are
   described in plain text first (Scope Discipline), and `migration:generate` output is
   always reviewed line-by-line before running
-- Entities registered explicitly in `app.module.ts` (`entities: [...]`) AND
-  `autoLoadEntities: true` — keep both in sync when adding an entity (requires
-  approval: high-blast-radius)
+- Entities are registered **explicitly by name, in one list**: `backend/entities.ts`
+  exports `ENTITIES`, which both `app.module.ts` (alongside `autoLoadEntities: true`) and
+  `backend/data-source.ts` import. Add a new entity there only — editing either consumer's
+  list back into existence recreates the divergence that let `migration:generate` silently
+  omit a table (2026-07-31). A glob was considered and rejected: registering by name is the
+  deliberate choice, so the fix was one list, not a filesystem rule
 - Relations always explicit: `FileEntity.creator` (ManyToOne, `nullable: false`,
   `cascade: true`) ↔ `UserEntity.creator` (OneToMany). The relation property is named
   `creator` on **both** sides — follow that naming
@@ -751,11 +754,22 @@ Do not suggest alternatives to these decisions without explicit request.
 - Upload constraint: single field `video`, `fileSize` limit 100,000,000 bytes (100MB) —
   a single-video domain needs exactly one field, and the 100MB ceiling caps disk usage and
   bounds an upload-based denial-of-service
+- **Decided but not yet built (design gate, ADR 0025, 2026-07-31)**: file visibility
+  (`public`/`private`/`unlisted` via a rotatable `shareToken` + optional TTL), an
+  access-controlled `GET /file/:id/content` endpoint that makes `ServeStaticModule` **stop
+  serving `file/upload`**, and a media-type expansion (images/audio/video via type-specific
+  `image`/`audio`/`video` upload fields, replacing the single `video` field — a breaking
+  change against the live `frontend/`). This **partially revises this section** (serving +
+  the single-`video` constraint above) and ADR 0005 — but only once the implementation task
+  lands with its reviewed migration. Until then the two bullets above remain operative: files
+  are served statically and public, the upload field is `video`. Do not code against the
+  ADR 0025 shape as if it exists; treat it as the decided direction, not current behavior
 - **Never suggest**: S3/cloud storage, streaming/chunked upload, CDN — unless explicitly requested
   (2026-07-23: AWS deployment, VOD playback access control, and a storage
   port-adapter are now explicitly decided roadmap items — ROADMAP.md Stage 4.
   Local disk stays the operative decision until those dedicated tasks land,
-  each with its own ADR)
+  each with its own ADR. VOD access control was generalized into ADR 0025's
+  file-visibility task 2026-07-31)
 
 ### API Layer
 - REST only, documented via Swagger at `/doc` (`persistAuthorization: true` keeps the
@@ -860,7 +874,9 @@ cleanup, deletion policy, upload idempotency) → ~~Stage 3 board-domain expansi
 (search/filter/sort, post/comment modules)~~ — **complete 2026-07-31** (ADR 0021,
 ADR 0023 + its two implementation halves, with ADR 0024 settling the invariant gap
 between them) → Stage 4 production transition (AWS
-container deploy, VOD playback access control, storage port-adapter, performance
+container deploy, file visibility + media-type expansion + access-controlled serving
+[ADR 0025, 2026-07-31 — generalizes the former "VOD playback access control" row, may be
+pulled ahead of deployment], storage port-adapter, performance
 criteria) → **Stage 5 operational surface — admin console (appended 2026-07-30,
 ADR 0022**: role-delivery decision, adapting the imported `admin/` console,
 `GET /user` pagination, resolving the duplicate admin surface, and deciding whether

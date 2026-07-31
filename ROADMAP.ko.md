@@ -10,9 +10,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)로 다시 개정되어
 **Stage 5(운영 화면 — admin 콘솔)가 추가되었다**: 11축 검토는 admin 화면에 어떤
 단계도 배정하지 않았는데, ADR 0010이 그 배치는 이미 결정해 뒀던 탓에 그 작업은
-"결정은 있으나 계획에는 자리가 없는" 상태로 남아 있었다. 아래 모든 항목은
-각각 독립된 설계·검토를 거치는 전용 작업으로 진행한다
-([CLAUDE.md](CLAUDE.md) > Scope Discipline).
+"결정은 있으나 계획에는 자리가 없는" 상태로 남아 있었다. 2026-07-31에
+[ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)로 한 번 더 개정되어
+**Stage 4의 "VOD 재생 접근 제어" 행을 일반화**했다 — 파일 가시성(공개/비공개/
+링크공유), 전체 미디어의 접근 제어 서빙, 미디어 타입 확장으로, 프로젝트 창립 목표를
+다시 정리하며 드러난 공백이다. 아래 모든 항목은 각각 독립된 설계·검토를 거치는
+전용 작업으로 진행한다 ([CLAUDE.md](CLAUDE.md) > Scope Discipline).
 
 > **정합성 안내**: 이 계획의 항목 중 CLAUDE.md가 "명시적 요청 없이는 제안 금지"로
 > 표시한 것들(CI, Docker, 클라우드 스토리지/배포)은 **2026-07-23 명시적 결정**으로
@@ -80,6 +83,15 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   차례**(Stage 5에서 앞당김) →
   #3 Stage 5 admin 화면 → #4 Stage 4 배포(마지막). 이로써 Stage 5의 부동 위치가
   Stage 4 앞으로 확정되고, 독립적인 페이지네이션 부채가 둘보다 앞으로 당겨진다.
+- **파일 가시성 + 미디어 타입 확장을 2026-07-31에 결정했다**(설계 게이트,
+  [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)): 프로젝트 창립 목표를
+  다시 정리하니 공백 둘이 드러났다 — 저장된 모든 파일이 공개로만 서빙되어 비공개/링크공유
+  선택지가 없고, 업로드 허용 목록이 영상 전용이다. 결정은 3-상태 `visibility`(공개/비공개/
+  **링크공유**, 회전 가능한 공유 토큰 + 선택적 TTL), 접근 제어 `GET /file/:id/content`
+  엔드포인트(그래서 `ServeStaticModule`이 `file/upload` 노출을 중단), 이미지+오디오+영상
+  타입별 업로드 필드를 더한다. **Stage 4의 "VOD 재생 접근 제어" 행을 일반화하며 대체**하고,
+  배포 대상과 독립적이므로 배포보다 앞에 둘 수 있다. 아직 코드는 없다 — 설계 게이트뿐이며,
+  검토된 마이그레이션과 프론트엔드 반영은 각자의 과제로 이어진다.
 
 ## 1. 비전과 본질
 
@@ -142,10 +154,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   구역으로 시작하며, RBAC이 랜딩하고 실제 admin 요구사항이 쌓인 뒤에만 별도
   앱으로 승격한다. pnpm workspace 모노레포(백엔드를 `apps/backend`로 재배치)와
   즉시 3분리(frontend/backend/admin)는 검토 후 기각.
-- **알려진 제약 (감수)**: 정적 파일 서빙은 Stage 4의 VOD 재생 접근 제어 작업이
-  [ADR 0005](ADR/0005-local-disk-storage.ko.md)를 재검토할 때까지 무인증으로
-  유지된다 — `{BASE_URL}/file/...` URL은 공개이며, 프론트엔드도 그렇게 다뤄야
-  한다.
+- **알려진 제약 (감수, 이제 결정된 출구 있음)**: 정적 파일 서빙은 오늘 무인증이다 —
+  `{BASE_URL}/file/...` URL은 공개이며, 프론트엔드도 그렇게 다뤄야 한다. 출구는
+  결정됐다: [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)(2026-07-31)가
+  [ADR 0005](ADR/0005-local-disk-storage.ko.md)를 개정해 `ServeStaticModule`이
+  `file/upload` 노출을 중단하고 접근을 `GET /file/:id/content` 엔드포인트가 강제하도록
+  한다 — 그 구현 과제 대기 중(Stage 4, 배포보다 앞당길 수 있음).
 - 검토 후 보류한 대안: 이벤트 기반 보강(분리할 부수효과가 rename 하나뿐이며,
   rename을 트랜잭션 밖으로 빼면 `temp_`/`granted_` 원자성이 깨진다), CQRS-lite
   (읽기 모델이 분리할 만큼 복잡하지 않다; YAGNI).
@@ -253,7 +267,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 |---|---|
 | AWS 컨테이너 배포 | 로컬: Docker(compose), 배포: AWS — 컨테이너 기반. 신규 배포 ADR 필요; Stage 1의 Docker + CI에 의존. |
 | 컨테이너·배포 하드닝 | [ADR 0015](ADR/0015-docker-and-compose.ko.md)에서 드러난 항목: Stage 1 이미지는 배포 *가능*하지만 프로덕션 급은 아니다. 비루트 `USER`(현재 root 실행), distroless 런타임 베이스(셸/apt 공격 표면 제거), 헬스/레디니스 엔드포인트(LB·오케스트레이터 프로브용), 컨테이너 부팅이 아니라 **별도 배포 단계로 분리한 마이그레이션**(다중 인스턴스 마이그레이션 경합 회피), `.env`/`env_file` 대신 시크릿 매니저, HTTPS 종단(`ENV=prod`에서 `Secure` refresh 쿠키에 필요), 타깃 아키텍처 빌드(현재 x64 프리빌드 `bcrypt`; ARM/Graviton은 맞는 프리빌드나 `pnpm.onlyBuiltDependencies` 필요). AWS 배포 작업에 의존. |
-| VOD 재생 접근 제어 | 업로드된 파일이 현재 공개 URL이다 — 링크만 알면 누구나 시청 가능. 인증된 재생 경로를 도입하며, ADR 0005의 정적 서빙 결정 재검토를 포함한다. (라이브 방송이 아니라 업로드된 파일의 재생.) |
+| 파일 가시성·접근 제어 서빙·미디어 타입 확장 **(2026-07-31 결정, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md); 기존 "VOD 재생 접근 제어" 행을 일반화)** | 업로드된 파일이 오늘 공개 URL이다 — 링크만 알면 누구나 본다. 3-상태 `visibility`(공개/비공개/**링크공유**, 회전 가능한 공유 토큰 + 선택적 TTL)와 접근 제어 `GET /file/:id/content`를 더해 `ServeStaticModule`이 `file/upload`를 노출하지 않게 하고, 허용 목록을 이미지(jpg/png/webp)+오디오(mp3)+영상으로 타입별 업로드 필드로 확장한다. [ADR 0005](ADR/0005-local-disk-storage.ko.md)(서빙)와 [ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)(업로드 필드, 이제 살아 있는 프론트엔드에 대한 breaking 변경)을 부분 개정한다. 설계 게이트 완료(ADR 0025); 검토된 마이그레이션 + 프론트엔드 반영은 후속. **배포 대상과 독립적 — 배포보다 앞당길 수 있음.** |
 | 스토리지 포트-어댑터 | S3 필요가 확정될 때만 — 아키텍처 방향(4절) 참조. |
 | 성능/용량 기준 적용 | 인덱스 정책, 응답시간 목표, 디스크 상한 — 최적화 전에 측정부터. |
 
@@ -379,6 +393,15 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   돌려준다. `frontend/docs/API-CONTRACT.md`와 목록 화면(검색창, 정렬 컨트롤, 작성자 필터)을
   함께 갱신해야 하며, 그전까지 프론트엔드는 기존처럼 `take`/`skip`만 보내면서 결정적 정렬만
   그대로 얻는다. 백엔드 변경은 저장소 경계에서 멈췄다([CLAUDE.md](CLAUDE.md) > Project Overview).
+- 파일 가시성 + 미디어 확장의 프론트엔드 반영 (2026-07-31 기록,
+  [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)) — 위 청구·삭제·목록 조회
+  계약 항목과 마찬가지로 **백엔드 작업이 아니라 프론트엔드 전용 과제가 담당한다.** 단 이건
+  additive가 아니라 **살아 있는 프론트엔드에 대한 breaking 변경**이라 더 크다. ADR 0025
+  백엔드 과제가 착지하면 업로드 필드가 단일 `video`에서 `image`/`audio`/`video`로 바뀌고,
+  파일 접근이 `GET /file/:id/content`로 옮겨가며, `FileResponseDto`에 `visibility` + 공유
+  URL이 추가된다. `frontend/docs/API-CONTRACT.md`, 업로드 폼, 파일 목록, 재생/열람 화면이
+  모두 이를 받아들여야 한다(가시성 토글, 공유 링크 복사, 세 업로드 필드). 백엔드 변경은
+  저장소 경계에서 멈춘다([CLAUDE.md](CLAUDE.md) > Project Overview).
 - `ARCHITECTURE.md`(+ko)의 문서 부패 (2026-07-30 기록) — Stage 1 착지 내용이 이 문서에
   전혀 반영되지 않았다. "Non-Existent Infrastructure"는 여전히 CI 워크플로·Dockerfile·Nest
   `Logger` 사용이 없다고 서술하지만 셋 다 존재하고

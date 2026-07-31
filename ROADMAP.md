@@ -11,8 +11,12 @@ which inserts Stage F (frontend preparation) ahead of Stage 0. Amended again on
 2026-07-30 by [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md),
 which **appends Stage 5 (operational surface — admin console)**: the 11-axis review
 scheduled no stage for the admin surface, even though ADR 0010 had decided its
-placement, so the work existed as a decision with no home in the plan. Every item below
-lands as its own dedicated, designed change
+placement, so the work existed as a decision with no home in the plan. Amended once
+more on 2026-07-31 by [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md),
+which **generalizes the Stage 4 "VOD playback access control" row** into file
+visibility (public/private/unlisted), access-controlled serving of all media, and a
+media-type expansion — a gap surfaced by restating the project's founding goals. Every
+item below lands as its own dedicated, designed change
 ([CLAUDE.md](CLAUDE.md) > Scope Discipline).
 
 > **Consistency note**: items in this plan that CLAUDE.md marks "never suggest
@@ -85,6 +89,16 @@ lands as its own dedicated, designed change
   pagination — now next** (pulled forward from Stage 5) → #3 Stage 5 admin surface →
   #4 Stage 4 deployment, last. This resolves Stage 5's floating position (before Stage 4)
   and pulls the independent pagination debt ahead of both.
+- **File visibility + media-type expansion decided 2026-07-31** (design gate,
+  [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)): restating the project's
+  founding goals surfaced two gaps — every stored file is served publicly with no
+  private/unlisted option, and the upload allowlist is video-only. The decision adds a
+  3-state `visibility` (public/private/**unlisted** via a rotatable share token, optional
+  TTL), an access-controlled `GET /file/:id/content` endpoint (so `ServeStaticModule` stops
+  exposing `file/upload`), and images+audio+video type-specific upload fields. It
+  **generalizes and replaces the Stage 4 "VOD playback access control" row** and, being
+  independent of the deploy target, may be sequenced ahead of deployment. No code yet —
+  design gate only; a reviewed migration and the frontend adoption follow as their own tasks.
 
 ## 1. Vision & essence
 
@@ -153,10 +167,12 @@ work must pass them; they are not themselves roadmap subjects.
   only after RBAC lands and real admin requirements exist. A pnpm-workspace
   monorepo (relocating the backend into `apps/backend`) and an immediate
   three-way split (frontend/backend/admin) were considered and rejected.
-- **Known constraint (accepted)**: static file serving stays unauthenticated
-  until the Stage 4 VOD playback access-control task revisits
-  [ADR 0005](ADR/0005-local-disk-storage.md) — `{BASE_URL}/file/...` URLs are
-  public, and the frontend must treat them as such.
+- **Known constraint (accepted, now with a decided exit)**: static file serving is
+  unauthenticated today — `{BASE_URL}/file/...` URLs are public, and the frontend must
+  treat them as such. The exit is decided: [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)
+  (2026-07-31) revises [ADR 0005](ADR/0005-local-disk-storage.md) so `ServeStaticModule`
+  stops exposing `file/upload` and access is enforced by the `GET /file/:id/content`
+  endpoint — pending its implementation task (Stage 4, may be pulled ahead of deployment).
 - Considered and set aside in the review: event-driven reinforcement (only one
   side effect exists to decouple, and moving the rename out of the transaction
   would break `temp_`/`granted_` atomicity) and CQRS-lite (the read model is
@@ -272,7 +288,7 @@ Deployment comes after the board domain, the pagination debt, and the Stage 5 ad
 |---|---|
 | AWS container deployment | Local: Docker (compose); deploy: AWS, container-based. New deployment ADR; depends on Stage 1 Docker + CI. |
 | Container & deploy hardening | Surfaced by [ADR 0015](ADR/0015-docker-and-compose.md): the Stage 1 image is deploy-*capable* but not production-grade. Non-root `USER` (runs as root today), a distroless runtime base (drop the shell/apt attack surface), a health/readiness endpoint (for LB/orchestrator probes), migrations as a **separate deploy step** rather than on container boot (avoids multi-instance migration races), secrets via a manager instead of `.env`/`env_file`, HTTPS termination (the `Secure` refresh cookie requires it when `ENV=prod`), and a target-arch build (x64 prebuilt `bcrypt` today; ARM/Graviton needs a matching prebuild or `pnpm.onlyBuiltDependencies`). Depends on the AWS deployment task. |
-| VOD playback access control | Uploaded files are currently public URLs — anyone with the link can watch. An authenticated playback path; includes revisiting ADR 0005's static-serving decision. (Playback of uploaded files, not live streaming.) |
+| File visibility, access-controlled serving & media-type expansion **(decided 2026-07-31, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md); generalizes the former "VOD playback access control" row)** | Uploaded files are public URLs today — anyone with the link watches. Adds a 3-state `visibility` (public/private/**unlisted** via a rotatable share token + optional TTL) and an access-controlled `GET /file/:id/content` so `ServeStaticModule` stops exposing `file/upload`; also expands the allowlist to images (jpg/png/webp) + audio (mp3) + video via type-specific upload fields. Partially revises [ADR 0005](ADR/0005-local-disk-storage.md) (serving) and [ADR 0003](ADR/0003-two-phase-upload-contract.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) (upload field, now a breaking change against the live frontend). Design gate done (ADR 0025); a reviewed migration + frontend adoption follow. **Independent of the deploy target — may be sequenced ahead of deployment.** |
 | Storage port-adapter | Only if/when the S3 need is confirmed — see Architecture direction (section 4). |
 | Performance / capacity criteria | Index policy, response-time targets, disk ceilings — measured before optimized. |
 
@@ -411,6 +427,16 @@ role-delivery → adapt console → moderation decision → resolve duplicate su
   filter) must both take it up; until they do, the frontend simply keeps sending
   `take`/`skip` and gets the new deterministic ordering for free. The backend change stopped
   at the repo boundary ([CLAUDE.md](CLAUDE.md) > Project Overview).
+- Frontend adoption of file visibility + media expansion (recorded 2026-07-31,
+  [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)) — **owned by a frontend-scoped
+  task, not by backend work**, like the claim-, deletion-, and list-query-contract items above,
+  but larger: this one is a **breaking change against the live frontend**, not an additive one.
+  When the ADR 0025 backend task lands, the upload field changes from single `video` to
+  `image`/`audio`/`video`, file access moves to `GET /file/:id/content`, and `FileResponseDto`
+  gains `visibility` + a share URL. `frontend/docs/API-CONTRACT.md`, the upload form, the file
+  list, and the playback/view surface must all take it up (visibility toggle, share-link copy,
+  the three upload fields). The backend change stops at the repo boundary
+  ([CLAUDE.md](CLAUDE.md) > Project Overview).
 - Documentation rot in `ARCHITECTURE.md` (+ko) (recorded 2026-07-30) — the Stage 1
   landings were never reflected there: "Non-Existent Infrastructure" still claims no CI
   workflow, no Dockerfile, and no Nest `Logger` usage (all three exist —

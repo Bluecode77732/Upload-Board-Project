@@ -13,6 +13,24 @@
 ## [Unreleased]
 
 ### 추가
+- **파일 가시성 + 미디어 타입 확장 — 설계 게이트, 아직 코드 없음**
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)) — 프로젝트의 네 창립 목표를
+  다시 정리하니 의도와 실제 코드 사이 공백 둘이 드러났다: 저장된 모든 파일이 공개로만 서빙되어
+  비공개/링크공유 선택지가 없고, 업로드 허용 목록이 영상 전용이다. 결정(마이그레이션에 앞선
+  평문 게이트, Scope Discipline)은 3-상태 `FileEntity.visibility`(`public`/`private`/`unlisted`,
+  **기본 `private`**), 상태별 접근을 강제하는 접근 제어 `GET /file/:id/content` 엔드포인트 —
+  그래서 `ServeStaticModule`이 **`file/upload` 노출을 중단**한다(비공개 파일의 바이트가
+  `granted_` 경로로 여전히 닿으면 안 된다) —, **회전 가능한** `shareToken`을 통한 `unlisted`
+  공유(회전은 서명 URL이 못 주는 유출 대응 수단)에 **선택적** TTL `shareExpiresAt`(기본: 만료
+  없음)을 더하고, 허용 미디어를 이미지(jpg/png/webp)+오디오(mp3)+영상(mp4/mov/webm)으로,
+  단일 `video` 필드를 **타입별 업로드 필드**(`image`/`audio`/`video`)로 교체해 확장한다.
+  [ADR 0005](ADR/0005-local-disk-storage.ko.md)(서빙)와
+  [ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)
+  (업로드 필드 — 이제 소비자 0명이던 Stage F 동결과 달리 **살아 있는 `frontend/` 소비자에 대한
+  breaking 변경**)을 부분 개정한다. **ROADMAP Stage 4의 "VOD 재생 접근 제어" 행을 일반화하며
+  대체**하고, 배포 대상과 독립적이므로 배포보다 앞당길 수 있다. 이 항목에서는 스키마 변경도
+  마이그레이션도 라우트도 착지하지 않는다 — 검토된 마이그레이션과 프론트엔드 반영은 각자의
+  후속 과제다(후자는 [ROADMAP.ko.md](ROADMAP.ko.md) > 미배정에서 추적).
 - **게시판 comment 모듈 — 게시판 도메인 완성**
   ([ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) — 스키마 게이트의 후반부이며,
   이로써 **Stage 3**도 완결됐다. `CommentModule`은 ADR이 정한 네 라우트를 `JwtAuthGuard` 뒤에

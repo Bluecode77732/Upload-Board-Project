@@ -13,6 +13,27 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- **File visibility + media-type expansion — design gate, no code yet**
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)) — restating the project's
+  four founding goals surfaced two gaps between intent and shipped code: every stored file is
+  served publicly with no private/unlisted option, and the upload allowlist is video-only. The
+  decision (a plain-text gate, per Scope Discipline, ahead of any migration) adds a 3-state
+  `FileEntity.visibility` (`public`/`private`/`unlisted`, **default `private`**), an
+  access-controlled `GET /file/:id/content` endpoint that enforces access by state — so
+  `ServeStaticModule` **stops exposing `file/upload`** (a private file's bytes must not stay
+  reachable by their `granted_` path), an `unlisted` share via a **rotatable** `shareToken`
+  (rotation is the leak-response mechanism a signed URL cannot give) plus an **optional** TTL
+  `shareExpiresAt` (default: no expiry), and a media-type expansion to images (jpg/png/webp) +
+  audio (mp3) + video (mp4/mov/webm) across **type-specific upload fields** (`image`/`audio`/
+  `video`) replacing the single `video` field. It **partially revises**
+  [ADR 0005](ADR/0005-local-disk-storage.md) (serving) and
+  [ADR 0003](ADR/0003-two-phase-upload-contract.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)
+  (upload field — now a **breaking change against the live `frontend/` consumer**, unlike the
+  zero-consumer Stage F freeze). It **generalizes and replaces the ROADMAP Stage 4 "VOD playback
+  access control" row** and, being independent of the deploy target, may be sequenced ahead of
+  deployment. No schema change, migration, or route lands in this entry — the reviewed migration
+  and the frontend adoption are their own follow-up tasks (the latter tracked in
+  [ROADMAP.md](ROADMAP.md) > Unscheduled).
 - **Board comment module — the board domain is complete**
   ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) — the second half of
   the schema gate, and with it **Stage 3**. `CommentModule` ships the ADR's four routes behind
