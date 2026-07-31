@@ -150,6 +150,22 @@ export class PostService {
     return this.toResponse(post);
   }
 
+  // 목적: 주어진 id의 게시글이 실재하는지 판정한다.
+  // 이유: 댓글은 없는 글에 달릴 수 없고, 그 판정은 post 상태를 소유한 PostModule의 몫이다 —
+  //       CommentService가 post_entity를 직접 조회하면 모듈 경계를 넘는다(Tell Don't Ask).
+  // 방법: 관계를 붙이지 않고 존재 여부만 확인해 없으면 404를 던진다 — 값은 반환하지 않는 판정 전용이다.
+  //       getPostById 재사용은 창작자·파일 두 조인을 쓰지도 않을 응답을 위해 끌고 오게 된다.
+  async assertPostExists(postId: number): Promise<void> {
+    const exists = await this.postRepository.exists({ where: { id: postId } });
+
+    if (!exists) {
+      throw new NotFoundException({
+        code: ErrorCode.POST_NOT_FOUND,
+        message: 'No post found.',
+      });
+    }
+  }
+
   // 목적: 특정 파일을 이미 점유한 게시글을 찾는다.
   // 이유: fileId의 유니크 제약이 이 엔드포인트의 유일한 자연 멱등 키이므로, 그 행의 존재가 "이미 첨부됨"의 증거다.
   // 방법: fileId 정확 일치로 조회하되 creator를 함께 로드해 재제출자 본인 여부를 판정할 수 있게 한다.

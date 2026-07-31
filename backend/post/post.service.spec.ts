@@ -91,6 +91,7 @@ describe('PostService', () => {
     const mockPostRepository = {
       createQueryBuilder: jest.fn(),
       findOne: jest.fn(),
+      exists: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
     };
@@ -194,6 +195,26 @@ describe('PostService', () => {
       jest.spyOn(postRepository, 'createQueryBuilder').mockReturnValue(builder);
 
       await expect(postService.getPostById(404)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  // Asked by CommentService before it writes a comment: whether a post exists is
+  // PostModule's judgment, never a post_entity query from another module (ADR 0023).
+  describe('assertPostExists', () => {
+    it('passes for an existing post without loading relations', async () => {
+      jest.spyOn(postRepository, 'exists').mockResolvedValue(true);
+
+      await expect(postService.assertPostExists(5)).resolves.toBeUndefined();
+      // getPostById would drag the creator and file joins in for a response nobody reads.
+      expect(postRepository.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('throws POST_NOT_FOUND for a missing post', async () => {
+      jest.spyOn(postRepository, 'exists').mockResolvedValue(false);
+
+      await expect(postService.assertPostExists(404)).rejects.toThrow(
         NotFoundException,
       );
     });

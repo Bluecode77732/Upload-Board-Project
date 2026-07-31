@@ -30,6 +30,7 @@ export enum ErrorCode {
   USER_NOT_FOUND = 'USER_NOT_FOUND',
   FILE_NOT_FOUND = 'FILE_NOT_FOUND',
   POST_NOT_FOUND = 'POST_NOT_FOUND',
+  COMMENT_NOT_FOUND = 'COMMENT_NOT_FOUND',
   NOT_FOUND = 'NOT_FOUND',
 
   // 409
@@ -39,6 +40,10 @@ export enum ErrorCode {
   // The account still owns files, and the request did not confirm the cascade —
   // deleting it would irreversibly destroy those files too (ADR 0020).
   USER_HAS_FILES = 'USER_HAS_FILES',
+  // The cascade is confirmed, but another user's post references one of the account's
+  // files, so the file rows cannot go. Raised from the FK violation itself, since
+  // FileService cannot query post_entity without a module cycle (ADR 0024).
+  USER_FILES_IN_USE = 'USER_FILES_IN_USE',
   // The file is already attached to one of the requester's posts, and the repeated
   // submission carries different text — so it is a new post, not a retry (ADR 0023 D1).
   POST_FILE_TAKEN = 'POST_FILE_TAKEN',

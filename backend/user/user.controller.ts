@@ -82,7 +82,7 @@ export class UserController {
   @ApiResponse({
     status: 409,
     description:
-      'USER_HAS_FILES — the account still owns files and the request did not confirm the cascade. The message carries the file count so the client can warn before repeating with deleteFiles=true (ADR 0020).',
+      "USER_HAS_FILES — the account still owns files and the request did not confirm the cascade. The message carries the file count so the client can warn before repeating with deleteFiles=true (ADR 0020). USER_FILES_IN_USE — the cascade was confirmed, but one of the account's files is attached to another user's post, so nothing was deleted; remove that post first (ADR 0024).",
   })
   // 목적: 계정 삭제 요청을 권한 확인 후 서비스로 넘기고, 연쇄 삭제 동의 여부를 함께 전달한다.
   // 이유: 파일까지 지우는 경로는 비가역이므로, 확인 신호가 프론트 경고창이 아니라 요청 자체에 실려야 한다.

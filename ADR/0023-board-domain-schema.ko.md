@@ -374,3 +374,54 @@ post에 의존하지 그 반대가 아니기 때문이다. 그래서 마이그�
 
 **검증**: `pnpm lint` 무결, 단위 테스트 121개, e2e 52개(신규 14개 — post CRUD, 소유권 403 거절,
 같은 `fileId` 재제출의 replay/409, 409 `FILE_IN_USE`, 계정 연쇄의 `posts=N` 감사 detail).
+
+## 구현 노트 (comment 모듈, 2026-07-31)
+
+위 결정은 그대로다. 이 노트는 후반부가 어떻게 착지했는지만 기록하며 새 결정을 더하지 않는다. 이
+과제가 기다리던 게이트 — post 노트가 남긴 post↔file 불변식 gap — 는
+[ADR 0024](0024-account-cascade-fk-refusal.ko.md)로 먼저 정리했고, 계정 연쇄의 삭제 순서를 건드리지
+않았으므로 아래 순서는 다시 쓴 것이 아니라 끼워 넣은 것이다.
+
+`comment_entity`는 설계 그대로 들어갔다: `body`(`text`, 길이는 DTO에서 ≤1,000), `creatorId`
+FK(`NO ACTION`), `postId` FK(**`ON DELETE CASCADE`** — 여전히 이 스키마의 유일한 DB 연쇄), 그리고
+`IDX_comment_entity_postId_createdAt`. `migration:generate`는
+[ADR 0006](0006-schema-policy-and-migration-adoption.ko.md)이 예고한 대로 또 굴었다 — 이번엔 spurious
+6문장으로, `FK_file_entity_creator`·`FK_post_entity_creator`·`FK_post_entity_file`과
+`IDX_audit_log_entity_action_createdAt`을 TypeORM 해시 이름으로 바꾸기 위해서만 drop 후 재생성하려
+했다. 전부 걷어내고 새 제약에는 읽을 수 있는 이름을 붙였다(`PK_comment_entity`,
+`FK_comment_entity_creator`, `FK_comment_entity_post`).
+
+`COMMENT_NOT_FOUND`는 post 노트에 적은 대로 이제서야, 소비자와 함께 추가했다. `COMMENT_DELETE`는
+`AUDIT_ACTIONS`에 합류했다.
+
+**설계가 함축했지만 명시하지 않은 세 가지.**
+
+- **컨트롤러는 하나가 아니라 둘.** ADR 0023의 라우트 표는 접두사 두 개에 걸쳐 있다 — 스레드는 글에
+  매달리고(`GET`/`POST /post/:postId/comment`), 이미 존재하는 댓글은 자기 id로 지목된다
+  (`PATCH`/`DELETE /comment/:id`). 하나의 `@Controller`로는 둘을 함께 감당할 수 없어
+  `PostCommentController`와 `CommentController`를 두되 모두 `CommentModule` 소속으로 뒀다. ADR이
+  나열한 네 라우트만 존재한다. 구현 중 `GET /comment/:id`를 만들었다가 지웠다 — 어떤 결정도 요구하지
+  않은 엔드포인트는 범위 초과이기 때문이다.
+- **`PostService.assertPostExists(postId)`** 는 D1의 "FileService에 묻는다"에 대응하는 comment 쪽
+  장치다. 게터가 아니라 판정이므로 `CommentService`는 `post_entity`를 직접 조회하지 않는다.
+  `getPostById` 재사용 대신 조인 없이 존재만 확인하는데, 전자는 아무도 읽지 않을 응답을 만들려고
+  creator와 file 관계를 끌고 오기 때문이다.
+- **댓글 목록은 게시글을 조인하지 않는다.** `postId`는 이미 라우트에서 알고 있으므로, 조인하면 글
+  한 행이 스레드의 모든 댓글마다 반복된다. 그래서 `toResponse`가 id를 인자로 받고,
+  `CommentResponseDto`는 글을 임베드하지 않고 `postId`만 싣는다.
+
+**설계가 정한 대로 두고 완화하지 않은 두 가지.**
+
+1. **`USER_DELETE` 감사 detail에 `comments=N`을 넣지 않았다.** 서비스는 자기가 명시적으로 지운
+   댓글은 셀 수 있지만 FK 연쇄가 가져간 것은 셀 수 없고, 반쪽 집계는 총계처럼 읽힌다. 결과 절이 이미
+   "감사는 글은 세지만 댓글은 세지 않는다"를 수용했으므로, 셀 수 있는 절반만 넣는 것은 개선처럼
+   보이면서 실제로는 그 결정과 어긋난다.
+2. **댓글에는 멱등 키가 없다.** 이 행에는 유니크한 것이 없으므로 `POST /post/:postId/comment` 재제출은
+   두 번째 댓글을 만든다. D1이 `fileId` 없는 글에 대해 문서화한 결과와 같으며, 실수가 아니라 결정으로
+   남도록 두 테스트 스위트 모두에 고정해 뒀다.
+
+**검증**: `pnpm lint` 무결(에러 0, 경고 0), 단위 테스트 141개(`CommentService` 신규 16개, 그리고
+`assertPostExists`와 연쇄 순서 단언), e2e 64개(신규 11개 — 스레드 CRUD, 오래된 순 페이지네이션,
+읽기·쓰기 양쪽에서 없는 글에 대한 404, 소유권 403 거절 *및* 글 작성자가 자기 글의 댓글에 아무 권한도
+없음, `COMMENT_DELETE` 감사, 게시글 삭제 시 FK 연쇄, 계정 연쇄가 남의 글에 달린 그 계정의 댓글까지
+가져가는 것). `/doc`은 네 라우트를 모두 `Comment API` 아래 `@ApiBearerAuth`와 함께 렌더한다.

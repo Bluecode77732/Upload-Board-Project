@@ -757,5 +757,40 @@ describe('FileService', () => {
       );
       expect(mockDeleteBuilder.execute).toHaveBeenCalled();
     });
+
+    it('deleteFilesOfCreator translates a stranger post reference (23503) into a 409', async () => {
+      mockDeleteBuilder.execute.mockRejectedValueOnce(
+        new QueryFailedError(
+          'DELETE',
+          [],
+          Object.assign(new Error('violates foreign key constraint'), {
+            code: '23503',
+          }),
+        ),
+      );
+
+      // Reachable only after a prior ownership reassignment, but reachable — so the
+      // cascade must answer 409 USER_FILES_IN_USE, never the opaque 500 (ADR 0024).
+      await expect(
+        fileService.deleteFilesOfCreator(
+          mockManager as unknown as EntityManager,
+          7,
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('deleteFilesOfCreator rethrows a non-FK failure untouched', async () => {
+      const failure = new Error('connection lost');
+      mockDeleteBuilder.execute.mockRejectedValueOnce(failure);
+
+      // Only the foreseeable client-reachable outcome is typed; a genuine server
+      // fault must stay a 500 rather than be disguised as a conflict.
+      await expect(
+        fileService.deleteFilesOfCreator(
+          mockManager as unknown as EntityManager,
+          7,
+        ),
+      ).rejects.toThrow(failure);
+    });
   });
 });

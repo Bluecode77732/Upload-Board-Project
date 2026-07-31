@@ -12,6 +12,67 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Added
+- **Board comment module — the board domain is complete**
+  ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) — the second half of
+  the schema gate, and with it **Stage 3**. `CommentModule` ships the ADR's four routes behind
+  `JwtAuthGuard`, split across **two controllers** because they span two prefixes: a thread
+  hangs off its post (`GET`/`POST /post/:postId/comment`) while an existing comment is
+  addressed by its own id (`PATCH`/`DELETE /comment/:id`). The new `comment_entity` carries
+  `body` (`text`, bounded ≤1,000 at the DTO), a `creatorId` FK, and a `postId` FK with **the
+  schema's only `ON DELETE CASCADE`** — argued in ADR 0023 D3 rather than assumed, because a
+  comment has no URL, no file, and no existence outside its post, so nothing must be read
+  before the rows go. `IDX_comment_entity_postId_createdAt` serves the one query shape this
+  table has. The migration was reviewed line by line as
+  [ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md) requires — `generate` emitted
+  six spurious constraint-rename statements, which were stripped in favor of readable names.
+  **The thread reads oldest-first** (`createdAt ASC` with an `id` tiebreaker), the opposite of
+  the newest-first file and post listings, and the order is fixed rather than parameterized.
+  Ownership reuses `canManage` (author **or** admin+) with **no third axis**: the author of a
+  post gains no power over comments on it, since that would need the
+  `comment.post.creator` reach-through this project bans. `COMMENT_NOT_FOUND` and the
+  `COMMENT_DELETE` audit action arrived with their consumers. Two decisions were kept rather
+  than softened — a repeated `POST` creates a second comment (nothing on the row is unique, so
+  there is no natural idempotency key, exactly as for a post with no `fileId`), and the
+  `USER_DELETE` audit detail gains **no** `comments=N` (the cascaded half is uncountable, so a
+  partial count would read as a total).
+
+### Changed
+- **The account cascade now deletes comments first, then posts, then files**
+  ([ADR 0023](ADR/0023-board-domain-schema.md) D5) — `UserService.remove` deletes the
+  account's comments *anywhere* inside its existing `dataSource.transaction()`, keyed by
+  `creatorId`, before the posts. The order is load-bearing: comments the account wrote on
+  **other people's** posts are unreachable through the post FK cascade, which only fires when
+  the owning post is deleted. Comments left on the account's own posts still go with them
+  through that cascade. No confirmation flag was added — `deleteFiles` keeps guarding media
+  bytes only. `PostService.assertPostExists` was added so `CommentService` can refuse a
+  comment on a missing post with 404 `POST_NOT_FOUND` without ever querying `post_entity`
+  itself (Tell Don't Ask, the same shape as `FileService.assertAttachableBy`).
+
+### Fixed
+- **The account cascade answers 409 `USER_FILES_IN_USE` instead of an FK-violation 500**
+  ([ADR 0024](ADR/0024-account-cascade-fk-refusal.md)) — closes the known issue the post
+  module recorded a day earlier, and the gate the comment module waited on.
+  `PATCH /file/:id { userId }` can reassign a file's owner *after*
+  `FileService.assertAttachableBy` enforced ADR 0023 D1's same-creator rule at creation, so a
+  post can end up referencing a stranger's file; `DELETE /user/:id?deleteFiles=true` then raised
+  `23503` inside its transaction and surfaced as exactly the opaque 500
+  [ADR 0020](ADR/0020-account-deletion-cascade.md) set out to remove.
+  `FileService.deleteFilesOfCreator` now translates that `23503` the same way its sibling
+  `deleteFile` already translated `FILE_IN_USE` — both file-row delete paths answer a reference
+  identically, in the class that owns file rows. **No pre-check query**, for the two reasons
+  [ADR 0023](ADR/0023-board-domain-schema.md) D4 established: `FileService` reading
+  `post_entity` is a module cycle, and a post created between check and delete would still hit
+  the constraint. The other two candidate fixes were rejected on the record — widening the
+  cascade would destroy third-party posts *and* rewrite the delete order the comment task
+  extends, and a composite FK (`UNIQUE (id, creatorId)` on `file_entity`, referenced by
+  `post_entity`) is documented in that ADR as the shape to adopt only if the property is ever
+  needed as a *guarantee*. One new error code, `USER_FILES_IN_USE` (409), named symmetrically
+  with `USER_HAS_FILES` on the same route. No schema change, no migration. **Two things
+  deliberately unchanged**: the post↔file rule is now a creation-time rule rather than an
+  invariant, and `PostService.resolveAttachment`'s author-identity check stays reachable, so
+  it must not be simplified away.
+
 ### Changed
 - **ROADMAP execution order for the remaining work fixed** (2026-07-31) — the staged
   plan groups tasks by dependency, but several ready items span stages, so the actual
@@ -83,6 +144,9 @@ development line (package.json version).
   rather than recomposing one. `PostService` never reads `file.creator` (Law of Demeter).
 
 ### Known issue
+> Resolved 2026-07-31 by [ADR 0024](ADR/0024-account-cascade-fk-refusal.md) — see **Fixed**
+> above. The `23503` is now a typed 409; the `resolveAttachment` guard stays as described.
+
 - **File ownership reassignment can break the post↔file same-creator invariant** — ADR 0023 D1
   argues a post can only reference its own author's file, and that is what makes the account
   cascade FK-safe. It holds at creation, but `PATCH /file/:id { userId }` reassigns ownership

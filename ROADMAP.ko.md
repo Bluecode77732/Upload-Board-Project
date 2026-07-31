@@ -58,13 +58,16 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   삭제 정책은 2026-07-30 반영됐다 ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)):
   soft delete는 채택하지 않고, 계정은 명시적인 `deleteFiles=true`가 있을 때만 자기 파일까지
   연쇄 삭제하며, 기존 FK 위반 500은 타입 있는 409가 됐다 — **Stage 2가 완결됐다**.
-- **Stage 3이 진행 중이다**: 목록 검색/필터/정렬이 2026-07-30 반영됐다
+- **Stage 3이 완결됐다 (2026-07-31)**: 목록 검색/필터/정렬이 2026-07-30 반영됐다
   ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) — `GET /file`이 `search`,
   `creatorId`, `sortBy`, `order`를 받고, 정렬 키는 코드 내 화이트리스트로만 해석되며,
   이 엔드포인트에 없던 결정적 기본 정렬이 생겼다. 이어서 2026-07-30에 게시판 도메인의
-  **스키마 설계 게이트**가 반영됐다 ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) —
-  post와 comment를 코드 없이 평문으로 함께 확정한 것이며, 남은 Stage 3 작업은
-  post/comment 구현이다.
+  **스키마 설계 게이트**가 반영됐고 ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) —
+  post와 comment를 코드 없이 평문으로 함께 확정했다 — 그 구현 두 절반이 2026-07-31에
+  착지했다: comment가 post에 의존하므로 post 모듈이 먼저, 그다음 comment 모듈, 그 사이에
+  [ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)가 post↔file 불변식 gap을 정리했다.
+  **이 프로젝트 이름이 가리키는 게시판이 이제 실제로 존재한다**: 영상을 선택적으로 첨부한
+  게시글과 그 아래 스레드.
 - **Stage 5(운영 화면 — admin 콘솔)가 2026-07-30 추가됐다**
   ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)). 원래 계획의 공백을
   닫은 것이다: ADR 0010은 2026-07-23에 admin이 어디에 살지 결정했지만, 그것을 만드는
@@ -73,7 +76,8 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   — 클라이언트가 자기 역할을 어떻게 아는가 — 이 나머지를 막는 백엔드 결정이다.
   Stage 4에 의존하지 **않으며** 그보다 먼저 진행될 수도 있다.
 - **남은 작업의 실행 순번을 2026-07-31에 고정했다**(6절 > 실행 순번 참조):
-  #1 게시판 comment 모듈 → #2 `GET /user` 페이지네이션(Stage 5에서 앞당김) →
+  ~~#1 게시판 comment 모듈~~(✅ 2026-07-31 완료) → **#2 `GET /user` 페이지네이션 — 이제 다음
+  차례**(Stage 5에서 앞당김) →
   #3 Stage 5 admin 화면 → #4 Stage 4 배포(마지막). 이로써 Stage 5의 부동 위치가
   Stage 4 앞으로 확정되고, 독립적인 페이지네이션 부채가 둘보다 앞으로 당겨진다.
 
@@ -178,10 +182,10 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 실제 착수 순서를 여기서 고정한다(완결된 단계는 생략). 각 미완 항목은 자기 행에
 실행 번호를 함께 표기한다.
 
-1. **게시판 도메인 — comment 모듈** (Stage 3) — 가장 낮은 미완 단계에서 유일하게
-   의존성이 충족된 작업이다. 스키마 게이트([ADR 0023](ADR/0023-board-domain-schema.ko.md))가
-   끝났고 post 절반은 2026-07-31에 착지했으므로 이것이 다음 전용 작업이다.
-   **post↔file 불변식 gap을 먼저 정리할 것** — Stage 3 행 참조.
+1. ~~**게시판 도메인 — comment 모듈** (Stage 3)~~ — ✅ 2026-07-31 완료, **Stage 3 완결**.
+   게이트였던 post↔file 불변식 gap을 [ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)로
+   먼저 정리했고 계정 연쇄의 삭제 순서를 건드리지 않았으므로, 댓글 삭제가 게시글 앞에
+   그대로 끼워 넣어졌다. **이제 실행 #2가 다음 전용 작업이다.**
 2. **`GET /user` 페이지네이션** (Stage 5에서 앞당김) — 콘솔과 무관하게 갚아야 할
    독립적인 Never Do Group 2 부채이며, admin 사용자 목록이 필요로 할 조회 계층의
    선행이기도 해서 조기 빠른수정으로 당긴다.
@@ -238,7 +242,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | ~~목록 검색/필터/정렬~~ — ✅ 2026-07-30 반영 ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) | `GET /file`에 `search`(제목에 이스케이프된 `ILIKE '%term%'`), `creatorId`, 그리고 완전한 `Record` 화이트리스트로 해석되는 `sortBy`/`order`가 추가됐다. 이 엔드포인트에 없던 `ORDER BY`도 함께 들어가 offset 페이징이 결정적이 됐다. 스키마 변경은 없고, 후보 인덱스 세 개는 도입 계기를 기록한 채 유보했다. post 목록이 확장해 쓸 조회 계층 패턴이다. |
 | ~~게시판 도메인 — 스키마 설계 게이트~~ — ✅ 2026-07-30 반영 ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) | 마이그레이션에 앞서 Scope Discipline이 요구하는 평문 스키마 기술이며, comment 작업이 post 스키마를 되돌리게 만들 수 없도록 두 엔티티를 한 번에 다뤘다. post ↔ file은 1:1·선택적·동일 작성자이고(unique FK가 `POST /post`의 idempotency 키를 겸한다), 댓글은 평면 구조로 FK에서 글과 함께 연쇄 삭제된다. 첨부된 파일에 대한 `DELETE /file/:id`는 409 `FILE_IN_USE`가 된다. ADR 0020 계정 연쇄 삭제는 글과 댓글을 확인 없이 가져가되 플래그는 여전히 파일만 지킨다. `canManage`와 ADR 0021 조회 계층은 그대로 재사용한다. 설계 전용 — 코드도 마이그레이션도 없다. |
 | ~~게시판 도메인 — post 모듈~~ — ✅ 2026-07-31 완료 ([ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) | ADR 0023의 전반부. comment가 post에 의존하지 그 반대가 아니어서 분리했다: `PostModule`(`JwtAuthGuard` 뒤 5개 라우트), FK 2개와 `UQ_post_entity_fileId`를 가진 `post_entity`(검토된 마이그레이션 — generate가 뱉은 제약 이름 변경 4문장은 걷어냄), 신규 에러 코드 3개, `DELETE /file/:id`의 `23503` → 409 `FILE_IN_USE` 번역, 그리고 ADR 0020 계정 연쇄에 게시글 합류(감사 detail의 `posts=N`). ADR 0021 조회 계층과 `canManage`는 다시 만들지 않고 재사용했다. |
-| 게시판 도메인 — comment 모듈 **(실행 #1 — 다음 전용 작업)** | [ADR 0023](ADR/0023-board-domain-schema.ko.md)의 후반부: `CommentModule`, `post_entity`로의 `ON DELETE CASCADE` FK와 `IDX_comment_entity_postId_createdAt`을 가진 `comment_entity`, `COMMENT_NOT_FOUND` 코드(소비자보다 먼저 만들지 않았다), `/post/:postId/comment` 라우트, 그리고 계정 연쇄에서 post보다 먼저 삭제되는 댓글. `*.entity.ts`를 건드리려면 승인이 필요하다. **게이트 — 착수 전에 post↔file 불변식 gap을 먼저 결정한다**(아래 미배정 참조): 후보 처방 중 "연쇄 확대"가 이 작업이 딛고 설 삭제 순서를 바꾸므로, 나중에 결정하면 그 순서를 두 번 고쳐야 한다. |
+| ~~게시판 도메인 — comment 모듈~~ — ✅ 2026-07-31 완료 ([ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) | ADR 0023의 후반부이며, 이로써 **Stage 3이 완결됐다**. `CommentModule`이 ADR의 네 라우트를 `JwtAuthGuard` 뒤에 컨트롤러 두 개로 나눠 제공한다(스레드는 글에 매달리고, 이미 존재하는 댓글은 자기 id로 지목된다). 그 아래 `comment_entity`는 이 스키마의 유일한 `ON DELETE CASCADE` FK와 `IDX_comment_entity_postId_createdAt`을 갖는다(검토된 마이그레이션 — generate가 뱉은 제약 이름 변경 6문장은 걷어냄). `COMMENT_NOT_FOUND`와 `COMMENT_DELETE` 감사 액션은 소비자와 함께 들어왔다. 댓글은 계정 연쇄에서 **게시글보다 먼저** 삭제된다 — 그 계정이 *남의* 글에 단 댓글은 게시글 FK 연쇄로 닿지 않기 때문이다. 완화하지 않고 그대로 지킨 결정 둘: 감사 detail에 `comments=N` 없음(연쇄분을 셀 수 없어 반쪽 집계는 총계처럼 읽힌다), 멱등 키 없음(재제출은 `fileId` 없는 글과 마찬가지로 두 번째 댓글이 된다). 게이트는 [ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)가 먼저 풀었다. |
 
 ### Stage 4 — 실서비스 전환 — 실행 순번상 **마지막** (2026-07-31)
 
@@ -332,16 +336,16 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   장치는 없다. ADR 0018의 스윕을 복사해 해결하지 **않은** 것은 의도적이다 — "행 없이 디스크에
   있다"는 판정을 파일명만으로 내릴 수 없어 DB 조인 기반 정합 작업과 자체 ADR이 필요하다.
   일정 미배정 — 감수하는 잔여 위험은 디스크 낭비이며, 깨진 레코드는 발생하지 않는다.
-- 파일 소유권 이전이 post↔file 같은-작성자 불변식을 깰 수 있음 (2026-07-31 기록,
-  [ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) — D1은 게시글이 자기 작성자의
-  파일만 참조할 수 있다고 논증하며, 그것이 계정 연쇄를 FK 안전하게 만드는 근거다. 작성 시점에는
-  성립하지만 `PATCH /file/:id { userId }`가 사후에 소유권을 넘길 수 있어, 게시글이 남의 파일을
-  참조하는 상태가 만들어질 수 있다. 결과적으로 `DELETE /user/:id?deleteFiles=true`가 여전히
-  트랜잭션 안에서 `23503`을 내고, [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)이 없앤
-  불투명한 500으로 드러날 수 있다. 사전 이전이 필요한 좁은 경로지만 실재한다. 일정을 잡지 않은
-  이유는 처방이 전부 패치가 아니라 결정이기 때문이다 — 첨부된 파일의 소유권 이전을 거절하거나,
-  연쇄를 그 계정의 파일을 *참조만* 하는 게시글까지 넓히거나, `23503`을 타입 있는 거절로
-  번역하거나. 자체 ADR이 필요하다.
+- ~~파일 소유권 이전이 post↔file 같은-작성자 불변식을 깰 수 있음~~ — ✅ **2026-07-31 확정**
+  ([ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)). comment 모듈이 기다리던 게이트였다.
+  세 후보 중 *`23503`을 타입 있는 거절로 번역*을 택했다 — `FileService.deleteFilesOfCreator`가
+  409 `USER_FILES_IN_USE`로 답하며, 이는 형제 메서드 `deleteFile`이 `FILE_IN_USE`에 대해 이미
+  하던 것과 같다. 나머지 둘을 기각한 이유도 선택만큼 중요하다. 연쇄 확대는 제3자의 게시글을
+  파괴하는 데다 comment 과제가 확장할 삭제 순서까지 다시 쓰게 만들고, 규칙을 DB에서 강제하는
+  복합 FK는 이 성질이 "처리"가 아니라 *보장*으로 필요해질 때 채택할 형태로 그 ADR에 기록해 두었다.
+  남은 것은 잔여물이 아니라 의도된 결과다: 같은-작성자 규칙은 이제 **생성 시점 규칙**이므로,
+  자기 파일이 남의 게시글에 걸린 계정은 그 게시글이 사라질 때까지 삭제되지 않는다(409이며 admin이
+  치울 수 있다).
 - 유보한 목록 조회 인덱스 (2026-07-30 기록,
   [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) — 검색/필터/정렬 과제는
   의도적으로 **인덱스를 하나도 추가하지 않고** 마무리했다. 이 테이블 규모에서 후보 셋 다

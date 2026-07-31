@@ -490,20 +490,35 @@ export class FileService {
     return files.map((file) => file.filePath);
   }
 
-  // 목적: 한 유저가 소유한 파일 행 전부를 호출자의 트랜잭션 안에서 삭제한다.
+  // 목적: 한 유저가 소유한 파일 행 전부를 호출자의 트랜잭션 안에서 삭제하되, 남의 게시글이 참조 중이면 거절한다.
   // 이유: FK_file_entity_creator가 ON DELETE NO ACTION이라 유저 행보다 파일 행이 먼저 사라져야 하고,
-  //       파일 메타데이터의 삭제 규칙은 UserModule이 아니라 FileModule의 책임이다(모듈 책임 경계).
+  //       소유권 재배정(PATCH /file/:id userId) 이후에는 타인의 게시글이 이 파일을 참조할 수 있어
+  //       FK 위반이 그대로 500으로 새어 나갈 수 있다(ADR 0024).
   // 방법: id 목록이 아니라 creatorId 기준으로 지운다 — 조회 이후 끼어든 업로드까지 포함해야 FK 위반이 남지 않는다.
+  //       23503은 409 USER_FILES_IN_USE로 번역한다(사전 조회는 하지 않는다 — 모듈 순환이자 경합).
   async deleteFilesOfCreator(
     manager: EntityManager,
     creatorId: number,
   ): Promise<void> {
-    await manager
-      .createQueryBuilder()
-      .delete()
-      .from(FileEntity)
-      .where('"creatorId" = :creatorId', { creatorId })
-      .execute();
+    try {
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(FileEntity)
+        .where('"creatorId" = :creatorId', { creatorId })
+        .execute();
+    } catch (error) {
+      if (this.isPgErrorCode(error, FOREIGN_KEY_VIOLATION)) {
+        // The account's own posts are already gone by this point in the cascade order,
+        // so whatever still references these files provably belongs to someone else.
+        throw new ConflictException({
+          code: ErrorCode.USER_FILES_IN_USE,
+          message:
+            "A file owned by this account is attached to another user's post. Delete that post first.",
+        });
+      }
+      throw error;
+    }
   }
 
   // 목적: 파일 메타데이터 행과 그에 대응하는 물리 파일을 함께 제거하되, 게시글이 참조 중이면 거절한다.

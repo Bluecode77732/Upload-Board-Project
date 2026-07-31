@@ -22,9 +22,10 @@ Before making any change:
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer diskStorage, `temp_{uuid}_{timestamp}` naming) and `upload.controller.ts` (100MB size limit)
    - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `backend/common/unlink-stored-files.ts` (post-commit unlink, ADR 0020/0023)
    - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
+   - Comment/thread change → read `backend/comment/comment.service.ts` (fixed `createdAt ASC` order, `canManage`, `deleteCommentsOfCreator`) and `PostService.assertPostExists` — the one thing CommentModule asks PostModule for. Routes live in **two** controllers (`post-comment.controller.ts` for `/post/:postId/comment`, `comment.controller.ts` for `/comment/:id`); post deletion removes comments via the FK, not the service (ADR 0023 D3)
    - Orphan temp cleanup   → read `backend/temp-cleanup/temp-cleanup.service.ts` (`@nestjs/schedule` `SchedulerRegistry` cron, `temp_`-prefix + TTL sweep of `file/temp`, ADR 0018) and its `selectExpiredTempFiles` pure core
    - Env var change        → read the Joi schema in `backend/app.module.ts` AND `.env.example` — both must stay in sync
-   - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides. `backend/post/entity/post.entity.ts` is deliberately **unidirectional** (no inverse property on User/File) — do not "fix" that (ADR 0023)
+   - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides. `backend/post/entity/post.entity.ts` and `backend/comment/entity/comment.entity.ts` are deliberately **unidirectional** (no inverse property on User/File/Post) — do not "fix" that (ADR 0023). A new entity must be registered in **three** places or migrations silently omit it: `app.module.ts` `entities[]`, `backend/data-source.ts` `entities[]` (the CLI DataSource — `migration:generate` reads only this one), and `test/e2e-utils.ts` (`MIGRATIONS` + `TABLES`)
    - Static file serving   → read the `ServeStaticModule` block in `app.module.ts` (`rootPath: file/`, `serveRoot: 'file'`)
 2. Never invent APIs, files, functions, or types that you have not confirmed exist in the codebase.
 3. Reuse existing patterns only; do not introduce new abstractions unless explicitly asked.
@@ -566,7 +567,12 @@ one of these is violated, follow Principle Conflict Protocol.
   is its public URL (`toResponse`) — and never imports PostModule in return (ADR 0023 D4).
 - **PostModule** owns board post content only: the `PostEntity` row, its optional 1:1
   reference to a file, and post CRUD. It never reads `file.creator` — attachability is
-  FileModule's judgment to make. It exports `PostService` for the account cascade.
+  FileModule's judgment to make. It exports `PostService` for the account cascade and for
+  the one question CommentModule asks it (`assertPostExists`).
+- **CommentModule** owns thread content only: the `CommentEntity` row and comment CRUD. It
+  never queries `post_entity` — whether a post exists is PostModule's judgment to make — and
+  PostModule never imports it back, which is what lets post deletion stay a database cascade
+  (ADR 0023 D3). It exports `CommentService` for the account cascade.
 - **UploadModule** owns the *physical* file only: Multer disk storage into `file/temp`,
   size limit, temp naming. It has no service and no DB access — keep it that way.
 - **TempCleanupModule** (ADR 0018) is an *operational* module, not a domain one: it hosts
@@ -766,18 +772,25 @@ Do not suggest alternatives to these decisions without explicit request.
   does not justify the schema layer, client story, or operational overhead each would add
   (full reasoning: ADR 0009)
 
-### Deletion (ADR 0020)
+### Deletion (ADR 0020, ADR 0024)
 - **Soft delete is not adopted.** Every delete in this project is a hard delete; there is
   no `@DeleteDateColumn`, no `withDeleted` policy, and no recovery path. Introducing soft
   delete is a schema change on high-blast-radius entities and needs its own ADR
 - `DELETE /user/:id` cascades **only on an explicit `?deleteFiles=true`** (validated by
-  `DeleteUserQueryDto`): post rows → file rows → user row in one `dataSource.transaction()`,
-  then the stored files are unlinked. Unconfirmed against an account that owns files = 409
-  `USER_HAS_FILES` with the count in the message; `deleteFiles=false` counts as unconfirmed.
-  **Posts are deleted unconditionally** — the flag deliberately guards media bytes only, and
-  widening it (or adding a second flag) was rejected (ADR 0023 D5)
-- `DELETE /post/:id` hard-deletes the post row and **leaves its attached file untouched** — a
-  post references a file, it never owns it. `DELETE /file/:id` on a file a post references is
+  `DeleteUserQueryDto`): comment rows → post rows → file rows → user row in one
+  `dataSource.transaction()`, then the stored files are unlinked. Unconfirmed against an
+  account that owns files = 409 `USER_HAS_FILES` with the count in the message;
+  `deleteFiles=false` counts as unconfirmed.
+  **Posts and comments are deleted unconditionally** — the flag deliberately guards media
+  bytes only, and widening it (or adding a second flag) was rejected (ADR 0023 D5). Comments
+  go **first** and that order is load-bearing: the account's comments on *other people's*
+  posts are unreachable through the post FK cascade, which fires only when the owning post is
+  deleted. The audit detail counts files and posts but **not** comments — the cascaded half is
+  uncountable, so a partial count would read as a total (ADR 0023)
+- `DELETE /post/:id` hard-deletes the post row, **takes its comments with it through the FK**
+  (`ON DELETE CASCADE` — the schema's only one), and **leaves its attached file untouched** —
+  a post references a file, it never owns it. `DELETE /comment/:id` deletes just that row.
+  `DELETE /file/:id` on a file a post references is
   refused with 409 `FILE_IN_USE`, translated from the FK's `23503` with no pre-check query
   (a pre-check would create a `File ↔ Post` module cycle *and* still race — ADR 0023 D4)
 - The confirmation flag is a **string literal** (`'true' | 'false'`), never a boolean:
@@ -791,6 +804,17 @@ Do not suggest alternatives to these decisions without explicit request.
 - File rows stay `FileService`'s responsibility even during an account cascade:
   `UserService` owns the transaction and passes its `EntityManager` to
   `findStoredPathsOfCreator` / `deleteFilesOfCreator`
+- Both file-row delete paths translate the FK's `23503` rather than pre-checking:
+  `deleteFile` → 409 `FILE_IN_USE`, `deleteFilesOfCreator` → 409 `USER_FILES_IN_USE`
+  (ADR 0024 — reachable because `PATCH /file/:id { userId }` can reassign a file out from
+  under a post, so the account cascade can meet a stranger's post). A new file-row delete
+  path translates it too; letting `23503` reach the client as a 500 is the defect both
+  ADR 0020 and ADR 0024 exist to remove
+- `comment.postId` is the **only** `ON DELETE CASCADE` in this schema and is scoped by an
+  argument, not a precedent: a database cascade is used where the child has no independent
+  existence and no non-DB side effect; a service cascade is used where the parent is an
+  account, because that path needs confirmation, an audit row, and physical unlinking. Cite
+  ADR 0023 D3 before any future FK asks for one
 - **Never suggest**: adding `ON DELETE CASCADE` to the `FileEntity.creator` FK (the cascade
   is deliberately explicit in the service, where the paths to unlink are read), or an
   unconfirmed account cascade
@@ -832,8 +856,10 @@ in-repo `frontend/` subfolder [structure amended 2026-07-24], admin as an
 `/admin` route section inside it) → Stage 0
 RBAC → Stage 1 foundation (Node/pnpm pinning, Docker/compose, CI, logging
 conventions, E2E rewrite) → Stage 2 mechanism hardening (orphan temp-file
-cleanup, deletion policy, upload idempotency) → Stage 3 board-domain expansion
-(search/filter/sort, post/comment modules) → Stage 4 production transition (AWS
+cleanup, deletion policy, upload idempotency) → ~~Stage 3 board-domain expansion
+(search/filter/sort, post/comment modules)~~ — **complete 2026-07-31** (ADR 0021,
+ADR 0023 + its two implementation halves, with ADR 0024 settling the invariant gap
+between them) → Stage 4 production transition (AWS
 container deploy, VOD playback access control, storage port-adapter, performance
 criteria) → **Stage 5 operational surface — admin console (appended 2026-07-30,
 ADR 0022**: role-delivery decision, adapting the imported `admin/` console,
@@ -864,21 +890,20 @@ Architecture Decisions above remain operative.
   nothing sweeps `file/upload`, so a failed unlink (or a file inserted between the
   path read and the delete) leaves an orphan on disk — logged at `warn`, not repaired
   (reclamation needs a DB-joined design; tracked in ROADMAP > Unscheduled).
-  **That resolution is not total** — see the next entry
-- File ownership reassignment can still produce an FK-violation 500 on account deletion
-  (2026-07-31, ADR 0023 > Implementation notes). ADR 0023 D1 argues a post can only
-  reference *its own author's* file, and that invariant is what the entry above relies on
-  to be FK-safe. It holds at creation — `FileService.assertAttachableBy` enforces it — but
-  `PATCH /file/:id { userId }` reassigns file ownership *afterwards*, so a post can end up
-  referencing a stranger's file. Consequence: `DELETE /user/:id?deleteFiles=true` can still
-  raise `23503` inside its transaction and surface as exactly the opaque 500 ADR 0020 set
-  out to remove. Narrow (a prior reassignment is required) but reachable, and **the reason
-  `PostService.resolveAttachment` carries an author-identity check** — that branch is
-  reachable, not an unreachable guard. Do not "simplify" it away. Fixing the underlying
-  gap is explicit-request work needing its own ADR: the three candidates (refuse
-  reassignment of an attached file, widen the cascade to posts that merely *reference* the
-  account's files, or translate the `23503` into a typed refusal) are in ROADMAP >
-  Unscheduled
+  The one path this left as a 500 — a stranger's post referencing the account's file — was
+  closed separately by ADR 0024; see the next entry
+- ~~File ownership reassignment can produce an FK-violation 500 on account deletion~~ —
+  **resolved 2026-07-31** (ADR 0024): `FileService.deleteFilesOfCreator` translates the
+  `23503` into a typed 409 `USER_FILES_IN_USE`, the same technique its sibling `deleteFile`
+  already used. Two things this deliberately did **not** do, and both still bind new code:
+  the post↔file same-creator rule is now a **creation-time rule, not an invariant** — ADR 0023
+  D1's "structurally unreachable" no longer holds, because `PATCH /file/:id { userId }`
+  reassigns ownership after `FileService.assertAttachableBy` has run, so anything wanting that
+  property as a *guarantee* must first adopt ADR 0024's recorded composite-FK shape; and
+  **`PostService.resolveAttachment`'s author-identity check stays reachable** — it is the other
+  consequence of the same break, so do not "simplify" it away as an unreachable guard.
+  Accepted residual: an account whose file is attached to *another user's* post cannot be
+  deleted until that post is removed (409, actionable — any admin can delete the blocking post)
 - `ARCHITECTURE.md` (+ko) lags the code: its "Non-Existent Infrastructure" section still
   claims no CI workflow, no Dockerfile, and no Nest `Logger` usage (all three exist —
   ADR 0015/0016/0017), Jest `roots` is written as `["src"]` (actually `["backend"]`), the
@@ -960,9 +985,9 @@ pnpm test -- file.service
 **AppModule** wires together:
 - `ConfigModule` — global, Joi-validated env (see `.env.example`)
 - `TypeOrmModule` — PostgreSQL, `synchronize: false`, entities `FileEntity`, `UserEntity`,
-  `AuditLogEntity`, `PostEntity`
+  `AuditLogEntity`, `PostEntity`, `CommentEntity`
 - `ServeStaticModule` — serves the `file/` directory at `/file`
-- `FileModule`, `UserModule`, `PostModule`, `AuthModule`, `UploadModule`
+- `FileModule`, `UserModule`, `PostModule`, `CommentModule`, `AuthModule`, `UploadModule`
 
 **AuthModule** (`backend/auth/`)
 - REST: `POST /auth/register`, `POST /auth/signin` (both Basic token),
@@ -982,9 +1007,12 @@ pnpm test -- file.service
   `DELETE /user/:id` (optional `?deleteFiles=true` — confirmed cascade, ADR 0020) — no
   `POST /user` by design (registration is `POST /auth/register`)
 - `UserService` — CRUD; re-hashes password on update via `HASH_ROUNDS`; `remove` owns the
-  deletion transaction and delegates post rows to `PostService` and file rows to `FileService`
-  (posts first — both post FKs are `ON DELETE NO ACTION`)
-- Exports `UserService`; imports `FileModule` and `PostModule` for the account cascade
+  deletion transaction and delegates comment rows to `CommentService`, post rows to
+  `PostService` and file rows to `FileService` (comments first — the account's comments on
+  other people's posts are unreachable through the post FK cascade; posts next — both post
+  FKs are `ON DELETE NO ACTION`)
+- Exports `UserService`; imports `FileModule`, `PostModule` and `CommentModule` for the
+  account cascade
 
 **PostModule** (`backend/post/`)
 - REST (all behind `JwtAuthGuard`): `GET /post`, `GET /post/:id`, `POST /post`,
@@ -996,6 +1024,20 @@ pnpm test -- file.service
   `UserService`'s transaction
 - Imports `FileModule` (attachability + URL composition) and `AuditLogModule`
   (`POST_DELETE`); exports `PostService`
+
+**CommentModule** (`backend/comment/`)
+- REST (all behind `JwtAuthGuard`), across **two** controllers because the routes span two
+  prefixes (ADR 0023): `PostCommentController` serves `GET /post/:postId/comment` and
+  `POST /post/:postId/comment`; `CommentController` serves `PATCH /comment/:id` and
+  `DELETE /comment/:id`. There is deliberately no `GET /comment/:id` — the ADR did not
+  decide one
+- `CommentService` — comment CRUD; every write is a single DB write (transaction table
+  row 1). The listing order is **fixed** at `createdAt ASC` + `id` tiebreaker (a thread reads
+  oldest-first) and takes no sort parameters. `deleteCommentsOfCreator` serves the account
+  cascade inside `UserService`'s transaction
+- Imports `PostModule` (`assertPostExists` — existence is PostModule's judgment, never a
+  `post_entity` query from here) and `AuditLogModule` (`COMMENT_DELETE`); exports
+  `CommentService`
 
 **FileModule** (`backend/file/`)
 - REST (all behind `JwtAuthGuard`): `GET /file`, `GET /file/:id`, `POST /file`,
@@ -1038,6 +1080,13 @@ pnpm test -- file.service
   timestamps. Relations are **unidirectional**: neither `UserEntity` nor `FileEntity` gains
   an inverse collection, because the one inverse that exists (`UserEntity.creator`) is read
   by zero queries (ADR 0023)
+- `CommentEntity` — `body` (text; ≤1,000 bounded at the DTO, not the column),
+  `creator: UserEntity` (ManyToOne, `nullable: false`), `post: PostEntity` (ManyToOne,
+  `nullable: false`, **`onDelete: 'CASCADE'`** — the schema's only DB-level cascade, ADR 0023
+  D3), timestamps, and `@Index('IDX_comment_entity_postId_createdAt', ['post', 'createdAt'])`
+  for the one query shape this table has. Unidirectional like `PostEntity`: neither
+  `UserEntity` nor `PostEntity` gains an inverse collection. There is deliberately no
+  `parentId` — comments are flat, and threading is an additive migration if ever wanted
 - No shared base entity; timestamps declared per entity — a shared base would be premature
   abstraction (YAGNI) and add inheritance coupling for no reuse
 

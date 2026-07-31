@@ -62,14 +62,17 @@ lands as its own dedicated, designed change
   ([ADR 0020](ADR/0020-account-deletion-cascade.md)): soft delete is not adopted, an
   account cascades into its files only on an explicit `deleteFiles=true`, and the old
   FK-violation 500 is now a typed 409 — **Stage 2 is complete**.
-- **Stage 3 is under way**: list search / filter / sort landed 2026-07-30
+- **Stage 3 is complete (2026-07-31)**: list search / filter / sort landed 2026-07-30
   ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — `GET /file` now takes
   `search`, `creatorId`, `sortBy`, and `order`, with sort keys resolved through an in-code
   whitelist and a deterministic default order the endpoint previously lacked. The board
   domain's **schema design gate** followed on 2026-07-30
   ([ADR 0023](ADR/0023-board-domain-schema.md)) — post and comment settled together in
-  plain text, with no code — leaving the post/comment implementation as the remaining
-  Stage 3 task.
+  plain text, with no code — and its two implementation halves landed on 2026-07-31: the
+  post module first (comment depends on post, not the reverse), then the comment module,
+  with [ADR 0024](ADR/0024-account-cascade-fk-refusal.md) settling the post↔file invariant
+  gap in between. **The board this project is named for now exists**: posts with an optional
+  attached video, and threads under them.
 - **Stage 5 (operational surface — admin console) was appended 2026-07-30**
   ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)), closing a gap in the
   original plan: ADR 0010 decided where admin lives back on 2026-07-23, but no stage ever
@@ -78,10 +81,10 @@ lands as its own dedicated, designed change
   first row — how a client learns its own role — is a backend decision that blocks the rest.
   It does **not** depend on Stage 4 and may run before it.
 - **Execution order for the remaining work fixed 2026-07-31** (see section 6 >
-  Execution order): #1 board comment module → #2 `GET /user` pagination (pulled
-  forward from Stage 5) → #3 Stage 5 admin surface → #4 Stage 4 deployment, last. This
-  resolves Stage 5's floating position (before Stage 4) and pulls the independent
-  pagination debt ahead of both.
+  Execution order): ~~#1 board comment module~~ (✅ done 2026-07-31) → **#2 `GET /user`
+  pagination — now next** (pulled forward from Stage 5) → #3 Stage 5 admin surface →
+  #4 Stage 4 deployment, last. This resolves Stage 5's floating position (before Stage 4)
+  and pulls the independent pagination debt ahead of both.
 
 ## 1. Vision & essence
 
@@ -194,10 +197,11 @@ The stages below are grouped by dependency, but several ready items span stages,
 so the actual build sequence is fixed here (completed stages omitted). Each pending
 item carries its execution number in its own row.
 
-1. **Board domain — comment module** (Stage 3) — the only dependency-ready task in the
-   lowest incomplete stage; its schema gate ([ADR 0023](ADR/0023-board-domain-schema.md))
-   is done and the post half landed 2026-07-31, so this is the next dedicated task.
-   **Settle the post↔file invariant gap first** — see the Stage 3 row.
+1. ~~**Board domain — comment module** (Stage 3)~~ — ✅ done 2026-07-31, **completing
+   Stage 3**. Its gate, the post↔file invariant gap, was settled first by
+   [ADR 0024](ADR/0024-account-cascade-fk-refusal.md), which left the account-cascade
+   delete order untouched, so the comment delete slotted in ahead of posts without
+   rewriting it. **Execution #2 is now the next dedicated task.**
 2. **`GET /user` pagination** (pulled forward from Stage 5) — an independent Never
    Do Group 2 debt, owed regardless of the console; taken as an early quick win and
    as the read-layer precursor the admin user list will need.
@@ -257,7 +261,7 @@ settled while zero consumers exist.
 | ~~List search / filter / sort~~ — ✅ landed 2026-07-30 ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) | `GET /file` gained `search` (escaped `ILIKE '%term%'` on the title), `creatorId`, and `sortBy`/`order` resolved through a total-`Record` whitelist — plus the `ORDER BY` the endpoint never had, so offset paging is deterministic. No schema change; the three candidate indexes are deferred with their triggers recorded. This is the read-layer pattern the post listing extends. |
 | ~~Board domain — schema design gate~~ — ✅ landed 2026-07-30 ([ADR 0023](ADR/0023-board-domain-schema.md)) | The plain-text schema description Scope Discipline requires before any migration, covering both entities at once so the comment task cannot force a post-schema rollback: post ↔ file is 1:1, optional, same-creator (the unique FK doubles as `POST /post`'s idempotency key); comments are flat and cascade with their post at the FK; `DELETE /file/:id` on an attached file becomes 409 `FILE_IN_USE`; the ADR 0020 account cascade takes posts and comments unconfirmed while the flag still guards files only; `canManage` and the ADR 0021 read layer are reused unchanged. Design only — no code, no migration. |
 | ~~Board domain — post module~~ — ✅ landed 2026-07-31 ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) | The first half of ADR 0023, split out because comment depends on post and not the reverse: `PostModule` (5 routes behind `JwtAuthGuard`), `post_entity` with 2 FKs and `UQ_post_entity_fileId` (reviewed migration — generate's four spurious constraint-rename statements stripped), 3 new error codes, the `DELETE /file/:id` `23503` → 409 `FILE_IN_USE` translation, and posts joining the ADR 0020 account cascade (`posts=N` in the audit detail). The ADR 0021 read layer and `canManage` were reused rather than restated. |
-| Board domain — comment module **(execution #1 — next dedicated task)** | The second half of [ADR 0023](ADR/0023-board-domain-schema.md): `CommentModule`, `comment_entity` with its `ON DELETE CASCADE` FK to `post_entity` and `IDX_comment_entity_postId_createdAt`, the `COMMENT_NOT_FOUND` code (deliberately not added ahead of its consumer), the `/post/:postId/comment` routes, and comments joining the account cascade ahead of posts. Needs approval to touch `*.entity.ts`. **Gate — decide the post↔file invariant gap before starting** (see Unscheduled below): its candidate fix "widen the cascade" changes the delete order this task builds on, so deciding afterwards means rewriting that order a second time. |
+| ~~Board domain — comment module~~ — ✅ landed 2026-07-31 ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) | The second half of ADR 0023, and with it **Stage 3 is complete**. `CommentModule` ships the ADR's four routes behind `JwtAuthGuard` across two controllers (a thread hangs off its post, an existing comment is addressed by its own id), over a `comment_entity` carrying the schema's only `ON DELETE CASCADE` FK plus `IDX_comment_entity_postId_createdAt` (reviewed migration — generate's six spurious constraint-rename statements stripped). `COMMENT_NOT_FOUND` and the `COMMENT_DELETE` audit action arrived with their consumers. Comments join the account cascade **ahead of posts**, because the account's comments on *other people's* posts are unreachable through the post FK cascade. Two design decisions were kept rather than softened: no `comments=N` in the audit detail (the cascaded half is uncountable, so a partial count would read as a total), and no idempotency key (a repeat creates a second comment, as for a post with no `fileId`). Its gate was cleared first by [ADR 0024](ADR/0024-account-cascade-fk-refusal.md). |
 
 ### Stage 4 — Production transition — sequenced **last** in the execution order (2026-07-31)
 
@@ -355,17 +359,18 @@ role-delivery → adapt console → moderation decision → resolve duplicate su
   copying ADR 0018's sweep: "on disk without a row" cannot be decided from the filename
   alone, so it needs a DB-joined reconciliation with its own ADR. Unscheduled — the
   accepted residual is disk waste, never a broken record.
-- File ownership reassignment can break the post↔file same-creator invariant (recorded
-  2026-07-31, [ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) — D1 argues
-  a post can only reference its own author's file, which is what makes the account cascade
-  FK-safe. That holds at creation, but `PATCH /file/:id { userId }` reassigns ownership
-  afterwards, so a post can end up referencing a stranger's file. Consequence:
-  `DELETE /user/:id?deleteFiles=true` can still raise `23503` inside its transaction and
-  surface as the opaque 500 [ADR 0020](ADR/0020-account-deletion-cascade.md) removed. Narrow
-  (a prior reassignment is required) but real. Unscheduled because every fix is a decision,
-  not a patch: refuse reassignment of an attached file, widen the cascade to posts that merely
-  *reference* the account's files, or translate the `23503` into a typed refusal. Needs its
-  own ADR.
+- ~~File ownership reassignment can break the post↔file same-creator invariant~~ — ✅
+  **settled 2026-07-31** ([ADR 0024](ADR/0024-account-cascade-fk-refusal.md)), the gate the
+  comment module waited on. Of the three candidates, *translate the `23503` into a typed
+  refusal* was chosen: `FileService.deleteFilesOfCreator` now answers 409
+  `USER_FILES_IN_USE`, matching what its sibling `deleteFile` already did for
+  `FILE_IN_USE`. Rejecting the other two mattered as much as choosing this one — widening
+  the cascade would have destroyed third-party posts *and* rewritten the delete order the
+  comment task extends, and a composite FK enforcing the rule in the database is recorded
+  in that ADR as the shape to adopt if the property is ever needed as a guarantee rather
+  than merely handled. What remains is deliberate, not residual: the same-creator rule is
+  now a **creation-time rule**, so an account whose file sits in a stranger's post cannot be
+  deleted until that post is (409, and any admin can clear it).
 - Deferred list-query indexes (recorded 2026-07-30,
   [ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — the search/filter/sort task
   deliberately shipped **no index**: at this table's size all three candidates are

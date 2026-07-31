@@ -406,3 +406,59 @@ neither, since resolving them is a decision, not an implementation detail:
 **Verified**: `pnpm lint` clean, 121 unit tests, 52 e2e tests (14 new, covering post CRUD,
 the 403 ownership refusals, replay/409 on a repeated `fileId`, 409 `FILE_IN_USE`, and the
 account cascade's `posts=N` audit detail).
+
+## Implementation notes (comment module, 2026-07-31)
+
+The decision above is unchanged. These notes record how the second half landed; they add no
+new decision. The gate this task waited on — the post↔file invariant gap recorded in the post
+notes — was settled first by [ADR 0024](0024-account-cascade-fk-refusal.md), which left the
+account-cascade delete order untouched, so the order below is an insertion rather than a
+rewrite.
+
+`comment_entity` landed exactly as designed: `body` (`text`, bounded at the DTO ≤1,000), a
+`creatorId` FK (`NO ACTION`), a `postId` FK (**`ON DELETE CASCADE`** — still the schema's only
+one), and `IDX_comment_entity_postId_createdAt`. `migration:generate` again behaved as
+[ADR 0006](0006-schema-policy-and-migration-adoption.md) predicts — six spurious statements
+this time, dropping and re-adding `FK_file_entity_creator`, `FK_post_entity_creator`,
+`FK_post_entity_file` and `IDX_audit_log_entity_action_createdAt` purely to rename them to
+TypeORM hashes. Those were stripped and the new constraints given readable names
+(`PK_comment_entity`, `FK_comment_entity_creator`, `FK_comment_entity_post`).
+
+`COMMENT_NOT_FOUND` was added now, with its consumer, as the post notes said it would be.
+`COMMENT_DELETE` joined `AUDIT_ACTIONS`.
+
+**Three shapes the design implied but did not name.**
+
+- **Two controllers, not one.** ADR 0023's route table spans two prefixes — a thread hangs off
+  its post (`GET`/`POST /post/:postId/comment`), while an existing comment is addressed by its
+  own id (`PATCH`/`DELETE /comment/:id`) — and one `@Controller` cannot carry both. Hence
+  `PostCommentController` and `CommentController`, both in `CommentModule`. Only the four
+  routes the ADR lists exist; a `GET /comment/:id` was written during implementation and
+  removed, since an endpoint no decision asked for is scope creep.
+- **`PostService.assertPostExists(postId)`** is comment's equivalent of D1's
+  "asks `FileService`": a judgment, not a getter, so `CommentService` never queries
+  `post_entity` itself. It checks existence without joins rather than reusing `getPostById`,
+  which would load the creator and file relations to build a response nobody reads.
+- **The comment listing does not join its post.** `postId` is already known from the route, so
+  joining would repeat one post's row across every comment in the thread. `toResponse` takes
+  the id as a parameter instead, and `CommentResponseDto` carries `postId` rather than an
+  embedded post.
+
+**Two things the design decided that the implementation deliberately did not soften.**
+
+1. **No `comments=N` in the `USER_DELETE` audit detail.** The service *can* count the comments
+   it deletes explicitly, but not the ones the FK cascade removes, and a partial count reads as
+   a total. Consequences already accepted that the audit counts posts but not comments; adding
+   the countable half would have contradicted it while looking like an improvement.
+2. **A comment has no idempotency key.** Nothing on the row is unique, so a repeated
+   `POST /post/:postId/comment` creates a second comment — the same outcome D1 documents for a
+   post with no `fileId`, and pinned by a test in both suites so it stays a decision rather
+   than an oversight.
+
+**Verified**: `pnpm lint` clean (0 errors, 0 warnings), 141 unit tests (16 new for
+`CommentService`, plus `assertPostExists` and the cascade-order assertion), 64 e2e tests
+(11 new — thread CRUD, oldest-first pagination, 404 on a missing post for both reads and
+writes, the 403 ownership refusals *including* the post author having no power over comments
+on their post, `COMMENT_DELETE` auditing, the FK cascade from a deleted post, and the account
+cascade taking the account's comments off other people's posts). `/doc` renders all four
+routes under `Comment API` behind `@ApiBearerAuth`.

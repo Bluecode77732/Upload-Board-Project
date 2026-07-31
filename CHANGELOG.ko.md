@@ -12,6 +12,60 @@
 
 ## [Unreleased]
 
+### 추가
+- **게시판 comment 모듈 — 게시판 도메인 완성**
+  ([ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) — 스키마 게이트의 후반부이며,
+  이로써 **Stage 3**도 완결됐다. `CommentModule`은 ADR이 정한 네 라우트를 `JwtAuthGuard` 뒤에
+  두되 **컨트롤러 두 개**로 나눴다. 접두사가 둘로 갈리기 때문이다: 스레드는 글에 매달리고
+  (`GET`/`POST /post/:postId/comment`), 이미 존재하는 댓글은 자기 id로 지목된다
+  (`PATCH`/`DELETE /comment/:id`). 새 `comment_entity`는 `body`(`text`, DTO에서 ≤1,000으로 제한),
+  `creatorId` FK, 그리고 **이 스키마의 유일한 `ON DELETE CASCADE`** 를 가진 `postId` FK로 이뤄진다 —
+  당연시한 게 아니라 ADR 0023 D3에서 근거를 밝혔다. 댓글에는 URL도 파일도 없고 글 밖에서는 존재하지
+  않으므로, 행을 지우기 전에 읽어야 할 것이 없다. `IDX_comment_entity_postId_createdAt`은 이 테이블의
+  유일한 조회 형태를 받쳐 준다. 마이그레이션은
+  [ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)이 요구하는 대로 라인단위로
+  검토했다 — `generate`가 제약 이름 변경 6문장을 뱉었고, 전부 걷어내고 읽을 수 있는 이름을 썼다.
+  **스레드는 오래된 순으로 읽는다**(`createdAt ASC` + `id` tiebreaker). 최신순인 파일·게시글 목록과
+  반대이며, 정렬은 파라미터로 열지 않고 고정했다. 소유권은 `canManage`(작성자 **또는** admin+)를 그대로
+  쓰되 **세 번째 축은 없다**: 글 작성자는 자기 글의 댓글에 아무 권한도 얻지 못한다. 그러려면 이 프로젝트가
+  금지하는 `comment.post.creator` reach-through가 필요하기 때문이다. `COMMENT_NOT_FOUND`와
+  `COMMENT_DELETE` 감사 액션은 소비자와 함께 들어왔다. 완화하지 않고 그대로 지킨 결정이 둘 있다 —
+  `POST` 재제출은 두 번째 댓글을 만들고(행에 유니크한 것이 없어 자연 멱등 키가 없으며, `fileId` 없는
+  글과 정확히 같다), `USER_DELETE` 감사 detail에는 `comments=N`을 **넣지 않았다**(연쇄분을 셀 수 없어
+  반쪽 집계가 총계처럼 읽히기 때문이다).
+
+### 변경
+- **계정 연쇄 삭제가 이제 댓글 → 게시글 → 파일 순서로 지운다**
+  ([ADR 0023](ADR/0023-board-domain-schema.ko.md) D5) — `UserService.remove`가 기존
+  `dataSource.transaction()` 안에서 그 계정의 댓글을 *어디에 달렸든* `creatorId` 기준으로 게시글보다
+  먼저 지운다. 이 순서가 핵심이다: 그 계정이 **남의** 글에 단 댓글은 게시글 FK 연쇄로 닿지 않는데,
+  그 연쇄는 소유 게시글이 삭제될 때만 발동하기 때문이다. 자기 글에 남은 댓글은 여전히 그 연쇄가
+  가져간다. 확인 플래그는 추가하지 않았다 — `deleteFiles`는 계속 미디어 바이트만 지킨다.
+  `PostService.assertPostExists`를 추가해, `CommentService`가 `post_entity`를 직접 조회하지 않고도
+  없는 글에 달린 댓글을 404 `POST_NOT_FOUND`로 거절할 수 있게 했다(Tell Don't Ask —
+  `FileService.assertAttachableBy`와 같은 형태다).
+
+### 수정
+- **계정 연쇄 삭제가 FK 위반 500 대신 409 `USER_FILES_IN_USE`로 답한다**
+  ([ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)) — 하루 전 post 모듈이 남긴 알려진
+  문제를 닫았고, comment 모듈이 기다리던 게이트를 해제했다. `PATCH /file/:id { userId }`는
+  `FileService.assertAttachableBy`가 생성 시점에 강제한 ADR 0023 D1의 같은-작성자 규칙 *이후에*
+  파일 소유자를 바꿀 수 있어, 게시글이 남의 파일을 참조하는 상태가 만들어진다. 그러면
+  `DELETE /user/:id?deleteFiles=true`가 트랜잭션 안에서 `23503`을 내고,
+  [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)이 없애려던 바로 그 불투명한 500으로
+  드러났다. 이제 `FileService.deleteFilesOfCreator`가 그 `23503`을 형제 메서드 `deleteFile`이
+  `FILE_IN_USE`에 대해 이미 하던 방식 그대로 번역한다 — 파일 행을 지우는 두 경로가 파일 행을
+  소유한 클래스 안에서 참조를 같은 방식으로 처리한다. **사전 조회는 하지 않는다.**
+  [ADR 0023](ADR/0023-board-domain-schema.ko.md) D4가 세운 두 이유 그대로다: `FileService`가
+  `post_entity`를 읽으면 모듈 순환이고, 확인과 삭제 사이에 생성된 게시글은 여전히 제약에 걸린다.
+  나머지 두 후보는 기각을 기록으로 남겼다 — 연쇄 확대는 제3자의 게시글을 파괴하는 데다 comment
+  과제가 확장할 삭제 순서까지 다시 쓰게 만들고, 복합 FK(`file_entity`의 `UNIQUE (id, creatorId)`를
+  `post_entity`가 참조)는 이 성질이 *보장*으로 필요해질 때만 채택할 형태로 해당 ADR에 적어 두었다.
+  새 에러 코드는 하나, `USER_FILES_IN_USE`(409)이며 같은 라우트의 `USER_HAS_FILES`와 대칭이다.
+  스키마 변경도 마이그레이션도 없다. **의도적으로 두 가지는 그대로 둔다**: post↔file 규칙은 이제
+  불변식이 아니라 생성 시점 규칙이고, `PostService.resolveAttachment`의 작성자 동일성 확인은 여전히
+  도달 가능하므로 정리해 없애면 안 된다.
+
 ### 변경
 - **남은 작업의 ROADMAP 실행 순번 고정** (2026-07-31) — 단계별 계획은 작업을 의존
   관계로 묶지만, 준비된 항목 몇 개가 단계를 가로질러 있어 실제 착수 순서를
@@ -78,6 +132,9 @@
   위임한다. `PostService`는 `file.creator`를 읽지 않는다(디미터 법칙).
 
 ### 알려진 문제
+> 2026-07-31 [ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)로 해소 — 위 **수정** 참조.
+> `23503`은 이제 타입 있는 409이고, `resolveAttachment` 가드는 아래 설명대로 유지된다.
+
 - **파일 소유권 이전이 post↔file 같은-작성자 불변식을 깰 수 있다** — ADR 0023 D1은 게시글이 자기
   작성자의 파일만 참조할 수 있다고 논증하며, 그것이 계정 연쇄를 FK 안전하게 만드는 근거다. 작성
   시점에는 성립하지만 `PATCH /file/:id { userId }`가 사후에 소유권을 넘긴다. 결과는 둘이고, 해결이

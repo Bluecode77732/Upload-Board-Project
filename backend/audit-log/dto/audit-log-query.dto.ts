@@ -10,6 +10,7 @@ export const AUDIT_ACTIONS = [
   'USER_DELETE',
   'FILE_DELETE',
   'POST_DELETE',
+  'COMMENT_DELETE',
 ] as const;
 
 export class AuditLogQueryDto {

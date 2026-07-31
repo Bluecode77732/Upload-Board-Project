@@ -7,6 +7,7 @@ import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { FileEntity } from '../backend/file/entity/file.entity';
 import { UserEntity } from '../backend/user/entity/user.entity';
+import { CommentEntity } from '../backend/comment/entity/comment.entity';
 import { UserRole } from '../backend/auth/role/role';
 import {
   setupE2E,
@@ -1002,6 +1003,310 @@ describe('Upload Board API (e2e)', () => {
         .set(auth(adminToken))
         .expect(200);
       expect(log.body[0][0].detail).toBe('files=0 posts=2');
+    });
+  });
+
+  // The board comment domain (ADR 0023): thread CRUD, the ownership shape (author or
+  // admin, and deliberately *not* the post's author), and the two delete consequences —
+  // the FK cascade from a deleted post, and comments joining the account cascade.
+  describe('Comment module (ADR 0023)', () => {
+    // Returns the id rather than the response: every caller here threads it into a
+    // route or a helper, and res.body is `any`.
+    async function newPost(token: string, title: string): Promise<number> {
+      const res = await request(server)
+        .post('/post')
+        .set(auth(token))
+        .send({ title, body: 'Post body.' })
+        .expect(201);
+      return res.body.id as number;
+    }
+
+    const createComment = (
+      token: string,
+      postId: number,
+      body: unknown,
+    ): request.Test =>
+      request(server)
+        .post(`/post/${postId}/comment`)
+        .set(auth(token))
+        .send(body);
+
+    it('comments on a post and lists it back under that post', async () => {
+      const user = await createUser('c-basic@e.com');
+      const post = await newPost(user.accessToken, 'Thread');
+
+      const created = await createComment(user.accessToken, post, {
+        body: 'First!',
+      }).expect(201);
+
+      expect(created.body.body).toBe('First!');
+      expect(created.body.postId).toBe(post);
+      expect(created.body.creator.email).toBe('c-basic@e.com');
+
+      const list = await request(server)
+        .get(`/post/${post}/comment`)
+        .set(auth(user.accessToken))
+        .expect(200);
+      expect(list.body[1]).toBe(1);
+      expect(list.body[0][0].id).toBe(created.body.id);
+    });
+
+    it('404s when commenting on a post that does not exist', async () => {
+      const user = await createUser('c-nopost@e.com');
+
+      // The FK would raise 23503; the service refuses before the insert instead.
+      const res = await createComment(user.accessToken, 999999, {
+        body: 'into the void',
+      }).expect(404);
+      expect(res.body.code).toBe('POST_NOT_FOUND');
+    });
+
+    it('404s when listing comments of a post that does not exist', async () => {
+      const user = await createUser('c-nolist@e.com');
+
+      const res = await request(server)
+        .get('/post/999999/comment')
+        .set(auth(user.accessToken))
+        .expect(404);
+      expect(res.body.code).toBe('POST_NOT_FOUND');
+    });
+
+    it('rejects an undeclared body field and an over-long body', async () => {
+      const user = await createUser('c-validate@e.com');
+      const post = await newPost(user.accessToken, 'Validated');
+
+      const extra = await createComment(user.accessToken, post, {
+        body: 'ok',
+        postId: 1,
+      }).expect(400);
+      expect(extra.body.code).toBe('VALIDATION_FAILED');
+
+      const long = await createComment(user.accessToken, post, {
+        body: 'x'.repeat(1001),
+      }).expect(400);
+      expect(long.body.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('reads the thread oldest-first and paginates', async () => {
+      const user = await createUser('c-page@e.com');
+      const post = await newPost(user.accessToken, 'Long thread');
+
+      for (const body of ['one', 'two', 'three']) {
+        await createComment(user.accessToken, post, { body }).expect(201);
+      }
+
+      const page = await request(server)
+        .get(`/post/${post}/comment?take=2&skip=0`)
+        .set(auth(user.accessToken))
+        .expect(200);
+
+      // Oldest-first, unlike the newest-first file and post listings (ADR 0023).
+      expect(page.body[0].map((c: { body: string }) => c.body)).toEqual([
+        'one',
+        'two',
+      ]);
+      expect(page.body[1]).toBe(3);
+    });
+
+    it('creates a second comment when the identical body is submitted twice', async () => {
+      const user = await createUser('c-dup@e.com');
+      const post = await newPost(user.accessToken, 'Dup');
+
+      // No unique column means no natural idempotency key — the repeat is a new
+      // comment, documented and accepted exactly as for a post with no fileId.
+      const first = await createComment(user.accessToken, post, {
+        body: 'same text',
+      }).expect(201);
+      const second = await createComment(user.accessToken, post, {
+        body: 'same text',
+      }).expect(201);
+
+      expect(second.body.id).not.toBe(first.body.id);
+    });
+
+    it('lets the author edit, forbids a stranger, and allows an admin', async () => {
+      const author = await createUser('c-author@e.com');
+      const stranger = await createUser('c-stranger@e.com');
+      const moderator = await createUser('c-admin@e.com');
+      await promoteToAdmin(moderator.id);
+
+      const post = await newPost(author.accessToken, 'Owned');
+      const comment = await createComment(author.accessToken, post, {
+        body: 'original',
+      }).expect(201);
+
+      const edited = await request(server)
+        .patch(`/comment/${comment.body.id}`)
+        .set(auth(author.accessToken))
+        .send({ body: 'edited' })
+        .expect(200);
+      expect(edited.body.body).toBe('edited');
+
+      const refused = await request(server)
+        .patch(`/comment/${comment.body.id}`)
+        .set(auth(stranger.accessToken))
+        .send({ body: 'hijacked' })
+        .expect(403);
+      expect(refused.body.code).toBe('FORBIDDEN_NOT_OWNER');
+
+      await request(server)
+        .patch(`/comment/${comment.body.id}`)
+        .set(auth(moderator.accessToken))
+        .send({ body: 'moderated' })
+        .expect(200);
+    });
+
+    it("gives the post's author no power over comments on their post", async () => {
+      const postAuthor = await createUser('c-postowner@e.com');
+      const commenter = await createUser('c-commenter@e.com');
+
+      const post = await newPost(postAuthor.accessToken, 'My post');
+      const comment = await createComment(commenter.accessToken, post, {
+        body: 'someone else wrote this',
+      }).expect(201);
+
+      // The third authorization axis was rejected by ADR 0023 — it would need a
+      // comment.post.creator reach-through, and admin moderation covers the case.
+      const res = await request(server)
+        .delete(`/comment/${comment.body.id}`)
+        .set(auth(postAuthor.accessToken))
+        .expect(403);
+      expect(res.body.code).toBe('FORBIDDEN_NOT_OWNER');
+    });
+
+    it('deletes a comment and audits COMMENT_DELETE, leaving the post alone', async () => {
+      const moderator = await createUser('c-audit@e.com');
+      await promoteToAdmin(moderator.id);
+      const post = await newPost(moderator.accessToken, 'Audited');
+      const comment = await createComment(moderator.accessToken, post, {
+        body: 'to be removed',
+      }).expect(201);
+
+      await request(server)
+        .delete(`/comment/${comment.body.id}`)
+        .set(auth(moderator.accessToken))
+        .expect(200);
+
+      await request(server)
+        .get(`/post/${post}`)
+        .set(auth(moderator.accessToken))
+        .expect(200);
+
+      const log = await request(server)
+        .get('/audit-log?action=COMMENT_DELETE')
+        .set(auth(moderator.accessToken))
+        .expect(200);
+      expect(log.body[1]).toBe(1);
+      expect(log.body[0][0].targetId).toBe(comment.body.id);
+    });
+
+    it('takes the comments with the post through the FK cascade', async () => {
+      const author = await createUser('c-cascade@e.com');
+      const commenter = await createUser('c-cascade2@e.com');
+      const post = await newPost(author.accessToken, 'Doomed');
+
+      await createComment(author.accessToken, post, {
+        body: 'mine',
+      }).expect(201);
+      await createComment(commenter.accessToken, post, {
+        body: 'theirs',
+      }).expect(201);
+
+      await request(server)
+        .delete(`/post/${post}`)
+        .set(auth(author.accessToken))
+        .expect(200);
+
+      // ON DELETE CASCADE — the schema's only database-level cascade (ADR 0023 D3).
+      const remaining = await app
+        .get(DataSource)
+        .getRepository(CommentEntity)
+        .count();
+      expect(remaining).toBe(0);
+    });
+
+    it("takes the account's comments everywhere, including on other people's posts", async () => {
+      const admin = await createUser('c-acctadmin@e.com');
+      await promoteToAdmin(admin.id);
+      const host = await createUser('c-host@e.com');
+      const victim = await createUser('c-victim@e.com');
+
+      const hostPost = await newPost(host.accessToken, 'Host post');
+      // The victim's comment on somebody else's post — unreachable through the post
+      // FK cascade, which is why the account cascade deletes comments explicitly first.
+      await createComment(victim.accessToken, hostPost, {
+        body: 'visiting',
+      }).expect(201);
+      await createComment(host.accessToken, hostPost, {
+        body: 'staying',
+      }).expect(201);
+
+      await request(server)
+        .delete(`/user/${victim.id}`)
+        .set(auth(admin.accessToken))
+        .expect(200);
+
+      const left = await request(server)
+        .get(`/post/${hostPost}/comment`)
+        .set(auth(admin.accessToken))
+        .expect(200);
+      expect(left.body[1]).toBe(1);
+      expect(left.body[0][0].body).toBe('staying');
+    });
+  });
+
+  // ADR 0024: PATCH /file/:id { userId } can move a file out from under a post, so the
+  // account cascade can meet a post it does not own. That was an opaque 500; it is now a
+  // typed 409. This is the only path that reproduces it end to end.
+  describe('Account cascade FK refusal (ADR 0024)', () => {
+    it("refuses the cascade when another user's post holds the account's file", async () => {
+      const author = await createUser('adr24-author@e.com');
+      const newOwner = await createUser('adr24-owner@e.com');
+
+      // The invariant holds here: the author attaches a file they created.
+      const fileId = await seedFile('reassigned-clip', author.id);
+      const post = await request(server)
+        .post('/post')
+        .set(auth(author.accessToken))
+        .send({
+          title: 'Still mine',
+          body: 'The file underneath is about to change hands.',
+          fileId,
+        })
+        .expect(201);
+
+      // ...and is broken here, after creation — assertAttachableBy never runs again.
+      await request(server)
+        .patch(`/file/${fileId}`)
+        .set(auth(author.accessToken))
+        .send({ userId: newOwner.id })
+        .expect(200);
+
+      const refused = await request(server)
+        .delete(`/user/${newOwner.id}?deleteFiles=true`)
+        .set(auth(newOwner.accessToken))
+        .expect(409);
+      expect(refused.body.code).toBe('USER_FILES_IN_USE');
+
+      // The whole transaction rolled back — the account and the post both survive.
+      await request(server)
+        .get(`/user/${newOwner.id}`)
+        .set(auth(newOwner.accessToken))
+        .expect(200);
+      await request(server)
+        .get(`/post/${post.body.id}`)
+        .set(auth(author.accessToken))
+        .expect(200);
+
+      // Actionable, not a dead end: clearing the blocking post unblocks the delete.
+      await request(server)
+        .delete(`/post/${post.body.id}`)
+        .set(auth(author.accessToken))
+        .expect(200);
+      await request(server)
+        .delete(`/user/${newOwner.id}?deleteFiles=true`)
+        .set(auth(newOwner.accessToken))
+        .expect(200);
     });
   });
 });

@@ -129,7 +129,10 @@ docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 �
   `USER_HAS_FILES`로 거절되며, `?deleteFiles=true`로 연쇄 삭제를 확인해야 계정과 파일을
   함께 삭제한다 — 되돌릴 수 없다 ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)).
   해당 계정의 **게시글은 별도 확인 없이 항상 함께 삭제된다** — 이 플래그가 지키는 대상은
-  미디어 바이트뿐이기 때문이다 ([ADR 0023](ADR/0023-board-domain-schema.ko.md))
+  미디어 바이트뿐이기 때문이다 ([ADR 0023](ADR/0023-board-domain-schema.ko.md)). 확인을
+  거쳤더라도 그 계정의 파일이 *다른 사용자의* 게시글에 걸려 있으면 409 `USER_FILES_IN_USE`로
+  거절된다 — 그 게시글을 먼저 지워야 한다
+  ([ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md))
 
 **파일**
 - `POST /upload/attach` — 동영상을 임시 저장소로 업로드 (multipart 필드 `video`, 100 MB 제한)
@@ -170,10 +173,25 @@ docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 �
   `fileId` 없는 게시글은 자연 키가 없어 재제출 시 새 글이 만들어진다
 - `PATCH /post/:id` — `title` / `body` 수정 (작성자 또는 admin). 첨부는 작성 시점에 고정되므로,
   영상을 떼려면 게시글을 삭제해야 한다
-- `DELETE /post/:id` — 게시글 삭제 (작성자 또는 admin), 되돌릴 수 없다
+- `DELETE /post/:id` — 게시글 삭제 (작성자 또는 admin), 되돌릴 수 없다. 그 글의 댓글은 FK 연쇄로
+  함께 사라지지만, 첨부 파일은 그대로 남는다
+
+**댓글** — 게시글 아래 스레드 ([ADR 0023](ADR/0023-board-domain-schema.ko.md)). 평면 구조이며
+대댓글은 없다
+- `GET /post/:postId/comment` — 한 게시글의 댓글 목록, **오래된 순**(최신순인 파일·게시글 목록과
+  반대다. 정렬은 고정이라 정렬 파라미터를 받지 않는다). `take` / `skip`으로 페이지네이션한다.
+  없는 글이면 404 `POST_NOT_FOUND`
+- `POST /post/:postId/comment` — 댓글 작성 (`{ body }`, 1,000자 이하). 글이 없으면 404
+  `POST_NOT_FOUND`. 댓글에는 유니크한 컬럼이 없어 멱등 키도 없으므로, 동일한 내용을 다시 제출하면
+  **두 번째** 댓글이 만들어진다
+- `PATCH /comment/:id` — `body` 수정 (작성자 또는 admin)
+- `DELETE /comment/:id` — 댓글 삭제 (작성자 또는 admin), 되돌릴 수 없다. 게시글은 그대로다
+
+게시글 작성자라고 해서 자기 글의 댓글에 **특별한 권한을 얻지는 않는다** — 수정과 삭제는 댓글
+작성자 본인이나 admin의 몫이며, 그 외 누구의 것도 아니다.
 
 **감사 로그**
-- `GET /audit-log` — ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE 기록 조회 (admin만; 페이지네이션, `?action` 필터)
+- `GET /audit-log` — ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE / COMMENT_DELETE 기록 조회 (admin만; 페이지네이션, `?action` 필터)
 
 ### 일반적인 흐름
 

@@ -15,6 +15,7 @@ import { UserRole } from 'backend/auth/role/role';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
 import { FileService } from 'backend/file/file.service';
 import { PostService } from 'backend/post/post.service';
+import { CommentService } from 'backend/comment/comment.service';
 import * as fs from 'fs/promises';
 
 jest.mock('bcrypt');
@@ -71,6 +72,12 @@ describe('UserService', () => {
     deletePostsOfCreator: jest.fn().mockResolvedValue(0),
   };
 
+  // ...and for comment rows, which go first: the account's comments on *other people's*
+  // posts are unreachable through the post FK cascade (ADR 0023 D5).
+  const mockCommentService = {
+    deleteCommentsOfCreator: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -98,6 +105,10 @@ describe('UserService', () => {
         {
           provide: PostService,
           useValue: mockPostService,
+        },
+        {
+          provide: CommentService,
+          useValue: mockCommentService,
         },
       ],
     }).compile();
@@ -242,13 +253,24 @@ describe('UserService', () => {
       expect(result).toBe('User 2 deleted.');
     });
 
-    it('should delete posts unconfirmed, before files, and count them in the audit detail', async () => {
+    it('should delete comments, then posts, then files, counting posts in the audit detail', async () => {
       mockFileService.findStoredPathsOfCreator.mockResolvedValue(storedPaths);
       mockPostService.deletePostsOfCreator.mockResolvedValueOnce(4);
 
       await userService.remove(1, 2, true);
 
-      // Posts go first: FK_post_entity_file/creator are ON DELETE NO ACTION, so a
+      // Comments go first: the account's comments on *other people's* posts are reachable
+      // no other way, since the FK cascade only fires when the owning post goes.
+      expect(
+        mockCommentService.deleteCommentsOfCreator.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        mockPostService.deletePostsOfCreator.mock.invocationCallOrder[0],
+      );
+      expect(mockCommentService.deleteCommentsOfCreator).toHaveBeenCalledWith(
+        mockManager,
+        2,
+      );
+      // Posts next: FK_post_entity_file/creator are ON DELETE NO ACTION, so a
       // remaining post row would block both the file rows and the user row (ADR 0023 D5).
       expect(
         mockPostService.deletePostsOfCreator.mock.invocationCallOrder[0],

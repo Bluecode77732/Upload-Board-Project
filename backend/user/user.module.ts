@@ -7,16 +7,18 @@ import { AuditLogModule } from 'backend/audit-log/audit-log.module';
 import { SuperadminSeedService } from './superadmin-seed.service';
 import { FileModule } from 'backend/file/file.module';
 import { PostModule } from 'backend/post/post.module';
+import { CommentModule } from 'backend/comment/comment.module';
 
 @Module({
-  // FileModule and PostModule supply the services that own file rows and post rows, so
-  // account deletion can cascade into both without UserService owning either
+  // File/Post/CommentModule supply the services that own file, post and comment rows, so
+  // account deletion can cascade into all three without UserService owning any
   // (ADR 0020, ADR 0023 D5).
   imports: [
     TypeOrmModule.forFeature([UserEntity]),
     AuditLogModule,
     FileModule,
     PostModule,
+    CommentModule,
   ],
   controllers: [UserController],
   providers: [UserService, SuperadminSeedService],

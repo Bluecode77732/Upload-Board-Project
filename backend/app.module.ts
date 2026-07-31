@@ -14,6 +14,8 @@ import { AuditLogModule } from './audit-log/audit-log.module';
 import { UploadModule } from './upload/upload.module';
 import { PostModule } from './post/post.module';
 import { PostEntity } from './post/entity/post.entity';
+import { CommentModule } from './comment/comment.module';
+import { CommentEntity } from './comment/entity/comment.entity';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TempCleanupModule } from './temp-cleanup/temp-cleanup.module';
@@ -55,7 +57,13 @@ import { join } from 'node:path';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        entities: [FileEntity, UserEntity, AuditLogEntity, PostEntity],
+        entities: [
+          FileEntity,
+          UserEntity,
+          AuditLogEntity,
+          PostEntity,
+          CommentEntity,
+        ],
         synchronize: false,
         autoLoadEntities: true,
       }),
@@ -69,6 +77,7 @@ import { join } from 'node:path';
     FileModule,
     UserModule,
     PostModule,
+    CommentModule,
     AuthModule,
     UploadModule,
     AuditLogModule,

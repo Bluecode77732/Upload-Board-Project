@@ -130,7 +130,10 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.m
   `?deleteFiles=true`, which deletes the account together with its files — irreversibly
   ([ADR 0020](ADR/0020-account-deletion-cascade.md)). The account's **posts are always
   deleted with it**, with no confirmation of their own: the flag deliberately guards
-  media bytes only ([ADR 0023](ADR/0023-board-domain-schema.md))
+  media bytes only ([ADR 0023](ADR/0023-board-domain-schema.md)). A confirmed cascade is
+  still refused with 409 `USER_FILES_IN_USE` when one of the account's files is attached
+  to *another user's* post — delete that post first
+  ([ADR 0024](ADR/0024-account-cascade-fk-refusal.md))
 
 **File**
 - `POST /upload/attach` — upload a video to temp storage (multipart field `video`, 100 MB limit)
@@ -171,10 +174,27 @@ never owned, so deleting a post leaves it intact
   repeat creates a second post
 - `PATCH /post/:id` — update `title` / `body` (author or admin). The attachment is fixed at
   creation; detaching a video means deleting the post
-- `DELETE /post/:id` — delete a post (author or admin), irreversibly
+- `DELETE /post/:id` — delete a post (author or admin), irreversibly. Its comments go with
+  it through the FK cascade; its attached file does not
+
+**Comment** — the thread under a post ([ADR 0023](ADR/0023-board-domain-schema.md)). Flat —
+there are no replies to replies
+- `GET /post/:postId/comment` — list one post's comments, **oldest first** (the opposite of
+  the newest-first file and post lists; the order is fixed and takes no sort parameters).
+  `take` / `skip` paginate. 404 `POST_NOT_FOUND` if the post does not exist
+- `POST /post/:postId/comment` — comment on a post (`{ body }`, ≤1,000 chars). 404
+  `POST_NOT_FOUND` if the post is gone. A comment has no unique column and therefore no
+  idempotency key, so an identical resubmission creates a **second** comment
+- `PATCH /comment/:id` — update `body` (author or admin)
+- `DELETE /comment/:id` — delete a comment (author or admin), irreversibly. The post is
+  untouched
+
+A post's author gets **no** special power over the comments on their post — editing and
+deleting are the comment author's or an admin's, and nobody else's.
 
 **Audit log**
-- `GET /audit-log` — review ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE records (admin only; paginated, `?action` filter)
+- `GET /audit-log` — review ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE /
+  COMMENT_DELETE records (admin only; paginated, `?action` filter)
 
 ### Typical flow
 

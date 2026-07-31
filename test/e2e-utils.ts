@@ -11,6 +11,7 @@ import { InitialSchema1784678400000 } from '../backend/migrations/1784678400000-
 import { AddUserRefreshTokenHash1784851200000 } from '../backend/migrations/1784851200000-AddUserRefreshTokenHash';
 import { AddUserRoleAndAuditLog1784912790431 } from '../backend/migrations/1784912790431-AddUserRoleAndAuditLog';
 import { AddPostEntity1785428640007 } from '../backend/migrations/1785428640007-AddPostEntity';
+import { AddCommentEntity1785476002527 } from '../backend/migrations/1785476002527-AddCommentEntity';
 
 // A dedicated database, never the dev one — dropped and recreated every run so the
 // suite owns its data. New migrations must be appended here or boot fails loudly.
@@ -22,6 +23,7 @@ const MIGRATIONS = [
   AddUserRefreshTokenHash1784851200000,
   AddUserRoleAndAuditLog1784912790431,
   AddPostEntity1785428640007,
+  AddCommentEntity1785476002527,
 ];
 
 // Every table the app writes; truncated between tests for per-test isolation.
@@ -30,6 +32,7 @@ const TABLES = [
   'file_entity',
   'audit_log_entity',
   'post_entity',
+  'comment_entity',
 ];
 
 function connectionBase() {
