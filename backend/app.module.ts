@@ -7,15 +7,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import * as Joi from 'joi';
-import { FileEntity } from './file/entity/file.entity';
-import { UserEntity } from './user/entity/user.entity';
-import { AuditLogEntity } from './audit-log/audit-log.entity';
+import { ENTITIES } from './entities';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { UploadModule } from './upload/upload.module';
 import { PostModule } from './post/post.module';
-import { PostEntity } from './post/entity/post.entity';
 import { CommentModule } from './comment/comment.module';
-import { CommentEntity } from './comment/entity/comment.entity';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TempCleanupModule } from './temp-cleanup/temp-cleanup.module';
@@ -57,13 +53,8 @@ import { join } from 'node:path';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        entities: [
-          FileEntity,
-          UserEntity,
-          AuditLogEntity,
-          PostEntity,
-          CommentEntity,
-        ],
+        // One list, shared with backend/data-source.ts — see backend/entities.ts.
+        entities: ENTITIES,
         synchronize: false,
         autoLoadEntities: true,
       }),
