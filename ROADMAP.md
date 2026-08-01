@@ -508,6 +508,26 @@ role-delivery → adapt console → moderation decision → resolve duplicate su
   ADR 0006 Consequences ("top roadmap item") carries a dated landed note; and
   `CHAT-REMNANT-REMOVAL-PLAN` ("ROADMAP's CI candidate") now points at the landed
   Stage 1 CI ([ADR 0016](ADR/0016-github-actions-ci.md)). **Done.**
+- In-code trade-off documentation gap for pre-mandate services (recorded 2026-08-02) —
+  a full-codebase survey found trade-off reasoning is dense but **tiered**: the ADRs carry
+  every decision-level trade-off (a `## Consequences` section plus rejected alternatives,
+  5–39 markers each), while the call-site layer — the `이유` line of the mandatory
+  목적/이유/방법 block ([CLAUDE.md](CLAUDE.md) > File Creation Convention) — is dense in the
+  board/visibility-era services (`file.service` 17 blocks, `post.service` 12, `comment.service`
+  8) but **absent in the oldest service, `auth.service.ts` (0 blocks)**, whose trade-offs live
+  only in [ADR 0001](ADR/0001-basic-token-authentication.md) /
+  [0002](ADR/0002-dual-secret-token-pair.md) / [0012](ADR/0012-refresh-cookie-rotation.md).
+  This is **not a rule violation** — the block mandate (commit `995df5e`) binds only *new or
+  modified* functions, and auth.service predates it and has not been touched since — so it is a
+  documentation-density gap between the decision layer (dense) and the call-site layer (thin),
+  not a defect. **Scheduled as a follow-up to run after all Stages complete**, deliberately not
+  now: it is a documentation-only pass with no behavior change, and running it before the stages
+  finish would churn functions a later stage (any auth-touching work) may modify anyway — which
+  would add the blocks as a side effect and shrink the gap for free. The dedicated task
+  retro-adds 목적/이유/방법 blocks to the pre-mandate services (auth.service the clearest case),
+  each `이유` line pointing at its governing ADR. Not a drive-by: a repo-wide comment sweep is
+  exactly the kind of change Scope Discipline keeps out of feature commits, so it lands as its
+  own task once the staged work is done.
 
 ## 8. Advisory notes
 

@@ -468,6 +468,25 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   ADR 0006 Consequences("top roadmap item")에는 날짜 병기 완료 주석이 붙었으며,
   `CHAT-REMNANT-REMOVAL-PLAN`("ROADMAP's CI candidate")은 이제 착지된 Stage 1
   CI([ADR 0016](ADR/0016-github-actions-ci.ko.md))를 가리킴. **완료.**
+- 사전-의무화 서비스의 코드 내 트레이드오프 문서화 공백 (2026-08-02 기록) — 코드베이스
+  전수 조사 결과, 트레이드오프 서술은 촘촘하되 **계층화**되어 있다: ADR은 결정 수준
+  트레이드오프를 빠짐없이 담고(`## Consequences` 절 + 기각안, ADR당 마커 5~39개), 호출
+  지점 수준 — 의무 목적/이유/방법 블록의 `이유` 라인([CLAUDE.md](CLAUDE.md) > File Creation
+  Convention) — 은 게시판/가시성 세대 서비스에서는 촘촘하지만(`file.service` 17블록,
+  `post.service` 12, `comment.service` 8), **가장 오래된 `auth.service.ts`에는 0블록으로
+  부재**하며 그 트레이드오프는 [ADR 0001](ADR/0001-basic-token-authentication.ko.md) /
+  [0002](ADR/0002-dual-secret-token-pair.ko.md) /
+  [0012](ADR/0012-refresh-cookie-rotation.ko.md)에만 있다. 이는 **규칙 위반이 아니다** —
+  블록 의무화(커밋 `995df5e`)는 *새로 만들거나 수정한* 함수에만 적용되는데, auth.service는
+  그보다 앞서 만들어졌고 이후 수정되지 않았다 — 따라서 결함이 아니라 결정 계층(촘촘)과
+  호출 지점 계층(희박) 사이의 문서화 밀도 공백이다. **전 Stage 완료 후 진행할 후속 작업으로
+  일정 배정**하며, 지금 하지 않는 것은 의도다: 동작 변경이 없는 문서 전용 패스이고, 단계가
+  끝나기 전에 하면 이후 단계(auth를 건드리는 작업)가 어차피 수정할 함수를 헛되이 흔드는
+  꼴이 된다 — 그 수정이 블록을 부수 효과로 추가해 공백을 공짜로 줄여 줄 수 있다. 전용
+  작업은 사전-의무화 서비스(auth.service가 가장 명확한 사례)에 목적/이유/방법 블록을
+  소급 추가하고, 각 `이유` 라인이 자기 지배 ADR을 가리키게 한다. 드라이브바이가 아니다:
+  저장소 전역 주석 스윕이야말로 Scope Discipline이 기능 커밋에서 배제하는 종류의 변경이므로,
+  단계별 작업이 끝난 뒤 자체 작업으로 착지한다.
 
 ## 8. Advisory 노트
 
