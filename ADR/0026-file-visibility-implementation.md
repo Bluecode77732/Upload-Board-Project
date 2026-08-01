@@ -149,3 +149,23 @@ are untouched.
   describe the landed behavior (content-endpoint serving, `file/upload` no longer static)
   instead of the "decided but not yet built" gate language, since the gate has now been
   passed for D1/D2/D3/D6. The D4/D5 media-type-expansion language stays as still-pending.
+
+## Known limitations (follow-ups, recorded 2026-08-01)
+
+A post-implementation review flagged open items in the content endpoint
+([file-content.controller.ts](../backend/file/file-content.controller.ts)),
+severity-ordered; the code items are tracked in [ROADMAP.md](../ROADMAP.md) > Unscheduled:
+
+1. **[medium] No stream error handling.** `createReadStream(...).pipe(res)` on both the
+   200 and 206 paths attaches no `'error'` listener, so a read failure *after* the headers
+   are sent — a `DELETE /file/:id` racing an in-progress stream, or a disk fault — surfaces
+   as an unhandled `'error'` event and crashes the process (Never Do Group 1). Fix:
+   `stream.on('error', …)` that destroys the response and logs at `warn`.
+2. **[low] Suffix `Range: bytes=-N` mishandled.** A last-N-bytes request is parsed as
+   `start=0, end=N` (the first N+1 bytes) rather than the final N. Real impact is low —
+   players use `bytes=N-` — so add the suffix branch when convenient.
+
+Non-code observations (recorded, no fix): the `416` reply carries no `ErrorBody` `code`
+(a protocol-level response, not a domain error); a rejected multi-field upload leaves temp
+orphans the [ADR 0018](0018-orphan-temp-file-cleanup.md) sweep reclaims; and `file/temp`
+stays statically served (pre-existing, unguessable-uuid — outside the visibility scope).

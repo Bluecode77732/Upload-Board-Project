@@ -334,6 +334,21 @@ role-delivery → adapt console → moderation decision → resolve duplicate su
 
 ## 7. Unscheduled / open decisions
 
+- ADR 0026 content-endpoint follow-ups (recorded 2026-08-01, from a post-implementation
+  review of `GET /file/:id/content`,
+  [file-content.controller.ts](backend/file/file-content.controller.ts)), severity-ordered:
+  1. **[medium] Missing stream error handling** — `createReadStream(...).pipe(res)` (200 and
+     206 paths) attaches no `'error'` listener, so a read failure after headers are sent (a
+     `DELETE /file/:id` racing an in-progress stream, or a disk fault) becomes an unhandled
+     `'error'` event and crashes the process (Never Do Group 1). Fix: `stream.on('error', …)`
+     that destroys the response and logs at `warn`.
+  2. **[low] Suffix `Range: bytes=-N` mishandled** — a last-N-bytes request is served as the
+     first N+1 bytes; players use `bytes=N-`, so impact is low. Add the suffix branch when
+     convenient.
+  Non-code observations (no fix): the `416` reply omits an `ErrorBody` code (protocol-level);
+  a rejected multi-field upload leaves temp orphans the ADR 0018 sweep reclaims; `file/temp`
+  stays statically served (pre-existing, outside the visibility scope). Full write-up in
+  [ADR 0026](ADR/0026-file-visibility-implementation.md) > Known limitations.
 - Testcontainers for e2e (recorded 2026-07-26): the e2e suite uses a throwaway DB
   plus a jest `setupFiles` env override ([ADR 0016](ADR/0016-github-actions-ci.md),
   `test/e2e-env.ts`) — valid, but it relies on env-before-import timing and a
