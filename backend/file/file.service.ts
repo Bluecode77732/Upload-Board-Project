@@ -18,8 +18,10 @@ import {
 import { UserEntity } from 'backend/user/entity/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FileEntity } from './entity/file.entity';
+import { FileVisibility } from './entity/file-visibility.enum';
 import { access, rename } from 'fs/promises';
 import path, { join } from 'path';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import { UpdateFileDto } from './dto/update-uploadFile.dto';
 import { FileResponseDto } from './dto/file-response.dto';
 import { FileSortField, GetFilesDto } from './dto/get-files.dto';
@@ -85,18 +87,51 @@ export class FileService {
     );
   }
 
+  // 목적: unlisted 파일의 공유 토큰으로 쓸 서버 발급 랜덤 opaque 문자열을 만든다.
+  // 이유: 추측 가능한 id는 링크 공유의 보안 전제를 깨고(ADR 0025 D3), 회전이 곧 무효화 수단이 되려면
+  //       매번 예측 불가능한 새 값이어야 한다.
+  // 방법: crypto.randomBytes(32)를 base64url로 인코딩 — URL 쿼리에 그대로 넣을 수 있는 형태.
+  private generateShareToken(): string {
+    return randomBytes(32).toString('base64url');
+  }
+
+  // 목적: 요청으로 들어온 공유 토큰이 저장된 토큰과 일치하는지 판정한다.
+  // 이유: 비밀 토큰 비교는 타이밍 사이드채널에 노출되면 안 된다(Never Do G3, Secure by Default).
+  // 방법: 길이가 다르면 즉시 거부하고, 같을 때만 timingSafeEqual로 상수 시간 비교한다.
+  private isValidShareToken(candidate: string, actual: string): boolean {
+    const candidateBuffer = Buffer.from(candidate);
+    const actualBuffer = Buffer.from(actual);
+    if (candidateBuffer.length !== actualBuffer.length) return false;
+    return timingSafeEqual(candidateBuffer, actualBuffer);
+  }
+
   // 목적: FileEntity를 공개 URL이 붙은 응답 DTO로 변환한다.
   // 이유: BASE_URL 합성은 한 곳에만 있어야 하는데, 게시글 응답도 첨부 파일 URL을 담아야 한다(ADR 0023).
-  // 방법: private에서 public으로만 올린다 — PostService가 자기 쪽에서 URL을 다시 조립하지 않고 이 메서드에 위임한다.
-  toResponse(file: FileEntity): FileResponseDto {
+  //       fileUrl은 이제 정적 경로가 아니라 접근 검사를 거치는 콘텐츠 엔드포인트를 가리킨다(ADR 0025 D2).
+  // 방법: private에서 public으로만 올린다 — PostService가 자기 쪽에서 URL을 다시 조립하지 않고 이 메서드에
+  //       위임한다. shareUrl은 요청자가 관리 권한을 가진 unlisted 파일에만, 그 외에는 절대 노출하지 않는다.
+  toResponse(file: FileEntity, requester?: Requester): FileResponseDto {
     const baseUrl = this.configService.get<string>(
       'BASE_URL',
       'http://localhost:3000',
     );
+    const contentUrl = `${baseUrl}/file/${file.id}/content`;
+    const isManager = !!(
+      requester &&
+      file.creator &&
+      this.canManage(file.creator.id, requester)
+    );
+
     return {
       id: file.id,
       title: file.title,
-      fileUrl: `${baseUrl}/${file.filePath}`,
+      fileUrl: contentUrl,
+      visibility: file.visibility,
+      ...(isManager &&
+        file.visibility === FileVisibility.unlisted &&
+        file.shareToken && {
+          shareUrl: `${contentUrl}?share=${file.shareToken}`,
+        }),
       createdAt: file.createdAt,
       updatedAt: file.updatedAt,
       ...(file.creator && {
@@ -110,10 +145,15 @@ export class FileService {
 
   // 목적: 목록 조회에 제목 검색·작성자 필터·화이트리스트 정렬을 기존 페이지네이션 위에 얹는다.
   // 이유: take/skip만으로는 최신순 조회도 검색도 불가능했고, ORDER BY가 아예 없어 페이지 간 행
-  //       중복·누락까지 가능했다(정렬 없는 OFFSET은 순서가 미정의).
+  //       중복·누락까지 가능했다(정렬 없는 OFFSET은 순서가 미정의). private/unlisted 파일의 제목·작성자
+  //       메타데이터가 소유자·admin 외에게 새는 것은 '비공개' 토글의 취지를 무력화한다(ADR 0025).
   // 방법: 기존 QueryBuilder에 조건만 조립 — 검색어는 와일드카드를 이스케이프한 ILIKE, 정렬 컬럼은
-  //       SORT_COLUMN 매핑으로만 결정하고, id를 tiebreaker로 덧붙여 페이징을 안정화한다.
-  async getFiles(query: GetFilesDto): Promise<[FileResponseDto[], number]> {
+  //       SORT_COLUMN 매핑으로만 결정하고, id를 tiebreaker로 덧붙여 페이징을 안정화한다. admin이 아니면
+  //       public이거나 본인 소유인 행만 남긴다.
+  async getFiles(
+    query: GetFilesDto,
+    requester: Requester,
+  ): Promise<[FileResponseDto[], number]> {
     const { take, skip, search, sortBy, order, creatorId } = query;
 
     const queryBuilder = this.fileRepository
@@ -132,6 +172,13 @@ export class FileService {
       queryBuilder.andWhere('creator.id = :creatorId', { creatorId });
     }
 
+    if (ROLE_RANK[requester.role] < ROLE_RANK[UserRole.admin]) {
+      queryBuilder.andWhere(
+        '(file.visibility = :publicVisibility OR creator.id = :requesterId)',
+        { publicVisibility: FileVisibility.public, requesterId: requester.id },
+      );
+    }
+
     queryBuilder.orderBy(SORT_COLUMN[sortBy], order);
     // A unique tiebreaker makes the page boundary deterministic when the sort column ties;
     // sorting by id already is one, so adding it twice would only duplicate the clause.
@@ -143,24 +190,36 @@ export class FileService {
       .take(take)
       .skip(skip)
       .getManyAndCount();
-    return [files.map((f) => this.toResponse(f)), count];
+    return [files.map((f) => this.toResponse(f, requester)), count];
   }
 
-  async getFileById(id: number): Promise<FileResponseDto> {
+  // 목적: 단일 파일 메타데이터를 조회하되, 볼 권한이 없으면 존재 자체를 숨긴다.
+  // 이유: private/unlisted 파일의 제목·작성자를 소유자·admin 외에게 보여주면 '비공개' 토글이 이름뿐인
+  //       상태가 된다(ADR 0025). 403이 아니라 404를 쓰는 이유는 콘텐츠 접근 거부(FORBIDDEN_NOT_OWNER)와
+  //       달리 메타데이터 단계에서는 파일의 존재 자체도 확인해 줄 이유가 없기 때문이다.
+  // 방법: 조회 후 public이거나 canManage인 경우에만 반환하고, 그 외에는 찾지 못한 것과 동일하게 404.
+  async getFileById(
+    id: number,
+    requester: Requester,
+  ): Promise<FileResponseDto> {
     const file = await this.fileRepository
       .createQueryBuilder('file')
       .leftJoinAndSelect('file.creator', 'creator')
       .where('file.id = :id', { id })
       .getOne();
 
-    if (!file) {
+    if (
+      !file ||
+      (file.visibility !== FileVisibility.public &&
+        !this.canManage(file.creator.id, requester))
+    ) {
       throw new NotFoundException({
         code: ErrorCode.FILE_NOT_FOUND,
         message: 'No file found.',
       });
     }
 
-    return this.toResponse(file);
+    return this.toResponse(file, requester);
   }
 
   // 목적: attach가 발급한 temp 파일명을 승격 후 저장 경로(file/upload/granted_...)로 변환한다.
@@ -359,6 +418,11 @@ export class FileService {
     return { replayed: false, file: this.toResponse(saved) };
   }
 
+  // 목적: 파일 메타데이터(제목/경로/소유자/가시성)를 갱신한다.
+  // 이유: 가시성 토글(ADR 0025 D1)이 새 엔드포인트가 아니라 기존 소유자-가드 쓰기 경로를 재사용하도록
+  //       결정됐으므로, 공유 토큰 발급/회전/폐기도 같은 트랜잭션에 들어가야 한다.
+  // 방법: 단일 QueryRunner 트랜잭션(기존 패턴 유지) 안에서 필드를 갱신 — visibility가 'unlisted'로
+  //       진입할 때만(또는 rotateShareToken 명시 시) 새 토큰을 발급하고, 벗어나면 토큰/만료를 비운다.
   async updateFile(
     id: number,
     updateFileDto: UpdateFileDto,
@@ -435,6 +499,33 @@ export class FileService {
         updateFields.creator = creator;
       }
 
+      const { visibility, rotateShareToken, shareExpiresAt } = updateFileDto;
+      if (visibility !== undefined) {
+        updateFields.visibility = visibility;
+      }
+      const targetVisibility = updateFields.visibility ?? file.visibility;
+      const enteringUnlisted = targetVisibility === FileVisibility.unlisted;
+
+      if (
+        enteringUnlisted &&
+        (file.visibility !== FileVisibility.unlisted || rotateShareToken)
+      ) {
+        // Newly unlisted, or an explicit rotation: a fresh token invalidates any
+        // previously shared link (ADR 0025 D3).
+        updateFields.shareToken = this.generateShareToken();
+        updateFields.shareExpiresAt = null;
+      } else if (!enteringUnlisted && file.shareToken !== null) {
+        // Leaving (or never entering) unlisted: no token should remain.
+        updateFields.shareToken = null;
+        updateFields.shareExpiresAt = null;
+      }
+
+      // Only meaningful once the file is (or becomes) unlisted — silently has no
+      // effect otherwise, since there is no token for it to bound.
+      if (shareExpiresAt !== undefined && enteringUnlisted) {
+        updateFields.shareExpiresAt = new Date(shareExpiresAt);
+      }
+
       await queryRunner.manager
         .createQueryBuilder()
         .update(FileEntity)
@@ -462,7 +553,7 @@ export class FileService {
         message: 'No file found.',
       });
     }
-    return this.toResponse(updated);
+    return this.toResponse(updated, requester);
   }
 
   // 목적: 저장 경로 목록의 물리 파일을 지우고, 남은 것은 경고 로그로 드러낸다.
@@ -569,5 +660,66 @@ export class FileService {
     await this.auditLogService.log(requester.id, id, 'FILE_DELETE');
 
     return `File ${id} deleted.`;
+  }
+
+  // 목적: GET /file/:id/content가 실제로 바이트를 스트리밍해도 되는지 가시성 규칙으로 판정한다.
+  // 이유: file/upload 정적 서빙이 중단되므로(ADR 0025 D2) 모든 granted 읽기가 이 판정을 반드시 거쳐야
+  //       "private=소유자/admin만, unlisted=토큰 소지자만"이라는 D1 계약이 실제로 성립한다.
+  // 방법: public은 무조건 통과, private는 canManage만, unlisted는 소유자/admin 우회 또는 토큰 일치+
+  //       미만료만 통과시킨다 — 실패는 전부 403(존재는 확인해 주되 접근만 거부, D6)으로 통일한다.
+  async resolveContentAccess(
+    id: number,
+    requester: Requester | null,
+    shareToken?: string,
+  ): Promise<FileEntity> {
+    const file = await this.fileRepository.findOne({
+      where: { id },
+      relations: ['creator'],
+    });
+
+    if (!file) {
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
+    }
+
+    if (file.visibility === FileVisibility.public) {
+      return file;
+    }
+
+    const isManager = !!(
+      requester && this.canManage(file.creator.id, requester)
+    );
+
+    if (file.visibility === FileVisibility.private) {
+      if (isManager) return file;
+      throw new ForbiddenException({
+        code: ErrorCode.FORBIDDEN_NOT_OWNER,
+        message: 'Only the file creator or an admin can access this file.',
+      });
+    }
+
+    // unlisted: owner/admin bypass the token entirely; anyone else needs a valid,
+    // unexpired share token — no login required (ADR 0025 D1/D2).
+    if (isManager) return file;
+
+    const expired =
+      file.shareExpiresAt !== null &&
+      file.shareExpiresAt.getTime() < Date.now();
+
+    if (
+      !shareToken ||
+      !file.shareToken ||
+      expired ||
+      !this.isValidShareToken(shareToken, file.shareToken)
+    ) {
+      throw new ForbiddenException({
+        code: ErrorCode.FILE_SHARE_INVALID,
+        message: 'Missing, invalid, or expired share token.',
+      });
+    }
+
+    return file;
   }
 }

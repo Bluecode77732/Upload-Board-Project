@@ -18,7 +18,7 @@ Before making any change:
 1. Inspect the codebase thoroughly — read the relevant files, grep for symbols, trace the actual call chain.
    Concern-to-entrypoint map (check these first):
    - Auth flow change      → read `backend/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `backend/auth/strategy/`; grep `JwtAuthGuard`, `LocalAuthGuard`
-   - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract, one-shot claim resolution in `uploadFile` — ADR 0019)
+   - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract, one-shot claim resolution in `uploadFile` — ADR 0019). Content reads go through the separate `backend/file/file-content.controller.ts` (`GET /file/:id/content`, `OptionalJwtAuthGuard`) → `FileService.resolveContentAccess` — the visibility gate (ADR 0025/0026)
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer diskStorage, `temp_{uuid}_{timestamp}` naming) and `upload.controller.ts` (100MB size limit)
    - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `backend/common/unlink-stored-files.ts` (post-commit unlink, ADR 0020/0023)
    - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
@@ -26,7 +26,7 @@ Before making any change:
    - Orphan temp cleanup   → read `backend/temp-cleanup/temp-cleanup.service.ts` (`@nestjs/schedule` `SchedulerRegistry` cron, `temp_`-prefix + TTL sweep of `file/temp`, ADR 0018) and its `selectExpiredTempFiles` pure core
    - Env var change        → read the Joi schema in `backend/app.module.ts` AND `.env.example` — both must stay in sync
    - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides. `backend/post/entity/post.entity.ts` and `backend/comment/entity/comment.entity.ts` are deliberately **unidirectional** (no inverse property on User/File/Post) — do not "fix" that (ADR 0023). A new entity is registered in **`backend/entities.ts` and nowhere else** — `app.module.ts` and `backend/data-source.ts` both import that one `ENTITIES` array, so an entity cannot be live in the app but invisible to `migration:generate` (it was two hand-maintained lists until 2026-07-31, and that divergence made `generate` report success while omitting a whole table). The e2e suite still needs its own line: `test/e2e-utils.ts` (`MIGRATIONS` + `TABLES`) — but omitting it fails loudly on the next run
-   - Static file serving   → read the `ServeStaticModule` block in `app.module.ts` (`rootPath: file/`, `serveRoot: 'file'`)
+   - Static file serving   → read the `ServeStaticModule` block in `app.module.ts` (`rootPath: file/temp`, `serveRoot: 'file/temp'` — `file/upload` is deliberately not mounted; granted reads go through `GET /file/:id/content` instead, ADR 0025/0026)
 2. Never invent APIs, files, functions, or types that you have not confirmed exist in the codebase.
 3. Reuse existing patterns only; do not introduce new abstractions unless explicitly asked.
 4. Verify every assumption with actual code, search results, or test output — not memory or inference alone.
@@ -144,7 +144,7 @@ After completing any implementation, apply the review perspective that matches w
 **After a Modification:**
 - Do the changes work correctly? Run `pnpm lint` and `pnpm test` to verify.
   - QueryRunner used → verify `release()` is in a `finally` block and every path either commits or rolls back
-  - `filePath` logic changed → verify the `temp_`/`granted_` prefix state machine end to end (`upload.module.ts` naming → `file.service.ts` rename → `ServeStaticModule` URL)
+  - `filePath` logic changed → verify the `temp_`/`granted_` prefix state machine end to end (`upload.module.ts` naming → `file.service.ts` rename → `GET /file/:id/content` access check, not a static URL — ADR 0025/0026)
   - Endpoint changed → verify the Swagger doc at `/doc` still describes the real behavior
 - Are there any regressions in existing functionality?
 - What side effects or hidden risks does this change introduce?
@@ -379,8 +379,9 @@ return user  // without serialization
 
 // ❌ Serving user-supplied paths → path traversal
 res.sendFile(req.query.path)
-// ✅ Static serving only via ServeStaticModule rooted at file/; filePath values are
-//    server-constructed (uuid + timestamp), never client-chosen paths
+// ✅ file/temp is the only ServeStaticModule root; granted (file/upload) bytes stream only
+//    through GET /file/:id/content, gated by FileService.resolveContentAccess (ADR 0025/0026).
+//    filePath values are always server-constructed (uuid + timestamp), never client-chosen paths
 
 // ❌ AI tool reading attacker-controlled content → prompt injection
 // Any file read or query that retrieves content written by a potential attacker
@@ -595,9 +596,12 @@ one of these is violated, follow Principle Conflict Protocol.
   to `file/upload` (`file.service.ts` `uploadFile`). `UpdateFileDto.filePath` rejects
   `temp_` values and accepts only `granted_` ones.
 - Rationale: the prefix is a state machine — `temp_` means "uploaded but unclaimed",
-  `granted_` means "owned by a DB row". Static serving (`ServeStaticModule`, rootPath
-  `file/`) exposes both folders, so the prefix is the only marker of a file's lifecycle
-  state.
+  `granted_` means "owned by a DB row". `ServeStaticModule` now roots only at `file/temp`
+  (ADR 0025/0026) — a `granted_` file's bytes are never statically reachable; the sole
+  read path is `GET /file/:id/content`, gated by `FileEntity.visibility`
+  (`public`/`private`/`unlisted`, default `private`). The prefix still marks lifecycle
+  state; visibility is an orthogonal, separately-gated concern layered on top of a
+  `granted_` row.
 - Goal: any new code that touches `filePath` preserves the prefix state machine end to
   end. Never construct a `filePath` from client-supplied path segments — the server
   generates names (uuid + timestamp); the client only echoes them back. That echo is
@@ -749,21 +753,38 @@ Do not suggest alternatives to these decisions without explicit request.
 
 ### File Storage
 - Local disk only: Multer `diskStorage` into `file/temp`, promoted to `file/upload`
-- Served statically by `ServeStaticModule` (`rootPath: file/`, `serveRoot: 'file'`);
-  public URLs composed as `{BASE_URL}/{filePath}` in `toResponse()`
+- **File visibility (landed 2026-08-01, ADR 0025 D1/D2/D3/D6 + ADR 0026)**: `FileEntity`
+  carries `visibility` (`public`/`private`/`unlisted`, **default `private`**), a nullable
+  `shareToken` (server-generated random opaque string, set only while `unlisted`), and a
+  nullable `shareExpiresAt` TTL. `ServeStaticModule` now roots **only** at `file/temp`
+  (`rootPath: file/temp`, `serveRoot: 'file/temp'`) — `file/upload` is not statically
+  exposed. The **only** path that serves granted bytes is `GET /file/:id/content`
+  (`backend/file/file-content.controller.ts`, `FileService.resolveContentAccess`),
+  Range-aware, guarded by `OptionalJwtAuthGuard` so `public`/`unlisted`+token access works
+  with no bearer token: `public` → unauthenticated; `private` → creator/admin only (403
+  `FORBIDDEN_NOT_OWNER` otherwise); `unlisted` → a matching, unexpired `?share=<token>`,
+  no login required (403 `FILE_SHARE_INVALID` otherwise). Visibility toggling and share-token
+  rotation reuse the existing `PATCH /file/:id` write path — there is no separate
+  visibility-only endpoint. `GET /file` and `GET /file/:id` also filter `private`/`unlisted`
+  rows from non-owner/non-admin requesters (ADR 0026 D7); a hidden `GET /file/:id` answers
+  404 `FILE_NOT_FOUND` (existence hidden), while content access answers 403 for the same
+  requester (existence confirmed, bytes refused) — the two endpoints disclose differently on
+  purpose (ADR 0026 D8). `FileResponseDto.fileUrl` is the content-endpoint URL, not a static
+  path; `shareUrl` appears only for a manager of an unlisted file. Public URLs are no longer
+  composed as `{BASE_URL}/{filePath}` — `toResponse()` builds `{BASE_URL}/file/:id/content`
+  instead
 - Upload constraint: single field `video`, `fileSize` limit 100,000,000 bytes (100MB) —
   a single-video domain needs exactly one field, and the 100MB ceiling caps disk usage and
   bounds an upload-based denial-of-service
-- **Decided but not yet built (design gate, ADR 0025, 2026-07-31)**: file visibility
-  (`public`/`private`/`unlisted` via a rotatable `shareToken` + optional TTL), an
-  access-controlled `GET /file/:id/content` endpoint that makes `ServeStaticModule` **stop
-  serving `file/upload`**, and a media-type expansion (images/audio/video via type-specific
-  `image`/`audio`/`video` upload fields, replacing the single `video` field — a breaking
-  change against the live `frontend/`). This **partially revises this section** (serving +
-  the single-`video` constraint above) and ADR 0005 — but only once the implementation task
-  lands with its reviewed migration. Until then the two bullets above remain operative: files
-  are served statically and public, the upload field is `video`. Do not code against the
-  ADR 0025 shape as if it exists; treat it as the decided direction, not current behavior
+- **Decided but not yet built (ADR 0025 D4/D5, 2026-07-31 — media-type expansion only;
+  D1/D2/D3/D6 above are landed)**: a media-type expansion (images/audio/video via
+  type-specific `image`/`audio`/`video` upload fields, replacing the single `video`
+  field — a breaking change against the live `frontend/`). This still-pending half
+  **partially revises** [ADR 0003](ADR/0003-two-phase-upload-contract.md)/
+  [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) (upload field), but only
+  once its own implementation task lands. Until then the upload-constraint bullet above
+  remains operative: the upload field is `video`, mp4/mov/webm only. Do not code against
+  the D4/D5 shape as if it exists; treat it as the decided direction, not current behavior
 - **Never suggest**: S3/cloud storage, streaming/chunked upload, CDN — unless explicitly requested
   (2026-07-23: AWS deployment, VOD playback access control, and a storage
   port-adapter are now explicitly decided roadmap items — ROADMAP.md Stage 4.
@@ -874,9 +895,10 @@ cleanup, deletion policy, upload idempotency) → ~~Stage 3 board-domain expansi
 (search/filter/sort, post/comment modules)~~ — **complete 2026-07-31** (ADR 0021,
 ADR 0023 + its two implementation halves, with ADR 0024 settling the invariant gap
 between them) → Stage 4 production transition (AWS
-container deploy, file visibility + media-type expansion + access-controlled serving
-[ADR 0025, 2026-07-31 — generalizes the former "VOD playback access control" row, may be
-pulled ahead of deployment], storage port-adapter, performance
+container deploy, ~~file visibility + access-controlled serving~~ [**landed 2026-08-01**,
+ADR 0025 D1/D2/D3/D6 + ADR 0026 — generalizes the former "VOD playback access control" row,
+pulled ahead of deployment as its own task] + media-type expansion [ADR 0025 D4/D5, still
+pending], storage port-adapter, performance
 criteria) → **Stage 5 operational surface — admin console (appended 2026-07-30,
 ADR 0022**: role-delivery decision, adapting the imported `admin/` console,
 `GET /user` pagination, resolving the duplicate admin surface, and deciding whether
@@ -1011,7 +1033,8 @@ pnpm test -- file.service
 - `ConfigModule` — global, Joi-validated env (see `.env.example`)
 - `TypeOrmModule` — PostgreSQL, `synchronize: false`, entities `FileEntity`, `UserEntity`,
   `AuditLogEntity`, `PostEntity`, `CommentEntity`
-- `ServeStaticModule` — serves the `file/` directory at `/file`
+- `ServeStaticModule` — serves only `file/temp` at `/file/temp`; `file/upload` is not
+  statically served (granted reads go through `GET /file/:id/content`, ADR 0025/0026)
 - `FileModule`, `UserModule`, `PostModule`, `CommentModule`, `AuthModule`, `UploadModule`
 
 **AuthModule** (`backend/auth/`)
@@ -1065,14 +1088,22 @@ pnpm test -- file.service
   `CommentService`
 
 **FileModule** (`backend/file/`)
-- REST (all behind `JwtAuthGuard`): `GET /file`, `GET /file/:id`, `POST /file`,
-  `PATCH /file/:id`, `DELETE /file/:id`
+- REST — two controllers (ADR 0026, mirroring `CommentModule`'s split, here for an
+  auth-requirement reason rather than a prefix one): `FileController` (behind
+  `JwtAuthGuard`): `GET /file`, `GET /file/:id`, `POST /file`, `PATCH /file/:id`,
+  `DELETE /file/:id`; `FileContentController` (behind `OptionalJwtAuthGuard`):
+  `GET /file/:id/content`, the sole path serving granted bytes
 - `FileService` — metadata CRUD; `uploadFile`/`updateFile` use the manual QueryRunner
-  transaction pattern; `toResponse()` shapes `FileResponseDto` with `BASE_URL`.
-  `uploadFile` returns `{ replayed, file }` — the claim outcome (ADR 0019), which the
-  controller maps to 200 (replay) or 201 (fresh promotion). `deleteFile` also unlinks the
-  stored file after the row is gone; `findStoredPathsOfCreator` / `deleteFilesOfCreator`
-  serve the account cascade inside `UserService`'s transaction (ADR 0020)
+  transaction pattern; `toResponse()` shapes `FileResponseDto` with `BASE_URL`, composing
+  `fileUrl` as the content-endpoint URL and including `shareUrl` only for a manager of an
+  unlisted file. `uploadFile` returns `{ replayed, file }` — the claim outcome (ADR 0019),
+  which the controller maps to 200 (replay) or 201 (fresh promotion), defaulting the new
+  row to `visibility: 'private'`. `getFiles`/`getFileById` filter `private`/`unlisted`
+  rows from non-owner/non-admin requesters (ADR 0026 D7); `resolveContentAccess` is the
+  visibility gate `GET /file/:id/content` calls (ADR 0025 D1/D2, ADR 0026 D8). `deleteFile`
+  also unlinks the stored file after the row is gone; `findStoredPathsOfCreator` /
+  `deleteFilesOfCreator` serve the account cascade inside `UserService`'s transaction
+  (ADR 0020)
 - Exports `FileService` (consumed by `UserModule` for the account cascade)
 
 **UploadModule** (`backend/upload/`)
@@ -1091,8 +1122,10 @@ pnpm test -- file.service
    transaction: inserts `FileEntity` (`filePath` rewritten to `file/upload/granted_...`),
    renames the physical file from `file/temp` to `file/upload`, commits; rollback on
    failure, `release()` in `finally`
-4. The file is now publicly served at `{BASE_URL}/file/upload/granted_...` via
-   `ServeStaticModule`; API responses expose it as `fileUrl` in `FileResponseDto`
+4. The row defaults to `visibility: 'private'`. Its bytes are now reachable only through
+   `GET /file/:id/content` (creator/admin only until the owner switches visibility to
+   `public` or `unlisted` via `PATCH /file/:id`); API responses expose that endpoint's URL
+   as `fileUrl` in `FileResponseDto` (ADR 0025/0026)
 
 ### Entities (TypeORM)
 - `UserEntity` — email (unique), hashed password (`@Exclude` on serialization),

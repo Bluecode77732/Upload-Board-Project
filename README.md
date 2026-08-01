@@ -150,12 +150,27 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.m
   | `creatorId` | user id | — |
 
   Example: `GET /file?search=holiday&creatorId=3&sortBy=title&order=ASC&take=10`
-- `GET /file/:id` — get file metadata
-- `POST /file` — promote a temp file to permanent storage (transactional). The attached
-  filename is a one-shot claim token: resubmitting it returns the existing file with 200
-  (idempotent retry) for the user who claimed it, and 409 `FILE_ALREADY_CLAIMED` for
-  anyone else ([ADR 0019](ADR/0019-upload-claim-idempotency.md))
-- `PATCH /file/:id` — update file metadata (creator or admin)
+- `GET /file/:id` — get file metadata. A `private`/`unlisted` file is 404 `FILE_NOT_FOUND`
+  for anyone but its creator/admin — existence itself is hidden
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md),
+  [ADR 0026](ADR/0026-file-visibility-implementation.md))
+- `GET /file/:id/content` — stream the file's stored bytes, gated by `visibility`: `public`
+  needs no auth, `private` needs a creator/admin Bearer token (403
+  `FORBIDDEN_NOT_OWNER` otherwise), `unlisted` needs a matching `?share=<token>` (no login
+  required; 403 `FILE_SHARE_INVALID` if missing/wrong/expired). Supports `Range` requests
+  for video/audio seeking. This is the **only** path that serves granted bytes —
+  `ServeStaticModule` no longer exposes `file/upload`
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2,
+  [ADR 0026](ADR/0026-file-visibility-implementation.md))
+- `POST /file` — promote a temp file to permanent storage (transactional), defaulting to
+  `visibility: private`. The attached filename is a one-shot claim token: resubmitting it
+  returns the existing file with 200 (idempotent retry) for the user who claimed it, and
+  409 `FILE_ALREADY_CLAIMED` for anyone else ([ADR 0019](ADR/0019-upload-claim-idempotency.md))
+- `PATCH /file/:id` — update file metadata (creator or admin), including toggling
+  `visibility`. Switching to `unlisted` issues a `shareToken` (returned as `shareUrl`, owner/
+  admin only); `rotateShareToken: true` regenerates it, invalidating every previously shared
+  link; an optional `shareExpiresAt` bounds it (default: no expiry)
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D3)
 - `DELETE /file/:id` — delete file metadata and the stored file (creator or admin). A file
   attached to a post is refused with 409 `FILE_IN_USE` — delete the post first
   ([ADR 0023](ADR/0023-board-domain-schema.md))
@@ -203,7 +218,9 @@ POST /auth/register   (Basic)          → user created
 POST /auth/signin     (Basic)          → { accessToken } + Set-Cookie: refreshToken (httpOnly)
 POST /upload/attach   (Bearer, video)  → { filename: "temp_..." }
 POST /file            (Bearer, { title, filePath: "temp_..." })
-                                       → promoted; served at {BASE_URL}/file/upload/granted_...
+                                       → promoted (visibility: private); served at
+                                         {BASE_URL}/file/:id/content (Bearer required until
+                                         PATCH /file/:id sets visibility to public/unlisted)
 ```
 
 ### Error responses
@@ -247,11 +264,13 @@ Docker/compose, CI (GitHub Actions), logging conventions, and the e2e rewrite al
 landed 2026-07-25 (ADR 0014–0017), and the e2e suite covers the
 auth/ownership/pagination/promotion paths. **Stage 2 has begun** — orphan temp-file
 cleanup landed 2026-07-26 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)).
-**Uploaded files are served unauthenticated at public URLs**
-(`{BASE_URL}/file/upload/granted_...`) until the Stage 4 VOD access-control task
-— anyone with the link can fetch them ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)).
-Uploads enforce an mp4/mov/webm allowlist and `pnpm lint` is clean as of
-2026-07-22.
+**File visibility landed 2026-08-01** — every stored file now has a
+`public`/`private`/`unlisted` state (default `private`) and is served only through the
+access-controlled `GET /file/:id/content`; `file/upload` is no longer statically exposed
+([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6,
+[ADR 0026](ADR/0026-file-visibility-implementation.md)). Media-type expansion
+(images/audio, ADR 0025 D4/D5) has not landed — uploads still enforce an mp4/mov/webm
+allowlist through the single `video` field. `pnpm lint` is clean as of 2026-07-22.
 
 ## Author
 

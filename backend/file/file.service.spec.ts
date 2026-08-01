@@ -10,6 +10,7 @@ import {
   SelectQueryBuilder,
 } from 'typeorm';
 import { FileEntity } from './entity/file.entity';
+import { FileVisibility } from './entity/file-visibility.enum';
 import { GetFilesDto } from './dto/get-files.dto';
 import { UserEntity } from 'backend/user/entity/user.entity';
 import {
@@ -49,6 +50,9 @@ describe('FileService', () => {
     title: 'Test File',
     filePath: 'file/upload/granted_test.mp4',
     creator: { id: 1, email: 'creator@test.com' } as UserEntity,
+    visibility: FileVisibility.public,
+    shareToken: null,
+    shareExpiresAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -187,7 +191,7 @@ describe('FileService', () => {
       expect(result.file).toMatchObject({
         id: 1,
         title: 'Test File',
-        fileUrl: 'http://localhost:3000/file/upload/granted_test.mp4',
+        fileUrl: 'http://localhost:3000/file/1/content',
       });
       expect(queryRunner.connect).toHaveBeenCalled();
       expect(queryRunner.startTransaction).toHaveBeenCalled();
@@ -443,6 +447,117 @@ describe('FileService', () => {
 
       expect(userRepository.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
     });
+
+    // ADR 0025 D1/D3: visibility toggling reuses this write path rather than a new
+    // endpoint, so token issuance/rotation/clearing all live inside the same tx.
+    describe('visibility toggling', () => {
+      const setupUpdate = (existing: FileEntity) => {
+        queryRunner.manager.findOne = jest.fn().mockResolvedValue(existing);
+        const mockUpdateQueryBuilder = {
+          update: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue({ affected: 1 }),
+        };
+        queryRunner.manager.createQueryBuilder = jest
+          .fn()
+          .mockReturnValue(mockUpdateQueryBuilder);
+        jest.spyOn(fileRepository, 'findOne').mockResolvedValue(existing);
+        return mockUpdateQueryBuilder;
+      };
+
+      it('generates a share token when switching to unlisted', async () => {
+        const mockUpdateQueryBuilder = setupUpdate(mockFileEntity);
+
+        await fileService.updateFile(
+          1,
+          { visibility: FileVisibility.unlisted },
+          owner,
+        );
+
+        const [setCall] = mockUpdateQueryBuilder.set.mock.calls as [
+          { visibility?: FileVisibility; shareToken?: string },
+        ][];
+        expect(setCall[0].visibility).toBe(FileVisibility.unlisted);
+        expect(typeof setCall[0].shareToken).toBe('string');
+        expect(setCall[0].shareToken).not.toHaveLength(0);
+      });
+
+      it('rotates the share token, invalidating the previous link', async () => {
+        const unlistedFile = {
+          ...mockFileEntity,
+          visibility: FileVisibility.unlisted,
+          shareToken: 'old-token',
+        };
+        const mockUpdateQueryBuilder = setupUpdate(unlistedFile);
+
+        await fileService.updateFile(1, { rotateShareToken: true }, owner);
+
+        const [setCall] = mockUpdateQueryBuilder.set.mock.calls as [
+          { shareToken?: string },
+        ][];
+        expect(setCall[0].shareToken).toEqual(expect.any(String));
+        expect(setCall[0].shareToken).not.toBe('old-token');
+      });
+
+      it('clears the share token when leaving unlisted', async () => {
+        const unlistedFile = {
+          ...mockFileEntity,
+          visibility: FileVisibility.unlisted,
+          shareToken: 'old-token',
+          shareExpiresAt: new Date('2026-01-01'),
+        };
+        const mockUpdateQueryBuilder = setupUpdate(unlistedFile);
+
+        await fileService.updateFile(
+          1,
+          { visibility: FileVisibility.public },
+          owner,
+        );
+
+        expect(mockUpdateQueryBuilder.set).toHaveBeenCalledWith(
+          expect.objectContaining({
+            visibility: FileVisibility.public,
+            shareToken: null,
+            shareExpiresAt: null,
+          }),
+        );
+      });
+
+      it('sets shareExpiresAt only when the resulting visibility is unlisted', async () => {
+        const mockUpdateQueryBuilder = setupUpdate(mockFileEntity);
+
+        await fileService.updateFile(
+          1,
+          {
+            visibility: FileVisibility.unlisted,
+            shareExpiresAt: '2026-12-31T00:00:00.000Z',
+          },
+          owner,
+        );
+
+        expect(mockUpdateQueryBuilder.set).toHaveBeenCalledWith(
+          expect.objectContaining({
+            shareExpiresAt: new Date('2026-12-31T00:00:00.000Z'),
+          }),
+        );
+      });
+
+      it('ignores shareExpiresAt when not entering unlisted', async () => {
+        const mockUpdateQueryBuilder = setupUpdate(mockFileEntity);
+
+        await fileService.updateFile(
+          1,
+          { shareExpiresAt: '2026-12-31T00:00:00.000Z' },
+          owner,
+        );
+
+        const [setCall] = mockUpdateQueryBuilder.set.mock.calls as [
+          { shareExpiresAt?: Date | null },
+        ][];
+        expect(setCall[0].shareExpiresAt).toBeUndefined();
+      });
+    });
   });
 
   describe('getFiles', () => {
@@ -474,8 +589,11 @@ describe('FileService', () => {
         );
     });
 
+    // Every generic behavior test below runs as admin so the visibility filter
+    // (its own dedicated block further down) never adds an extra andWhere call
+    // that these unrelated assertions would have to account for.
     it('should apply take and skip to the query', async () => {
-      const [files, count] = await fileService.getFiles(listQuery());
+      const [files, count] = await fileService.getFiles(listQuery(), admin);
 
       expect(listQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
         'file.creator',
@@ -488,7 +606,7 @@ describe('FileService', () => {
     });
 
     it('should default to newest first with id as a tiebreaker', async () => {
-      await fileService.getFiles(listQuery());
+      await fileService.getFiles(listQuery(), admin);
 
       expect(listQueryBuilder.orderBy).toHaveBeenCalledWith(
         'file.createdAt',
@@ -503,7 +621,10 @@ describe('FileService', () => {
     });
 
     it('should map an allowed sort key to its column instead of interpolating it', async () => {
-      await fileService.getFiles(listQuery({ sortBy: 'title', order: 'ASC' }));
+      await fileService.getFiles(
+        listQuery({ sortBy: 'title', order: 'ASC' }),
+        admin,
+      );
 
       expect(listQueryBuilder.orderBy).toHaveBeenCalledWith(
         'file.title',
@@ -516,14 +637,14 @@ describe('FileService', () => {
     });
 
     it('should not duplicate the tiebreaker when sorting by id', async () => {
-      await fileService.getFiles(listQuery({ sortBy: 'id' }));
+      await fileService.getFiles(listQuery({ sortBy: 'id' }), admin);
 
       expect(listQueryBuilder.orderBy).toHaveBeenCalledWith('file.id', 'DESC');
       expect(listQueryBuilder.addOrderBy).not.toHaveBeenCalled();
     });
 
     it('should search the title with a case-insensitive partial match', async () => {
-      await fileService.getFiles(listQuery({ search: 'holiday' }));
+      await fileService.getFiles(listQuery({ search: 'holiday' }), admin);
 
       expect(listQueryBuilder.andWhere).toHaveBeenCalledWith(
         "file.title ILIKE :term ESCAPE '\\'",
@@ -532,7 +653,7 @@ describe('FileService', () => {
     });
 
     it('should escape LIKE wildcards so they match literally', async () => {
-      await fileService.getFiles(listQuery({ search: '100%_a\\b' }));
+      await fileService.getFiles(listQuery({ search: '100%_a\\b' }), admin);
 
       // Unescaped, `%` and `_` would widen the match far beyond what was typed.
       expect(listQueryBuilder.andWhere).toHaveBeenCalledWith(
@@ -542,13 +663,13 @@ describe('FileService', () => {
     });
 
     it('should ignore a whitespace-only search term', async () => {
-      await fileService.getFiles(listQuery({ search: '   ' }));
+      await fileService.getFiles(listQuery({ search: '   ' }), admin);
 
       expect(listQueryBuilder.andWhere).not.toHaveBeenCalled();
     });
 
     it('should filter by creator through the existing join', async () => {
-      await fileService.getFiles(listQuery({ creatorId: 7 }));
+      await fileService.getFiles(listQuery({ creatorId: 7 }), admin);
 
       expect(listQueryBuilder.andWhere).toHaveBeenCalledWith(
         'creator.id = :creatorId',
@@ -559,9 +680,126 @@ describe('FileService', () => {
     });
 
     it('should combine search and creator filter', async () => {
-      await fileService.getFiles(listQuery({ search: 'trip', creatorId: 3 }));
+      await fileService.getFiles(
+        listQuery({ search: 'trip', creatorId: 3 }),
+        admin,
+      );
 
       expect(listQueryBuilder.andWhere).toHaveBeenCalledTimes(2);
+    });
+
+    // ADR 0025: private/unlisted metadata must not leak to a non-owner/non-admin —
+    // 'unlisted' hides from listings too since the whole point is "not listed".
+    it('should hide private/unlisted files from a non-admin who does not own them', async () => {
+      await fileService.getFiles(listQuery(), stranger);
+
+      expect(listQueryBuilder.andWhere).toHaveBeenCalledWith(
+        '(file.visibility = :publicVisibility OR creator.id = :requesterId)',
+        { publicVisibility: FileVisibility.public, requesterId: stranger.id },
+      );
+    });
+
+    it('should not filter by visibility for an admin', async () => {
+      await fileService.getFiles(listQuery(), admin);
+
+      expect(listQueryBuilder.andWhere).not.toHaveBeenCalledWith(
+        expect.stringContaining('file.visibility'),
+        expect.anything(),
+      );
+    });
+  });
+
+  // ADR 0025: getFileById answers 404 (not 403) for a file the requester cannot see,
+  // so a non-owner cannot even confirm a private/unlisted file exists.
+  describe('getFileById', () => {
+    it('returns a public file to anyone', async () => {
+      const getOne = jest.fn().mockResolvedValue(mockFileEntity);
+      jest.spyOn(fileRepository, 'createQueryBuilder').mockReturnValue({
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getOne,
+      } as unknown as SelectQueryBuilder<FileEntity>);
+
+      const result = await fileService.getFileById(1, stranger);
+
+      expect(result).toMatchObject({ id: 1, title: 'Test File' });
+    });
+
+    it('returns a private file to its owner', async () => {
+      const privateFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.private,
+      };
+      jest.spyOn(fileRepository, 'createQueryBuilder').mockReturnValue({
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(privateFile),
+      } as unknown as SelectQueryBuilder<FileEntity>);
+
+      await expect(fileService.getFileById(1, owner)).resolves.toMatchObject({
+        id: 1,
+      });
+    });
+
+    it('returns a private file to an admin', async () => {
+      const privateFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.private,
+      };
+      jest.spyOn(fileRepository, 'createQueryBuilder').mockReturnValue({
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(privateFile),
+      } as unknown as SelectQueryBuilder<FileEntity>);
+
+      await expect(fileService.getFileById(1, admin)).resolves.toMatchObject({
+        id: 1,
+      });
+    });
+
+    it('hides a private file from a stranger behind 404, not 403', async () => {
+      const privateFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.private,
+      };
+      jest.spyOn(fileRepository, 'createQueryBuilder').mockReturnValue({
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(privateFile),
+      } as unknown as SelectQueryBuilder<FileEntity>);
+
+      await expect(fileService.getFileById(1, stranger)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('hides an unlisted file from a stranger', async () => {
+      const unlistedFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.unlisted,
+        shareToken: 'token',
+      };
+      jest.spyOn(fileRepository, 'createQueryBuilder').mockReturnValue({
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(unlistedFile),
+      } as unknown as SelectQueryBuilder<FileEntity>);
+
+      await expect(fileService.getFileById(1, stranger)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws NotFoundException when the file does not exist', async () => {
+      jest.spyOn(fileRepository, 'createQueryBuilder').mockReturnValue({
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(null),
+      } as unknown as SelectQueryBuilder<FileEntity>);
+
+      await expect(fileService.getFileById(1, stranger)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -791,6 +1029,159 @@ describe('FileService', () => {
           7,
         ),
       ).rejects.toThrow(failure);
+    });
+  });
+
+  // GET /file/:id/content's access matrix (ADR 0025 D1/D2/D3/D6): every granted read
+  // now goes through this judgment, since file/upload is no longer statically served.
+  describe('resolveContentAccess', () => {
+    it('serves a public file to an anonymous requester', async () => {
+      const publicFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.public,
+      };
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(publicFile);
+
+      await expect(fileService.resolveContentAccess(1, null)).resolves.toBe(
+        publicFile,
+      );
+    });
+
+    it('serves a private file to its owner', async () => {
+      const privateFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.private,
+      };
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(privateFile);
+
+      await expect(fileService.resolveContentAccess(1, owner)).resolves.toBe(
+        privateFile,
+      );
+    });
+
+    it('serves a private file to an admin', async () => {
+      const privateFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.private,
+      };
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(privateFile);
+
+      await expect(fileService.resolveContentAccess(1, admin)).resolves.toBe(
+        privateFile,
+      );
+    });
+
+    it('refuses a private file to a stranger with FORBIDDEN_NOT_OWNER', async () => {
+      const privateFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.private,
+      };
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(privateFile);
+
+      await expect(
+        fileService.resolveContentAccess(1, stranger),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('refuses a private file to an anonymous requester', async () => {
+      const privateFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.private,
+      };
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(privateFile);
+
+      await expect(fileService.resolveContentAccess(1, null)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('serves an unlisted file to its owner without a share token', async () => {
+      const unlistedFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.unlisted,
+        shareToken: 'the-token',
+      };
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(unlistedFile);
+
+      await expect(fileService.resolveContentAccess(1, owner)).resolves.toBe(
+        unlistedFile,
+      );
+    });
+
+    it('serves an unlisted file to an anonymous requester with a matching share token', async () => {
+      const unlistedFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.unlisted,
+        shareToken: 'the-token',
+      };
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(unlistedFile);
+
+      await expect(
+        fileService.resolveContentAccess(1, null, 'the-token'),
+      ).resolves.toBe(unlistedFile);
+    });
+
+    it('refuses an unlisted file with no share token', async () => {
+      const unlistedFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.unlisted,
+        shareToken: 'the-token',
+      };
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(unlistedFile);
+
+      await expect(fileService.resolveContentAccess(1, null)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('refuses an unlisted file after its token was rotated', async () => {
+      const unlistedFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.unlisted,
+        shareToken: 'new-token',
+      };
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(unlistedFile);
+
+      // The old link, captured before rotation, must stop working immediately.
+      await expect(
+        fileService.resolveContentAccess(1, null, 'old-token'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('refuses an unlisted file whose share token has expired', async () => {
+      const unlistedFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.unlisted,
+        shareToken: 'the-token',
+        shareExpiresAt: new Date(Date.now() - 1000),
+      };
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(unlistedFile);
+
+      await expect(
+        fileService.resolveContentAccess(1, null, 'the-token'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('serves an unlisted file with a valid token before expiry', async () => {
+      const unlistedFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.unlisted,
+        shareToken: 'the-token',
+        shareExpiresAt: new Date(Date.now() + 1000 * 60 * 60),
+      };
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(unlistedFile);
+
+      await expect(
+        fileService.resolveContentAccess(1, null, 'the-token'),
+      ).resolves.toBe(unlistedFile);
+    });
+
+    it('throws NotFoundException when the file does not exist', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(null);
+
+      await expect(fileService.resolveContentAccess(1, null)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

@@ -11,6 +11,9 @@ export enum ErrorCode {
   AUTH_EMAIL_TAKEN = 'AUTH_EMAIL_TAKEN',
   FILE_TITLE_TAKEN = 'FILE_TITLE_TAKEN',
   FILE_INVALID_PATH = 'FILE_INVALID_PATH',
+  // An unlisted file's content was requested with a missing, wrong, or expired
+  // share token (ADR 0025 D2/D6).
+  FILE_SHARE_INVALID = 'FILE_SHARE_INVALID',
   UPLOAD_FILE_REQUIRED = 'UPLOAD_FILE_REQUIRED',
   UPLOAD_INVALID_TYPE = 'UPLOAD_INVALID_TYPE',
   // Refused: demoting the last remaining superadmin would lock the role system (ADR 0013).

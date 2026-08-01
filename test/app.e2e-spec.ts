@@ -461,8 +461,11 @@ describe('Upload Board API (e2e)', () => {
         .send({ title: 'promoted-clip', filePath: filename })
         .expect(201);
 
-      expect(promote.body.fileUrl).toContain('file/upload/');
-      expect(promote.body.fileUrl).toContain('granted_');
+      // file/upload is no longer statically served (ADR 0025 D2) — fileUrl now
+      // points at the access-controlled content endpoint, not a static path.
+      expect(promote.body.fileUrl).toBe(
+        `http://localhost:3000/file/${promote.body.id}/content`,
+      );
       expect(existsSync(grantedPath)).toBe(true);
       expect(existsSync(tempPath)).toBe(false);
     });
@@ -592,6 +595,207 @@ describe('Upload Board API (e2e)', () => {
         })
         .expect(400);
       expect(res.body.code).toBe('UPLOAD_INVALID_TYPE');
+    });
+  });
+
+  // File visibility + access-controlled content (ADR 0025 D1/D2/D3/D6): every granted
+  // read now goes through GET /file/:id/content, gated by the public/private/unlisted
+  // state — file/upload is no longer statically served.
+  describe('File visibility & access-controlled content (ADR 0025)', () => {
+    const BYTES = 'fake-mp4-bytes';
+
+    async function promoteFile(accessToken: string, title: string) {
+      const attach = await request(server)
+        .post('/upload/attach')
+        .set(auth(accessToken))
+        .attach('video', Buffer.from(BYTES), {
+          filename: 'sample.mp4',
+          contentType: 'video/mp4',
+        })
+        .expect(201);
+
+      const filename = attach.body.filename as string;
+      createdFiles.push(
+        join(process.cwd(), 'file', 'temp', filename),
+        join(
+          process.cwd(),
+          'file',
+          'upload',
+          filename.replace('temp_', 'granted_'),
+        ),
+      );
+
+      const promote = await request(server)
+        .post('/file')
+        .set(auth(accessToken))
+        .send({ title, filePath: filename })
+        .expect(201);
+
+      return promote.body as { id: number; visibility: string };
+    }
+
+    it('defaults to private, hiding metadata from a non-owner behind 404', async () => {
+      const owner = await createUser('vis-owner@e.com');
+      const stranger = await createUser('vis-stranger@e.com');
+      const file = await promoteFile(owner.accessToken, 'vis-default');
+
+      expect(file.visibility).toBe('private');
+
+      await request(server)
+        .get(`/file/${file.id}`)
+        .set(auth(stranger.accessToken))
+        .expect(404);
+
+      await request(server)
+        .get(`/file/${file.id}`)
+        .set(auth(owner.accessToken))
+        .expect(200);
+    });
+
+    it("hides a private file from another user's listing but keeps it in the owner's", async () => {
+      const owner = await createUser('vis-list-owner@e.com');
+      const stranger = await createUser('vis-list-stranger@e.com');
+      await promoteFile(owner.accessToken, 'vis-list-private');
+
+      const asStranger = await request(server)
+        .get('/file')
+        .set(auth(stranger.accessToken))
+        .expect(200);
+      expect(asStranger.body[1]).toBe(0);
+
+      const asOwner = await request(server)
+        .get('/file')
+        .set(auth(owner.accessToken))
+        .expect(200);
+      expect(asOwner.body[1]).toBe(1);
+    });
+
+    it("refuses a private file's content to a stranger and serves it to the owner", async () => {
+      const owner = await createUser('vis-private-owner@e.com');
+      const stranger = await createUser('vis-private-stranger@e.com');
+      const file = await promoteFile(owner.accessToken, 'vis-private-content');
+
+      const refused = await request(server)
+        .get(`/file/${file.id}/content`)
+        .set(auth(stranger.accessToken))
+        .expect(403);
+      expect(refused.body.code).toBe('FORBIDDEN_NOT_OWNER');
+
+      const served = await request(server)
+        .get(`/file/${file.id}/content`)
+        .set(auth(owner.accessToken))
+        .buffer(true)
+        .expect(200);
+      expect(served.body.toString()).toBe(BYTES);
+    });
+
+    it('serves a public file to a fully anonymous request', async () => {
+      const owner = await createUser('vis-public-owner@e.com');
+      const file = await promoteFile(owner.accessToken, 'vis-public-content');
+
+      await request(server)
+        .patch(`/file/${file.id}`)
+        .set(auth(owner.accessToken))
+        .send({ visibility: 'public' })
+        .expect(200);
+
+      const res = await request(server)
+        .get(`/file/${file.id}/content`)
+        .buffer(true)
+        .expect(200);
+      expect(res.body.toString()).toBe(BYTES);
+      expect(res.headers['content-type']).toBe('video/mp4');
+    });
+
+    it('supports Range requests for partial content', async () => {
+      const owner = await createUser('vis-range-owner@e.com');
+      const file = await promoteFile(owner.accessToken, 'vis-range-content');
+      await request(server)
+        .patch(`/file/${file.id}`)
+        .set(auth(owner.accessToken))
+        .send({ visibility: 'public' })
+        .expect(200);
+
+      const res = await request(server)
+        .get(`/file/${file.id}/content`)
+        .set('Range', 'bytes=0-3')
+        .buffer(true)
+        .expect(206);
+
+      expect(res.headers['content-range']).toBe(
+        `bytes 0-3/${Buffer.byteLength(BYTES)}`,
+      );
+      expect(res.body.toString()).toBe(BYTES.slice(0, 4));
+    });
+
+    it('switches to unlisted, hands the owner a shareUrl, and rotation invalidates the old token', async () => {
+      const owner = await createUser('vis-unlisted-owner@e.com');
+      const file = await promoteFile(owner.accessToken, 'vis-unlisted-content');
+
+      const unlisted = await request(server)
+        .patch(`/file/${file.id}`)
+        .set(auth(owner.accessToken))
+        .send({ visibility: 'unlisted' })
+        .expect(200);
+
+      expect(unlisted.body.shareUrl).toContain(
+        `/file/${file.id}/content?share=`,
+      );
+      const firstToken = new URL(
+        unlisted.body.shareUrl as string,
+      ).searchParams.get('share');
+
+      // Anonymous, no token: refused.
+      const noToken = await request(server)
+        .get(`/file/${file.id}/content`)
+        .expect(403);
+      expect(noToken.body.code).toBe('FILE_SHARE_INVALID');
+
+      // Anonymous, correct token: served.
+      const withToken = await request(server)
+        .get(`/file/${file.id}/content?share=${firstToken}`)
+        .buffer(true)
+        .expect(200);
+      expect(withToken.body.toString()).toBe(BYTES);
+
+      // Rotate: the old link stops working immediately.
+      const rotated = await request(server)
+        .patch(`/file/${file.id}`)
+        .set(auth(owner.accessToken))
+        .send({ rotateShareToken: true })
+        .expect(200);
+      const secondToken = new URL(
+        rotated.body.shareUrl as string,
+      ).searchParams.get('share');
+      expect(secondToken).not.toBe(firstToken);
+
+      await request(server)
+        .get(`/file/${file.id}/content?share=${firstToken}`)
+        .expect(403);
+      await request(server)
+        .get(`/file/${file.id}/content?share=${secondToken}`)
+        .buffer(true)
+        .expect(200);
+    });
+
+    it('refuses an unlisted share token past its expiry', async () => {
+      const owner = await createUser('vis-ttl-owner@e.com');
+      const file = await promoteFile(owner.accessToken, 'vis-ttl-content');
+
+      const expired = new Date(Date.now() - 60_000).toISOString();
+      const unlisted = await request(server)
+        .patch(`/file/${file.id}`)
+        .set(auth(owner.accessToken))
+        .send({ visibility: 'unlisted', shareExpiresAt: expired })
+        .expect(200);
+      const token = new URL(unlisted.body.shareUrl as string).searchParams.get(
+        'share',
+      );
+
+      const res = await request(server)
+        .get(`/file/${file.id}/content?share=${token}`)
+        .expect(403);
+      expect(res.body.code).toBe('FILE_SHARE_INVALID');
     });
   });
 
@@ -773,8 +977,8 @@ describe('Upload Board API (e2e)', () => {
       }).expect(201);
 
       expect(created.body.file.id).toBe(fileId);
-      expect(created.body.file.fileUrl).toContain(
-        'file/upload/granted_attached-clip.mp4',
+      expect(created.body.file.fileUrl).toBe(
+        `http://localhost:3000/file/${fileId}/content`,
       );
     });
 

@@ -34,6 +34,7 @@ each ADR records the *why* behind those rules.
 | [0023](0023-board-domain-schema.md) | Board domain schema — post and comment | Accepted | 2026-07-30 |
 | [0024](0024-account-cascade-fk-refusal.md) | Account cascade — a typed refusal instead of an FK-violation 500 | Accepted | 2026-07-31 |
 | [0025](0025-file-visibility-and-media-expansion.md) | File visibility, access-controlled serving, and media-type expansion | Accepted — design gate | 2026-07-31 |
+| [0026](0026-file-visibility-implementation.md) | File visibility implementation — serving mechanism, metadata filtering, and the content/metadata disclosure split | Accepted | 2026-08-01 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

@@ -31,6 +31,28 @@
   대체**하고, 배포 대상과 독립적이므로 배포보다 앞당길 수 있다. 이 항목에서는 스키마 변경도
   마이그레이션도 라우트도 착지하지 않는다 — 검토된 마이그레이션과 프론트엔드 반영은 각자의
   후속 과제다(후자는 [ROADMAP.ko.md](ROADMAP.ko.md) > 미배정에서 추적).
+- **파일 가시성 + 접근 제어 콘텐츠 엔드포인트 — 구현 완료**
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D1/D2/D3/D6 +
+  [ADR 0026](ADR/0026-file-visibility-implementation.ko.md)) — 위 설계 게이트가 미디어 타입
+  확장(D4/D5, 여전히 별도 미착수 과제)을 제외하고 모두 착지했다. `FileEntity`는
+  `visibility`(`public`/`private`/`unlisted`, 기본 `private`), `shareToken`,
+  `shareExpiresAt`을 얻는다(마이그레이션 `1785571437643-AddFileVisibility`, `migration:generate`
+  원본 출력과 라인 단위로 대조 검토). `GET /file/:id/content`가 granted 바이트를 서빙하는 유일한
+  경로다 — Range 지원(영상/오디오 탐색)이고, 새 `OptionalJwtAuthGuard`로 가드해 public/unlisted
+  접근이 bearer 토큰 없이도 동작한다 — D2의 열린 하위 결정을 병행 public 정적 디렉터리 대신 단일
+  엔드포인트로 확정했다. `ServeStaticModule`은 이제 `file/temp`만 루트로 삼으며, `file/upload`는
+  더 이상 정적으로 노출되지 않는다. `GET /file`·`GET /file/:id`도 비소유자·비admin 요청자에게
+  `private`/`unlisted` 행을 필터링한다(ADR 0025 본문이 전혀 다루지 않은 공백이었고, ADR 0026
+  D7로 확정) — 콘텐츠와 메타데이터는 의도적으로 서로 다르게 접근 거부를 알린다(ADR 0026 D8):
+  메타데이터는 404 `FILE_NOT_FOUND`(존재를 숨김), 콘텐츠는 403 `FORBIDDEN_NOT_OWNER` 또는 403
+  `FILE_SHARE_INVALID`(존재는 확인해 주되 바이트만 거부)로 답한다. 가시성 토글과 공유 토큰
+  회전은 새 엔드포인트 대신 기존 `PATCH /file/:id` 쓰기 경로를 재사용한다.
+  `FileResponseDto.fileUrl`은 이제 정적 경로 대신 콘텐츠 엔드포인트를 가리키고, `visibility`
+  필드는 항상 존재하며, `shareUrl`은 unlisted 파일을 관리할 수 있는 응답자에게만 존재한다. 새
+  에러 코드 `FILE_SHARE_INVALID`(403). 테스트 커버리지: 가시성 접근 매트릭스 전체
+  (public/private/unlisted × owner/stranger/anonymous/admin), 토큰 회전이 이전 링크를
+  무효화하는지, TTL 만료, Range 요청까지 — 유닛(`file.service.spec.ts`)과 실제 HTTP+DB e2e
+  (`test/app.e2e-spec.ts`) 양쪽에서 검증했다.
 - **게시판 comment 모듈 — 게시판 도메인 완성**
   ([ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) — 스키마 게이트의 후반부이며,
   이로써 **Stage 3**도 완결됐다. `CommentModule`은 ADR이 정한 네 라우트를 `JwtAuthGuard` 뒤에

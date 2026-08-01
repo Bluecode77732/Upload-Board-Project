@@ -45,14 +45,21 @@ export class FileController {
   })
   // 목적: 검증된 목록 조회 조건을 DTO 한 덩어리로 서비스에 넘긴다.
   // 이유: 조건이 take/skip에서 검색·정렬·필터까지 늘어나, 위치 인자로 풀면 호출부가 인자 순서 실수에 노출된다.
+  //       요청자 신원도 넘겨야 private/unlisted 행을 소유자·admin 기준으로 필터링할 수 있다(ADR 0025).
   // 방법: @Query()로 바인딩된 GetFilesDto를 그대로 전달한다 — 컨트롤러는 조회 조건을 해석하지 않는다.
-  getFiles(@Query() getFilesDto: GetFilesDto) {
-    return this.fileService.getFiles(getFilesDto);
+  getFiles(@Query() getFilesDto: GetFilesDto, @AuthUser() actor: AuthUser) {
+    return this.fileService.getFiles(getFilesDto, actor);
   }
 
   @Get(':id')
-  getFileById(@Param('id', ParseIntPipe) id: number) {
-    return this.fileService.getFileById(id);
+  // 목적: 단일 파일 메타데이터를 조회한다.
+  // 이유: private/unlisted 파일의 존재·제목이 요청자 신원 없이는 접근 판정을 내릴 수 없다(ADR 0025).
+  // 방법: @AuthUser()로 얻은 요청자를 그대로 서비스에 넘긴다 — 판정은 FileService의 몫이다.
+  getFileById(
+    @Param('id', ParseIntPipe) id: number,
+    @AuthUser() actor: AuthUser,
+  ) {
+    return this.fileService.getFileById(id, actor);
   }
 
   @Post()

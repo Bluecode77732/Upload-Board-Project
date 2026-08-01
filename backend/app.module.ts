@@ -60,9 +60,13 @@ import { join } from 'node:path';
       }),
       inject: [ConfigService],
     }),
+    // file/upload is deliberately NOT served here — every granted read now goes
+    // through the access-controlled GET /file/:id/content (ADR 0025 D2). file/temp
+    // stays statically exposed; its lifecycle is the orphan-sweep's concern (ADR 0018),
+    // unaffected by visibility.
     ServeStaticModule.forRoot({
-      rootPath: join(process.cwd(), 'file'),
-      serveRoot: 'file',
+      rootPath: join(process.cwd(), 'file', 'temp'),
+      serveRoot: 'file/temp',
     }),
     ScheduleModule.forRoot(),
     FileModule,

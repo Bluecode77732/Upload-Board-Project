@@ -97,8 +97,14 @@ item below lands as its own dedicated, designed change
   TTL), an access-controlled `GET /file/:id/content` endpoint (so `ServeStaticModule` stops
   exposing `file/upload`), and images+audio+video type-specific upload fields. It
   **generalizes and replaces the Stage 4 "VOD playback access control" row** and, being
-  independent of the deploy target, may be sequenced ahead of deployment. No code yet —
-  design gate only; a reviewed migration and the frontend adoption follow as their own tasks.
+  independent of the deploy target, may be sequenced ahead of deployment.
+- ~~**Visibility + access-controlled serving implemented 2026-08-01**~~ ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)
+  D1/D2/D3/D6 + [ADR 0026](ADR/0026-file-visibility-implementation.md)): the migration
+  landed (reviewed line-by-line), `GET /file/:id/content` is live with Range support, and
+  `GET /file`/`GET /file/:id` filter private/unlisted metadata from non-owners. **The
+  media-type expansion (D4/D5) is unimplemented and split out as its own Stage 4 row**;
+  frontend adoption of the new `fileUrl`/`visibility` response shape remains its own
+  tracked task (Unscheduled below).
 
 ## 1. Vision & essence
 
@@ -167,12 +173,13 @@ work must pass them; they are not themselves roadmap subjects.
   only after RBAC lands and real admin requirements exist. A pnpm-workspace
   monorepo (relocating the backend into `apps/backend`) and an immediate
   three-way split (frontend/backend/admin) were considered and rejected.
-- **Known constraint (accepted, now with a decided exit)**: static file serving is
-  unauthenticated today — `{BASE_URL}/file/...` URLs are public, and the frontend must
-  treat them as such. The exit is decided: [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)
-  (2026-07-31) revises [ADR 0005](ADR/0005-local-disk-storage.md) so `ServeStaticModule`
-  stops exposing `file/upload` and access is enforced by the `GET /file/:id/content`
-  endpoint — pending its implementation task (Stage 4, may be pulled ahead of deployment).
+- ~~**Known constraint**: static file serving is unauthenticated~~ — **resolved on the
+  backend 2026-08-01** ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6
+  + [ADR 0026](ADR/0026-file-visibility-implementation.md)): `ServeStaticModule` no longer
+  exposes `file/upload`, and access is enforced by `GET /file/:id/content`
+  (public/private/unlisted, Range-aware). The frontend has not adopted this yet — it still
+  reads the old static `fileUrl` shape — so the constraint the *frontend* must work around is
+  unchanged until that task lands (see Unscheduled).
 - Considered and set aside in the review: event-driven reinforcement (only one
   side effect exists to decouple, and moving the rename out of the transaction
   would break `temp_`/`granted_` atomicity) and CQRS-lite (the read model is
@@ -288,7 +295,8 @@ Deployment comes after the board domain, the pagination debt, and the Stage 5 ad
 |---|---|
 | AWS container deployment | Local: Docker (compose); deploy: AWS, container-based. New deployment ADR; depends on Stage 1 Docker + CI. |
 | Container & deploy hardening | Surfaced by [ADR 0015](ADR/0015-docker-and-compose.md): the Stage 1 image is deploy-*capable* but not production-grade. Non-root `USER` (runs as root today), a distroless runtime base (drop the shell/apt attack surface), a health/readiness endpoint (for LB/orchestrator probes), migrations as a **separate deploy step** rather than on container boot (avoids multi-instance migration races), secrets via a manager instead of `.env`/`env_file`, HTTPS termination (the `Secure` refresh cookie requires it when `ENV=prod`), and a target-arch build (x64 prebuilt `bcrypt` today; ARM/Graviton needs a matching prebuild or `pnpm.onlyBuiltDependencies`). Depends on the AWS deployment task. |
-| File visibility, access-controlled serving & media-type expansion **(decided 2026-07-31, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md); generalizes the former "VOD playback access control" row)** | Uploaded files are public URLs today — anyone with the link watches. Adds a 3-state `visibility` (public/private/**unlisted** via a rotatable share token + optional TTL) and an access-controlled `GET /file/:id/content` so `ServeStaticModule` stops exposing `file/upload`; also expands the allowlist to images (jpg/png/webp) + audio (mp3) + video via type-specific upload fields. Partially revises [ADR 0005](ADR/0005-local-disk-storage.md) (serving) and [ADR 0003](ADR/0003-two-phase-upload-contract.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) (upload field, now a breaking change against the live frontend). Design gate done (ADR 0025); a reviewed migration + frontend adoption follow. **Independent of the deploy target — may be sequenced ahead of deployment.** |
+| ~~File visibility & access-controlled serving~~ **(landed 2026-08-01, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6 + [ADR 0026](ADR/0026-file-visibility-implementation.md); generalizes the former "VOD playback access control" row)** | Uploaded files used to be plain public URLs — anyone with the link could watch. `FileEntity` now carries a 3-state `visibility` (public/private/**unlisted** via a rotatable share token + optional TTL); `GET /file/:id/content` is the sole access-controlled read path (Range-aware), and `ServeStaticModule` no longer exposes `file/upload`. Partially revises [ADR 0005](ADR/0005-local-disk-storage.md) (serving). **Frontend adoption of the new `fileUrl`/`visibility` shape is still outstanding** — see Unscheduled below. |
+| Media-type expansion (images/audio, type-specific upload fields) **(decided 2026-07-31, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D4/D5 — split from the row above 2026-08-01, not yet implemented)** | Expands the upload allowlist to images (jpg/png/webp) + audio (mp3) + video via type-specific `image`/`audio`/`video` upload fields, replacing the single `video` field. Revises [ADR 0003](ADR/0003-two-phase-upload-contract.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) (upload field, a breaking change against the live frontend). Design gate done (ADR 0025); implementation + frontend adoption still pending. **Independent of the deploy target — may be sequenced ahead of deployment.** |
 | Storage port-adapter | Only if/when the S3 need is confirmed — see Architecture direction (section 4). |
 | Performance / capacity criteria | Index policy, response-time targets, disk ceilings — measured before optimized. |
 
@@ -428,13 +436,18 @@ role-delivery → adapt console → moderation decision → resolve duplicate su
   `take`/`skip` and gets the new deterministic ordering for free. The backend change stopped
   at the repo boundary ([CLAUDE.md](CLAUDE.md) > Project Overview).
 - Frontend adoption of file visibility + media expansion (recorded 2026-07-31,
-  [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)) — **owned by a frontend-scoped
-  task, not by backend work**, like the claim-, deletion-, and list-query-contract items above,
-  but larger: this one is a **breaking change against the live frontend**, not an additive one.
-  When the ADR 0025 backend task lands, the upload field changes from single `video` to
-  `image`/`audio`/`video`, file access moves to `GET /file/:id/content`, and `FileResponseDto`
-  gains `visibility` + a share URL. `frontend/docs/API-CONTRACT.md`, the upload form, the file
-  list, and the playback/view surface must all take it up (visibility toggle, share-link copy,
+  [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md); visibility half **landed on
+  the backend 2026-08-01**, [ADR 0026](ADR/0026-file-visibility-implementation.md)) —
+  **owned by a frontend-scoped task, not by backend work**, like the claim-, deletion-, and
+  list-query-contract items above, but larger: this one is a **breaking change against the
+  live frontend**, not an additive one. As of 2026-08-01, file access already moved to
+  `GET /file/:id/content` and `FileResponseDto` gains `visibility` + (for the owner) a
+  `shareUrl` — the frontend currently reads the old static `fileUrl` shape and cannot toggle
+  visibility at all, so this is now a live gap, not a future one. The upload field split
+  (single `video` → `image`/`audio`/`video`) is still backend-unimplemented (ADR 0025 D4/D5,
+  see the Stage 4 media-type-expansion row) and will widen this same frontend task when it
+  lands. `frontend/docs/API-CONTRACT.md`, the upload form, the file list, and the
+  playback/view surface must all take it up (visibility toggle, share-link copy, and later
   the three upload fields). The backend change stops at the repo boundary
   ([CLAUDE.md](CLAUDE.md) > Project Overview).
 - Documentation rot in `ARCHITECTURE.md` (+ko) (recorded 2026-07-30) — the Stage 1

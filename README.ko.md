@@ -150,12 +150,27 @@ docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 �
   | `creatorId` | 유저 id | — |
 
   예: `GET /file?search=holiday&creatorId=3&sortBy=title&order=ASC&take=10`
-- `GET /file/:id` — 파일 메타데이터 조회
-- `POST /file` — 임시 파일을 영구 저장소로 승격 (트랜잭션). attach로 받은 파일명은 1회용 청구
-  토큰이라, 다시 제출하면 청구한 본인에게는 기존 파일을 200으로 돌려주고(멱등 재시도), 다른
-  사용자에게는 409 `FILE_ALREADY_CLAIMED`를 반환합니다
-  ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md))
-- `PATCH /file/:id` — 파일 메타데이터 수정 (작성자 또는 admin)
+- `GET /file/:id` — 파일 메타데이터 조회. `private`/`unlisted` 파일은 작성자·admin 외에게는
+  404 `FILE_NOT_FOUND`로 답한다 — 존재 자체를 숨긴다
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md),
+  [ADR 0026](ADR/0026-file-visibility-implementation.ko.md))
+- `GET /file/:id/content` — 저장된 파일 바이트를 스트리밍하며, `visibility`로 접근을
+  검사한다: `public`은 인증 불필요, `private`은 작성자·admin의 Bearer 토큰 필요(아니면 403
+  `FORBIDDEN_NOT_OWNER`), `unlisted`는 일치하는 `?share=<token>` 필요(로그인 불필요; 누락·오류·
+  만료 시 403 `FILE_SHARE_INVALID`). 영상/오디오 탐색을 위한 `Range` 요청을 지원한다.
+  granted 바이트를 서빙하는 **유일한** 경로다 — `ServeStaticModule`은 더 이상 `file/upload`를
+  노출하지 않는다
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D1/D2,
+  [ADR 0026](ADR/0026-file-visibility-implementation.ko.md))
+- `POST /file` — 임시 파일을 영구 저장소로 승격 (트랜잭션), 기본 `visibility: private`로
+  시작한다. attach로 받은 파일명은 1회용 청구 토큰이라, 다시 제출하면 청구한 본인에게는 기존
+  파일을 200으로 돌려주고(멱등 재시도), 다른 사용자에게는 409 `FILE_ALREADY_CLAIMED`를
+  반환합니다 ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md))
+- `PATCH /file/:id` — 파일 메타데이터 수정 (작성자 또는 admin), `visibility` 토글 포함.
+  `unlisted`로 전환하면 `shareToken`이 발급되어 `shareUrl`로 반환된다(소유자·admin에게만);
+  `rotateShareToken: true`는 이를 재발급해 이전에 공유된 링크를 모두 무효화한다; 선택적
+  `shareExpiresAt`으로 만료 시각을 둘 수 있다(기본: 만료 없음)
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D3)
 - `DELETE /file/:id` — 파일 메타데이터와 저장된 물리 파일 삭제 (작성자 또는 admin). 게시글이
   참조 중인 파일은 409 `FILE_IN_USE`로 거절되므로 게시글을 먼저 지워야 한다
   ([ADR 0023](ADR/0023-board-domain-schema.ko.md))
@@ -200,7 +215,9 @@ POST /auth/register   (Basic)          → 사용자 생성
 POST /auth/signin     (Basic)          → { accessToken } + Set-Cookie: refreshToken (httpOnly)
 POST /upload/attach   (Bearer, video)  → { filename: "temp_..." }
 POST /file            (Bearer, { title, filePath: "temp_..." })
-                                       → 승격; {BASE_URL}/file/upload/granted_... 로 서빙
+                                       → 승격(visibility: private); {BASE_URL}/file/:id/content로
+                                         서빙 (PATCH /file/:id로 public/unlisted를 설정하기
+                                         전까지는 Bearer 필요)
 ```
 
 ### 에러 응답
@@ -244,11 +261,14 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
 Docker/compose, CI(GitHub Actions), 로깅 규약, e2e 재작성이 2026-07-25에 모두
 반영되었고(ADR 0014–0017) e2e 스위트가 인증/소유권/페이지네이션/승격 경로를 커버합니다.
 **Stage 2가 시작**되었습니다 — 고아 temp 파일 정리가 2026-07-26에 반영되었습니다
-([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)). **업로드된 파일은 무인증
-공개 URL**(`{BASE_URL}/file/upload/granted_...`)**로 서빙됩니다** — Stage 4의
-VOD 접근 제어 작업 전까지는 링크를 아는 사람은 누구나 접근할 수
-있습니다([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)).
-업로드는 mp4/mov/webm 허용 목록을 강제하며 `pnpm lint`는 2026-07-22 기준 클린.
+([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)). **파일 가시성이 2026-08-01에
+반영**되었습니다 — 모든 저장 파일은 이제 `public`/`private`/`unlisted` 상태(기본
+`private`)를 가지며 접근 제어된 `GET /file/:id/content`로만 서빙됩니다. `file/upload`는
+더 이상 정적으로 노출되지 않습니다
+([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D1/D2/D3/D6,
+[ADR 0026](ADR/0026-file-visibility-implementation.ko.md)). 미디어 타입 확장(이미지/오디오,
+ADR 0025 D4/D5)은 아직 반영되지 않아, 업로드는 여전히 단일 `video` 필드로 mp4/mov/webm
+허용 목록을 강제합니다. `pnpm lint`는 2026-07-22 기준 클린.
 
 ## 작성자
 

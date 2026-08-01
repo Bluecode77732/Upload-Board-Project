@@ -34,6 +34,29 @@ development line (package.json version).
   deployment. No schema change, migration, or route lands in this entry — the reviewed migration
   and the frontend adoption are their own follow-up tasks (the latter tracked in
   [ROADMAP.md](ROADMAP.md) > Unscheduled).
+- **File visibility + access-controlled content endpoint — implemented**
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6 +
+  [ADR 0026](ADR/0026-file-visibility-implementation.md)) — the design gate above lands for
+  everything except media-type expansion (D4/D5, still its own pending task). `FileEntity`
+  gains `visibility` (`public`/`private`/`unlisted`, default `private`), `shareToken`, and
+  `shareExpiresAt` (migration `1785571437643-AddFileVisibility`, reviewed line-by-line against
+  the raw `migration:generate` output). `GET /file/:id/content` is the sole path that serves
+  granted bytes — Range-aware (video/audio seeking), guarded by a new `OptionalJwtAuthGuard` so
+  public/unlisted access works with no bearer token at all — resolving D2's open sub-decision in
+  favor of a single endpoint over a parallel public static directory. `ServeStaticModule` now
+  roots at `file/temp` only; `file/upload` is no longer statically exposed.
+  `GET /file`/`GET /file/:id` also filter `private`/`unlisted` rows from non-owner/non-admin
+  requesters (a gap ADR 0025's text never addressed, settled as ADR 0026 D7) — content and
+  metadata deliberately disclose non-access differently (ADR 0026 D8): metadata answers 404
+  `FILE_NOT_FOUND` (hides existence), content answers 403 `FORBIDDEN_NOT_OWNER` or 403
+  `FILE_SHARE_INVALID` (confirms existence, refuses bytes). Visibility toggling and share-token
+  rotation reuse the existing `PATCH /file/:id` write path rather than a new endpoint.
+  `FileResponseDto.fileUrl` now points at the content endpoint instead of a static path; a new
+  `visibility` field is always present, and `shareUrl` only for a manager of an unlisted file.
+  New error code `FILE_SHARE_INVALID` (403). Test coverage: the full visibility access matrix
+  (public/private/unlisted × owner/stranger/anonymous/admin), token rotation invalidating the
+  previous link, TTL expiry, and Range requests — both unit (`file.service.spec.ts`) and e2e
+  over real HTTP+DB (`test/app.e2e-spec.ts`).
 - **Board comment module — the board domain is complete**
   ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) — the second half of
   the schema gate, and with it **Stage 3**. `CommentModule` ships the ADR's four routes behind
