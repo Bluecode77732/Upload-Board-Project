@@ -160,6 +160,7 @@ After completing any task, always append a brief summary in this format:
 ## Change Summary
 - What changed: <one line per file or concern>
 - Why: <the stated reason>
+- Trade-offs / ADR: <if the task made an architecturally significant decision — a schema change, a new module, an alternative weighed and rejected, a resolved principle conflict — name the ADR that records the trade-off (write one if the decision has no home yet); omit for routine changes with no alternative to weigh>
 - Side effects: <impact on: DB schema / file-directory contract (temp_/granted_) / Swagger doc / Joi schema + .env.example>
 - Guard impact: <any endpoint whose guard coverage changed — list affected routes; omit if no guard was touched>
 - README impact: <update README.md if a user-visible feature or endpoint was added, modified, or removed; omit if no feature surface changed>
