@@ -1,7 +1,8 @@
 # ADR 0025: 파일 가시성, 접근 제어 서빙, 미디어 타입 확장
 
-- Status: Accepted — 설계 게이트 (코드 없음)
-- Date: 2026-07-31
+- Status: Accepted — 구현 완료 ([ADR 0026](0026-file-visibility-implementation.ko.md)가
+  D1/D2/D3/D6을, [ADR 0027](0027-media-type-expansion-implementation.ko.md)이 D4/D5를 구현)
+- Date: 2026-07-31 (설계 게이트); 구현은 2026-08-01에 착지
 - English: [0025-file-visibility-and-media-expansion.md](0025-file-visibility-and-media-expansion.md)
 
 ## Context

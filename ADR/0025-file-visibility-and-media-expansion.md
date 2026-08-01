@@ -1,7 +1,8 @@
 # ADR 0025: File Visibility, Access-Controlled Serving, and Media-Type Expansion
 
-- Status: Accepted — design gate (no code)
-- Date: 2026-07-31
+- Status: Accepted — implemented ([ADR 0026](0026-file-visibility-implementation.md) landed
+  D1/D2/D3/D6, [ADR 0027](0027-media-type-expansion-implementation.md) landed D4/D5)
+- Date: 2026-07-31 (design gate); implementation landed 2026-08-01
 - 한국어: [0025-file-visibility-and-media-expansion.ko.md](0025-file-visibility-and-media-expansion.ko.md)
 
 ## Context

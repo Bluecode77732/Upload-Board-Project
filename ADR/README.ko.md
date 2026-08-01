@@ -32,7 +32,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0022](0022-admin-console-import-from-chat-project.ko.md) | Chat Project에서 가져온 admin 콘솔 — 수정 기반으로서의 이식 | 승인됨 | 2026-07-30 |
 | [0023](0023-board-domain-schema.ko.md) | Board 도메인 스키마 — post와 comment | 승인됨 | 2026-07-30 |
 | [0024](0024-account-cascade-fk-refusal.ko.md) | 계정 연쇄 삭제 — FK 위반 500 대신 타입 있는 거절 | 승인됨 | 2026-07-31 |
-| [0025](0025-file-visibility-and-media-expansion.ko.md) | 파일 가시성, 접근 제어 서빙, 미디어 타입 확장 | 승인됨 — 설계 게이트 | 2026-07-31 |
+| [0025](0025-file-visibility-and-media-expansion.ko.md) | 파일 가시성, 접근 제어 서빙, 미디어 타입 확장 | 승인됨 — 구현 완료(0026, 0027) | 2026-07-31 |
 | [0026](0026-file-visibility-implementation.ko.md) | 파일 가시성 구현 — 서빙 방식, 메타데이터 필터링, 콘텐츠/메타데이터 노출 정책 분리 | 승인됨 | 2026-08-01 |
 | [0027](0027-media-type-expansion-implementation.ko.md) | 미디어 타입 확장 구현 — 타입별 업로드 필드 | 승인됨 | 2026-08-01 |
 
