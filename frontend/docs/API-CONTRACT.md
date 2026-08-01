@@ -90,18 +90,25 @@ Every error is the frozen `ErrorBody` shape:
 
 | Method | Path | Notes |
 |---|---|---|
-| `GET` | `/file?take=&skip=` | paginated (`take` 1–100 default 20) |
-| `GET` | `/file/:id` | metadata + creator |
-| `POST` | `/file` | promote a temp upload to permanent |
-| `PATCH` | `/file/:id` | creator-only |
-| `DELETE` | `/file/:id` | creator-only |
-| `POST` | `/upload/attach` | multipart field `video`, 100 MB, mp4/mov/webm |
+| `GET` | `/file?take=&skip=&search=&sortBy=&order=&creatorId=` | tuple `[rows, total]`; hides non-public rows from non-owner/admin (ADR 0026 D7) |
+| `GET` | `/file/:id` | metadata + creator; 404 for a hidden file (existence hidden, ADR 0026 D8) |
+| `GET` | `/file/:id/content?share=` | the **only** path serving bytes — access-gated by visibility (ADR 0025/0026); Range-aware |
+| `POST` | `/file` | promote a temp upload to permanent (new rows default `visibility: private`) |
+| `PATCH` | `/file/:id` | creator/admin; toggles visibility + rotates share token here |
+| `DELETE` | `/file/:id` | creator/admin; 409 `FILE_IN_USE` if a post references it |
+| `POST` | `/upload/attach` | multipart — exactly one of `image`/`audio`/`video`, 100 MB (ADR 0027) |
 | `GET` | `/user`, `/user/:id` | |
-| `PATCH`/`DELETE` | `/user/:id` | self-only |
+| `PATCH`/`DELETE` | `/user/:id` | self/admin |
 
-Uploading is two-phase: `POST /upload/attach` (multipart field `video`, sent via
-`api.postForm` so the browser sets the boundary `Content-Type`) returns `{ filename }`,
-then `POST /file` `{ title, filePath: filename }` promotes it (backend `temp_`→`granted_`).
+Uploading is two-phase: `POST /upload/attach` (multipart — exactly one of the
+type-specific fields `image` jpg/jpeg/png/webp · `audio` mp3 · `video` mp4/mov/webm,
+sent via `api.postForm` so the browser sets the boundary `Content-Type`) returns
+`{ filename }`; attaching more than one field is `400 UPLOAD_MULTIPLE_FIELDS`. Then
+`POST /file` `{ title, filePath: filename }` promotes it (backend `temp_`→`granted_`),
+returning `201` (fresh) or `200` (idempotent replay of the same claim, ADR 0019).
 
-Uploaded files are served at public URLs (`fileUrl` in responses) — unauthenticated
-until the backend's Stage 4 VOD access-control task. Treat those URLs as public.
+`fileUrl` in responses is the **access-controlled** content endpoint
+`/file/:id/content`, NOT a static/public path (ADR 0025/0026): a `public` file streams
+without a token, `private` needs the creator/admin bearer, `unlisted` needs a matching
+`?share=<token>`. New files default to `private`. `shareUrl` is returned only to a
+manager of an unlisted file.

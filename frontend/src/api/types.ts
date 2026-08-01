@@ -16,13 +16,20 @@ export interface User {
   updatedAt: string
 }
 
-// GET /file, GET /file/:id — FileResponseDto. `creator` is present when the
-// backend joins the relation (list + detail); `fileUrl` is a public URL (ADR 0010,
-// unauthenticated until the backend's Stage 4 VOD access-control task).
+// A file's access level (backend FileVisibility enum, ADR 0025 D1). New rows default
+// to `private`; only `public` is readable without the owner/admin or a share token.
+export type FileVisibility = 'public' | 'private' | 'unlisted'
+
+// GET /file, GET /file/:id — FileResponseDto. `creator` is present when the backend
+// joins the relation (list + detail). `fileUrl` is the access-controlled content
+// endpoint (`/file/:id/content`, ADR 0025/0026), NOT a static path — reading it obeys
+// `visibility`. `shareUrl` appears only for a manager of an unlisted file (ADR 0025 D3).
 export interface FileResponse {
   id: number
   title: string
   fileUrl: string
+  visibility: FileVisibility
+  shareUrl?: string
   creator?: {
     id: number
     email: string

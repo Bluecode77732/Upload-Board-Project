@@ -26,6 +26,9 @@ function messageForError(error: unknown): string {
         return 'A file with that title already exists — pick another.'
       case ErrorCode.FILE_INVALID_PATH:
         return 'Upload could not be completed — please try again.'
+      case ErrorCode.FILE_ALREADY_CLAIMED:
+        // The temp upload was already promoted by someone else (ADR 0019, 409).
+        return 'That upload was already claimed — please attach the file again.'
       case ErrorCode.VALIDATION_FAILED:
         return 'Please enter a title and choose a video file.'
       default:
