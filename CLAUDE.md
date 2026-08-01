@@ -87,6 +87,7 @@ Before implementing anything non-trivial, ask the one question that applies:
 | Any change touching `filePath`           | Does the `temp_` → `granted_` prefix contract between `UploadModule` and `FileService.uploadFile` still hold end to end? |
 | New DTO field                            | The global pipe runs `whitelist + forbidNonWhitelisted` — is the field declared on the DTO, or will the request be rejected/stripped? |
 | New write endpoint                       | What happens when the identical request arrives twice (network retry, double-click)? Name the natural idempotency key (a server-issued token, a unique column) and the typed outcome of a repeat — replay, or which `ErrorCode` (ADR 0019). |
+| Architecturally significant decision (schema change, new module, an alternative weighed and rejected) | Describe the alternatives and the trade-off in plain text first, and confirm whether this needs its own ADR — do not settle the decision in code before it is written down. |
 
 Ask one focused question rather than a list. Do not proceed on assumptions when intent is ambiguous.
 
