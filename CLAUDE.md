@@ -373,8 +373,9 @@ return user  // without serialization
 
 // ❌ File upload without validation → malicious file, storage exhaustion
 @UploadedFile() file: Express.Multer.File  // no limits, no type check
-// ✅ Enforce size limit AND a mimetype/extension allowlist in FileInterceptor config —
-//    the existing upload.controller.ts pattern (100MB; mp4/mov/webm); new upload
+// ✅ Enforce size limit AND a mimetype/extension allowlist in FileInterceptor/
+//    FileFieldsInterceptor config — the existing upload.controller.ts pattern (100MB;
+//    a per-field allowlist keyed on file.fieldname for image/audio/video); new upload
 //    endpoints must include both. Client-supplied mimetype is an allowlist, not a guarantee
 
 // ❌ Serving user-supplied paths → path traversal
@@ -773,18 +774,23 @@ Do not suggest alternatives to these decisions without explicit request.
   path; `shareUrl` appears only for a manager of an unlisted file. Public URLs are no longer
   composed as `{BASE_URL}/{filePath}` — `toResponse()` builds `{BASE_URL}/file/:id/content`
   instead
-- Upload constraint: single field `video`, `fileSize` limit 100,000,000 bytes (100MB) —
-  a single-video domain needs exactly one field, and the 100MB ceiling caps disk usage and
-  bounds an upload-based denial-of-service
-- **Decided but not yet built (ADR 0025 D4/D5, 2026-07-31 — media-type expansion only;
-  D1/D2/D3/D6 above are landed)**: a media-type expansion (images/audio/video via
-  type-specific `image`/`audio`/`video` upload fields, replacing the single `video`
-  field — a breaking change against the live `frontend/`). This still-pending half
-  **partially revises** [ADR 0003](ADR/0003-two-phase-upload-contract.md)/
-  [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) (upload field), but only
-  once its own implementation task lands. Until then the upload-constraint bullet above
-  remains operative: the upload field is `video`, mp4/mov/webm only. Do not code against
-  the D4/D5 shape as if it exists; treat it as the decided direction, not current behavior
+- **Upload constraint (media-type expansion landed 2026-08-01, ADR 0025 D4/D5 + [ADR
+  0027](ADR/0027-media-type-expansion-implementation.md))**: `POST /upload/attach` accepts
+  exactly one of three type-specific multipart fields, each with its own class allowlist —
+  `image` (jpg/jpeg/png/webp), `audio` (mp3), `video` (mp4/mov/webm, unchanged) — via
+  `FileFieldsInterceptor` and a shared `fileFilter` keyed on `file.fieldname`
+  (`backend/upload/upload.controller.ts`). All three share the same `fileSize` limit,
+  100,000,000 bytes (100MB), which caps disk usage and bounds an upload-based denial-of-
+  service. Zero fields attached is 400 `UPLOAD_FILE_REQUIRED`; more than one is 400
+  `UPLOAD_MULTIPLE_FIELDS`. This **revises** [ADR 0003](ADR/0003-two-phase-upload-contract.md)
+  (the two-phase contract's field) and [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)
+  (the frozen surface) — a breaking change against the live `frontend/`, which has not yet
+  adopted it. `upload.module.ts`'s Multer `diskStorage` (`temp_{uuid}_{timestamp}.{ext}`,
+  extension read off `file.originalname`) is unaffected — it was already field-name-agnostic.
+  Two other extension-keyed lookups widened in step so promotion and serving stay correct
+  for the new classes: `TEMP_FILENAME_PATTERN`
+  (`backend/file/dto/create-uploadFile.dto.ts`) and `CONTENT_TYPE_BY_EXTENSION`
+  (`backend/file/file-content.controller.ts`)
 - **Never suggest**: S3/cloud storage, streaming/chunked upload, CDN — unless explicitly requested
   (2026-07-23: AWS deployment, VOD playback access control, and a storage
   port-adapter are now explicitly decided roadmap items — ROADMAP.md Stage 4.

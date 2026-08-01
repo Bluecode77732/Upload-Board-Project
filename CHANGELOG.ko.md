@@ -53,6 +53,22 @@
   (public/private/unlisted × owner/stranger/anonymous/admin), 토큰 회전이 이전 링크를
   무효화하는지, TTL 만료, Range 요청까지 — 유닛(`file.service.spec.ts`)과 실제 HTTP+DB e2e
   (`test/app.e2e-spec.ts`) 양쪽에서 검증했다.
+- **미디어 타입 확장 — 타입별 업로드 필드 구현 완료**
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D4/D5 +
+  [ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md)) — 설계 게이트의 나머지
+  절반이다. `POST /upload/attach`는 이제 세 멀티파트 필드 중 하나를 받는다 — `image`
+  (jpg/jpeg/png/webp), `audio`(mp3), `video`(mp4/mov/webm, 변경 없음) — 각각 자신만의 클래스
+  허용 목록을 가지며, `FileFieldsInterceptor`와 `file.fieldname`으로 분기하는 공유
+  `fileFilter`로 구현했다. 필드를 하나도 첨부하지 않으면 여전히 400 `UPLOAD_FILE_REQUIRED`이고,
+  둘 이상 첨부하면 새 400 `UPLOAD_MULTIPLE_FIELDS`다. `TEMP_FILENAME_PATTERN`
+  (`create-uploadFile.dto.ts`)과 `CONTENT_TYPE_BY_EXTENSION`(`file-content.controller.ts`) —
+  둘 다 필드가 아니라 확장자로 판단한다 — 을 함께 넓혀서 `POST /file` 승격과
+  `GET /file/:id/content` 서빙이 새 클래스에서도 올바르게 동작한다. 스키마 변경은 없다. ADR
+  0025 D5가 이미 예고한 대로 살아 있는 `frontend/` 소비자에 대한 breaking 변경이며, 프론트엔드
+  반영은 여전히 별도 과제로 남는다. 테스트 커버리지: 이미지·오디오 왕복(첨부 → 승격 → 콘텐츠
+  `Content-Type`), 필드에 맞지 않는 타입 거부, 필드 두 개 동시 첨부 거부를
+  `test/app.e2e-spec.ts`에 추가했다. 기존 `video` 필드 e2e 케이스는 수정 없이 그대로
+  통과한다.
 - **게시판 comment 모듈 — 게시판 도메인 완성**
   ([ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) — 스키마 게이트의 후반부이며,
   이로써 **Stage 3**도 완결됐다. `CommentModule`은 ADR이 정한 네 라우트를 `JwtAuthGuard` 뒤에

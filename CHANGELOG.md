@@ -57,6 +57,22 @@ development line (package.json version).
   (public/private/unlisted × owner/stranger/anonymous/admin), token rotation invalidating the
   previous link, TTL expiry, and Range requests — both unit (`file.service.spec.ts`) and e2e
   over real HTTP+DB (`test/app.e2e-spec.ts`).
+- **Media-type expansion — type-specific upload fields implemented**
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D4/D5 +
+  [ADR 0027](ADR/0027-media-type-expansion-implementation.md)) — the design gate's other
+  half. `POST /upload/attach` now accepts one of three multipart fields — `image`
+  (jpg/jpeg/png/webp), `audio` (mp3), `video` (mp4/mov/webm, unchanged) — each with its own
+  class allowlist, via `FileFieldsInterceptor` and a shared `fileFilter` keyed off
+  `file.fieldname`. Attaching zero fields still 400s `UPLOAD_FILE_REQUIRED`; attaching more
+  than one is a new 400 `UPLOAD_MULTIPLE_FIELDS`. `TEMP_FILENAME_PATTERN`
+  (`create-uploadFile.dto.ts`) and `CONTENT_TYPE_BY_EXTENSION`
+  (`file-content.controller.ts`) — both extension-keyed, not field-keyed — widened in step,
+  so `POST /file` promotion and `GET /file/:id/content` serving stay correct for the new
+  classes. No schema change. Breaking change against the live `frontend/` consumer, exactly
+  as ADR 0025 D5 already flagged — frontend adoption stays its own separate task. Test
+  coverage: an image and an audio round trip (attach → promote → content `Content-Type`),
+  a wrong-type-for-field rejection, and a two-fields-at-once rejection, added to
+  `test/app.e2e-spec.ts`; existing `video`-field e2e cases pass unmodified.
 - **Board comment module — the board domain is complete**
   ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) — the second half of
   the schema gate, and with it **Stage 3**. `CommentModule` ships the ADR's four routes behind

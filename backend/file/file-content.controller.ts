@@ -25,10 +25,15 @@ import { OptionalAuthUser } from 'backend/auth/decorator/optional-auth-user.deco
 import { AuthUser } from 'backend/auth/decorator/auth-user.decorator';
 import { ErrorCode } from 'backend/common/error-code';
 
-// Mirrors the video-only allowlist upload.controller.ts already enforces (ADR 0025 D4/D5
-// media-type expansion is a separate task) — the extension is server-assigned, never
-// client-chosen, so this is a lookup, not a validated allowlist.
+// Mirrors the image/audio/video allowlist upload.controller.ts enforces (ADR 0025 D4/D5)
+// — the extension is server-assigned, never client-chosen, so this is a lookup, not a
+// validated allowlist.
 const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  mp3: 'audio/mpeg',
   mp4: 'video/mp4',
   mov: 'video/quicktime',
   webm: 'video/webm',

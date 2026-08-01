@@ -7,8 +7,8 @@
 
 > 한국어 버전: [README.ko.md](README.ko.md)
 
-A NestJS REST API where authenticated users upload and manage video files.
-JWT auth (Passport), PostgreSQL via TypeORM, Multer disk storage, transaction-safe
+A NestJS REST API where authenticated users upload and manage image, audio, and video
+files. JWT auth (Passport), PostgreSQL via TypeORM, Multer disk storage, transaction-safe
 file promotion, Swagger documentation. A local/portfolio backend project — no
 deploy pipeline. A React + Vite browser frontend lives in the `frontend/`
 subfolder of this repository ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md));
@@ -136,7 +136,12 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.m
   ([ADR 0024](ADR/0024-account-cascade-fk-refusal.md))
 
 **File**
-- `POST /upload/attach` — upload a video to temp storage (multipart field `video`, 100 MB limit)
+- `POST /upload/attach` — upload a file to temp storage, 100 MB limit. Exactly one of three
+  multipart fields, each with its own class allowlist: `image` (jpg/jpeg/png/webp), `audio`
+  (mp3), `video` (mp4/mov/webm). Zero fields is 400 `UPLOAD_FILE_REQUIRED`; more than one is
+  400 `UPLOAD_MULTIPLE_FIELDS`; a file that does not match its field's allowlist is 400
+  `UPLOAD_INVALID_TYPE` ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D4/D5,
+  [ADR 0027](ADR/0027-media-type-expansion-implementation.md))
 - `GET /file` — list files. All query parameters are optional and combinable; an undeclared
   one is rejected as 400 `VALIDATION_FAILED` ([ADR 0021](ADR/0021-list-query-search-filter-sort.md))
 
@@ -216,7 +221,7 @@ deleting are the comment author's or an admin's, and nobody else's.
 ```
 POST /auth/register   (Basic)          → user created
 POST /auth/signin     (Basic)          → { accessToken } + Set-Cookie: refreshToken (httpOnly)
-POST /upload/attach   (Bearer, video)  → { filename: "temp_..." }
+POST /upload/attach   (Bearer, one of image/audio/video) → { filename: "temp_..." }
 POST /file            (Bearer, { title, filePath: "temp_..." })
                                        → promoted (visibility: private); served at
                                          {BASE_URL}/file/:id/content (Bearer required until
@@ -268,9 +273,13 @@ cleanup landed 2026-07-26 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)).
 `public`/`private`/`unlisted` state (default `private`) and is served only through the
 access-controlled `GET /file/:id/content`; `file/upload` is no longer statically exposed
 ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6,
-[ADR 0026](ADR/0026-file-visibility-implementation.md)). Media-type expansion
-(images/audio, ADR 0025 D4/D5) has not landed — uploads still enforce an mp4/mov/webm
-allowlist through the single `video` field. `pnpm lint` is clean as of 2026-07-22.
+[ADR 0026](ADR/0026-file-visibility-implementation.md)). **Media-type expansion also
+landed 2026-08-01** — `POST /upload/attach` now takes one of three type-specific fields
+(`image`/`audio`/`video`), each with its own allowlist
+([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D4/D5,
+[ADR 0027](ADR/0027-media-type-expansion-implementation.md)). Both changes are breaking
+for the live `frontend/` consumer, which has not yet adopted either. `pnpm lint` is clean
+as of 2026-07-22.
 
 ## Author
 

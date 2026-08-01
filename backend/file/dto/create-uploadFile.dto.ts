@@ -5,8 +5,11 @@ import { IsNotEmpty, IsString, Matches } from 'class-validator';
 // here makes the filename a one-shot claim token (ADR 0019) and keeps client-chosen path
 // segments ('../', absolute paths) out of the rename in FileService.uploadFile.
 // Case-insensitive: the stored extension keeps the original filename's casing.
+// Extensions cover all three upload.controller.ts fields (image/audio/video, ADR 0025
+// D4/D5) — the pattern is extension-based, not field-name-based, so it needs no per-field
+// branching to stay in sync with the fileFilter allowlist.
 export const TEMP_FILENAME_PATTERN =
-  /^temp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_\d+\.(mp4|mov|webm)$/i;
+  /^temp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_\d+\.(jpg|jpeg|png|webp|mp3|mp4|mov|webm)$/i;
 
 export class UploadFileDto {
   @IsString()

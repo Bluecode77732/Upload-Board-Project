@@ -596,6 +596,116 @@ describe('Upload Board API (e2e)', () => {
         .expect(400);
       expect(res.body.code).toBe('UPLOAD_INVALID_TYPE');
     });
+
+    // Media-type expansion (ADR 0025 D4/D5): image/audio/video are now three
+    // type-specific fields, each with its own class allowlist.
+    it('attaches an image under the image field, promotes it, and serves it with the right content-type', async () => {
+      const user = await createUser('upload-image@e.com');
+
+      const attach = await request(server)
+        .post('/upload/attach')
+        .set(auth(user.accessToken))
+        .attach('image', Buffer.from('fake-jpg-bytes'), {
+          filename: 'sample.jpg',
+          contentType: 'image/jpeg',
+        })
+        .expect(201);
+
+      const filename = attach.body.filename as string;
+      expect(filename).toMatch(/^temp_.*\.jpg$/);
+      createdFiles.push(
+        join(process.cwd(), 'file', 'temp', filename),
+        join(
+          process.cwd(),
+          'file',
+          'upload',
+          filename.replace('temp_', 'granted_'),
+        ),
+      );
+
+      const promote = await request(server)
+        .post('/file')
+        .set(auth(user.accessToken))
+        .send({ title: 'promoted-image', filePath: filename })
+        .expect(201);
+
+      const res = await request(server)
+        .get(`/file/${promote.body.id}/content`)
+        .set(auth(user.accessToken))
+        .buffer(true)
+        .expect(200);
+      expect(res.headers['content-type']).toBe('image/jpeg');
+    });
+
+    it('attaches an audio file under the audio field, promotes it, and serves it with the right content-type', async () => {
+      const user = await createUser('upload-audio@e.com');
+
+      const attach = await request(server)
+        .post('/upload/attach')
+        .set(auth(user.accessToken))
+        .attach('audio', Buffer.from('fake-mp3-bytes'), {
+          filename: 'sample.mp3',
+          contentType: 'audio/mpeg',
+        })
+        .expect(201);
+
+      const filename = attach.body.filename as string;
+      expect(filename).toMatch(/^temp_.*\.mp3$/);
+      createdFiles.push(
+        join(process.cwd(), 'file', 'temp', filename),
+        join(
+          process.cwd(),
+          'file',
+          'upload',
+          filename.replace('temp_', 'granted_'),
+        ),
+      );
+
+      const promote = await request(server)
+        .post('/file')
+        .set(auth(user.accessToken))
+        .send({ title: 'promoted-audio', filePath: filename })
+        .expect(201);
+
+      const res = await request(server)
+        .get(`/file/${promote.body.id}/content`)
+        .set(auth(user.accessToken))
+        .buffer(true)
+        .expect(200);
+      expect(res.headers['content-type']).toBe('audio/mpeg');
+    });
+
+    it('rejects a file attached under a field that does not accept its type (UPLOAD_INVALID_TYPE)', async () => {
+      const user = await createUser('upload-wrong-field@e.com');
+
+      const res = await request(server)
+        .post('/upload/attach')
+        .set(auth(user.accessToken))
+        .attach('image', Buffer.from('fake-mp4-bytes'), {
+          filename: 'sample.mp4',
+          contentType: 'video/mp4',
+        })
+        .expect(400);
+      expect(res.body.code).toBe('UPLOAD_INVALID_TYPE');
+    });
+
+    it('rejects a request with more than one of image/audio/video attached (UPLOAD_MULTIPLE_FIELDS)', async () => {
+      const user = await createUser('upload-multi-field@e.com');
+
+      const res = await request(server)
+        .post('/upload/attach')
+        .set(auth(user.accessToken))
+        .attach('image', Buffer.from('fake-jpg-bytes'), {
+          filename: 'sample.jpg',
+          contentType: 'image/jpeg',
+        })
+        .attach('video', Buffer.from('fake-mp4-bytes'), {
+          filename: 'sample.mp4',
+          contentType: 'video/mp4',
+        })
+        .expect(400);
+      expect(res.body.code).toBe('UPLOAD_MULTIPLE_FIELDS');
+    });
   });
 
   // File visibility + access-controlled content (ADR 0025 D1/D2/D3/D6): every granted

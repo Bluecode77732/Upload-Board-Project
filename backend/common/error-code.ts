@@ -16,6 +16,9 @@ export enum ErrorCode {
   FILE_SHARE_INVALID = 'FILE_SHARE_INVALID',
   UPLOAD_FILE_REQUIRED = 'UPLOAD_FILE_REQUIRED',
   UPLOAD_INVALID_TYPE = 'UPLOAD_INVALID_TYPE',
+  // More than one of the three type-specific fields (image/audio/video) was attached
+  // to the same POST /upload/attach request (ADR 0025 D5).
+  UPLOAD_MULTIPLE_FIELDS = 'UPLOAD_MULTIPLE_FIELDS',
   // Refused: demoting the last remaining superadmin would lock the role system (ADR 0013).
   AUTH_LAST_SUPERADMIN = 'AUTH_LAST_SUPERADMIN',
 

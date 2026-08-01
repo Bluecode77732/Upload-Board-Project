@@ -7,7 +7,7 @@
 
 > English version: [README.md](README.md)
 
-인증된 사용자가 동영상 파일을 업로드하고 관리하는 NestJS REST API.
+인증된 사용자가 이미지·오디오·동영상 파일을 업로드하고 관리하는 NestJS REST API.
 JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, 트랜잭션으로
 보호되는 파일 승격, Swagger 문서화를 갖춘 로컬/포트폴리오 백엔드 프로젝트입니다 —
 배포 파이프라인은 없습니다. React + Vite 브라우저 프론트엔드는 이 저장소의
@@ -135,7 +135,12 @@ docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 �
   ([ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md))
 
 **파일**
-- `POST /upload/attach` — 동영상을 임시 저장소로 업로드 (multipart 필드 `video`, 100 MB 제한)
+- `POST /upload/attach` — 파일을 임시 저장소로 업로드 (100 MB 제한). 각자 고유한 클래스
+  허용 목록을 가진 세 멀티파트 필드 중 정확히 하나: `image`(jpg/jpeg/png/webp), `audio`
+  (mp3), `video`(mp4/mov/webm). 필드가 0개면 400 `UPLOAD_FILE_REQUIRED`, 2개 이상이면 400
+  `UPLOAD_MULTIPLE_FIELDS`, 필드의 허용 목록과 맞지 않는 파일이면 400
+  `UPLOAD_INVALID_TYPE` ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)
+  D4/D5, [ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md))
 - `GET /file` — 파일 목록. 모든 쿼리 파라미터는 선택적이며 함께 조합할 수 있다. 선언되지 않은
   파라미터는 400 `VALIDATION_FAILED`로 거절된다
   ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md))
@@ -213,7 +218,7 @@ docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 �
 ```
 POST /auth/register   (Basic)          → 사용자 생성
 POST /auth/signin     (Basic)          → { accessToken } + Set-Cookie: refreshToken (httpOnly)
-POST /upload/attach   (Bearer, video)  → { filename: "temp_..." }
+POST /upload/attach   (Bearer, image/audio/video 중 하나) → { filename: "temp_..." }
 POST /file            (Bearer, { title, filePath: "temp_..." })
                                        → 승격(visibility: private); {BASE_URL}/file/:id/content로
                                          서빙 (PATCH /file/:id로 public/unlisted를 설정하기
@@ -266,9 +271,13 @@ Docker/compose, CI(GitHub Actions), 로깅 규약, e2e 재작성이 2026-07-25�
 `private`)를 가지며 접근 제어된 `GET /file/:id/content`로만 서빙됩니다. `file/upload`는
 더 이상 정적으로 노출되지 않습니다
 ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D1/D2/D3/D6,
-[ADR 0026](ADR/0026-file-visibility-implementation.ko.md)). 미디어 타입 확장(이미지/오디오,
-ADR 0025 D4/D5)은 아직 반영되지 않아, 업로드는 여전히 단일 `video` 필드로 mp4/mov/webm
-허용 목록을 강제합니다. `pnpm lint`는 2026-07-22 기준 클린.
+[ADR 0026](ADR/0026-file-visibility-implementation.ko.md)). **미디어 타입 확장도
+2026-08-01에 반영**되었습니다 — `POST /upload/attach`는 이제 각자 고유한 허용 목록을 가진
+세 타입별 필드(`image`/`audio`/`video`) 중 하나를 받습니다
+([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D4/D5,
+[ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md)). 두 변경 모두 아직 반영하지
+않은 살아 있는 `frontend/` 소비자에게는 breaking 변경입니다. `pnpm lint`는 2026-07-22 기준
+클린.
 
 ## 작성자
 
