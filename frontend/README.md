@@ -39,7 +39,9 @@ src/
     │             creator filter/pagination + visibility badges, FileBoard.tsx) and
     │             FileDetailPage (protected, /view/:id — metadata + visibility-gated
     │             playback: direct <video src> for public/unlisted, an authenticated
-    │             blob+objectURL fetch for private)
+    │             blob+objectURL fetch for private; for the creator or an admin, a
+    │             management section — visibility toggle, unlisted share-link copy/
+    │             rotation, and delete — all via PATCH/DELETE /file/:id)
     └── admin/    AdminPage (/admin stub, awaits backend RBAC)
 ```
 

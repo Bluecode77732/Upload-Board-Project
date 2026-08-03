@@ -53,3 +53,13 @@ export type SortOrder = (typeof SORT_ORDERS)[number]
 export interface AttachResponse {
   filename: string
 }
+
+// PATCH /file/:id body for visibility management (ADR 0025 D1/D3) — only the fields this
+// app's UI sends; the backend's UpdateFileDto has more fields (title/userId/filePath/
+// shareExpiresAt) this app does not use yet.
+export interface UpdateFileVisibilityRequest {
+  visibility?: FileVisibility
+  // Regenerates the share token; only takes effect when the resulting visibility is
+  // 'unlisted' (ADR 0025 D3) — invalidates every previously shared link.
+  rotateShareToken?: boolean
+}

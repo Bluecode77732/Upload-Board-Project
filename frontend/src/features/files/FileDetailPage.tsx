@@ -5,11 +5,14 @@
 //   <video src> can't carry a Bearer header, so a private file's bytes are fetched authenticated.
 
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
-import type { FileResponse } from '../../api/types'
+import type { FileResponse, FileVisibility, UpdateFileVisibilityRequest } from '../../api/types'
+import { useAuth } from '../../auth/useAuth'
 import { VisibilityBadge } from './VisibilityBadge'
+
+const VISIBILITY_OPTIONS: FileVisibility[] = ['public', 'private', 'unlisted']
 
 // Branch on the stable code (backend ADR 0011), never on the human-readable message.
 function messageForError(error: unknown): string {
@@ -28,14 +31,39 @@ function messageForError(error: unknown): string {
   return 'Network error. Is the backend running?'
 }
 
+// Errors from the management actions (visibility toggle, share rotation, delete) branch on
+// a different set of codes than read/playback (409 FILE_IN_USE only applies to delete).
+function messageForManageError(error: unknown): string {
+  if (error instanceof ApiError) {
+    switch (error.code) {
+      case ErrorCode.FORBIDDEN_NOT_OWNER:
+        return 'Only the file creator or an admin can manage this file.'
+      case ErrorCode.FILE_IN_USE:
+        return 'This file is attached to a post and cannot be deleted. Delete the post first.'
+      case ErrorCode.FILE_NOT_FOUND:
+        return 'File not found.'
+      case ErrorCode.VALIDATION_FAILED:
+        return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
+      default:
+        return 'The action failed.'
+    }
+  }
+  return 'Network error. Is the backend running?'
+}
+
 export function FileDetailPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
+  const { currentUserId } = useAuth()
   const fileId = id !== undefined && /^\d+$/.test(id) ? Number(id) : null
 
   const [file, setFile] = useState<FileResponse | null>(null)
   const [metaError, setMetaError] = useState<string | null>(null)
   const [playbackError, setPlaybackError] = useState<string | null>(null)
   const [objectUrl, setObjectUrl] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     setFile(null)
@@ -87,6 +115,68 @@ export function FileDetailPage() {
       .catch((err: unknown) => setPlaybackError(messageForError(err)))
   }
 
+  // A UI hint only (decoded token claim, not a server round trip) — every write below is
+  // re-checked server-side and a wrong guess here just surfaces as a 403, never a silent bypass.
+  const canManage = currentUserId !== null && file?.creator?.id === currentUserId
+
+  // 목적: 소유자가 visibility를 전환한다(예: private → public/unlisted).
+  // 이유: 백엔드는 별도 엔드포인트 없이 PATCH /file/:id 하나로 토글을 처리한다(ADR 0026).
+  // 방법: PATCH 응답(갱신된 FileResponseDto)으로 로컬 file 상태를 그대로 교체 — shareUrl 유무도 응답이 결정.
+  function handleVisibilityChange(next: FileVisibility) {
+    if (!file) return
+    setActionError(null)
+    setCopyFeedback(null)
+    setBusy(true)
+    const body: UpdateFileVisibilityRequest = { visibility: next }
+    api
+      .patch<FileResponse>(`/file/${file.id}`, body)
+      .then((updated) => setFile(updated))
+      .catch((err: unknown) => setActionError(messageForManageError(err)))
+      .finally(() => setBusy(false))
+  }
+
+  // 목적: unlisted 파일의 공유 토큰을 회전해 이전에 공유된 링크를 전부 무효화한다.
+  // 이유: 링크가 유출됐다고 의심될 때 소유자가 즉시 무효화할 수단이 필요하다(ADR 0025 D3).
+  // 방법: rotateShareToken:true와 함께 visibility:'unlisted'를 보내 새 토큰을 발급받는다.
+  function handleRotateShareToken() {
+    if (!file) return
+    setActionError(null)
+    setCopyFeedback(null)
+    setBusy(true)
+    const body: UpdateFileVisibilityRequest = { visibility: 'unlisted', rotateShareToken: true }
+    api
+      .patch<FileResponse>(`/file/${file.id}`, body)
+      .then((updated) => setFile(updated))
+      .catch((err: unknown) => setActionError(messageForManageError(err)))
+      .finally(() => setBusy(false))
+  }
+
+  function handleCopyShareLink() {
+    if (!file?.shareUrl) return
+    navigator.clipboard
+      .writeText(file.shareUrl)
+      .then(() => setCopyFeedback('Copied.'))
+      .catch(() => setCopyFeedback('Could not copy — copy it manually.'))
+  }
+
+  // 목적: 소유자/관리자가 파일 행과 저장된 바이트를 삭제한다.
+  // 이유: 게시글이 참조 중이면 백엔드가 409 FILE_IN_USE로 거절하므로(ADR 0023 D4), 그 결과를
+  //   사용자에게 보여줘야 한다.
+  // 방법: 확인 대화상자 → DELETE /file/:id → 성공 시 목록으로 이동, 실패 시 에러만 표시.
+  function handleDelete() {
+    if (!file) return
+    if (!window.confirm(`Delete "${file.title}"? This cannot be undone.`)) return
+    setActionError(null)
+    setBusy(true)
+    api
+      .delete(`/file/${file.id}`)
+      .then(() => navigate('/'))
+      .catch((err: unknown) => {
+        setActionError(messageForManageError(err))
+        setBusy(false)
+      })
+  }
+
   if (metaError) {
     return (
       <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
@@ -133,7 +223,49 @@ export function FileDetailPage() {
       {file.visibility === 'unlisted' && file.shareUrl && (
         <p style={{ marginTop: 12 }}>
           Share link: <code>{file.shareUrl}</code>
+          {canManage && (
+            <button type="button" onClick={handleCopyShareLink} style={{ marginLeft: 8 }}>
+              Copy
+            </button>
+          )}
+          {copyFeedback && <span style={{ marginLeft: 8, color: '#1e7e34' }}>{copyFeedback}</span>}
         </p>
+      )}
+
+      {canManage && (
+        <section style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #ddd' }}>
+          <h2 style={{ fontSize: '1rem' }}>Manage</h2>
+          {actionError && <p style={{ color: 'crimson' }}>{actionError}</p>}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              Visibility
+              <select
+                value={file.visibility}
+                disabled={busy}
+                onChange={(e) => handleVisibilityChange(e.target.value as FileVisibility)}
+              >
+                {VISIBILITY_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {file.visibility === 'unlisted' && (
+              <button type="button" disabled={busy} onClick={handleRotateShareToken}>
+                Rotate share link
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleDelete}
+              style={{ color: 'crimson', marginLeft: 'auto' }}
+            >
+              Delete file
+            </button>
+          </div>
+        </section>
       )}
     </main>
   )

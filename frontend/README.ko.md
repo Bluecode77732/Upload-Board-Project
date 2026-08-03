@@ -39,7 +39,9 @@ src/
     │             작성자 필터/페이지네이션 + visibility 배지, FileBoard.tsx),
     │             FileDetailPage (보호됨, /view/:id — 메타데이터 + visibility별
     │             재생: public/unlisted은 <video src> 직접 재생, private은 인증된
-    │             blob+objectURL 페치)
+    │             blob+objectURL 페치; 작성자 또는 admin에게는 관리 섹션도 노출된다
+    │             — visibility 전환, unlisted 공유 링크 복사/회전, 삭제를 모두
+    │             PATCH/DELETE /file/:id로 처리)
     └── admin/    AdminPage (/admin 스텁, 백엔드 RBAC를 기다리는 중)
 ```
 

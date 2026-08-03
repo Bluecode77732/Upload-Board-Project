@@ -11,15 +11,19 @@ import {
   signout as apiSignout,
   refreshAccessToken,
 } from '../api/client'
-import { getAccessToken, subscribe } from '../api/authStore'
+import { getAccessToken, getCurrentUserId, subscribe } from '../api/authStore'
 import { AuthContext, type AuthStatus } from './authContext'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading')
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null)
 
   // Reflect token changes (login, silent refresh, expiry) into render state.
   useEffect(() => {
-    return subscribe((token) => setStatus(token ? 'authenticated' : 'anonymous'))
+    return subscribe((token) => {
+      setStatus(token ? 'authenticated' : 'anonymous')
+      setCurrentUserId(getCurrentUserId())
+    })
   }, [])
 
   // On mount, try to revive a session from the refresh cookie.
@@ -30,6 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => {
         if (!cancelled) {
           setStatus(getAccessToken() ? 'authenticated' : 'anonymous')
+          setCurrentUserId(getCurrentUserId())
         }
       })
     return () => {
@@ -50,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ status, signIn, register, signOut }}>
+    <AuthContext.Provider value={{ status, currentUserId, signIn, register, signOut }}>
       {children}
     </AuthContext.Provider>
   )
