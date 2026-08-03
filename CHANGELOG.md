@@ -116,6 +116,26 @@ development line (package.json version).
   there is no natural idempotency key, exactly as for a post with no `fileId`), and the
   `USER_DELETE` audit detail gains **no** `comments=N` (the cascaded half is uncountable, so a
   partial count would read as a total).
+- **Frontend Playwright E2E specs — auth, upload, board** — `frontend/e2e/` gains three specs
+  beyond the existing harness/smoke check (`playwright.config.ts`, `smoke.spec.ts`):
+  `auth.spec.ts` (register→signIn→signOut through LoginPage, plus the
+  `AUTH_EMAIL_TAKEN`/`AUTH_INVALID_CREDENTIALS` error-code branches), `upload.spec.ts` (the
+  two-phase `POST /upload/attach` → `POST /file` flow through a real file input, plus
+  `FILE_TITLE_TAKEN` on a duplicate title), and `board.spec.ts` (FileBoard's
+  search/sort/creator-filter/pagination against files it uploads itself, plus the default
+  `private` visibility badge). Every spec registers a unique account (and unique titles) per
+  run, since the shared dev DB behind `:5173`'s Vite proxy is never truncated (unlike the
+  backend's dedicated e2e DB); assertions branch on the app's own code-mapped error strings
+  (`messageForError`), never the backend's raw `message`, matching `docs/API-CONTRACT.md`'s
+  "branch on `code`" rule. A real mp4 (copied from `assets/files/sample.mp4`) lives at
+  `frontend/e2e/fixtures/sample.mp4`. Two Playwright quirks surfaced writing these and are now
+  recorded in `frontend/CLAUDE.md` so they aren't rediscovered: re-setting an
+  `<input type="file">` to an identical path back-to-back doesn't reliably fire a `change`
+  event (fixed by clearing the input first), and `getByLabel`/`getByRole`'s default
+  substring+case-insensitive name matching collided with this app's own markup (a `<select>`
+  nested inside a `<label>` folds its option text into the label's accessible name; a
+  generated test email containing a common word matched an unrelated button) — fixed with
+  `{ exact: true }` on the affected queries. No backend or app-code change.
 
 ### Changed
 - **The account cascade now deletes comments first, then posts, then files**

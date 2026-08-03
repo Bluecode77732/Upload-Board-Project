@@ -109,6 +109,25 @@
   `POST` 재제출은 두 번째 댓글을 만들고(행에 유니크한 것이 없어 자연 멱등 키가 없으며, `fileId` 없는
   글과 정확히 같다), `USER_DELETE` 감사 detail에는 `comments=N`을 **넣지 않았다**(연쇄분을 셀 수 없어
   반쪽 집계가 총계처럼 읽히기 때문이다).
+- **프론트엔드 Playwright E2E 스펙 — auth, upload, board** — `frontend/e2e/`에 기존
+  하네스/스모크 테스트(`playwright.config.ts`, `smoke.spec.ts`) 외에 세 개의 스펙이
+  추가되었다: `auth.spec.ts`(LoginPage를 통한 회원가입→로그인→로그아웃,
+  `AUTH_EMAIL_TAKEN`/`AUTH_INVALID_CREDENTIALS` 에러 코드 분기 포함), `upload.spec.ts`
+  (실제 파일 인풋을 통한 `POST /upload/attach` → `POST /file` 2단계 플로우, 중복 제목 시
+  `FILE_TITLE_TAKEN` 포함), `board.spec.ts`(직접 업로드한 파일을 대상으로 한 FileBoard의
+  검색/정렬/작성자 필터/페이지네이션, 기본값 `private` visibility 배지 포함). `:5173`의
+  Vite 프록시가 바라보는 공유 dev DB는(백엔드 전용 e2e DB와 달리) truncate되지 않으므로,
+  매 스펙 실행마다 유니크한 계정(과 유니크한 제목)을 새로 만든다. 모든 어서션은 백엔드의
+  원문 `message`가 아니라 앱 자체가 코드로 매핑한 고정 문자열(`messageForError`)을
+  기준으로 분기하며, 이는 `docs/API-CONTRACT.md`의 "code로 분기하라" 규칙과 일치한다.
+  실제 mp4 파일(`assets/files/sample.mp4`을 복사)이 `frontend/e2e/fixtures/sample.mp4`에
+  있다. 작성 과정에서 Playwright의 두 가지 함정을 발견해 `frontend/CLAUDE.md`에 기록해
+  두었다 — `<input type="file">`에 동일한 경로를 연속으로 재설정해도 `change` 이벤트가
+  안정적으로 발생하지 않는 문제(입력을 먼저 비운 뒤 재설정해 해결), `getByLabel`/
+  `getByRole`의 기본 substring + 대소문자 무시 매칭이 이 앱의 마크업과 충돌하는 문제
+  (`<label>` 안에 중첩된 `<select>`의 옵션 텍스트가 라벨의 접근성 이름에 섞여 들어가고,
+  흔한 단어를 포함한 테스트용 이메일이 엉뚱한 버튼과 매칭됨 — 해당 쿼리에
+  `{ exact: true }`를 붙여 해결). 백엔드나 앱 코드 변경은 없다.
 
 ### 변경
 - **계정 연쇄 삭제가 이제 댓글 → 게시글 → 파일 순서로 지운다**
