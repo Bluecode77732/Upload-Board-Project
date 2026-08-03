@@ -76,6 +76,25 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
 - **TypeScript**: no `any`; the build runs `tsc -b` with `noUnusedLocals`/
   `noUnusedParameters` — keep it green.
 
+### Playwright E2E gotchas (`frontend/e2e/`)
+
+Two failure modes discovered writing `auth`/`upload`/`board.spec.ts` (2026-08-03)
+that will resurface in any new spec unless avoided up front:
+
+- **Re-setting the same file input path is a silent no-op.** `locator.setInputFiles(path)`
+  called twice in a row with the *identical* path (e.g. re-attaching the same fixture
+  after a form reset) does not reliably fire the input's `change` event, so React state
+  never updates and the form submits as if no file were chosen. Clear first:
+  `await input.setInputFiles([]); await input.setInputFiles(path)`.
+- **`getByLabel`/`getByRole` name matching is substring + case-insensitive by default**,
+  and this app's generated content can collide with it: a `<select>` nested inside a
+  `<label>` exposes its accessible name as the label text concatenated with every
+  `<option>` text (`getByLabel('Title')` matched FileBoard's "Sort by" select because
+  its options spell out "...title..."), and a test-generated email containing a common
+  word can match an unrelated button (`getByRole('button', { name: 'Upload' })` matched
+  a creator-filter button whose accessible name was `e2e-upload-...@example.com`). Pass
+  `{ exact: true }` on any label/role query whose text is a short common word.
+
 ## Commands
 
 ```bash
