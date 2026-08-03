@@ -11,6 +11,7 @@ repo root) and consumes the backend REST API over HTTP; admin lives here as an
 - **react-router-dom** — routing, including a protected route guard
 - **TypeScript** — strict build (`tsc -b`), no `any`
 - **oxlint** — linting
+- **Playwright** (`@playwright/test`, chromium only) — browser-level E2E, `frontend/e2e/`
 - Plain `fetch` wrapper (`src/api/client.ts`) — no data-fetching or state library yet
   (plus an `XMLHttpRequest` path in the same file for upload-progress reporting,
   since `fetch` exposes no upload-progress event)
@@ -66,4 +67,6 @@ pnpm dev        # dev server (:5173)
 pnpm build      # type-check + production build
 pnpm lint       # oxlint
 pnpm preview    # serve the built app
+pnpm test:e2e   # Playwright E2E — needs the backend (+ its DB) reachable on :3000;
+                # starts/reuses the :5173 dev server itself (playwright.config.ts)
 ```

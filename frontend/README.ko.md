@@ -11,6 +11,7 @@ REST API를 HTTP로 소비한다. 관리자 화면도 이 안에 `/admin` 라우
 - **react-router-dom** — 라우팅, 보호된 라우트 가드 포함
 - **TypeScript** — strict 빌드(`tsc -b`), `any` 사용 안 함
 - **oxlint** — 린팅
+- **Playwright** (`@playwright/test`, chromium만 설치) — 브라우저 수준 E2E, `frontend/e2e/`
 - 순수 `fetch` 래퍼(`src/api/client.ts`) — 데이터 페칭/상태 관리 라이브러리는 아직 없음
   (같은 파일에 업로드 진행률 보고용 `XMLHttpRequest` 경로도 함께 있다 —
   `fetch`는 업로드 진행률 이벤트를 제공하지 않기 때문)
@@ -66,4 +67,6 @@ pnpm dev        # 개발 서버 (:5173)
 pnpm build      # 타입 체크 + 프로덕션 빌드
 pnpm lint       # oxlint
 pnpm preview    # 빌드된 앱 미리보기
+pnpm test:e2e   # Playwright E2E — 백엔드(및 그 DB)가 :3000에서 떠 있어야 하며,
+                # :5173 개발 서버는 직접 기동하거나 재사용한다 (playwright.config.ts)
 ```
