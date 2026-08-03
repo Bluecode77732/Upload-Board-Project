@@ -61,6 +61,12 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
 - Keep `src/api/errorCodes.ts` and `src/api/types.ts` in sync with the backend
   when its contract changes — update [docs/API-CONTRACT.md](docs/API-CONTRACT.md)
   in the same change.
+- Every `DELETE` route in this API returns a plain-text `200` body, not JSON
+  (see [docs/API-CONTRACT.md](docs/API-CONTRACT.md#delete-responses-are-plain-text-not-json)).
+  `client.ts`'s `request()` handles this centrally (Content-Type-gated JSON parse,
+  `undefined` otherwise) — found after it originally crashed every successful
+  delete with a `SyntaxError` that surfaced as a generic "Network error". Don't
+  add a caller that expects a parsed body from `api.delete()`.
 
 ## Conventions
 

@@ -113,3 +113,16 @@ returning `201` (fresh) or `200` (idempotent replay of the same claim, ADR 0019)
 without a token, `private` needs the creator/admin bearer, `unlisted` needs a matching
 `?share=<token>`. New files default to `private`. `shareUrl` is returned only to a
 manager of an unlisted file.
+
+### DELETE responses are plain text, not JSON
+
+Every `DELETE` route in this API (`/file/:id`, `/user/:id`, `/post/:id`, `/comment/:id`)
+resolves its handler to a bare string (e.g. `"File 12 deleted."`), which Nest sends as a
+`200 text/html` body — there is no `ErrorBody`-shaped or JSON success payload to parse.
+`src/api/client.ts`'s `request()` handles this centrally: it only calls `response.json()`
+when the response's `Content-Type` says so, otherwise resolving `undefined`. This was
+found the hard way — an earlier version called `response.json()` unconditionally on every
+non-204 2xx response, which threw a `SyntaxError` on every successful delete and made
+`FileDetailPage`'s delete look like a network failure even though the backend had already
+deleted the row. Do not add a caller that expects a parsed body from `api.delete()`.
+

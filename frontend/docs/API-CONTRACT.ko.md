@@ -118,3 +118,17 @@
 필요하며, `unlisted`는 일치하는 `?share=<token>`이 필요하다. 새 파일은
 기본값으로 `private`이다. `shareUrl`은 unlisted 파일을 관리할 수 있는
 사람에게만 반환된다.
+
+### DELETE 응답은 JSON이 아니라 순수 텍스트다
+
+이 API의 모든 `DELETE` 라우트(`/file/:id`, `/user/:id`, `/post/:id`,
+`/comment/:id`)는 핸들러가 그냥 문자열을 반환하며(예: `"File 12 deleted."`),
+Nest는 이를 `200 text/html` 본문으로 내려보낸다 — 파싱할 `ErrorBody` 형태나
+JSON 성공 페이로드가 애초에 없다. `src/api/client.ts`의 `request()`가 이를
+중앙에서 처리한다: 응답의 `Content-Type`이 JSON일 때만 `response.json()`을
+호출하고, 그 외에는 `undefined`를 반환한다. 이는 실제로 겪고 나서 알게 된
+문제였다 — 이전 버전은 204가 아닌 모든 2xx 응답에 무조건 `response.json()`을
+호출했는데, 이 때문에 성공한 삭제마다 `SyntaxError`가 나서 `FileDetailPage`의
+삭제가 실제로는 백엔드에서 행이 이미 지워졌는데도 네트워크 오류처럼 보였다.
+`api.delete()`의 반환값에서 파싱된 본문을 기대하는 호출부를 새로 추가하지
+말 것.
