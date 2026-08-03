@@ -36,7 +36,10 @@ src/
 └── features/
     ├── auth/     LoginPage (Basic signin/register)
     ├── files/    DashboardPage (protected — upload form + file board: search/sort/
-    │             creator filter/pagination + visibility badges, FileBoard.tsx)
+    │             creator filter/pagination + visibility badges, FileBoard.tsx) and
+    │             FileDetailPage (protected, /view/:id — metadata + visibility-gated
+    │             playback: direct <video src> for public/unlisted, an authenticated
+    │             blob+objectURL fetch for private)
     └── admin/    AdminPage (/admin stub, awaits backend RBAC)
 ```
 

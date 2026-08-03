@@ -5,16 +5,12 @@
 //   without a data-fetching library (plain fetch + React state, per frontend CLAUDE.md).
 
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import { FILE_SORT_FIELDS, SORT_ORDERS } from '../../api/types'
-import type {
-  FileListResponse,
-  FileResponse,
-  FileSortField,
-  FileVisibility,
-  SortOrder,
-} from '../../api/types'
+import type { FileListResponse, FileResponse, FileSortField, SortOrder } from '../../api/types'
+import { VisibilityBadge } from './VisibilityBadge'
 
 const TAKE = 20
 
@@ -29,30 +25,6 @@ function messageForError(error: unknown): string {
     }
   }
   return 'Network error. Is the backend running?'
-}
-
-const VISIBILITY_STYLE: Record<FileVisibility, { label: string; background: string; color: string }> = {
-  public: { label: 'Public', background: '#e6f4ea', color: '#1e7e34' },
-  private: { label: 'Private', background: '#fdecea', color: '#b3261e' },
-  unlisted: { label: 'Unlisted', background: '#fff4e0', color: '#996a13' },
-}
-
-function VisibilityBadge({ visibility }: { visibility: FileVisibility }) {
-  const { label, background, color } = VISIBILITY_STYLE[visibility]
-  return (
-    <span
-      style={{
-        fontSize: '0.75rem',
-        fontWeight: 600,
-        padding: '2px 8px',
-        borderRadius: 999,
-        background,
-        color,
-      }}
-    >
-      {label}
-    </span>
-  )
 }
 
 export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
@@ -192,7 +164,7 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
               >
                 <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <VisibilityBadge visibility={file.visibility} />
-                  {file.title}
+                  <Link to={`/view/${file.id}`}>{file.title}</Link>
                 </span>
                 {creator && (
                   <button

@@ -84,6 +84,32 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return (await response.json()) as T
 }
 
+// Authenticated binary fetch (e.g. GET /file/:id/content for a private file) — mirrors
+// request()'s auth header + single-flight 401-refresh-retry, but returns a Blob instead
+// of parsing JSON, since content endpoints don't return the ErrorBody shape on success.
+async function requestBlob(path: string): Promise<Blob> {
+  const doFetch = () => {
+    const token = getAccessToken()
+    return fetch(`${BASE}${path}`, {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+  }
+
+  let response = await doFetch()
+
+  if (response.status === 401 && getAccessToken()) {
+    const refreshed = await tryRefresh()
+    if (refreshed) response = await doFetch()
+  }
+
+  if (!response.ok) {
+    throw new ApiError(response.status, await parseError(response))
+  }
+
+  return response.blob()
+}
+
 // Single-flight refresh: concurrent 401s share one refresh call.
 let refreshInFlight: Promise<boolean> | null = null
 
@@ -151,4 +177,6 @@ export const api = {
   postForm: <T>(path: string, form: FormData) => request<T>(path, { method: 'POST', body: form }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  // Authenticated binary read (e.g. a private file's content) — see requestBlob above.
+  getBlob: (path: string) => requestBlob(path),
 }

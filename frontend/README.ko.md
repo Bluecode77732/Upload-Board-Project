@@ -36,7 +36,10 @@ src/
 └── features/
     ├── auth/     LoginPage (Basic 로그인/회원가입)
     ├── files/    DashboardPage (보호됨 — 업로드 폼 + 파일 보드: 검색/정렬/
-    │             작성자 필터/페이지네이션 + visibility 배지, FileBoard.tsx)
+    │             작성자 필터/페이지네이션 + visibility 배지, FileBoard.tsx),
+    │             FileDetailPage (보호됨, /view/:id — 메타데이터 + visibility별
+    │             재생: public/unlisted은 <video src> 직접 재생, private은 인증된
+    │             blob+objectURL 페치)
     └── admin/    AdminPage (/admin 스텁, 백엔드 RBAC를 기다리는 중)
 ```
 
