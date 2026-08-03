@@ -128,6 +128,29 @@
   (`<label>` 안에 중첩된 `<select>`의 옵션 텍스트가 라벨의 접근성 이름에 섞여 들어가고,
   흔한 단어를 포함한 테스트용 이메일이 엉뚱한 버튼과 매칭됨 — 해당 쿼리에
   `{ exact: true }`를 붙여 해결). 백엔드나 앱 코드 변경은 없다.
+- **프론트엔드 Playwright E2E 스펙 — 파일 상세 페이지** — `frontend/e2e/detail.spec.ts`가 `/view/:id`
+  (`FileDetailPage`)를 엔드투엔드로 검증한다: private 파일의 인증된 blob 재생과, 그 objectURL이
+  다른 페이지로 이동할 때 실제로 해제되는지(`URL.revokeObjectURL`을 `page.addInitScript`로 스파이해
+  확인); `public`/`unlisted`로 전환한 뒤 콘텐츠 엔드포인트가 Bearer 토큰도 쿠키도 없이 응답하는지를,
+  page의 쿠키나 메모리 속 액세스 토큰과 전혀 무관한 Playwright의 순수 `request` 픽스처로 확인;
+  unlisted 공유 토큰을 회전한 뒤 이전 토큰은 403 `FILE_SHARE_INVALID`로 거절되고 새 토큰은 여전히
+  재생되는지; 남의 private 파일에 대한 타인의 `/view/:id` 접근이 404 `FILE_NOT_FOUND`로 응답해
+  존재 자체를 숨기면서(ADR 0026 D8) Manage 섹션도 렌더링하지 않는지; 그리고 게시글이 참조 중인
+  파일의 `DELETE /file/:id`가 `FILE_IN_USE`로 거절되었다가(프론트엔드에 아직 게시글 UI가 없어
+  백엔드 API로 직접 붙인 테스트 준비물) 그 게시글을 지우면 성공해 목록에서 사라지는지를 검증한다.
+  백엔드 변경은 없다.
+
+### 수정
+- **`api.delete`의 성공 경로가 `DELETE /file/:id`의 순수 텍스트 본문에서 예외를 던지던 문제** —
+  `frontend/src/api/client.ts`의 공용 `request()`가 204가 아닌 2xx 응답이면 무조건
+  `response.json()`을 호출했는데, `DELETE /file/:id`는 `200 text/html`에 순수 문자열
+  (`File ${id} deleted.`)을 응답하므로 파싱이 `SyntaxError`로 깨졌다. `FileDetailPage.handleDelete`의
+  catch는 이를 일반 실패로 오인해 "Network error. Is the backend running?"를 보여줬고, 그 결과
+  백엔드는 이미 파일을 지웠는데도 화면은 목록으로 이동하지 않았다. `detail.spec.ts`의 삭제 플로우
+  어서션을 작성하다 발견했다. 이제 `request()`는 응답의 `Content-Type`이 JSON일 때만 파싱하고, 그
+  외에는 (기존 204 처리와 동일하게) `undefined`를 반환한다 — `api.delete`를 호출하는 곳 중 반환값을
+  쓰는 곳이 없어 다른 JSON 응답 엔드포인트의 동작에는 영향이 없는 순수 버그 수정이다. 백엔드 변경은
+  없다 — 삭제에 순수 텍스트 200을 응답하는 백엔드 동작 자체는 그대로다.
 
 ### 변경
 - **계정 연쇄 삭제가 이제 댓글 → 게시글 → 파일 순서로 지운다**

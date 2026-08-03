@@ -46,6 +46,14 @@ async function parseError(response: Response): Promise<ErrorBody | undefined> {
   }
 }
 
+// 목적: 인증 헤더/크리덴셜을 붙여 백엔드 REST 호출을 수행하고 성공 응답을 호출자가 기대하는 타입으로 반환한다.
+// 이유: 만료된 액세스 토큰의 401→refresh→재시도, 그리고 JSON이 아닌 성공 응답(예: DELETE /file/:id의
+//       순수 텍스트 200 "File 3 deleted.")의 파싱까지 호출자마다 각자 처리하면 ADR 0012 토큰 로직과
+//       파싱 예외 처리가 흩어진다. 후자는 response.json()이 무조건 호출되어 SyntaxError로 깨지던 실제
+//       버그였다(FileDetailPage.handleDelete가 성공한 삭제를 "Network error"로 오인).
+// 방법: fetch → 401이면 1회 리프레시 후 재시도 → !ok면 ApiError. 204는 그대로 undefined, Content-Type이
+//       application/json이 아니면 파싱하지 않고 undefined를 반환 — 어떤 api.delete 호출부도 반환값을
+//       쓰지 않으므로 안전하다.
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, headers = {}, skipAuthRefresh = false } = options
 
@@ -81,6 +89,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (response.status === 204) return undefined as T
+  const contentType = response.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) return undefined as T
   return (await response.json()) as T
 }
 

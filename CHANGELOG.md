@@ -136,6 +136,31 @@ development line (package.json version).
   nested inside a `<label>` folds its option text into the label's accessible name; a
   generated test email containing a common word matched an unrelated button) — fixed with
   `{ exact: true }` on the affected queries. No backend or app-code change.
+- **Frontend Playwright E2E specs — file detail page** — `frontend/e2e/detail.spec.ts` exercises
+  `/view/:id` (`FileDetailPage`) end to end: a private file's authenticated blob playback, and
+  that its objectURL is revoked (`URL.revokeObjectURL`, spied via `page.addInitScript`) on
+  navigating away; toggling to `public`/`unlisted` and confirming the content endpoint answers
+  with no bearer token or cookies at all, using Playwright's bare `request` fixture, which shares
+  neither the page's cookies nor its in-memory access token; rotating an unlisted share token and
+  confirming the old one now 403s `FILE_SHARE_INVALID` while the new one still plays; a
+  stranger's `/view/:id` for another user's private file answering 404 `FILE_NOT_FOUND`
+  (existence hidden, ADR 0026 D8) with no Manage section rendered; and `DELETE /file/:id`
+  refusing with `FILE_IN_USE` while a post references the file (attached directly through the
+  backend API as test setup, since the frontend has no post UI yet), then succeeding once the
+  blocking post is removed, with the file gone from the board. No backend change.
+
+### Fixed
+- **`api.delete`'s success path threw on `DELETE /file/:id`'s plain-text body** —
+  `frontend/src/api/client.ts`'s shared `request()` unconditionally called `response.json()` on
+  any non-204 2xx response, but `DELETE /file/:id` answers `200 text/html` with a plain string
+  (`File ${id} deleted.`), so the parse threw a `SyntaxError`; `FileDetailPage.handleDelete`'s
+  catch treated that as a generic failure ("Network error. Is the backend running?"), so deleting
+  a file never navigated away even though the backend had already deleted it. Found writing
+  `detail.spec.ts`'s delete-flow assertion. `request()` now only parses JSON when the response's
+  `Content-Type` says so, otherwise resolving `undefined` (mirroring the existing 204 case); no
+  caller of `api.delete` uses the resolved value, so this is a pure bug fix with no behavior
+  change for any JSON-returning endpoint. No backend change — the backend's plain-text 200 for a
+  delete is unaffected.
 
 ### Changed
 - **The account cascade now deletes comments first, then posts, then files**
