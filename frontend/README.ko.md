@@ -1,0 +1,61 @@
+# Upload Board — 프론트엔드
+
+Upload Board 프로젝트를 위한 React + Vite(TypeScript) SPA. 프로젝트 저장소의
+`frontend/` 하위 폴더로 존재하며(리포지토리 루트의 백엔드와 나란히), 백엔드
+REST API를 HTTP로 소비한다. 관리자 화면도 이 안에 `/admin` 라우트 섹션으로
+들어 있다(백엔드 ADR 0010).
+
+## 스택
+
+- **React 19 + Vite** — SPA, SSR 없음 (API는 백엔드가 담당)
+- **react-router-dom** — 라우팅, 보호된 라우트 가드 포함
+- **TypeScript** — strict 빌드(`tsc -b`), `any` 사용 안 함
+- **oxlint** — 린팅
+- 순수 `fetch` 래퍼(`src/api/client.ts`) — 데이터 페칭/상태 관리 라이브러리는 아직 없음
+
+## 빠른 시작
+
+```bash
+pnpm install
+cp .env.example .env        # 개발 환경에서는 VITE_API_BASE를 비워 둔다 (Vite 프록시)
+pnpm dev                    # http://localhost:5173
+```
+
+개발 서버는 `/auth`, `/file`, `/user`, `/upload`를
+`http://localhost:3000`의 백엔드로 프록시한다. 덕분에 개발 환경에서는 앱이
+동일 출처(same-origin)로 동작해 httpOnly 리프레시 쿠키가 CORS 없이 작동한다.
+**백엔드를 먼저 실행해야 한다** (해당 저장소에서: `pnpm run start:dev`).
+
+## 구조
+
+```
+src/
+├── api/          전송 계층: client (fetch 래퍼), authStore (인메모리 액세스 토큰),
+│                 errorCodes + types (백엔드 계약의 미러)
+├── auth/         세션 상태: AuthProvider (사일런트 리프레시), useAuth, RequireAuth 가드
+└── features/
+    ├── auth/     LoginPage (Basic 로그인/회원가입)
+    ├── files/    DashboardPage (보호됨 — 업로드 폼 + 파일 보드: 검색/정렬/
+    │             작성자 필터/페이지네이션 + visibility 배지, FileBoard.tsx)
+    └── admin/    AdminPage (/admin 스텁, 백엔드 RBAC를 기다리는 중)
+```
+
+## 인증 모델 (백엔드 ADR 0012)
+
+- 액세스 토큰: **메모리에만 보관** (localStorage에는 절대 저장하지 않음) —
+  새로고침하면 쿠키로부터 조용히 다시 리프레시된다.
+- 리프레시 토큰: **httpOnly 쿠키**, 리프레시할 때마다 회전(rotate)된다. 이미
+  회전되어 무효화된 토큰을 재사용하면 세션이 종료된다.
+- 로그인: `POST /auth/signin`에 Basic 헤더로 요청한다 (`client.ts`에서 조립).
+
+전체 소비 계약은 [docs/API-CONTRACT.ko.md](docs/API-CONTRACT.ko.md)를,
+개발 컨벤션은 [CLAUDE.md](CLAUDE.md)를 참고한다.
+
+## 명령어
+
+```bash
+pnpm dev        # 개발 서버 (:5173)
+pnpm build      # 타입 체크 + 프로덕션 빌드
+pnpm lint       # oxlint
+pnpm preview    # 빌드된 앱 미리보기
+```
