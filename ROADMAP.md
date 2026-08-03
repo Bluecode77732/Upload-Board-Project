@@ -105,9 +105,9 @@ item below lands as its own dedicated, designed change
 - ~~**Media-type expansion implemented 2026-08-01**~~ ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)
   D4/D5 + [ADR 0027](ADR/0027-media-type-expansion-implementation.md)): `POST /upload/attach`
   now accepts `image`/`audio`/`video` as three type-specific fields, each with its own class
-  allowlist, replacing the single `video` field. No schema change. **Frontend adoption of
-  both the new `fileUrl`/`visibility` response shape and the split upload fields remains its
-  own tracked task** (Unscheduled below).
+  allowlist, replacing the single `video` field. No schema change. ~~Frontend adoption of
+  both the new `fileUrl`/`visibility` response shape and the split upload fields~~ — ✅
+  **done 2026-08-03** (Unscheduled below).
 
 ## 1. Vision & essence
 
@@ -180,9 +180,8 @@ work must pass them; they are not themselves roadmap subjects.
   backend 2026-08-01** ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6
   + [ADR 0026](ADR/0026-file-visibility-implementation.md)): `ServeStaticModule` no longer
   exposes `file/upload`, and access is enforced by `GET /file/:id/content`
-  (public/private/unlisted, Range-aware). The frontend has not adopted this yet — it still
-  reads the old static `fileUrl` shape — so the constraint the *frontend* must work around is
-  unchanged until that task lands (see Unscheduled).
+  (public/private/unlisted, Range-aware). The frontend adopted this 2026-08-03 (see
+  Unscheduled) — it now reads `fileUrl` as the content endpoint and can toggle visibility.
 - Considered and set aside in the review: event-driven reinforcement (only one
   side effect exists to decouple, and moving the rename out of the transaction
   would break `temp_`/`granted_` atomicity) and CQRS-lite (the read model is
@@ -453,22 +452,20 @@ role-delivery → adapt console → moderation decision → resolve duplicate su
   filter) must both take it up; until they do, the frontend simply keeps sending
   `take`/`skip` and gets the new deterministic ordering for free. The backend change stopped
   at the repo boundary ([CLAUDE.md](CLAUDE.md) > Project Overview).
-- Frontend adoption of file visibility + media expansion (recorded 2026-07-31,
-  [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md); both halves now **landed on
-  the backend 2026-08-01** — visibility via [ADR 0026](ADR/0026-file-visibility-implementation.md),
-  media-type expansion via [ADR 0027](ADR/0027-media-type-expansion-implementation.md)) —
-  **owned by a frontend-scoped task, not by backend work**, like the claim-, deletion-, and
-  list-query-contract items above, but larger: this one is a **breaking change against the
-  live frontend**, not an additive one. As of 2026-08-01, file access already moved to
-  `GET /file/:id/content` and `FileResponseDto` gains `visibility` + (for the owner) a
-  `shareUrl` — the frontend currently reads the old static `fileUrl` shape and cannot toggle
-  visibility at all, so this is now a live gap, not a future one. The upload field split
-  (single `video` → `image`/`audio`/`video`) also landed on the backend 2026-08-01 (ADR 0025
-  D4/D5), so both halves of the breaking change are now live on the API the frontend has not
-  yet adopted. `frontend/docs/API-CONTRACT.md`, the upload form, the file list, and the
-  playback/view surface must all take it up (visibility toggle, share-link copy, and the
-  three upload fields). The backend change stops at the repo boundary
-  ([CLAUDE.md](CLAUDE.md) > Project Overview).
+- ~~Frontend adoption of file visibility + media expansion~~ — ✅ **resolved 2026-08-03**
+  (recorded 2026-07-31, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md); both
+  backend halves landed 2026-08-01 — visibility via
+  [ADR 0026](ADR/0026-file-visibility-implementation.md), media-type expansion via
+  [ADR 0027](ADR/0027-media-type-expansion-implementation.md)). All four pieces this item
+  called out are now live in `frontend/`: the file board (search/sort/filter/pagination/
+  visibility badges, `FileBoard.tsx`), the file detail page (visibility-gated playback — a
+  direct `<video src>` for public/unlisted, an authenticated blob+objectURL fetch for
+  private), file management actions (visibility toggle, share-link rotation, delete, all via
+  `PATCH`/`DELETE /file/:id`), and the upload form (`image`/`audio`/`video` fields mirroring
+  ADR 0027's per-field allowlist, plus XHR-based upload-progress reporting, added in the same
+  task, since `fetch` has no upload-progress event). `frontend/docs/API-CONTRACT.md` documents
+  the content-endpoint `fileUrl`/`visibility`/`shareUrl` shape and the three-field upload
+  contract.
 - Documentation rot in `ARCHITECTURE.md` (+ko) (recorded 2026-07-30) — the Stage 1
   landings were never reflected there: "Non-Existent Infrastructure" still claims no CI
   workflow, no Dockerfile, and no Nest `Logger` usage (all three exist —

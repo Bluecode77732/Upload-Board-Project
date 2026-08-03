@@ -98,10 +98,9 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 - ~~**미디어 타입 확장을 2026-08-01에 구현했다**~~ ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)
   D4/D5 + [ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md)): `POST
   /upload/attach`는 이제 단일 `video` 필드 대신 `image`/`audio`/`video` 타입별 필드 세 개를
-  받으며, 각각 자신만의 클래스 허용 목록을 가진다. 스키마 변경은 없다. **새
-  `fileUrl`/`visibility` 응답 형태와 분리된 업로드 필드 모두에 대한 프론트엔드 반영은 여전히
-  별도로 추적되는 과제다
-  (아래 미배정 참고).
+  받으며, 각각 자신만의 클래스 허용 목록을 가진다. 스키마 변경은 없다. ~~새
+  `fileUrl`/`visibility` 응답 형태와 분리된 업로드 필드 모두에 대한 프론트엔드 반영~~ — ✅
+  **2026-08-03 완료** (아래 미배정 참고).
 
 ## 1. 비전과 본질
 
@@ -168,9 +167,8 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D1/D2/D3/D6 +
   [ADR 0026](ADR/0026-file-visibility-implementation.ko.md)): `ServeStaticModule`은 더 이상
   `file/upload`를 노출하지 않고, 접근은 `GET /file/:id/content`(공개/비공개/링크공유,
-  Range 지원)가 강제한다. 프론트엔드는 아직 이를 반영하지 않았다 — 여전히 옛 정적
-  `fileUrl` 형태를 읽는다 — 그래서 *프론트엔드*가 우회해야 하는 제약은 그 과제가 랜딩할
-  때까지 그대로다(아래 미배정 참고).
+  Range 지원)가 강제한다. 프론트엔드는 2026-08-03에 이를 반영했다(아래 미배정 참고) —
+  이제 `fileUrl`을 콘텐츠 엔드포인트로 읽고 visibility를 토글할 수 있다.
 - 검토 후 보류한 대안: 이벤트 기반 보강(분리할 부수효과가 rename 하나뿐이며,
   rename을 트랜잭션 밖으로 빼면 `temp_`/`granted_` 원자성이 깨진다), CQRS-lite
   (읽기 모델이 분리할 만큼 복잡하지 않다; YAGNI).
@@ -416,21 +414,19 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   돌려준다. `frontend/docs/API-CONTRACT.md`와 목록 화면(검색창, 정렬 컨트롤, 작성자 필터)을
   함께 갱신해야 하며, 그전까지 프론트엔드는 기존처럼 `take`/`skip`만 보내면서 결정적 정렬만
   그대로 얻는다. 백엔드 변경은 저장소 경계에서 멈췄다([CLAUDE.md](CLAUDE.md) > Project Overview).
-- 파일 가시성 + 미디어 확장의 프론트엔드 반영 (2026-07-31 기록,
-  [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md); 두 절반 모두
-  **2026-08-01 백엔드에서 착지** — 가시성은 [ADR 0026](ADR/0026-file-visibility-implementation.ko.md),
-  미디어 타입 확장은 [ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md)) —
-  위 청구·삭제·목록 조회 계약 항목과 마찬가지로 **백엔드 작업이 아니라 프론트엔드 전용
-  과제가 담당한다.** 단 이건 additive가 아니라 **살아 있는 프론트엔드에 대한 breaking
-  변경**이라 더 크다. 2026-08-01 기준으로 파일 접근은 이미 `GET /file/:id/content`로
-  옮겨갔고 `FileResponseDto`에 `visibility` + (소유자에게만) `shareUrl`이 추가됐다 —
-  프론트엔드는 아직 옛 정적 `fileUrl` 형태를 읽고 있고 가시성을 전혀 토글할 수 없으므로,
-  이는 이제 미래가 아니라 현재의 공백이다. 업로드 필드 분리(단일 `video` →
-  `image`/`audio`/`video`)도 2026-08-01에 백엔드에서 착지해서(ADR 0025 D4/D5), 이제
-  breaking 변경의 두 절반 모두 프론트엔드가 아직 반영하지 않은 API 위에 살아 있다.
-  `frontend/docs/API-CONTRACT.md`, 업로드 폼, 파일 목록, 재생/열람 화면이 모두 이를
-  받아들여야 한다(가시성 토글, 공유 링크 복사, 세 업로드 필드). 백엔드 변경은
-  저장소 경계에서 멈춘다([CLAUDE.md](CLAUDE.md) > Project Overview).
+- ~~파일 가시성 + 미디어 확장의 프론트엔드 반영~~ — ✅ **2026-08-03 해소**
+  (2026-07-31 기록, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md); 두 절반
+  모두 2026-08-01 백엔드에서 착지 — 가시성은
+  [ADR 0026](ADR/0026-file-visibility-implementation.ko.md), 미디어 타입 확장은
+  [ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md)). 이 항목이 요구하던 네
+  가지가 모두 `frontend/`에 반영됐다: 파일 보드(검색/정렬/필터/페이지네이션/visibility
+  배지, `FileBoard.tsx`), 파일 상세 페이지(visibility별 재생 — public/unlisted은
+  `<video src>` 직접 재생, private은 인증된 blob+objectURL 페치), 파일 관리 액션(visibility
+  토글, 공유 링크 회전, 삭제 — 모두 `PATCH`/`DELETE /file/:id`로 처리), 그리고 업로드
+  폼(ADR 0027의 필드별 허용목록을 미러링하는 `image`/`audio`/`video` 필드, 그리고 같은
+  과제에서 함께 추가된 XHR 기반 업로드 진행률 표시 — `fetch`는 업로드 진행률 이벤트를
+  제공하지 않기 때문). `frontend/docs/API-CONTRACT.md`는 콘텐츠 엔드포인트
+  `fileUrl`/`visibility`/`shareUrl` 형태와 3필드 업로드 계약을 이미 문서화하고 있다.
 - `ARCHITECTURE.md`(+ko)의 문서 부패 (2026-07-30 기록) — Stage 1 착지 내용이 이 문서에
   전혀 반영되지 않았다. "Non-Existent Infrastructure"는 여전히 CI 워크플로·Dockerfile·Nest
   `Logger` 사용이 없다고 서술하지만 셋 다 존재하고

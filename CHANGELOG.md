@@ -73,6 +73,26 @@ development line (package.json version).
   coverage: an image and an audio round trip (attach → promote → content `Content-Type`),
   a wrong-type-for-field rejection, and a two-fields-at-once rejection, added to
   `test/app.e2e-spec.ts`; existing `video`-field e2e cases pass unmodified.
+- **Frontend adoption of file visibility + media-type expansion**
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)/
+  [0026](ADR/0026-file-visibility-implementation.md)/
+  [0027](ADR/0027-media-type-expansion-implementation.md)) — closes the breaking-change gap
+  the two backend entries above left open ([ROADMAP.md](ROADMAP.md) > Unscheduled). The file
+  board (`frontend/src/features/files/FileBoard.tsx`) gains `GET /file`'s full ADR 0021 query
+  surface (debounced search, sort field/order, creator-ID filter, pagination) plus a
+  `VisibilityBadge` per row. `FileDetailPage` (`/view/:id`) reads `fileUrl` as the
+  access-controlled content endpoint: `public`/`unlisted` files stream via a direct
+  `<video src>` (keeping Range-based seeking), `private` files fetch authenticated as a Blob
+  and play from an objectURL revoked on unmount (a plain `<video src>` can't carry a Bearer
+  header). A "Manage" section, shown only to the creator/admin (a client-side hint only —
+  every write is re-checked server-side), toggles visibility and rotates the unlisted share
+  token, both via the existing `PATCH /file/:id` (no new endpoint, per ADR 0025 D3), plus a
+  confirmed `DELETE /file/:id` that surfaces `FILE_IN_USE` if a post references the file.
+  `UploadForm` replaces its single `video` field with radio-selected `image`/`audio`/`video`
+  fields mirroring the backend's per-field allowlist, and gains upload-progress reporting via
+  a new `api.postFormWithProgress` (`XMLHttpRequest`-based, since `fetch` exposes no
+  upload-progress event — the one piece here not itself required by ADR 0025/0026/0027).
+  `frontend/docs/API-CONTRACT.md` already documented the target contract. No backend change.
 - **Board comment module — the board domain is complete**
   ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) — the second half of
   the schema gate, and with it **Stage 3**. `CommentModule` ships the ADR's four routes behind

@@ -69,6 +69,26 @@
   `Content-Type`), 필드에 맞지 않는 타입 거부, 필드 두 개 동시 첨부 거부를
   `test/app.e2e-spec.ts`에 추가했다. 기존 `video` 필드 e2e 케이스는 수정 없이 그대로
   통과한다.
+- **파일 가시성 + 미디어 타입 확장의 프론트엔드 반영**
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)/
+  [0026](ADR/0026-file-visibility-implementation.ko.md)/
+  [0027](ADR/0027-media-type-expansion-implementation.ko.md)) — 위 백엔드 항목 둘이 남긴
+  breaking-change 공백을 닫는다([ROADMAP.md](ROADMAP.md) > 미배정). 파일 보드
+  (`frontend/src/features/files/FileBoard.tsx`)는 `GET /file`의 ADR 0021 쿼리 표면
+  전체(디바운스된 검색, 정렬 필드/순서, 작성자 ID 필터, 페이지네이션)와 행마다
+  `VisibilityBadge`를 얻는다. `FileDetailPage`(`/view/:id`)는 `fileUrl`을 접근 제어된
+  콘텐츠 엔드포인트로 읽는다: `public`/`unlisted` 파일은 `<video src>` 직접 재생으로
+  스트리밍하고(Range 기반 탐색 유지), `private` 파일은 인증된 Blob으로 가져와 언마운트 시
+  해제되는 objectURL로 재생한다(일반 `<video src>`는 Bearer 헤더를 실을 수 없기 때문).
+  작성자/admin에게만 보이는 "Manage" 섹션(클라이언트 측 힌트일 뿐 — 모든 쓰기는 서버에서
+  다시 검사된다)은 visibility 토글과 unlisted 공유 토큰 회전을 기존 `PATCH /file/:id`
+  하나로 처리하며(새 엔드포인트 없음, ADR 0025 D3), 게시글이 참조 중이면 `FILE_IN_USE`를
+  드러내는 확인형 `DELETE /file/:id`도 추가했다. `UploadForm`은 단일 `video` 필드를
+  백엔드의 필드별 허용 목록을 미러링하는 라디오 선택형 `image`/`audio`/`video` 필드로
+  교체하고, 새 `api.postFormWithProgress`(`XMLHttpRequest` 기반 — `fetch`는 업로드 진행률
+  이벤트를 제공하지 않기 때문. ADR 0025/0026/0027이 요구하지 않은 이 항목만의 추가 사항)로
+  업로드 진행률 표시를 얻는다. `frontend/docs/API-CONTRACT.md`는 이미 목표 계약을
+  문서화하고 있었다. 백엔드 변경은 없다.
 - **게시판 comment 모듈 — 게시판 도메인 완성**
   ([ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) — 스키마 게이트의 후반부이며,
   이로써 **Stage 3**도 완결됐다. `CommentModule`은 ADR이 정한 네 라우트를 `JwtAuthGuard` 뒤에
