@@ -35,7 +35,8 @@ src/
 ├── auth/         session state: AuthProvider (silent refresh), useAuth, RequireAuth guard
 └── features/
     ├── auth/     LoginPage (Basic signin/register)
-    ├── files/    DashboardPage (protected — lists files)
+    ├── files/    DashboardPage (protected — upload form + file board: search/sort/
+    │             creator filter/pagination + visibility badges, FileBoard.tsx)
     └── admin/    AdminPage (/admin stub, awaits backend RBAC)
 ```
 

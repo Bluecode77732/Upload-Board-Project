@@ -42,6 +42,13 @@ export interface FileResponse {
 // not a bare array; `total` drives client pagination.
 export type FileListResponse = [FileResponse[], number]
 
+// GET /file query — mirrors backend GetFilesDto (ADR 0021). sortBy/order are a
+// whitelist (IsIn), not free strings: a value outside these tuples is 400 VALIDATION_FAILED.
+export const FILE_SORT_FIELDS = ['createdAt', 'title', 'id'] as const
+export type FileSortField = (typeof FILE_SORT_FIELDS)[number]
+export const SORT_ORDERS = ['DESC', 'ASC'] as const
+export type SortOrder = (typeof SORT_ORDERS)[number]
+
 // POST /upload/attach — returns the server-generated temp_ filename to hand to POST /file.
 export interface AttachResponse {
   filename: string

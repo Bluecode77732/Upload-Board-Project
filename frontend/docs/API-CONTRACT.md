@@ -91,6 +91,7 @@ Every error is the frozen `ErrorBody` shape:
 | Method | Path | Notes |
 |---|---|---|
 | `GET` | `/file?take=&skip=&search=&sortBy=&order=&creatorId=` | tuple `[rows, total]`; hides non-public rows from non-owner/admin (ADR 0026 D7) |
+| — | — | `take` 1–100 (default 20), `skip` ≥0 (default 0), `search` ≤100 chars (title ILIKE, blank = absent), `sortBy` one of `createdAt`\|`title`\|`id` (default `createdAt`), `order` `ASC`\|`DESC` (default `DESC`), `creatorId` a positive integer — any other value is `400 VALIDATION_FAILED` (ADR 0021, backend `GetFilesDto`) |
 | `GET` | `/file/:id` | metadata + creator; 404 for a hidden file (existence hidden, ADR 0026 D8) |
 | `GET` | `/file/:id/content?share=` | the **only** path serving bytes — access-gated by visibility (ADR 0025/0026); Range-aware |
 | `POST` | `/file` | promote a temp upload to permanent (new rows default `visibility: private`) |
