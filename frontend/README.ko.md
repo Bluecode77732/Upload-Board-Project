@@ -12,6 +12,8 @@ REST API를 HTTP로 소비한다. 관리자 화면도 이 안에 `/admin` 라우
 - **TypeScript** — strict 빌드(`tsc -b`), `any` 사용 안 함
 - **oxlint** — 린팅
 - 순수 `fetch` 래퍼(`src/api/client.ts`) — 데이터 페칭/상태 관리 라이브러리는 아직 없음
+  (같은 파일에 업로드 진행률 보고용 `XMLHttpRequest` 경로도 함께 있다 —
+  `fetch`는 업로드 진행률 이벤트를 제공하지 않기 때문)
 
 ## 빠른 시작
 
@@ -35,7 +37,8 @@ src/
 ├── auth/         세션 상태: AuthProvider (사일런트 리프레시), useAuth, RequireAuth 가드
 └── features/
     ├── auth/     LoginPage (Basic 로그인/회원가입)
-    ├── files/    DashboardPage (보호됨 — 업로드 폼 + 파일 보드: 검색/정렬/
+    ├── files/    DashboardPage (보호됨 — 업로드 폼(이미지/오디오/비디오, 업로드
+    │             진행률 표시줄 포함) + 파일 보드: 검색/정렬/
     │             작성자 필터/페이지네이션 + visibility 배지, FileBoard.tsx),
     │             FileDetailPage (보호됨, /view/:id — 메타데이터 + visibility별
     │             재생: public/unlisted은 <video src> 직접 재생, private은 인증된

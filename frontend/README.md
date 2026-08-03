@@ -12,6 +12,8 @@ repo root) and consumes the backend REST API over HTTP; admin lives here as an
 - **TypeScript** — strict build (`tsc -b`), no `any`
 - **oxlint** — linting
 - Plain `fetch` wrapper (`src/api/client.ts`) — no data-fetching or state library yet
+  (plus an `XMLHttpRequest` path in the same file for upload-progress reporting,
+  since `fetch` exposes no upload-progress event)
 
 ## Quick start
 
@@ -35,7 +37,8 @@ src/
 ├── auth/         session state: AuthProvider (silent refresh), useAuth, RequireAuth guard
 └── features/
     ├── auth/     LoginPage (Basic signin/register)
-    ├── files/    DashboardPage (protected — upload form + file board: search/sort/
+    ├── files/    DashboardPage (protected — upload form (image/audio/video, with
+    │             upload-progress bar) + file board: search/sort/
     │             creator filter/pagination + visibility badges, FileBoard.tsx) and
     │             FileDetailPage (protected, /view/:id — metadata + visibility-gated
     │             playback: direct <video src> for public/unlisted, an authenticated

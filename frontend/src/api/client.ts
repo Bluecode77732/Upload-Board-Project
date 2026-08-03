@@ -110,6 +110,62 @@ async function requestBlob(path: string): Promise<Blob> {
   return response.blob()
 }
 
+// One attempt at a multipart POST via XMLHttpRequest, reporting upload progress.
+// fetch() exposes no upload-progress event (only XHR's upload.onprogress does),
+// so this is a separate primitive from request() rather than a fetch wrapper.
+function xhrPostForm<T>(
+  path: string,
+  form: FormData,
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${BASE}${path}`)
+    xhr.withCredentials = true // send the httpOnly refresh cookie, mirroring fetch's credentials:'include'
+    const token = getAccessToken()
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    if (onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) onProgress(event.loaded, event.total)
+      }
+    }
+    xhr.onload = () => {
+      let body: unknown
+      try {
+        body = xhr.responseText ? JSON.parse(xhr.responseText) : undefined
+      } catch {
+        body = undefined
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(body as T)
+      } else {
+        reject(new ApiError(xhr.status, body as ErrorBody | undefined))
+      }
+    }
+    xhr.onerror = () => reject(new ApiError(0, undefined))
+    xhr.send(form)
+  })
+}
+
+// Multipart POST with upload-progress reporting (e.g. POST /upload/attach) — mirrors
+// request()'s single 401-refresh-retry, built on xhrPostForm since fetch cannot report
+// upload progress.
+async function requestFormWithProgress<T>(
+  path: string,
+  form: FormData,
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<T> {
+  try {
+    return await xhrPostForm<T>(path, form, onProgress)
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401 && getAccessToken()) {
+      const refreshed = await tryRefresh()
+      if (refreshed) return await xhrPostForm<T>(path, form, onProgress)
+    }
+    throw err
+  }
+}
+
 // Single-flight refresh: concurrent 401s share one refresh call.
 let refreshInFlight: Promise<boolean> | null = null
 
@@ -175,6 +231,12 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
   // Multipart POST — pass a FormData; the browser sets the boundary Content-Type.
   postForm: <T>(path: string, form: FormData) => request<T>(path, { method: 'POST', body: form }),
+  // Multipart POST with upload-progress reporting (XHR-based — see requestFormWithProgress).
+  postFormWithProgress: <T>(
+    path: string,
+    form: FormData,
+    onProgress?: (loaded: number, total: number) => void,
+  ) => requestFormWithProgress<T>(path, form, onProgress),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
   // Authenticated binary read (e.g. a private file's content) — see requestBlob above.
