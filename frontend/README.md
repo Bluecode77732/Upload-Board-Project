@@ -12,6 +12,8 @@ repo root) and consumes the backend REST API over HTTP; admin lives here as an
 - **TypeScript** — strict build (`tsc -b`), no `any`
 - **oxlint** — linting
 - **Playwright** (`@playwright/test`, chromium only) — browser-level E2E, `frontend/e2e/`
+  (`auth`/`upload`/`board` specs cover register-signin-signout, the two-phase video
+  upload, and the file board's search/sort/pagination/visibility badges)
 - Plain `fetch` wrapper (`src/api/client.ts`) — no data-fetching or state library yet
   (plus an `XMLHttpRequest` path in the same file for upload-progress reporting,
   since `fetch` exposes no upload-progress event)

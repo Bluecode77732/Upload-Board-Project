@@ -12,6 +12,8 @@ REST API를 HTTP로 소비한다. 관리자 화면도 이 안에 `/admin` 라우
 - **TypeScript** — strict 빌드(`tsc -b`), `any` 사용 안 함
 - **oxlint** — 린팅
 - **Playwright** (`@playwright/test`, chromium만 설치) — 브라우저 수준 E2E, `frontend/e2e/`
+  (`auth`/`upload`/`board` 스펙이 회원가입-로그인-로그아웃, 2단계 영상 업로드,
+  파일 보드의 검색/정렬/페이지네이션/visibility 배지를 검증한다)
 - 순수 `fetch` 래퍼(`src/api/client.ts`) — 데이터 페칭/상태 관리 라이브러리는 아직 없음
   (같은 파일에 업로드 진행률 보고용 `XMLHttpRequest` 경로도 함께 있다 —
   `fetch`는 업로드 진행률 이벤트를 제공하지 않기 때문)
