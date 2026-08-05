@@ -13,6 +13,21 @@
 ## [Unreleased]
 
 ### 추가
+- **액세스 토큰에 `role` 클레임 추가** (ROADMAP 실행순서 #3, Stage 5의 막고 있던 첫 행,
+  [ADR 0028](ADR/0028-access-token-role-claim.ko.md); [ADR 0002](ADR/0002-dual-secret-token-pair.ko.md)
+  개정) — ADR 0022의 수정 백로그가 기록한 공백을 닫는다: 이식된 `admin/` 콘솔은
+  `jwtDecode<{ sub, role }>(accessToken)`을 디코드해 자기 라우트를 게이팅하는데, 이 API의
+  액세스 토큰 payload는 `{ sub, type }`뿐이라 `role`이 없어 콘솔이 모든 admin을 거부하고
+  있었다. `Payload`(`backend/auth/interface/payload-interface.ts`)는 선택적 `role?: UserRole`을
+  얻으며 액세스 토큰에만 채운다(리프레시 토큰은 기존 최소 형태 유지); `AuthService.issueToken`과
+  `issueTokenPair`는 `Pick<UserEntity, 'id'>`에서 `Pick<UserEntity, 'id' | 'role'>`로 넓어졌다.
+  요청 기반 조회(`GET /user/:id` 또는 신규 `GET /auth/me`) 대신 이 형태를 고른 이유는 이미
+  실전에 있는 패턴과 맞기 때문이다 — 프론트엔드는 이미 액세스 토큰을 클라이언트 측에서 디코드해
+  `sub`을 읽고 있다 — 그리고 앱 로드나 조용한 재발급마다 왕복이 추가되지 않는다. **서버 측 강제에는
+  변경이 없다**: `RolesGuard`/`AuthUser`는 여전히 `JwtStrategy.validate`의 매 요청 실시간 DB
+  조회에서 role을 얻지, 토큰 payload에서 얻지 않는다 — 그래서 강등 후 낡은 클레임(액세스 토큰
+  TTL로 한정, 로컬 180초)은 클라이언트 UI만 잠깐 어긋나게 할 뿐 검사를 우회하지 못한다. 스키마
+  변경, 마이그레이션, 새 엔드포인트, 새 에러 코드 모두 없음.
 - **`GET /user` 페이지네이션** (실행순서 #2, [Stage 5](ROADMAP.ko.md#stage-5--운영-화면-admin-콘솔--2026-07-30-추가)에서
   앞당김) — `UserController.findAll`은 `@Query()`를 전혀 받지 않았고, `UserService.findAll()`은
   단순 `findAndCount()`로 전체 행을 반환하고 있었다 — admin 콘솔과 무관하게 갚아야 할 Never Do

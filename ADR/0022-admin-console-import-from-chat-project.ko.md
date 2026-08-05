@@ -268,3 +268,12 @@ A안은 명시한 두 목적에서 동시에 이긴다 — 토큰이 가장 싸�
   출처 없이 복사하는 것이야말로
   [chat 잔재 제거 계획](../CHAT-REMNANT-REMOVAL-PLAN.ko.md)이 쓰이게 만든 바로 그 실패다:
   `CLAUDE.md` 자체가 그렇게 이 저장소에 들어왔고, 정리 비용이 이식으로 아낀 것을 훨씬 넘어섰다.
+
+> **2026-08-05 추가 기록** — 위 수정 백로그 중 두 행이 이제 해소됐다. **`GET /user`
+> 페이지네이션**은 2026-08-05에 ROADMAP 실행순서 #2(Stage 5에서 앞당김, 별도 ADR 없음 — 새
+> `GetUsersDto`로 [ADR 0021](0021-list-query-search-filter-sort.ko.md)의 조회 계층 패턴을
+> 재사용)로 착지했다. 이 ADR이 "먼저 필요한 백엔드 질문"으로 표시했던 **role 출처**는
+> [ADR 0028](0028-access-token-role-claim.ko.md)이 답했다: 액세스 토큰이 이제 선택적 `role`
+> 클레임을 실어, 이식된 콘솔의 `jwtDecode<{ sub, role }>(accessToken)` 가정이 이 API에서도
+> 성립한다. 둘 다 Stage 5의 걸림돌이었고, 콘솔 자체 적응(이 ADR의 백로그, 아직 미착수)이 이제
+> 진행될 수 있다.

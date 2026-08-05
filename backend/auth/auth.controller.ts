@@ -116,7 +116,7 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
   @ApiBody({ type: CreateUserDto, required: true })
   async userLocalLoginPassport(
-    @Request() req: { user: { id: number } },
+    @Request() req: { user: Pick<UserEntity, 'id' | 'role'> },
     @Res({ passthrough: true }) response: Response,
   ) {
     const { refreshToken, accessToken } = await this.authService.issueTokenPair(

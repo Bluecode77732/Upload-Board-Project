@@ -87,8 +87,10 @@ item below lands as its own dedicated, designed change
 - **Execution order for the remaining work fixed 2026-07-31** (see section 6 >
   Execution order): ~~#1 board comment module~~ (✅ done 2026-07-31) → ~~#2 `GET /user`
   pagination~~ (✅ done 2026-08-05, pulled forward from Stage 5) → **#3 Stage 5 admin
-  surface — now next** → #4 Stage 4 deployment, last. This resolves Stage 5's floating
-  position (before Stage 4) and pulls the independent pagination debt ahead of both.
+  surface — in progress** (its blocking first row, role delivery, done 2026-08-05 via
+  [ADR 0028](ADR/0028-access-token-role-claim.md); console adaptation is next) → #4 Stage 4
+  deployment, last. This resolves Stage 5's floating position (before Stage 4) and pulls the
+  independent pagination debt ahead of both.
 - **File visibility + media-type expansion decided 2026-07-31** (design gate,
   [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)): restating the project's
   founding goals surfaced two gaps — every stored file is served publicly with no
@@ -234,11 +236,12 @@ item carries its execution number in its own row.
    were deliberately left out of scope — the ROADMAP item named pagination only — and
    remain open for Stage 5 if the admin console needs them. **Execution #3 is now next.**
 3. **Stage 5 — operational surface (admin console)**, sequenced **before Stage 4**:
-   role-delivery decision (blocks the rest) → adapt the imported console →
-   moderation-existence decision → resolve the duplicate admin surface. Rationale
-   (already recorded in the Stage 5 note): a deployed system whose privilege
-   hierarchy is operable only through Swagger is hard to run, so the operational
-   surface precedes deployment.
+   ~~role-delivery decision (blocked the rest)~~ (✅ done 2026-08-05,
+   [ADR 0028](ADR/0028-access-token-role-claim.md) — access token gains a `role` claim) →
+   **adapt the imported console — now next** → moderation-existence decision → resolve the
+   duplicate admin surface. Rationale (already recorded in the Stage 5 note): a deployed
+   system whose privilege hierarchy is operable only through Swagger is hard to run, so the
+   operational surface precedes deployment.
 4. **Stage 4 — production transition (deployment)**, sequenced **last**: AWS
    deployment → container/deploy hardening → VOD access control → storage
    port-adapter (conditional) → performance/capacity criteria.
@@ -325,11 +328,12 @@ hierarchy can only be operated through Swagger is hard to run in production.
 argument won: the operational surface precedes deployment. Stage 5's internal order is
 role-delivery → adapt console → moderation decision → resolve duplicate surface; its
 `GET /user` pagination row was pulled out to execution #2 as an early quick win — **done
-2026-08-05**, see the row below.
+2026-08-05**, see the row below. The role-delivery row itself is also **done, 2026-08-05**
+([ADR 0028](ADR/0028-access-token-role-claim.md)) — console adaptation is next.
 
 | Task | Rationale / dependencies |
 |---|---|
-| **How the client learns a user's role** (backend decision — **blocks the rest of this stage**) | The access-token payload is `{ sub, type }` — there is deliberately **no `role` claim** ([ADR 0002](ADR/0002-dual-secret-token-pair.md)), so a client cannot know its own role today. Any admin UI needs it for route gating. Two shapes to decide between: a `role` claim added to the access token (fast, but puts an authorization fact in a token that outlives a demotion — note `updateRole` already nulls `refreshTokenHash` to bound that window), or a request-based lookup (`GET /user/:id`, or a new `GET /auth/me`). Needs its own ADR amending ADR 0002; the imported console currently assumes the claim exists and therefore rejects every admin. |
+| ~~**How the client learns a user's role**~~ (backend decision — **done 2026-08-05**, [ADR 0028](ADR/0028-access-token-role-claim.md)) | Chose the access-token `role` claim over a request-based lookup (`GET /user/:id` or a new `GET /auth/me`): matches the frontend's existing client-side JWT-decode pattern (no new round trip), and the one real cost — a demoted user's *decoded* role can lag up to the access-token TTL — never becomes a live privilege, since `RolesGuard`/`AuthUser` still source `role` from `JwtStrategy.validate`'s per-request DB read, never from the token. `Payload` gains `role?: UserRole` (access tokens only); `issueToken`/`issueTokenPair` widen to `Pick<UserEntity, 'id' \| 'role'>`. Amends [ADR 0002](ADR/0002-dual-secret-token-pair.md). **Unblocks the row below.** |
 | Adapt the imported `admin/` console | Rewrite the [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md) import from the Chat Project's API to this one, using that ADR's verified backlog as the brief. **Start with the role-management slice** — `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`, `GET /audit-log`, and `POST /auth/signin` are already the right routes and the rank values `0/1/2` already match `ROLE_RANK`, so that part is route-level correction, not redesign. The chat-domain pages (`rooms-page`, presence/nickname widgets) and the whole Apollo/`/graphql` layer are deletions. Depends on the row above. **If the adapted user-list page needs to filter/sort by email or role, see the `GET /user` search/sort follow-up in section 7** — `GetUsersDto` currently has no field for it (execution #2 shipped take/skip only). |
 | ~~`GET /user` pagination~~ **(execution #2 — pulled forward from Stage 5, done 2026-08-05)** | Closed the standing Never Do Group 2 violation (`findAll()` bound no `@Query()` and returned `findAndCount()` over every user). New `GetUsersDto` (`take`/`skip`, mirroring `GetFilesDto`); `UserService.findAll` sorts `createdAt DESC, id DESC` for deterministic pages; response kept the existing `[rows, total]` tuple shape (`GET /file` parity, no new ADR). Search/sort were left out of this pass' scope — open for the admin console task below if it needs them. |
 | Resolve the duplicate admin surface | Delete whichever of the two loses: `frontend/src/features/admin/AdminPage.tsx` (ADR 0010's route section) or the standalone `admin/` app (ADR 0022). Deliberately decided **during** this stage, not before it — how much of the import survives adaptation is the input to the choice. Tracked as an open decision in section 7. |

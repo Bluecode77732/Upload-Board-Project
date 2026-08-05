@@ -100,7 +100,17 @@ export class AuthService {
     return user;
   }
 
-  async issueToken(user: Pick<UserEntity, 'id'>, isRefreshToken: boolean) {
+  // 목적: sub/type(+role)을 실은 서명된 JWT 한 장을 발급한다.
+  // 이유: 클라이언트가 자기 role을 알려면(admin UI 라우트 게이팅) 매 요청마다 별도 조회를 시키는
+  //       대신 이미 디코드하고 있는 액세스 토큰에 실어 보내는 편이 왕복을 줄인다(ADR 0028).
+  // 방법: role은 액세스 토큰에만 싣는다 — refresh 토큰 payload는 최소로 유지하고, RolesGuard/
+  //       AuthUser는 이 클레임을 절대 읽지 않고 JwtStrategy.validate의 매 요청 DB 조회 결과만
+  //       신뢰하므로, 여기 실리는 role은 순수 광고용(advisory)이며 강등 후 최대 access-token TTL
+  //       만큼만 클라이언트 UI에 stale하게 보일 뿐 서버 판정에는 영향이 없다.
+  async issueToken(
+    user: Pick<UserEntity, 'id' | 'role'>,
+    isRefreshToken: boolean,
+  ) {
     const refreshSecret = this.configService.getOrThrow<string>(
       'REFRESH_TOKEN_SECRET',
     );
@@ -113,7 +123,7 @@ export class AuthService {
       type: isRefreshToken ? 'refresh' : 'access',
       // jti makes every refresh token unique — same-second issuance would
       // otherwise produce identical signatures, blinding reuse detection.
-      ...(isRefreshToken ? { jti: randomUUID() } : {}),
+      ...(isRefreshToken ? { jti: randomUUID() } : { role: user.role }),
     };
 
     return this.jwtService.signAsync(payload, {
@@ -157,9 +167,11 @@ export class AuthService {
     return createHash('sha256').update(token).digest('hex');
   }
 
-  // Issues a fresh access/refresh pair and anchors the refresh token server-side
-  // (single write — plain repository call, no transaction needed).
-  async issueTokenPair(user: Pick<UserEntity, 'id'>) {
+  // 목적: 새 액세스/리프레시 토큰 쌍을 발급하고 리프레시 토큰을 서버 측에 앵커링한다.
+  // 이유: issueToken이 액세스 토큰에 role을 실으려면(ADR 0028) 호출자가 id뿐 아니라 role도 쥐고
+  //       있어야 한다 — 기존에는 id만 요구했다.
+  // 방법: 단일 쓰기(트랜잭션 불필요)로 refreshTokenHash를 갱신한 뒤 두 토큰을 반환한다.
+  async issueTokenPair(user: Pick<UserEntity, 'id' | 'role'>) {
     const refreshToken = await this.issueToken(user, true);
     const accessToken = await this.issueToken(user, false);
 

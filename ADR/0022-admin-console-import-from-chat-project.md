@@ -285,3 +285,12 @@ Verified against this repository's code on 2026-07-30, not inferred. Each row is
   Rejected outright. An undocumented copy of another project's app is the exact failure the
   [chat-remnant removal plan](../CHAT-REMNANT-REMOVAL-PLAN.md) was written after: `CLAUDE.md`
   itself entered this repo that way, and the cleanup cost far more than the import saved.
+
+> **Note added 2026-08-05** — two rows of the modification backlog above are now resolved.
+> **`GET /user` pagination** landed 2026-08-05 as ROADMAP execution order #2 (pulled forward
+> from Stage 5, no new ADR — it reuses the [ADR 0021](0021-list-query-search-filter-sort.md)
+> read-layer pattern via a new `GetUsersDto`). **Role source** — the "backend question first"
+> this ADR flagged — is answered by [ADR 0028](0028-access-token-role-claim.md): the access
+> token now carries an optional `role` claim, so the imported console's
+> `jwtDecode<{ sub, role }>(accessToken)` assumption holds against this API. Both were Stage 5
+> blockers; adapting the console itself (this ADR's backlog, still unstarted) can now proceed.

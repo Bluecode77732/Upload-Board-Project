@@ -36,6 +36,13 @@
 > httpOnly 쿠키로 이동하고 `parseBearerToken`의 순수 검증 코어는
 > `verifyToken`으로 존속한다.
 
+> 2026-08-05: `Payload` 형태는 [ADR 0028](0028-access-token-role-claim.ko.md)로
+> 개정되었다 — 액세스 토큰(리프레시 토큰은 아님)이 이제 선택적 `role: UserRole`
+> 클레임을 실어, 클라이언트가 추가 요청 없이 자기 role을 읽을 수 있다. 이중
+> 시크릿 + `type` 클레임 결정과 `verifyToken`의 시크릿+type 검사는 불변이며,
+> 새 클레임은 클라이언트만 읽고 `RolesGuard`/`AuthUser`는 절대 참조하지 않는다 —
+> 이들은 계속 매 요청마다 살아있는 DB 조회에서 `role`을 얻는다.
+
 ## 결과
 
 - 리프레시→액세스 재사용이 구조적으로 불가능합니다: 잘못된 시크릿은 검증에 실패하고,

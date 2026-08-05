@@ -13,6 +13,23 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- **Access token carries a `role` claim** (ROADMAP execution order #3, Stage 5's blocking
+  first row, [ADR 0028](ADR/0028-access-token-role-claim.md); amends
+  [ADR 0002](ADR/0002-dual-secret-token-pair.md)) — closes the gap ADR 0022's modification
+  backlog recorded: the imported `admin/` console decodes
+  `jwtDecode<{ sub, role }>(accessToken)` to gate its own routes, but this API's access-token
+  payload was `{ sub, type }` with no `role`, so the console rejected every admin. `Payload`
+  (`backend/auth/interface/payload-interface.ts`) gains an optional `role?: UserRole`, set only
+  on access tokens (refresh tokens keep their existing minimal shape); `AuthService.issueToken`
+  and `issueTokenPair` widen from `Pick<UserEntity, 'id'>` to `Pick<UserEntity, 'id' | 'role'>`.
+  Chosen over a request-based lookup (`GET /user/:id` or a new `GET /auth/me`) because it
+  matches a pattern already in production — the frontend already decodes the access token
+  client-side for `sub` — and adds no round trip on app load or silent refresh. **No change to
+  server-side enforcement**: `RolesGuard`/`AuthUser` still source `role` from
+  `JwtStrategy.validate`'s live per-request database read, never from the token payload, so a
+  stale claim after a demotion (bounded by the access-token TTL — locally 180s) can only mislead
+  client-side UI, never bypass a check. No schema change, no migration, no new endpoint, no new
+  error code.
 - **`GET /user` pagination** (execution order #2, pulled forward from
   [Stage 5](ROADMAP.md#stage-5--operational-surface-admin-console--added-2026-07-30)) —
   `UserController.findAll` bound **no `@Query()` at all**, and `UserService.findAll()` returned
