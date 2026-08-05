@@ -107,6 +107,13 @@ already re-derives it live regardless, is optimizing a property nothing depends 
   (or Passport's validated equivalent), so this is a compile-time-only change everywhere
   except `AuthController.userLocalLoginPassport`'s locally-declared request type, which
   widened to match.
+- **The `id`-only signature's documented allowance — re-tokenizing from a bare JWT payload
+  (`{ id: payload.sub }`) with no DB round trip ([ADR 0002](0002-dual-secret-token-pair.md))
+  — is closed.** No current call site ever exercised it (`signIn`, `rotateRefreshToken`, and
+  `userLocalLoginPassport` all already hold a full user from a prior DB read), so this is a
+  latent capability lost, not a behavior change. A future caller wanting to re-tokenize from a
+  bare `sub` alone would need a `role` from somewhere else first — the DB read this ADR was
+  written to avoid paying elsewhere.
 - **No change to server-side authorization.** `RolesGuard`/`AuthUser` continue to read
   `request.user.role`, sourced fresh from `JwtStrategy.validate`'s per-request database
   lookup. The access token's `role` claim is never consulted by any guard — it exists purely

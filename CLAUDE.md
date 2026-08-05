@@ -661,9 +661,9 @@ effect), choose the pattern explicitly from this table — state the choice and 
   token even though both are structurally valid JWTs; the stored hash makes a
   rotated-out token's replay detectable and the session revocable.
 - Goal: any new token consumer verifies both the secret and the `type` claim — never
-  one without the other. `issueToken` takes `Pick<UserEntity, 'id'>` so a bare JWT
-  payload (`{ id: payload.sub }`) can be re-tokenized without a DB round trip — keep
-  that signature. New refresh-token consumers must also preserve the hash-anchor
+  one without the other. `issueToken` takes `Pick<UserEntity, 'id' | 'role'>` (widened
+  from `id`-only by ADR 0028 so the access-token branch can embed `role`) — keep that
+  signature. New refresh-token consumers must also preserve the hash-anchor
   contract (`issueTokenPair` stores, `rotateRefreshToken` compares, `signOut` clears).
 
 ### Boundary Validation & Response Shaping
@@ -702,7 +702,9 @@ Do not suggest alternatives to these decisions without explicit request.
 - Registration & sign-in: `Authorization: Basic base64(email:password)` header —
   parsed by `parseBasicToken`, not body DTOs
 - Token pair: accessToken + refreshToken, separate secrets, separate expiry env vars
-  (`*_EXPIRES_IN`, numeric); payload shape `{ sub: userId, type: 'access' | 'refresh' }`
+  (`*_EXPIRES_IN`, numeric); payload shape `{ sub: userId, type: 'access' | 'refresh' }`,
+  plus an access-token-only `role` claim (ADR 0028) so a client can read its own role
+  without an extra request — `RolesGuard`/`AuthUser` never read this claim themselves
 - Guards: `JwtAuthGuard` (Passport strategy name `"jwt-auth-guard"`) protects all
   non-auth controllers at class level; `LocalAuthGuard` (`"local-auth-guard"`) exists
   for `POST /auth/signin/local` only

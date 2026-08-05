@@ -103,6 +103,13 @@ UI 전용 값을 최신으로 유지하려고 앱 로드마다 요청 비용을 
   `UserEntity`(혹은 Passport가 검증한 동등물)를 쥐고 있었으므로,
   `AuthController.userLocalLoginPassport`의 지역 선언 요청 타입을 맞춰 넓힌 것을 빼면 컴파일
   타임에서만 일어나는 변경이다.
+- **`id`뿐이던 시그니처가 문서로 남겨 두었던 여지 — 순수 JWT payload(`{ id: payload.sub }`)만으로
+  DB 왕복 없이 재토큰화하는 것([ADR 0002](0002-dual-secret-token-pair.ko.md)) — 은 이제 막힌다.**
+  현재 어떤 호출부도 이를 실제로 쓴 적이 없다(`signIn`, `rotateRefreshToken`,
+  `userLocalLoginPassport` 모두 이미 앞선 DB 조회로 얻은 완전한 user를 쥐고 있다)는 점에서, 이는
+  동작 변경이 아니라 잠재적으로만 존재하던 여지가 사라진 것이다. 훗날 순수 `sub`만으로
+  재토큰화하려는 호출자가 생긴다면, 어딘가에서 `role`을 먼저 구해야 하는데 — 그것이 바로 이
+  ADR이 다른 곳에서 치르지 않게 하려던 그 DB 조회다.
 - **서버 측 인가에는 변경이 없다.** `RolesGuard`/`AuthUser`는 계속 `JwtStrategy.validate`의
   매 요청 DB 조회에서 나온 `request.user.role`을 읽는다. 액세스 토큰의 `role` 클레임은 어떤
   가드도 참조하지 않는다 — 오직 클라이언트가 읽으라고만 존재한다.
