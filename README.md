@@ -121,7 +121,12 @@ All endpoints except `/auth/*` require a Bearer access token.
 
 **User** — user creation is `POST /auth/register`; there is no `POST /user`.
 Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.md))
-- `GET /user` — list users (admin only)
+- `GET /user` — list users (admin only). `take` (1–100, default 20) and `skip` (default 0)
+  paginate, sorted `createdAt DESC`; an undeclared query param is rejected as 400
+  `VALIDATION_FAILED` rather than silently ignored — the global `ValidationPipe`'s
+  `forbidNonWhitelisted` treats a typo like `?orderBy=email` as an error, the same strict-input
+  stance `GET /file` already takes ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)).
+  Response is a `[users, totalCount]` tuple, matching `GET /file`
 - `GET /user/:id` — get a user
 - `PATCH /user/:id` — update a user (self or admin)
 - `PATCH /user/:id/role` — assign a role (superadmin only; the last superadmin cannot be demoted)

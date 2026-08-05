@@ -13,6 +13,19 @@
 ## [Unreleased]
 
 ### 추가
+- **`GET /user` 페이지네이션** (실행순서 #2, [Stage 5](ROADMAP.ko.md#stage-5--운영-화면-admin-콘솔--2026-07-30-추가)에서
+  앞당김) — `UserController.findAll`은 `@Query()`를 전혀 받지 않았고, `UserService.findAll()`은
+  단순 `findAndCount()`로 전체 행을 반환하고 있었다 — admin 콘솔과 무관하게 갚아야 할 Never Do
+  Group 2 위반. 새 `GetUsersDto`(`backend/user/dto/get-users.dto.ts`)는 `GetFilesDto`의
+  `take`(1–100, 기본 20)/`skip`(≥0, 기본 0) 경계를 그대로 미러한다([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)
+  패턴 재사용, 별도 ADR 불필요). 응답은 기존 `[rows, total]` 튜플 형태를 유지한다 — `findAll()`이
+  이미 `findAndCount()` 튜플을 반환하고 있었으므로 이번 변경은 순수 페이지네이션 적용이지 계약
+  변경이 아니다 — `GET /file`과 형태를 맞춰 두 목록 엔드포인트의 일관성을 유지한다. 정렬은
+  `createdAt DESC, id DESC`(타이브레이커, `GET /file`과 동일)로 내부 고정해 페이지 경계를
+  결정적으로 만든다. 검색/정렬은 이번 범위에서 쿼리 파라미터로 노출하지 않는다 — ROADMAP 항목명이
+  페이지네이션만 지칭하며, 검색/정렬이 실제로 필요해지면 Stage 5 admin 콘솔 작업에서 열어둔다.
+  admin 전용 가드(`RolesGuard` + `@Roles(admin)`)와 `ClassSerializerInterceptor`(password·
+  `refreshTokenHash` 제외)는 변경 없음. 스키마 변경, 새 에러 코드, 마이그레이션 없음.
 - **파일 가시성 + 미디어 타입 확장 — 설계 게이트, 아직 코드 없음**
   ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)) — 프로젝트의 네 창립 목표를
   다시 정리하니 의도와 실제 코드 사이 공백 둘이 드러났다: 저장된 모든 파일이 공개로만 서빙되어

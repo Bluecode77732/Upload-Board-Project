@@ -85,10 +85,10 @@ item below lands as its own dedicated, designed change
   first row — how a client learns its own role — is a backend decision that blocks the rest.
   It does **not** depend on Stage 4 and may run before it.
 - **Execution order for the remaining work fixed 2026-07-31** (see section 6 >
-  Execution order): ~~#1 board comment module~~ (✅ done 2026-07-31) → **#2 `GET /user`
-  pagination — now next** (pulled forward from Stage 5) → #3 Stage 5 admin surface →
-  #4 Stage 4 deployment, last. This resolves Stage 5's floating position (before Stage 4)
-  and pulls the independent pagination debt ahead of both.
+  Execution order): ~~#1 board comment module~~ (✅ done 2026-07-31) → ~~#2 `GET /user`
+  pagination~~ (✅ done 2026-08-05, pulled forward from Stage 5) → **#3 Stage 5 admin
+  surface — now next** → #4 Stage 4 deployment, last. This resolves Stage 5's floating
+  position (before Stage 4) and pulls the independent pagination debt ahead of both.
 - **File visibility + media-type expansion decided 2026-07-31** (design gate,
   [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)): restating the project's
   founding goals surfaced two gaps — every stored file is served publicly with no
@@ -227,9 +227,12 @@ item carries its execution number in its own row.
    [ADR 0024](ADR/0024-account-cascade-fk-refusal.md), which left the account-cascade
    delete order untouched, so the comment delete slotted in ahead of posts without
    rewriting it. **Execution #2 is now the next dedicated task.**
-2. **`GET /user` pagination** (pulled forward from Stage 5) — an independent Never
-   Do Group 2 debt, owed regardless of the console; taken as an early quick win and
-   as the read-layer precursor the admin user list will need.
+2. ~~**`GET /user` pagination**~~ (pulled forward from Stage 5) — ✅ done 2026-08-05.
+   New `GetUsersDto` (`take` 1–100 default 20, `skip` ≥0 default 0) mirrors `GetFilesDto`;
+   `UserService.findAll` sorts `createdAt DESC, id DESC` for deterministic pages; response
+   stays the existing `[rows, total]` tuple (`GET /file` shape, no new ADR). Search/sort
+   were deliberately left out of scope — the ROADMAP item named pagination only — and
+   remain open for Stage 5 if the admin console needs them. **Execution #3 is now next.**
 3. **Stage 5 — operational surface (admin console)**, sequenced **before Stage 4**:
    role-delivery decision (blocks the rest) → adapt the imported console →
    moderation-existence decision → resolve the duplicate admin surface. Rationale
@@ -321,13 +324,14 @@ hierarchy can only be operated through Swagger is hard to run in production.
 **Resolved 2026-07-31 — Stage 5 runs before Stage 4** (see Execution order above). The soft
 argument won: the operational surface precedes deployment. Stage 5's internal order is
 role-delivery → adapt console → moderation decision → resolve duplicate surface; its
-`GET /user` pagination row was pulled out to execution #2 as an early quick win.
+`GET /user` pagination row was pulled out to execution #2 as an early quick win — **done
+2026-08-05**, see the row below.
 
 | Task | Rationale / dependencies |
 |---|---|
 | **How the client learns a user's role** (backend decision — **blocks the rest of this stage**) | The access-token payload is `{ sub, type }` — there is deliberately **no `role` claim** ([ADR 0002](ADR/0002-dual-secret-token-pair.md)), so a client cannot know its own role today. Any admin UI needs it for route gating. Two shapes to decide between: a `role` claim added to the access token (fast, but puts an authorization fact in a token that outlives a demotion — note `updateRole` already nulls `refreshTokenHash` to bound that window), or a request-based lookup (`GET /user/:id`, or a new `GET /auth/me`). Needs its own ADR amending ADR 0002; the imported console currently assumes the claim exists and therefore rejects every admin. |
-| Adapt the imported `admin/` console | Rewrite the [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md) import from the Chat Project's API to this one, using that ADR's verified backlog as the brief. **Start with the role-management slice** — `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`, `GET /audit-log`, and `POST /auth/signin` are already the right routes and the rank values `0/1/2` already match `ROLE_RANK`, so that part is route-level correction, not redesign. The chat-domain pages (`rooms-page`, presence/nickname widgets) and the whole Apollo/`/graphql` layer are deletions. Depends on the row above. |
-| `GET /user` pagination **(execution #2 — pulled forward from Stage 5, 2026-07-31)** | The admin user list needs it, and the endpoint currently binds **no `@Query()` at all** — `findAll()` returns `findAndCount()` over every user. That is a standing violation of this project's own pagination rule ([CLAUDE.md](CLAUDE.md) > Never Do Group 2), so it is owed regardless of the console — hence pulled ahead of the rest of Stage 5 as an early quick win. Extend the `GetFilesDto` / [ADR 0021](ADR/0021-list-query-search-filter-sort.md) read-layer pattern rather than inventing a second one. |
+| Adapt the imported `admin/` console | Rewrite the [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md) import from the Chat Project's API to this one, using that ADR's verified backlog as the brief. **Start with the role-management slice** — `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`, `GET /audit-log`, and `POST /auth/signin` are already the right routes and the rank values `0/1/2` already match `ROLE_RANK`, so that part is route-level correction, not redesign. The chat-domain pages (`rooms-page`, presence/nickname widgets) and the whole Apollo/`/graphql` layer are deletions. Depends on the row above. **If the adapted user-list page needs to filter/sort by email or role, see the `GET /user` search/sort follow-up in section 7** — `GetUsersDto` currently has no field for it (execution #2 shipped take/skip only). |
+| ~~`GET /user` pagination~~ **(execution #2 — pulled forward from Stage 5, done 2026-08-05)** | Closed the standing Never Do Group 2 violation (`findAll()` bound no `@Query()` and returned `findAndCount()` over every user). New `GetUsersDto` (`take`/`skip`, mirroring `GetFilesDto`); `UserService.findAll` sorts `createdAt DESC, id DESC` for deterministic pages; response kept the existing `[rows, total]` tuple shape (`GET /file` parity, no new ADR). Search/sort were left out of this pass' scope — open for the admin console task below if it needs them. |
 | Resolve the duplicate admin surface | Delete whichever of the two loses: `frontend/src/features/admin/AdminPage.tsx` (ADR 0010's route section) or the standalone `admin/` app (ADR 0022). Deliberately decided **during** this stage, not before it — how much of the import survives adaptation is the input to the choice. Tracked as an open decision in section 7. |
 | Decide whether moderation actions exist at all | The import calls `POST /user/:id/ban`, `/unban`, and `/force-logout`, and colors audit actions (`USER_BANNED`, `USER_MUTED`, `USER_UNBAN`, `FORCE_LOGOUT`) that **this project never emits** — `AUDIT_ACTIONS` is exactly `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`. Default answer is "no": delete them, since a video-upload board has no stated moderation requirement (YAGNI). Building any of them is new backend surface needing its own ADR — not a side effect of adapting a UI. |
 
@@ -525,6 +529,21 @@ role-delivery → adapt console → moderation decision → resolve duplicate su
   each `이유` line pointing at its governing ADR. Not a drive-by: a repo-wide comment sweep is
   exactly the kind of change Scope Discipline keeps out of feature commits, so it lands as its
   own task once the staged work is done.
+- `GET /user` search/sort (recorded 2026-08-05, as a follow-up from execution #2's
+  `GET /user` pagination task, deferred to
+  [Stage 5](#stage-5--operational-surface-admin-console--added-2026-07-30)) —
+  the pagination task deliberately shipped **take/skip only**: the ROADMAP item named
+  pagination specifically, and `GetFilesDto`'s `search`/`sortBy`/`order` surface
+  ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) was not mirrored onto
+  `GetUsersDto`. **Trigger for revisiting**: Stage 5's "adapt the imported `admin/` console"
+  row — the imported user-list page (`ADR 0022` backlog: `GET /user?page&take&sort&sortBy&search&status`)
+  will want to filter/sort the account list by email or role, and today's `GetUsersDto` has no
+  field for it. If that need materializes, extend `GetUsersDto` with the same
+  `search`/`sortBy`/`order` shape `GetFilesDto` already uses (email `ILIKE`, a
+  `USER_SORT_FIELDS` tuple keyed the same way `FILE_SORT_FIELDS` is) rather than inventing a
+  second read-layer pattern — no new ADR needed, same as the pagination task. Not scheduled
+  as its own task: it is a plausible extension of Stage 5's console-adaptation row, not an
+  independent debt like pagination was.
 
 ## 8. Advisory notes
 

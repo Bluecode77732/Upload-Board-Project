@@ -121,7 +121,13 @@ docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 �
 
 **사용자** — 사용자 생성은 `POST /auth/register`이며 `POST /user`는 없습니다.
 역할: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md))
-- `GET /user` — 사용자 목록 (admin만)
+- `GET /user` — 사용자 목록 (admin만). `take`(1–100, 기본 20), `skip`(기본 0)로
+  페이지네이션하며 `createdAt DESC`로 정렬됩니다; 선언되지 않은 쿼리 파라미터는 조용히
+  무시되지 않고 400 `VALIDATION_FAILED`로 거부됩니다 — 전역 `ValidationPipe`의
+  `forbidNonWhitelisted`가 `?orderBy=email`같은 오타를 오류로 취급하는 것으로, `GET /file`이
+  이미 취하고 있는 것과 동일한 엄격 입력 방침입니다
+  ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)). 응답은 `GET /file`과 동일한
+  `[users, totalCount]` 튜플입니다
 - `GET /user/:id` — 사용자 조회
 - `PATCH /user/:id` — 사용자 수정 (본인 또는 admin)
 - `PATCH /user/:id/role` — 역할 부여 (superadmin만; 마지막 superadmin은 강등 불가)

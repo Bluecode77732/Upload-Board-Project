@@ -13,6 +13,22 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- **`GET /user` pagination** (execution order #2, pulled forward from
+  [Stage 5](ROADMAP.md#stage-5--operational-surface-admin-console--added-2026-07-30)) —
+  `UserController.findAll` bound **no `@Query()` at all**, and `UserService.findAll()` returned
+  every row via a bare `findAndCount()`; a standing Never Do Group 2 violation, owed regardless
+  of the admin console. New `GetUsersDto` (`backend/user/dto/get-users.dto.ts`) mirrors
+  `GetFilesDto`'s `take` (1–100, default 20) / `skip` (≥0, default 0) boundary
+  ([ADR 0021](ADR/0021-list-query-search-filter-sort.md) pattern, no new ADR needed). The
+  response stays the existing `[rows, total]` tuple shape — `findAll()` already returned a
+  `findAndCount()` tuple, so this is a pure pagination fix, not a contract change — matching
+  `GET /file`'s tuple so the two list endpoints stay consistent. Sort order is fixed internally
+  to `createdAt DESC, id DESC` (a tiebreaker, same as `GET /file`) so page boundaries are
+  deterministic; search/sort are **not** exposed as query params in this pass — the ROADMAP item
+  names pagination only, and search/sort remain open for the Stage 5 admin console task if it
+  turns out to need them. Admin-only guard (`RolesGuard` + `@Roles(admin)`) and
+  `ClassSerializerInterceptor` (password/`refreshTokenHash` exclusion) are unchanged. No schema
+  change, no new error code, no migration.
 - **File visibility + media-type expansion — design gate, no code yet**
   ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)) — restating the project's
   four founding goals surfaced two gaps between intent and shipped code: every stored file is

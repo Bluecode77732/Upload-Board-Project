@@ -16,6 +16,7 @@ import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { DeleteUserQueryDto } from './dto/delete-user-query.dto';
+import { GetUsersDto } from './dto/get-users.dto';
 import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'backend/auth/guard/jwt-auth.guard';
 import { RolesGuard } from 'backend/auth/guard/roles.guard';
@@ -36,8 +37,25 @@ export class UserController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.admin)
-  findAll() {
-    return this.userService.findAll();
+  @ApiResponse({
+    status: 200,
+    description:
+      'A [users, totalCount] tuple. Defaults to the 20 newest accounts (createdAt DESC); take/skip paginate (ROADMAP execution order #2).',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'VALIDATION_FAILED — take is out of 1–100, skip is negative, or the request carries a ' +
+      "query parameter GetUsersDto doesn't declare (e.g. a typo like ?orderBy=email). The " +
+      'global ValidationPipe runs forbidNonWhitelisted, so an unrecognized parameter is ' +
+      'rejected rather than silently ignored — the same strict-input stance GET /file already ' +
+      'takes (ADR 0021).',
+  })
+  // 목적: 검증된 페이지네이션 조건을 서비스에 그대로 넘긴다.
+  // 이유: GetFilesDto/GetUsersDto 패턴을 따라 컨트롤러가 목록 조회 조건을 직접 해석하지 않게 한다.
+  // 방법: @Query()로 바인딩된 GetUsersDto를 그대로 전달한다.
+  findAll(@Query() query: GetUsersDto) {
+    return this.userService.findAll(query);
   }
 
   @Get(':id')

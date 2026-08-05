@@ -120,6 +120,22 @@ describe('UserService', () => {
     jest.clearAllMocks();
   });
 
+  describe('findAll', () => {
+    it('should forward take/skip and sort deterministically by createdAt DESC, id DESC', async () => {
+      const rows = [{ id: 2 }, { id: 1 }];
+      mockUserRepository.findAndCount.mockResolvedValue([rows, 2]);
+
+      const result = await userService.findAll({ take: 10, skip: 5 });
+
+      expect(mockUserRepository.findAndCount).toHaveBeenCalledWith({
+        take: 10,
+        skip: 5,
+        order: { createdAt: 'DESC', id: 'DESC' },
+      });
+      expect(result).toEqual([rows, 2]);
+    });
+  });
+
   describe('update', () => {
     it('should update a user.', async () => {
       const updateUserDto: UpdateUserDto = {

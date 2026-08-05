@@ -79,10 +79,10 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   — 클라이언트가 자기 역할을 어떻게 아는가 — 이 나머지를 막는 백엔드 결정이다.
   Stage 4에 의존하지 **않으며** 그보다 먼저 진행될 수도 있다.
 - **남은 작업의 실행 순번을 2026-07-31에 고정했다**(6절 > 실행 순번 참조):
-  ~~#1 게시판 comment 모듈~~(✅ 2026-07-31 완료) → **#2 `GET /user` 페이지네이션 — 이제 다음
-  차례**(Stage 5에서 앞당김) →
-  #3 Stage 5 admin 화면 → #4 Stage 4 배포(마지막). 이로써 Stage 5의 부동 위치가
-  Stage 4 앞으로 확정되고, 독립적인 페이지네이션 부채가 둘보다 앞으로 당겨진다.
+  ~~#1 게시판 comment 모듈~~(✅ 2026-07-31 완료) → ~~#2 `GET /user` 페이지네이션~~(✅
+  2026-08-05 완료, Stage 5에서 앞당김) →
+  **#3 Stage 5 admin 화면 — 이제 다음 차례** → #4 Stage 4 배포(마지막). 이로써 Stage 5의
+  부동 위치가 Stage 4 앞으로 확정되고, 독립적인 페이지네이션 부채가 둘보다 앞으로 당겨진다.
 - **파일 가시성 + 미디어 타입 확장을 2026-07-31에 결정했다**(설계 게이트,
   [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)): 프로젝트 창립 목표를
   다시 정리하니 공백 둘이 드러났다 — 저장된 모든 파일이 공개로만 서빙되어 비공개/링크공유
@@ -209,9 +209,13 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
    게이트였던 post↔file 불변식 gap을 [ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)로
    먼저 정리했고 계정 연쇄의 삭제 순서를 건드리지 않았으므로, 댓글 삭제가 게시글 앞에
    그대로 끼워 넣어졌다. **이제 실행 #2가 다음 전용 작업이다.**
-2. **`GET /user` 페이지네이션** (Stage 5에서 앞당김) — 콘솔과 무관하게 갚아야 할
-   독립적인 Never Do Group 2 부채이며, admin 사용자 목록이 필요로 할 조회 계층의
-   선행이기도 해서 조기 빠른수정으로 당긴다.
+2. ~~**`GET /user` 페이지네이션**~~ (Stage 5에서 앞당김) — ✅ 2026-08-05 완료.
+   새 `GetUsersDto`(`take` 1–100 기본 20, `skip` ≥0 기본 0)가 `GetFilesDto`를 그대로
+   미러하고, `UserService.findAll`은 `createdAt DESC, id DESC`로 정렬해 페이지 경계를
+   결정적으로 만든다. 응답은 기존 `[rows, total]` 튜플 형태를 유지(`GET /file`과 형태
+   일치, 별도 ADR 불필요). 검색/정렬은 이번 범위에서 의도적으로 제외 — ROADMAP 항목명이
+   페이지네이션만 지칭했고, admin 콘솔 작업에서 필요해지면 그때 연다. **이제 실행 #3이
+   다음 차례다.**
 3. **Stage 5 — 운영 화면 (admin 콘솔)**, **Stage 4보다 앞에** 배치: 역할 전달 결정
    (나머지를 막음) → 이식 콘솔 적응 → 모더레이션 존재 여부 결정 → 중복 admin 화면
    정리. 근거(Stage 5 노트에 이미 기록): 권한 계층을 Swagger로만 운영할 수 있는 배포
@@ -299,13 +303,13 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 **2026-07-31 확정 — Stage 5를 Stage 4보다 먼저 진행한다**(위 실행 순번 참조). 그 "앞으로
 당길 근거"가 채택됐다: 운영 화면을 배포보다 앞세운다. Stage 5 내부 순서는 역할 전달 →
 콘솔 적응 → 모더레이션 결정 → 중복 화면 정리이며, `GET /user` 페이지네이션 행은 조기
-빠른수정으로 실행 #2에 빼냈다.
+빠른수정으로 실행 #2에 빼냈다 — **2026-08-05 완료**, 아래 행 참조.
 
 | 작업 | 근거 / 의존성 |
 |---|---|
 | **클라이언트가 사용자 역할을 어떻게 아는가** (백엔드 결정 — **이 단계의 나머지를 막는다**) | 액세스 토큰 페이로드는 `{ sub, type }`이며 `role` 클레임이 의도적으로 **없다**([ADR 0002](ADR/0002-dual-secret-token-pair.ko.md)). 그래서 클라이언트는 지금 자기 역할을 알 수 없는데, admin UI는 라우트 게이팅에 그것이 필요하다. 결정할 두 형태: 액세스 토큰에 `role` 클레임 추가(빠르지만 강등보다 오래 사는 토큰에 인가 사실을 싣는 셈 — 다만 `updateRole`이 이미 `refreshTokenHash`를 null로 만들어 그 창을 제한한다), 또는 요청 기반 조회(`GET /user/:id`, 혹은 신규 `GET /auth/me`). ADR 0002를 개정하는 자체 ADR이 필요하다. 이식된 콘솔은 현재 그 클레임이 있다고 가정하므로 모든 admin을 거부한다. |
-| 이식된 `admin/` 콘솔 적응 | [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의 이식본을 Chat Project API에서 이 API로 다시 쓴다. 그 ADR의 검증된 백로그가 작업 지시서다. **역할 관리 조각부터 시작한다** — `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`, `GET /audit-log`, `POST /auth/signin`은 이미 맞는 라우트이고 등급 값 `0/1/2`도 이미 `ROLE_RANK`와 일치하므로, 그 부분은 재설계가 아니라 라우트 수준 교정이다. 채팅 도메인 페이지(`rooms-page`, 접속/닉네임 위젯)와 Apollo/`/graphql` 계층 전체는 삭제다. 위 행에 의존. |
-| `GET /user` 페이지네이션 **(실행 #2 — Stage 5에서 앞당김, 2026-07-31)** | admin 사용자 목록에 필요하고, 이 엔드포인트는 현재 `@Query()`를 **전혀 바인딩하지 않는다** — `findAll()`이 전체 사용자에 대한 `findAndCount()`를 반환한다. 이는 이 프로젝트 자체 페이지네이션 규칙([CLAUDE.md](CLAUDE.md) > Never Do Group 2)을 상시 위반하는 상태이므로, 콘솔과 무관하게도 갚아야 할 빚이다 — 그래서 Stage 5 나머지보다 앞으로 당겨 조기 빠른수정으로 처리한다. 두 번째 패턴을 만들지 말고 `GetFilesDto` / [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)의 조회 계층 패턴을 확장한다. |
+| 이식된 `admin/` 콘솔 적응 | [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의 이식본을 Chat Project API에서 이 API로 다시 쓴다. 그 ADR의 검증된 백로그가 작업 지시서다. **역할 관리 조각부터 시작한다** — `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`, `GET /audit-log`, `POST /auth/signin`은 이미 맞는 라우트이고 등급 값 `0/1/2`도 이미 `ROLE_RANK`와 일치하므로, 그 부분은 재설계가 아니라 라우트 수준 교정이다. 채팅 도메인 페이지(`rooms-page`, 접속/닉네임 위젯)와 Apollo/`/graphql` 계층 전체는 삭제다. 위 행에 의존. **적응된 사용자 목록 화면이 email·역할로 필터/정렬해야 한다면 7절의 `GET /user` 검색/정렬 후속 항목을 참조** — `GetUsersDto`는 현재 그 필드가 없다(실행 #2는 take/skip만 배포). |
+| ~~`GET /user` 페이지네이션~~ **(실행 #2 — Stage 5에서 앞당김, 2026-08-05 완료)** | 상시 위반 상태였던 Never Do Group 2 문제를 해소했다(`findAll()`이 `@Query()` 없이 전체 사용자 `findAndCount()`를 반환하던 상태). 새 `GetUsersDto`(`take`/`skip`, `GetFilesDto` 미러); `UserService.findAll`은 `createdAt DESC, id DESC`로 정렬해 페이지 경계를 결정적으로 만든다; 응답은 기존 `[rows, total]` 튜플 형태 유지(`GET /file`과 일치, 별도 ADR 불필요). 검색/정렬은 이번 범위에서 제외 — 아래 admin 콘솔 작업에서 필요해지면 그때 연다. |
 | 중복된 admin 화면 정리 | 둘 중 지는 쪽을 삭제한다: `frontend/src/features/admin/AdminPage.tsx`(ADR 0010의 라우트 구역) 또는 독립 `admin/` 앱(ADR 0022). 이 단계 **이전이 아니라 진행 중에** 결정하도록 의도했다 — 이식본이 적응 후 얼마나 살아남는지가 그 선택의 입력값이다. 7절에 미결 사항으로 추적한다. |
 | 모더레이션 기능을 둘 것인지 결정 | 이식본은 `POST /user/:id/ban`, `/unban`, `/force-logout`을 호출하고, 이 프로젝트가 **절대 기록하지 않는** 감사 액션(`USER_BANNED`, `USER_MUTED`, `USER_UNBAN`, `FORCE_LOGOUT`)에 색을 지정한다 — `AUDIT_ACTIONS`는 정확히 `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`다. 기본 답은 "두지 않는다": 영상 업로드 게시판에 명시된 모더레이션 요구사항이 없으므로 삭제한다(YAGNI). 그중 하나라도 만드는 것은 자체 ADR이 필요한 신규 백엔드 표면이며, UI 적응의 부수 효과로 끼워 넣을 일이 아니다. |
 
@@ -483,6 +487,18 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   소급 추가하고, 각 `이유` 라인이 자기 지배 ADR을 가리키게 한다. 드라이브바이가 아니다:
   저장소 전역 주석 스윕이야말로 Scope Discipline이 기능 커밋에서 배제하는 종류의 변경이므로,
   단계별 작업이 끝난 뒤 자체 작업으로 착지한다.
+- `GET /user` 검색/정렬 (2026-08-05 기록, 실행 #2 `GET /user` 페이지네이션 작업의 후속으로
+  [Stage 5](#stage-5--운영-화면-admin-콘솔--2026-07-30-추가)로 미룸) — 페이지네이션 작업은
+  의도적으로 **take/skip만** 배포했다: ROADMAP 항목명이 페이지네이션만 지칭했고,
+  `GetFilesDto`의 `search`/`sortBy`/`order` 표면([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md))을
+  `GetUsersDto`에 미러링하지 않았다. **재검토 트리거**: Stage 5의 "이식된 `admin/` 콘솔 적응"
+  행 — 이식된 사용자 목록 화면(`ADR 0022` 백로그: `GET /user?page&take&sort&sortBy&search&status`)이
+  email이나 역할로 필터/정렬하길 원할 텐데, 오늘의 `GetUsersDto`에는 그 필드가 없다. 그 필요가
+  실제로 드러나면 두 번째 조회 계층 패턴을 새로 만들지 말고 `GetFilesDto`가 이미 쓰는
+  `search`/`sortBy`/`order` 형태(email `ILIKE`, `FILE_SORT_FIELDS`와 같은 방식으로 키를 둔
+  `USER_SORT_FIELDS` 튜플)로 `GetUsersDto`를 확장한다 — 페이지네이션 작업과 마찬가지로 별도
+  ADR 불필요. 자체 작업으로 일정 배정하지 않는다: 페이지네이션처럼 독립된 부채가 아니라
+  Stage 5의 콘솔-적응 행에서 나올 법한 확장 항목이다.
 
 ## 8. Advisory 노트
 

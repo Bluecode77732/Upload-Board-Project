@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { GetUsersDto } from './dto/get-users.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserEntity } from './entity/user.entity';
 import { DataSource, Repository } from 'typeorm';
@@ -35,8 +36,19 @@ export class UserService {
     private readonly commentService: CommentService,
   ) {}
 
-  async findAll() {
-    return this.userRepository.findAndCount();
+  // 목적: 관리자용 전체 유저 목록을 개수와 함께 반환한다.
+  // 이유: 기존 findAndCount()가 무제한으로 전체 테이블을 반환해 Never Do G2(목록 페이지네이션 필수)를
+  //       위반하고 있었다 — ROADMAP 실행순서 #2로 확정된 독립 부채.
+  // 방법: GetFilesDto와 동일한 take/skip 경계를 받고, createdAt DESC + id 타이브레이커로 고정 정렬해
+  //       페이지 경계가 결정적이게 한다(검색/정렬 파라미터는 이번 범위에서 제외 — ADR 0021과 달리 클라이언트
+  //       에 노출하지 않음).
+  async findAll(query: GetUsersDto): Promise<[UserEntity[], number]> {
+    const { take, skip } = query;
+    return this.userRepository.findAndCount({
+      take,
+      skip,
+      order: { createdAt: 'DESC', id: 'DESC' },
+    });
   }
 
   async findOne(id: number) {
