@@ -246,6 +246,24 @@ item carries its execution number in its own row.
    deployment → container/deploy hardening → VOD access control → storage
    port-adapter (conditional) → performance/capacity criteria.
 
+**Why #2 and #3 were pulled ahead of their nominal stage position** — three separate
+arguments, layered:
+
+- **Stage 5 as a whole precedes Stage 4** (2026-07-31): a deployed system whose privilege
+  hierarchy can only be operated through Swagger is hard to run in production, so the
+  operational surface goes before deployment rather than after it.
+- **`GET /user` pagination (#2) was pulled out ahead of the rest of Stage 5**, not just
+  ahead of Stage 4, for three independent reasons: it is a standing Never Do Group 2 debt
+  owed regardless of whether the admin console work ever happens (not entangled with it);
+  it is a small, self-contained early quick win; and it pre-builds the read-layer pattern
+  (`GetUsersDto`, mirroring `GetFilesDto`/[ADR 0021](ADR/0021-list-query-search-filter-sort.md))
+  the console's user list will eventually draw on.
+- **The role-delivery decision (#3) is not a "pulled forward" item at all** — it is Stage
+  5's own first row and its hard blocker: the imported console decodes
+  `jwtDecode<{ sub, role }>(accessToken)`, so console adaptation (Stage 5's next row)
+  cannot start until this is settled. It only *looks* pulled forward because #2 delayed
+  reaching it.
+
 This resolves Stage 5's "numbering is not dependency order" note in favor of Stage 5
 before Stage 4, and pulls the one independent debt item (#2) ahead of both. Within a
 stage, the internal dependency order in its table still holds.
