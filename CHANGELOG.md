@@ -13,6 +13,40 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- **`admin/` console adapted to this backend's real routes — role-management slice**
+  (ROADMAP Stage 5, fourth task; [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s
+  verified backlog as the brief, unblocked by the access-token `role` claim below) — the
+  imported Chat Project console targeted a numeric 2-tier role, an unpaginated
+  search/sort/status user list, a `userId`/date-range/CSV audit-log filter set, and
+  `ban`/`unban`/`force-logout` actions, none of which exist on this API. `auth.store.ts`'s
+  `role` is now the string `UserRole` (`'user' | 'admin' | 'superadmin'`), decoded from the
+  new access-token claim; a `ROLE_RANK`/`ROLE_LABEL` lookup (`admin/src/auth/role.ts`, new)
+  replaces every numeric rank compare. The role-change control is a 3-option `<select>`
+  (user/admin/superadmin), not the imported binary toggle — chosen so the console can operate
+  the full hierarchy, the console's stated purpose (ADR 0022) — rendered only when the actor
+  is superadmin, on every row including the actor's own and other superadmins' (matching what
+  `PATCH /user/:id/role` actually allows: no rank ceiling on the target, only a refusal to
+  demote the last superadmin, 400 `AUTH_LAST_SUPERADMIN`, branched with its own message).
+  `users-page.tsx` and `logs-page.tsx` read `take`/`skip` and the `[data, total]` tuple
+  `GetUsersDto`/`AuditLogQueryDto` actually return, and delete/role-change errors branch on
+  the frozen `{ code, message }` contract (`AUTH_LAST_SUPERADMIN`, `USER_HAS_FILES` — with a
+  cascade-confirmation re-prompt showing the file count before retrying `?deleteFiles=true` —
+  `USER_FILES_IN_USE`, and `FORBIDDEN`, the last for a privilege-escalation guard closed the
+  same day on `PATCH`/`DELETE /user/:id` this pass found while wiring up the Delete button's
+  visibility rule). The per-user audit-log panel was **dropped, not approximated** —
+  `AuditLogQueryDto` has no `userId` filter, and client-side-filtering an unfiltered page
+  would silently drop a user's older entries once real activity outgrows that page. The
+  chat-domain surface (`rooms-page.tsx`, `api/apollo.ts`, `api/graphql-operations.ts`, the
+  `/rooms` route, `main.tsx`'s `ApolloProvider`) had no counterpart on this API and was
+  deleted outright, taking `@apollo/client`/`graphql`/`rxjs` out of `package.json` with it;
+  `POST /user/:id/ban|unban|force-logout` and their audit-log colors were deleted the same
+  way, settling Stage 5's moderation-existence row "no". `e2e/seed-superadmin.mjs`'s SQL now
+  inserts the string `'superadmin'` (was `role=2, "isAI"=false` — `isAI` isn't a column on
+  `UserEntity`) and its `.env` search path points at the real root `.env`. No backend files
+  touched. Full defect-by-defect mapping and the two judgment calls made along the way (drop
+  the audit panel; 3-option select over the binary toggle): `admin/README.md` > "What was
+  adapted". Resolving which of the two admin surfaces survives (this console vs.
+  `frontend/src/features/admin/AdminPage.tsx`) remains Stage 5's only open row.
 - **Access token carries a `role` claim** (ROADMAP execution order #3, Stage 5's blocking
   first row, [ADR 0028](ADR/0028-access-token-role-claim.md); amends
   [ADR 0002](ADR/0002-dual-secret-token-pair.md)) — closes the gap ADR 0022's modification

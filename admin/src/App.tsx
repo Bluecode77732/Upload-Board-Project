@@ -3,7 +3,6 @@ import ProtectedRoute from './components/protected-route';
 import LoginPage from './pages/login-page';
 import DashboardPage from './pages/dashboard-page';
 import UsersPage from './pages/users-page';
-import RoomsPage from './pages/rooms-page';
 import LogsPage from './pages/logs-page';
 
 function App() {
@@ -19,11 +18,6 @@ function App() {
                 <Route path='/users' element={
                     <ProtectedRoute>
                         <UsersPage />
-                    </ProtectedRoute>
-                } />
-                <Route path='/rooms' element={
-                    <ProtectedRoute>
-                        <RoomsPage />
                     </ProtectedRoute>
                 } />
                 <Route path='/logs' element={

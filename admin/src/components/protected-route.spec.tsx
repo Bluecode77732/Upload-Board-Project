@@ -39,7 +39,7 @@ describe('ProtectedRoute', () => {
     });
 
     it('renders the protected content when an admin token is already present.', async () => {
-        useAuthStore.getState().setTokens('token-abc', 1, 1);
+        useAuthStore.getState().setTokens('token-abc', 1, 'admin');
 
         renderProtectedRoute();
 
@@ -47,8 +47,8 @@ describe('ProtectedRoute', () => {
         expect(refreshAccessTokenSafely).not.toHaveBeenCalled();
     });
 
-    it('redirects a regular user (role 0) away from the protected content.', async () => {
-        useAuthStore.getState().setTokens('token-abc', 1, 0);
+    it("redirects a regular user (role 'user') away from the protected content.", async () => {
+        useAuthStore.getState().setTokens('token-abc', 1, 'user');
 
         renderProtectedRoute();
 
@@ -60,7 +60,7 @@ describe('ProtectedRoute', () => {
         // refreshAccessTokenSafely's real implementation sets the store as a side effect;
         // the mock must replicate that since ProtectedRoute no longer touches the store itself.
         (refreshAccessTokenSafely as ReturnType<typeof vi.fn>).mockImplementation(async () => {
-            useAuthStore.getState().setTokens('new-token', 5, 1);
+            useAuthStore.getState().setTokens('new-token', 5, 'admin');
             return 'new-token';
         });
 

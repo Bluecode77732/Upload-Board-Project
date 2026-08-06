@@ -88,7 +88,10 @@ item below lands as its own dedicated, designed change
   Execution order): ~~#1 board comment module~~ (✅ done 2026-07-31) → ~~#2 `GET /user`
   pagination~~ (✅ done 2026-08-05, pulled forward from Stage 5) → **#3 Stage 5 admin
   surface — in progress** (its blocking first row, role delivery, done 2026-08-05 via
-  [ADR 0028](ADR/0028-access-token-role-claim.md); console adaptation is next) → #4 Stage 4
+  [ADR 0028](ADR/0028-access-token-role-claim.md); console adaptation done 2026-08-06 —
+  the role-management slice of `admin/` now targets this backend's real routes, and the
+  moderation-existence row was settled "no" as part of the same change; resolving the
+  duplicate admin surface is Stage 5's last open row) → #4 Stage 4
   deployment, last. This resolves Stage 5's floating position (before Stage 4) and pulls the
   independent pagination debt ahead of both.
 - **File visibility + media-type expansion decided 2026-07-31** (design gate,
@@ -263,10 +266,12 @@ item carries its execution number in its own row.
 3. **Stage 5 — operational surface (admin console)**, sequenced **before Stage 4**:
    ~~role-delivery decision (blocked the rest)~~ (✅ done 2026-08-05,
    [ADR 0028](ADR/0028-access-token-role-claim.md) — access token gains a `role` claim) →
-   **adapt the imported console — now next** → moderation-existence decision → resolve the
-   duplicate admin surface. Rationale (already recorded in the Stage 5 note): a deployed
-   system whose privilege hierarchy is operable only through Swagger is hard to run, so the
-   operational surface precedes deployment.
+   ~~adapt the imported console~~ (✅ done 2026-08-06 — see the row below) →
+   ~~moderation-existence decision~~ (✅ settled "no" as part of the same change — ban/unban/
+   force-logout deleted, no backend replacement built) → **resolve the duplicate admin
+   surface — now the only open row**. Rationale (already recorded in the Stage 5 note): a
+   deployed system whose privilege hierarchy is operable only through Swagger is hard to run,
+   so the operational surface precedes deployment.
 4. **Stage 4 — production transition (deployment)**, sequenced **last**: AWS
    deployment → container/deploy hardening → VOD access control → storage
    port-adapter (conditional) → performance/capacity criteria.
@@ -377,10 +382,10 @@ role-delivery → adapt console → moderation decision → resolve duplicate su
 | Task | Rationale / dependencies |
 |---|---|
 | ~~**How the client learns a user's role**~~ (backend decision — **done 2026-08-05**, [ADR 0028](ADR/0028-access-token-role-claim.md)) | Chose the access-token `role` claim over a request-based lookup (`GET /user/:id` or a new `GET /auth/me`): matches the frontend's existing client-side JWT-decode pattern (no new round trip), and the one real cost — a demoted user's *decoded* role can lag up to the access-token TTL — never becomes a live privilege, since `RolesGuard`/`AuthUser` still source `role` from `JwtStrategy.validate`'s per-request DB read, never from the token. `Payload` gains `role?: UserRole` (access tokens only); `issueToken`/`issueTokenPair` widen to `Pick<UserEntity, 'id' \| 'role'>`. Amends [ADR 0002](ADR/0002-dual-secret-token-pair.md). **Unblocks the row below.** |
-| Adapt the imported `admin/` console | Rewrite the [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md) import from the Chat Project's API to this one, using that ADR's verified backlog as the brief. **Start with the role-management slice** — `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`, `GET /audit-log`, and `POST /auth/signin` are already the right routes and the rank values `0/1/2` already match `ROLE_RANK`, so that part is route-level correction, not redesign. The chat-domain pages (`rooms-page`, presence/nickname widgets) and the whole Apollo/`/graphql` layer are deletions. Depends on the row above. **If the adapted user-list page needs to filter/sort by email or role, see the `GET /user` search/sort follow-up in section 7** — `GetUsersDto` currently has no field for it (execution #2 shipped take/skip only). |
-| ~~`GET /user` pagination~~ **(execution #2 — pulled forward from Stage 5, done 2026-08-05)** | Closed the standing Never Do Group 2 violation (`findAll()` bound no `@Query()` and returned `findAndCount()` over every user). New `GetUsersDto` (`take`/`skip`, mirroring `GetFilesDto`); `UserService.findAll` sorts `createdAt DESC, id DESC` for deterministic pages; response kept the existing `[rows, total]` tuple shape (`GET /file` parity, no new ADR). Search/sort were left out of this pass' scope — open for the admin console task below if it needs them. |
-| Resolve the duplicate admin surface | Delete whichever of the two loses: `frontend/src/features/admin/AdminPage.tsx` (ADR 0010's route section) or the standalone `admin/` app (ADR 0022). Deliberately decided **during** this stage, not before it — how much of the import survives adaptation is the input to the choice. Tracked as an open decision in section 7. |
-| Decide whether moderation actions exist at all | The import calls `POST /user/:id/ban`, `/unban`, and `/force-logout`, and colors audit actions (`USER_BANNED`, `USER_MUTED`, `USER_UNBAN`, `FORCE_LOGOUT`) that **this project never emits** — `AUDIT_ACTIONS` is exactly `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`. Default answer is "no": delete them, since a video-upload board has no stated moderation requirement (YAGNI). Building any of them is new backend surface needing its own ADR — not a side effect of adapting a UI. |
+| ~~Adapt the imported `admin/` console~~ (**done 2026-08-06**) | Rewrote the [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md) import from the Chat Project's API to this one, using that ADR's verified backlog as the brief. Landed the role-management slice: string `UserRole` (was numeric), role read from the access-token claim (ADR 0028), a 3-option role `<select>` (was a binary toggle — chosen over keeping the toggle so the console can operate all three tiers, per ADR 0022's own stated purpose), `AUTH_LAST_SUPERADMIN`/`USER_HAS_FILES`/`FORBIDDEN` handled by `{ code, message }` branching (ADR 0011), and `take`/`skip` + `[data, total]` tuple reads matching `GetUsersDto`/`AuditLogQueryDto` exactly (no search/sort/status/userId/export — none exist server-side). The chat-domain pages (`rooms-page`, presence/nickname widgets) and the whole Apollo/`/graphql` layer were deleted, not rewritten. The per-user audit-log panel was dropped rather than approximated (`GET /audit-log` has no `userId` filter — see the follow-up in section 7). Full defect-by-defect mapping: `admin/README.md` > "What was adapted". No backend files touched. |
+| ~~`GET /user` pagination~~ **(execution #2 — pulled forward from Stage 5, done 2026-08-05)** | Closed the standing Never Do Group 2 violation (`findAll()` bound no `@Query()` and returned `findAndCount()` over every user). New `GetUsersDto` (`take`/`skip`, mirroring `GetFilesDto`); `UserService.findAll` sorts `createdAt DESC, id DESC` for deterministic pages; response kept the existing `[rows, total]` tuple shape (`GET /file` parity, no new ADR). Search/sort were left out of this pass' scope — the console adaptation above did not need them either; the follow-up in section 7 stays open. |
+| Resolve the duplicate admin surface | Delete whichever of the two loses: `frontend/src/features/admin/AdminPage.tsx` (ADR 0010's route section) or the standalone `admin/` app (ADR 0022). Deliberately decided **during** this stage, not before it — how much of the import survives adaptation is the input to the choice. Tracked as an open decision in section 7. **Now that the console adaptation above is done, this is Stage 5's only remaining row.** |
+| ~~Decide whether moderation actions exist at all~~ (**settled "no", 2026-08-06, as part of the console adaptation above**) | The import called `POST /user/:id/ban`, `/unban`, and `/force-logout`, and colored audit actions (`USER_BANNED`, `USER_MUTED`, `USER_UNBAN`, `FORCE_LOGOUT`) that **this project never emits** — `AUDIT_ACTIONS` is exactly `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`, `POST_DELETE`, `COMMENT_DELETE`. Took the default answer: deleted the three actions and the four nonexistent audit colors from `admin/`, since a video-upload board has no stated moderation requirement (YAGNI). No backend surface was built for them — that would be new scope needing its own ADR, not a side effect of adapting a UI. |
 
 ## 7. Unscheduled / open decisions
 
@@ -590,7 +595,22 @@ role-delivery → adapt console → moderation decision → resolve duplicate su
   `USER_SORT_FIELDS` tuple keyed the same way `FILE_SORT_FIELDS` is) rather than inventing a
   second read-layer pattern — no new ADR needed, same as the pagination task. Not scheduled
   as its own task: it is a plausible extension of Stage 5's console-adaptation row, not an
-  independent debt like pagination was.
+  independent debt like pagination was. **Trigger reached, need did not materialize
+  (2026-08-06)**: the console adaptation landed without it — the rewritten `users-page.tsx`
+  paginates on `take`/`skip` only, with no search/sort UI, matching `GetUsersDto` exactly
+  rather than sending fields that would 400. This entry stays open for a future request, not
+  because the adaptation needed it and deferred it.
+- `GET /audit-log` has no `userId` filter (found 2026-08-06, during the Stage 5 console
+  adaptation row above) — the imported users-page detail panel called
+  `GET /audit-log?userId=…` for a per-user "recent activity" slice, but
+  `AuditLogQueryDto` filters on `action` only. Resolution for the console itself: the panel
+  section was **dropped, not approximated** — filtering an unfiltered page client-side would
+  silently miss a user's older entries once they fall off that page, which is worse than not
+  showing the slice at all (`admin/README.md` > "Two decisions made for this adaptation").
+  If a `userId` filter is wanted later, mirror `AuditLogQueryDto`'s existing `action` filter
+  shape (an optional indexed column filter, same DTO) — no new ADR needed. Not scheduled as
+  its own task; revisit only if an actual consumer needs it, same standard as the `GET /user`
+  search/sort item above.
 
 ## 8. Advisory notes
 
@@ -600,6 +620,12 @@ ordering), docs-as-code enforcement (automated README/endpoint consistency — a
 candidate under the CI task).
 
 ## 9. Completed
+
+### 2026-08-06
+
+| Item | Notes |
+|---|---|
+| Admin console adaptation (role-management slice) | Rewrote `admin/`'s imported Chat Project UI against this backend's real routes: string `UserRole` throughout (was numeric), role read from the access-token claim ([ADR 0028](ADR/0028-access-token-role-claim.md)), a 3-option role `<select>` replacing the binary promote/demote toggle, `AUTH_LAST_SUPERADMIN`/`USER_HAS_FILES`/`USER_FILES_IN_USE`/`FORBIDDEN` branched by `{ code, message }` ([ADR 0011](ADR/0011-error-code-contract.md)), and `take`/`skip` + `[data, total]` tuple reads matching `GetUsersDto`/`AuditLogQueryDto` exactly. Chat-domain pages (`rooms-page`, Apollo/`/graphql` layer, ban/unban/force-logout) deleted, settling Stage 5's moderation-existence row "no" in the same change. Per-user audit-log panel dropped (not approximated) — `GET /audit-log` has no `userId` filter, tracked as a follow-up in section 7. No backend files touched — **fourth Stage 5 task; only "resolve the duplicate admin surface" remains** (full defect list: `admin/README.md` > "What was adapted") |
 
 ### 2026-07-30
 

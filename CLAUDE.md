@@ -1028,24 +1028,30 @@ the backend at the root is untouched (its Jest roots, migration paths, and lint
 globs do not include `frontend/`). Do not edit backend files from a frontend
 task or vice versa.
 
-`admin/` (added 2026-07-30, ADR 0022) is **imported code from a different
-project, not this project's admin client**. It is the author's Chat Project admin
-console, copied in wholesale and committed unmodified as a *modification base*,
-for two stated purposes: (1) to become the **operator surface for the RBAC role
-hierarchy** that ADR 0013 shipped without one — role listing, promotion/demotion
-via superadmin-only `PATCH /user/:id/role`, and a `ROLE_CHANGE` audit viewer;
-(2) **token economy** — that console was already built for this same three-tier
-hierarchy, so importing it costs a fraction of the LLM tokens regenerating it
-would. Treat it as read-only reference material: it targets the Chat Project's
-API (Apollo/`/graphql`, `POST /auth/token/refreshaccess`, numeric roles, chat-room
-pages, ban/force-logout endpoints that do not exist here), so **nothing in it
-describes this repo's contracts** — verify against `backend/`, never against
-`admin/`. It is wired into no root tooling (outside the lint glob, Jest `roots`,
-`tsconfig.build.json`, compose, and CI) and carries its own `package.json` and
-tooling, like `frontend/`. Adapting it is its own dedicated task with its own
-approval; `admin/README.md` and ADR 0022 hold the modification backlog. Do not
-edit `admin/` from a backend task, and do not cite it as precedent for any
-pattern.
+`admin/` (added 2026-07-30, ADR 0022; role-management slice adapted 2026-08-06) is
+**imported code from a different project, not a from-scratch admin client**. It is
+the author's Chat Project admin console, originally copied in wholesale and
+committed unmodified as a *modification base*, for two stated purposes: (1) to
+become the **operator surface for the RBAC role hierarchy** that ADR 0013 shipped
+without one — role listing, promotion/demotion via superadmin-only
+`PATCH /user/:id/role`, and a `ROLE_CHANGE` audit viewer; (2) **token economy** —
+that console was already built for this same three-tier hierarchy, so importing it
+cost a fraction of the LLM tokens regenerating it would have. As of 2026-08-06, the
+role-management slice (login, dashboard, users, audit log) has been adapted against
+this backend's real routes — string `UserRole`, the access-token `role` claim
+(ADR 0028), `take`/`skip` pagination, `{ code, message }` error branching — so **that
+slice now does describe this repo's contracts**; verify current behavior against
+`admin/src/` directly, not against this paragraph or ADR 0022's original backlog
+(`admin/README.md` > "What was adapted" is the up-to-date record). The chat-domain
+remnant (Apollo/`/graphql`, rooms, ban/force-logout) was deleted in the same pass,
+not adapted — nothing chat-related remains to be read as reference material. It is
+still wired into no root tooling (outside the lint glob, Jest `roots`,
+`tsconfig.build.json`, compose, and CI) and still carries its own `package.json` and
+tooling, like `frontend/`. Resolving which of the two admin surfaces survives (this
+console vs. `frontend/src/features/admin/AdminPage.tsx`) is Stage 5's one remaining
+open row (ROADMAP.md > Unscheduled) — do not treat that choice as settled. Do not
+edit `admin/` from a backend task, and do not cite its adapted code as precedent for
+a backend pattern (it is a frontend consumer of the backend, not the reverse).
 
 ## Commands
 

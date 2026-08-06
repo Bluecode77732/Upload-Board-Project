@@ -2,7 +2,8 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import api from '../api/axios';
-import { useAuthStore } from '../store/auth.store';
+import { useAuthStore, type UserRole } from '../store/auth.store';
+import { ROLE_RANK } from '../auth/role';
 import { useState } from 'react';
 
 interface LoginForm {
@@ -23,8 +24,8 @@ function LoginPage() {
             const res = await api.post('/auth/signin', null, {
                 headers: { Authorization: `Basic ${base64}` },
             });
-            const { sub, role } = jwtDecode<{ sub: number; role: number }>(res.data.accessToken);
-            if (role < 1) {
+            const { sub, role } = jwtDecode<{ sub: number; role?: UserRole }>(res.data.accessToken);
+            if (!role || ROLE_RANK[role] < ROLE_RANK.admin) {
                 setError('Admin access only.');
                 return;
             }

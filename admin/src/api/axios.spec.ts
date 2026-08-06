@@ -60,7 +60,7 @@ describe('admin axios instance', () => {
 
     describe('request interceptor', () => {
         it('attaches the bearer token when one is stored and no Authorization header is set.', () => {
-            useAuthStore.getState().setTokens('token-abc', 1, 1);
+            useAuthStore.getState().setTokens('token-abc', 1, 'admin');
 
             const config = requestHandler({ headers: {} });
 
@@ -68,7 +68,7 @@ describe('admin axios instance', () => {
         });
 
         it('does not overwrite an existing Authorization header (e.g. Basic login).', () => {
-            useAuthStore.getState().setTokens('token-abc', 1, 1);
+            useAuthStore.getState().setTokens('token-abc', 1, 'admin');
 
             const config = requestHandler({ headers: { Authorization: 'Basic xyz' } });
 

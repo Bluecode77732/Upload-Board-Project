@@ -82,7 +82,10 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   ~~#1 게시판 comment 모듈~~(✅ 2026-07-31 완료) → ~~#2 `GET /user` 페이지네이션~~(✅
   2026-08-05 완료, Stage 5에서 앞당김) →
   **#3 Stage 5 admin 화면 — 진행 중**(막고 있던 첫 행인 role 전달 결정이 2026-08-05
-  [ADR 0028](ADR/0028-access-token-role-claim.ko.md)로 완료됐고, 콘솔 적응이 다음 차례) →
+  [ADR 0028](ADR/0028-access-token-role-claim.ko.md)로 완료됐고, 콘솔 적응은 2026-08-06
+  완료됐다 — `admin/`의 역할 관리 조각이 이제 이 백엔드의 실제 라우트를 대상으로 하며,
+  모더레이션 존재 여부 행도 같은 변경에서 "아니오"로 결론났다. 중복 admin 화면 정리가
+  Stage 5의 마지막 남은 행이다) →
   #4 Stage 4 배포(마지막). 이로써 Stage 5의 부동 위치가 Stage 4 앞으로 확정되고, 독립적인
   페이지네이션 부채가 둘보다 앞으로 당겨진다.
 - **파일 가시성 + 미디어 타입 확장을 2026-07-31에 결정했다**(설계 게이트,
@@ -243,9 +246,11 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
    다음 차례다.**
 3. **Stage 5 — 운영 화면 (admin 콘솔)**, **Stage 4보다 앞에** 배치:
    ~~역할 전달 결정(나머지를 막음)~~ (✅ 2026-08-05 완료, [ADR 0028](ADR/0028-access-token-role-claim.ko.md)
-   — 액세스 토큰에 `role` 클레임 추가) → **이식 콘솔 적응 — 이제 다음 차례** → 모더레이션
-   존재 여부 결정 → 중복 admin 화면 정리. 근거(Stage 5 노트에 이미 기록): 권한 계층을
-   Swagger로만 운영할 수 있는 배포 시스템은 운영이 어려우므로, 운영 화면을 배포보다 앞세운다.
+   — 액세스 토큰에 `role` 클레임 추가) → ~~이식 콘솔 적응~~ (✅ 2026-08-06 완료 — 아래 행
+   참조) → ~~모더레이션 존재 여부 결정~~ (✅ 같은 변경에서 "아니오"로 결론 — ban/unban/
+   force-logout 삭제, 백엔드 쪽 대체 구현 없음) → **중복 admin 화면 정리 — 이제 유일하게
+   남은 행**. 근거(Stage 5 노트에 이미 기록): 권한 계층을 Swagger로만 운영할 수 있는 배포
+   시스템은 운영이 어려우므로, 운영 화면을 배포보다 앞세운다.
 4. **Stage 4 — 실서비스 전환 (배포)**, **마지막**으로 배치: AWS 배포 → 컨테이너·배포
    하드닝 → VOD 접근 제어 → 스토리지 포트-어댑터(조건부) → 성능/용량 기준.
 
@@ -350,10 +355,10 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | 작업 | 근거 / 의존성 |
 |---|---|
 | ~~**클라이언트가 사용자 역할을 어떻게 아는가**~~ (백엔드 결정 — **2026-08-05 완료**, [ADR 0028](ADR/0028-access-token-role-claim.ko.md)) | 요청 기반 조회(`GET /user/:id` 또는 신규 `GET /auth/me`) 대신 액세스 토큰 `role` 클레임을 선택 — 프론트엔드가 이미 쓰는 클라이언트 측 JWT 디코드 패턴과 일치하고(추가 왕복 없음), 유일한 실질 비용 — 강등된 사용자의 *디코드된* role이 액세스 토큰 TTL만큼 지연될 수 있다는 점 — 은 실제 권한으로 이어지지 않는다. `RolesGuard`/`AuthUser`는 여전히 `JwtStrategy.validate`의 매 요청 DB 조회에서 role을 얻지, 토큰에서 얻지 않기 때문이다. `Payload`는 `role?: UserRole`을 얻고(액세스 토큰만); `issueToken`/`issueTokenPair`는 `Pick<UserEntity, 'id' \| 'role'>`로 넓어졌다. [ADR 0002](ADR/0002-dual-secret-token-pair.ko.md)를 개정한다. **아래 행의 걸림돌을 해소한다.** |
-| 이식된 `admin/` 콘솔 적응 | [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의 이식본을 Chat Project API에서 이 API로 다시 쓴다. 그 ADR의 검증된 백로그가 작업 지시서다. **역할 관리 조각부터 시작한다** — `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`, `GET /audit-log`, `POST /auth/signin`은 이미 맞는 라우트이고 등급 값 `0/1/2`도 이미 `ROLE_RANK`와 일치하므로, 그 부분은 재설계가 아니라 라우트 수준 교정이다. 채팅 도메인 페이지(`rooms-page`, 접속/닉네임 위젯)와 Apollo/`/graphql` 계층 전체는 삭제다. 위 행에 의존. **적응된 사용자 목록 화면이 email·역할로 필터/정렬해야 한다면 7절의 `GET /user` 검색/정렬 후속 항목을 참조** — `GetUsersDto`는 현재 그 필드가 없다(실행 #2는 take/skip만 배포). |
-| ~~`GET /user` 페이지네이션~~ **(실행 #2 — Stage 5에서 앞당김, 2026-08-05 완료)** | 상시 위반 상태였던 Never Do Group 2 문제를 해소했다(`findAll()`이 `@Query()` 없이 전체 사용자 `findAndCount()`를 반환하던 상태). 새 `GetUsersDto`(`take`/`skip`, `GetFilesDto` 미러); `UserService.findAll`은 `createdAt DESC, id DESC`로 정렬해 페이지 경계를 결정적으로 만든다; 응답은 기존 `[rows, total]` 튜플 형태 유지(`GET /file`과 일치, 별도 ADR 불필요). 검색/정렬은 이번 범위에서 제외 — 아래 admin 콘솔 작업에서 필요해지면 그때 연다. |
-| 중복된 admin 화면 정리 | 둘 중 지는 쪽을 삭제한다: `frontend/src/features/admin/AdminPage.tsx`(ADR 0010의 라우트 구역) 또는 독립 `admin/` 앱(ADR 0022). 이 단계 **이전이 아니라 진행 중에** 결정하도록 의도했다 — 이식본이 적응 후 얼마나 살아남는지가 그 선택의 입력값이다. 7절에 미결 사항으로 추적한다. |
-| 모더레이션 기능을 둘 것인지 결정 | 이식본은 `POST /user/:id/ban`, `/unban`, `/force-logout`을 호출하고, 이 프로젝트가 **절대 기록하지 않는** 감사 액션(`USER_BANNED`, `USER_MUTED`, `USER_UNBAN`, `FORCE_LOGOUT`)에 색을 지정한다 — `AUDIT_ACTIONS`는 정확히 `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`다. 기본 답은 "두지 않는다": 영상 업로드 게시판에 명시된 모더레이션 요구사항이 없으므로 삭제한다(YAGNI). 그중 하나라도 만드는 것은 자체 ADR이 필요한 신규 백엔드 표면이며, UI 적응의 부수 효과로 끼워 넣을 일이 아니다. |
+| ~~이식된 `admin/` 콘솔 적응~~ (**2026-08-06 완료**) | [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의 이식본을 Chat Project API에서 이 API로 다시 썼다. 그 ADR의 검증된 백로그를 작업 지시서로 삼았다. 역할 관리 조각을 착륙시켰다: 문자열 `UserRole`(기존 숫자였음), 액세스 토큰 클레임에서 역할을 읽음(ADR 0028), 3단계 역할 `<select>`(기존 이진 토글이었음 — 토글을 유지하는 대신 이 선택을 한 이유는 ADR 0022 자체가 명시한 목적대로 콘솔이 3단계를 모두 조작할 수 있게 하기 위해서다), `{ code, message }` 분기로 처리되는 `AUTH_LAST_SUPERADMIN`/`USER_HAS_FILES`/`FORBIDDEN`(ADR 0011), `GetUsersDto`/`AuditLogQueryDto`와 정확히 일치하는 `take`/`skip` + `[data, total]` 튜플 읽기(검색/정렬/상태/userId/내보내기는 서버 쪽에 없으므로 전부 없앴다). 채팅 도메인 페이지(`rooms-page`, 접속/닉네임 위젯)와 Apollo/`/graphql` 계층 전체는 재작성이 아니라 삭제했다. 사용자별 감사 로그 패널은 근사하지 않고 제거했다(`GET /audit-log`에 `userId` 필터가 없다 — 7절 후속 항목 참조). 백엔드 파일은 건드리지 않았다. 결함별 전체 대응표: `admin/README.md` > "무엇을 적응시켰는가" |
+| ~~`GET /user` 페이지네이션~~ **(실행 #2 — Stage 5에서 앞당김, 2026-08-05 완료)** | 상시 위반 상태였던 Never Do Group 2 문제를 해소했다(`findAll()`이 `@Query()` 없이 전체 사용자 `findAndCount()`를 반환하던 상태). 새 `GetUsersDto`(`take`/`skip`, `GetFilesDto` 미러); `UserService.findAll`은 `createdAt DESC, id DESC`로 정렬해 페이지 경계를 결정적으로 만든다; 응답은 기존 `[rows, total]` 튜플 형태 유지(`GET /file`과 일치, 별도 ADR 불필요). 검색/정렬은 이번 범위에서 제외했고, 위 콘솔 적응에서도 필요하지 않았다 — 7절 후속 항목은 열린 채로 남는다. |
+| 중복된 admin 화면 정리 | 둘 중 지는 쪽을 삭제한다: `frontend/src/features/admin/AdminPage.tsx`(ADR 0010의 라우트 구역) 또는 독립 `admin/` 앱(ADR 0022). 이 단계 **이전이 아니라 진행 중에** 결정하도록 의도했다 — 이식본이 적응 후 얼마나 살아남는지가 그 선택의 입력값이다. 7절에 미결 사항으로 추적한다. **위 콘솔 적응이 끝난 지금, 이것이 Stage 5의 유일한 남은 행이다.** |
+| ~~모더레이션 기능을 둘 것인지 결정~~ (**"두지 않는다"로 결론, 2026-08-06, 위 콘솔 적응의 일부**) | 이식본은 `POST /user/:id/ban`, `/unban`, `/force-logout`을 호출했고, 이 프로젝트가 **절대 기록하지 않는** 감사 액션(`USER_BANNED`, `USER_MUTED`, `USER_UNBAN`, `FORCE_LOGOUT`)에 색을 지정했다 — `AUDIT_ACTIONS`는 정확히 `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`, `POST_DELETE`, `COMMENT_DELETE`다. 기본 답을 택했다: 영상 업로드 게시판에 명시된 모더레이션 요구사항이 없으므로(YAGNI) 세 액션과 존재하지 않는 감사 색 4개를 `admin/`에서 삭제했다. 그중 하나도 백엔드에 만들지 않았다 — 그것은 자체 ADR이 필요한 신규 범위이며, UI 적응의 부수 효과가 아니다. |
 
 ## 7. 미일정 / 미결 사항
 
@@ -540,7 +545,22 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   `search`/`sortBy`/`order` 형태(email `ILIKE`, `FILE_SORT_FIELDS`와 같은 방식으로 키를 둔
   `USER_SORT_FIELDS` 튜플)로 `GetUsersDto`를 확장한다 — 페이지네이션 작업과 마찬가지로 별도
   ADR 불필요. 자체 작업으로 일정 배정하지 않는다: 페이지네이션처럼 독립된 부채가 아니라
-  Stage 5의 콘솔-적응 행에서 나올 법한 확장 항목이다.
+  Stage 5의 콘솔-적응 행에서 나올 법한 확장 항목이다. **트리거는 도달했지만 필요는
+  드러나지 않았다(2026-08-06)**: 콘솔 적응이 이것 없이 착지했다 — 다시 쓴
+  `users-page.tsx`는 `take`/`skip`만으로 페이지네이션하고 검색/정렬 UI가 없어,
+  400을 유발할 필드를 보내는 대신 `GetUsersDto`와 정확히 일치시켰다. 이 항목은 앞으로의
+  요청을 위해 열린 채로 남는다 — 적응 작업이 이걸 필요로 했는데 미룬 게 아니다.
+- `GET /audit-log`에 `userId` 필터가 없다(2026-08-06 발견, 위 Stage 5 콘솔 적응 행 도중) —
+  이식된 사용자 페이지 상세 패널이 사용자별 "최근 활동" 조각을 위해
+  `GET /audit-log?userId=…`를 호출했지만, `AuditLogQueryDto`는 `action`만 필터한다.
+  콘솔 자체에 대한 해결책: 패널 절을 **근사하지 않고 제거했다** — 필터 없는 페이지를
+  가져와 클라이언트에서 걸러내면 사용자의 오래된 항목이 그 페이지 밖으로 밀려날 때
+  조용히 빠지는데, 이는 조각을 아예 보여주지 않는 것보다 나쁘다
+  (`admin/README.md` > "이번 적응에서 내린 두 가지 결정"). 나중에 `userId` 필터가
+  필요해지면 `AuditLogQueryDto`의 기존 `action` 필터 형태(같은 DTO에 인덱스된 선택적
+  컬럼 필터 하나 추가)를 그대로 따른다 — 별도 ADR 불필요. 자체 작업으로 일정 배정하지
+  않는다; 실제 소비자가 필요로 할 때만 재검토한다, 위 `GET /user` 검색/정렬 항목과 같은
+  기준이다.
 
 ## 8. Advisory 노트
 
@@ -549,6 +569,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 (README/엔드포인트 일치의 자동 검증 — CI 작업 아래의 후보).
 
 ## 9. 완료
+
+### 2026-08-06
+
+| 항목 | 비고 |
+|---|---|
+| admin 콘솔 적응 (역할 관리 조각) | `admin/`의 이식된 Chat Project UI를 이 백엔드의 실제 라우트에 맞게 다시 썼다: 문자열 `UserRole`(기존 숫자였음), 액세스 토큰 클레임에서 역할을 읽음([ADR 0028](ADR/0028-access-token-role-claim.ko.md)), 이진 승격/강등 토글을 대체하는 3단계 역할 `<select>`, `{ code, message }`로 분기되는 `AUTH_LAST_SUPERADMIN`/`USER_HAS_FILES`/`USER_FILES_IN_USE`/`FORBIDDEN`([ADR 0011](ADR/0011-error-code-contract.ko.md)), `GetUsersDto`/`AuditLogQueryDto`와 정확히 일치하는 `take`/`skip` + `[data, total]` 튜플 읽기. 채팅 도메인 페이지(`rooms-page`, Apollo/`/graphql` 계층, ban/unban/force-logout)를 삭제하며 같은 변경에서 Stage 5의 모더레이션 존재 여부 행도 "아니오"로 결론지었다. 사용자별 감사 로그 패널은 근사하지 않고 제거했다 — `GET /audit-log`에 `userId` 필터가 없다, 7절에 후속 항목으로 추적. 백엔드 파일은 건드리지 않았다 — **Stage 5 네 번째 작업; "중복 admin 화면 정리"만 남았다**(전체 결함 목록: `admin/README.md` > "무엇을 적응시켰는가") |
 
 ### 2026-07-30
 

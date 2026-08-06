@@ -1,5 +1,6 @@
-// Purpose: seeds/updates a superadmin account for admin e2e tests — no in-app flow
-// can create one (see CLAUDE.md's Role Population Invariants).
+// Purpose: seeds/updates a superadmin account for admin e2e tests — no in-app flow can
+// create one (the real mechanism is SUPERADMIN_EMAIL + superadmin-seed.service.ts,
+// backend ADR 0013 — there is no "Role Population Invariants" section anywhere in this repo).
 // Usage: run from the repo root as `pnpm --filter admin e2e:seed` before `pnpm --filter
 // admin e2e`, both locally (reads e2e/.env) and in CI (reads job-level env directly).
 // Rationale: shared by local dev and CI so the seeding logic exists exactly once.
@@ -10,7 +11,9 @@ import { dirname, join } from 'node:path';
 
 // Both files are only present for local runs — CI supplies DB_* and
 // E2E_SUPERADMIN_* directly as job env vars, so these are no-ops there.
-for (const envFile of ['../backend/.env', './e2e/.env']) {
+// The root .env (not backend/.env — there is no such file) holds the backend's DB_*
+// vars when running this from the repo root.
+for (const envFile of ['../.env', './e2e/.env']) {
     try {
         process.loadEnvFile(envFile);
     } catch {
@@ -45,8 +48,8 @@ const client = new Client({
 await client.connect();
 try {
     await client.query(
-        `INSERT INTO user_entity (email, password, role, "isAI")
-         VALUES ($1, $2, 2, false)
+        `INSERT INTO user_entity (email, password, role)
+         VALUES ($1, $2, 'superadmin')
          ON CONFLICT (email) DO UPDATE SET password = EXCLUDED.password, role = EXCLUDED.role`,
         [email, hash],
     );

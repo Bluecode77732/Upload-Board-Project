@@ -13,6 +13,40 @@
 ## [Unreleased]
 
 ### 추가
+- **`admin/` 콘솔을 이 백엔드의 실제 라우트에 맞게 적응 — 역할 관리 조각**
+  (ROADMAP Stage 5 네 번째 작업; [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의
+  검증된 백로그를 작업 지시서로 삼음, 아래 액세스 토큰 `role` 클레임으로 막힘이 풀림) —
+  이식된 Chat Project 콘솔은 숫자 2단계 역할, 페이지네이션 없는 검색/정렬/상태 사용자
+  목록, `userId`/날짜 범위/CSV 감사 로그 필터, `ban`/`unban`/`force-logout` 액션을
+  대상으로 했는데, 이 API에는 그중 어느 것도 없다. `auth.store.ts`의 `role`은 이제
+  문자열 `UserRole`(`'user' | 'admin' | 'superadmin'`)이며 새 액세스 토큰 클레임에서
+  디코드된다; `ROLE_RANK`/`ROLE_LABEL` 조회표(`admin/src/auth/role.ts`, 신규)가 모든
+  숫자 등급 비교를 대체한다. 역할 변경 컨트롤은 이식된 이진 토글이 아니라 3단계
+  `<select>`(user/admin/superadmin)다 — 콘솔이 계층 전체를 조작할 수 있도록 이렇게
+  선택했다(ADR 0022가 명시한 콘솔의 목적), actor가 superadmin일 때만, 본인 행과 다른
+  superadmin 행을 포함한 모든 행에 렌더링한다(`PATCH /user/:id/role`이 실제로 허용하는
+  범위와 일치 — 대상 등급에 상한이 없고 마지막 superadmin 강등만 거부, 400
+  `AUTH_LAST_SUPERADMIN`을 자체 메시지로 분기). `users-page.tsx`와 `logs-page.tsx`는
+  `GetUsersDto`/`AuditLogQueryDto`가 실제로 반환하는 `take`/`skip`과 `[data, total]`
+  튜플을 읽고, 삭제·역할 변경 에러는 동결된 `{ code, message }` 계약으로 분기한다
+  (`AUTH_LAST_SUPERADMIN`, 파일 개수를 보여주고 `?deleteFiles=true`로 재시도하기 전
+  재확인하는 `USER_HAS_FILES`, `USER_FILES_IN_USE`, 그리고 Delete 버튼의 표시 규칙을
+  연결하던 중 이번 작업이 발견한, 같은 날 닫힌 권한 역전 방지 가드에 해당하는
+  `FORBIDDEN`). 사용자별 감사 로그 패널은 **근사하지 않고 제거했다** —
+  `AuditLogQueryDto`에는 `userId` 필터가 없고, 필터 없는 페이지를 클라이언트에서
+  걸러내면 실제 활동이 그 페이지를 넘어설 때 사용자의 오래된 항목을 조용히 빠뜨리게
+  된다. 채팅 도메인 화면(`rooms-page.tsx`, `api/apollo.ts`, `api/graphql-operations.ts`,
+  `/rooms` 라우트, `main.tsx`의 `ApolloProvider`)은 이 API에 대응물이 없어 통째로
+  삭제했고, `@apollo/client`/`graphql`/`rxjs`도 `package.json`에서 함께 뺐다;
+  `POST /user/:id/ban|unban|force-logout`과 그 감사 로그 색상도 같은 방식으로
+  삭제하며 Stage 5의 모더레이션 존재 여부 행을 "아니오"로 결론지었다.
+  `e2e/seed-superadmin.mjs`의 SQL은 이제 문자열 `'superadmin'`을 넣는다(기존
+  `role=2, "isAI"=false` — `isAI`는 `UserEntity`의 컬럼이 아니다), `.env` 탐색 경로도
+  실제 루트 `.env`를 가리킨다. 백엔드 파일은 건드리지 않았다. 결함별 전체 대응표와
+  진행 중 내린 두 가지 판단(감사 패널 제거; 이진 토글 대신 3단계 select):
+  `admin/README.ko.md` > "무엇을 적응시켰는가". 두 admin 화면 중 무엇이 살아남을지
+  (이 콘솔 대 `frontend/src/features/admin/AdminPage.tsx`)는 Stage 5의 유일하게 남은
+  행이다.
 - **액세스 토큰에 `role` 클레임 추가** (ROADMAP 실행순서 #3, Stage 5의 막고 있던 첫 행,
   [ADR 0028](ADR/0028-access-token-role-claim.ko.md); [ADR 0002](ADR/0002-dual-secret-token-pair.ko.md)
   개정) — ADR 0022의 수정 백로그가 기록한 공백을 닫는다: 이식된 `admin/` 콘솔은

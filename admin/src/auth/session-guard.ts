@@ -1,12 +1,13 @@
 // Purpose: single entry point for silent token refresh and multi-tab session-conflict
-// detection in the admin app, mirroring frontend/src/auth/session-guard.ts.
-// Usage: imported by api/axios.ts (response interceptor), api/apollo.ts (errorLink), and
-// components/protected-route.tsx — no other call site should hit /auth/token/refreshaccess.
-// Rationale: axios and apollo previously called the refresh endpoint independently with no
-// shared in-flight guard and no cross-tab account-conflict check, unlike the main frontend.
+// detection in the admin app, playing the role frontend/src/auth/AuthProvider.tsx's silent
+// refresh plays there (that file, not a same-named session-guard.ts, is the real counterpart).
+// Usage: imported by api/axios.ts (response interceptor) and components/protected-route.tsx —
+// no other call site should hit /auth/token/refresh.
+// Rationale: axios previously called the refresh endpoint with no shared in-flight guard and
+// no cross-tab account-conflict check, unlike the main frontend.
 
 import { jwtDecode } from 'jwt-decode';
-import { useAuthStore } from '../store/auth.store';
+import { useAuthStore, type UserRole } from '../store/auth.store';
 
 const SESSION_USER_KEY = 'admin:sessionUserId';
 
@@ -41,14 +42,20 @@ const doRefresh = async (): Promise<string | null> => {
         // refreshToken cookie is sent automatically via credentials: 'include'.
         // Uses fetch directly (not the axios instance in api/axios.ts) to avoid a
         // circular import, since axios.ts itself calls refreshAccessTokenSafely().
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/token/refreshaccess`, {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/token/refresh`, {
             method: 'POST',
             credentials: 'include',
         });
         if (!res.ok) throw new Error('Refresh failed');
 
         const data = await res.json();
-        const { sub, role } = jwtDecode<{ sub: number; role: number }>(data.accessToken);
+        // role is an access-token-only claim (ADR 0028) — absent would mean a token this
+        // console cannot use, so treat it as a rejection rather than storing `null`.
+        const { sub, role } = jwtDecode<{ sub: number; role?: UserRole }>(data.accessToken);
+        if (!role) {
+            rejectSession();
+            return null;
+        }
 
         if (!assertSessionUser(sub)) {
             rejectSession();

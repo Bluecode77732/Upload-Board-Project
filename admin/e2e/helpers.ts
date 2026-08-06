@@ -40,7 +40,6 @@ export interface TargetUser {
     id: number;
     email: string;
     password: string;
-    nickname: string;
 }
 
 async function signInViaApi(
@@ -61,7 +60,8 @@ async function signInViaApi(
 
 // Registers a plain (role: user) account directly against the backend REST API —
 // admin has no registration UI of its own, and this is fixture setup, not the
-// thing under test.
+// thing under test. POST /auth/register reads no body (Basic header only, ADR 0002) —
+// there is no nickname field to send.
 export async function registerTargetUser(
     request: APIRequestContext,
     label: string,
@@ -69,12 +69,10 @@ export async function registerTargetUser(
     const suffix = uniqueSuffix();
     const email = `admin-e2e-${label}-${suffix}@test.local`;
     const password = 'E2ETestPassword123';
-    const nickname = `adm${suffix}`;
 
     const credential = Buffer.from(`${email}:${password}`).toString('base64');
     const registerRes = await request.post(`${BACKEND_URL}/auth/register`, {
         headers: { Authorization: `Basic ${credential}` },
-        data: { nickname },
     });
     if (!registerRes.ok()) {
         throw new Error(
@@ -83,33 +81,5 @@ export async function registerTargetUser(
     }
 
     const accessToken = await signInViaApi(request, email, password);
-    return { id: decodeUserId(accessToken), email, password, nickname };
-}
-
-// Creates a room + first message between two fixture users via the sendMessage
-// GraphQL mutation, authenticated as `sender` — seeds a deletable room for
-// rooms.spec.ts without going through any UI.
-export async function createRoomBetween(
-    request: APIRequestContext,
-    sender: TargetUser,
-    recipient: TargetUser,
-): Promise<number> {
-    const token = await signInViaApi(request, sender.email, sender.password);
-    const res = await request.post(`${BACKEND_URL}/graphql`, {
-        headers: { Authorization: `Bearer ${token}` },
-        data: {
-            query: `mutation SendMessage($input: CreateChatInput!, $recipientId: Int!) {
-                sendMessage(input: $input, recipientId: $recipientId) { roomId }
-            }`,
-            variables: { input: { message: 'admin e2e seed message' }, recipientId: recipient.id },
-        },
-    });
-    const body = (await res.json()) as {
-        data?: { sendMessage: { roomId: number } };
-        errors?: unknown;
-    };
-    if (body.errors || !body.data) {
-        throw new Error(`Failed to seed room: ${JSON.stringify(body.errors)}`);
-    }
-    return body.data.sendMessage.roomId;
+    return { id: decodeUserId(accessToken), email, password };
 }

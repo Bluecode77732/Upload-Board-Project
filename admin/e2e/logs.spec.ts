@@ -1,42 +1,39 @@
-// Purpose: e2e coverage for the audit log page — time sort and action filter.
-// Usage: run via `pnpm e2e` in admin/; requires backend on :3000 with Postgres/Redis
-// reachable, and a seeded superadmin account (see e2e/.env.example).
-// Rationale: logs-page.tsx had zero coverage for sort and filter interactions.
+// Purpose: e2e coverage for the audit log page — action filter and pagination.
+// Usage: run via `pnpm e2e` in admin/; requires backend on :3000 with Postgres reachable,
+// and a seeded superadmin account (see e2e/.env.example).
+// Rationale: logs-page.tsx had zero coverage for filter interactions. Rewritten from the
+// imported Chat Project version, which asserted a client-side sort toggle, a userId/from/to
+// filter set, and a CSV export button this API does not have (GET /audit-log's order is
+// server-fixed at createdAt DESC and its only filter is `action`) — see admin/README.md's
+// backlog table for the full defect list this rewrite closes.
 
 import { test, expect } from '@playwright/test';
 import { loginAsSuperadmin, registerTargetUser } from './helpers';
 
-test('Audit log Time header is always bold and toggling sort re-renders the table', async ({ page, request }) => {
+test('promoting and demoting a user produces ROLE_CHANGE entries visible in the logs table', async ({ page, request }) => {
     const target = await registerTargetUser(request, 'logSort');
     await loginAsSuperadmin(page);
 
-    // Promote then demote target to produce ROLE_CHANGE log entries. Demoting back is
-    // required so this spec leaves no admin behind — a leaked admin would consume a
-    // MAX_ADMIN_COUNT slot and make the promote/demote spec in users.spec.ts fail.
+    // Demoting back to 'user' is required so this spec leaves no admin behind — a leaked
+    // admin would not itself break other specs (there is no MAX_ADMIN_COUNT here), but the
+    // account is otherwise orphaned test fixture state.
     const row = page.getByTestId(`user-row-${target.id}`);
     await expect(row).toBeVisible();
-    await row.getByTestId(`user-promote-${target.id}`).click();
+    const roleSelect = row.getByTestId(`user-role-select-${target.id}`);
+    await roleSelect.selectOption('admin');
     await expect(row.getByTestId(`user-role-${target.id}`)).toHaveText('admin');
-    await row.getByTestId(`user-promote-${target.id}`).click();
+    await roleSelect.selectOption('user');
     await expect(row.getByTestId(`user-role-${target.id}`)).toHaveText('user');
 
     await page.getByTestId('nav-logs').click();
     await expect(page).toHaveURL('/logs');
 
-    const timeBtn = page.getByRole('columnheader').filter({ hasText: 'Time' }).getByRole('button');
-
-    // Time is the only sortable column — always bold
-    await expect(timeBtn).toHaveClass(/font-bold/);
-
-    // Toggle to ASC and back — table must remain visible
-    await timeBtn.click();
+    await page.getByTestId('log-action-filter').selectOption('ROLE_CHANGE');
     await expect(page.getByTestId('logs-table')).toBeVisible();
-
-    await timeBtn.click();
-    await expect(page.getByTestId('logs-table')).toBeVisible();
+    await expect(page.getByTestId('logs-table').getByText(`User ${target.id}`).first()).toBeVisible();
 });
 
-test('Audit log action filter narrows results', async ({ page }) => {
+test('audit log action filter narrows results', async ({ page }) => {
     await loginAsSuperadmin(page);
     await page.getByTestId('nav-logs').click();
     await expect(page).toHaveURL('/logs');

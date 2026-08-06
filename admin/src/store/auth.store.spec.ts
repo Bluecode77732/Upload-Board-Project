@@ -15,16 +15,16 @@ describe('useAuthStore', () => {
     });
 
     it('sets the token, userId, and role together.', () => {
-        useAuthStore.getState().setTokens('token-abc', 1, 2);
+        useAuthStore.getState().setTokens('token-abc', 1, 'superadmin');
 
         const state = useAuthStore.getState();
         expect(state.accessToken).toBe('token-abc');
         expect(state.userId).toBe(1);
-        expect(state.role).toBe(2);
+        expect(state.role).toBe('superadmin');
     });
 
     it('clears the token, userId, and role together.', () => {
-        useAuthStore.getState().setTokens('token-abc', 1, 2);
+        useAuthStore.getState().setTokens('token-abc', 1, 'superadmin');
         useAuthStore.getState().clearTokens();
 
         const state = useAuthStore.getState();

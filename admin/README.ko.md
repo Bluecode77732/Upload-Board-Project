@@ -1,15 +1,17 @@
-# `admin/` — 이식된 admin 콘솔 (이 프로젝트에 아직 적응되지 않음)
+# `admin/` — admin 콘솔 (2026-08-06 적응: 역할 관리 부분)
 
 > English version: [README.md](README.md)
 
 ## 먼저 읽을 것
 
-**이 폴더의 모든 파일은 다른 프로젝트 애플리케이션의 사본이다.** 저자의 **Chat Project**
-(NestJS + GraphQL + Redis + Socket.IO)에서 가져와 **수정하지 않은 상태로** 커밋했다. 이
-저장소가 아니라 Chat Project의 API를 대상으로 하는 코드다.
+**이 폴더의 모든 파일은 원래 다른 프로젝트 애플리케이션의 사본으로 시작했다.** 저자의
+**Chat Project**(NestJS + GraphQL + Redis + Socket.IO)에서 가져와 2026-07-30에 **수정하지
+않은 상태로** 커밋했다. 당시에는 이 저장소가 아니라 Chat Project의 API를 대상으로 하는
+코드였다.
 
-**아직 이 백엔드에 대해 동작하지 않으며, 동작해야 하는 것도 아니다.** 이 폴더는 *수정
-기반*으로 존재한다.
+**2026-08-06부터 역할 관리 부분(로그인, 대시보드, 사용자, 감사 로그)이 이 백엔드의 실제
+REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" 참고. 채팅 도메인 화면(채팅방,
+접속 상태, Apollo/GraphQL)은 여기 대응물이 아예 없었으므로 재작성이 아니라 삭제됐다.
 
 ## 왜 여기 있는가 — 두 가지 목적
 
@@ -22,98 +24,84 @@
    (400 `AUTH_LAST_SUPERADMIN`), **모든** 역할 변경은 대상의 `refreshTokenHash`를 null로 만들어
    세션을 즉시 끊는다. 이 콘솔이 바로 그 운영 화면이다.
 2. **토큰 절약.** Chat Project의 콘솔은 **같은** 3단계 계층을 대상으로 이미 만들어져 있었고
-   (이 프로젝트의 RBAC 설계는 ROADMAP에 "Chat-project style"로 기록돼 있다), 그 사용자 페이지에는
-   역할 컬럼, 배정 컨트롤, 사용자별 상세 패널, 사용자별 감사 조각이 이미 다 있다. 이것과 골격
-   (라우터, 라우트 가드, 인증 스토어, 단일 비행 무음 갱신, axios 인터셉터, Playwright·Vitest
-   하네스)을 함께 가져오는 비용은 프롬프트로 하나씩 재생성하는 LLM 토큰의 극히 일부다.
+   (이 프로젝트의 RBAC 설계는 ROADMAP에 "Chat-project style"로 기록돼 있다), 그 사용자
+   페이지에는 역할 컬럼, 배정 컨트롤, 사용자별 상세 패널이 이미 있었다. 이것과 골격(라우터,
+   라우트 가드, 인증 스토어, 단일 비행 무음 갱신, axios 인터셉터, Playwright·Vitest
+   하네스)을 함께 가져오는 비용은 프롬프트로 하나씩 재생성하는 LLM 토큰의 극히 일부였다.
 
-목적 1이 요구사항 — admin 콘솔이 필요한 이유다. 목적 2가 수단 — 그것이 새 코드가 아니라 사본으로
-도착한 이유다.
+목적 1이 요구사항 — admin 콘솔이 필요한 이유다. 목적 2가 수단 — 그것이 새 코드가 아니라
+사본으로 도착한 이유이자, 아래 적응이 처음부터 다시 쓰는 게 아니라 표적 교정인 이유다.
 
-- 결정 전문, 기각한 대안, 결과:
+- 이식 결정 전문, 기각한 대안, 결과:
   [ADR 0022](../ADR/0022-admin-console-import-from-chat-project.ko.md)
-- 적응 작업은 **별도의 전용 작업**이며([CLAUDE.md](../CLAUDE.md) > 범위 준수),
-  **[ROADMAP](../ROADMAP.ko.md) Stage 5 — 운영 화면(admin 콘솔)**로 스케줄됐다. 그 단계는 아직
-  아무것도 시작하지 않았고, **첫 행이 나머지를 막는다**: 클라이언트가 자기 역할을 어떻게 아는지가
-  백엔드 결정 사항(액세스 토큰에 `role` 클레임이 없다)이라, 그것이 정해지기 전까지 이 콘솔은
-  admin 라우트를 하나도 게이팅할 수 없다. 이 폴더를 지나가며 하는 정리로 취급하지 말고, 이 안의
-  어떤 줄도 이 프로젝트의 계약을 반영한다고 가정하지 말 것.
+- 이번 적응은 **ROADMAP Stage 5의 두 번째 행**("이식된 `admin/` 콘솔 적응")이며, 첫 행이 이를
+  막고 있었다 — 액세스 토큰이 [ADR 0028](../ADR/0028-access-token-role-claim.ko.md)(실행순서
+  #3)에서 `role` 클레임을 얻었고, 이 콘솔의 라우트 가드가 `/dashboard`, `/users`, `/logs`를
+  게이팅하는 데 그것을 쓴다.
 
 ## 상태
 
 | | |
 |---|---|
-| 출처 | Chat Project admin 콘솔, 2026-07-30 이식 |
-| 이 API에 적응됐는가? | **아니다** — 아래 백로그 참조 |
-| 루트 도구 체계에 연결됐는가? | **아니다** — 린트 glob, Jest `roots`, `tsconfig.build.json`, `docker-compose.yml`, CI 모두의 바깥 |
-| 의존성 | 자체 `package.json` / `node_modules`. pnpm 워크스페이스가 **아니다**(`frontend/`와 같은 선례) |
-| 지금 실행되는가? | 단독으로는 빌드·서빙되지만, 모든 백엔드 호출이 이 API에 없는 라우트를 향한다 |
+| 출처 | Chat Project admin 콘솔, 2026-07-30 이식; 역할 관리 부분 2026-08-06 적응 |
+| 이 API에 적응됐는가? | **그렇다** — 로그인/대시보드/사용자/로그("무엇을 적응시켰는가" 참고). 배포 설정(`vercel.json`)은 손대지 않았고, 여전히 배포 대상이 없다 |
+| 루트 도구 체계에 연결됐는가? | **아니다** — 린트 glob, Jest `roots`, `tsconfig.build.json`, `docker-compose.yml`, CI 모두의 바깥이다. 이것은 의도된 것이지(ADR 0022) 빈틈이 아니다 |
+| 의존성 | 자체 `package.json` / `node_modules`. pnpm 워크스페이스가 **아니다**(`frontend/`와 같은 선례). 채팅 도메인 삭제와 함께 `@apollo/client`, `graphql`, `rxjs`를 제거했다 |
+| 지금 실행되는가? | 그렇다, 실제 백엔드(`:3000`)를 대상으로 동작한다 — 필요한 일회성 `CORS_ORIGIN` 설정은 "로컬 명령" 참고(`admin`은 `frontend/`의 동일 출처 Vite 프록시와 달리 자체 출처 `:5174`에서 동작한다) |
 
 루트의 `pnpm lint`, `pnpm test`, `pnpm test:e2e`는 이 폴더에 닿을 수 없으므로, 여기 있는 어떤
 것도 백엔드 파이프라인을 깨뜨릴 수 없다.
 
-## 어디서 시작할까 — 역할 관리 부분은 이미 맞물린다
+## 무엇을 적응시켰는가
 
-두 프로젝트가 같은 계층을 구현했기 때문에, 역할 관리 호출은 이 API에 **실제로 존재하는**
-라우트를 향한다. 적응은 여기서 시작해야 한다 — 재설계가 아니라 라우트 수준 교정으로 끝난다.
+아래 각 행은 Chat Project에서는 *올바른* 코드였고, 이 프로젝트를 기준으로만 결함이었다.
+2026-08-06에 이 저장소 코드를 다시 확인했다(2026-07-30 조사 재검증 — 그사이 백엔드 변경이
+하나 있었다. `FORBIDDEN` 행 참고).
 
-| 이식 코드의 호출 | 이 프로젝트의 라우트 | 상태 |
-|---|---|---|
-| `api.patch('/user/:id/role', { role })` | `PATCH /user/:id/role` — superadmin 전용 | 라우트 일치, 본문 인코딩 불일치 |
-| `api.get('/user', …)` | `GET /user` — admin 전용 | 라우트 일치, 파라미터 무시·페이지네이션 없음 |
-| `api.get('/user/:id')` | `GET /user/:id` | 라우트 일치, `nickname`/`status`는 여기 없음 |
-| `api.delete('/user/:id')` | `DELETE /user/:id` | 라우트 일치, `?deleteFiles=true` 누락 |
-| `api.get('/audit-log', …)` | `GET /audit-log` — admin 전용 | 라우트 일치, 필터 다름·`/export` 없음 |
-| `api.post('/auth/signin', …)` (Basic) | `POST /auth/signin` — Basic 토큰 | 일치 |
-| 등급 `0 / 1 / 2` | `ROLE_RANK` = `user: 0, admin: 1, superadmin: 2` | **완전히 동일** — 모델이 그대로 이전된다 |
+| 영역 | 이식 코드가 기대하던 것 | 이 프로젝트의 실제 | 해결 방법 |
+|---|---|---|---|
+| 역할 인코딩 | `{ role: 1 }`(숫자), 라벨은 `Record<number, string>` | `UserRole` **문자열 enum**(`'user' \| 'admin' \| 'superadmin'`) | `auth.store.ts`의 `role`을 `UserRole`로 바꿨다; `ROLE_RANK`/`ROLE_LABEL` 조회표(`src/auth/role.ts`, 신규)가 모든 숫자 비교를 대체한다 |
+| 역할 출처 | `jwtDecode<{ sub, role }>(accessToken)` | 액세스 토큰 페이로드가 이제 `role`을 담는다([ADR 0028](../ADR/0028-access-token-role-claim.ko.md)) | `session-guard.ts`, `login-page.tsx`, `protected-route.tsx`가 `role`을 `UserRole \| undefined`로 디코드하고 `ROLE_RANK[role] >= ROLE_RANK.admin`으로 게이팅한다 |
+| 누가 역할을 배정하는가 | admin이면 누구나 역할 컨트롤을 본다 | `PATCH /user/:id/role`은 **superadmin 전용**이며, `updateRole`은 대상 등급에 상한이 없다(마지막 superadmin 강등만 거부) | `users-page.tsx`는 `myRole === 'superadmin'`일 때만 역할 `<select>`를 렌더링하되, 본인 행과 다른 superadmin 행을 포함해 모든 행에 렌더링한다 — 엔드포인트가 실제로 허용하는 범위와 일치시켰다 |
+| 계층 불변식 | 어느 쪽도 분기가 없다 | 마지막 superadmin 강등 거부(400 `AUTH_LAST_SUPERADMIN`), 모든 역할 변경이 대상 세션을 종료(`refreshTokenHash` null) | `users-page.tsx`의 `updateRole()`이 `AUTH_LAST_SUPERADMIN` 코드를 분기해 별도 메시지를 보여준다; 세션 종료 부수효과는 클라이언트 처리가 필요 없다(그대로가 맞다) |
+| 역할 라벨 | `role === 1 ? 'admin' : 'user'`(이진) | 3단계 | 승격/강등 토글을 3단계 `<select>`(user/admin/superadmin)로 교체했다 — 아래 "역할 변경 UI" 결정 참고 |
+| 권한 역전 방지 가드 *(이번 작업 중 발견 — 2026-07-30 조사에는 없었다)* | 이런 검사가 어디에도 없었다 | `PATCH`/`DELETE /user/:id`가 이제 동급/상위 등급 대상에 대한 admin의 조작을 403 `FORBIDDEN`으로 거부한다 — 이번 적응과 같은 날 닫힌 결함 | `users-page.tsx`는 `ROLE_RANK[myRole] > ROLE_RANK[target.role]`일 때만 삭제 버튼을 렌더링하고, `deleteUser()`는 여전히 `FORBIDDEN`을 방어적으로 분기한다(화면 로드와 클릭 사이에 역할이 바뀔 수 있으므로) |
+| 감사 액션 | `FORCE_LOGOUT`, `USER_BANNED`, `USER_MUTED`, `USER_UNBAN`을 포함한 6개에 색 지정 | `AUDIT_ACTIONS`는 정확히 `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`, `POST_DELETE`, `COMMENT_DELETE` | `logs-page.tsx`의 `ACTIONS` 목록과 두 페이지의 `actionColor()`를 정확히 맞췄다 |
+| superadmin 부트스트랩 문서 | `e2e/.env.example`과 `e2e/seed-superadmin.mjs`가 "CLAUDE.md의 Role Population Invariants"를 인용 | 이 저장소 어디에도 그런 절이 없다 — 실제 메커니즘은 `SUPERADMIN_EMAIL` + `superadmin-seed.service.ts` | 두 파일의 인용을 고쳤다; `seed-superadmin.mjs`의 SQL은 이제 문자열 `'superadmin'`을 넣는다(`role=2, "isAI"=false`가 아니다 — `isAI`는 `UserEntity`에 없다), `.env` 탐색 경로도 실제 루트 `.env`로 고쳤다(`backend/.env`는 존재하지 않는다) |
+| 전송 계층 | `/graphql`을 향한 Apollo Client(`src/api/apollo.ts`, `src/api/graphql-operations.ts`, `dashboard-page`/`rooms-page`/`logs-page`의 Apollo 훅) | **REST 전용 — `/graphql` 라우트가 없다**([ADR 0009](../ADR/0009-rest-only-api-with-swagger.ko.md)) | 두 파일 삭제; `main.tsx`의 `ApolloProvider` 제거; `package.json`에서 `@apollo/client`/`graphql` 제거 |
+| 갱신 라우트 | `POST /auth/token/refreshaccess` | `POST /auth/token/refresh` ([ADR 0012](../ADR/0012-refresh-cookie-rotation.ko.md)) | `session-guard.ts`에서 수정 |
+| 로그아웃 라우트 | `POST /auth/signOut` | `POST /auth/signout` (소문자) | 로그아웃하는 모든 페이지에서 수정 |
+| 도메인 페이지 | `rooms-page.tsx`, `getOnlineUser`, `getUserNicknames` | 채팅방·접속 상태·닉네임이 없다 — 이 도메인은 **업로드된 영상 파일**이다 | `rooms-page.tsx`와 `graphql-operations.ts` 삭제; `App.tsx`에서 `/rooms` 라우트 제거; 삭제된 Apollo 계층에서만 쓰던 `rxjs`를 `package.json`에서 제거 |
+| 사용자 조작 | `POST /user/:id/ban` \| `/unban` \| `/force-logout` | **하나도 없다** — ROADMAP의 기본값은 여전히 "모더레이션 액션 없음" | `users-page.tsx`에서 세 가지 모두 삭제, 백엔드 쪽 대체 구현은 만들지 않았다(그것은 적응이 아니라 새 범위가 된다) |
+| 사용자 목록 조회 | `GET /user?page&take&sort&sortBy&search&status` | `take`/`skip`만, 고정 `createdAt DESC` 순서, 검색·정렬·상태 없음([ROADMAP 실행순서 #2](../ROADMAP.ko.md)) | `users-page.tsx`는 `take`/`skip`으로 페이지네이션한다; 검색창·정렬 토글 헤더·상태 필터는 제거했다(지금 보내면 400 `VALIDATION_FAILED` — `forbidNonWhitelisted`) |
+| 감사 로그 | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip`만; 고정 `createdAt DESC`; **`/export` 없음**, **`userId` 필터 없음** | `logs-page.tsx`는 액션 필터 + 페이지네이션만 남겼다; CSV 내보내기 버튼, 날짜 범위 필터, 사용자 필터는 제거했다 |
+| 페이징 모델 | `page` + `take` | `take` + `skip`(오프셋) ([ADR 0021](../ADR/0021-list-query-search-filter-sort.ko.md)) | 두 목록 페이지 모두 `skip = (page - 1) * take`를 계산하고, `{ data, total, page, take }`가 아니라 `[data, total]` 튜플 응답을 읽는다 |
+| 사용자별 감사 조각 | 사용자 페이지 상세 패널이 `GET /audit-log?userId=…`를 호출 | `userId` 필터가 존재하지 않는다 | **근사하지 않고 제거했다** — 아래 "열린 사항" 참고 |
+| 사용자 삭제 | 확인 없는 `DELETE /user/:id` | 계정이 파일을 가진 경우 `?deleteFiles=true` 필수, 없으면 409 `USER_HAS_FILES` ([ADR 0020](../ADR/0020-account-deletion-cascade.ko.md)) | `deleteUser()`가 `USER_HAS_FILES`를 잡아 응답 `message`의 파일 개수를 보여주고, 재확인 후 `?deleteFiles=true`로 재시도한다 |
+| 에러 처리 | 그때그때의 상태 코드·메시지 검사 | 동결된 `{ code, message }` 계약 — `code`로 분기 ([ADR 0011](../ADR/0011-error-code-contract.ko.md)) | `users-page.tsx`는 모든 분기(`AUTH_LAST_SUPERADMIN`, `USER_HAS_FILES`, `USER_FILES_IN_USE`, `FORBIDDEN`)에서 `axios.isAxiosError`로 `err.response.data.code`를 읽는다 |
+| 배포 설정 | CSP가 Chat Project의 Railway 호스트로 고정된 `vercel.json` | **배포 대상이 없다**; AWS는 Stage 4 로드맵 항목 | 이전처럼 손대지 않았다 — 이번 작업 범위 밖 |
 
-반면 채팅 도메인 페이지(`rooms-page.tsx`, 접속/닉네임 위젯)와 Apollo 계층은 대응물이 아예 없다 —
-이쪽은 재작성이 아니라 삭제다.
+`vercel.json`은 의도적으로 그대로 뒀다 — 이 콘솔은 여전히 배포 대상이 없다.
 
-## 동작하려면 무엇을 바꿔야 하는가
+## 이번 적응에서 내린 두 가지 결정
 
-2026-07-30에 이 저장소 코드를 직접 확인했다. 모든 행이 Chat Project에서는 *올바른* 코드였고,
-이 프로젝트를 기준으로만 결함이다. 권한 계층 목적을 담은 역할 관련 행을 앞에 뒀다.
-
-| 영역 | 이식 코드가 기대하는 것 | 이 프로젝트의 실제 |
-|---|---|---|
-| 역할 인코딩 | `{ role: 1 }`(숫자), 라벨은 `Record<number, string>` | `UserRole` **문자열 enum**. `UpdateRoleDto`가 `@IsEnum`을 쓰므로 숫자 본문은 400 `VALIDATION_FAILED`. **등급 자체는 이미 맞다** ([ADR 0013](../ADR/0013-rbac-and-audit-log.ko.md)) |
-| 역할 출처 | `jwtDecode<{ sub, role }>(accessToken)` | 액세스 토큰 페이로드는 `{ sub, type }` — **`role` 클레임이 없어서** 가드가 `undefined`를 읽고 모두 거부한다. 클라이언트가 역할을 어떻게 알지는 먼저 **백엔드 결정** 사안이다 |
-| 누가 역할을 배정하는가 | admin이면 누구나 역할 컨트롤을 본다 | `PATCH /user/:id/role`은 **superadmin 전용** — 일반 admin에게 `RolesGuard`가 403 `FORBIDDEN`을 던진다 |
-| 계층 불변식 | 어느 쪽도 분기가 없다 | 마지막 superadmin 강등 거부(400 `AUTH_LAST_SUPERADMIN`), 모든 역할 변경이 대상 세션을 종료(`refreshTokenHash` null) |
-| 역할 라벨 | `role === 1 ? 'admin' : 'user'` | 3단계다 — 그 검사로는 `superadmin`을 표현할 수 없다 |
-| 감사 액션 | `FORCE_LOGOUT`, `USER_BANNED`, `USER_MUTED`, `USER_UNBAN`을 포함한 6개에 색 지정 | `AUDIT_ACTIONS`는 정확히 `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE` |
-| superadmin 부트스트랩 문서 | `e2e/.env.example`과 `e2e/seed-superadmin.mjs`가 "CLAUDE.md의 Role Population Invariants"를 인용 | **여기에는 그런 절이 없다** — Chat Project의 것이다. 실제 메커니즘은 `SUPERADMIN_EMAIL` + `superadmin-seed.service.ts`. 그 문장의 *주장*("앱 내 흐름으로 superadmin을 만들 수 없다")은 여기서도 참이며 인용만 틀렸다 |
-| 전송 계층 | `/graphql`을 향한 Apollo Client(`src/api/apollo.ts`, `src/api/graphql-operations.ts`, 그리고 `dashboard-page`·`rooms-page`·`logs-page`의 Apollo 훅) | **REST 전용 — `/graphql` 라우트가 없다**([ADR 0009](../ADR/0009-rest-only-api-with-swagger.ko.md)) |
-| 갱신 라우트 | `POST /auth/token/refreshaccess` | `POST /auth/token/refresh` ([ADR 0012](../ADR/0012-refresh-cookie-rotation.ko.md)) |
-| 로그아웃 라우트 | `POST /auth/signOut` | `POST /auth/signout` (소문자) |
-| 도메인 페이지 | `rooms-page.tsx`, `getOnlineUser`, `getUserNicknames` | 채팅방·접속 상태·닉네임이 없다 — 이 도메인은 **업로드된 영상 파일**이다 |
-| 사용자 조작 | `POST /user/:id/ban` \| `/unban` \| `/force-logout` | **하나도 없다** |
-| 사용자 목록 조회 | `GET /user?page&take&sort&sortBy&search&status` | `findAll()`은 `@Query()`를 바인딩하지 않고 전체 사용자를 페이지네이션 없이 반환한다 |
-| 감사 로그 | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip`만. **`/export`가 없다** |
-| 페이징 모델 | `page` + `take` | `take` + `skip`(오프셋) ([ADR 0021](../ADR/0021-list-query-search-filter-sort.ko.md)) |
-| 사용자 삭제 | 확인 없는 `DELETE /user/:id` | 계정이 파일을 가진 경우 `?deleteFiles=true` 필수, 없으면 409 `USER_HAS_FILES` ([ADR 0020](../ADR/0020-account-deletion-cascade.ko.md)) |
-| 에러 처리 | 그때그때의 상태 코드·메시지 검사 | 동결된 `{ code, message }` 계약 — `code`로 분기 ([ADR 0011](../ADR/0011-error-code-contract.ko.md)) |
-| 배포 설정 | CSP가 Chat Project의 Railway 호스트로 고정된 `vercel.json` | **배포 대상이 없다.** AWS는 Stage 4 로드맵 항목. 어디든 배포하기 전에 다시 쓰거나 삭제 |
-
-`vercel.json`은 의도적으로 손대지 않았다. 적응 작업이 반쯤 고쳐진 파일이 아니라 원본을 기준으로
-diff를 뜰 수 있어야 하기 때문이다.
-
-## 관련 결정
-
-- [ADR 0022](../ADR/0022-admin-console-import-from-chat-project.ko.md) — 이번 이식. ADR 0010의
-  admin 배치 조항을 개정한다
-- [ADR 0010](../ADR/0010-frontend-split-and-api-surface-freeze.ko.md) — 원래 admin을 `frontend/`
-  안의 `/admin` 라우트 구역으로 배치했다. 그 구역
-  (`frontend/src/features/admin/AdminPage.tsx`)은 **아직 남아 있고**, 두 화면 중 무엇이
-  살아남을지는 [ROADMAP.ko.md](../ROADMAP.ko.md) > 미예정 항목의 미결 사항이다
-- [CHAT-REMNANT-REMOVAL-PLAN.ko.md](../CHAT-REMNANT-REMOVAL-PLAN.ko.md) — 이 폴더는 *선언된*
-  설계 이식(버킷 4)이며, 표시 없는 잔재가 아니다. 이 분류는 이 파일과 ADR 0022가 "이 코드는
-  Chat Project API를 대상으로 한다"고 계속 밝히는 동안에만 유효하다
+1. **사용자별 감사 조각: 근사하지 않고 제거했다.** `GET /audit-log`에는 `userId` 필터가
+   없어서, 이식된 패널의 "이 사용자의 최근 로그" 절은 필터 없는 페이지를 가져와
+   클라이언트 쪽에서 걸러내는 방식으로만 흉내 낼 수 있었다 — 이 방식은 사용자의 실제
+   활동이 그 페이지 밖으로 밀려나면 오래된 항목을 조용히 빠뜨린다. 절을 제거하는 쪽이
+   정확하고, 흉내 내는 쪽은 그렇지 않다. 빠진 필터 자체는 이제
+   [ROADMAP.md](../ROADMAP.ko.md) > 미예정 항목에 백엔드 후속 작업으로 기록돼 있으며,
+   여기서 해결한 것은 아니다.
+2. **역할 변경 UI: 이식된 이진 토글이 아니라 3단계 `<select>`.** 이식된 승격/강등 토글은
+   행을 두 상태 사이로만 옮길 수 있고 `superadmin`을 전혀 표현하지 못한다 —
+   [ADR 0022](../ADR/0022-admin-console-import-from-chat-project.ko.md)가 이 콘솔이
+   존재하는 이유로 정확히 지목한 그 빈틈이다. 드롭다운은 여전히 actor가 superadmin일
+   때만 렌더링되며(서버 쪽 `RolesGuard` 검사를 클라이언트에서 거울처럼 반영), 여전히
+   `AUTH_LAST_SUPERADMIN`을 자체 메시지로 분기한다.
 
 ## 로컬 명령
 
-`admin/` 안에서 실행한다. 이식된 스크립트 그대로다.
+`admin/` 안에서 실행한다.
 
 ```bash
 pnpm install     # admin/는 자체 의존성 트리를 갖는다
@@ -121,9 +109,43 @@ pnpm dev         # 5174 포트 Vite 개발 서버
 pnpm build       # tsc -b && vite build
 pnpm lint        # admin/ 자체 eslint 설정
 pnpm test        # Vitest (src/**/*.{test,spec}.{ts,tsx})
-pnpm e2e         # Playwright — Chat Project 라우트를 기대하므로 여기서는 실패한다
+pnpm e2e         # Playwright — 이제 이 백엔드의 실제 라우트를 대상으로 한다
 pnpm e2e:seed    # superadmin 시딩. e2e/.env 필요(git 무시 대상)
 ```
 
 `.env.example`을 `.env`로, `e2e/.env.example`을 `e2e/.env`로 복사한다. 두 `.env` 파일과
 `node_modules/`, `dist/`는 `admin/.gitignore`가 무시하므로 추적되는 비밀 값은 없다.
+
+**`frontend/`에는 필요 없는, 이 콘솔에만 필요한 일회성 백엔드 설정**: `admin/`은 백엔드를
+교차 출처로 호출한다(`:5174` → `:3000`, 개발 프록시 없음, 갱신 쿠키를 위해 `axios`가
+`withCredentials: true`로 설정돼 있다). 그래서 백엔드 루트 `.env`에
+`CORS_ORIGIN=http://localhost:5174`가 필요하다(`frontend/`의 `:5173` 출처와 함께 쓰려면
+쉼표로 연결). 이것이 없으면 브라우저가 모든 요청을 막고, 콘솔의 로그인은 읽을 수 있는
+에러 없이 조용히 실패한다 — 이것은 이 폴더의 코드로 우회할 수 없는 백엔드 설정 변경이며,
+기본값으로는 꺼져 있다(`backend/.env.example`).
+
+## 열린 사항 (이번 작업으로 해결되지 않음)
+
+- **`GET /audit-log`에 `userId` 필터가 없다** — 위 "두 가지 결정" 참고. ROADMAP.md > 미예정
+  항목에 백엔드 후속 작업으로 기록돼 있다.
+- **`PATCH /file/:id { userId }` 파일 이전 필드는 어떤 결정으로도 정당화된 적이 없다**
+  (CLAUDE.md > 알려진 미해결 지점) — 이 콘솔과는 무관하지만, 이번 작업이 손대지 않았고
+  해결된 것으로 가정해서는 안 되므로 여기 적어둔다.
+- **두 admin 화면 중 무엇이 살아남을지** — 이 콘솔 대
+  `frontend/src/features/admin/AdminPage.tsx` — 은 여전히
+  [ROADMAP.md](../ROADMAP.ko.md) > 미예정 항목의 미결 사항이다. 이번 작업은 그 질문을
+  어느 쪽으로도 해결하지 않고 이 콘솔만 적응시켰다.
+
+## 관련 결정
+
+- [ADR 0022](../ADR/0022-admin-console-import-from-chat-project.ko.md) — 이번 이식. ADR 0010의
+  admin 배치 조항을 개정한다
+- [ADR 0028](../ADR/0028-access-token-role-claim.ko.md) — 이 콘솔의 라우트 가드가 의존하는
+  액세스 토큰 `role` 클레임을 추가했다
+- [ADR 0010](../ADR/0010-frontend-split-and-api-surface-freeze.ko.md) — 원래 admin을
+  `frontend/` 안의 `/admin` 라우트 구역으로 배치했다. 그 구역
+  (`frontend/src/features/admin/AdminPage.tsx`)은 **아직 남아 있고**, 두 화면 중 무엇이
+  살아남을지는 [ROADMAP.ko.md](../ROADMAP.ko.md) > 미예정 항목의 미결 사항이다
+- [CHAT-REMNANT-REMOVAL-PLAN.ko.md](../CHAT-REMNANT-REMOVAL-PLAN.ko.md) — 이 폴더는 *선언된*
+  설계 이식(버킷 4)이며, 표시 없는 잔재가 아니다. 이 분류는 이번 적응과 무관하게 유효하다 —
+  남은 코드는 여전히 출처가 있는 사본이고, 이제는 원본 그대로가 아니라 교정된 상태일 뿐이다
