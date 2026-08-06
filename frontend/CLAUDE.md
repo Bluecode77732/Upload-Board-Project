@@ -77,8 +77,12 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   `src/auth/`).
 - **File header comment** (new files only): three lines — Purpose / Usage /
   Rationale — above the imports, matching the existing files.
-- **Admin**: `/admin` is a route section inside this app (backend ADR 0010),
-  a stub until backend RBAC lands — it must not imply elevated access yet.
+- **Admin**: there is no `/admin` route in this app. ADR 0010 originally reserved one
+  as a stub; ADR 0022 imported a standalone Chat Project console to `admin/` instead as
+  the operator surface, and once that console's role-management slice was adapted to
+  this backend (2026-08-06), the stub route was deleted rather than built out — see
+  ROADMAP.md's Stage 5 "resolve the duplicate admin surface" row. Do not re-add an
+  `/admin` route here; the operator surface lives in the sibling `admin/` app.
 - **TypeScript**: no `any`; the build runs `tsc -b` with `noUnusedLocals`/
   `noUnusedParameters` — keep it green.
 

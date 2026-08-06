@@ -294,3 +294,16 @@ Verified against this repository's code on 2026-07-30, not inferred. Each row is
 > token now carries an optional `role` claim, so the imported console's
 > `jwtDecode<{ sub, role }>(accessToken)` assumption holds against this API. Both were Stage 5
 > blockers; adapting the console itself (this ADR's backlog, still unstarted) can now proceed.
+
+> **Note added 2026-08-06** — the console's role-management slice (login, dashboard, users,
+> audit log) was adapted against this backend's real routes, closing the modification backlog
+> above (full defect-by-defect record: `admin/README.md` > "What was adapted"). That answered
+> the question Decision 5 and Consequences left open — **"which admin surface survives"**: the
+> import turned out *not* to be "mostly deletable" (only the chat-domain remnant — Apollo,
+> rooms, ban/force-logout — was deletable; the role-management substance, the entire reason
+> for this import, adapted cleanly), so `admin/` is now the sole admin surface.
+> `frontend/src/features/admin/AdminPage.tsx` — a 17-line stub with no backend calls, still
+> exactly what it was when [ADR 0010](0010-frontend-split-and-api-surface-freeze.md) reserved
+> it — was deleted rather than built out, closing Stage 5's last open row (ROADMAP.md > Stage
+> 5). This further amends ADR 0010's admin-placement clause: admin is no longer a route section
+> inside `frontend/` at all, not even a reserved one.

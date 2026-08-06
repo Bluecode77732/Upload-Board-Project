@@ -86,14 +86,13 @@ item below lands as its own dedicated, designed change
   It does **not** depend on Stage 4 and may run before it.
 - **Execution order for the remaining work fixed 2026-07-31** (see section 6 >
   Execution order): ~~#1 board comment module~~ (✅ done 2026-07-31) → ~~#2 `GET /user`
-  pagination~~ (✅ done 2026-08-05, pulled forward from Stage 5) → **#3 Stage 5 admin
-  surface — in progress** (its blocking first row, role delivery, done 2026-08-05 via
-  [ADR 0028](ADR/0028-access-token-role-claim.md); console adaptation done 2026-08-06 —
-  the role-management slice of `admin/` now targets this backend's real routes, and the
-  moderation-existence row was settled "no" as part of the same change; resolving the
-  duplicate admin surface is Stage 5's last open row) → #4 Stage 4
-  deployment, last. This resolves Stage 5's floating position (before Stage 4) and pulls the
-  independent pagination debt ahead of both.
+  pagination~~ (✅ done 2026-08-05, pulled forward from Stage 5) → ~~#3 Stage 5 admin
+  surface~~ (✅ **complete 2026-08-06** — role delivery via
+  [ADR 0028](ADR/0028-access-token-role-claim.md), the `admin/` role-management slice adapted
+  to this backend's real routes, moderation-existence settled "no", and the duplicate admin
+  surface resolved in favor of `admin/` — `frontend/src/features/admin/AdminPage.tsx` deleted)
+  → **#4 Stage 4 deployment — now next, last**. This resolves Stage 5's floating position
+  (before Stage 4) and pulls the independent pagination debt ahead of both.
 - **File visibility + media-type expansion decided 2026-07-31** (design gate,
   [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)): restating the project's
   founding goals surfaced two gaps — every stored file is served publicly with no
@@ -262,16 +261,16 @@ item carries its execution number in its own row.
    `UserService.findAll` sorts `createdAt DESC, id DESC` for deterministic pages; response
    stays the existing `[rows, total]` tuple (`GET /file` shape, no new ADR). Search/sort
    were deliberately left out of scope — the ROADMAP item named pagination only — and
-   remain open for Stage 5 if the admin console needs them. **Execution #3 is now next.**
-3. **Stage 5 — operational surface (admin console)**, sequenced **before Stage 4**:
-   ~~role-delivery decision (blocked the rest)~~ (✅ done 2026-08-05,
-   [ADR 0028](ADR/0028-access-token-role-claim.md) — access token gains a `role` claim) →
-   ~~adapt the imported console~~ (✅ done 2026-08-06 — see the row below) →
-   ~~moderation-existence decision~~ (✅ settled "no" as part of the same change — ban/unban/
-   force-logout deleted, no backend replacement built) → **resolve the duplicate admin
-   surface — now the only open row**. Rationale (already recorded in the Stage 5 note): a
-   deployed system whose privilege hierarchy is operable only through Swagger is hard to run,
-   so the operational surface precedes deployment.
+   remain open for Stage 5 if the admin console needs them (it did not).
+3. ~~**Stage 5 — operational surface (admin console)**~~ — ✅ **complete 2026-08-06**, all
+   four rows done: role-delivery decision
+   ([ADR 0028](ADR/0028-access-token-role-claim.md), access token gains a `role` claim) →
+   adapt the imported console (role-management slice against real routes) →
+   moderation-existence decision (settled "no" — ban/unban/force-logout deleted, no backend
+   replacement built) → resolve the duplicate admin surface (`admin/` kept,
+   `frontend/src/features/admin/AdminPage.tsx` deleted — see [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s
+   2026-08-06 note). Ran before Stage 4 as planned: a deployed system whose privilege
+   hierarchy is operable only through Swagger is hard to run. **Execution #4 is now next.**
 4. **Stage 4 — production transition (deployment)**, sequenced **last**: AWS
    deployment → container/deploy hardening → VOD access control → storage
    port-adapter (conditional) → performance/capacity criteria.
@@ -376,15 +375,15 @@ hierarchy can only be operated through Swagger is hard to run in production.
 argument won: the operational surface precedes deployment. Stage 5's internal order is
 role-delivery → adapt console → moderation decision → resolve duplicate surface; its
 `GET /user` pagination row was pulled out to execution #2 as an early quick win — **done
-2026-08-05**, see the row below. The role-delivery row itself is also **done, 2026-08-05**
-([ADR 0028](ADR/0028-access-token-role-claim.md)) — console adaptation is next.
+2026-08-05**, see the row below. **Stage 5 is now complete (2026-08-06)** — all four rows
+below are done; execution order #4 (Stage 4 deployment) is next.
 
 | Task | Rationale / dependencies |
 |---|---|
 | ~~**How the client learns a user's role**~~ (backend decision — **done 2026-08-05**, [ADR 0028](ADR/0028-access-token-role-claim.md)) | Chose the access-token `role` claim over a request-based lookup (`GET /user/:id` or a new `GET /auth/me`): matches the frontend's existing client-side JWT-decode pattern (no new round trip), and the one real cost — a demoted user's *decoded* role can lag up to the access-token TTL — never becomes a live privilege, since `RolesGuard`/`AuthUser` still source `role` from `JwtStrategy.validate`'s per-request DB read, never from the token. `Payload` gains `role?: UserRole` (access tokens only); `issueToken`/`issueTokenPair` widen to `Pick<UserEntity, 'id' \| 'role'>`. Amends [ADR 0002](ADR/0002-dual-secret-token-pair.md). **Unblocks the row below.** |
 | ~~Adapt the imported `admin/` console~~ (**done 2026-08-06**) | Rewrote the [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md) import from the Chat Project's API to this one, using that ADR's verified backlog as the brief. Landed the role-management slice: string `UserRole` (was numeric), role read from the access-token claim (ADR 0028), a 3-option role `<select>` (was a binary toggle — chosen over keeping the toggle so the console can operate all three tiers, per ADR 0022's own stated purpose), `AUTH_LAST_SUPERADMIN`/`USER_HAS_FILES`/`FORBIDDEN` handled by `{ code, message }` branching (ADR 0011), and `take`/`skip` + `[data, total]` tuple reads matching `GetUsersDto`/`AuditLogQueryDto` exactly (no search/sort/status/userId/export — none exist server-side). The chat-domain pages (`rooms-page`, presence/nickname widgets) and the whole Apollo/`/graphql` layer were deleted, not rewritten. The per-user audit-log panel was dropped rather than approximated (`GET /audit-log` has no `userId` filter — see the follow-up in section 7). Full defect-by-defect mapping: `admin/README.md` > "What was adapted". No backend files touched. |
 | ~~`GET /user` pagination~~ **(execution #2 — pulled forward from Stage 5, done 2026-08-05)** | Closed the standing Never Do Group 2 violation (`findAll()` bound no `@Query()` and returned `findAndCount()` over every user). New `GetUsersDto` (`take`/`skip`, mirroring `GetFilesDto`); `UserService.findAll` sorts `createdAt DESC, id DESC` for deterministic pages; response kept the existing `[rows, total]` tuple shape (`GET /file` parity, no new ADR). Search/sort were left out of this pass' scope — the console adaptation above did not need them either; the follow-up in section 7 stays open. |
-| Resolve the duplicate admin surface | Delete whichever of the two loses: `frontend/src/features/admin/AdminPage.tsx` (ADR 0010's route section) or the standalone `admin/` app (ADR 0022). Deliberately decided **during** this stage, not before it — how much of the import survives adaptation is the input to the choice. Tracked as an open decision in section 7. **Now that the console adaptation above is done, this is Stage 5's only remaining row.** |
+| ~~Resolve the duplicate admin surface~~ (**done 2026-08-06**) | The adaptation above answered which survives: the import was not "mostly deletable" (only the chat-domain remnant was), so `admin/` is the sole admin surface. Deleted `frontend/src/features/admin/AdminPage.tsx` (ADR 0010's stub route section, still a 17-line no-op) and its `/admin` route + import in `frontend/src/App.tsx`. Further amends [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) — admin is no longer a route section inside `frontend/` at all. Resolved in [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s 2026-08-06 note; the section 7 open decision is closed. |
 | ~~Decide whether moderation actions exist at all~~ (**settled "no", 2026-08-06, as part of the console adaptation above**) | The import called `POST /user/:id/ban`, `/unban`, and `/force-logout`, and colored audit actions (`USER_BANNED`, `USER_MUTED`, `USER_UNBAN`, `FORCE_LOGOUT`) that **this project never emits** — `AUDIT_ACTIONS` is exactly `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`, `POST_DELETE`, `COMMENT_DELETE`. Took the default answer: deleted the three actions and the four nonexistent audit colors from `admin/`, since a video-upload board has no stated moderation requirement (YAGNI). No backend surface was built for them — that would be new scope needing its own ADR, not a side effect of adapting a UI. |
 
 ## 7. Unscheduled / open decisions
@@ -544,17 +543,15 @@ role-delivery → adapt console → moderation decision → resolve duplicate su
   without, and doing it at a fraction of the LLM token cost of regenerating a console already
   built for the same three-tier hierarchy. The verified modification backlog lives in ADR 0022;
   the task rows, their ordering, and the backend decisions they depend on are now Stage 5's.
-- Which admin surface survives (recorded 2026-07-30,
-  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — **an open decision**, and it
-  stays one even though the work is now scheduled: it is
-  [Stage 5](#stage-5--operational-surface-admin-console--added-2026-07-30)'s fourth row, to be
-  settled **during** that stage rather than before it. Two admin surfaces coexist:
-  `frontend/src/features/admin/AdminPage.tsx` (the `/admin` route section
-  [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) specified, whose
-  admin-placement clause ADR 0022 amends) and the imported standalone `admin/` app. Choosing
-  now would be guessing — how much of the import survives adaptation is the input to the choice.
-  If it turns out mostly deletable, ADR 0010's original route-section plan is the better path
-  and this flips back to it.
+- ~~Which admin surface survives~~ (recorded 2026-07-30,
+  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — **resolved 2026-08-06**.
+  The console adaptation ([Stage 5](#stage-5--operational-surface-admin-console--added-2026-07-30)'s
+  third row) showed the import was *not* mostly deletable — only its chat-domain remnant was —
+  so `admin/` is the sole admin surface. `frontend/src/features/admin/AdminPage.tsx` (the
+  `/admin` route section [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)
+  specified) was deleted along with its route in `frontend/src/App.tsx`, further amending
+  ADR 0010's admin-placement clause: admin is no longer a route section inside `frontend/` at
+  all. Recorded in ADR 0022's 2026-08-06 note.
 - Doc-wording sync (deferred 2026-07-23; completed 2026-07-29): pre-plan
   "candidate" phrasings reconciled with this plan. ADR 0003 ("candidate
   roadmap item") now points at the landed [ADR 0018](ADR/0018-orphan-temp-file-cleanup.md);
@@ -625,7 +622,8 @@ candidate under the CI task).
 
 | Item | Notes |
 |---|---|
-| Admin console adaptation (role-management slice) | Rewrote `admin/`'s imported Chat Project UI against this backend's real routes: string `UserRole` throughout (was numeric), role read from the access-token claim ([ADR 0028](ADR/0028-access-token-role-claim.md)), a 3-option role `<select>` replacing the binary promote/demote toggle, `AUTH_LAST_SUPERADMIN`/`USER_HAS_FILES`/`USER_FILES_IN_USE`/`FORBIDDEN` branched by `{ code, message }` ([ADR 0011](ADR/0011-error-code-contract.md)), and `take`/`skip` + `[data, total]` tuple reads matching `GetUsersDto`/`AuditLogQueryDto` exactly. Chat-domain pages (`rooms-page`, Apollo/`/graphql` layer, ban/unban/force-logout) deleted, settling Stage 5's moderation-existence row "no" in the same change. Per-user audit-log panel dropped (not approximated) — `GET /audit-log` has no `userId` filter, tracked as a follow-up in section 7. No backend files touched — **fourth Stage 5 task; only "resolve the duplicate admin surface" remains** (full defect list: `admin/README.md` > "What was adapted") |
+| Admin console adaptation (role-management slice) | Rewrote `admin/`'s imported Chat Project UI against this backend's real routes: string `UserRole` throughout (was numeric), role read from the access-token claim ([ADR 0028](ADR/0028-access-token-role-claim.md)), a 3-option role `<select>` replacing the binary promote/demote toggle, `AUTH_LAST_SUPERADMIN`/`USER_HAS_FILES`/`USER_FILES_IN_USE`/`FORBIDDEN` branched by `{ code, message }` ([ADR 0011](ADR/0011-error-code-contract.md)), and `take`/`skip` + `[data, total]` tuple reads matching `GetUsersDto`/`AuditLogQueryDto` exactly. Chat-domain pages (`rooms-page`, Apollo/`/graphql` layer, ban/unban/force-logout) deleted, settling Stage 5's moderation-existence row "no" in the same change. Per-user audit-log panel dropped (not approximated) — `GET /audit-log` has no `userId` filter, tracked as a follow-up in section 7. No backend files touched — fourth Stage 5 task (full defect list: `admin/README.md` > "What was adapted") |
+| Resolve the duplicate admin surface — **Stage 5 complete** | The adaptation above answered the open question ADR 0022 deferred: the import was *not* "mostly deletable" (only the chat-domain remnant was; the role-management substance adapted cleanly), so `admin/` is now the sole admin surface. Deleted `frontend/src/features/admin/AdminPage.tsx` (a 17-line stub with no backend calls, unchanged since ADR 0010 reserved it) and its `/admin` route + import in `frontend/src/App.tsx`. Further amends [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)'s admin-placement clause — admin is no longer a route section inside `frontend/` at all. Resolution recorded in [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s 2026-08-06 note. **All four Stage 5 rows are now done — execution order #4 (Stage 4 deployment) is next.** |
 
 ### 2026-07-30
 

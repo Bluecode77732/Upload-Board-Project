@@ -277,3 +277,15 @@ A안은 명시한 두 목적에서 동시에 이긴다 — 토큰이 가장 싸�
 > 클레임을 실어, 이식된 콘솔의 `jwtDecode<{ sub, role }>(accessToken)` 가정이 이 API에서도
 > 성립한다. 둘 다 Stage 5의 걸림돌이었고, 콘솔 자체 적응(이 ADR의 백로그, 아직 미착수)이 이제
 > 진행될 수 있다.
+
+> **2026-08-06 추가 기록** — 콘솔의 역할 관리 조각(로그인, 대시보드, 유저, 감사 로그)이 이
+> 백엔드의 실제 라우트에 맞게 적응되어 위 수정 백로그가 해소됐다(항목별 전체 기록:
+> `admin/README.md` > "What was adapted"). 이것이 Decision 5와 Consequences가 미결로 남겨뒀던
+> 질문 — **"어느 admin 화면이 살아남는가"** — 에 답했다: 이식본은 "대부분 삭제 가능"한 것으로
+> 밝혀지지 **않았다** — 삭제 가능했던 건 채팅 도메인 잔재(Apollo, rooms, ban/force-logout)뿐이고,
+> 이 이식의 존재 이유였던 역할 관리 본체는 깔끔하게 적응됐다 — 그래서 `admin/`이 이제 유일한
+> admin 화면이다. `frontend/src/features/admin/AdminPage.tsx` — 백엔드 호출이 전혀 없는 17줄짜리
+> stub으로, [ADR 0010](0010-frontend-split-and-api-surface-freeze.ko.md)이 그것을 예약해 둘 때와
+> 정확히 같은 상태였다 — 은 구현되지 않고 삭제되어 Stage 5의 마지막 미결 행을 닫았다(ROADMAP.md
+> > Stage 5). 이는 ADR 0010의 admin 배치 조항을 한 번 더 개정한다: admin은 이제 `frontend/` 안의
+> 라우트 구역조차 아니다 — 예약된 자리조차 남지 않았다.

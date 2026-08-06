@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { LoginPage } from './features/auth/LoginPage'
 import { DashboardPage } from './features/files/DashboardPage'
 import { FileDetailPage } from './features/files/FileDetailPage'
-import { AdminPage } from './features/admin/AdminPage'
 import { RequireAuth } from './auth/RequireAuth'
 
 function App() {
@@ -24,14 +23,6 @@ function App() {
         element={
           <RequireAuth>
             <FileDetailPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/admin"
-        element={
-          <RequireAuth>
-            <AdminPage />
           </RequireAuth>
         }
       />

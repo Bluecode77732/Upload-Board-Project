@@ -12,6 +12,20 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Removed
+- **`frontend/src/features/admin/AdminPage.tsx` and its `/admin` route** (ROADMAP Stage 5,
+  final task — resolves the duplicate admin surface) — the console adaptation below showed
+  the imported `admin/` app's import was *not* "mostly deletable": only its chat-domain
+  remnant was, while the role-management substance (the entire reason ADR 0022 imported it)
+  adapted cleanly against real routes. That settles the choice ADR 0022 deferred in favor of
+  keeping `admin/` as the sole admin surface, so this 17-line stub — unchanged since
+  [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) reserved the route, with no
+  backend calls of its own — is deleted rather than built out. Further amends ADR 0010's
+  admin-placement clause: admin is no longer a route section inside `frontend/` at all.
+  Resolution recorded in [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s
+  2026-08-06 note. No backend files touched; `frontend/CLAUDE.md`'s Admin bullet updated to
+  match. **Stage 5 is now complete — all four rows done.**
+
 ### Added
 - **`admin/` console adapted to this backend's real routes — role-management slice**
   (ROADMAP Stage 5, fourth task; [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s

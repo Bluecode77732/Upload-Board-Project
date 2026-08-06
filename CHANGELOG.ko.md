@@ -12,6 +12,19 @@
 
 ## [Unreleased]
 
+### 제거
+- **`frontend/src/features/admin/AdminPage.tsx`와 그 `/admin` 라우트** (ROADMAP Stage 5
+  마지막 작업 — 중복 admin 화면 정리) — 아래 콘솔 적응 작업이 이식된 `admin/` 앱의 이식본이
+  "대부분 삭제 가능"하지 **않았음**을 보여줬다: 삭제 가능했던 건 채팅 도메인 잔재뿐이고,
+  ADR 0022가 이 콘솔을 이식한 이유 그 자체였던 역할 관리 본체는 실제 라우트에 맞게 깔끔하게
+  적응됐다. 이것이 ADR 0022가 미뤄뒀던 선택에 답을 준다 — `admin/`을 유일한 admin 화면으로
+  둔다. 그래서 [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)이 라우트를
+  예약해 둔 이래 변하지 않은, 자체 백엔드 호출이 전혀 없는 이 17줄짜리 stub은 구현되지 않고
+  삭제된다. ADR 0010의 admin 배치 조항을 한 번 더 개정한다 — admin은 이제 `frontend/` 안의
+  라우트 구역조차 아니다. 해소 내용은 [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의
+  2026-08-06 추가 기록에 남겼다. 백엔드 파일은 건드리지 않았다; `frontend/CLAUDE.md`의 Admin
+  항목도 맞춰 갱신했다. **Stage 5가 이제 완료됐다 — 네 행 모두 끝났다.**
+
 ### 추가
 - **`admin/` 콘솔을 이 백엔드의 실제 라우트에 맞게 적응 — 역할 관리 조각**
   (ROADMAP Stage 5 네 번째 작업; [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의

@@ -1047,11 +1047,13 @@ remnant (Apollo/`/graphql`, rooms, ban/force-logout) was deleted in the same pas
 not adapted — nothing chat-related remains to be read as reference material. It is
 still wired into no root tooling (outside the lint glob, Jest `roots`,
 `tsconfig.build.json`, compose, and CI) and still carries its own `package.json` and
-tooling, like `frontend/`. Resolving which of the two admin surfaces survives (this
-console vs. `frontend/src/features/admin/AdminPage.tsx`) is Stage 5's one remaining
-open row (ROADMAP.md > Unscheduled) — do not treat that choice as settled. Do not
-edit `admin/` from a backend task, and do not cite its adapted code as precedent for
-a backend pattern (it is a frontend consumer of the backend, not the reverse).
+tooling, like `frontend/`. **This is now the sole admin surface** — the other
+candidate, `frontend/src/features/admin/AdminPage.tsx` (a 17-line stub with no
+backend calls), was deleted 2026-08-06 once this console's adaptation proved the
+import was not "mostly deletable," settling Stage 5's last open row (ROADMAP.md
+> Stage 5). Do not re-add an `/admin` route to `frontend/`. Do not edit `admin/`
+from a backend task, and do not cite its adapted code as precedent for a backend
+pattern (it is a frontend consumer of the backend, not the reverse).
 
 ## Commands
 
