@@ -91,8 +91,12 @@ item below lands as its own dedicated, designed change
   [ADR 0028](ADR/0028-access-token-role-claim.md), the `admin/` role-management slice adapted
   to this backend's real routes, moderation-existence settled "no", and the duplicate admin
   surface resolved in favor of `admin/` — `frontend/src/features/admin/AdminPage.tsx` deleted)
-  → **#4 Stage 4 deployment — now next, last**. This resolves Stage 5's floating position
-  (before Stage 4) and pulls the independent pagination debt ahead of both.
+  → **the remaining work is Stage 4 (production transition), now next**. Its last two tasks
+  are the **cloud-native infrastructure introduction (K8s · Helm · S3)** and then
+  **deployment itself** — the latter deliberately **unnumbered**, since it is the terminal
+  act of the whole plan rather than a "step N" (a number only re-invited the Stage 4/Stage 5
+  ordering confusion). This resolves Stage 5's floating position (before Stage 4) and pulled
+  the independent pagination debt ahead of both.
 - **File visibility + media-type expansion decided 2026-07-31** (design gate,
   [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)): restating the project's
   founding goals surfaced two gaps — every stored file is served publicly with no
@@ -270,10 +274,20 @@ item carries its execution number in its own row.
    replacement built) → resolve the duplicate admin surface (`admin/` kept,
    `frontend/src/features/admin/AdminPage.tsx` deleted — see [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s
    2026-08-06 note). Ran before Stage 4 as planned: a deployed system whose privilege
-   hierarchy is operable only through Swagger is hard to run. **Execution #4 is now next.**
-4. **Stage 4 — production transition (deployment)**, sequenced **last**: AWS
-   deployment → container/deploy hardening → VOD access control → storage
-   port-adapter (conditional) → performance/capacity criteria.
+   hierarchy is operable only through Swagger is hard to run. **Stage 4 is now the remaining
+   work** — its infrastructure introduction (K8s · Helm · S3) then, finally, the deploy act
+   itself, deliberately unnumbered (see below).
+4. **Cloud-native infrastructure introduction** (K8s · Helm · S3) — the immediate
+   pre-deployment task: Kubernetes for container orchestration, Helm for release
+   packaging/templating, and S3 for object storage (the concrete storage port-adapter),
+   alongside the container/deploy hardening the Stage 1 image deferred. Each component
+   takes its own ADR.
+
+Then, finally — **deployment itself**. It carries **no execution number, deliberately**:
+deployment is not "step N" but the terminal act of the whole plan, performed once
+everything above is built and operable. A number here only re-invites the Stage 4/Stage 5
+ordering confusion this section already had to untangle, so it is labelled simply *the
+last work*.
 
 **Why #2 and #3 were pulled ahead of their nominal stage position** — three separate
 arguments, layered:
@@ -341,19 +355,21 @@ settled while zero consumers exist.
 | ~~Board domain — post module~~ — ✅ landed 2026-07-31 ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) | The first half of ADR 0023, split out because comment depends on post and not the reverse: `PostModule` (5 routes behind `JwtAuthGuard`), `post_entity` with 2 FKs and `UQ_post_entity_fileId` (reviewed migration — generate's four spurious constraint-rename statements stripped), 3 new error codes, the `DELETE /file/:id` `23503` → 409 `FILE_IN_USE` translation, and posts joining the ADR 0020 account cascade (`posts=N` in the audit detail). The ADR 0021 read layer and `canManage` were reused rather than restated. |
 | ~~Board domain — comment module~~ — ✅ landed 2026-07-31 ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) | The second half of ADR 0023, and with it **Stage 3 is complete**. `CommentModule` ships the ADR's four routes behind `JwtAuthGuard` across two controllers (a thread hangs off its post, an existing comment is addressed by its own id), over a `comment_entity` carrying the schema's only `ON DELETE CASCADE` FK plus `IDX_comment_entity_postId_createdAt` (reviewed migration — generate's six spurious constraint-rename statements stripped). `COMMENT_NOT_FOUND` and the `COMMENT_DELETE` audit action arrived with their consumers. Comments join the account cascade **ahead of posts**, because the account's comments on *other people's* posts are unreachable through the post FK cascade. Two design decisions were kept rather than softened: no `comments=N` in the audit detail (the cascaded half is uncountable, so a partial count would read as a total), and no idempotency key (a repeat creates a second comment, as for a post with no `fileId`). Its gate was cleared first by [ADR 0024](ADR/0024-account-cascade-fk-refusal.md). |
 
-### Stage 4 — Production transition — sequenced **last** in the execution order (2026-07-31)
+### Stage 4 — Production transition — the final work (deliberately unnumbered)
 
-Deployment comes after the board domain, the pagination debt, and the Stage 5 admin surface
-(see Execution order above). The rows below keep their internal dependency order.
+Deployment is the terminal act of the whole plan — done once everything else is built and
+operable — so it carries **no execution number**; a number here only re-invites the Stage
+4/Stage 5 ordering confusion the plan already had to untangle. The task **immediately before**
+the deploy act is the cloud-native infrastructure introduction (K8s · Helm · S3). The rows
+below keep their internal dependency order, and the deploy act is deliberately the last row.
 
 | Task | Rationale / dependencies |
 |---|---|
-| AWS container deployment | Local: Docker (compose); deploy: AWS, container-based. New deployment ADR; depends on Stage 1 Docker + CI. |
-| Container & deploy hardening | Surfaced by [ADR 0015](ADR/0015-docker-and-compose.md): the Stage 1 image is deploy-*capable* but not production-grade. Non-root `USER` (runs as root today), a distroless runtime base (drop the shell/apt attack surface), a health/readiness endpoint (for LB/orchestrator probes), migrations as a **separate deploy step** rather than on container boot (avoids multi-instance migration races), secrets via a manager instead of `.env`/`env_file`, HTTPS termination (the `Secure` refresh cookie requires it when `ENV=prod`), and a target-arch build (x64 prebuilt `bcrypt` today; ARM/Graviton needs a matching prebuild or `pnpm.onlyBuiltDependencies`). Depends on the AWS deployment task. |
+| **Cloud-native infrastructure introduction (K8s · Helm · S3) — immediate pre-deployment task** | Kubernetes for container orchestration, Helm for release packaging/templating, and S3 for object storage — the concrete form of the storage port-adapter (section 4), which moves file bytes off the host disk that horizontal scaling and multi-instance deploys otherwise break silently ([ADR 0005](ADR/0005-local-disk-storage.md)). Also carries the container/deploy hardening the Stage 1 image deferred, surfaced by [ADR 0015](ADR/0015-docker-and-compose.md): non-root `USER` (runs as root today), a distroless runtime base, a health/readiness endpoint (for LB/orchestrator probes), migrations as a **separate deploy step** rather than on container boot (avoids multi-instance migration races), secrets via a manager instead of `.env`/`env_file`, HTTPS termination (the `Secure` refresh cookie requires it when `ENV=prod`), and a target-arch build (x64 prebuilt `bcrypt` today; ARM/Graviton needs a matching prebuild or `pnpm.onlyBuiltDependencies`). Each component takes its own ADR; depends on Stage 1 Docker + CI. |
 | ~~File visibility & access-controlled serving~~ **(landed 2026-08-01, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6 + [ADR 0026](ADR/0026-file-visibility-implementation.md); generalizes the former "VOD playback access control" row)** | Uploaded files used to be plain public URLs — anyone with the link could watch. `FileEntity` now carries a 3-state `visibility` (public/private/**unlisted** via a rotatable share token + optional TTL); `GET /file/:id/content` is the sole access-controlled read path (Range-aware), and `ServeStaticModule` no longer exposes `file/upload`. Partially revises [ADR 0005](ADR/0005-local-disk-storage.md) (serving). **Frontend adoption of the new `fileUrl`/`visibility` shape is still outstanding** — see Unscheduled below. |
 | ~~Media-type expansion (images/audio, type-specific upload fields)~~ **(landed 2026-08-01, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D4/D5 + [ADR 0027](ADR/0027-media-type-expansion-implementation.md) — split from the row above 2026-08-01)** | `POST /upload/attach` now accepts `image` (jpg/jpeg/png/webp), `audio` (mp3), or `video` (mp4/mov/webm, unchanged) as three type-specific fields, each with its own allowlist, replacing the single `video` field. Revises [ADR 0003](ADR/0003-two-phase-upload-contract.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) (upload field, a breaking change against the live frontend). No schema change. **Frontend adoption of the new upload fields is still outstanding** — see Unscheduled below. |
-| Storage port-adapter | Only if/when the S3 need is confirmed — see Architecture direction (section 4). |
 | Performance / capacity criteria | Index policy, response-time targets, disk ceilings — measured before optimized. |
+| **Deployment — the final work** (no execution number, deliberately) | AWS, container-based, onto the infrastructure introduced above (K8s · Helm · S3). Not "step N" but the terminal act of the whole plan, performed once everything above is built and operable — hence unnumbered. New deployment ADR; depends on the infrastructure-introduction row plus Stage 1 Docker + CI. (The former standalone "storage port-adapter" row was folded into that introduction — S3 is exactly its concrete form.) |
 
 ### Stage 5 — Operational surface (admin console) — added 2026-07-30
 
@@ -376,7 +392,7 @@ argument won: the operational surface precedes deployment. Stage 5's internal or
 role-delivery → adapt console → moderation decision → resolve duplicate surface; its
 `GET /user` pagination row was pulled out to execution #2 as an early quick win — **done
 2026-08-05**, see the row below. **Stage 5 is now complete (2026-08-06)** — all four rows
-below are done; execution order #4 (Stage 4 deployment) is next.
+below are done; the remaining work is Stage 4 (infrastructure introduction, then deployment).
 
 | Task | Rationale / dependencies |
 |---|---|
@@ -623,7 +639,7 @@ candidate under the CI task).
 | Item | Notes |
 |---|---|
 | Admin console adaptation (role-management slice) | Rewrote `admin/`'s imported Chat Project UI against this backend's real routes: string `UserRole` throughout (was numeric), role read from the access-token claim ([ADR 0028](ADR/0028-access-token-role-claim.md)), a 3-option role `<select>` replacing the binary promote/demote toggle, `AUTH_LAST_SUPERADMIN`/`USER_HAS_FILES`/`USER_FILES_IN_USE`/`FORBIDDEN` branched by `{ code, message }` ([ADR 0011](ADR/0011-error-code-contract.md)), and `take`/`skip` + `[data, total]` tuple reads matching `GetUsersDto`/`AuditLogQueryDto` exactly. Chat-domain pages (`rooms-page`, Apollo/`/graphql` layer, ban/unban/force-logout) deleted, settling Stage 5's moderation-existence row "no" in the same change. Per-user audit-log panel dropped (not approximated) — `GET /audit-log` has no `userId` filter, tracked as a follow-up in section 7. No backend files touched — fourth Stage 5 task (full defect list: `admin/README.md` > "What was adapted") |
-| Resolve the duplicate admin surface — **Stage 5 complete** | The adaptation above answered the open question ADR 0022 deferred: the import was *not* "mostly deletable" (only the chat-domain remnant was; the role-management substance adapted cleanly), so `admin/` is now the sole admin surface. Deleted `frontend/src/features/admin/AdminPage.tsx` (a 17-line stub with no backend calls, unchanged since ADR 0010 reserved it) and its `/admin` route + import in `frontend/src/App.tsx`. Further amends [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)'s admin-placement clause — admin is no longer a route section inside `frontend/` at all. Resolution recorded in [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s 2026-08-06 note. **All four Stage 5 rows are now done — execution order #4 (Stage 4 deployment) is next.** |
+| Resolve the duplicate admin surface — **Stage 5 complete** | The adaptation above answered the open question ADR 0022 deferred: the import was *not* "mostly deletable" (only the chat-domain remnant was; the role-management substance adapted cleanly), so `admin/` is now the sole admin surface. Deleted `frontend/src/features/admin/AdminPage.tsx` (a 17-line stub with no backend calls, unchanged since ADR 0010 reserved it) and its `/admin` route + import in `frontend/src/App.tsx`. Further amends [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)'s admin-placement clause — admin is no longer a route section inside `frontend/` at all. Resolution recorded in [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s 2026-08-06 note. **All four Stage 5 rows are now done — the remaining work is Stage 4 (infrastructure introduction, then deployment).** |
 
 ### 2026-07-30
 

@@ -12,6 +12,21 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Changed
+- **ROADMAP Stage 4 restructured — deployment is unnumbered, with a cloud-native
+  infrastructure introduction (K8s · Helm · S3) as its immediate pre-deploy task**
+  (documentation only). Deployment no longer carries an execution number: it is the terminal
+  act of the whole plan, done once everything else is built and operable, and a number only
+  re-invited the Stage 4/Stage 5 ordering confusion the plan already had to untangle — so it
+  is labelled simply *the last work* and sits as the final row of the Stage 4 table. A new
+  **"Cloud-native infrastructure introduction (K8s · Helm · S3)"** task is added immediately
+  before it: Kubernetes (orchestration), Helm (release packaging), and S3 (object storage —
+  the concrete form of the storage port-adapter, into which the standalone "storage
+  port-adapter" and "container & deploy hardening" rows were folded). Updated across
+  `ROADMAP.md`/`.ko.md` (Current position, §6 execution order, Stage 4 header + table, Stage 5
+  completion notes) and the `CLAUDE.md` roadmap summary. No code, schema, or plan-scope change
+  — only the naming and ordering of the remaining Stage 4 work.
+
 ### Removed
 - **`frontend/src/features/admin/AdminPage.tsx` and its `/admin` route** (ROADMAP Stage 5,
   final task — resolves the duplicate admin surface) — the console adaptation below showed

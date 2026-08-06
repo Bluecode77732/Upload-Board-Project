@@ -938,13 +938,15 @@ conventions, E2E rewrite) → Stage 2 mechanism hardening (orphan temp-file
 cleanup, deletion policy, upload idempotency) → ~~Stage 3 board-domain expansion
 (search/filter/sort, post/comment modules)~~ — **complete 2026-07-31** (ADR 0021,
 ADR 0023 + its two implementation halves, with ADR 0024 settling the invariant gap
-between them) → Stage 4 production transition (AWS
-container deploy, ~~file visibility + access-controlled serving~~ [**landed 2026-08-01**,
-ADR 0025 D1/D2/D3/D6 + ADR 0026 — generalizes the former "VOD playback access control" row,
-pulled ahead of deployment as its own task] + ~~media-type expansion~~ [**landed
-2026-08-01**, ADR 0025 D4/D5 + ADR 0027 — completes ADR 0025's design gate], storage
-port-adapter, performance
-criteria) → **Stage 5 operational surface — admin console (appended 2026-07-30,
+between them) → Stage 4 production transition (~~file visibility + access-controlled
+serving~~ [**landed 2026-08-01**, ADR 0025 D1/D2/D3/D6 + ADR 0026 — generalizes the former
+"VOD playback access control" row, pulled ahead of deployment as its own task] +
+~~media-type expansion~~ [**landed 2026-08-01**, ADR 0025 D4/D5 + ADR 0027 — completes
+ADR 0025's design gate], then a **cloud-native infrastructure introduction (K8s · Helm · S3
+— the storage port-adapter's concrete form)** as the immediate pre-deploy task, performance
+criteria, and finally **deployment itself — the terminal act, deliberately carrying no
+execution number** (a number only re-invited the Stage 4/Stage 5 ordering confusion; it is
+simply the last work) → **Stage 5 operational surface — admin console (appended 2026-07-30,
 ADR 0022**: role-delivery decision, adapting the imported `admin/` console,
 `GET /user` pagination, resolving the duplicate admin surface, and deciding whether
 moderation actions exist at all). Stage 5's number is **not** dependency order — it

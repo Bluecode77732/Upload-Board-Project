@@ -85,7 +85,10 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   역할 관리 조각을 이 백엔드의 실제 라우트에 맞게 적응, 모더레이션 존재 여부 "아니오"로
   결론, 중복 admin 화면을 `admin/` 쪽으로 정리하며
   `frontend/src/features/admin/AdminPage.tsx` 삭제까지 네 행 모두 완료) →
-  **#4 Stage 4 배포 — 이제 다음, 마지막**. 이로써 Stage 5의 부동 위치가 Stage 4 앞으로 확정되고, 독립적인
+  **남은 작업은 Stage 4(프로덕션 전환), 이제 다음**. 마지막 두 작업은 **클라우드 네이티브
+  인프라 도입(K8s · Helm · S3)**, 그다음 **배포 자체**다 — 배포는 "N번째 단계"가 아니라 전체
+  계획의 종착 행위이므로 **의도적으로 번호를 붙이지 않는다**(번호는 Stage 4/Stage 5 순서
+  혼동을 다시 부를 뿐이다). 이로써 Stage 5의 부동 위치가 Stage 4 앞으로 확정되고, 독립적인
   페이지네이션 부채가 둘보다 앞으로 당겨진다.
 - **파일 가시성 + 미디어 타입 확장을 2026-07-31에 결정했다**(설계 게이트,
   [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)): 프로젝트 창립 목표를
@@ -250,9 +253,18 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
    중복 admin 화면 정리(`admin/` 유지,
    `frontend/src/features/admin/AdminPage.tsx` 삭제 — [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의
    2026-08-06 추가 기록 참조). 계획대로 Stage 4보다 먼저 진행됐다: 권한 계층을 Swagger로만
-   운영할 수 있는 배포 시스템은 운영이 어렵기 때문. **이제 실행 #4가 다음 차례다.**
-4. **Stage 4 — 실서비스 전환 (배포)**, **마지막**으로 배치: AWS 배포 → 컨테이너·배포
-   하드닝 → VOD 접근 제어 → 스토리지 포트-어댑터(조건부) → 성능/용량 기준.
+   운영할 수 있는 배포 시스템은 운영이 어렵기 때문. **이제 남은 작업은 Stage 4** — 인프라
+   도입(K8s · Helm · S3), 그다음 마지막으로 배포 자체이며, 배포는 의도적으로 번호를 붙이지
+   않는다(아래 참조).
+4. **클라우드 네이티브 인프라 도입** (K8s · Helm · S3) — 배포 직전 작업: 컨테이너
+   오케스트레이션(Kubernetes), 릴리스 패키징/템플릿(Helm), 오브젝트 스토리지(S3 —
+   스토리지 포트-어댑터의 구체적 형태)와 함께, Stage 1 이미지가 미룬 컨테이너·배포
+   하드닝을 담는다. 각 구성요소는 자체 ADR을 갖는다.
+
+그다음, 마지막으로 — **배포 자체**. **의도적으로 실행 번호를 붙이지 않는다**: 배포는
+"N번째 단계"가 아니라 위의 모든 것이 만들어지고 운영 가능해진 뒤 수행하는 전체 계획의
+종착 행위다. 여기에 번호를 붙이면 이 절이 이미 정리한 Stage 4/Stage 5 순서 혼동을 다시
+부를 뿐이라, 그냥 *마지막 작업*으로 표기한다.
 
 **#2와 #3이 원래 소속 단계보다 앞당겨진 이유** — 층을 이루는 세 가지 별개 논거:
 
@@ -316,19 +328,21 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | ~~게시판 도메인 — post 모듈~~ — ✅ 2026-07-31 완료 ([ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) | ADR 0023의 전반부. comment가 post에 의존하지 그 반대가 아니어서 분리했다: `PostModule`(`JwtAuthGuard` 뒤 5개 라우트), FK 2개와 `UQ_post_entity_fileId`를 가진 `post_entity`(검토된 마이그레이션 — generate가 뱉은 제약 이름 변경 4문장은 걷어냄), 신규 에러 코드 3개, `DELETE /file/:id`의 `23503` → 409 `FILE_IN_USE` 번역, 그리고 ADR 0020 계정 연쇄에 게시글 합류(감사 detail의 `posts=N`). ADR 0021 조회 계층과 `canManage`는 다시 만들지 않고 재사용했다. |
 | ~~게시판 도메인 — comment 모듈~~ — ✅ 2026-07-31 완료 ([ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) | ADR 0023의 후반부이며, 이로써 **Stage 3이 완결됐다**. `CommentModule`이 ADR의 네 라우트를 `JwtAuthGuard` 뒤에 컨트롤러 두 개로 나눠 제공한다(스레드는 글에 매달리고, 이미 존재하는 댓글은 자기 id로 지목된다). 그 아래 `comment_entity`는 이 스키마의 유일한 `ON DELETE CASCADE` FK와 `IDX_comment_entity_postId_createdAt`을 갖는다(검토된 마이그레이션 — generate가 뱉은 제약 이름 변경 6문장은 걷어냄). `COMMENT_NOT_FOUND`와 `COMMENT_DELETE` 감사 액션은 소비자와 함께 들어왔다. 댓글은 계정 연쇄에서 **게시글보다 먼저** 삭제된다 — 그 계정이 *남의* 글에 단 댓글은 게시글 FK 연쇄로 닿지 않기 때문이다. 완화하지 않고 그대로 지킨 결정 둘: 감사 detail에 `comments=N` 없음(연쇄분을 셀 수 없어 반쪽 집계는 총계처럼 읽힌다), 멱등 키 없음(재제출은 `fileId` 없는 글과 마찬가지로 두 번째 댓글이 된다). 게이트는 [ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)가 먼저 풀었다. |
 
-### Stage 4 — 실서비스 전환 — 실행 순번상 **마지막** (2026-07-31)
+### Stage 4 — 실서비스 전환 — 마지막 작업 (의도적으로 번호 없음)
 
-배포는 게시판 도메인, 페이지네이션 부채, Stage 5 admin 화면 이후에 온다(위 실행 순번
-참조). 아래 행들은 각자의 내부 의존 순서를 그대로 유지한다.
+배포는 전체 계획의 종착 행위다 — 나머지가 모두 만들어지고 운영 가능해진 뒤 수행하므로
+**실행 번호를 붙이지 않는다**; 여기에 번호를 붙이면 이 계획이 이미 정리한 Stage 4/Stage 5
+순서 혼동을 다시 부를 뿐이다. 배포 **직전** 작업은 클라우드 네이티브 인프라 도입
+(K8s · Helm · S3)이다. 아래 행들은 각자의 내부 의존 순서를 유지하며, 배포 행은 의도적으로
+맨 마지막이다.
 
 | 작업 | 근거 / 의존성 |
 |---|---|
-| AWS 컨테이너 배포 | 로컬: Docker(compose), 배포: AWS — 컨테이너 기반. 신규 배포 ADR 필요; Stage 1의 Docker + CI에 의존. |
-| 컨테이너·배포 하드닝 | [ADR 0015](ADR/0015-docker-and-compose.ko.md)에서 드러난 항목: Stage 1 이미지는 배포 *가능*하지만 프로덕션 급은 아니다. 비루트 `USER`(현재 root 실행), distroless 런타임 베이스(셸/apt 공격 표면 제거), 헬스/레디니스 엔드포인트(LB·오케스트레이터 프로브용), 컨테이너 부팅이 아니라 **별도 배포 단계로 분리한 마이그레이션**(다중 인스턴스 마이그레이션 경합 회피), `.env`/`env_file` 대신 시크릿 매니저, HTTPS 종단(`ENV=prod`에서 `Secure` refresh 쿠키에 필요), 타깃 아키텍처 빌드(현재 x64 프리빌드 `bcrypt`; ARM/Graviton은 맞는 프리빌드나 `pnpm.onlyBuiltDependencies` 필요). AWS 배포 작업에 의존. |
+| **클라우드 네이티브 인프라 도입 (K8s · Helm · S3) — 배포 직전 작업** | 컨테이너 오케스트레이션(Kubernetes), 릴리스 패키징/템플릿(Helm), 오브젝트 스토리지(S3 — 스토리지 포트-어댑터의 구체적 형태, 4절)로, 수평 확장·다중 인스턴스 배포가 조용히 깨뜨리는 호스트 디스크에서 파일 바이트를 떼어낸다([ADR 0005](ADR/0005-local-disk-storage.ko.md)). 또한 Stage 1 이미지가 미룬 컨테이너·배포 하드닝을 담는다([ADR 0015](ADR/0015-docker-and-compose.ko.md)에서 드러남): 비루트 `USER`(현재 root 실행), distroless 런타임 베이스, 헬스/레디니스 엔드포인트(LB·오케스트레이터 프로브용), 컨테이너 부팅이 아니라 **별도 배포 단계로 분리한 마이그레이션**(다중 인스턴스 경합 회피), `.env`/`env_file` 대신 시크릿 매니저, HTTPS 종단(`ENV=prod`에서 `Secure` refresh 쿠키에 필요), 타깃 아키텍처 빌드(현재 x64 프리빌드 `bcrypt`; ARM/Graviton은 맞는 프리빌드나 `pnpm.onlyBuiltDependencies` 필요). 각 구성요소는 자체 ADR을 갖는다; Stage 1의 Docker + CI에 의존. |
 | ~~파일 가시성·접근 제어 서빙~~ **(2026-08-01 구현, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D1/D2/D3/D6 + [ADR 0026](ADR/0026-file-visibility-implementation.ko.md); 기존 "VOD 재생 접근 제어" 행을 일반화)** | 업로드된 파일은 예전엔 단순 공개 URL이었다 — 링크만 알면 누구나 봤다. `FileEntity`는 이제 3-상태 `visibility`(공개/비공개/**링크공유**, 회전 가능한 공유 토큰 + 선택적 TTL)를 가지며, `GET /file/:id/content`가 유일한 접근 제어 읽기 경로(Range 지원)이고, `ServeStaticModule`은 더 이상 `file/upload`를 노출하지 않는다. [ADR 0005](ADR/0005-local-disk-storage.ko.md)(서빙)를 부분 개정한다. **새 `fileUrl`/`visibility` 형태에 대한 프론트엔드 반영은 여전히 미착수** — 아래 미배정 참고. |
 | ~~미디어 타입 확장 (이미지/오디오, 타입별 업로드 필드)~~ **(2026-08-01 구현, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D4/D5 + [ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md) — 2026-08-01에 위 행에서 분리)** | `POST /upload/attach`는 이제 `image`(jpg/jpeg/png/webp), `audio`(mp3), `video`(mp4/mov/webm, 변경 없음) 세 타입별 필드를 받으며 각각 자신만의 허용 목록을 가진다 — 단일 `video` 필드를 대체했다. [ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)(업로드 필드, 살아 있는 프론트엔드에 대한 breaking 변경)을 개정한다. 스키마 변경은 없다. **새 업로드 필드에 대한 프론트엔드 반영은 여전히 미착수** — 아래 미배정 참고. |
-| 스토리지 포트-어댑터 | S3 필요가 확정될 때만 — 아키텍처 방향(4절) 참조. |
 | 성능/용량 기준 적용 | 인덱스 정책, 응답시간 목표, 디스크 상한 — 최적화 전에 측정부터. |
+| **배포 — 마지막 작업** (의도적으로 실행 번호 없음) | AWS, 컨테이너 기반, 위에서 도입한 인프라(K8s · Helm · S3) 위에. "N번째 단계"가 아니라 위의 모든 것이 만들어지고 운영 가능해진 뒤 수행하는 전체 계획의 종착 행위이므로 번호를 붙이지 않는다. 신규 배포 ADR; 인프라 도입 행 + Stage 1의 Docker + CI에 의존. (기존 독립 "스토리지 포트-어댑터" 행은 그 인프라 도입에 흡수했다 — S3가 곧 그 구체적 형태다.) |
 
 ### Stage 5 — 운영 화면 (admin 콘솔) — 2026-07-30 추가
 
@@ -349,7 +363,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 당길 근거"가 채택됐다: 운영 화면을 배포보다 앞세운다. Stage 5 내부 순서는 역할 전달 →
 콘솔 적응 → 모더레이션 결정 → 중복 화면 정리이며, `GET /user` 페이지네이션 행은 조기
 빠른수정으로 실행 #2에 빼냈다 — **2026-08-05 완료**, 아래 행 참조. **Stage 5는 이제
-2026-08-06에 완료됐다** — 아래 네 행 모두 끝났고, 실행순서 #4(Stage 4 배포)가 다음이다.
+2026-08-06에 완료됐다** — 아래 네 행 모두 끝났고, 남은 작업은 Stage 4(인프라 도입 후 배포)다.
 
 | 작업 | 근거 / 의존성 |
 |---|---|
@@ -573,7 +587,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | 항목 | 비고 |
 |---|---|
 | admin 콘솔 적응 (역할 관리 조각) | `admin/`의 이식된 Chat Project UI를 이 백엔드의 실제 라우트에 맞게 다시 썼다: 문자열 `UserRole`(기존 숫자였음), 액세스 토큰 클레임에서 역할을 읽음([ADR 0028](ADR/0028-access-token-role-claim.ko.md)), 이진 승격/강등 토글을 대체하는 3단계 역할 `<select>`, `{ code, message }`로 분기되는 `AUTH_LAST_SUPERADMIN`/`USER_HAS_FILES`/`USER_FILES_IN_USE`/`FORBIDDEN`([ADR 0011](ADR/0011-error-code-contract.ko.md)), `GetUsersDto`/`AuditLogQueryDto`와 정확히 일치하는 `take`/`skip` + `[data, total]` 튜플 읽기. 채팅 도메인 페이지(`rooms-page`, Apollo/`/graphql` 계층, ban/unban/force-logout)를 삭제하며 같은 변경에서 Stage 5의 모더레이션 존재 여부 행도 "아니오"로 결론지었다. 사용자별 감사 로그 패널은 근사하지 않고 제거했다 — `GET /audit-log`에 `userId` 필터가 없다, 7절에 후속 항목으로 추적. 백엔드 파일은 건드리지 않았다 — Stage 5 네 번째 작업(전체 결함 목록: `admin/README.md` > "무엇을 적응시켰는가") |
-| 중복 admin 화면 정리 — **Stage 5 완료** | 위 적응 작업이 ADR 0022가 미뤄뒀던 질문에 답했다: 이식본은 "대부분 삭제 가능"하지 않았다(삭제 가능했던 건 채팅 도메인 잔재뿐, 역할 관리 본체는 깔끔하게 적응됐다) — 그래서 `admin/`이 유일한 admin 화면이다. `frontend/src/features/admin/AdminPage.tsx`(백엔드 호출이 전혀 없는 17줄짜리 stub, ADR 0010이 예약해 둘 때와 동일한 상태)와 `frontend/src/App.tsx`의 `/admin` 라우트+import를 삭제했다. [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)의 admin 배치 조항을 한 번 더 개정한다 — admin은 이제 `frontend/` 안의 라우트 구역조차 아니다. [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의 2026-08-06 추가 기록에 남겼다. **Stage 5의 네 행이 모두 끝났다 — 실행순서 #4(Stage 4 배포)가 다음이다.** |
+| 중복 admin 화면 정리 — **Stage 5 완료** | 위 적응 작업이 ADR 0022가 미뤄뒀던 질문에 답했다: 이식본은 "대부분 삭제 가능"하지 않았다(삭제 가능했던 건 채팅 도메인 잔재뿐, 역할 관리 본체는 깔끔하게 적응됐다) — 그래서 `admin/`이 유일한 admin 화면이다. `frontend/src/features/admin/AdminPage.tsx`(백엔드 호출이 전혀 없는 17줄짜리 stub, ADR 0010이 예약해 둘 때와 동일한 상태)와 `frontend/src/App.tsx`의 `/admin` 라우트+import를 삭제했다. [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)의 admin 배치 조항을 한 번 더 개정한다 — admin은 이제 `frontend/` 안의 라우트 구역조차 아니다. [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의 2026-08-06 추가 기록에 남겼다. **Stage 5의 네 행이 모두 끝났다 — 남은 작업은 Stage 4(인프라 도입 후 배포)다.** |
 
 ### 2026-07-30
 
