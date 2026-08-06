@@ -48,8 +48,11 @@ src/
     │             blob+objectURL 페치; 작성자 또는 admin에게는 관리 섹션도 노출된다
     │             — visibility 전환, unlisted 공유 링크 복사/회전, 삭제를 모두
     │             PATCH/DELETE /file/:id로 처리)
-    └── admin/    AdminPage (/admin 스텁, 백엔드 RBAC를 기다리는 중)
 ```
+
+여기에는 `admin/` 기능 폴더도 `/admin` 라우트도 없다 — 예약해 뒀던 stub은 저장소
+루트의 형제 `admin/` 앱(ADR 0022)이 실제 백엔드에 맞게 적응되어 유일한 admin
+화면으로 확정된 2026-08-06에 삭제됐다(ADR 0010의 두 번째 개정 노트).
 
 ## 인증 모델 (백엔드 ADR 0012)
 

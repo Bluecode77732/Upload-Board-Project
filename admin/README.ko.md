@@ -131,10 +131,10 @@ pnpm e2e:seed    # superadmin 시딩. e2e/.env 필요(git 무시 대상)
 - **`PATCH /file/:id { userId }` 파일 이전 필드는 어떤 결정으로도 정당화된 적이 없다**
   (CLAUDE.md > 알려진 미해결 지점) — 이 콘솔과는 무관하지만, 이번 작업이 손대지 않았고
   해결된 것으로 가정해서는 안 되므로 여기 적어둔다.
-- **두 admin 화면 중 무엇이 살아남을지** — 이 콘솔 대
-  `frontend/src/features/admin/AdminPage.tsx` — 은 여전히
-  [ROADMAP.md](../ROADMAP.ko.md) > 미예정 항목의 미결 사항이다. 이번 작업은 그 질문을
-  어느 쪽으로도 해결하지 않고 이 콘솔만 적응시켰다.
+- ~~두 admin 화면 중 무엇이 살아남을지~~ — **2026-08-06 해소**: 이 콘솔의 적응이 성공하면서
+  이식본이 "대부분 삭제 가능"하지 않았음이 드러났다(삭제 가능했던 건 채팅 도메인 잔재뿐) —
+  그래서 이 콘솔이 유일한 admin 화면이다. `frontend/src/features/admin/AdminPage.tsx`는
+  삭제됐다. [ROADMAP.md](../ROADMAP.ko.md) > Stage 5 참고.
 
 ## 관련 결정
 
@@ -144,8 +144,8 @@ pnpm e2e:seed    # superadmin 시딩. e2e/.env 필요(git 무시 대상)
   액세스 토큰 `role` 클레임을 추가했다
 - [ADR 0010](../ADR/0010-frontend-split-and-api-surface-freeze.ko.md) — 원래 admin을
   `frontend/` 안의 `/admin` 라우트 구역으로 배치했다. 그 구역
-  (`frontend/src/features/admin/AdminPage.tsx`)은 **아직 남아 있고**, 두 화면 중 무엇이
-  살아남을지는 [ROADMAP.ko.md](../ROADMAP.ko.md) > 미예정 항목의 미결 사항이다
+  (`frontend/src/features/admin/AdminPage.tsx`)은 이 콘솔이 살아남는 화면으로 확정된
+  2026-08-06에 삭제됐다 — 그 ADR의 두 번째 개정 노트 참고
 - [CHAT-REMNANT-REMOVAL-PLAN.ko.md](../CHAT-REMNANT-REMOVAL-PLAN.ko.md) — 이 폴더는 *선언된*
   설계 이식(버킷 4)이며, 표시 없는 잔재가 아니다. 이 분류는 이번 적응과 무관하게 유효하다 —
   남은 코드는 여전히 출처가 있는 사본이고, 이제는 원본 그대로가 아니라 교정된 상태일 뿐이다

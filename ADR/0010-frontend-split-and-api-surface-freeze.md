@@ -50,9 +50,16 @@ consumers** — every breaking API change is still free. Opt-in CORS
 > `admin/` folder — a declared modification base, not working code. Admin therefore
 > **begins as a separate application at `admin/`**, not as an `/admin` route section.
 > Everything else in this ADR (the surface freeze, the in-repo non-workspace structure,
-> the static-serving constraint) stands. The `/admin` section this bullet produced
-> (`frontend/src/features/admin/AdminPage.tsx`) still exists; which of the two surfaces
-> survives is an open decision in ROADMAP > Unscheduled.
+> the static-serving constraint) stands.
+>
+> **Further amended 2026-08-06** — the open question above is resolved. Once
+> [ADR 0022](0022-admin-console-import-from-chat-project.md)'s import was adapted against
+> this backend's real routes, it proved not to be "mostly deletable": only its chat-domain
+> remnant was, while the role-management substance survived intact. `admin/` is therefore
+> the sole admin surface, and the `/admin` route section this bullet originally produced
+> (`frontend/src/features/admin/AdminPage.tsx`, a stub with no backend calls) has been
+> deleted, not built out. Admin is no longer a route section inside `frontend/` in any
+> form — resolution recorded in ADR 0022's 2026-08-06 note.
 
 - **Admin starts as a route section (`/admin/*`) inside the frontend**, not as
   a third application. Promotion to a dedicated admin app is reconsidered only

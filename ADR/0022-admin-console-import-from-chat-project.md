@@ -116,7 +116,8 @@ case; together they select this specific import over the alternatives:
    `frontend/src/features/admin/AdminPage.tsx` — ADR 0010's route section — still exists.
    Which of the two survives is an **open decision**, recorded in ROADMAP > Unscheduled, not
    settled here: settling it requires the adaptation work to reveal how much of the imported
-   console is actually worth keeping.
+   console is actually worth keeping. *(Resolved 2026-08-06 — see the note at the end of this
+   ADR: `admin/` survives, `AdminPage.tsx` was deleted.)*
 6. **This is not a chat remnant in the [removal plan](../CHAT-REMNANT-REMOVAL-PLAN.md)'s
    sense — it is bucket 4 (intentional design reference), under a stricter condition.** That
    plan's bucket 4 permits citing the chat project as a design source "provided it is phrased
@@ -229,7 +230,8 @@ Verified against this repository's code on 2026-07-30, not inferred. Each row is
   reason `frontend` is listed there.
 - **Two admin surfaces exist simultaneously**, and the duplication is visible rather than
   hidden: ADR 0010's `frontend/src/features/admin/AdminPage.tsx` and this `admin/` app.
-  Resolving it is tracked in ROADMAP > Unscheduled.
+  Resolving it is tracked in ROADMAP > Unscheduled. *(Resolved 2026-08-06 — see the note at
+  the end of this ADR.)*
 - **The `.ko.md` sibling requirement extends into `admin/`.** `admin/README.md` is a tracked
   document, so `admin/README.ko.md` accompanies it, per
   [CLAUDE.md](../CLAUDE.md) > Documentation Convention.

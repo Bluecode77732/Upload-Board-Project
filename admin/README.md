@@ -132,10 +132,11 @@ folder's code can work around, and it is unset by default (`backend/.env.example
 - **`PATCH /file/:id { userId }` file-transfer field has never been justified by any
   decision** (CLAUDE.md > Known Gaps) — unrelated to this console, noted here only because
   nothing in this pass touches it and it should not be assumed settled.
-- **Which of the two admin surfaces survives** — this console vs.
-  `frontend/src/features/admin/AdminPage.tsx` — is still an open decision in
-  [ROADMAP.md](../ROADMAP.md) > Unscheduled. This pass adapts this console without resolving
-  that question either way.
+- ~~Which of the two admin surfaces survives~~ — **resolved 2026-08-06**: this console's
+  successful adaptation proved the import was not "mostly deletable" (only its chat-domain
+  remnant was), so this is now the sole admin surface.
+  `frontend/src/features/admin/AdminPage.tsx` was deleted. See
+  [ROADMAP.md](../ROADMAP.md) > Stage 5.
 
 ## Related decisions
 
@@ -145,8 +146,8 @@ folder's code can work around, and it is unset by default (`backend/.env.example
   this console's route guard depends on
 - [ADR 0010](../ADR/0010-frontend-split-and-api-surface-freeze.md) — originally placed admin as
   an `/admin` route section inside `frontend/`. That section
-  (`frontend/src/features/admin/AdminPage.tsx`) **still exists**; which of the two surfaces
-  survives is an open decision in [ROADMAP.md](../ROADMAP.md) > Unscheduled
+  (`frontend/src/features/admin/AdminPage.tsx`) was deleted 2026-08-06 once this console
+  proved to be the surface that survives — see that ADR's second amendment note
 - [CHAT-REMNANT-REMOVAL-PLAN.md](../CHAT-REMNANT-REMOVAL-PLAN.md) — this folder is a *declared*
   design import (bucket 4), not an unlabelled remnant. That classification holds regardless of
   this adaptation — the remaining code is still provenance-copied, now corrected rather than raw

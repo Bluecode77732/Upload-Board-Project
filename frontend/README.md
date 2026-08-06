@@ -48,8 +48,12 @@ src/
     │             blob+objectURL fetch for private; for the creator or an admin, a
     │             management section — visibility toggle, unlisted share-link copy/
     │             rotation, and delete — all via PATCH/DELETE /file/:id)
-    └── admin/    AdminPage (/admin stub, awaits backend RBAC)
 ```
+
+There is no `admin/` feature folder or `/admin` route here — the reserved stub was
+deleted 2026-08-06 once the sibling `admin/` app (repo root, ADR 0022) was adapted
+against the real backend and confirmed as the sole admin surface (ADR 0010's second
+amendment note).
 
 ## Auth model (backend ADR 0012)
 

@@ -111,6 +111,8 @@ ROADMAP은 이 프로젝트의 RBAC 설계를 "Chat-project style"로 기록해 
    `frontend/src/features/admin/AdminPage.tsx`가 아직 남아 있다. 둘 중 무엇이 살아남을지는
    여기서 정하지 않고 **미결 사항**으로 ROADMAP > 미예정 항목에 기록한다. 이식된 콘솔에서
    실제로 남길 가치가 있는 부분이 얼마나 되는지는 적응 작업을 해봐야 드러나기 때문이다.
+   *(2026-08-06 해소 — 이 ADR 끝의 추가 기록 참고: `admin/`이 살아남았고
+   `AdminPage.tsx`는 삭제됐다.)*
 6. **이것은 [잔재 제거 계획](../CHAT-REMNANT-REMOVAL-PLAN.ko.md)이 말하는 chat 잔재가 아니라,
    더 엄격한 조건이 붙은 버킷 4(의도적 설계 참조)다.** 그 계획의 버킷 4는 chat 프로젝트를 설계
    출처로 인용하는 것을 허용하되 "다른 프로젝트에 대한 참조로 표현되어야 하고, 이 저장소의 현재
@@ -218,7 +220,7 @@ A안은 명시한 두 목적에서 동시에 이긴다 — 토큰이 가장 싸�
   것과 같은 이유다.
 - **admin 화면이 동시에 두 개 존재하며**, 그 중복은 감춰지지 않고 드러나 있다: ADR 0010의
   `frontend/src/features/admin/AdminPage.tsx`와 이번 `admin/` 앱. 해소는 ROADMAP > 미예정
-  항목에서 추적한다.
+  항목에서 추적한다. *(2026-08-06 해소 — 이 ADR 끝의 추가 기록 참고.)*
 - **`.ko.md` 형제 문서 규약이 `admin/` 안까지 확장된다.** `admin/README.md`는 추적되는 문서이므로
   [CLAUDE.md](../CLAUDE.md) > 문서 규약에 따라 `admin/README.ko.md`가 함께 존재한다.
 - **[ADR 0013](0013-rbac-and-audit-log.ko.md)이 남긴 빈 구멍은 닫힌 것이 아니라 담당자가
