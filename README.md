@@ -128,9 +128,12 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.m
   stance `GET /file` already takes ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)).
   Response is a `[users, totalCount]` tuple, matching `GET /file`
 - `GET /user/:id` — get a user
-- `PATCH /user/:id` — update a user (self or admin)
+- `PATCH /user/:id` — update a user (self, or an admin/superadmin acting on a
+  strictly lower-ranked account — an admin cannot modify a peer admin or a superadmin)
 - `PATCH /user/:id/role` — assign a role (superadmin only; the last superadmin cannot be demoted)
-- `DELETE /user/:id` — delete a user (self or admin). An account that owns files is
+- `DELETE /user/:id` — delete a user (self, or an admin/superadmin acting on a
+  strictly lower-ranked account, with the same peer/higher-rank restriction as above).
+  An account that owns files is
   refused with 409 `USER_HAS_FILES` unless the request confirms the cascade with
   `?deleteFiles=true`, which deletes the account together with its files — irreversibly
   ([ADR 0020](ADR/0020-account-deletion-cascade.md)). The account's **posts are always

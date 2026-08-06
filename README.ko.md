@@ -129,9 +129,11 @@ docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 �
   ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)). 응답은 `GET /file`과 동일한
   `[users, totalCount]` 튜플입니다
 - `GET /user/:id` — 사용자 조회
-- `PATCH /user/:id` — 사용자 수정 (본인 또는 admin)
+- `PATCH /user/:id` — 사용자 수정 (본인, 또는 자신보다 낮은 role의 계정에 대해서만 동작하는
+  admin/superadmin — admin은 동급 admin이나 superadmin은 수정할 수 없다)
 - `PATCH /user/:id/role` — 역할 부여 (superadmin만; 마지막 superadmin은 강등 불가)
-- `DELETE /user/:id` — 사용자 삭제 (본인 또는 admin). 파일을 보유한 계정은 409
+- `DELETE /user/:id` — 사용자 삭제 (본인, 또는 위와 동일한 동급/상위 role 제한이 적용되는
+  admin/superadmin). 파일을 보유한 계정은 409
   `USER_HAS_FILES`로 거절되며, `?deleteFiles=true`로 연쇄 삭제를 확인해야 계정과 파일을
   함께 삭제한다 — 되돌릴 수 없다 ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)).
   해당 계정의 **게시글은 별도 확인 없이 항상 함께 삭제된다** — 이 플래그가 지키는 대상은
