@@ -60,6 +60,23 @@
   `admin/README.ko.md` > "무엇을 적응시켰는가". 두 admin 화면 중 무엇이 살아남을지
   (이 콘솔 대 `frontend/src/features/admin/AdminPage.tsx`)는 Stage 5의 유일하게 남은
   행이다.
+
+### 수정
+- **`PATCH`/`DELETE /user/:id`의 권한 역전 취약점** — `UserController`는 행위자가 `admin`
+  이상 등급인지만 확인했을 뿐, *대상* 계정의 등급과는 비교하지 않았다. `admin`과
+  `superadmin` 둘 다 일반 `user`보다 높은 등급이라는 점만으로는 충분하지 않았는데 두
+  핸들러 모두 그 이상을 보지 않았기 때문에, admin이 다른 admin이나 심지어 superadmin을
+  수정·삭제할 수 있었다. admin 콘솔의 Delete 버튼 표시 규칙을 실제 `{ code, message }`
+  계약에 맞춰 연결하던 중(위 항목) 발견했다. `UserService.update`와 `UserService.remove`는
+  이제 대상 id와 함께 행위자의 role도 받아, (이미 존재 확인용으로 필요했던) 대상 행을
+  로드하고, 행위자가 동급 이상 등급의 상대에게 작용하려 할 때 403 `FORBIDDEN`으로
+  거부한다 — 본인에 대한 작업은 role과 무관하게 계속 허용된다. 이 판단은 `UserController`에서
+  서비스 쪽으로 옮겨졌다 — 서비스가 이미 대상 엔티티를 로드하므로 컨트롤러가 같은 검사를
+  중복으로 갖고 있을 필요가 없다. 스키마 변경 없음, 새 에러 코드 없음(`FORBIDDEN`은 이번
+  수정 이전부터 있었다), 마이그레이션 없음; `admin/README.ko.md` > "무엇을 적응시켰는가"가
+  콘솔 Delete 버튼 규칙을 위해 이 제약을 문서화한다.
+
+### 추가
 - **액세스 토큰에 `role` 클레임 추가** (ROADMAP 실행순서 #3, Stage 5의 막고 있던 첫 행,
   [ADR 0028](ADR/0028-access-token-role-claim.ko.md); [ADR 0002](ADR/0002-dual-secret-token-pair.ko.md)
   개정) — ADR 0022의 수정 백로그가 기록한 공백을 닫는다: 이식된 `admin/` 콘솔은

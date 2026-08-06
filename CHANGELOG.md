@@ -61,6 +61,23 @@ development line (package.json version).
   the audit panel; 3-option select over the binary toggle): `admin/README.md` > "What was
   adapted". Resolving which of the two admin surfaces survives (this console vs.
   `frontend/src/features/admin/AdminPage.tsx`) remains Stage 5's only open row.
+
+### Fixed
+- **Privilege-escalation gap on `PATCH`/`DELETE /user/:id`** — `UserController` checked only
+  that the actor held `admin` rank or higher, never the *target* account's rank; since both
+  `admin` and `superadmin` simply outrank a plain `user`, neither handler looked past that, so
+  an admin could modify or delete another admin, or even a superadmin. Found while adapting the
+  admin console's Delete-button visibility rule to the real `{ code, message }` contract (the
+  entry above). `UserService.update` and `UserService.remove` now take the actor's role
+  alongside the target id, load the target row (already needed for the existence check), and
+  refuse with 403 `FORBIDDEN` whenever the actor acts on someone else at an equal or higher
+  rank — self-action stays allowed regardless of role. The decision moves from
+  `UserController` into the service, which already loads the target entity, so the controller
+  no longer keeps a second copy of the same check. No schema change, no new error code
+  (`FORBIDDEN` pre-dates this fix), no migration; `admin/README.md` > "What was adapted"
+  documents the restriction for the console's Delete-button rule.
+
+### Added
 - **Access token carries a `role` claim** (ROADMAP execution order #3, Stage 5's blocking
   first row, [ADR 0028](ADR/0028-access-token-role-claim.md); amends
   [ADR 0002](ADR/0002-dual-secret-token-pair.md)) — closes the gap ADR 0022's modification
