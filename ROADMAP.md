@@ -218,6 +218,31 @@ work must pass them; they are not themselves roadmap subjects.
 
 Ordering is by dependency. Each row is one dedicated task.
 
+### When ordering deviates from dependency (general criteria)
+
+Four items in this plan have run ahead of their nominal dependency order: RBAC
+sequenced after Stage F (Current position, 2026-07-23); file visibility +
+media-type expansion allowed ahead of Stage 4 deployment (Current position,
+2026-07-31); Stage 5 sequenced before Stage 4 (below); and `GET /user`
+pagination pulled ahead of the rest of Stage 5 (Execution order below). Each
+was argued on its own terms at the time; the shared test behind all four,
+distilled after the fact rather than planned in advance, is stated here
+generally so it applies to any future item, not only these four:
+
+1. **No reverse hard dependency.** The item moving forward doesn't require
+   anything from the item it's passing. Necessary, not sufficient — this only
+   shows the two are independent, not that reordering is warranted.
+2. **No added cost to what stays behind.** Moving the item forward creates no
+   rework for the item(s) it passes. If the passed item would have to redo
+   work because of the reorder, the order stays as-is.
+3. **A stated reason to actually move it**, not just permission to move it —
+   e.g. closing a standing debt that isn't entangled with the item being
+   passed, avoiding rework that the reverse order would cause, or an
+   operability/necessity argument for why the moved item can't wait.
+
+All three must hold. (1) alone only proves independence; without (2) or (3),
+default stays dependency order.
+
 ### Execution order for remaining work (decided 2026-07-31)
 
 The stages below are grouped by dependency, but several ready items span stages,
