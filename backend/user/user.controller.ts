@@ -1,6 +1,5 @@
 import {
   Controller,
-  ForbiddenException,
   Get,
   Body,
   Patch,
@@ -22,8 +21,7 @@ import { JwtAuthGuard } from 'backend/auth/guard/jwt-auth.guard';
 import { RolesGuard } from 'backend/auth/guard/roles.guard';
 import { Roles } from 'backend/auth/decorator/roles.decorator';
 import { AuthUser } from 'backend/auth/decorator/auth-user.decorator';
-import { ROLE_RANK, UserRole } from 'backend/auth/role/role';
-import { ErrorCode } from 'backend/common/error-code';
+import { UserRole } from 'backend/auth/role/role';
 
 @Controller('user')
 @ApiTags('User API')
@@ -69,14 +67,9 @@ export class UserController {
     @Body() updateUserDto: UpdateUserDto,
     @AuthUser() actor: AuthUser,
   ) {
-    // Self, or an admin acting on another account (RBAC ownership extension).
-    if (actor.id !== id && ROLE_RANK[actor.role] < ROLE_RANK[UserRole.admin]) {
-      throw new ForbiddenException({
-        code: ErrorCode.FORBIDDEN_NOT_OWNER,
-        message: 'You can only update your own account.',
-      });
-    }
-    return this.userService.update(id, updateUserDto);
+    // Self, or an admin acting on a strictly lower-ranked account — UserService.update
+    // owns the check since it already loads the target row (RBAC ownership extension).
+    return this.userService.update(actor.id, actor.role, id, updateUserDto);
   }
 
   // superadmin-only role assignment; the sole path that mutates UserEntity.role.
@@ -110,12 +103,13 @@ export class UserController {
     @Query() query: DeleteUserQueryDto,
     @AuthUser() actor: AuthUser,
   ) {
-    if (actor.id !== id && ROLE_RANK[actor.role] < ROLE_RANK[UserRole.admin]) {
-      throw new ForbiddenException({
-        code: ErrorCode.FORBIDDEN_NOT_OWNER,
-        message: 'You can only delete your own account.',
-      });
-    }
-    return this.userService.remove(actor.id, id, query.deleteFiles === 'true');
+    // Self, or an admin acting on a strictly lower-ranked account — UserService.remove
+    // owns the check since it already loads the target row (RBAC ownership extension).
+    return this.userService.remove(
+      actor.id,
+      actor.role,
+      id,
+      query.deleteFiles === 'true',
+    );
   }
 }

@@ -6,6 +6,7 @@ import * as bcrypt from 'bcrypt';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -147,7 +148,12 @@ describe('UserService', () => {
       const userId = 1;
       const hashed = 'hashed_password';
 
-      const user = { id: userId, email: 'email@gmail.com', password: hashed };
+      const user = {
+        id: userId,
+        email: 'email@gmail.com',
+        password: hashed,
+        role: UserRole.user,
+      };
 
       jest
         .spyOn(mockUserRepository, 'findOne')
@@ -158,7 +164,12 @@ describe('UserService', () => {
       jest.spyOn(mockUserRepository, 'update').mockResolvedValue(undefined);
 
       const originalPassword = updateUserDto.password;
-      const result = await userService.update(userId, updateUserDto);
+      const result = await userService.update(
+        userId,
+        UserRole.user,
+        userId,
+        updateUserDto,
+      );
 
       expect(result).toEqual({ ...user, password: hashed });
       expect(bcrypt.hash).toHaveBeenCalledWith(originalPassword, genSalt);
@@ -171,9 +182,35 @@ describe('UserService', () => {
     it("should throw NotFoundException when the user doesn't exist.", async () => {
       jest.spyOn(mockUserRepository, 'findOne').mockResolvedValue(null);
 
-      await expect(userService.update(1, { email: 'x@y.com' })).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        userService.update(1, UserRole.user, 1, { email: 'x@y.com' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockUserRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('should allow an admin to update a strictly lower-ranked account', async () => {
+      const target = { id: 2, email: 'b@c.com', role: UserRole.user };
+      jest
+        .spyOn(mockUserRepository, 'findOne')
+        .mockResolvedValueOnce(target)
+        .mockResolvedValueOnce(target);
+      jest.spyOn(mockUserRepository, 'update').mockResolvedValue(undefined);
+
+      const result = await userService.update(1, UserRole.admin, 2, {
+        email: 'b@c.com',
+      });
+
+      expect(mockUserRepository.update).toHaveBeenCalled();
+      expect(result).toEqual(target);
+    });
+
+    it('should reject updating an account with an equal or higher role', async () => {
+      const target = { id: 2, email: 'admin@b.com', role: UserRole.admin };
+      jest.spyOn(mockUserRepository, 'findOne').mockResolvedValue(target);
+
+      await expect(
+        userService.update(1, UserRole.admin, 2, { email: 'x@y.com' }),
+      ).rejects.toThrow(ForbiddenException);
       expect(mockUserRepository.update).not.toHaveBeenCalled();
     });
   });
@@ -248,14 +285,18 @@ describe('UserService', () => {
     ];
 
     beforeEach(() => {
-      mockManager.findOne.mockResolvedValue({ id: 2, email: 'a@b.com' });
+      mockManager.findOne.mockResolvedValue({
+        id: 2,
+        email: 'a@b.com',
+        role: UserRole.user,
+      });
       (fs.unlink as jest.Mock).mockResolvedValue(undefined);
     });
 
     it('should delete a user who owns no files and audit files=0', async () => {
       mockFileService.findStoredPathsOfCreator.mockResolvedValue([]);
 
-      const result = await userService.remove(1, 2);
+      const result = await userService.remove(1, UserRole.admin, 2);
 
       expect(mockFileService.deleteFilesOfCreator).not.toHaveBeenCalled();
       expect(mockManager.delete).toHaveBeenCalledWith(UserEntity, 2);
@@ -273,7 +314,7 @@ describe('UserService', () => {
       mockFileService.findStoredPathsOfCreator.mockResolvedValue(storedPaths);
       mockPostService.deletePostsOfCreator.mockResolvedValueOnce(4);
 
-      await userService.remove(1, 2, true);
+      await userService.remove(1, UserRole.admin, 2, true);
 
       // Comments go first: the account's comments on *other people's* posts are reachable
       // no other way, since the FK cascade only fires when the owning post goes.
@@ -308,7 +349,9 @@ describe('UserService', () => {
     it('should refuse with ConflictException when files exist and the cascade is unconfirmed', async () => {
       mockFileService.findStoredPathsOfCreator.mockResolvedValue(storedPaths);
 
-      await expect(userService.remove(1, 2)).rejects.toThrow(ConflictException);
+      await expect(userService.remove(1, UserRole.admin, 2)).rejects.toThrow(
+        ConflictException,
+      );
       expect(mockFileService.deleteFilesOfCreator).not.toHaveBeenCalled();
       expect(mockManager.delete).not.toHaveBeenCalled();
       expect(fs.unlink).not.toHaveBeenCalled();
@@ -318,7 +361,7 @@ describe('UserService', () => {
     it('should cascade into file rows and stored files once confirmed', async () => {
       mockFileService.findStoredPathsOfCreator.mockResolvedValue(storedPaths);
 
-      const result = await userService.remove(1, 2, true);
+      const result = await userService.remove(1, UserRole.admin, 2, true);
 
       expect(mockFileService.deleteFilesOfCreator).toHaveBeenCalledWith(
         mockManager,
@@ -342,7 +385,7 @@ describe('UserService', () => {
         .mockRejectedValueOnce(new Error('EACCES'))
         .mockResolvedValueOnce(undefined);
 
-      const result = await userService.remove(1, 2, true);
+      const result = await userService.remove(1, UserRole.admin, 2, true);
 
       // The DB deletion is already committed — a failed unlink must not undo it.
       expect(result).toBe('User 2 deleted.');
@@ -357,9 +400,40 @@ describe('UserService', () => {
     it('should throw NotFoundException when the user is missing', async () => {
       mockManager.findOne.mockResolvedValue(null);
 
-      await expect(userService.remove(1, 2)).rejects.toThrow(NotFoundException);
+      await expect(userService.remove(1, UserRole.admin, 2)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(mockManager.delete).not.toHaveBeenCalled();
       expect(mockAuditLogService.log).not.toHaveBeenCalled();
+    });
+
+    it('should reject deleting an account with an equal or higher role', async () => {
+      mockManager.findOne.mockResolvedValue({
+        id: 2,
+        email: 'admin@b.com',
+        role: UserRole.admin,
+      });
+
+      await expect(userService.remove(1, UserRole.admin, 2)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(mockFileService.findStoredPathsOfCreator).not.toHaveBeenCalled();
+      expect(mockManager.delete).not.toHaveBeenCalled();
+      expect(mockAuditLogService.log).not.toHaveBeenCalled();
+    });
+
+    it('should allow self-deletion regardless of role', async () => {
+      mockManager.findOne.mockResolvedValue({
+        id: 2,
+        email: 'super@b.com',
+        role: UserRole.superadmin,
+      });
+      mockFileService.findStoredPathsOfCreator.mockResolvedValue([]);
+
+      const result = await userService.remove(2, UserRole.superadmin, 2);
+
+      expect(mockManager.delete).toHaveBeenCalledWith(UserEntity, 2);
+      expect(result).toBe('User 2 deleted.');
     });
   });
 });
