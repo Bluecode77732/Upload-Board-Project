@@ -243,6 +243,40 @@ exempt. When writing or updating any `.ko.md` document:
   change — this is the one sanctioned exception to "no drive-by edits", scoped to
   Korean fluency only (never content changes the English sibling doesn't have).
 
+## Documentation Authoring Protocol (문서 작성 프로토콜)
+
+Scope: the project-level documents — `README.md`, `ARCHITECTURE.md`, `CHANGELOG.md`,
+`ROADMAP.md`, `CONTRIBUTING.md`, and `ADR/` — plus their `.ko.md` siblings. (Source-code
+comments are governed instead by File Creation Convention.) When asked to author or overhaul
+any of these, run the five roles **in order** — do not collapse them, and do not start writing
+before the earlier roles are done:
+
+1. **조사 (Investigate)** — read the actual code, git history, and existing docs before
+   writing a word. This is Hallucination Prevention applied to documentation: every claim
+   traces to a file, a commit, or test output, never to memory. Evidence expires — re-read the
+   file a claim is about before concluding (Hallucination Prevention #10), especially when
+   parallel sessions may have touched the repo.
+2. **계획 (Plan)** — decide the document set, each document's scope, and its end-to-end
+   structure (Analysis Protocol > Structure Analysis). State which documents change and why
+   before editing any of them.
+3. **질문 (Question)** — **do not guess what the code cannot tell you.** Implementation
+   *intent*, the *reason* a technology was chosen, and the *background* of a past decision live
+   in the author's head, not the source — ask for them first (Clarification Protocol). Precede
+   a choice question with a compact options × criteria table so the developer decides from the
+   table, not from prose. A rationale is written only after it is confirmed — never inferred
+   and presented as fact.
+4. **작성 (Write)** — write the English document, then its `.ko.md` sibling in the same change
+   (Documentation Convention). Record the trade-off and the rejected alternatives, not only the
+   outcome (Change Summary > Trade-offs / ADR); an architecturally significant decision gets its
+   own ADR. Cite the ADR or file that carries each rationale rather than restating it.
+5. **검증 (Verify)** — Result Review for docs: relative links resolve, EN/KO structure stays
+   symmetric, endpoint/behavior claims match the real routes, and nothing is stated as done
+   that is not actually committed. Run the link and symmetry checks — do not eyeball them.
+
+Goal: a documentation pass is investigate → plan → ask → write → verify, and the "ask" step is
+load-bearing. The specific failure this protocol exists to prevent is a confidently-worded
+document built on an inferred rationale the author never actually held.
+
 ## Never Do — Forbidden Patterns
 These patterns defeat the purpose of TypeScript and cause production failures.
 Violations are grouped by failure class.
