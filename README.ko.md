@@ -85,11 +85,17 @@ pnpm run test:cov      # 커버리지 (서비스만 측정)
 
 ```bash
 cp .env.example .env        # 시크릿 채우기; DB_*는 compose용으로 그대로 둬도 됨
-docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 시 마이그레이션 실행
+docker compose up --build   # db(postgres:16) → migrate(one-shot) → api를 :3000에 기동
 ```
 
 `db` 서비스가 `${DB_PORT}`(5435)를 노출하므로, 호스트에서 돌리는 `pnpm test:e2e`와
-`pnpm migration:*`도 같은 데이터베이스에 접속합니다.
+`pnpm migration:*`도 같은 데이터베이스에 접속합니다. 마이그레이션은 `api`의 부팅 과정이
+아니라 별도의 `migrate` 서비스로 실행됩니다([ADR 0032](ADR/0032-migration-as-separate-deploy-step.ko.md))
+— `api`는 `migrate`가 0으로 종료될 때까지 기다립니다. 이미지는 non-root 사용자로
+실행됩니다([ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)) — 네이티브
+Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 실패하면 한 번
+`chown`하세요: `sudo chown -R 1001:1001 file/` (Windows/Mac Docker Desktop은 영향
+없음).
 
 ### 환경변수
 
@@ -221,6 +227,11 @@ docker compose up --build   # db(postgres:16) + api를 :3000에 기동; 부팅 �
 **감사 로그**
 - `GET /audit-log` — ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE / COMMENT_DELETE 기록 조회 (admin만; 페이지네이션, `?action` 필터)
 
+**헬스 체크** (운영용 — 애플리케이션 소비자가 아니라 로드밸런서/오케스트레이터
+프로브를 위한 것이며, 설계상 인증 없음, [ADR 0031](ADR/0031-health-and-readiness-endpoints.ko.md))
+- `GET /health/live` — 프로세스가 살아 있는지만 확인; 의존성 체크 없음
+- `GET /health/ready` — 추가로 DB 연결을 확인; 연결 불가 시 503
+
 ### 일반적인 흐름
 
 ```
@@ -284,8 +295,14 @@ Docker/compose, CI(GitHub Actions), 로깅 규약, e2e 재작성이 2026-07-25�
 세 타입별 필드(`image`/`audio`/`video`) 중 하나를 받습니다
 ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D4/D5,
 [ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md)). 두 변경 모두 아직 반영하지
-않은 살아 있는 `frontend/` 소비자에게는 breaking 변경입니다. `pnpm lint`는 2026-07-22 기준
-클린.
+않은 살아 있는 `frontend/` 소비자에게는 breaking 변경입니다. **컨테이너 하드닝이
+2026-08-08에 반영**되었습니다 — 이미지 non-root 실행, liveness/readiness 엔드포인트,
+마이그레이션의 별도 배포 스텝 분리
+([ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)–[ADR 0032](ADR/0032-migration-as-separate-deploy-step.ko.md)).
+distroless 런타임 베이스, 실제 시크릿 매니저, HTTPS 종단은 여전히 미착수 항목으로
+남아 있습니다([ADR 0033](ADR/0033-secrets-delivery-target.ko.md),
+[ADR 0034](ADR/0034-https-termination-stance.ko.md), distroless는 ROADMAP.md >
+Unscheduled). `pnpm lint`는 2026-07-22 기준 클린.
 
 ## 작성자
 

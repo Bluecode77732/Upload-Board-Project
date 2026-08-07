@@ -46,6 +46,34 @@ development line (package.json version).
   match. **Stage 5 is now complete — all four rows done.**
 
 ### Added
+- **Container/deploy hardening — non-root image, liveness/readiness endpoints,
+  migrations as a separate deploy step** ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–
+  [ADR 0034](ADR/0034-https-termination-stance.md), amends [ADR 0015](ADR/0015-docker-and-compose.md);
+  the container/deploy hardening ADR 0015 deferred, part of ROADMAP Stage 4's production DevOps
+  stack introduction) — the runtime image now creates and switches to a dedicated non-root
+  user (uid/gid 1001) before `CMD`, and gains a `HEALTHCHECK` instruction calling the new
+  `GET /health/live` (ADR 0030). A new operational `HealthModule` (`backend/health/`, mirrors
+  the `TempCleanupModule` precedent) adds `GET /health/live` (always 200, no dependency
+  checks) and `GET /health/ready` (pings the DB via `DataSource.query('SELECT 1')`, 503
+  `ServiceUnavailableException` on failure) — both unauthenticated by design, since
+  kubelet/LB probes carry no bearer token (ADR 0031); `backend/app.module.ts` gained one
+  import. `Dockerfile`'s `CMD` no longer runs `migration:run` — `docker-compose.yml` gained
+  a one-shot `migrate` service running it instead, with `api` now depending on
+  `migrate: condition: service_completed_successfully`, so a scaled `api` can never race
+  `migration:run` against the same database (ADR 0032). Two further hardening rows landed
+  as **design-only ADRs, no code change**: the target secrets-delivery mechanism is a native
+  Kubernetes `Secret` mounted as env vars, with AWS Secrets Manager (if adopted) sitting
+  upstream via an External Secrets Operator — deferred to the Terraform task, since it needs
+  a live AWS account and IAM roles that don't exist yet (ADR 0033); and TLS termination is
+  committed to the ingress/ALB layer, never inside the Node process — the existing
+  `secure: ENV === 'prod'` refresh-cookie gate (ADR 0012) already assumes this and needs no
+  change (ADR 0034). Distroless and multi-arch builds were considered and explicitly deferred
+  (ADR 0030) — an exact Node 24 distroless tag was not verified to exist, and losing the
+  container's shell has no K8s ephemeral-debug-container replacement yet; tracked in
+  ROADMAP.md > Unscheduled. `README.md`'s Docker section and API Endpoints list, and
+  `ADR/README.md`, were updated to match; `ARCHITECTURE.md` was deliberately left untouched
+  (already flagged stale in CLAUDE.md > Known Gaps as its own pending doc-audit task, and
+  this change doesn't touch anything it currently describes).
 - **Storage port-adapter — `FileStorage` interface, `LocalDiskStorage` + `S3Storage`
   adapters** ([ADR 0029](ADR/0029-storage-port-adapter.md), amends
   [ADR 0005](ADR/0005-local-disk-storage.md); the code-first slice of ROADMAP Stage 4's

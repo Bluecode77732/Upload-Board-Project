@@ -16,6 +16,9 @@ COPY . .
 RUN pnpm build && pnpm prune --prod
 
 # Runtime stage — slim (no compilers needed; prod node_modules come from build).
+# Distroless was considered (ADR 0030) and deferred: an exact Node 24 tag is
+# unverified and this project has no ephemeral-debug-container tooling yet to
+# replace the shell it would remove.
 FROM node:24.8.0-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
@@ -25,7 +28,24 @@ COPY --from=build /app/package.json ./package.json
 # Both upload folders must exist for the temp_ -> granted_ promotion contract;
 # a compose volume mounts over this at runtime for persistence.
 RUN mkdir -p file/temp file/upload
+
+# Non-root (ADR 0030): a compromised process no longer carries root inside the
+# container's user namespace. uid/gid 1001 is arbitrary but fixed, so a Linux
+# host bind-mounting ./file (docker-compose.yml, local dev only) can chown it
+# to match once; Windows/Mac Docker Desktop's mount layer is unaffected.
+RUN groupadd --gid 1001 appgroup \
+  && useradd --uid 1001 --gid appgroup --no-create-home appuser \
+  && chown -R appuser:appgroup /app
+USER appuser
+
 EXPOSE 3000
-# Apply committed migrations (idempotent), then boot. migration:run needs only the
-# compiled dist/data-source.js + typeorm CLI (a prod dep) — no nest/pnpm at runtime.
-CMD ["sh", "-c", "node node_modules/typeorm/cli.js migration:run -d dist/data-source.js && node dist/main"]
+# Liveness only (ADR 0031) — a DB outage must not restart an otherwise-healthy
+# process; that is readiness's (GET /health/ready) job, checked by the
+# orchestrator/LB, not by Docker's own restart policy.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD node -e "require('node:http').get('http://127.0.0.1:3000/health/live',(r)=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"
+# Migrations are no longer run here (ADR 0032) — a multi-instance boot would
+# race `migration:run` against the same database. They run as their own step
+# (docker-compose.yml's `migrate` service; a Kubernetes Job in the eventual
+# Helm chart) before this container ever starts.
+CMD ["node", "dist/main"]

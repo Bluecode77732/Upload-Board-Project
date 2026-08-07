@@ -42,6 +42,35 @@
   항목도 맞춰 갱신했다. **Stage 5가 이제 완료됐다 — 네 행 모두 끝났다.**
 
 ### 추가
+- **컨테이너/배포 하드닝 — non-root 이미지, liveness/readiness 엔드포인트,
+  마이그레이션의 별도 배포 스텝 분리** ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)–
+  [ADR 0034](ADR/0034-https-termination-stance.ko.md), [ADR 0015](ADR/0015-docker-and-compose.ko.md)
+  개정; ADR 0015가 미뤘던 컨테이너/배포 하드닝, ROADMAP Stage 4 production DevOps stack
+  introduction의 일부) — 런타임 이미지는 이제 `CMD` 전에 전용 non-root 사용자(uid/gid
+  1001)를 만들고 그 계정으로 전환하며, 새 `GET /health/live`를 호출하는 `HEALTHCHECK`
+  지시문을 갖는다(ADR 0030). 새로운 운영용 `HealthModule`(`backend/health/`,
+  `TempCleanupModule` 선례를 따름)이 `GET /health/live`(의존성 체크 없이 항상 200)와
+  `GET /health/ready`(`DataSource.query('SELECT 1')`로 DB를 ping, 실패 시
+  `ServiceUnavailableException`으로 503)를 추가한다 — kubelet/LB 프로브는 Bearer
+  토큰을 들고 오지 않으므로 둘 다 설계상 인증 없음(ADR 0031); `backend/app.module.ts`에
+  import 한 줄이 추가됐다. `Dockerfile`의 `CMD`는 더 이상 `migration:run`을 실행하지
+  않는다 — 대신 `docker-compose.yml`에 이를 실행하는 one-shot `migrate` 서비스가
+  추가됐고, `api`는 이제 `migrate: condition: service_completed_successfully`에
+  의존해서, 스케일된 `api`가 같은 데이터베이스에 대해 `migration:run`을 경합하는
+  일이 구조적으로 없어졌다(ADR 0032). 나머지 두 하드닝 항목은 **설계만 하고 코드
+  변경은 없는 ADR**로 남았다: 목표 시크릿 전달 메커니즘은 환경변수로 마운트되는
+  네이티브 Kubernetes `Secret`이고, AWS Secrets Manager를 도입한다면 External
+  Secrets Operator를 통해 그 상류에 둔다 — 실제 AWS 계정과 아직 존재하지 않는 IAM
+  롤이 필요해 Terraform 작업으로 미룬다(ADR 0033); TLS 종단은 Node 프로세스 안이
+  아니라 ingress/ALB 레이어에서 하기로 못박았다 — 기존 `secure: ENV === 'prod'`
+  refresh 쿠키 게이트(ADR 0012)는 이미 이를 전제하고 있어 코드 변경이 필요 없다
+  (ADR 0034). distroless와 멀티아치 빌드는 검토했지만 명시적으로 보류했다(ADR
+  0030) — Node 24 distroless 태그가 실제로 존재하는지 검증되지 않았고, 컨테이너의
+  쉘을 잃는 것을 대체할 K8s ephemeral-debug-container가 아직 없다 — ROADMAP.md >
+  Unscheduled에 기록. `README.md`의 Docker 섹션과 API Endpoints 목록, `ADR/README.md`를
+  맞춰 갱신했다; `ARCHITECTURE.md`는 의도적으로 손대지 않았다(CLAUDE.md > Known Gaps에
+  이미 별도의 미착수 문서 감사 작업으로 표시돼 있고, 이번 변경이 그 문서가 지금
+  서술하는 어떤 내용도 건드리지 않기 때문이다).
 - **스토리지 포트-어댑터 — `FileStorage` 인터페이스, `LocalDiskStorage` + `S3Storage`
   어댑터** ([ADR 0029](ADR/0029-storage-port-adapter.ko.md), [ADR 0005](ADR/0005-local-disk-storage.ko.md)
   개정; ROADMAP Stage 4 클라우드 네이티브 인프라 과제의 코드 선행 조각) — 물리 파일

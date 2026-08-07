@@ -15,6 +15,7 @@ import { CommentModule } from './comment/comment.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TempCleanupModule } from './temp-cleanup/temp-cleanup.module';
+import { HealthModule } from './health/health.module';
 import { join } from 'node:path';
 
 @Module({
@@ -89,6 +90,7 @@ import { join } from 'node:path';
     UploadModule,
     AuditLogModule,
     TempCleanupModule,
+    HealthModule,
   ],
   providers: [
     // Global error-contract filter (ADR 0011) — APP_FILTER keeps it DI-managed

@@ -36,7 +36,13 @@ each ADR records the *why* behind those rules.
 | [0025](0025-file-visibility-and-media-expansion.md) | File visibility, access-controlled serving, and media-type expansion | Accepted — implemented (0026, 0027) | 2026-07-31 |
 | [0026](0026-file-visibility-implementation.md) | File visibility implementation — serving mechanism, metadata filtering, and the content/metadata disclosure split | Accepted | 2026-08-01 |
 | [0027](0027-media-type-expansion-implementation.md) | Media-type expansion implementation — type-specific upload fields | Accepted | 2026-08-01 |
+| [0028](0028-access-token-role-claim.md) | Access token carries a `role` claim | Accepted | 2026-08-05 |
 | [0029](0029-storage-port-adapter.md) | Storage port-adapter — `FileStorage` interface, amends 0005 | Accepted | 2026-08-07 |
+| [0030](0030-container-non-root-and-arch-stance.md) | Container runs non-root; distroless and multi-arch deferred | Accepted | 2026-08-08 |
+| [0031](0031-health-and-readiness-endpoints.md) | Liveness and readiness endpoints | Accepted | 2026-08-08 |
+| [0032](0032-migration-as-separate-deploy-step.md) | Migrations run as a separate deploy step, not on container boot | Accepted | 2026-08-08 |
+| [0033](0033-secrets-delivery-target.md) | Secrets delivery target — Kubernetes Secrets, AWS Secrets Manager deferred | Accepted (design-only) | 2026-08-08 |
+| [0034](0034-https-termination-stance.md) | HTTPS termination happens at the ingress, not in the app | Accepted (design-only) | 2026-08-08 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

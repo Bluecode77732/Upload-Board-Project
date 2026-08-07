@@ -85,11 +85,16 @@ Stop the legacy `upload-board-pg` container first — it holds host port 5435.
 
 ```bash
 cp .env.example .env        # fill in secrets; DB_* can stay as-is for compose
-docker compose up --build   # db (postgres:16) + api on :3000; migrations run on boot
+docker compose up --build   # db (postgres:16) → migrate (one-shot) → api on :3000
 ```
 
 The `db` service publishes `${DB_PORT}` (5435), so host-run `pnpm test:e2e` and
-`pnpm migration:*` reach the same database.
+`pnpm migration:*` reach the same database. Migrations run as their own `migrate`
+service, not inside `api`'s boot ([ADR 0032](ADR/0032-migration-as-separate-deploy-step.md))
+— `api` waits for `migrate` to exit 0. The image runs as a non-root user
+([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)); on a native Linux host, if
+the bind-mounted `./file` directory fails to write, `chown` it once:
+`sudo chown -R 1001:1001 file/` (Windows/Mac Docker Desktop is unaffected).
 
 ### Environment variables
 
@@ -224,6 +229,11 @@ deleting are the comment author's or an admin's, and nobody else's.
 - `GET /audit-log` — review ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE /
   COMMENT_DELETE records (admin only; paginated, `?action` filter)
 
+**Health** (operational — for load-balancer/orchestrator probes, not application
+consumers; unauthenticated by design, [ADR 0031](ADR/0031-health-and-readiness-endpoints.md))
+- `GET /health/live` — the process is running; no dependency checks
+- `GET /health/ready` — additionally checks DB connectivity; 503 if unreachable
+
 ### Typical flow
 
 ```
@@ -286,8 +296,13 @@ landed 2026-08-01** — `POST /upload/attach` now takes one of three type-specif
 (`image`/`audio`/`video`), each with its own allowlist
 ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D4/D5,
 [ADR 0027](ADR/0027-media-type-expansion-implementation.md)). Both changes are breaking
-for the live `frontend/` consumer, which has not yet adopted either. `pnpm lint` is clean
-as of 2026-07-22.
+for the live `frontend/` consumer, which has not yet adopted either. **Container hardening
+landed 2026-08-08** — non-root image user, liveness/readiness endpoints, and migrations
+moved to their own deploy step ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–
+[ADR 0032](ADR/0032-migration-as-separate-deploy-step.md)); a distroless runtime base, a
+real secrets manager, and HTTPS termination stay open items ([ADR 0033](ADR/0033-secrets-delivery-target.md),
+[ADR 0034](ADR/0034-https-termination-stance.md), and ROADMAP.md > Unscheduled for
+distroless). `pnpm lint` is clean as of 2026-07-22.
 
 ## Author
 

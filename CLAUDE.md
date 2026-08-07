@@ -21,6 +21,7 @@ Before making any change:
    - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract, one-shot claim resolution in `uploadFile` — ADR 0019). Content reads go through the separate `backend/file/file-content.controller.ts` (`GET /file/:id/content`, `OptionalJwtAuthGuard`) → `FileService.resolveContentAccess` — the visibility gate (ADR 0025/0026)
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer `memoryStorage`) and `upload.controller.ts` (100MB size limit) together with `backend/upload/upload.service.ts` (`stageTemp` — `temp_{uuid}_{timestamp}` naming, calls the `FileStorage` port, ADR 0029 D4)
    - Storage adapter change→ read `backend/storage/file-storage.interface.ts` (the `FileStorage` port + `FILE_STORAGE` token), `local-disk.storage.ts` / `s3.storage.ts` (the two implementations), and `storage.module.ts` (the `STORAGE_DRIVER`-keyed factory, ADR 0029)
+   - Container/deploy change→ read `Dockerfile` (non-root `USER`, `HEALTHCHECK`, migration removed from `CMD` — ADR 0030/0032) and `docker-compose.yml` (the one-shot `migrate` service) together with `backend/health/` (`GET /health/live`/`GET /health/ready` — ADR 0031)
    - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `LocalDiskStorage.unlink`/`S3Storage.unlink` (post-commit unlink through the `FileStorage` port, ADR 0020/0023/0029)
    - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
    - Comment/thread change → read `backend/comment/comment.service.ts` (fixed `createdAt ASC` order, `canManage`, `deleteCommentsOfCreator`) and `PostService.assertPostExists` — the one thing CommentModule asks PostModule for. Routes live in **two** controllers (`post-comment.controller.ts` for `/post/:postId/comment`, `comment.controller.ts` for `/comment/:id`); post deletion removes comments via the FK, not the service (ADR 0023 D3)
@@ -636,6 +637,12 @@ one of these is violated, follow Principle Conflict Protocol.
   onto a domain module. It deliberately does **not** live in UploadModule: keeping
   UploadModule's own concern narrow to staging temp writes (above) was chosen over
   co-locating the sweep with it (Principle Conflict Protocol resolution, ADR 0018).
+- **HealthModule** (ADR 0031) is another *operational* module, mirroring the
+  TempCleanupModule precedent: it hosts `GET /health/live` (no dependency checks) and
+  `GET /health/ready` (pings the DB via the injected `DataSource`), both deliberately
+  unauthenticated since kubelet/LB probes carry no bearer token. It owns no domain state
+  and imports nothing beyond the globally-available `DataSource` — no domain module gets
+  a health-check responsibility bolted onto it.
 - Goal: a change request that spans "physical file" and "file metadata" is two modules'
   work by design; do not merge the concerns into one service for convenience.
 
@@ -957,6 +964,11 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
   ([ADR 0029](ADR/0029-storage-port-adapter.md)): the code-first slice of the Stage 4
   cloud-native infrastructure task — see Architecture Decisions > File Storage. `local`
   stays the operative default; the real S3 cutover is still Stage 4 work
+- ~~Container/deploy hardening (non-root, health endpoints, migration deploy step)~~ —
+  **landed 2026-08-08** ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–
+  [ADR 0034](ADR/0034-https-termination-stance.md)): the container/deploy hardening ADR
+  0015 deferred — see CI/CD and Module Responsibility > HealthModule. Distroless, a real
+  secrets manager, HTTPS termination, and multi-arch stay open (ROADMAP.md > Unscheduled)
 - Chat-project remnant handling — docs audited clean 2026-07-22; pending git-history
   decision + re-verification trigger. See `CHAT-REMNANT-REMOVAL-PLAN.md` and
   ROADMAP.md > Unscheduled / open decisions
@@ -1311,7 +1323,9 @@ cosmetic — a missing or wrong one is a documentation bug caught in Result Revi
 CI: GitHub Actions (`.github/workflows/ci.yml`, ADR 0016) runs lint (`lint:ci` — the
 0-error gate, no `--fix`) + unit tests and a separate e2e job (against a `postgres:16`
 service) on push/PR to `main`/`dev`. Local containerization: a multi-stage `Dockerfile`
-+ `docker-compose.yml` (ADR 0015). There is **no deploy target and no git hooks** — AWS
-container deployment is a Stage 4 roadmap item (ROADMAP.md), and no git-hook tooling is
-installed. Do not assume a deploy pipeline or hooks; adding either is explicit-request
-work under Scope Discipline.
++ `docker-compose.yml` (ADR 0015; hardened 2026-08-08 — non-root `USER`, a `HEALTHCHECK`
+against `GET /health/live`, and migrations moved out of `CMD` into `docker-compose.yml`'s
+one-shot `migrate` service, ADR 0030–0032). There is **no deploy target and no git
+hooks** — AWS container deployment is a Stage 4 roadmap item (ROADMAP.md), and no
+git-hook tooling is installed. Do not assume a deploy pipeline or hooks; adding either is
+explicit-request work under Scope Discipline.

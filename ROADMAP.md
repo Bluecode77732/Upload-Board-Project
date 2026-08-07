@@ -122,6 +122,13 @@ item below lands as its own dedicated, designed change
   the K8s/Helm work below — see §4 (Architecture direction) for the full breakdown.
   `local` stays the operative default; only the real S3 cutover remains as part of
   Stage 4's infrastructure-introduction row.
+- ~~**Container/deploy hardening implemented 2026-08-08**~~
+  ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–[ADR 0034](ADR/0034-https-termination-stance.md)):
+  the container/deploy hardening ADR 0015 deferred — non-root image user,
+  `HEALTHCHECK` + liveness/readiness endpoints, and migrations moved to their own
+  deploy step landed with code; secrets-delivery target and HTTPS-termination
+  stance landed as design-only ADRs; distroless and multi-arch stay explicitly
+  deferred (Unscheduled, §7) — see §6 Stage 4 for the full breakdown.
 
 ## 1. Vision & essence
 
@@ -386,7 +393,7 @@ dependency order, and the deploy act is deliberately the last row.
 
 | Task | Rationale / dependencies |
 |---|---|
-| **Production DevOps stack introduction — immediate pre-deployment task** | **Why this stack:** it is the industry-standard DevOps toolchain, adopted so the project is developed, deployed, and operated in an environment close to real-world practice, and so it can absorb future service scaling. The components and their roles: **AWS** (cloud platform / deploy target), **Docker** (containerization — *already landed*, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.md)), **Kubernetes** (container orchestration), **Helm** (release packaging/templating), **GitHub Actions** (CI/CD — *already landed*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.md)), **Prometheus** (metrics collection), **Grafana** (metrics dashboards), and **Terraform** (infrastructure as code). **S3** (object storage) is the concrete backend this task switches to: the `FileStorage` port-adapter (section 4) that isolates physical-file operations from the host disk already landed 2026-08-07 ([ADR 0029](ADR/0029-storage-port-adapter.md), `S3Storage` implementation included, unit-tested only), so this row's remaining storage work is `STORAGE_DRIVER=s3` against a real bucket, not building the abstraction itself. This task also carries the container/deploy hardening the Stage 1 image deferred, surfaced by [ADR 0015](ADR/0015-docker-and-compose.md): non-root `USER` (runs as root today), a distroless runtime base, a health/readiness endpoint (for LB/orchestrator probes), migrations as a **separate deploy step** rather than on container boot (avoids multi-instance migration races), secrets via a manager instead of `.env`/`env_file`, HTTPS termination (the `Secure` refresh cookie requires it when `ENV=prod`), and a target-arch build (x64 prebuilt `bcrypt` today; ARM/Graviton needs a matching prebuild or `pnpm.onlyBuiltDependencies`). Each not-yet-landed component takes its own ADR; depends on Stage 1 Docker + CI. |
+| **Production DevOps stack introduction — immediate pre-deployment task** | **Why this stack:** it is the industry-standard DevOps toolchain, adopted so the project is developed, deployed, and operated in an environment close to real-world practice, and so it can absorb future service scaling. The components and their roles: **AWS** (cloud platform / deploy target), **Docker** (containerization — *already landed*, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.md)), **Kubernetes** (container orchestration), **Helm** (release packaging/templating), **GitHub Actions** (CI/CD — *already landed*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.md)), **Prometheus** (metrics collection), **Grafana** (metrics dashboards), and **Terraform** (infrastructure as code). **S3** (object storage) is the concrete backend this task switches to: the `FileStorage` port-adapter (section 4) that isolates physical-file operations from the host disk already landed 2026-08-07 ([ADR 0029](ADR/0029-storage-port-adapter.md), `S3Storage` implementation included, unit-tested only), so this row's remaining storage work is `STORAGE_DRIVER=s3` against a real bucket, not building the abstraction itself. This task also carries the container/deploy hardening the Stage 1 image deferred, surfaced by [ADR 0015](ADR/0015-docker-and-compose.md) — ~~non-root `USER`, a health/readiness endpoint, migrations as a separate deploy step~~ **landed 2026-08-08** ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–[ADR 0034](ADR/0034-https-termination-stance.md)): the image now runs as a dedicated non-root user with a `HEALTHCHECK` against the new `GET /health/live`/`GET /health/ready` (ADR 0030/0031); `docker-compose.yml`'s `migrate` one-shot service models the eventual Kubernetes Job so a scaled `api` can never race `migration:run` (ADR 0032); the secrets-delivery target (native Kubernetes `Secret`, AWS Secrets Manager deferred to Terraform) and the HTTPS-termination stance (ingress/ALB, never in-process) are recorded as design-only ADRs with no code yet (ADR 0033/0034). A distroless runtime base and a target-arch (ARM/Graviton) build were considered and explicitly deferred (ADR 0030) — see the two new Unscheduled rows below for why. Each landed component has its own ADR, as planned; depends on Stage 1 Docker + CI. |
 | ~~File visibility & access-controlled serving~~ **(landed 2026-08-01, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6 + [ADR 0026](ADR/0026-file-visibility-implementation.md); generalizes the former "VOD playback access control" row)** | Uploaded files used to be plain public URLs — anyone with the link could watch. `FileEntity` now carries a 3-state `visibility` (public/private/**unlisted** via a rotatable share token + optional TTL); `GET /file/:id/content` is the sole access-controlled read path (Range-aware), and `ServeStaticModule` no longer exposes `file/upload`. Partially revises [ADR 0005](ADR/0005-local-disk-storage.md) (serving). Frontend adoption of the new `fileUrl`/`visibility` shape landed 2026-08-03 — see Unscheduled below. |
 | ~~Media-type expansion (images/audio, type-specific upload fields)~~ **(landed 2026-08-01, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D4/D5 + [ADR 0027](ADR/0027-media-type-expansion-implementation.md) — split from the row above 2026-08-01)** | `POST /upload/attach` now accepts `image` (jpg/jpeg/png/webp), `audio` (mp3), or `video` (mp4/mov/webm, unchanged) as three type-specific fields, each with its own allowlist, replacing the single `video` field. Revises [ADR 0003](ADR/0003-two-phase-upload-contract.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) (upload field, a breaking change against the live frontend). No schema change. Frontend adoption of the new upload fields landed 2026-08-03 — see Unscheduled below. |
 | Performance / capacity criteria | Index policy, response-time targets, disk ceilings — measured before optimized. |
@@ -425,6 +432,35 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
 
 ## 7. Unscheduled / open decisions
 
+- Distroless runtime base (recorded 2026-08-08, [ADR 0030](ADR/0030-container-non-root-and-arch-stance.md))
+  — **not started because** whether an exact Node 24 distroless tag
+  (`gcr.io/distroless/nodejs24-debian12` or similar) even exists was never verified
+  against a live registry, and distroless removes the only debugging path
+  (`docker exec`) this project has today with no K8s-native replacement
+  (`kubectl debug`, ephemeral debug containers) yet in place. Revisit once the tag is
+  confirmed and the Kubernetes stage (this section, below) lands ephemeral-debug
+  tooling — not bundled with the non-root hardening that already landed, since that
+  part carried no such unverified dependency.
+- ARM/Graviton (multi-arch) container build (recorded 2026-08-08,
+  [ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)) — **not started because**
+  `bcrypt`'s prebuilt binaries are x64-only, and no deploy target has chosen an
+  instance architecture yet — building for an architecture nothing will run on is
+  speculative work Scope Discipline rejects. Revisit as part of the Terraform
+  node-group decision (Production DevOps stack introduction, above), which is what
+  actually picks the instance family this would need to target.
+- AWS Secrets Manager + External Secrets Operator (ESO) wiring (recorded 2026-08-08,
+  [ADR 0033](ADR/0033-secrets-delivery-target.md)) — **not started because** it needs
+  a live AWS account, an IAM role for IRSA, and a running Kubernetes cluster with ESO
+  installed — none of which exist yet. The target shape (K8s `Secret` as the app's
+  direct interface, Secrets Manager syncing into it) is decided; provisioning it is
+  Terraform/IaC work, scheduled to land together with the Terraform introduction row
+  (Production DevOps stack introduction, above).
+- Kubernetes `Ingress`/ALB + TLS certificate provisioning (recorded 2026-08-08,
+  [ADR 0034](ADR/0034-https-termination-stance.md)) — **not started because** it
+  depends on a running Kubernetes cluster and a chosen certificate source (ACM vs.
+  cert-manager + Let's Encrypt), neither decided yet. The stance (terminate at the
+  ingress, never in-process) is settled; scheduled to land with the Helm/K8s task
+  (Production DevOps stack introduction, above).
 - ADR 0026 content-endpoint follow-ups (recorded 2026-08-01, from a post-implementation
   review of `GET /file/:id/content`,
   [file-content.controller.ts](backend/file/file-content.controller.ts)), severity-ordered:

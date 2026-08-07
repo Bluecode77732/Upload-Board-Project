@@ -113,6 +113,13 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   Stage 4 클라우드 네이티브 인프라 과제의 코드 선행 조각으로, 아래 K8s/Helm 작업보다
   먼저 랜딩했다 — 자세한 내용은 4절(아키텍처 방향) 참고. `local`이 여전히 기본값이며,
   실제 S3 전환만 Stage 4 인프라 도입 행에 남는다.
+- ~~**컨테이너/배포 하드닝을 2026-08-08에 구현했다**~~
+  ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)–[ADR 0034](ADR/0034-https-termination-stance.ko.md)):
+  ADR 0015가 미뤘던 컨테이너/배포 하드닝 — non-root 이미지 사용자, `HEALTHCHECK` +
+  liveness/readiness 엔드포인트, 별도 배포 단계로 분리한 마이그레이션은 코드와 함께
+  반영됐고, 시크릿 전달 목표와 HTTPS 종단 방침은 설계만 담은 ADR로 반영됐다.
+  distroless와 멀티아치는 명시적으로 계속 보류한다(7절 미일정) — 자세한 내용은
+  6절 Stage 4 참고.
 
 ## 1. 비전과 본질
 
@@ -356,7 +363,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 
 | 작업 | 근거 / 의존성 |
 |---|---|
-| **프로덕션 DevOps 스택 도입 — 배포 직전 작업** | **이 스택을 도입하는 이유:** 업계에서 널리 쓰이는 표준 DevOps 툴체인으로, 이를 기반으로 실무와 유사한 개발·배포·운영 환경을 경험하고 향후 서비스 확장에도 대응하기 위함이다. 구성요소와 역할: **AWS**(클라우드 플랫폼 / 배포 대상), **Docker**(컨테이너화 — *이미 반영됨*, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.ko.md)), **Kubernetes**(컨테이너 오케스트레이션), **Helm**(릴리스 패키징/템플릿), **GitHub Actions**(CI/CD — *이미 반영됨*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.ko.md)), **Prometheus**(메트릭 수집), **Grafana**(메트릭 대시보드), **Terraform**(코드형 인프라, IaC). **S3**(오브젝트 스토리지)는 이 작업이 실제로 전환하는 구체적 백엔드다 — 호스트 디스크에서 물리 파일 조작을 분리하는 `FileStorage` 포트-어댑터(4절) 자체는 이미 2026-08-07에 랜딩했으므로([ADR 0029](ADR/0029-storage-port-adapter.ko.md), `S3Storage` 구현 포함, 단위 테스트만 거침), 이 행에 남은 스토리지 작업은 추상화를 만드는 것이 아니라 실제 버킷을 대상으로 `STORAGE_DRIVER=s3`를 켜는 것이다. 이 작업은 또한 Stage 1 이미지가 미룬 컨테이너·배포 하드닝을 담는다([ADR 0015](ADR/0015-docker-and-compose.ko.md)에서 드러남): 비루트 `USER`(현재 root 실행), distroless 런타임 베이스, 헬스/레디니스 엔드포인트(LB·오케스트레이터 프로브용), 컨테이너 부팅이 아니라 **별도 배포 단계로 분리한 마이그레이션**(다중 인스턴스 경합 회피), `.env`/`env_file` 대신 시크릿 매니저, HTTPS 종단(`ENV=prod`에서 `Secure` refresh 쿠키에 필요), 타깃 아키텍처 빌드(현재 x64 프리빌드 `bcrypt`; ARM/Graviton은 맞는 프리빌드나 `pnpm.onlyBuiltDependencies` 필요). 아직 반영되지 않은 각 구성요소는 자체 ADR을 갖는다; Stage 1의 Docker + CI에 의존. |
+| **프로덕션 DevOps 스택 도입 — 배포 직전 작업** | **이 스택을 도입하는 이유:** 업계에서 널리 쓰이는 표준 DevOps 툴체인으로, 이를 기반으로 실무와 유사한 개발·배포·운영 환경을 경험하고 향후 서비스 확장에도 대응하기 위함이다. 구성요소와 역할: **AWS**(클라우드 플랫폼 / 배포 대상), **Docker**(컨테이너화 — *이미 반영됨*, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.ko.md)), **Kubernetes**(컨테이너 오케스트레이션), **Helm**(릴리스 패키징/템플릿), **GitHub Actions**(CI/CD — *이미 반영됨*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.ko.md)), **Prometheus**(메트릭 수집), **Grafana**(메트릭 대시보드), **Terraform**(코드형 인프라, IaC). **S3**(오브젝트 스토리지)는 이 작업이 실제로 전환하는 구체적 백엔드다 — 호스트 디스크에서 물리 파일 조작을 분리하는 `FileStorage` 포트-어댑터(4절) 자체는 이미 2026-08-07에 랜딩했으므로([ADR 0029](ADR/0029-storage-port-adapter.ko.md), `S3Storage` 구현 포함, 단위 테스트만 거침), 이 행에 남은 스토리지 작업은 추상화를 만드는 것이 아니라 실제 버킷을 대상으로 `STORAGE_DRIVER=s3`를 켜는 것이다. 이 작업은 또한 Stage 1 이미지가 미룬 컨테이너·배포 하드닝을 담는다([ADR 0015](ADR/0015-docker-and-compose.ko.md)에서 드러남) — ~~비루트 `USER`, 헬스/레디니스 엔드포인트, 별도 배포 단계로 분리한 마이그레이션~~ **2026-08-08 반영**([ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)–[ADR 0034](ADR/0034-https-termination-stance.ko.md)): 이미지는 이제 전용 non-root 사용자로 실행되며 새 `GET /health/live`/`GET /health/ready`를 호출하는 `HEALTHCHECK`를 갖는다(ADR 0030/0031); `docker-compose.yml`의 one-shot `migrate` 서비스가 향후 Kubernetes Job을 모델링해 스케일된 `api`가 `migration:run`을 경합하는 일이 구조적으로 없어졌다(ADR 0032); 시크릿 전달 목표(네이티브 Kubernetes `Secret`, AWS Secrets Manager는 Terraform으로 보류)와 HTTPS 종단 방침(ingress/ALB, 앱 안에서는 하지 않음)은 코드 없이 설계만 담은 ADR로 기록됐다(ADR 0033/0034). distroless 런타임 베이스와 타깃 아키텍처(ARM/Graviton) 빌드는 검토했지만 명시적으로 보류했다(ADR 0030) — 이유는 아래 새 미일정 항목 두 개 참고. 반영된 각 구성요소는 계획대로 자체 ADR을 갖는다; Stage 1의 Docker + CI에 의존. |
 | ~~파일 가시성·접근 제어 서빙~~ **(2026-08-01 구현, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D1/D2/D3/D6 + [ADR 0026](ADR/0026-file-visibility-implementation.ko.md); 기존 "VOD 재생 접근 제어" 행을 일반화)** | 업로드된 파일은 예전엔 단순 공개 URL이었다 — 링크만 알면 누구나 봤다. `FileEntity`는 이제 3-상태 `visibility`(공개/비공개/**링크공유**, 회전 가능한 공유 토큰 + 선택적 TTL)를 가지며, `GET /file/:id/content`가 유일한 접근 제어 읽기 경로(Range 지원)이고, `ServeStaticModule`은 더 이상 `file/upload`를 노출하지 않는다. [ADR 0005](ADR/0005-local-disk-storage.ko.md)(서빙)를 부분 개정한다. 새 `fileUrl`/`visibility` 형태에 대한 프론트엔드 반영은 2026-08-03에 착지했다 — 아래 미배정 참고. |
 | ~~미디어 타입 확장 (이미지/오디오, 타입별 업로드 필드)~~ **(2026-08-01 구현, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D4/D5 + [ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md) — 2026-08-01에 위 행에서 분리)** | `POST /upload/attach`는 이제 `image`(jpg/jpeg/png/webp), `audio`(mp3), `video`(mp4/mov/webm, 변경 없음) 세 타입별 필드를 받으며 각각 자신만의 허용 목록을 가진다 — 단일 `video` 필드를 대체했다. [ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)(업로드 필드, 살아 있는 프론트엔드에 대한 breaking 변경)을 개정한다. 스키마 변경은 없다. 새 업로드 필드에 대한 프론트엔드 반영은 2026-08-03에 착지했다 — 아래 미배정 참고. |
 | 성능/용량 기준 적용 | 인덱스 정책, 응답시간 목표, 디스크 상한 — 최적화 전에 측정부터. |
@@ -393,6 +400,34 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 
 ## 7. 미일정 / 미결 사항
 
+- Distroless 런타임 베이스 (2026-08-08 기록, [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md))
+  — **미착수 이유**: Node 24용 distroless 태그(`gcr.io/distroless/nodejs24-debian12`
+  등)가 실제로 존재하는지 실물 레지스트리로 검증하지 않았고, distroless는 이
+  프로젝트가 지금 가진 유일한 디버깅 경로(`docker exec`)를 없애는데 이를 대체할
+  K8s 네이티브 수단(`kubectl debug`, ephemeral debug container)이 아직 없다.
+  태그가 확인되고 Kubernetes 단계(아래)가 ephemeral-debug 도구를 갖춘 뒤
+  재검토한다 — 이미 반영된 non-root 하드닝과는 별개다. 그쪽은 이런 미검증
+  의존성이 없었기 때문이다.
+- ARM/Graviton(멀티아치) 컨테이너 빌드 (2026-08-08 기록,
+  [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)) — **미착수
+  이유**: `bcrypt`의 프리빌드 바이너리가 x64 전용이고, 아직 어떤 배포 타깃도
+  인스턴스 아키텍처를 선택하지 않았다 — 아무것도 돌지 않을 아키텍처를 위해
+  미리 빌드하는 것은 Scope Discipline이 배제하는 추측성 작업이다. 위 Terraform
+  노드 그룹 결정(프로덕션 DevOps 스택 도입)의 일부로 재검토한다 — 실제로 이
+  작업이 대상 인스턴스 패밀리를 고른다.
+- AWS Secrets Manager + External Secrets Operator(ESO) 연동 (2026-08-08 기록,
+  [ADR 0033](ADR/0033-secrets-delivery-target.ko.md)) — **미착수 이유**: 실제
+  AWS 계정, IRSA용 IAM 롤, ESO가 설치된 동작 중인 Kubernetes 클러스터가
+  필요한데 지금은 그중 아무것도 존재하지 않는다. 목표 형태(K8s `Secret`을 앱의
+  직접 인터페이스로, 그 안으로 Secrets Manager가 동기화)는 확정됐다 —
+  프로비저닝은 Terraform/IaC 작업이며, 위 Terraform 도입 행과 함께 착수하도록
+  스케줄링한다.
+- Kubernetes `Ingress`/ALB + TLS 인증서 프로비저닝 (2026-08-08 기록,
+  [ADR 0034](ADR/0034-https-termination-stance.ko.md)) — **미착수 이유**: 동작
+  중인 Kubernetes 클러스터와 확정된 인증서 소스(ACM vs. cert-manager +
+  Let's Encrypt)가 필요한데 둘 다 아직 정해지지 않았다. 방침(ingress에서 종단,
+  앱 안에서는 하지 않음)은 확정됐다 — 위 Helm/K8s 작업과 함께 착수하도록
+  스케줄링한다.
 - ADR 0026 콘텐츠 엔드포인트 후속 (2026-08-01 기록, `GET /file/:id/content`
   [file-content.controller.ts](backend/file/file-content.controller.ts) 구현 후 검토), 심각도 순:
   1. **[중간] 스트림 에러 미처리** — 200·206 경로의 `createReadStream(...).pipe(res)`에
