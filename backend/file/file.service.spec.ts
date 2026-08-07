@@ -23,10 +23,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { UserRole } from 'backend/auth/role/role';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
-import * as fs from 'fs/promises';
-import { join } from 'path';
-
-jest.mock('fs/promises');
+import {
+  FILE_STORAGE,
+  FileStorage,
+} from 'backend/storage/file-storage.interface';
 
 // mockFileEntity.creator.id === 1, so `owner` manages by ownership; `stranger`
 // (non-creator, plain user) is forbidden; `admin` manages by role (RBAC).
@@ -43,6 +43,16 @@ describe('FileService', () => {
 
   const mockAuditLogService = {
     log: jest.fn(),
+  };
+
+  const mockStorage: jest.Mocked<FileStorage> = {
+    saveTemp: jest.fn(),
+    existsTemp: jest.fn(),
+    promote: jest.fn(),
+    stat: jest.fn(),
+    createReadStream: jest.fn(),
+    unlink: jest.fn(),
+    listTemp: jest.fn(),
   };
 
   const mockFileEntity: FileEntity = {
@@ -116,6 +126,10 @@ describe('FileService', () => {
           provide: AuditLogService,
           useValue: mockAuditLogService,
         },
+        {
+          provide: FILE_STORAGE,
+          useValue: mockStorage,
+        },
       ],
     }).compile();
 
@@ -164,10 +178,10 @@ describe('FileService', () => {
       );
 
     beforeEach(() => {
-      // fs/promises is automocked; make the temp-file existence check pass by default
-      // (mock implementations survive clearAllMocks, so it is set per test run).
-      (fs.access as jest.Mock).mockResolvedValue(undefined);
-      (fs.rename as jest.Mock).mockResolvedValue(undefined);
+      // Make the temp-object existence check pass by default (mock implementations
+      // survive clearAllMocks, so it is set per test run).
+      mockStorage.existsTemp.mockResolvedValue(true);
+      mockStorage.promote.mockResolvedValue(undefined);
     });
 
     it('should successfully upload a file', async () => {
@@ -197,7 +211,7 @@ describe('FileService', () => {
       expect(queryRunner.startTransaction).toHaveBeenCalled();
       expect(queryRunner.commitTransaction).toHaveBeenCalled();
       expect(queryRunner.release).toHaveBeenCalled();
-      expect(fs.rename).toHaveBeenCalled();
+      expect(mockStorage.promote).toHaveBeenCalled();
     });
 
     it('should replay the existing file when the same user resubmits a claimed filename', async () => {
@@ -210,7 +224,7 @@ describe('FileService', () => {
       // A retry of an already-succeeded request opens no transaction and moves no file.
       expect(queryRunner.connect).not.toHaveBeenCalled();
       expect(queryRunner.startTransaction).not.toHaveBeenCalled();
-      expect(fs.rename).not.toHaveBeenCalled();
+      expect(mockStorage.promote).not.toHaveBeenCalled();
     });
 
     it('should throw ConflictException (FILE_ALREADY_CLAIMED) when another user claimed the filename', async () => {
@@ -220,19 +234,19 @@ describe('FileService', () => {
         ConflictException,
       );
       expect(queryRunner.startTransaction).not.toHaveBeenCalled();
-      expect(fs.rename).not.toHaveBeenCalled();
+      expect(mockStorage.promote).not.toHaveBeenCalled();
     });
 
     it('should throw BadRequestException (FILE_INVALID_PATH) when the temp file no longer exists', async () => {
       jest.spyOn(fileRepository, 'findOne').mockResolvedValueOnce(null);
-      (fs.access as jest.Mock).mockRejectedValue(new Error('ENOENT'));
+      mockStorage.existsTemp.mockResolvedValue(false);
 
       await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(
         BadRequestException,
       );
       // Nothing was written: the precondition fails before the transaction opens.
       expect(queryRunner.startTransaction).not.toHaveBeenCalled();
-      expect(fs.rename).not.toHaveBeenCalled();
+      expect(mockStorage.promote).not.toHaveBeenCalled();
     });
 
     it('should throw NotFoundException without rollback when the post-commit re-read finds nothing', async () => {
@@ -284,7 +298,7 @@ describe('FileService', () => {
       // the transaction rolls back, and the connection is released.
       expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
       expect(queryRunner.release).toHaveBeenCalled();
-      expect(fs.rename).not.toHaveBeenCalled();
+      expect(mockStorage.promote).not.toHaveBeenCalled();
     });
 
     it('should replay instead of failing when a concurrent submit wins the unique constraint', async () => {
@@ -805,7 +819,7 @@ describe('FileService', () => {
 
   describe('deleteFile', () => {
     beforeEach(() => {
-      (fs.unlink as jest.Mock).mockResolvedValue(undefined);
+      mockStorage.unlink.mockResolvedValue({ deleted: 1, failures: [] });
     });
 
     it('should delete a file owned by the requester and audit FILE_DELETE', async () => {
@@ -831,35 +845,25 @@ describe('FileService', () => {
 
       await fileService.deleteFile(1, owner);
 
-      expect(fs.unlink).toHaveBeenCalledTimes(1);
-      expect(fs.unlink).toHaveBeenCalledWith(
-        join(process.cwd(), 'file/upload/granted_test.mp4'),
-      );
+      expect(mockStorage.unlink).toHaveBeenCalledTimes(1);
+      expect(mockStorage.unlink).toHaveBeenCalledWith([
+        'file/upload/granted_test.mp4',
+      ]);
     });
 
     it('should still report success when the stored file cannot be unlinked', async () => {
       jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
-      (fs.unlink as jest.Mock).mockRejectedValue(new Error('ENOENT'));
+      mockStorage.unlink.mockResolvedValue({
+        deleted: 0,
+        failures: [{ key: 'file/upload/granted_test.mp4', reason: 'ENOENT' }],
+      });
 
-      // The row is already gone; a failed unlink leaves an orphan, not an error path.
+      // The row is already gone; a failed unlink leaves an orphan, not an error path
+      // (the port never rejects — failures are reported, not thrown).
       await expect(fileService.deleteFile(1, owner)).resolves.toBe(
         'File 1 deleted.',
       );
       expect(mockAuditLogService.log).toHaveBeenCalled();
-    });
-
-    it('should refuse to unlink a stored path outside the upload folder', async () => {
-      // updateFile accepts a bare granted_ name, so a row can hold such a path —
-      // the unlink guard must not follow it out of file/upload.
-      jest.spyOn(fileRepository, 'findOne').mockResolvedValue({
-        ...mockFileEntity,
-        filePath: 'granted_loose.mp4',
-      });
-
-      await fileService.deleteFile(1, owner);
-
-      expect(fileRepository.delete).toHaveBeenCalledWith(1);
-      expect(fs.unlink).not.toHaveBeenCalled();
     });
 
     it('should allow an admin to delete a file they do not own', async () => {
@@ -912,7 +916,7 @@ describe('FileService', () => {
         ConflictException,
       );
       // The row survived, so its stored file must not be unlinked.
-      expect(fs.unlink).not.toHaveBeenCalled();
+      expect(mockStorage.unlink).not.toHaveBeenCalled();
       expect(mockAuditLogService.log).not.toHaveBeenCalled();
     });
   });

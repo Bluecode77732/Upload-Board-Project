@@ -85,8 +85,9 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   역할 관리 조각을 이 백엔드의 실제 라우트에 맞게 적응, 모더레이션 존재 여부 "아니오"로
   결론, 중복 admin 화면을 `admin/` 쪽으로 정리하며
   `frontend/src/features/admin/AdminPage.tsx` 삭제까지 네 행 모두 완료) →
-  **남은 작업은 Stage 4(프로덕션 전환), 이제 다음**. 마지막 두 작업은 **클라우드 네이티브
-  인프라 도입(K8s · Helm · S3)**, 그다음 **배포 자체**다 — 배포는 "N번째 단계"가 아니라 전체
+  **남은 작업은 Stage 4(프로덕션 전환), 이제 다음**. 마지막 두 작업은 **프로덕션 DevOps 스택
+  도입(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform)**,
+  그다음 **배포 자체**다 — 배포는 "N번째 단계"가 아니라 전체
   계획의 종착 행위이므로 **의도적으로 번호를 붙이지 않는다**(번호는 Stage 4/Stage 5 순서
   혼동을 다시 부를 뿐이다). 이로써 Stage 5의 부동 위치가 Stage 4 앞으로 확정되고, 독립적인
   페이지네이션 부채가 둘보다 앞으로 당겨진다.
@@ -108,6 +109,10 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   받으며, 각각 자신만의 클래스 허용 목록을 가진다. 스키마 변경은 없다. ~~새
   `fileUrl`/`visibility` 응답 형태와 분리된 업로드 필드 모두에 대한 프론트엔드 반영~~ — ✅
   **2026-08-03 완료** (아래 미배정 참고).
+- ~~**스토리지 포트-어댑터를 2026-08-07에 구현했다**~~ ([ADR 0029](ADR/0029-storage-port-adapter.ko.md)):
+  Stage 4 클라우드 네이티브 인프라 과제의 코드 선행 조각으로, 아래 K8s/Helm 작업보다
+  먼저 랜딩했다 — 자세한 내용은 4절(아키텍처 방향) 참고. `local`이 여전히 기본값이며,
+  실제 S3 전환만 Stage 4 인프라 도입 행에 남는다.
 
 ## 1. 비전과 본질
 
@@ -158,12 +163,17 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 
 - **현재**: 계층형 모듈러 모놀리스 유지 — Controller → Service → Repository,
   단일 책임의 4모듈. 패턴 변경은 로드맵 범위에 없다.
-- **향후 목표 (2026-07-23 결정)**: **스토리지 포트-어댑터** — 물리 파일 조작을
-  `FileStorage` 인터페이스로 분리해, Stage 4에서 필요해질 때 로컬 디스크
-  구현([ADR 0005](ADR/0005-local-disk-storage.ko.md))을 클라우드 스토리지(S3)로
-  교체할 수 있게 한다. 착수 시 ADR 0005 재검토와, ISP 규약("실제 두 번째 구현체가
-  생기기 전에는 서비스 인터페이스 계층 금지")을 Principle Conflict Protocol로
-  통과시키는 절차가 필요하다.
+- ~~**향후 목표 (2026-07-23 결정)**: 스토리지 포트-어댑터~~ — **2026-08-07 완료**
+  ([ADR 0029](ADR/0029-storage-port-adapter.ko.md), Stage 4 인프라 과제의 코드 선행
+  조각): `FileStorage` 인터페이스(`backend/storage/`)가 물리 파일 조작을
+  `LocalDiskStorage`([ADR 0005](ADR/0005-local-disk-storage.ko.md)의 동작을 그대로
+  이식)와 `S3Storage`(ISP가 요구하는 두 번째 구현체, 단위 테스트만 거침 — SDK
+  모킹, 실제 버킷 미검증) 뒤로 분리한다. 선택은 `STORAGE_DRIVER`(`local` 기본값 |
+  `s3`)로 한다. Multer가 `diskStorage`에서 `memoryStorage`로 바뀌어 temp 쓰기
+  자체도 포트를 거치게 됐다(`UploadService.stageTemp`) — ADR 0005가 기록해 둔
+  다중 인스턴스 격차를 승격 이후 절반만이 아니라 실제로 해소하는 전제조건이다.
+  `local`이 여전히 기본값이며, 실제 배포를 S3로 전환하는 작업은 아래 Stage 4에
+  남아 있다.
 - **프론트엔드 분리 (2026-07-23 결정, 구조 2026-07-24 개정, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md))**:
   프론트엔드는 이 저장소 안의 `frontend/` 하위 폴더(백엔드는 루트에 그대로)로
   두어 HTTP로 이 API를 소비한다. admin은 그 프론트엔드 안의 `/admin` 라우트
@@ -253,13 +263,21 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
    중복 admin 화면 정리(`admin/` 유지,
    `frontend/src/features/admin/AdminPage.tsx` 삭제 — [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의
    2026-08-06 추가 기록 참조). 계획대로 Stage 4보다 먼저 진행됐다: 권한 계층을 Swagger로만
-   운영할 수 있는 배포 시스템은 운영이 어렵기 때문. **이제 남은 작업은 Stage 4** — 인프라
-   도입(K8s · Helm · S3), 그다음 마지막으로 배포 자체이며, 배포는 의도적으로 번호를 붙이지
+   운영할 수 있는 배포 시스템은 운영이 어렵기 때문. **이제 남은 작업은 Stage 4** — 프로덕션
+   DevOps 스택 도입(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus ·
+   Grafana · Terraform), 그다음 마지막으로 배포 자체이며, 배포는 의도적으로 번호를 붙이지
    않는다(아래 참조).
-4. **클라우드 네이티브 인프라 도입** (K8s · Helm · S3) — 배포 직전 작업: 컨테이너
-   오케스트레이션(Kubernetes), 릴리스 패키징/템플릿(Helm), 오브젝트 스토리지(S3 —
-   스토리지 포트-어댑터의 구체적 형태)와 함께, Stage 1 이미지가 미룬 컨테이너·배포
-   하드닝을 담는다. 각 구성요소는 자체 ADR을 갖는다.
+4. **프로덕션 DevOps 스택 도입** — 배포 직전 작업. **이 스택을 도입하는 이유**: 업계에서
+   널리 쓰이는 표준 DevOps 툴체인으로, 이를 기반으로 실무와 유사한 개발·배포·운영 환경을
+   경험하고 향후 서비스 확장에도 대응하기 위함이다. **AWS**(클라우드 플랫폼 / 배포 대상),
+   **Docker**(컨테이너화 — *이미 반영됨*, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.ko.md)),
+   **Kubernetes**(컨테이너 오케스트레이션), **Helm**(릴리스 패키징/템플릿),
+   **GitHub Actions**(CI/CD — *이미 반영됨*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.ko.md)),
+   **Prometheus**(메트릭 수집), **Grafana**(메트릭 대시보드), **Terraform**(코드형
+   인프라, IaC). S3(오브젝트 스토리지)는 이 작업에 남은 스토리지 몫이다 — `FileStorage`
+   포트-어댑터 자체(4절)는 이미 2026-08-07에 랜딩했으므로([ADR 0029](ADR/0029-storage-port-adapter.ko.md)),
+   여기 남은 일은 실제 버킷을 대상으로 `STORAGE_DRIVER=s3`를 켜는 것뿐이다. 아직
+   반영되지 않은 각 구성요소는 자체 ADR을 갖는다.
 
 그다음, 마지막으로 — **배포 자체**. **의도적으로 실행 번호를 붙이지 않는다**: 배포는
 "N번째 단계"가 아니라 위의 모든 것이 만들어지고 운영 가능해진 뒤 수행하는 전체 계획의
@@ -332,17 +350,17 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 
 배포는 전체 계획의 종착 행위다 — 나머지가 모두 만들어지고 운영 가능해진 뒤 수행하므로
 **실행 번호를 붙이지 않는다**; 여기에 번호를 붙이면 이 계획이 이미 정리한 Stage 4/Stage 5
-순서 혼동을 다시 부를 뿐이다. 배포 **직전** 작업은 클라우드 네이티브 인프라 도입
-(K8s · Helm · S3)이다. 아래 행들은 각자의 내부 의존 순서를 유지하며, 배포 행은 의도적으로
-맨 마지막이다.
+순서 혼동을 다시 부를 뿐이다. 배포 **직전** 작업은 프로덕션 DevOps 스택 도입
+(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform)이다.
+아래 행들은 각자의 내부 의존 순서를 유지하며, 배포 행은 의도적으로 맨 마지막이다.
 
 | 작업 | 근거 / 의존성 |
 |---|---|
-| **클라우드 네이티브 인프라 도입 (K8s · Helm · S3) — 배포 직전 작업** | 컨테이너 오케스트레이션(Kubernetes), 릴리스 패키징/템플릿(Helm), 오브젝트 스토리지(S3 — 스토리지 포트-어댑터의 구체적 형태, 4절)로, 수평 확장·다중 인스턴스 배포가 조용히 깨뜨리는 호스트 디스크에서 파일 바이트를 떼어낸다([ADR 0005](ADR/0005-local-disk-storage.ko.md)). 또한 Stage 1 이미지가 미룬 컨테이너·배포 하드닝을 담는다([ADR 0015](ADR/0015-docker-and-compose.ko.md)에서 드러남): 비루트 `USER`(현재 root 실행), distroless 런타임 베이스, 헬스/레디니스 엔드포인트(LB·오케스트레이터 프로브용), 컨테이너 부팅이 아니라 **별도 배포 단계로 분리한 마이그레이션**(다중 인스턴스 경합 회피), `.env`/`env_file` 대신 시크릿 매니저, HTTPS 종단(`ENV=prod`에서 `Secure` refresh 쿠키에 필요), 타깃 아키텍처 빌드(현재 x64 프리빌드 `bcrypt`; ARM/Graviton은 맞는 프리빌드나 `pnpm.onlyBuiltDependencies` 필요). 각 구성요소는 자체 ADR을 갖는다; Stage 1의 Docker + CI에 의존. |
+| **프로덕션 DevOps 스택 도입 — 배포 직전 작업** | **이 스택을 도입하는 이유:** 업계에서 널리 쓰이는 표준 DevOps 툴체인으로, 이를 기반으로 실무와 유사한 개발·배포·운영 환경을 경험하고 향후 서비스 확장에도 대응하기 위함이다. 구성요소와 역할: **AWS**(클라우드 플랫폼 / 배포 대상), **Docker**(컨테이너화 — *이미 반영됨*, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.ko.md)), **Kubernetes**(컨테이너 오케스트레이션), **Helm**(릴리스 패키징/템플릿), **GitHub Actions**(CI/CD — *이미 반영됨*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.ko.md)), **Prometheus**(메트릭 수집), **Grafana**(메트릭 대시보드), **Terraform**(코드형 인프라, IaC). **S3**(오브젝트 스토리지)는 이 작업이 실제로 전환하는 구체적 백엔드다 — 호스트 디스크에서 물리 파일 조작을 분리하는 `FileStorage` 포트-어댑터(4절) 자체는 이미 2026-08-07에 랜딩했으므로([ADR 0029](ADR/0029-storage-port-adapter.ko.md), `S3Storage` 구현 포함, 단위 테스트만 거침), 이 행에 남은 스토리지 작업은 추상화를 만드는 것이 아니라 실제 버킷을 대상으로 `STORAGE_DRIVER=s3`를 켜는 것이다. 이 작업은 또한 Stage 1 이미지가 미룬 컨테이너·배포 하드닝을 담는다([ADR 0015](ADR/0015-docker-and-compose.ko.md)에서 드러남): 비루트 `USER`(현재 root 실행), distroless 런타임 베이스, 헬스/레디니스 엔드포인트(LB·오케스트레이터 프로브용), 컨테이너 부팅이 아니라 **별도 배포 단계로 분리한 마이그레이션**(다중 인스턴스 경합 회피), `.env`/`env_file` 대신 시크릿 매니저, HTTPS 종단(`ENV=prod`에서 `Secure` refresh 쿠키에 필요), 타깃 아키텍처 빌드(현재 x64 프리빌드 `bcrypt`; ARM/Graviton은 맞는 프리빌드나 `pnpm.onlyBuiltDependencies` 필요). 아직 반영되지 않은 각 구성요소는 자체 ADR을 갖는다; Stage 1의 Docker + CI에 의존. |
 | ~~파일 가시성·접근 제어 서빙~~ **(2026-08-01 구현, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D1/D2/D3/D6 + [ADR 0026](ADR/0026-file-visibility-implementation.ko.md); 기존 "VOD 재생 접근 제어" 행을 일반화)** | 업로드된 파일은 예전엔 단순 공개 URL이었다 — 링크만 알면 누구나 봤다. `FileEntity`는 이제 3-상태 `visibility`(공개/비공개/**링크공유**, 회전 가능한 공유 토큰 + 선택적 TTL)를 가지며, `GET /file/:id/content`가 유일한 접근 제어 읽기 경로(Range 지원)이고, `ServeStaticModule`은 더 이상 `file/upload`를 노출하지 않는다. [ADR 0005](ADR/0005-local-disk-storage.ko.md)(서빙)를 부분 개정한다. 새 `fileUrl`/`visibility` 형태에 대한 프론트엔드 반영은 2026-08-03에 착지했다 — 아래 미배정 참고. |
 | ~~미디어 타입 확장 (이미지/오디오, 타입별 업로드 필드)~~ **(2026-08-01 구현, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D4/D5 + [ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md) — 2026-08-01에 위 행에서 분리)** | `POST /upload/attach`는 이제 `image`(jpg/jpeg/png/webp), `audio`(mp3), `video`(mp4/mov/webm, 변경 없음) 세 타입별 필드를 받으며 각각 자신만의 허용 목록을 가진다 — 단일 `video` 필드를 대체했다. [ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)(업로드 필드, 살아 있는 프론트엔드에 대한 breaking 변경)을 개정한다. 스키마 변경은 없다. 새 업로드 필드에 대한 프론트엔드 반영은 2026-08-03에 착지했다 — 아래 미배정 참고. |
 | 성능/용량 기준 적용 | 인덱스 정책, 응답시간 목표, 디스크 상한 — 최적화 전에 측정부터. |
-| **배포 — 마지막 작업** (의도적으로 실행 번호 없음) | AWS, 컨테이너 기반, 위에서 도입한 인프라(K8s · Helm · S3) 위에. "N번째 단계"가 아니라 위의 모든 것이 만들어지고 운영 가능해진 뒤 수행하는 전체 계획의 종착 행위이므로 번호를 붙이지 않는다. 신규 배포 ADR; 인프라 도입 행 + Stage 1의 Docker + CI에 의존. (기존 독립 "스토리지 포트-어댑터" 행은 그 인프라 도입에 흡수했다 — S3가 곧 그 구체적 형태다.) |
+| **배포 — 마지막 작업** (의도적으로 실행 번호 없음) | AWS, 컨테이너 기반, 위에서 도입한 DevOps 스택(Kubernetes · Helm · Terraform · Prometheus/Grafana · S3) 위에. "N번째 단계"가 아니라 위의 모든 것이 만들어지고 운영 가능해진 뒤 수행하는 전체 계획의 종착 행위이므로 번호를 붙이지 않는다. 신규 배포 ADR; DevOps 스택 도입 행 + Stage 1의 Docker + CI에 의존. (기존 독립 "스토리지 포트-어댑터" 행은 이 행보다 먼저, 2026-08-07에 별도로 랜딩했다 — [ADR 0029](ADR/0029-storage-port-adapter.ko.md) — 그래서 이 행이 물려받는 것은 추상화 자체가 아니라 S3 전환뿐이다.) |
 
 ### Stage 5 — 운영 화면 (admin 콘솔) — 2026-07-30 추가
 

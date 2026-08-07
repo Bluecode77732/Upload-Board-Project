@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -19,7 +20,10 @@ import { AuditLogService } from 'backend/audit-log/audit-log.service';
 import { FileService } from 'backend/file/file.service';
 import { PostService } from 'backend/post/post.service';
 import { CommentService } from 'backend/comment/comment.service';
-import { unlinkStoredFiles } from 'backend/common/unlink-stored-files';
+import {
+  FILE_STORAGE,
+  type FileStorage,
+} from 'backend/storage/file-storage.interface';
 
 @Injectable()
 export class UserService {
@@ -35,6 +39,9 @@ export class UserService {
     private readonly fileService: FileService,
     private readonly postService: PostService,
     private readonly commentService: CommentService,
+
+    @Inject(FILE_STORAGE)
+    private readonly storage: FileStorage,
   ) {}
 
   // 목적: 관리자용 전체 유저 목록을 개수와 함께 반환한다.
@@ -242,10 +249,10 @@ export class UserService {
 
     // Post-commit on purpose: unlink cannot be rolled back, so its failure leaves a
     // recoverable orphan on disk rather than a row pointing at a missing file.
-    const { failures } = await unlinkStoredFiles(storedPaths);
+    const { failures } = await this.storage.unlink(storedPaths);
     for (const failure of failures) {
       this.logger.warn(
-        `Stored file left on disk: ${failure.filePath} (${failure.reason})`,
+        `Stored file left on disk: ${failure.key} (${failure.reason})`,
       );
     }
 

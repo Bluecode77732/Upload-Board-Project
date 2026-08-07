@@ -6,6 +6,7 @@
 import {
   Controller,
   Get,
+  Inject,
   NotFoundException,
   Param,
   ParseIntPipe,
@@ -16,14 +17,15 @@ import {
 } from '@nestjs/common';
 import { ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import { createReadStream, type Stats } from 'fs';
-import { stat } from 'fs/promises';
-import { join } from 'path';
 import { FileService } from './file.service';
 import { OptionalJwtAuthGuard } from 'backend/auth/guard/optional-jwt-auth.guard';
 import { OptionalAuthUser } from 'backend/auth/decorator/optional-auth-user.decorator';
 import { AuthUser } from 'backend/auth/decorator/auth-user.decorator';
 import { ErrorCode } from 'backend/common/error-code';
+import {
+  FILE_STORAGE,
+  type FileStorage,
+} from 'backend/storage/file-storage.interface';
 
 // Mirrors the image/audio/video allowlist upload.controller.ts enforces (ADR 0025 D4/D5)
 // — the extension is server-assigned, never client-chosen, so this is a lookup, not a
@@ -44,7 +46,10 @@ const RANGE_PATTERN = /^bytes=(\d*)-(\d*)$/;
 @Controller('file')
 @ApiTags('File API')
 export class FileContentController {
-  constructor(private readonly fileService: FileService) {}
+  constructor(
+    private readonly fileService: FileService,
+    @Inject(FILE_STORAGE) private readonly storage: FileStorage,
+  ) {}
 
   @Get(':id/content')
   @UseGuards(OptionalJwtAuthGuard)
@@ -71,9 +76,10 @@ export class FileContentController {
   @ApiResponse({ status: 404, description: 'FILE_NOT_FOUND.' })
   // 목적: 가시성 검사를 통과한 파일의 실제 바이트를 Range 요청까지 지원하며 스트리밍한다.
   // 이유: 정적 서빙이 공짜로 주던 부분 요청(재생 탐색)을 이 엔드포인트가 직접 구현해야 하고,
-  //       접근 판정은 FileService가 이미 끝냈으므로 여기서는 순수 HTTP 스트리밍만 남는다.
-  // 방법: 접근 판정 → fs/promises.stat → Range 헤더가 없으면 200 전체 스트림, 있으면 파싱해
-  //       206 부분 스트림(범위 밖이면 416) — 동기 fs 호출은 쓰지 않는다(Never Do G1).
+  //       접근 판정은 FileService가 이미 끝냈으므로 여기서는 순수 HTTP 스트리밍만 남는다. 실제
+  //       바이트 I/O는 이제 FileStorage 포트에 위임해 어댑터(로컬/S3)에 무관하게 동작한다(ADR 0029).
+  // 방법: 접근 판정 → storage.stat → Range 헤더가 없으면 200 전체 스트림, 있으면 파싱해
+  //       206 부분 스트림(범위 밖이면 416) — fs를 직접 호출하지 않는다.
   async getContent(
     @Param('id', ParseIntPipe) id: number,
     @Query('share') share: string | undefined,
@@ -87,12 +93,11 @@ export class FileContentController {
       share,
     );
 
-    const absolutePath = join(process.cwd(), file.filePath);
-    let stats: Stats;
+    let stats: { size: number };
     try {
-      stats = await stat(absolutePath);
+      stats = await this.storage.stat(file.filePath);
     } catch {
-      // The row exists but the disk copy does not (orphaned metadata) — a client
+      // The row exists but the stored copy does not (orphaned metadata) — a client
       // outcome (the resource is gone), not a server fault.
       throw new NotFoundException({
         code: ErrorCode.FILE_NOT_FOUND,
@@ -111,7 +116,8 @@ export class FileContentController {
         'Content-Length': stats.size,
         'Accept-Ranges': 'bytes',
       });
-      createReadStream(absolutePath).pipe(res);
+      const stream = await this.storage.createReadStream(file.filePath);
+      stream.pipe(res);
       return;
     }
 
@@ -131,6 +137,10 @@ export class FileContentController {
       'Accept-Ranges': 'bytes',
       'Content-Length': end - start + 1,
     });
-    createReadStream(absolutePath, { start, end }).pipe(res);
+    const stream = await this.storage.createReadStream(file.filePath, {
+      start,
+      end,
+    });
+    stream.pipe(res);
   }
 }

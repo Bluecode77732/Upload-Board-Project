@@ -36,6 +36,7 @@ each ADR records the *why* behind those rules.
 | [0025](0025-file-visibility-and-media-expansion.md) | File visibility, access-controlled serving, and media-type expansion | Accepted — implemented (0026, 0027) | 2026-07-31 |
 | [0026](0026-file-visibility-implementation.md) | File visibility implementation — serving mechanism, metadata filtering, and the content/metadata disclosure split | Accepted | 2026-08-01 |
 | [0027](0027-media-type-expansion-implementation.md) | Media-type expansion implementation — type-specific upload fields | Accepted | 2026-08-01 |
+| [0029](0029-storage-port-adapter.md) | Storage port-adapter — `FileStorage` interface, amends 0005 | Accepted | 2026-08-07 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

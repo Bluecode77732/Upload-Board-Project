@@ -42,6 +42,18 @@ import { join } from 'node:path';
         TEMP_SWEEP_CRON: Joi.string().default('0 * * * *'),
         TEMP_SWEEP_TTL_HOURS: Joi.number().default(24),
         TEMP_SWEEP_DRY_RUN: Joi.boolean().default(false),
+        // Storage port-adapter (ADR 0029): selects the FileStorage implementation.
+        // AWS credentials are deliberately not here — the SDK's own default provider
+        // chain resolves them, since our code never reads them itself.
+        STORAGE_DRIVER: Joi.string().valid('local', 's3').default('local'),
+        S3_BUCKET: Joi.string().when('STORAGE_DRIVER', {
+          is: 's3',
+          then: Joi.required(),
+        }),
+        AWS_REGION: Joi.string().when('STORAGE_DRIVER', {
+          is: 's3',
+          then: Joi.required(),
+        }),
       }),
       isGlobal: true,
     }),

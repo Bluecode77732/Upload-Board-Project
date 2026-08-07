@@ -13,16 +13,20 @@
 ## [Unreleased]
 
 ### 변경
-- **ROADMAP Stage 4 재구성 — 배포는 번호 없음, 배포 직전 작업으로 클라우드 네이티브
-  인프라 도입(K8s · Helm · S3) 명시**(문서 전용). 배포는 더 이상 실행 번호를 갖지 않는다:
-  나머지가 모두 만들어지고 운영 가능해진 뒤 수행하는 전체 계획의 종착 행위이며, 번호를 붙이면
-  이 계획이 이미 정리한 Stage 4/Stage 5 순서 혼동을 다시 부를 뿐이라 — 그냥 *마지막 작업*으로
-  표기하고 Stage 4 표의 맨 마지막 행에 둔다. 그 직전에 신규 **"클라우드 네이티브 인프라 도입
-  (K8s · Helm · S3)"** 작업을 추가했다: Kubernetes(오케스트레이션), Helm(릴리스 패키징), S3
-  (오브젝트 스토리지 — 스토리지 포트-어댑터의 구체적 형태로, 기존의 독립 "스토리지 포트-어댑터"
-  행과 "컨테이너·배포 하드닝" 행을 여기에 흡수). `ROADMAP.md`/`.ko.md`(현재 위치, 6절 실행 순번,
-  Stage 4 헤더 + 표, Stage 5 완료 노트)와 `CLAUDE.md` 로드맵 요약에 반영. 코드·스키마·계획 범위
-  변경은 없다 — 남은 Stage 4 작업의 명칭과 순서만 바뀐다.
+- **ROADMAP Stage 4 재구성 — 배포는 번호 없음, 배포 직전 작업으로 프로덕션 DevOps 스택
+  도입 명시**(문서 전용). 배포는 더 이상 실행 번호를 갖지 않는다: 나머지가 모두 만들어지고
+  운영 가능해진 뒤 수행하는 전체 계획의 종착 행위이며, 번호를 붙이면 이 계획이 이미 정리한
+  Stage 4/Stage 5 순서 혼동을 다시 부를 뿐이라 — 그냥 *마지막 작업*으로 표기하고 Stage 4 표의
+  맨 마지막 행에 둔다. 그 직전에 신규 **"프로덕션 DevOps 스택 도입"** 작업을 명시적 이유와 함께
+  추가했다: 업계에서 널리 쓰이는 표준 DevOps 툴체인으로, 실무와 유사한 개발·배포·운영 환경을
+  경험하고 향후 서비스 확장에 대응하기 위함이다. 스택과 역할: **AWS**(클라우드/배포 대상),
+  **Docker**(컨테이너화 — 이미 반영됨, Stage 1, ADR 0015), **Kubernetes**(오케스트레이션),
+  **Helm**(릴리스 패키징), **GitHub Actions**(CI/CD — 이미 반영됨, Stage 1, ADR 0016),
+  **Prometheus**(메트릭), **Grafana**(대시보드), **Terraform**(IaC); S3(오브젝트 스토리지)는
+  스토리지 포트-어댑터의 구체적 형태로, 기존의 독립 "스토리지 포트-어댑터" 행과 "컨테이너·배포
+  하드닝" 행을 여기에 흡수했다. `ROADMAP.md`/`.ko.md`(현재 위치, 6절 실행 순번, Stage 4 헤더 +
+  표, Stage 5 완료 노트)와 `CLAUDE.md` 로드맵 요약에 반영. 코드·스키마·계획 범위 변경은 없다 —
+  남은 Stage 4 작업의 명칭과 순서만 바뀐다.
 
 ### 제거
 - **`frontend/src/features/admin/AdminPage.tsx`와 그 `/admin` 라우트** (ROADMAP Stage 5
@@ -38,6 +42,24 @@
   항목도 맞춰 갱신했다. **Stage 5가 이제 완료됐다 — 네 행 모두 끝났다.**
 
 ### 추가
+- **스토리지 포트-어댑터 — `FileStorage` 인터페이스, `LocalDiskStorage` + `S3Storage`
+  어댑터** ([ADR 0029](ADR/0029-storage-port-adapter.ko.md), [ADR 0005](ADR/0005-local-disk-storage.ko.md)
+  개정; ROADMAP Stage 4 클라우드 네이티브 인프라 과제의 코드 선행 조각) — 물리 파일
+  조작(`saveTemp`, `existsTemp`, `promote`, `stat`, `createReadStream`, `unlink`,
+  `listTemp`)이 이제 `FileStorage` 포트(`backend/storage/`)를 거친다. 부팅 시
+  `STORAGE_DRIVER`(`'local'` 기본값 | `'s3'`, Joi 검증, `S3_BUCKET`/`AWS_REGION`은
+  `s3`일 때만 필수)로 선택한다. `LocalDiskStorage`는 ADR 0005의 디스크 동작을 그대로
+  이식했다(temp_/granted_ 상태머신, Range/206/416 스트리밍, 가드가 있는 배치 unlink —
+  폐기된 `backend/common/unlink-stored-files.ts`가 이 안으로 흡수됐다). `S3Storage`는
+  ISP가 요구하는 두 번째 구현체로, 모킹된 `@aws-sdk/client-s3` 클라이언트(Apache-2.0)에
+  대한 단위 테스트로만 검증됐다 — 실제 버킷에 실행된 적은 없다. `UploadModule`의
+  Multer는 `diskStorage`에서 `memoryStorage`로 바뀌었고, 버퍼링된 업로드를 포트로
+  밀어 넣는 얇은 `UploadService.stageTemp`를 새로 얻었다 — `STORAGE_DRIVER=s3`가
+  ADR 0005가 기록해 둔 다중 인스턴스 격차를 승격된 파일 쪽 절반만이 아니라 temp 쓰기
+  쪽까지 실제로 닫기 위한 전제조건이다. `FileService`, `FileContentController`,
+  `UserService`의 계정 삭제 연쇄, `TempCleanupService`의 고아 스윕(ADR 0018) 모두
+  이제 `fs`/`fs/promises`를 직접 쓰는 대신 주입된 `FILE_STORAGE` 토큰을 통해
+  읽고 쓴다. `local`이 여전히 기본값이다; 스키마 변경도 API 표면 변경도 없다.
 - **`admin/` 콘솔을 이 백엔드의 실제 라우트에 맞게 적응 — 역할 관리 조각**
   (ROADMAP Stage 5 네 번째 작업; [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의
   검증된 백로그를 작업 지시서로 삼음, 아래 액세스 토큰 `role` 클레임으로 막힘이 풀림) —

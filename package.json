@@ -30,6 +30,7 @@
     "migration:show": "pnpm build && typeorm migration:show -d dist/data-source.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1105.0",
     "@nestjs/common": "^11.1.28",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.28",

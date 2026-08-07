@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   HttpException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -19,7 +20,6 @@ import { UserEntity } from 'backend/user/entity/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FileEntity } from './entity/file.entity';
 import { FileVisibility } from './entity/file-visibility.enum';
-import { access, rename } from 'fs/promises';
 import path, { join } from 'path';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { UpdateFileDto } from './dto/update-uploadFile.dto';
@@ -29,8 +29,11 @@ import { ConfigService } from '@nestjs/config';
 import { ErrorCode } from 'backend/common/error-code';
 import { ROLE_RANK, UserRole } from 'backend/auth/role/role';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
-import { unlinkStoredFiles } from 'backend/common/unlink-stored-files';
 import { escapeLikePattern } from 'backend/common/escape-like-pattern';
+import {
+  FILE_STORAGE,
+  type FileStorage,
+} from 'backend/storage/file-storage.interface';
 
 // The acting user's identity + role (from the JWT), enough for creator-OR-admin checks.
 interface Requester {
@@ -77,6 +80,9 @@ export class FileService {
     private readonly userRepository: Repository<UserEntity>,
 
     private readonly auditLogService: AuditLogService,
+
+    @Inject(FILE_STORAGE)
+    private readonly storage: FileStorage,
   ) {}
 
   // A file is manageable by its creator, or by an admin/superadmin (RBAC, ADR 0013).
@@ -303,15 +309,14 @@ export class FileService {
   }
 
   // 목적: temp 업로드를 소유 파일로 승격하고, 같은 요청의 재제출을 멱등하게 처리한다.
-  // 이유: DB 저장과 물리 rename이 따로 실패하면 행이 없는 파일을 가리키고, 재시도는 모호한 400이나 500을 받는다.
+  // 이유: DB 저장과 물리 승격이 따로 실패하면 행이 없는 파일을 가리키고, 재시도는 모호한 400이나 500을 받는다.
   // 방법: 서버 발급 파일명을 1회용 청구 토큰으로 삼아 선청구 여부를 먼저 판정(replay/409)하고, 미청구일 때만
-  //       QueryRunner 트랜잭션 하나로 insert → rename → commit; 실패 시 rollback, release()는 finally.
+  //       QueryRunner 트랜잭션 하나로 insert → FileStorage 포트 promote → commit; 실패 시 rollback, release()는 finally.
+  //       물리 이동은 어댑터(LocalDiskStorage/S3Storage)에 위임한다(ADR 0029).
   async uploadFile(
     uploadFileDto: UploadFileDto,
     userId: number,
   ): Promise<FileClaimResult> {
-    const temporaryFolder = join('file', 'temp');
-    const uploadFolder = join('file', 'upload');
     const storedPath = this.toStoredPath(uploadFileDto.filePath);
 
     // A retry of an already-succeeded request must not open a transaction at all.
@@ -320,13 +325,10 @@ export class FileService {
       return this.resolveClaim(existingClaim, userId);
     }
 
-    // Nothing claims the filename and no temp file backs it: never issued, or swept
+    // Nothing claims the filename and no temp object backs it: never issued, or swept
     // past its TTL (ADR 0018). That is a client precondition failure, not a 500.
-    try {
-      await access(
-        join(process.cwd(), temporaryFolder, uploadFileDto.filePath),
-      );
-    } catch {
+    const tempExists = await this.storage.existsTemp(uploadFileDto.filePath);
+    if (!tempExists) {
       throw new BadRequestException({
         code: ErrorCode.FILE_INVALID_PATH,
         message: 'Attach the file again.',
@@ -370,12 +372,8 @@ export class FileService {
         });
       }
       fileId = insertedId;
-      const newFilePath = uploadFileDto.filePath.replace('temp_', 'granted_');
 
-      await rename(
-        join(process.cwd(), temporaryFolder, uploadFileDto.filePath),
-        join(process.cwd(), uploadFolder, newFilePath),
-      );
+      await this.storage.promote(uploadFileDto.filePath, storedPath);
 
       await queryRunner.commitTransaction();
     } catch (error) {
@@ -558,12 +556,12 @@ export class FileService {
 
   // 목적: 저장 경로 목록의 물리 파일을 지우고, 남은 것은 경고 로그로 드러낸다.
   // 이유: unlink 실패가 이미 확정된 DB 삭제를 되돌릴 수는 없으므로, 조용히 새는 대신 관측 가능해야 한다.
-  // 방법: 공용 unlinkStoredFiles로 file/upload 하위만 best-effort 삭제하고, 실패분을 건별 warn으로 남긴다.
+  // 방법: FileStorage 포트로 best-effort 삭제하고(경로 안전성 검사는 어댑터 책임, ADR 0029), 실패분을 건별 warn으로 남긴다.
   private async removeStoredFiles(filePaths: string[]): Promise<void> {
-    const { failures } = await unlinkStoredFiles(filePaths);
+    const { failures } = await this.storage.unlink(filePaths);
     for (const failure of failures) {
       this.logger.warn(
-        `Stored file left on disk: ${failure.filePath} (${failure.reason})`,
+        `Stored file left on disk: ${failure.key} (${failure.reason})`,
       );
     }
   }

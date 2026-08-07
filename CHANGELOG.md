@@ -13,19 +13,23 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
-- **ROADMAP Stage 4 restructured — deployment is unnumbered, with a cloud-native
-  infrastructure introduction (K8s · Helm · S3) as its immediate pre-deploy task**
-  (documentation only). Deployment no longer carries an execution number: it is the terminal
-  act of the whole plan, done once everything else is built and operable, and a number only
-  re-invited the Stage 4/Stage 5 ordering confusion the plan already had to untangle — so it
-  is labelled simply *the last work* and sits as the final row of the Stage 4 table. A new
-  **"Cloud-native infrastructure introduction (K8s · Helm · S3)"** task is added immediately
-  before it: Kubernetes (orchestration), Helm (release packaging), and S3 (object storage —
-  the concrete form of the storage port-adapter, into which the standalone "storage
-  port-adapter" and "container & deploy hardening" rows were folded). Updated across
-  `ROADMAP.md`/`.ko.md` (Current position, §6 execution order, Stage 4 header + table, Stage 5
-  completion notes) and the `CLAUDE.md` roadmap summary. No code, schema, or plan-scope change
-  — only the naming and ordering of the remaining Stage 4 work.
+- **ROADMAP Stage 4 restructured — deployment is unnumbered, with a production DevOps stack
+  introduction as its immediate pre-deploy task** (documentation only). Deployment no longer
+  carries an execution number: it is the terminal act of the whole plan, done once everything
+  else is built and operable, and a number only re-invited the Stage 4/Stage 5 ordering
+  confusion the plan already had to untangle — so it is labelled simply *the last work* and
+  sits as the final row of the Stage 4 table. A new **"Production DevOps stack introduction"**
+  task is added immediately before it, with an explicit rationale: it is the industry-standard
+  DevOps toolchain, adopted for a real-world-like dev/deploy/ops environment and to absorb
+  future service scaling. The stack and roles: **AWS** (cloud/deploy target), **Docker**
+  (containerization — already landed, Stage 1, ADR 0015), **Kubernetes** (orchestration),
+  **Helm** (release packaging), **GitHub Actions** (CI/CD — already landed, Stage 1, ADR 0016),
+  **Prometheus** (metrics), **Grafana** (dashboards), **Terraform** (IaC); S3 (object storage)
+  is the storage port-adapter's concrete form, into which the standalone "storage port-adapter"
+  and "container & deploy hardening" rows were folded. Updated across `ROADMAP.md`/`.ko.md`
+  (Current position, §6 execution order, Stage 4 header + table, Stage 5 completion notes) and
+  the `CLAUDE.md` roadmap summary. No code, schema, or plan-scope change — only the naming and
+  ordering of the remaining Stage 4 work.
 
 ### Removed
 - **`frontend/src/features/admin/AdminPage.tsx` and its `/admin` route** (ROADMAP Stage 5,
@@ -42,6 +46,26 @@ development line (package.json version).
   match. **Stage 5 is now complete — all four rows done.**
 
 ### Added
+- **Storage port-adapter — `FileStorage` interface, `LocalDiskStorage` + `S3Storage`
+  adapters** ([ADR 0029](ADR/0029-storage-port-adapter.md), amends
+  [ADR 0005](ADR/0005-local-disk-storage.md); the code-first slice of ROADMAP Stage 4's
+  cloud-native infrastructure task) — physical-file operations (`saveTemp`, `existsTemp`,
+  `promote`, `stat`, `createReadStream`, `unlink`, `listTemp`) now go through a
+  `FileStorage` port (`backend/storage/`), selected at boot by `STORAGE_DRIVER`
+  (`'local'` default | `'s3'`, Joi-validated, `S3_BUCKET`/`AWS_REGION` required only for
+  `s3`). `LocalDiskStorage` ports ADR 0005's disk mechanics unchanged (temp_/granted_
+  state machine, Range/206/416 streaming, guarded batched unlink — the retired
+  `backend/common/unlink-stored-files.ts` folded into it); `S3Storage` is the
+  ISP-required second implementation, verified only by unit tests against a mocked
+  `@aws-sdk/client-s3` client (Apache-2.0) — never run against a live bucket.
+  `UploadModule`'s Multer switched from `diskStorage` to `memoryStorage`, and gained a
+  thin `UploadService.stageTemp` to push the buffered upload through the port — the
+  precondition for `STORAGE_DRIVER=s3` to close the multi-instance gap ADR 0005 recorded
+  for the temp-write half, not just the promoted-file half. `FileService`,
+  `FileContentController`, `UserService`'s account-deletion cascade, and
+  `TempCleanupService`'s orphan sweep (ADR 0018) all now read/write through the
+  injected `FILE_STORAGE` token instead of `fs`/`fs/promises` directly. `local` stays
+  the operative default; no schema change, no API surface change.
 - **`admin/` console adapted to this backend's real routes — role-management slice**
   (ROADMAP Stage 5, fourth task; [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s
   verified backlog as the brief, unblocked by the access-token `role` claim below) — the

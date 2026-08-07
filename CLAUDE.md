@@ -19,8 +19,9 @@ Before making any change:
    Concern-to-entrypoint map (check these first):
    - Auth flow change      → read `backend/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `backend/auth/strategy/`; grep `JwtAuthGuard`, `LocalAuthGuard`
    - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract, one-shot claim resolution in `uploadFile` — ADR 0019). Content reads go through the separate `backend/file/file-content.controller.ts` (`GET /file/:id/content`, `OptionalJwtAuthGuard`) → `FileService.resolveContentAccess` — the visibility gate (ADR 0025/0026)
-   - Physical upload change→ read `backend/upload/upload.module.ts` (Multer diskStorage, `temp_{uuid}_{timestamp}` naming) and `upload.controller.ts` (100MB size limit)
-   - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `backend/common/unlink-stored-files.ts` (post-commit unlink, ADR 0020/0023)
+   - Physical upload change→ read `backend/upload/upload.module.ts` (Multer `memoryStorage`) and `upload.controller.ts` (100MB size limit) together with `backend/upload/upload.service.ts` (`stageTemp` — `temp_{uuid}_{timestamp}` naming, calls the `FileStorage` port, ADR 0029 D4)
+   - Storage adapter change→ read `backend/storage/file-storage.interface.ts` (the `FileStorage` port + `FILE_STORAGE` token), `local-disk.storage.ts` / `s3.storage.ts` (the two implementations), and `storage.module.ts` (the `STORAGE_DRIVER`-keyed factory, ADR 0029)
+   - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `LocalDiskStorage.unlink`/`S3Storage.unlink` (post-commit unlink through the `FileStorage` port, ADR 0020/0023/0029)
    - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
    - Comment/thread change → read `backend/comment/comment.service.ts` (fixed `createdAt ASC` order, `canManage`, `deleteCommentsOfCreator`) and `PostService.assertPostExists` — the one thing CommentModule asks PostModule for. Routes live in **two** controllers (`post-comment.controller.ts` for `/post/:postId/comment`, `comment.controller.ts` for `/comment/:id`); post deletion removes comments via the FK, not the service (ADR 0023 D3)
    - Orphan temp cleanup   → read `backend/temp-cleanup/temp-cleanup.service.ts` (`@nestjs/schedule` `SchedulerRegistry` cron, `temp_`-prefix + TTL sweep of `file/temp`, ADR 0018) and its `selectExpiredTempFiles` pure core
@@ -611,40 +612,56 @@ one of these is violated, follow Principle Conflict Protocol.
   never queries `post_entity` — whether a post exists is PostModule's judgment to make — and
   PostModule never imports it back, which is what lets post deletion stay a database cascade
   (ADR 0023 D3). It exports `CommentService` for the account cascade.
-- **UploadModule** owns the *physical* file only: Multer disk storage into `file/temp`,
-  size limit, temp naming. It has no service and no DB access — keep it that way.
+- **UploadModule** owns the physical *temp* write only, through the injected
+  `FileStorage` port — a thin `UploadService`, not a metadata/DB layer. Multer uses
+  `memoryStorage` (buffers the upload, does not write to disk itself);
+  `UploadService.stageTemp` generates the `temp_{uuid}_{timestamp}` name and calls
+  `storage.saveTemp`. **Revised from "no service and no DB access" (2026-08-07,
+  ADR 0029 D4)**: a bare controller cannot hold the `FileStorage` dependency a
+  driver-agnostic temp write requires, so the module gained the minimum service that
+  makes that true — it still knows nothing about `FileEntity`, ownership, or claims.
+- **StorageModule** (ADR 0029) is an *operational* module, not a domain one: it hosts
+  the `FileStorage` port and the `STORAGE_DRIVER`-keyed factory that selects
+  `LocalDiskStorage` or `S3Storage`. `UploadModule`, `FileModule`, `UserModule`, and
+  `TempCleanupModule` all `imports: [StorageModule]` and inject the `FILE_STORAGE`
+  token — it cannot live inside any one of them (mirrors the TempCleanupModule
+  precedent below: infrastructure consumed by multiple domain modules gets its own
+  module rather than being bolted onto one).
 - **TempCleanupModule** (ADR 0018) is an *operational* module, not a domain one: it hosts
-  the scheduled sweep that deletes orphaned `temp_` files from `file/temp` past a TTL
-  (`@nestjs/schedule`, imperative `SchedulerRegistry` registration; no DB). It is the
+  the scheduled sweep that deletes orphaned `temp_` objects past a TTL (`@nestjs/schedule`,
+  imperative `SchedulerRegistry` registration; no DB) — reading/deleting through the
+  `FileStorage` port (ADR 0029) so the sweep works under either adapter. It is the
   **sanctioned exception** to "the module set maps to the four domain concerns" —
   operational / cross-cutting maintenance gets its own module rather than being bolted
   onto a domain module. It deliberately does **not** live in UploadModule: keeping
-  UploadModule controller-only (above) was chosen over co-locating the sweep with the
-  `file/temp` writer (Principle Conflict Protocol resolution, ADR 0018).
+  UploadModule's own concern narrow to staging temp writes (above) was chosen over
+  co-locating the sweep with it (Principle Conflict Protocol resolution, ADR 0018).
 - Goal: a change request that spans "physical file" and "file metadata" is two modules'
   work by design; do not merge the concerns into one service for convenience.
 
 ### Two-Phase Upload Contract (temp_ → granted_)
 
-- Breakdown: `POST /upload/attach` writes `file/temp/temp_{uuid}_{timestamp}.{ext}` and
-  returns only the filename (`upload.module.ts` diskStorage). `POST /file`
-  then, inside a transaction, inserts the `FileEntity` row with
-  `filePath = file/upload/granted_...` and physically renames the file from `file/temp`
-  to `file/upload` (`file.service.ts` `uploadFile`). `UpdateFileDto.filePath` rejects
-  `temp_` values and accepts only `granted_` ones.
+- Breakdown: `POST /upload/attach` stages `temp_{uuid}_{timestamp}.{ext}` through the
+  `FileStorage` port (`UploadService.stageTemp`, ADR 0029 D4) and returns only the
+  filename. `POST /file` then, inside a transaction, inserts the `FileEntity` row with
+  `filePath = file/upload/granted_...` and calls `storage.promote()` to move the object
+  from its temp key to that granted key (`file.service.ts` `uploadFile`).
+  `UpdateFileDto.filePath` rejects `temp_` values and accepts only `granted_` ones.
 - Rationale: the prefix is a state machine — `temp_` means "uploaded but unclaimed",
   `granted_` means "owned by a DB row". `ServeStaticModule` now roots only at `file/temp`
   (ADR 0025/0026) — a `granted_` file's bytes are never statically reachable; the sole
   read path is `GET /file/:id/content`, gated by `FileEntity.visibility`
   (`public`/`private`/`unlisted`, default `private`). The prefix still marks lifecycle
   state; visibility is an orthogonal, separately-gated concern layered on top of a
-  `granted_` row.
+  `granted_` row. Under `STORAGE_DRIVER=s3` the `ServeStaticModule` route serves nothing
+  (temp bytes never touch local disk) — an accepted residual, not a break, since nothing
+  in the live flow reads through it (ADR 0029 D6).
 - Goal: any new code that touches `filePath` preserves the prefix state machine end to
   end. Never construct a `filePath` from client-supplied path segments — the server
   generates names (uuid + timestamp); the client only echoes them back. That echo is
   enforced, not assumed: `UploadFileDto.filePath` carries
   `@Matches(TEMP_FILENAME_PATTERN)` (ADR 0019), so a malformed value is rejected at the
-  boundary as `VALIDATION_FAILED` and never reaches the `rename`. `UpdateFileDto`
+  boundary as `VALIDATION_FAILED` and never reaches `storage.promote()`. `UpdateFileDto`
   deliberately **omits** the inherited `filePath` and redeclares it — the two endpoints
   sit on opposite sides of the state machine, so the pattern must not be inherited.
 - Duplicate submission (ADR 0019): the attach-issued filename is a **one-shot claim
@@ -656,12 +673,13 @@ one of these is violated, follow Principle Conflict Protocol.
   settled by the unique constraint: a `23505` whose winner claimed the same filename is
   replayed, otherwise it is 400 `FILE_TITLE_TAKEN`. New code on this path keeps every
   duplicate outcome typed — a foreseeable client repeat must never surface as a 500.
-- Orphan cleanup (ADR 0018): a `temp_` file that is never claimed (`POST /file` never
+- Orphan cleanup (ADR 0018): a `temp_` object that is never claimed (`POST /file` never
   called) is deleted by the scheduled sweep in `TempCleanupModule` once it exceeds
-  `TEMP_SWEEP_TTL_HOURS` (default 24h, hourly cron). The sweep only ever deletes
-  `temp_`-prefixed files in `file/temp`; `granted_` / `file/upload` are never candidates
-  — the prefix state machine above is exactly what makes "still in `file/temp` with a
-  `temp_` prefix ⇒ unclaimed orphan" a safe, DB-free identification.
+  `TEMP_SWEEP_TTL_HOURS` (default 24h, hourly cron), reading/deleting through
+  `storage.listTemp()`/`storage.unlink()` (ADR 0029) so the sweep works under either
+  adapter. The sweep only ever considers `temp_`-prefixed objects; `granted_` objects
+  are never candidates — the prefix state machine above is exactly what makes "still
+  listed as `temp_` ⇒ unclaimed orphan" a safe, DB-free identification.
 
 ### Transaction Boundary per Multi-Write (트랜잭션 패턴 선택 기준)
 
@@ -791,7 +809,19 @@ Do not suggest alternatives to these decisions without explicit request.
   without prior plain-text description of the entity change
 
 ### File Storage
-- Local disk only: Multer `diskStorage` into `file/temp`, promoted to `file/upload`
+- **Storage port-adapter (landed 2026-08-07, [ADR 0029](ADR/0029-storage-port-adapter.md),
+  amends this section's former "local disk only" framing)**: physical-file operations go
+  through a `FileStorage` interface (`backend/storage/`) selected at boot by
+  `STORAGE_DRIVER` (`'local'` default | `'s3'`). `LocalDiskStorage` ports ADR 0005's
+  original disk mechanics unchanged; `S3Storage` is the ISP-required second
+  implementation, unit-tested only (SDK mocked) — it has never run against a live
+  bucket. `UploadModule`'s Multer uses `memoryStorage`, not `diskStorage`, so the very
+  first byte of a temp upload also goes through the port (`UploadService.stageTemp`) —
+  the precondition for `STORAGE_DRIVER=s3` to actually fix the multi-instance gap ADR
+  0005 recorded, not just the promoted-file half of it. `local` stays the operative
+  default; switching a real deployment to `s3` is Stage 4 work (ROADMAP.md). Promotion
+  (temp → `file/upload/granted_...`) goes through `storage.promote()`
+  (`file.service.ts` `uploadFile`)
 - **File visibility (landed 2026-08-01, ADR 0025 D1/D2/D3/D6 + ADR 0026)**: `FileEntity`
   carries `visibility` (`public`/`private`/`unlisted`, **default `private`**), a nullable
   `shareToken` (server-generated random opaque string, set only while `unlisted`), and a
@@ -823,18 +853,18 @@ Do not suggest alternatives to these decisions without explicit request.
   `UPLOAD_MULTIPLE_FIELDS`. This **revises** [ADR 0003](ADR/0003-two-phase-upload-contract.md)
   (the two-phase contract's field) and [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)
   (the frozen surface) — a breaking change against the live `frontend/`, which has not yet
-  adopted it. `upload.module.ts`'s Multer `diskStorage` (`temp_{uuid}_{timestamp}.{ext}`,
-  extension read off `file.originalname`) is unaffected — it was already field-name-agnostic.
-  Two other extension-keyed lookups widened in step so promotion and serving stay correct
-  for the new classes: `TEMP_FILENAME_PATTERN`
+  adopted it. The `temp_{uuid}_{timestamp}.{ext}` naming (extension read off
+  `file.originalname`) moved from Multer's `diskStorage` callback to
+  `UploadService.stageTemp` (ADR 0029 D4) but is otherwise unaffected — it was already
+  field-name-agnostic. Two other extension-keyed lookups widened in step so promotion
+  and serving stay correct for the new classes: `TEMP_FILENAME_PATTERN`
   (`backend/file/dto/create-uploadFile.dto.ts`) and `CONTENT_TYPE_BY_EXTENSION`
   (`backend/file/file-content.controller.ts`)
-- **Never suggest**: S3/cloud storage, streaming/chunked upload, CDN — unless explicitly requested
-  (2026-07-23: AWS deployment, VOD playback access control, and a storage
-  port-adapter are now explicitly decided roadmap items — ROADMAP.md Stage 4.
-  Local disk stays the operative decision until those dedicated tasks land,
-  each with its own ADR. VOD access control was generalized into ADR 0025's
-  file-visibility task 2026-07-31)
+- **Never suggest**: streaming/chunked upload, CDN — unless explicitly requested. S3 is no
+  longer in this list: the storage port-adapter (ADR 0029, above) landed both an
+  `S3Storage` implementation and the `STORAGE_DRIVER` switch, but `local` stays the
+  operative default — treat `S3Storage` as unverified-in-anger until Stage 4's cutover
+  exercises it against a live bucket (ROADMAP.md)
 
 ### API Layer
 - REST only, documented via Swagger at `/doc` (`persistAuthorization: true` keeps the
@@ -923,6 +953,10 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
   Decisions > Auth
 - ~~Ownership checks~~ — **landed 2026-07-22** (commit `0549ca4`): user writes self-only,
   file writes creator-only
+- ~~Storage port-adapter (`FileStorage` interface)~~ — **landed 2026-08-07**
+  ([ADR 0029](ADR/0029-storage-port-adapter.md)): the code-first slice of the Stage 4
+  cloud-native infrastructure task — see Architecture Decisions > File Storage. `local`
+  stays the operative default; the real S3 cutover is still Stage 4 work
 - Chat-project remnant handling — docs audited clean 2026-07-22; pending git-history
   decision + re-verification trigger. See `CHAT-REMNANT-REMOVAL-PLAN.md` and
   ROADMAP.md > Unscheduled / open decisions
@@ -942,11 +976,13 @@ between them) → Stage 4 production transition (~~file visibility + access-cont
 serving~~ [**landed 2026-08-01**, ADR 0025 D1/D2/D3/D6 + ADR 0026 — generalizes the former
 "VOD playback access control" row, pulled ahead of deployment as its own task] +
 ~~media-type expansion~~ [**landed 2026-08-01**, ADR 0025 D4/D5 + ADR 0027 — completes
-ADR 0025's design gate], then a **cloud-native infrastructure introduction (K8s · Helm · S3
-— the storage port-adapter's concrete form)** as the immediate pre-deploy task, performance
-criteria, and finally **deployment itself — the terminal act, deliberately carrying no
-execution number** (a number only re-invited the Stage 4/Stage 5 ordering confusion; it is
-simply the last work) → **Stage 5 operational surface — admin console (appended 2026-07-30,
+ADR 0025's design gate], then a **production DevOps stack introduction (AWS · Docker ·
+Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform — the industry-standard
+toolchain, for a real-world-like dev/deploy/ops environment and future scaling; Docker + CI
+already landed in Stage 1, S3 is the storage port-adapter's concrete form)** as the immediate
+pre-deploy task, performance criteria, and finally **deployment itself — the terminal act,
+deliberately carrying no execution number** (a number only re-invited the Stage 4/Stage 5
+ordering confusion; it is simply the last work) → **Stage 5 operational surface — admin console (appended 2026-07-30,
 ADR 0022**: role-delivery decision, adapting the imported `admin/` console,
 `GET /user` pagination, resolving the duplicate admin surface, and deciding whether
 moderation actions exist at all). Stage 5's number is **not** dependency order — it

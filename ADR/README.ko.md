@@ -35,6 +35,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0025](0025-file-visibility-and-media-expansion.ko.md) | 파일 가시성, 접근 제어 서빙, 미디어 타입 확장 | 승인됨 — 구현 완료(0026, 0027) | 2026-07-31 |
 | [0026](0026-file-visibility-implementation.ko.md) | 파일 가시성 구현 — 서빙 방식, 메타데이터 필터링, 콘텐츠/메타데이터 노출 정책 분리 | 승인됨 | 2026-08-01 |
 | [0027](0027-media-type-expansion-implementation.ko.md) | 미디어 타입 확장 구현 — 타입별 업로드 필드 | 승인됨 | 2026-08-01 |
+| [0029](0029-storage-port-adapter.ko.md) | 스토리지 포트-어댑터 — `FileStorage` 인터페이스, 0005 개정 | 승인됨 | 2026-08-07 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

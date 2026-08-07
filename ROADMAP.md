@@ -92,7 +92,8 @@ item below lands as its own dedicated, designed change
   to this backend's real routes, moderation-existence settled "no", and the duplicate admin
   surface resolved in favor of `admin/` — `frontend/src/features/admin/AdminPage.tsx` deleted)
   → **the remaining work is Stage 4 (production transition), now next**. Its last two tasks
-  are the **cloud-native infrastructure introduction (K8s · Helm · S3)** and then
+  are the **production DevOps stack introduction (AWS · Docker · Kubernetes · Helm · GitHub
+  Actions · Prometheus · Grafana · Terraform)** and then
   **deployment itself** — the latter deliberately **unnumbered**, since it is the terminal
   act of the whole plan rather than a "step N" (a number only re-invited the Stage 4/Stage 5
   ordering confusion). This resolves Stage 5's floating position (before Stage 4) and pulled
@@ -116,6 +117,11 @@ item below lands as its own dedicated, designed change
   allowlist, replacing the single `video` field. No schema change. ~~Frontend adoption of
   both the new `fileUrl`/`visibility` response shape and the split upload fields~~ — ✅
   **done 2026-08-03** (Unscheduled below).
+- ~~**Storage port-adapter implemented 2026-08-07**~~ ([ADR 0029](ADR/0029-storage-port-adapter.md)):
+  the code-first slice of Stage 4's cloud-native infrastructure task, landed ahead of
+  the K8s/Helm work below — see §4 (Architecture direction) for the full breakdown.
+  `local` stays the operative default; only the real S3 cutover remains as part of
+  Stage 4's infrastructure-introduction row.
 
 ## 1. Vision & essence
 
@@ -170,13 +176,17 @@ work must pass them; they are not themselves roadmap subjects.
 - **Now**: the layered modular monolith stays — Controller → Service →
   Repository, four single-responsibility modules. No pattern change is in
   roadmap scope.
-- **Future goal (decided 2026-07-23)**: a **storage port-adapter** — a
-  `FileStorage` interface isolating physical-file operations so the local-disk
-  implementation ([ADR 0005](ADR/0005-local-disk-storage.md)) can be swapped
-  for cloud storage (S3) when Stage 4 makes it necessary. Landing it requires
-  revisiting ADR 0005 and passing the ISP rule ("no service-interface layer
-  until a real second implementation exists") through the Principle Conflict
-  Protocol.
+- ~~**Future goal (decided 2026-07-23)**: a storage port-adapter~~ — **landed
+  2026-08-07** ([ADR 0029](ADR/0029-storage-port-adapter.md), the code-first slice of
+  Stage 4's infrastructure task): a `FileStorage` interface (`backend/storage/`)
+  isolates physical-file operations behind `LocalDiskStorage` (ports
+  [ADR 0005](ADR/0005-local-disk-storage.md)'s mechanics unchanged) and `S3Storage`
+  (the ISP-required second implementation, unit-tested only — SDK mocked, no live
+  bucket yet), selected by `STORAGE_DRIVER` (`local` default | `s3`). Multer moved from
+  `diskStorage` to `memoryStorage` so the temp write itself routes through the port too
+  (`UploadService.stageTemp`) — the precondition for the switch to actually fix the
+  multi-instance gap ADR 0005 recorded, not just the promoted-file half of it. `local`
+  stays the operative default; the real S3 cutover is still Stage 4 work below.
 - **Frontend split (decided 2026-07-23, structure amended 2026-07-24, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md))**:
   the frontend lives as a `frontend/` subfolder in this same repository (backend
   at the root, untouched) and consumes this API over HTTP; admin starts as an
@@ -275,13 +285,23 @@ item carries its execution number in its own row.
    `frontend/src/features/admin/AdminPage.tsx` deleted — see [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s
    2026-08-06 note). Ran before Stage 4 as planned: a deployed system whose privilege
    hierarchy is operable only through Swagger is hard to run. **Stage 4 is now the remaining
-   work** — its infrastructure introduction (K8s · Helm · S3) then, finally, the deploy act
-   itself, deliberately unnumbered (see below).
-4. **Cloud-native infrastructure introduction** (K8s · Helm · S3) — the immediate
-   pre-deployment task: Kubernetes for container orchestration, Helm for release
-   packaging/templating, and S3 for object storage (the concrete storage port-adapter),
-   alongside the container/deploy hardening the Stage 1 image deferred. Each component
-   takes its own ADR.
+   work** — the production DevOps stack introduction (AWS · Docker · Kubernetes · Helm ·
+   GitHub Actions · Prometheus · Grafana · Terraform — the industry-standard toolchain,
+   adopted for a real-world-like dev/deploy/ops environment and future scaling) then, finally,
+   the deploy act itself, deliberately unnumbered (see below).
+4. **Production DevOps stack introduction** — the immediate pre-deployment task. **Why this
+   stack**: it is the industry-standard DevOps toolchain, adopted so the project is
+   developed, deployed, and operated in an environment close to real-world practice, and so
+   it can absorb future service scaling. **AWS** (cloud platform / deploy target), **Docker**
+   (containerization — already landed, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.md)),
+   **Kubernetes** (container orchestration), **Helm** (release packaging/templating),
+   **GitHub Actions** (CI/CD — already landed, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.md)),
+   **Prometheus** (metrics collection), **Grafana** (metrics dashboards), **Terraform**
+   (infrastructure as code). S3 (object storage) is this task's remaining storage
+   work: the `FileStorage` port-adapter itself (section 4) already landed 2026-08-07
+   ([ADR 0029](ADR/0029-storage-port-adapter.md)), so what's left here is switching
+   `STORAGE_DRIVER=s3` against a real bucket. Each not-yet-landed component takes its
+   own ADR.
 
 Then, finally — **deployment itself**. It carries **no execution number, deliberately**:
 deployment is not "step N" but the terminal act of the whole plan, performed once
@@ -360,16 +380,17 @@ settled while zero consumers exist.
 Deployment is the terminal act of the whole plan — done once everything else is built and
 operable — so it carries **no execution number**; a number here only re-invites the Stage
 4/Stage 5 ordering confusion the plan already had to untangle. The task **immediately before**
-the deploy act is the cloud-native infrastructure introduction (K8s · Helm · S3). The rows
-below keep their internal dependency order, and the deploy act is deliberately the last row.
+the deploy act is the production DevOps stack introduction (AWS · Docker · Kubernetes · Helm ·
+GitHub Actions · Prometheus · Grafana · Terraform). The rows below keep their internal
+dependency order, and the deploy act is deliberately the last row.
 
 | Task | Rationale / dependencies |
 |---|---|
-| **Cloud-native infrastructure introduction (K8s · Helm · S3) — immediate pre-deployment task** | Kubernetes for container orchestration, Helm for release packaging/templating, and S3 for object storage — the concrete form of the storage port-adapter (section 4), which moves file bytes off the host disk that horizontal scaling and multi-instance deploys otherwise break silently ([ADR 0005](ADR/0005-local-disk-storage.md)). Also carries the container/deploy hardening the Stage 1 image deferred, surfaced by [ADR 0015](ADR/0015-docker-and-compose.md): non-root `USER` (runs as root today), a distroless runtime base, a health/readiness endpoint (for LB/orchestrator probes), migrations as a **separate deploy step** rather than on container boot (avoids multi-instance migration races), secrets via a manager instead of `.env`/`env_file`, HTTPS termination (the `Secure` refresh cookie requires it when `ENV=prod`), and a target-arch build (x64 prebuilt `bcrypt` today; ARM/Graviton needs a matching prebuild or `pnpm.onlyBuiltDependencies`). Each component takes its own ADR; depends on Stage 1 Docker + CI. |
+| **Production DevOps stack introduction — immediate pre-deployment task** | **Why this stack:** it is the industry-standard DevOps toolchain, adopted so the project is developed, deployed, and operated in an environment close to real-world practice, and so it can absorb future service scaling. The components and their roles: **AWS** (cloud platform / deploy target), **Docker** (containerization — *already landed*, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.md)), **Kubernetes** (container orchestration), **Helm** (release packaging/templating), **GitHub Actions** (CI/CD — *already landed*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.md)), **Prometheus** (metrics collection), **Grafana** (metrics dashboards), and **Terraform** (infrastructure as code). **S3** (object storage) is the concrete backend this task switches to: the `FileStorage` port-adapter (section 4) that isolates physical-file operations from the host disk already landed 2026-08-07 ([ADR 0029](ADR/0029-storage-port-adapter.md), `S3Storage` implementation included, unit-tested only), so this row's remaining storage work is `STORAGE_DRIVER=s3` against a real bucket, not building the abstraction itself. This task also carries the container/deploy hardening the Stage 1 image deferred, surfaced by [ADR 0015](ADR/0015-docker-and-compose.md): non-root `USER` (runs as root today), a distroless runtime base, a health/readiness endpoint (for LB/orchestrator probes), migrations as a **separate deploy step** rather than on container boot (avoids multi-instance migration races), secrets via a manager instead of `.env`/`env_file`, HTTPS termination (the `Secure` refresh cookie requires it when `ENV=prod`), and a target-arch build (x64 prebuilt `bcrypt` today; ARM/Graviton needs a matching prebuild or `pnpm.onlyBuiltDependencies`). Each not-yet-landed component takes its own ADR; depends on Stage 1 Docker + CI. |
 | ~~File visibility & access-controlled serving~~ **(landed 2026-08-01, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6 + [ADR 0026](ADR/0026-file-visibility-implementation.md); generalizes the former "VOD playback access control" row)** | Uploaded files used to be plain public URLs — anyone with the link could watch. `FileEntity` now carries a 3-state `visibility` (public/private/**unlisted** via a rotatable share token + optional TTL); `GET /file/:id/content` is the sole access-controlled read path (Range-aware), and `ServeStaticModule` no longer exposes `file/upload`. Partially revises [ADR 0005](ADR/0005-local-disk-storage.md) (serving). Frontend adoption of the new `fileUrl`/`visibility` shape landed 2026-08-03 — see Unscheduled below. |
 | ~~Media-type expansion (images/audio, type-specific upload fields)~~ **(landed 2026-08-01, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D4/D5 + [ADR 0027](ADR/0027-media-type-expansion-implementation.md) — split from the row above 2026-08-01)** | `POST /upload/attach` now accepts `image` (jpg/jpeg/png/webp), `audio` (mp3), or `video` (mp4/mov/webm, unchanged) as three type-specific fields, each with its own allowlist, replacing the single `video` field. Revises [ADR 0003](ADR/0003-two-phase-upload-contract.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) (upload field, a breaking change against the live frontend). No schema change. Frontend adoption of the new upload fields landed 2026-08-03 — see Unscheduled below. |
 | Performance / capacity criteria | Index policy, response-time targets, disk ceilings — measured before optimized. |
-| **Deployment — the final work** (no execution number, deliberately) | AWS, container-based, onto the infrastructure introduced above (K8s · Helm · S3). Not "step N" but the terminal act of the whole plan, performed once everything above is built and operable — hence unnumbered. New deployment ADR; depends on the infrastructure-introduction row plus Stage 1 Docker + CI. (The former standalone "storage port-adapter" row was folded into that introduction — S3 is exactly its concrete form.) |
+| **Deployment — the final work** (no execution number, deliberately) | AWS, container-based, onto the DevOps stack introduced above (Kubernetes · Helm · Terraform · Prometheus/Grafana · S3). Not "step N" but the terminal act of the whole plan, performed once everything above is built and operable — hence unnumbered. New deployment ADR; depends on the DevOps-stack-introduction row plus Stage 1 Docker + CI. (The former standalone "storage port-adapter" row landed separately and ahead of this one, 2026-08-07 — [ADR 0029](ADR/0029-storage-port-adapter.md) — so this row inherits only the S3 cutover, not the abstraction itself.) |
 
 ### Stage 5 — Operational surface (admin console) — added 2026-07-30
 

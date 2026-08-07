@@ -16,6 +16,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'backend/auth/guard/jwt-auth.guard';
 import { ErrorCode } from 'backend/common/error-code';
+import { UploadService } from './upload.service';
 
 // One class allowlist per type-specific field (ADR 0025 D4/D5). A Map (not a plain
 // object) keeps file.fieldname -> allowlist lookup honestly typed as possibly-undefined
@@ -49,6 +50,8 @@ const UPLOAD_ALLOWLIST = new Map<
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class UploadController {
+  constructor(private readonly uploadService: UploadService) {}
+
   @Post('attach')
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -123,13 +126,15 @@ export class UploadController {
   )
   // 목적: image/audio/video 세 필드 중 정확히 하나로 첨부된 파일을 임시 저장소에 받는다.
   // 이유: 단일 video 필드가 이미지·오디오를 거부해 창립 목표 4(이미지/비디오/mp3/mp4)를
-  //       충족하지 못했다(ADR 0025 D4/D5).
+  //       충족하지 못했다(ADR 0025 D4/D5). Multer가 memoryStorage로 바뀌어(ADR 0029 D4)
+  //       파일이 더 이상 스스로 디스크에 쓰이지 않으므로, 물리 저장은 UploadService에 위임한다.
   // 방법: FileFieldsInterceptor로 세 필드를 등록하고 fieldname별 허용목록을 fileFilter에서
-  //       분기 적용, 컨트롤러에서는 정확히 하나의 필드만 채워졌는지 확인한 뒤 파일명을 반환한다.
-  uploadMedia(
+  //       분기 적용, 컨트롤러에서는 정확히 하나의 필드만 채워졌는지 확인한 뒤
+  //       UploadService.stageTemp로 버퍼를 포트에 저장하고 그 파일명을 반환한다.
+  async uploadMedia(
     @UploadedFiles()
     files: Partial<Record<UploadField, Express.Multer.File[]>> = {},
-  ) {
+  ): Promise<{ filename: string }> {
     const attached = UPLOAD_FIELD_NAMES.flatMap((name) => files[name] ?? []);
     const [file] = attached;
 
@@ -147,8 +152,6 @@ export class UploadController {
       });
     }
 
-    return {
-      filename: file.filename,
-    };
+    return this.uploadService.stageTemp(file);
   }
 }

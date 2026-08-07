@@ -6,9 +6,14 @@ import { UserEntity } from 'backend/user/entity/user.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FileEntity } from './entity/file.entity';
 import { AuditLogModule } from 'backend/audit-log/audit-log.module';
+import { StorageModule } from 'backend/storage/storage.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([FileEntity, UserEntity]), AuditLogModule],
+  imports: [
+    TypeOrmModule.forFeature([FileEntity, UserEntity]),
+    AuditLogModule,
+    StorageModule,
+  ],
   controllers: [FileController, FileContentController],
   providers: [FileService],
   // Exported for UserModule: account deletion cascades into file rows, and those

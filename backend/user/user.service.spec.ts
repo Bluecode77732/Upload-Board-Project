@@ -17,10 +17,12 @@ import { AuditLogService } from 'backend/audit-log/audit-log.service';
 import { FileService } from 'backend/file/file.service';
 import { PostService } from 'backend/post/post.service';
 import { CommentService } from 'backend/comment/comment.service';
-import * as fs from 'fs/promises';
+import {
+  FILE_STORAGE,
+  FileStorage,
+} from 'backend/storage/file-storage.interface';
 
 jest.mock('bcrypt');
-jest.mock('fs/promises');
 
 describe('UserService', () => {
   let userService: UserService;
@@ -79,6 +81,16 @@ describe('UserService', () => {
     deleteCommentsOfCreator: jest.fn(),
   };
 
+  const mockStorage: jest.Mocked<FileStorage> = {
+    saveTemp: jest.fn(),
+    existsTemp: jest.fn(),
+    promote: jest.fn(),
+    stat: jest.fn(),
+    createReadStream: jest.fn(),
+    unlink: jest.fn(),
+    listTemp: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -110,6 +122,10 @@ describe('UserService', () => {
         {
           provide: CommentService,
           useValue: mockCommentService,
+        },
+        {
+          provide: FILE_STORAGE,
+          useValue: mockStorage,
         },
       ],
     }).compile();
@@ -290,7 +306,7 @@ describe('UserService', () => {
         email: 'a@b.com',
         role: UserRole.user,
       });
-      (fs.unlink as jest.Mock).mockResolvedValue(undefined);
+      mockStorage.unlink.mockResolvedValue({ deleted: 0, failures: [] });
     });
 
     it('should delete a user who owns no files and audit files=0', async () => {
@@ -300,7 +316,7 @@ describe('UserService', () => {
 
       expect(mockFileService.deleteFilesOfCreator).not.toHaveBeenCalled();
       expect(mockManager.delete).toHaveBeenCalledWith(UserEntity, 2);
-      expect(fs.unlink).not.toHaveBeenCalled();
+      expect(mockStorage.unlink).toHaveBeenCalledWith([]);
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
@@ -354,7 +370,7 @@ describe('UserService', () => {
       );
       expect(mockFileService.deleteFilesOfCreator).not.toHaveBeenCalled();
       expect(mockManager.delete).not.toHaveBeenCalled();
-      expect(fs.unlink).not.toHaveBeenCalled();
+      expect(mockStorage.unlink).not.toHaveBeenCalled();
       expect(mockAuditLogService.log).not.toHaveBeenCalled();
     });
 
@@ -369,7 +385,7 @@ describe('UserService', () => {
       );
       expect(mockManager.delete).toHaveBeenCalledWith(UserEntity, 2);
       // Stored files go only after the transaction returns (post-commit unlink).
-      expect(fs.unlink).toHaveBeenCalledTimes(2);
+      expect(mockStorage.unlink).toHaveBeenCalledWith(storedPaths);
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
@@ -381,9 +397,10 @@ describe('UserService', () => {
 
     it('should still complete when a stored file cannot be unlinked', async () => {
       mockFileService.findStoredPathsOfCreator.mockResolvedValue(storedPaths);
-      (fs.unlink as jest.Mock)
-        .mockRejectedValueOnce(new Error('EACCES'))
-        .mockResolvedValueOnce(undefined);
+      mockStorage.unlink.mockResolvedValue({
+        deleted: 1,
+        failures: [{ key: storedPaths[0], reason: 'EACCES' }],
+      });
 
       const result = await userService.remove(1, UserRole.admin, 2, true);
 
