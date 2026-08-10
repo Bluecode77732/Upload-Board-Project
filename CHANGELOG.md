@@ -31,6 +31,18 @@ development line (package.json version).
   updated for the file board's new location; a new `navigation.spec.ts` covers the route split
   and the proxy fix specifically. The post/comment board UI itself (list, create, detail,
   comments) remains a follow-up task — this change is routing/types only.
+- **`frontend/`: post board list + create UI** (ADR 0021/0023), the follow-up to the routing/
+  type groundwork above. `PostBoard` (`/`) now hosts `PostForm` and a real post list instead of
+  a placeholder: `PostForm` takes title/body plus an optional file via a new `FilePicker`
+  (searches the signed-in user's own files, `GET /file?creatorId=`) and calls `POST /post` — a
+  200 replay and a 201 fresh post are handled identically, and `POST_FILE_TAKEN`/
+  `FILE_NOT_FOUND`/`FORBIDDEN_NOT_OWNER`/`VALIDATION_FAILED` each map to their own message. The
+  list itself mirrors `FileBoard`'s search/sort/creator-filter/pagination pattern verbatim
+  against `GET /post`, with an attachment icon per row and a link to `/posts/:id`. A new
+  `src/api/types.ts` export, `CreatePostRequest`, types the `POST /post` body. Covered by a new
+  `posts.spec.ts` e2e spec (text-only post, file-attached post, and the `POST_FILE_TAKEN`
+  conflict message); `frontend/README.md` (+ko) updated to match. `PostDetailPage` (post detail
+  + comment thread) remains the one outstanding placeholder from the original groundwork.
 
 ### Changed
 - **ROADMAP Stage 4 restructured — deployment is unnumbered, with a production DevOps stack

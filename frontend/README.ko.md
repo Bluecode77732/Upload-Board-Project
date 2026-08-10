@@ -15,7 +15,9 @@ REST API를 HTTP로 소비한다. 관리자 화면도 이 안에 `/admin` 라우
   (`auth`/`upload`/`board`/`detail` 스펙이 회원가입-로그인-로그아웃, 2단계 영상 업로드,
   파일 보드의 검색/정렬/페이지네이션/visibility 배지, FileDetailPage의 접근 제어
   분기를 검증하고, `navigation` 스펙이 "/" ⇄ "/files" 라우트 분리와 NavBar, 그
-  분리가 의존하는 dev 프록시 정규식 앵커링 수정을 검증한다)
+  분리가 의존하는 dev 프록시 정규식 앵커링 수정을 검증한다; `posts` 스펙은
+  PostForm으로 게시글을 작성하는 흐름을 — 파일을 첨부하는 경우와 첨부하지
+  않는 경우 모두 — 그리고 그 결과로 보드 행/상세 링크가 반영되는지를 검증한다)
 - 순수 `fetch` 래퍼(`src/api/client.ts`) — 데이터 페칭/상태 관리 라이브러리는 아직 없음
   (같은 파일에 업로드 진행률 보고용 `XMLHttpRequest` 경로도 함께 있다 —
   `fetch`는 업로드 진행률 이벤트를 제공하지 않기 때문)
@@ -47,10 +49,15 @@ src/
 ├── shared/       NavBar — 인증된 모든 화면에 표시되는 Posts/My Files/Sign out 헤더
 └── features/
     ├── auth/     LoginPage (Basic 로그인/회원가입)
-    ├── posts/    PostBoard (보호됨, "/" — 앱의 홈)와 PostDetailPage
-    │             (보호됨, "/posts/:id") — 둘 다 아직 자리표시자(placeholder)다.
-    │             게시글/댓글 API(백엔드 ADR 0021/0023/0024)는 src/api/types.ts에
-    │             미러링돼 있지만, 보드 UI 자체는 후속 작업이다
+    ├── posts/    PostBoard (보호됨, "/" — 앱의 홈: PostForm + 게시글 목록 —
+    │             FileBoard를 그대로 본뜬 검색/정렬/작성자 필터/페이지네이션,
+    │             행마다 첨부파일 아이콘, ADR 0021/0023), PostForm (title/body +
+    │             선택적으로 FilePicker가 고른 파일로 POST /post 호출 — 200
+    │             재생(replay)과 201 신규 생성을 동일하게 처리한다), FilePicker
+    │             (GET /file?creatorId=로 로그인한 사용자 소유 파일만 검색 —
+    │             미첨부 상태 강제는 오직 서버가 409 POST_FILE_TAKEN으로
+    │             수행한다). PostDetailPage(보호됨, "/posts/:id")는 아직
+    │             자리표시자다 — 게시글 상세와 댓글 스레드가 남은 후속 작업이다
     └── files/    DashboardPage (보호됨, "/files" — 업로드 폼(이미지/오디오/비디오,
                   업로드 진행률 표시줄 포함) + 파일 보드: 검색/정렬/
                   작성자 필터/페이지네이션 + visibility 배지, FileBoard.tsx),

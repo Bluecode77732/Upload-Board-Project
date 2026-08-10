@@ -559,8 +559,12 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   이제 앱의 홈(`PostBoard`)이고, 파일 보드는 `/files`로 옮겼으며, `/posts/:id`를
   예약해 뒀다(`PostDetailPage`). `PostResponse`/`CommentResponse`는 `src/api/types.ts`에서
   백엔드 DTO를 미러링하고 있고, `frontend/docs/API-CONTRACT.md`가 해당 라우트를 문서화한다.
-  보드 UI 자체(게시글 목록/검색/작성, 게시글 상세, 댓글 스레드)는 아직 자리표시자이며,
-  그것이 바로 이 기반 작업이 존재하는 이유인 후속 과제다.
+  **게시글 목록/작성은 같은 날 착지했다**: `PostBoard`가 `PostForm`(title/body + 선택적으로
+  `FilePicker`가 고른 파일, `POST /post` — 200 재생(replay)과 201 신규 생성을 동일하게
+  처리)과 게시글 목록 자체(`FileBoard`를 그대로 본뜬 검색/정렬/작성자 필터/페이지네이션,
+  행마다 첨부파일 아이콘, ADR 0021)를 함께 호스팅하며, 새 `posts.spec.ts` e2e 스펙이
+  이를 검증한다. 게시글 상세와 댓글 스레드(`PostDetailPage`)는 여전히 자리표시자로
+  남아 있으며, 이 기반 작업에서 아직 남은 유일한 부분이다.
 - ~~파일 가시성 + 미디어 확장의 프론트엔드 반영~~ — ✅ **2026-08-03 해소**
   (2026-07-31 기록, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md); 두 절반
   모두 2026-08-01 백엔드에서 착지 — 가시성은

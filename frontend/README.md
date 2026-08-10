@@ -15,7 +15,9 @@ repo root) and consumes the backend REST API over HTTP; admin lives here as an
   (`auth`/`upload`/`board`/`detail` specs cover register-signin-signout, the two-phase
   video upload, the file board's search/sort/pagination/visibility badges, and
   FileDetailPage's access-control branches; `navigation` covers the "/" ⇄ "/files"
-  route split, the NavBar, and the dev-proxy regex-anchor fix that split depends on)
+  route split, the NavBar, and the dev-proxy regex-anchor fix that split depends on;
+  `posts` covers creating a post through PostForm — with and without an attached
+  file — and the resulting board row/detail link)
 - Plain `fetch` wrapper (`src/api/client.ts`) — no data-fetching or state library yet
   (plus an `XMLHttpRequest` path in the same file for upload-progress reporting,
   since `fetch` exposes no upload-progress event)
@@ -47,10 +49,15 @@ src/
 │                 authenticated screen
 └── features/
     ├── auth/     LoginPage (Basic signin/register)
-    ├── posts/    PostBoard (protected, "/" — the app's home) and PostDetailPage
-    │             (protected, "/posts/:id") — both still placeholders; the post/comment
-    │             API (backend ADR 0021/0023/0024) is mirrored in src/api/types.ts but
-    │             the board UI itself is a follow-up task
+    ├── posts/    PostBoard (protected, "/" — the app's home: PostForm + the post list —
+    │             search/sort/creator filter/pagination mirroring FileBoard, attachment
+    │             icon per row, ADR 0021/0023), PostForm (title/body + an optional
+    │             FilePicker-selected file, POST /post — a 200 replay and a 201 fresh
+    │             post are handled identically), and FilePicker (searches the signed-in
+    │             user's own files via GET /file?creatorId=; the server alone enforces
+    │             the unclaimed invariant via 409 POST_FILE_TAKEN). PostDetailPage
+    │             (protected, "/posts/:id") is still a placeholder — post detail and
+    │             the comment thread are the remaining follow-up task
     └── files/    DashboardPage (protected, "/files" — upload form (image/audio/video,
                   with upload-progress bar) + file board: search/sort/
                   creator filter/pagination + visibility badges, FileBoard.tsx) and

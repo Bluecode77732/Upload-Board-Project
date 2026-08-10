@@ -607,9 +607,13 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   backend work**, like the item above. Routing groundwork landed 2026-08-11: `/` is now the
   app's home (`PostBoard`), the file board moved to `/files`, `/posts/:id` is reserved
   (`PostDetailPage`), and `PostResponse`/`CommentResponse` mirror the backend DTOs in
-  `src/api/types.ts` — `frontend/docs/API-CONTRACT.md` documents the routes. The board UI
-  itself (post list/search/create, post detail, comment thread) is still a placeholder;
-  that is the follow-up task this groundwork exists for.
+  `src/api/types.ts` — `frontend/docs/API-CONTRACT.md` documents the routes. **Post list/
+  create landed the same day**: `PostBoard` hosts `PostForm` (title/body + an optional
+  `FilePicker`-selected file, `POST /post`, a 200 replay and a 201 fresh post handled
+  identically) and the post list itself (search/sort/creator filter/pagination mirroring
+  `FileBoard`, an attachment icon per row, ADR 0021), covered by a new `posts.spec.ts`
+  e2e spec. Post detail and the comment thread (`PostDetailPage`) remain a placeholder —
+  that is the one piece of this groundwork still outstanding.
 - ~~Frontend adoption of file visibility + media expansion~~ — ✅ **resolved 2026-08-03**
   (recorded 2026-07-31, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md); both
   backend halves landed 2026-08-01 — visibility via

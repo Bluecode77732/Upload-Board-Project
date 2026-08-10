@@ -32,6 +32,18 @@
   분리와 프록시 수정을 전담 검증하는 `navigation.spec.ts`를 새로 추가했다. 게시글/댓글 보드
   UI 자체(목록, 작성, 상세, 댓글)는 여전히 후속 작업으로 남아 있다 — 이번 변경은 라우팅·타입
   뿐이다.
+- **`frontend/`: 게시글 보드 목록 + 작성 UI**(ADR 0021/0023) — 위 라우팅·타입 기반 작업의
+  후속 과제다. `PostBoard`(`/`)는 이제 자리표시자가 아니라 `PostForm`과 실제 게시글 목록을
+  호스팅한다: `PostForm`은 title/body와, 새로 만든 `FilePicker`(로그인한 사용자 소유 파일만
+  검색, `GET /file?creatorId=`)로 고른 선택적 파일을 받아 `POST /post`를 호출한다 — 200
+  재생(replay)과 201 신규 생성을 동일하게 처리하며, `POST_FILE_TAKEN`/`FILE_NOT_FOUND`/
+  `FORBIDDEN_NOT_OWNER`/`VALIDATION_FAILED`는 각각 자신만의 메시지로 매핑된다. 목록 자체는
+  `FileBoard`의 검색/정렬/작성자 필터/페이지네이션 패턴을 `GET /post`에 그대로 재사용하며,
+  행마다 첨부파일 아이콘과 `/posts/:id` 링크가 붙는다. `src/api/types.ts`에 새 export
+  `CreatePostRequest`를 추가해 `POST /post` 바디를 타입화했다. 새 `posts.spec.ts` e2e
+  스펙(텍스트 전용 게시글, 파일 첨부 게시글, `POST_FILE_TAKEN` 충돌 메시지)으로 검증했고,
+  `frontend/README.md`(+ko)도 함께 갱신했다. `PostDetailPage`(게시글 상세 + 댓글 스레드)는
+  원래 기반 작업에서 남은 유일한 자리표시자로 남아 있다.
 
 ### 변경
 - **ROADMAP Stage 4 재구성 — 배포는 번호 없음, 배포 직전 작업으로 프로덕션 DevOps 스택
