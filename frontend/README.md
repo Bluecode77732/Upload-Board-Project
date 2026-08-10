@@ -12,8 +12,10 @@ repo root) and consumes the backend REST API over HTTP; admin lives here as an
 - **TypeScript** — strict build (`tsc -b`), no `any`
 - **oxlint** — linting
 - **Playwright** (`@playwright/test`, chromium only) — browser-level E2E, `frontend/e2e/`
-  (`auth`/`upload`/`board` specs cover register-signin-signout, the two-phase video
-  upload, and the file board's search/sort/pagination/visibility badges)
+  (`auth`/`upload`/`board`/`detail` specs cover register-signin-signout, the two-phase
+  video upload, the file board's search/sort/pagination/visibility badges, and
+  FileDetailPage's access-control branches; `navigation` covers the "/" ⇄ "/files"
+  route split, the NavBar, and the dev-proxy regex-anchor fix that split depends on)
 - Plain `fetch` wrapper (`src/api/client.ts`) — no data-fetching or state library yet
   (plus an `XMLHttpRequest` path in the same file for upload-progress reporting,
   since `fetch` exposes no upload-progress event)
@@ -26,28 +28,37 @@ cp .env.example .env        # VITE_API_BASE stays empty in dev (Vite proxy)
 pnpm dev                    # http://localhost:5173
 ```
 
-The dev server proxies `/auth`, `/file`, `/user`, `/upload` to the backend on
-`http://localhost:3000`, so the app is same-origin in dev and the httpOnly
-refresh cookie works without CORS. **Start the backend first** (its repo:
-`pnpm run start:dev`).
+The dev server proxies `/auth`, `/file`, `/user`, `/upload`, `/post`, `/comment`
+to the backend on `http://localhost:3000` (`/file` and `/post` are regex-anchored
+in `vite.config.ts` so the proxy's prefix match doesn't also swallow the client
+routes `/files` and `/posts/:id`), so the app is same-origin in dev and the
+httpOnly refresh cookie works without CORS. **Start the backend first** (its
+repo: `pnpm run start:dev`).
 
 ## Structure
 
 ```
 src/
 ├── api/          transport: client (fetch wrapper), authStore (in-memory access token),
-│                 errorCodes + types (mirror of the backend contract)
+│                 errorCodes + types (mirror of the backend contract, now including
+│                 PostResponse/CommentResponse)
 ├── auth/         session state: AuthProvider (silent refresh), useAuth, RequireAuth guard
+├── shared/       NavBar — the Posts/My Files/Sign out header shown on every
+│                 authenticated screen
 └── features/
     ├── auth/     LoginPage (Basic signin/register)
-    ├── files/    DashboardPage (protected — upload form (image/audio/video, with
-    │             upload-progress bar) + file board: search/sort/
-    │             creator filter/pagination + visibility badges, FileBoard.tsx) and
-    │             FileDetailPage (protected, /view/:id — metadata + visibility-gated
-    │             playback: direct <video src> for public/unlisted, an authenticated
-    │             blob+objectURL fetch for private; for the creator or an admin, a
-    │             management section — visibility toggle, unlisted share-link copy/
-    │             rotation, and delete — all via PATCH/DELETE /file/:id)
+    ├── posts/    PostBoard (protected, "/" — the app's home) and PostDetailPage
+    │             (protected, "/posts/:id") — both still placeholders; the post/comment
+    │             API (backend ADR 0021/0023/0024) is mirrored in src/api/types.ts but
+    │             the board UI itself is a follow-up task
+    └── files/    DashboardPage (protected, "/files" — upload form (image/audio/video,
+                  with upload-progress bar) + file board: search/sort/
+                  creator filter/pagination + visibility badges, FileBoard.tsx) and
+                  FileDetailPage (protected, "/view/:id" — metadata + visibility-gated
+                  playback: direct <video src> for public/unlisted, an authenticated
+                  blob+objectURL fetch for private; for the creator or an admin, a
+                  management section — visibility toggle, unlisted share-link copy/
+                  rotation, and delete — all via PATCH/DELETE /file/:id)
 ```
 
 There is no `admin/` feature folder or `/admin` route here — the reserved stub was

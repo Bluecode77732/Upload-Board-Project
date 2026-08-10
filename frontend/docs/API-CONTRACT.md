@@ -6,13 +6,15 @@ contract the app depends on. When the backend changes it, update this file
 **and** the mirrored types in `src/api/` in the same change.
 
 Backend decisions referenced here live in the repo-root `ADR/` (0001, 0010,
-0011, 0012) — this file restates only what a client must obey.
+0011, 0012, 0021, 0023, 0024) — this file restates only what a client must obey.
 
 ## Base URL & transport
 
 - Dev: calls are same-origin via the Vite proxy (`vite.config.ts` forwards
-  `/auth`, `/file`, `/user`, `/upload` to `http://localhost:3000`). `VITE_API_BASE`
-  stays empty.
+  `/auth`, `/file`, `/user`, `/upload`, `/post`, `/comment` to
+  `http://localhost:3000`; `/file` and `/post` are regex-anchored there so the
+  proxy's prefix match doesn't also swallow the client routes `/files` and
+  `/posts/:id`). `VITE_API_BASE` stays empty.
 - Prod: set `VITE_API_BASE` to the real backend origin; the backend must allow
   that origin via its `CORS_ORIGIN` env (backend ADR 0008).
 - **Every** request sends `credentials: 'include'` so the httpOnly refresh
@@ -100,6 +102,15 @@ Every error is the frozen `ErrorBody` shape:
 | `POST` | `/upload/attach` | multipart — exactly one of `image`/`audio`/`video`, 100 MB (ADR 0027) |
 | `GET` | `/user`, `/user/:id` | |
 | `PATCH`/`DELETE` | `/user/:id` | self/admin |
+| `GET` | `/post?take=&skip=&search=&sortBy=&order=&creatorId=` | tuple `[rows, total]`; same query shape as `/file` (ADR 0021 read layer reused), `sortBy` one of `createdAt`\|`title`\|`id` |
+| `GET` | `/post/:id` | post + creator + attached `file` (`FileResponseDto`, absent for a text-only post); 404 `POST_NOT_FOUND` |
+| `POST` | `/post` | `{ title, body, fileId? }`; `fileId` must be the requester's own file, unclaimed by another post — identical resubmit for the same `fileId` replays `200`, a differing title/body is `409 POST_FILE_TAKEN` (ADR 0023 D1) |
+| `PATCH` | `/post/:id` | `{ title?, body? }` only — creator/admin; `fileId` is not editable, an attachment is fixed at creation (ADR 0023 D1) |
+| `DELETE` | `/post/:id` | creator/admin; takes its comments with it (the schema's only `ON DELETE CASCADE`, ADR 0023 D3) but leaves the attached file row untouched |
+| `GET` | `/post/:postId/comment?take=&skip=` | tuple `[rows, total]`; order is **fixed** `createdAt` ASC (a thread reads oldest-first) — no `sortBy`/`order` params exist here |
+| `POST` | `/post/:postId/comment` | `{ body }` (≤1,000 chars); no idempotency key — an identical resubmit creates a second comment (ADR 0023 D1) |
+| `PATCH` | `/comment/:id` | `{ body? }` — creator/admin; the post's own author gains no extra power over a comment they didn't write |
+| `DELETE` | `/comment/:id` | creator/admin |
 
 Uploading is two-phase: `POST /upload/attach` (multipart — exactly one of the
 type-specific fields `image` jpg/jpeg/png/webp · `audio` mp3 · `video` mp4/mov/webm,
@@ -113,6 +124,12 @@ returning `201` (fresh) or `200` (idempotent replay of the same claim, ADR 0019)
 without a token, `private` needs the creator/admin bearer, `unlisted` needs a matching
 `?share=<token>`. New files default to `private`. `shareUrl` is returned only to a
 manager of an unlisted file.
+
+A comment's `postId` in its response is the bare id, never an embedded post — a
+20-comment thread would otherwise repeat the same post body and file on every
+row. Comment routes span two prefixes: listing/creating hang off the post
+(`/post/:postId/comment`), while editing/deleting address a comment by its own
+id (`/comment/:id`) — there is deliberately no `GET /comment/:id`.
 
 ### DELETE responses are plain text, not JSON
 

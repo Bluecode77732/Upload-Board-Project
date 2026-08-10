@@ -108,7 +108,7 @@ that will resurface in any new spec unless avoided up front:
 ## Commands
 
 ```bash
-pnpm dev      # Vite dev server on :5173 (proxies /auth,/file,/user,/upload → :3000)
+pnpm dev      # Vite dev server on :5173 (proxies /auth,/file,/user,/upload,/post,/comment → :3000)
 pnpm build    # tsc -b type-check + vite production build
 pnpm lint     # oxlint
 pnpm preview  # serve the production build

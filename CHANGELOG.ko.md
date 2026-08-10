@@ -12,6 +12,27 @@
 
 ## [Unreleased]
 
+### 추가
+- **`frontend/`: Posts를 홈으로 승격, 파일 보드를 `/files`로 이동 — 게시글/댓글 보드 UI를 위한
+  라우팅·타입 기반 작업**(백엔드 Stage 3, ADR 0021/0023/0024). `App.tsx`: `/`는 이제
+  `PostBoard` 자리표시자를 렌더링하고, `/posts/:id`는 `PostDetailPage` 자리표시자를
+  렌더링하며, 기존 파일 보드(업로드 폼 + `FileBoard`)는 `/`에서 `/files`로 옮겼다.
+  `/view/:id`는 변경 없음. 새로 만든 `src/shared/NavBar.tsx`(Posts / My Files / Sign out)가
+  기존에 `DashboardPage`에만 있던 화면별 헤더를 대체하며, 이제 인증된 모든 화면에 표시된다.
+  `src/api/types.ts`에 `PostResponse`/`PostListResponse`/`CommentResponse`/
+  `CommentListResponse`를 추가해 백엔드 DTO를 미러링한다.
+  `vite.config.ts`의 dev 프록시에 `/post`/`/comment` 항목을 추가했고, `/file`과 `/post`는
+  평범한 문자열 prefix 대신 **정규식으로 앵커링**해야 했다(`^/file($|[/?])`,
+  `^/post($|[/?])`) — Vite는 문자열 프록시 키를 `url.startsWith()`로 매칭하는데, 그대로
+  두면 새 클라이언트 경로인 `/files`, `/posts/:id`가(그리고 첫 시도에서 e2e가 잡아낸
+  `/file?…` 형태의 목록 조회 쿼리까지) SPA 라우터가 아니라 곧장 백엔드로 넘어가 버렸다.
+  `frontend/docs/API-CONTRACT.md`(+ko)에 `/post`/`/comment` 라우트를 문서화했고,
+  `frontend/README.md`/`CLAUDE.md`(해당하는 곳은 +ko)도 함께 갱신했다. 기존 Playwright
+  스펙(`auth`/`board`/`upload`/`detail`)을 파일 보드의 새 위치에 맞게 갱신했고, 라우트
+  분리와 프록시 수정을 전담 검증하는 `navigation.spec.ts`를 새로 추가했다. 게시글/댓글 보드
+  UI 자체(목록, 작성, 상세, 댓글)는 여전히 후속 작업으로 남아 있다 — 이번 변경은 라우팅·타입
+  뿐이다.
+
 ### 변경
 - **ROADMAP Stage 4 재구성 — 배포는 번호 없음, 배포 직전 작업으로 프로덕션 DevOps 스택
   도입 명시**(문서 전용). 배포는 더 이상 실행 번호를 갖지 않는다: 나머지가 모두 만들어지고

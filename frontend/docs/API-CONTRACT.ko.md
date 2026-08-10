@@ -6,13 +6,16 @@
 **같은 변경**에서 함께 갱신한다.
 
 여기서 참조하는 백엔드 결정 사항은 저장소 루트의 `ADR/`(0001, 0010,
-0011, 0012)에 있다 — 이 문서는 클라이언트가 지켜야 할 부분만 다시 정리한다.
+0011, 0012, 0021, 0023, 0024)에 있다 — 이 문서는 클라이언트가 지켜야 할 부분만 다시 정리한다.
 
 ## Base URL과 전송
 
 - 개발: Vite 프록시를 통해 동일 출처로 호출한다 (`vite.config.ts`가
-  `/auth`, `/file`, `/user`, `/upload`를 `http://localhost:3000`으로
-  전달한다). `VITE_API_BASE`는 비워 둔다.
+  `/auth`, `/file`, `/user`, `/upload`, `/post`, `/comment`를
+  `http://localhost:3000`으로 전달한다. `/file`과 `/post`는 정규식으로
+  앵커링돼 있는데, 프록시의 prefix 매칭이 클라이언트 라우트인 `/files`,
+  `/posts/:id`까지 함께 삼켜버리지 않도록 하기 위해서다). `VITE_API_BASE`는
+  비워 둔다.
 - 프로덕션: `VITE_API_BASE`를 실제 백엔드 origin으로 설정한다. 백엔드는
   `CORS_ORIGIN` env로 그 origin을 허용해야 한다(백엔드 ADR 0008).
 - **모든** 요청은 `credentials: 'include'`를 보내 httpOnly 리프레시
@@ -102,6 +105,15 @@
 | `POST` | `/upload/attach` | multipart — `image`/`audio`/`video` 중 정확히 하나, 100MB (ADR 0027) |
 | `GET` | `/user`, `/user/:id` | |
 | `PATCH`/`DELETE` | `/user/:id` | self/admin |
+| `GET` | `/post?take=&skip=&search=&sortBy=&order=&creatorId=` | `[rows, total]` 튜플; `/file`과 같은 쿼리 형태(ADR 0021 read layer 재사용), `sortBy`는 `createdAt`\|`title`\|`id` 중 하나 |
+| `GET` | `/post/:id` | 게시글 + creator + 첨부된 `file`(`FileResponseDto`, 텍스트만 있는 글이면 없음); 없으면 404 `POST_NOT_FOUND` |
+| `POST` | `/post` | `{ title, body, fileId? }`; `fileId`는 요청자 본인의 파일이면서 다른 게시글이 아직 점유하지 않은 것이어야 한다 — 같은 `fileId`로 동일하게 재요청하면 `200`으로 재생(replay)되고, title/body가 다르면 `409 POST_FILE_TAKEN` (ADR 0023 D1) |
+| `PATCH` | `/post/:id` | `{ title?, body? }`만 — creator/admin; `fileId`는 수정 대상이 아니다. 첨부는 생성 시점에 고정된다 (ADR 0023 D1) |
+| `DELETE` | `/post/:id` | creator/admin; 댓글까지 함께 지워지지만(이 스키마의 유일한 `ON DELETE CASCADE`, ADR 0023 D3) 첨부된 파일 행은 그대로 남는다 |
+| `GET` | `/post/:postId/comment?take=&skip=` | `[rows, total]` 튜플; 정렬은 `createdAt` 오름차순으로 **고정**(스레드는 오래된 순으로 읽힌다) — 여기엔 `sortBy`/`order` 파라미터가 아예 없다 |
+| `POST` | `/post/:postId/comment` | `{ body }`(≤1,000자); 멱등성 키가 없어 동일하게 재요청하면 댓글이 하나 더 생긴다 (ADR 0023 D1) |
+| `PATCH` | `/comment/:id` | `{ body? }` — creator/admin; 그 댓글이 달린 게시글의 작성자라 해도 자신이 쓰지 않은 댓글에 대해서는 별도 권한을 갖지 않는다 |
+| `DELETE` | `/comment/:id` | creator/admin |
 
 업로드는 2단계다: `POST /upload/attach`(multipart — 타입별 필드 중 정확히
 하나, `image` jpg/jpeg/png/webp · `audio` mp3 · `video` mp4/mov/webm를
@@ -118,6 +130,13 @@
 필요하며, `unlisted`는 일치하는 `?share=<token>`이 필요하다. 새 파일은
 기본값으로 `private`이다. `shareUrl`은 unlisted 파일을 관리할 수 있는
 사람에게만 반환된다.
+
+댓글 응답의 `postId`는 순수한 id 값일 뿐, 게시글 전체를 담아 보내지
+않는다 — 그렇지 않으면 댓글 20개짜리 스레드가 같은 게시글 본문과 파일을
+행마다 반복해서 실어 보내게 된다. 댓글 라우트는 두 prefix로 나뉜다:
+목록 조회/작성은 게시글에 걸려 있고(`/post/:postId/comment`), 수정/삭제는
+댓글 자신의 id로 주소를 지정한다(`/comment/:id`) — `GET /comment/:id`는
+의도적으로 존재하지 않는다.
 
 ### DELETE 응답은 JSON이 아니라 순수 텍스트다
 

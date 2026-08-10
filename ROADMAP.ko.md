@@ -553,6 +553,14 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   돌려준다. `frontend/docs/API-CONTRACT.md`와 목록 화면(검색창, 정렬 컨트롤, 작성자 필터)을
   함께 갱신해야 하며, 그전까지 프론트엔드는 기존처럼 `take`/`skip`만 보내면서 결정적 정렬만
   그대로 얻는다. 백엔드 변경은 저장소 경계에서 멈췄다([CLAUDE.md](CLAUDE.md) > Project Overview).
+- 게시글/댓글 API의 프론트엔드 반영 (2026-08-11 기록,
+  [ADR 0023](ADR/0023-board-domain-schema.ko.md)) — 위 항목과 마찬가지로 **백엔드 작업이
+  아니라 프론트엔드 전용 과제가 담당한다.** 라우팅 기반 작업은 2026-08-11에 착지했다: `/`가
+  이제 앱의 홈(`PostBoard`)이고, 파일 보드는 `/files`로 옮겼으며, `/posts/:id`를
+  예약해 뒀다(`PostDetailPage`). `PostResponse`/`CommentResponse`는 `src/api/types.ts`에서
+  백엔드 DTO를 미러링하고 있고, `frontend/docs/API-CONTRACT.md`가 해당 라우트를 문서화한다.
+  보드 UI 자체(게시글 목록/검색/작성, 게시글 상세, 댓글 스레드)는 아직 자리표시자이며,
+  그것이 바로 이 기반 작업이 존재하는 이유인 후속 과제다.
 - ~~파일 가시성 + 미디어 확장의 프론트엔드 반영~~ — ✅ **2026-08-03 해소**
   (2026-07-31 기록, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md); 두 절반
   모두 2026-08-01 백엔드에서 착지 — 가시성은

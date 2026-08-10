@@ -602,6 +602,14 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   filter) must both take it up; until they do, the frontend simply keeps sending
   `take`/`skip` and gets the new deterministic ordering for free. The backend change stopped
   at the repo boundary ([CLAUDE.md](CLAUDE.md) > Project Overview).
+- Frontend adoption of the post/comment API (recorded 2026-08-11,
+  [ADR 0023](ADR/0023-board-domain-schema.md)) — **owned by a frontend-scoped task, not by
+  backend work**, like the item above. Routing groundwork landed 2026-08-11: `/` is now the
+  app's home (`PostBoard`), the file board moved to `/files`, `/posts/:id` is reserved
+  (`PostDetailPage`), and `PostResponse`/`CommentResponse` mirror the backend DTOs in
+  `src/api/types.ts` — `frontend/docs/API-CONTRACT.md` documents the routes. The board UI
+  itself (post list/search/create, post detail, comment thread) is still a placeholder;
+  that is the follow-up task this groundwork exists for.
 - ~~Frontend adoption of file visibility + media expansion~~ — ✅ **resolved 2026-08-03**
   (recorded 2026-07-31, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md); both
   backend halves landed 2026-08-01 — visibility via

@@ -12,6 +12,26 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Added
+- **`frontend/`: Posts promoted to home, file board moved to `/files` — routing/type groundwork
+  for the post/comment board UI** (backend Stage 3, ADR 0021/0023/0024). `App.tsx`: `/` now
+  renders a `PostBoard` placeholder, `/posts/:id` renders a `PostDetailPage` placeholder, and
+  the existing file board (upload form + `FileBoard`) moved from `/` to `/files`; `/view/:id`
+  unchanged. A new `src/shared/NavBar.tsx` (Posts / My Files / Sign out) replaces the
+  page-specific header that used to live in `DashboardPage`, and is now shown on every
+  authenticated screen. `src/api/types.ts` gains `PostResponse`/`PostListResponse`/
+  `CommentResponse`/`CommentListResponse`, mirroring the backend DTOs.
+  `vite.config.ts`'s dev proxy gained `/post`/`/comment` entries; `/file` and `/post` had to be
+  **regex-anchored** (`^/file($|[/?])`, `^/post($|[/?])`) instead of plain string prefixes —
+  Vite matches string proxy keys with `url.startsWith()`, which would otherwise route the new
+  client paths `/files` and `/posts/:id` (and, in a first pass that e2e caught, any `/file?…`
+  list query) straight to the backend instead of the SPA router. `frontend/docs/API-CONTRACT.md`
+  (+ko) documents the `/post`/`/comment` routes; `frontend/README.md`/`CLAUDE.md` (+ko where
+  applicable) updated to match. Existing Playwright specs (`auth`/`board`/`upload`/`detail`)
+  updated for the file board's new location; a new `navigation.spec.ts` covers the route split
+  and the proxy fix specifically. The post/comment board UI itself (list, create, detail,
+  comments) remains a follow-up task — this change is routing/types only.
+
 ### Changed
 - **ROADMAP Stage 4 restructured — deployment is unnumbered, with a production DevOps stack
   introduction as its immediate pre-deploy task** (documentation only). Deployment no longer

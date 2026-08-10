@@ -12,8 +12,10 @@ REST API를 HTTP로 소비한다. 관리자 화면도 이 안에 `/admin` 라우
 - **TypeScript** — strict 빌드(`tsc -b`), `any` 사용 안 함
 - **oxlint** — 린팅
 - **Playwright** (`@playwright/test`, chromium만 설치) — 브라우저 수준 E2E, `frontend/e2e/`
-  (`auth`/`upload`/`board` 스펙이 회원가입-로그인-로그아웃, 2단계 영상 업로드,
-  파일 보드의 검색/정렬/페이지네이션/visibility 배지를 검증한다)
+  (`auth`/`upload`/`board`/`detail` 스펙이 회원가입-로그인-로그아웃, 2단계 영상 업로드,
+  파일 보드의 검색/정렬/페이지네이션/visibility 배지, FileDetailPage의 접근 제어
+  분기를 검증하고, `navigation` 스펙이 "/" ⇄ "/files" 라우트 분리와 NavBar, 그
+  분리가 의존하는 dev 프록시 정규식 앵커링 수정을 검증한다)
 - 순수 `fetch` 래퍼(`src/api/client.ts`) — 데이터 페칭/상태 관리 라이브러리는 아직 없음
   (같은 파일에 업로드 진행률 보고용 `XMLHttpRequest` 경로도 함께 있다 —
   `fetch`는 업로드 진행률 이벤트를 제공하지 않기 때문)
@@ -26,28 +28,37 @@ cp .env.example .env        # 개발 환경에서는 VITE_API_BASE를 비워 둔
 pnpm dev                    # http://localhost:5173
 ```
 
-개발 서버는 `/auth`, `/file`, `/user`, `/upload`를
-`http://localhost:3000`의 백엔드로 프록시한다. 덕분에 개발 환경에서는 앱이
-동일 출처(same-origin)로 동작해 httpOnly 리프레시 쿠키가 CORS 없이 작동한다.
-**백엔드를 먼저 실행해야 한다** (해당 저장소에서: `pnpm run start:dev`).
+개발 서버는 `/auth`, `/file`, `/user`, `/upload`, `/post`, `/comment`를
+`http://localhost:3000`의 백엔드로 프록시한다(`/file`과 `/post`는
+`vite.config.ts`에서 정규식으로 앵커링돼 있는데, 프록시의 prefix 매칭이
+클라이언트 라우트인 `/files`, `/posts/:id`까지 함께 삼켜버리지 않도록 하기
+위해서다). 덕분에 개발 환경에서는 앱이 동일 출처(same-origin)로 동작해
+httpOnly 리프레시 쿠키가 CORS 없이 작동한다. **백엔드를 먼저 실행해야 한다**
+(해당 저장소에서: `pnpm run start:dev`).
 
 ## 구조
 
 ```
 src/
 ├── api/          전송 계층: client (fetch 래퍼), authStore (인메모리 액세스 토큰),
-│                 errorCodes + types (백엔드 계약의 미러)
+│                 errorCodes + types (백엔드 계약의 미러, 이제 PostResponse/
+│                 CommentResponse도 포함)
 ├── auth/         세션 상태: AuthProvider (사일런트 리프레시), useAuth, RequireAuth 가드
+├── shared/       NavBar — 인증된 모든 화면에 표시되는 Posts/My Files/Sign out 헤더
 └── features/
     ├── auth/     LoginPage (Basic 로그인/회원가입)
-    ├── files/    DashboardPage (보호됨 — 업로드 폼(이미지/오디오/비디오, 업로드
-    │             진행률 표시줄 포함) + 파일 보드: 검색/정렬/
-    │             작성자 필터/페이지네이션 + visibility 배지, FileBoard.tsx),
-    │             FileDetailPage (보호됨, /view/:id — 메타데이터 + visibility별
-    │             재생: public/unlisted은 <video src> 직접 재생, private은 인증된
-    │             blob+objectURL 페치; 작성자 또는 admin에게는 관리 섹션도 노출된다
-    │             — visibility 전환, unlisted 공유 링크 복사/회전, 삭제를 모두
-    │             PATCH/DELETE /file/:id로 처리)
+    ├── posts/    PostBoard (보호됨, "/" — 앱의 홈)와 PostDetailPage
+    │             (보호됨, "/posts/:id") — 둘 다 아직 자리표시자(placeholder)다.
+    │             게시글/댓글 API(백엔드 ADR 0021/0023/0024)는 src/api/types.ts에
+    │             미러링돼 있지만, 보드 UI 자체는 후속 작업이다
+    └── files/    DashboardPage (보호됨, "/files" — 업로드 폼(이미지/오디오/비디오,
+                  업로드 진행률 표시줄 포함) + 파일 보드: 검색/정렬/
+                  작성자 필터/페이지네이션 + visibility 배지, FileBoard.tsx),
+                  FileDetailPage (보호됨, "/view/:id" — 메타데이터 + visibility별
+                  재생: public/unlisted은 <video src> 직접 재생, private은 인증된
+                  blob+objectURL 페치; 작성자 또는 admin에게는 관리 섹션도 노출된다
+                  — visibility 전환, unlisted 공유 링크 복사/회전, 삭제를 모두
+                  PATCH/DELETE /file/:id로 처리)
 ```
 
 여기에는 `admin/` 기능 폴더도 `/admin` 라우트도 없다 — 예약해 뒀던 stub은 저장소
