@@ -27,6 +27,13 @@
   하드닝" 행을 여기에 흡수했다. `ROADMAP.md`/`.ko.md`(현재 위치, 6절 실행 순번, Stage 4 헤더 +
   표, Stage 5 완료 노트)와 `CLAUDE.md` 로드맵 요약에 반영. 코드·스키마·계획 범위 변경은 없다 —
   남은 Stage 4 작업의 명칭과 순서만 바뀐다.
+- **ROADMAP Stage 4에 구성요소별 상태 하위 표 추가**(`#### 프로덕션 DevOps 스택 — 구성요소
+  상태`) — 단일 밀집 도입 행을 구성요소별 한 행씩(Docker, GitHub Actions, S3, 헬스/레디니스,
+  마이그레이션 분리 단계, Kubernetes, 시크릿 전달, HTTPS 종단, Helm, Prometheus, Grafana,
+  Terraform, AWS)으로 펼치고 정확한 상태 범례(✅ 완료 / 🔶 부분 / 📝 설계만 ADR / 🆕 미착수)를
+  2026-08-08 기준으로 표기 — 그간 랜딩한 스토리지 포트-어댑터([ADR 0029](ADR/0029-storage-port-adapter.ko.md)),
+  컨테이너·배포 하드닝([ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)–[ADR 0034](ADR/0034-https-termination-stance.ko.md)),
+  기본 Kubernetes 매니페스트(`k8s/`)를 반영. 문서 전용.
 
 ### 제거
 - **`frontend/src/features/admin/AdminPage.tsx`와 그 `/admin` 라우트** (ROADMAP Stage 5

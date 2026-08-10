@@ -399,6 +399,28 @@ dependency order, and the deploy act is deliberately the last row.
 | Performance / capacity criteria | Index policy, response-time targets, disk ceilings — measured before optimized. |
 | **Deployment — the final work** (no execution number, deliberately) | AWS, container-based, onto the DevOps stack introduced above (Kubernetes · Helm · Terraform · Prometheus/Grafana · S3). Not "step N" but the terminal act of the whole plan, performed once everything above is built and operable — hence unnumbered. New deployment ADR; depends on the DevOps-stack-introduction row plus Stage 1 Docker + CI. (The former standalone "storage port-adapter" row landed separately and ahead of this one, 2026-08-07 — [ADR 0029](ADR/0029-storage-port-adapter.md) — so this row inherits only the S3 cutover, not the abstraction itself.) |
 
+#### Production DevOps stack — component status
+
+The single "Production DevOps stack introduction" row above expands here per component, so
+the status of each is scannable rather than buried in prose (as of 2026-08-08). Legend:
+✅ landed · 🔶 partially landed · 📝 design-only ADR · 🆕 not started.
+
+| Component | Role | Status | What is done / what remains | ADR / source |
+|---|---|---|---|---|
+| **Docker** | Containerization | ✅ + hardened | Multi-stage image (Stage 1); now runs as a dedicated **non-root** user with a `HEALTHCHECK`. A **distroless** base and a **multi-arch (ARM/Graviton)** build were considered and **deferred** (accepted residual). | [0015](ADR/0015-docker-and-compose.md), [0030](ADR/0030-container-non-root-and-arch-stance.md) |
+| **GitHub Actions** | CI (/CD) | ✅ CI only | `lint`+unit+e2e workflow on push/PR. A **deploy pipeline (CD)** is not built yet — added when AWS is the target. | [0016](ADR/0016-github-actions-ci.md) |
+| **S3** | Object storage | 🔶 adapter ✅ / cutover 🆕 | The `FileStorage` port + `S3Storage` implementation landed (unit-tested only, never run against a live bucket). Remaining: the real-bucket **`STORAGE_DRIVER=s3` cutover**. `local` stays the operative default. | [0029](ADR/0029-storage-port-adapter.md) |
+| **Health / readiness** | Probes | ✅ | `GET /health/live` + `GET /health/ready` for LB/orchestrator probes. | [0031](ADR/0031-health-and-readiness-endpoints.md) |
+| **Migration as a separate step** | Deploy safety | 🔶 compose ✅ / K8s Job 🆕 | `docker-compose.yml`'s one-shot `migrate` service models the eventual **Kubernetes Job**, so a scaled `api` never races `migration:run`. The K8s Job itself is pending. | [0032](ADR/0032-migration-as-separate-deploy-step.md) |
+| **Kubernetes** | Orchestration | 🔶 manifests | Base manifests landed under `k8s/` (Pod, Deployment, ClusterIP Service, rolling-update). A **live cluster deploy** (on AWS) is not done. | commit `2aff42a` |
+| **Secrets delivery** | Secrets | 📝 design-only | Target decided: native **Kubernetes `Secret`**; **AWS Secrets Manager** deferred to the Terraform step. No code yet. | [0033](ADR/0033-secrets-delivery-target.md) |
+| **HTTPS termination** | TLS | 📝 design-only | Terminate at **ingress / ALB**, never in-process (the `Secure` refresh cookie needs it when `ENV=prod`). No code yet. | [0034](ADR/0034-https-termination-stance.md) |
+| **Helm** | Release packaging | 🆕 | Template the `k8s/` manifests into a chart (per-env values, release versioning). | own ADR (planned) |
+| **Prometheus** | Metrics collection | 🆕 | Metrics export layered on the Nest `Logger` observability stance. | own ADR (planned); on [0017](ADR/0017-logging-conventions.md) |
+| **Grafana** | Dashboards | 🆕 | Dashboards/alerts over the Prometheus datasource. | own ADR (planned) |
+| **Terraform** | Infrastructure as code | 🆕 | Declaratively provision the AWS resources (network, cluster, S3, secrets). | own ADR (planned) |
+| **AWS** | Cloud / deploy target | 🆕 | The container deploy target the rows above build toward. | deployment ADR (planned) |
+
 ### Stage 5 — Operational surface (admin console) — added 2026-07-30
 
 **Why a new stage rather than a row in an existing one.** An admin console is neither board

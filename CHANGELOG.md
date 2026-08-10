@@ -30,6 +30,14 @@ development line (package.json version).
   (Current position, §6 execution order, Stage 4 header + table, Stage 5 completion notes) and
   the `CLAUDE.md` roadmap summary. No code, schema, or plan-scope change — only the naming and
   ordering of the remaining Stage 4 work.
+- **ROADMAP Stage 4 gains a per-component status sub-table** (`#### Production DevOps stack —
+  component status`) that expands the single dense introduction row into one scannable row per
+  component (Docker, GitHub Actions, S3, health/readiness, migration-separate-step, Kubernetes,
+  secrets delivery, HTTPS termination, Helm, Prometheus, Grafana, Terraform, AWS) with an
+  accurate status legend (✅ landed / 🔶 partial / 📝 design-only ADR / 🆕 not started) as of
+  2026-08-08 — reflecting the storage port-adapter ([ADR 0029](ADR/0029-storage-port-adapter.md)),
+  the container/deploy hardening ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–[ADR 0034](ADR/0034-https-termination-stance.md)),
+  and the base Kubernetes manifests (`k8s/`) that have since landed. Documentation only.
 
 ### Removed
 - **`frontend/src/features/admin/AdminPage.tsx` and its `/admin` route** (ROADMAP Stage 5,

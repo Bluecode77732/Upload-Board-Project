@@ -369,6 +369,28 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | 성능/용량 기준 적용 | 인덱스 정책, 응답시간 목표, 디스크 상한 — 최적화 전에 측정부터. |
 | **배포 — 마지막 작업** (의도적으로 실행 번호 없음) | AWS, 컨테이너 기반, 위에서 도입한 DevOps 스택(Kubernetes · Helm · Terraform · Prometheus/Grafana · S3) 위에. "N번째 단계"가 아니라 위의 모든 것이 만들어지고 운영 가능해진 뒤 수행하는 전체 계획의 종착 행위이므로 번호를 붙이지 않는다. 신규 배포 ADR; DevOps 스택 도입 행 + Stage 1의 Docker + CI에 의존. (기존 독립 "스토리지 포트-어댑터" 행은 이 행보다 먼저, 2026-08-07에 별도로 랜딩했다 — [ADR 0029](ADR/0029-storage-port-adapter.ko.md) — 그래서 이 행이 물려받는 것은 추상화 자체가 아니라 S3 전환뿐이다.) |
 
+#### 프로덕션 DevOps 스택 — 구성요소 상태
+
+위 "프로덕션 DevOps 스택 도입" 단일 행을 여기서 구성요소별로 펼쳐, 각 상태를 산문에 묻지
+않고 한눈에 볼 수 있게 한다(2026-08-08 기준). 범례: ✅ 완료 · 🔶 부분 완료 · 📝 설계만(ADR) ·
+🆕 미착수.
+
+| 구성요소 | 역할 | 상태 | 완료/잔여 | ADR / 출처 |
+|---|---|---|---|---|
+| **Docker** | 컨테이너화 | ✅ + 하드닝 | 멀티스테이지 이미지(Stage 1); 이제 전용 **비루트** 사용자로 실행 + `HEALTHCHECK`. **distroless** 베이스와 **멀티아치(ARM/Graviton)** 빌드는 검토 후 **유예**(감수). | [0015](ADR/0015-docker-and-compose.ko.md), [0030](ADR/0030-container-non-root-and-arch-stance.ko.md) |
+| **GitHub Actions** | CI(/CD) | ✅ CI만 | push/PR에서 `lint`+unit+e2e 워크플로. **배포 파이프라인(CD)**은 아직 없음 — AWS가 대상이 될 때 추가. | [0016](ADR/0016-github-actions-ci.ko.md) |
+| **S3** | 오브젝트 스토리지 | 🔶 어댑터 ✅ / 컷오버 🆕 | `FileStorage` 포트 + `S3Storage` 구현 랜딩(단위테스트만, 실버킷 미실행). 잔여: 실버킷 **`STORAGE_DRIVER=s3` 전환**. `local`이 운영 기본값 유지. | [0029](ADR/0029-storage-port-adapter.ko.md) |
+| **헬스/레디니스** | 프로브 | ✅ | LB·오케스트레이터 프로브용 `GET /health/live` + `GET /health/ready`. | [0031](ADR/0031-health-and-readiness-endpoints.ko.md) |
+| **마이그레이션 분리 단계** | 배포 안전 | 🔶 compose ✅ / K8s Job 🆕 | `docker-compose.yml`의 원샷 `migrate` 서비스가 향후 **Kubernetes Job**을 모델링 — 스케일된 `api`가 `migration:run`을 경합하지 않도록. K8s Job 자체는 예정. | [0032](ADR/0032-migration-as-separate-deploy-step.ko.md) |
+| **Kubernetes** | 오케스트레이션 | 🔶 매니페스트 | `k8s/` 아래 기본 매니페스트 랜딩(Pod, Deployment, ClusterIP Service, rolling-update). **실제 클러스터 배포**(AWS)는 미착수. | 커밋 `2aff42a` |
+| **시크릿 전달** | 시크릿 | 📝 설계만 | 대상 결정: 네이티브 **Kubernetes `Secret`**; **AWS Secrets Manager**는 Terraform 단계로 유예. 코드 없음. | [0033](ADR/0033-secrets-delivery-target.ko.md) |
+| **HTTPS 종단** | TLS | 📝 설계만 | **ingress / ALB**에서 종단, 인프로세스 금지(`ENV=prod`에서 `Secure` refresh 쿠키에 필요). 코드 없음. | [0034](ADR/0034-https-termination-stance.ko.md) |
+| **Helm** | 릴리스 패키징 | 🆕 | `k8s/` 매니페스트를 차트로 템플릿화(환경별 values, 릴리스 버전 관리). | 자체 ADR(예정) |
+| **Prometheus** | 메트릭 수집 | 🆕 | Nest `Logger` 관측성 스탠스 위에 메트릭 익스포트. | 자체 ADR(예정); [0017](ADR/0017-logging-conventions.ko.md) 위 |
+| **Grafana** | 대시보드 | 🆕 | Prometheus 데이터소스 기반 대시보드/알림. | 자체 ADR(예정) |
+| **Terraform** | 코드형 인프라 | 🆕 | AWS 리소스(네트워크·클러스터·S3·시크릿) 선언적 프로비저닝. | 자체 ADR(예정) |
+| **AWS** | 클라우드 / 배포 대상 | 🆕 | 위 행들이 향하는 컨테이너 배포 대상. | 배포 ADR(예정) |
+
 ### Stage 5 — 운영 화면 (admin 콘솔) — 2026-07-30 추가
 
 **기존 단계의 한 행이 아니라 새 단계로 만든 이유.** admin 콘솔은 게시판 도메인(Stage 3)도,
