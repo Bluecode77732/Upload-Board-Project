@@ -7,7 +7,7 @@
 //   else exists in the shared (never-truncated) dev DB.
 
 import { test, expect, type Page } from '@playwright/test'
-import { registerAndSignIn, uniqueEmail, uniqueTitle, VIDEO_FIXTURE_PATH } from './helpers'
+import { registerAndSignIn, goToFiles, uniqueEmail, uniqueTitle, VIDEO_FIXTURE_PATH } from './helpers'
 
 async function uploadVideo(page: Page, title: string) {
   await page.getByLabel('Title', { exact: true }).fill(title)
@@ -30,6 +30,7 @@ test('search, sort, and pagination reflect files uploaded through the board', as
   const titleBeta = `${token}-Beta`
 
   await registerAndSignIn(page, uniqueEmail('board'))
+  await goToFiles(page)
 
   // Alpha uploaded first, Beta second — this fixes their relative createdAt order.
   await uploadVideo(page, titleAlpha)
@@ -73,6 +74,7 @@ test('a file not matching the search term is not shown', async ({ page }) => {
   const token = uniqueTitle('board-nomatch').replace(/\s+/g, '-')
 
   await registerAndSignIn(page, uniqueEmail('board-nomatch'))
+  await goToFiles(page)
   await uploadVideo(page, token)
 
   await page.getByLabel('Search').fill(`${token}-does-not-exist`)

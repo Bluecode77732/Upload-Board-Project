@@ -63,3 +63,48 @@ export interface UpdateFileVisibilityRequest {
   // 'unlisted' (ADR 0025 D3) — invalidates every previously shared link.
   rotateShareToken?: boolean
 }
+
+// GET /post, GET /post/:id — PostResponseDto. `creator` is present when the backend joins
+// the relation (list + detail). `file` is present only for a post with an attached file,
+// composed by FileService so the BASE_URL/content-endpoint logic has one home (ADR 0023).
+export interface PostResponse {
+  id: number
+  title: string
+  body: string
+  creator?: {
+    id: number
+    email: string
+  }
+  file?: FileResponse
+  createdAt: string
+  updatedAt: string
+}
+
+// GET /post?take=&skip=... — the backend returns a [rows, total] tuple, same shape as
+// FileListResponse.
+export type PostListResponse = [PostResponse[], number]
+
+// GET /post query — mirrors backend GetPostsDto (ADR 0021/0023). sortBy/order are a
+// whitelist (IsIn), not free strings: a value outside these tuples is 400 VALIDATION_FAILED.
+export const POST_SORT_FIELDS = ['createdAt', 'title', 'id'] as const
+export type PostSortField = (typeof POST_SORT_FIELDS)[number]
+
+// GET /post/:postId/comment, PATCH /comment/:id — CommentResponseDto. `postId` is the bare
+// id, never an embedded post — a thread of comments would otherwise repeat the same post
+// body/file on every row.
+export interface CommentResponse {
+  id: number
+  body: string
+  creator?: {
+    id: number
+    email: string
+  }
+  postId: number
+  createdAt: string
+  updatedAt: string
+}
+
+// GET /post/:postId/comment?take=&skip= — [rows, total] tuple. The thread order is fixed
+// at createdAt ASC server-side (ADR 0023) — this endpoint takes no sortBy/order params, so
+// unlike FileListResponse/PostListResponse there is no corresponding sort-field constant.
+export type CommentListResponse = [CommentResponse[], number]

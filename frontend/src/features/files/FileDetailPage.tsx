@@ -10,6 +10,7 @@ import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { FileResponse, FileVisibility, UpdateFileVisibilityRequest } from '../../api/types'
 import { useAuth } from '../../auth/useAuth'
+import { NavBar } from '../../shared/NavBar'
 import { VisibilityBadge } from './VisibilityBadge'
 
 const VISIBILITY_OPTIONS: FileVisibility[] = ['public', 'private', 'unlisted']
@@ -170,7 +171,7 @@ export function FileDetailPage() {
     setBusy(true)
     api
       .delete(`/file/${file.id}`)
-      .then(() => navigate('/'))
+      .then(() => navigate('/files'))
       .catch((err: unknown) => {
         setActionError(messageForManageError(err))
         setBusy(false)
@@ -180,8 +181,9 @@ export function FileDetailPage() {
   if (metaError) {
     return (
       <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+        <NavBar />
         <p style={{ color: 'crimson' }}>{metaError}</p>
-        <Link to="/">Back to files</Link>
+        <Link to="/files">Back to files</Link>
       </main>
     )
   }
@@ -189,6 +191,7 @@ export function FileDetailPage() {
   if (!file) {
     return (
       <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+        <NavBar />
         <p>Loading…</p>
       </main>
     )
@@ -196,7 +199,8 @@ export function FileDetailPage() {
 
   return (
     <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
-      <Link to="/">Back to files</Link>
+      <NavBar />
+      <Link to="/files">Back to files</Link>
       <header style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '16px 0' }}>
         <VisibilityBadge visibility={file.visibility} />
         <h1 style={{ margin: 0 }}>{file.title}</h1>

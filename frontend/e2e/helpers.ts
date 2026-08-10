@@ -32,7 +32,10 @@ export function uniqueTitle(prefix: string): string {
 export const TEST_PASSWORD = 'TestPass!234'
 
 // Drives LoginPage's register-then-signIn flow (one submit does both) and waits for the
-// redirect to the authenticated dashboard.
+// redirect to the authenticated home (PostBoard, "/"). Asserts on the NavBar's Sign out
+// button rather than a page-specific heading — PostBoard's own content is still a
+// placeholder (App.tsx), and the Sign out button is the one thing every authenticated
+// screen has in common.
 export async function registerAndSignIn(page: Page, email: string, password = TEST_PASSWORD): Promise<void> {
   await page.goto('/login')
   await page.getByRole('button', { name: 'Need an account? Register' }).click()
@@ -41,5 +44,14 @@ export async function registerAndSignIn(page: Page, email: string, password = TE
   await page.getByRole('button', { name: 'Register & sign in' }).click()
 
   await expect(page).toHaveURL(/\/$/)
-  await expect(page.getByRole('heading', { name: 'Upload Board' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+}
+
+// The file board (upload form + FileBoard) lives at /files, not the home "/" (which is now
+// PostBoard) — call after registerAndSignIn in any spec whose assertions target the upload
+// form or file list.
+export async function goToFiles(page: Page): Promise<void> {
+  await page.getByRole('link', { name: 'My Files' }).click()
+  await expect(page).toHaveURL(/\/files$/)
+  await expect(page.getByRole('heading', { name: 'Files' })).toBeVisible()
 }

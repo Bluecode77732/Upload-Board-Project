@@ -5,13 +5,14 @@
 //   a real file input/FormData submission rather than calling the API directly.
 
 import { test, expect } from '@playwright/test'
-import { registerAndSignIn, uniqueEmail, uniqueTitle, VIDEO_FIXTURE_PATH } from './helpers'
+import { registerAndSignIn, goToFiles, uniqueEmail, uniqueTitle, VIDEO_FIXTURE_PATH } from './helpers'
 
 test('uploading a video promotes it and it appears in the file board as Private', async ({ page }) => {
   test.setTimeout(60_000)
   const title = uniqueTitle('upload-video')
 
   await registerAndSignIn(page, uniqueEmail('upload'))
+  await goToFiles(page)
 
   await page.getByLabel('Title', { exact: true }).fill(title)
   // Video is UploadForm's default fieldType, but select it explicitly so the test doesn't
@@ -34,6 +35,7 @@ test('uploading a duplicate title surfaces the FILE_TITLE_TAKEN message', async 
   const title = uniqueTitle('upload-dupe')
 
   await registerAndSignIn(page, uniqueEmail('upload-dupe'))
+  await goToFiles(page)
 
   await page.getByLabel('Title', { exact: true }).fill(title)
   await page.getByRole('radio', { name: 'Video' }).check()

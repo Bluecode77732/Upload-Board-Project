@@ -10,7 +10,7 @@
 //   <video src> cannot carry, and the manage actions are only reachable by the file's own creator.
 
 import { test, expect, type APIRequestContext, type Page, type Response } from '@playwright/test'
-import { registerAndSignIn, uniqueEmail, uniqueTitle, VIDEO_FIXTURE_PATH, TEST_PASSWORD } from './helpers'
+import { registerAndSignIn, goToFiles, uniqueEmail, uniqueTitle, VIDEO_FIXTURE_PATH, TEST_PASSWORD } from './helpers'
 
 // Same origin the Vite dev proxy forwards /file, /auth, /post to (vite.config.ts) — used here to
 // call the backend directly, since the `request` fixture (unlike `page`) never goes through it.
@@ -88,6 +88,7 @@ test('a private file plays for its owner via an authenticated blob fetch and rev
   })
 
   await registerAndSignIn(page, uniqueEmail('detail-private'))
+  await goToFiles(page)
   await uploadVideo(page, title)
   const { contentResponse } = await openDetailPage(page, title)
 
@@ -102,7 +103,7 @@ test('a private file plays for its owner via an authenticated blob fetch and rev
   await expect(page.getByText('Share link:')).toHaveCount(0)
 
   await page.getByRole('link', { name: 'Back to files' }).click()
-  await expect(page).toHaveURL(/\/$/)
+  await expect(page).toHaveURL(/\/files$/)
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __revokedUrls: string[] }).__revokedUrls.length))
     .toBeGreaterThan(0)
@@ -116,6 +117,7 @@ test('switching visibility to public serves the content endpoint directly, witho
   const title = uniqueTitle('detail-public')
 
   await registerAndSignIn(page, uniqueEmail('detail-public'))
+  await goToFiles(page)
   await uploadVideo(page, title)
   const { id: fileId } = await openDetailPage(page, title)
 
@@ -145,6 +147,7 @@ test('switching visibility to unlisted exposes a rotatable share link that plays
   const title = uniqueTitle('detail-unlisted')
 
   await registerAndSignIn(page, uniqueEmail('detail-unlisted'))
+  await goToFiles(page)
   await uploadVideo(page, title)
   const { id: fileId } = await openDetailPage(page, title)
 
@@ -182,6 +185,7 @@ test('a private file is hidden from a different signed-in user (404, existence h
   const title = uniqueTitle('detail-stranger')
 
   await registerAndSignIn(page, uniqueEmail('detail-owner'))
+  await goToFiles(page)
   await uploadVideo(page, title)
   const { id: fileId } = await openDetailPage(page, title)
   await expect(page.getByText('Private', { exact: true })).toBeVisible()
@@ -215,6 +219,7 @@ test('a file referenced by a post cannot be deleted (409 FILE_IN_USE) until the 
   const email = uniqueEmail('detail-delete')
 
   await registerAndSignIn(page, email)
+  await goToFiles(page)
   await uploadVideo(page, title)
   const { id: fileId } = await openDetailPage(page, title)
 
@@ -240,7 +245,7 @@ test('a file referenced by a post cannot be deleted (409 FILE_IN_USE) until the 
 
   page.once('dialog', (dialog) => void dialog.accept())
   await page.getByRole('button', { name: 'Delete file' }).click()
-  await expect(page).toHaveURL(/\/$/)
+  await expect(page).toHaveURL(/\/files$/)
 
   await page.getByLabel('Search').fill(title)
   await expect(page.getByText('No files match the current filters.')).toBeVisible({ timeout: 10_000 })

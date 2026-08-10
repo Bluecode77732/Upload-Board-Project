@@ -6,7 +6,7 @@
 import { test, expect } from '@playwright/test'
 import { registerAndSignIn, uniqueEmail, TEST_PASSWORD } from './helpers'
 
-test('registering a new account signs in and lands on the dashboard', async ({ page }) => {
+test('registering a new account signs in and lands on the authenticated home', async ({ page }) => {
   const email = uniqueEmail('auth-register')
 
   await registerAndSignIn(page, email)
