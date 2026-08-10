@@ -89,6 +89,15 @@ export type PostListResponse = [PostResponse[], number]
 export const POST_SORT_FIELDS = ['createdAt', 'title', 'id'] as const
 export type PostSortField = (typeof POST_SORT_FIELDS)[number]
 
+// POST /post body — mirrors backend CreatePostDto (ADR 0023 D1). `fileId` must be a file
+// the requester created and that no other post already holds; an identical resubmit for
+// the same fileId replays 200, a differing title/body 409s POST_FILE_TAKEN.
+export interface CreatePostRequest {
+  title: string
+  body: string
+  fileId?: number
+}
+
 // GET /post/:postId/comment, PATCH /comment/:id — CommentResponseDto. `postId` is the bare
 // id, never an embedded post — a thread of comments would otherwise repeat the same post
 // body/file on every row.

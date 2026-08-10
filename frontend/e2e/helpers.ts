@@ -55,3 +55,13 @@ export async function goToFiles(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/files$/)
   await expect(page.getByRole('heading', { name: 'Files' })).toBeVisible()
 }
+
+// Navigates back to the post board home ("/"). Waits for PostForm's own heading, not just the
+// URL — a URL match fires the instant React Router swaps history, before the new route's DOM
+// (and its "Title"/"Body" labels) has actually mounted; filling fields right after the URL
+// assertion alone races that transition and can land on the previous page's still-present DOM.
+export async function goToHome(page: Page): Promise<void> {
+  await page.getByRole('link', { name: 'Posts' }).click()
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByRole('heading', { name: 'New post' })).toBeVisible()
+}
