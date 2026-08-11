@@ -27,7 +27,8 @@ test('creating a text-only post appears on the board and links to its detail pag
 
   await row.getByRole('link', { name: title }).click()
   await expect(page).toHaveURL(/\/posts\/\d+$/)
-  await expect(page.getByText(/detail coming soon\.$/)).toBeVisible()
+  await expect(page.getByRole('heading', { name: title })).toBeVisible()
+  await expect(page.getByText('A text-only post body.')).toBeVisible()
 })
 
 test('attaching one of my files shows the attachment icon on the post row', async ({ page }) => {

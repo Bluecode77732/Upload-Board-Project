@@ -117,3 +117,20 @@ export interface CommentResponse {
 // at createdAt ASC server-side (ADR 0023) — this endpoint takes no sortBy/order params, so
 // unlike FileListResponse/PostListResponse there is no corresponding sort-field constant.
 export type CommentListResponse = [CommentResponse[], number]
+
+// PATCH /post/:id body — mirrors backend UpdatePostDto. fileId is deliberately absent:
+// the attachment is fixed at creation and cannot be moved by an edit (ADR 0023 D1).
+export interface UpdatePostRequest {
+  title?: string
+  body?: string
+}
+
+// POST /post/:postId/comment body — mirrors backend CreateCommentDto.
+export interface CreateCommentRequest {
+  body: string
+}
+
+// PATCH /comment/:id body — mirrors backend UpdateCommentDto. Only `body` is editable.
+export interface UpdateCommentRequest {
+  body: string
+}
