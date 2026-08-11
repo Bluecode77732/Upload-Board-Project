@@ -989,9 +989,10 @@ serving~~ [**landed 2026-08-01**, ADR 0025 D1/D2/D3/D6 + ADR 0026 — generalize
 "VOD playback access control" row, pulled ahead of deployment as its own task] +
 ~~media-type expansion~~ [**landed 2026-08-01**, ADR 0025 D4/D5 + ADR 0027 — completes
 ADR 0025's design gate], then a **production DevOps stack introduction (AWS · Docker ·
-Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform — the industry-standard
-toolchain, for a real-world-like dev/deploy/ops environment and future scaling; Docker + CI
-already landed in Stage 1, S3 is the storage port-adapter's concrete form)** as the immediate
+Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform · Istio [planned after
+Terraform] — the industry-standard toolchain, for a real-world-like dev/deploy/ops environment
+and future scaling; Docker + CI already landed in Stage 1, S3 is the storage port-adapter's
+concrete form)** as the immediate
 pre-deploy task, performance criteria, and finally **deployment itself — the terminal act,
 deliberately carrying no execution number** (a number only re-invited the Stage 4/Stage 5
 ordering confusion; it is simply the last work) → **Stage 5 operational surface — admin console (appended 2026-07-30,

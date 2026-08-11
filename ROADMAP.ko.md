@@ -86,8 +86,8 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   결론, 중복 admin 화면을 `admin/` 쪽으로 정리하며
   `frontend/src/features/admin/AdminPage.tsx` 삭제까지 네 행 모두 완료) →
   **남은 작업은 Stage 4(프로덕션 전환), 이제 다음**. 마지막 두 작업은 **프로덕션 DevOps 스택
-  도입(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform)**,
-  그다음 **배포 자체**다 — 배포는 "N번째 단계"가 아니라 전체
+  도입(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform ·
+  Istio [Terraform 이후 예정])**, 그다음 **배포 자체**다 — 배포는 "N번째 단계"가 아니라 전체
   계획의 종착 행위이므로 **의도적으로 번호를 붙이지 않는다**(번호는 Stage 4/Stage 5 순서
   혼동을 다시 부를 뿐이다). 이로써 Stage 5의 부동 위치가 Stage 4 앞으로 확정되고, 독립적인
   페이지네이션 부채가 둘보다 앞으로 당겨진다.
@@ -272,8 +272,8 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
    2026-08-06 추가 기록 참조). 계획대로 Stage 4보다 먼저 진행됐다: 권한 계층을 Swagger로만
    운영할 수 있는 배포 시스템은 운영이 어렵기 때문. **이제 남은 작업은 Stage 4** — 프로덕션
    DevOps 스택 도입(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus ·
-   Grafana · Terraform), 그다음 마지막으로 배포 자체이며, 배포는 의도적으로 번호를 붙이지
-   않는다(아래 참조).
+   Grafana · Terraform · Istio[Terraform 이후]), 그다음 마지막으로 배포 자체이며, 배포는
+   의도적으로 번호를 붙이지 않는다(아래 참조).
 4. **프로덕션 DevOps 스택 도입** — 배포 직전 작업. **이 스택을 도입하는 이유**: 업계에서
    널리 쓰이는 표준 DevOps 툴체인으로, 이를 기반으로 실무와 유사한 개발·배포·운영 환경을
    경험하고 향후 서비스 확장에도 대응하기 위함이다. **AWS**(클라우드 플랫폼 / 배포 대상),
@@ -281,7 +281,8 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
    **Kubernetes**(컨테이너 오케스트레이션), **Helm**(릴리스 패키징/템플릿),
    **GitHub Actions**(CI/CD — *이미 반영됨*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.ko.md)),
    **Prometheus**(메트릭 수집), **Grafana**(메트릭 대시보드), **Terraform**(코드형
-   인프라, IaC). S3(오브젝트 스토리지)는 이 작업에 남은 스토리지 몫이다 — `FileStorage`
+   인프라, IaC), 그리고 — **Terraform 이후 예정** — **Istio**(클러스터 위 서비스 메시:
+   트래픽 관리, mTLS, 메시 텔레메트리). S3(오브젝트 스토리지)는 이 작업에 남은 스토리지 몫이다 — `FileStorage`
    포트-어댑터 자체(4절)는 이미 2026-08-07에 랜딩했으므로([ADR 0029](ADR/0029-storage-port-adapter.ko.md)),
    여기 남은 일은 실제 버킷을 대상으로 `STORAGE_DRIVER=s3`를 켜는 것뿐이다. 아직
    반영되지 않은 각 구성요소는 자체 ADR을 갖는다.
@@ -358,8 +359,9 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 배포는 전체 계획의 종착 행위다 — 나머지가 모두 만들어지고 운영 가능해진 뒤 수행하므로
 **실행 번호를 붙이지 않는다**; 여기에 번호를 붙이면 이 계획이 이미 정리한 Stage 4/Stage 5
 순서 혼동을 다시 부를 뿐이다. 배포 **직전** 작업은 프로덕션 DevOps 스택 도입
-(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform)이다.
-아래 행들은 각자의 내부 의존 순서를 유지하며, 배포 행은 의도적으로 맨 마지막이다.
+(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform ·
+Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 순서를 유지하며, 배포 행은
+의도적으로 맨 마지막이다.
 
 | 작업 | 근거 / 의존성 |
 |---|---|
@@ -389,6 +391,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 | **Prometheus** | 메트릭 수집 | 🆕 | Nest `Logger` 관측성 스탠스 위에 메트릭 익스포트. | 자체 ADR(예정); [0017](ADR/0017-logging-conventions.ko.md) 위 |
 | **Grafana** | 대시보드 | 🆕 | Prometheus 데이터소스 기반 대시보드/알림. | 자체 ADR(예정) |
 | **Terraform** | 코드형 인프라 | 🆕 | AWS 리소스(네트워크·클러스터·S3·시크릿) 선언적 프로비저닝. | 자체 ADR(예정) |
+| **Istio** | 서비스 메시 | 🆕 | **Terraform 이후 예정** — Kubernetes 클러스터 위의 서비스 메시(트래픽 관리, 워크로드 간 mTLS, 메시 레벨 텔레메트리를 Prometheus/Grafana로). IaC로 프로비저닝된 클러스터가 생긴 뒤 도입; 향후 다중 서비스 확장을 내다본 것. | 자체 ADR(예정); Terraform 이후 |
 | **AWS** | 클라우드 / 배포 대상 | 🆕 | 위 행들이 향하는 컨테이너 배포 대상. | 배포 ADR(예정) |
 
 ### Stage 5 — 운영 화면 (admin 콘솔) — 2026-07-30 추가

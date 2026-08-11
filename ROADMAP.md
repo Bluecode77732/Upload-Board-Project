@@ -93,7 +93,7 @@ item below lands as its own dedicated, designed change
   surface resolved in favor of `admin/` — `frontend/src/features/admin/AdminPage.tsx` deleted)
   → **the remaining work is Stage 4 (production transition), now next**. Its last two tasks
   are the **production DevOps stack introduction (AWS · Docker · Kubernetes · Helm · GitHub
-  Actions · Prometheus · Grafana · Terraform)** and then
+  Actions · Prometheus · Grafana · Terraform · Istio [planned after Terraform])** and then
   **deployment itself** — the latter deliberately **unnumbered**, since it is the terminal
   act of the whole plan rather than a "step N" (a number only re-invited the Stage 4/Stage 5
   ordering confusion). This resolves Stage 5's floating position (before Stage 4) and pulled
@@ -293,8 +293,9 @@ item carries its execution number in its own row.
    2026-08-06 note). Ran before Stage 4 as planned: a deployed system whose privilege
    hierarchy is operable only through Swagger is hard to run. **Stage 4 is now the remaining
    work** — the production DevOps stack introduction (AWS · Docker · Kubernetes · Helm ·
-   GitHub Actions · Prometheus · Grafana · Terraform — the industry-standard toolchain,
-   adopted for a real-world-like dev/deploy/ops environment and future scaling) then, finally,
+   GitHub Actions · Prometheus · Grafana · Terraform · Istio [after Terraform] — the
+   industry-standard toolchain, adopted for a real-world-like dev/deploy/ops environment and
+   future scaling) then, finally,
    the deploy act itself, deliberately unnumbered (see below).
 4. **Production DevOps stack introduction** — the immediate pre-deployment task. **Why this
    stack**: it is the industry-standard DevOps toolchain, adopted so the project is
@@ -304,7 +305,8 @@ item carries its execution number in its own row.
    **Kubernetes** (container orchestration), **Helm** (release packaging/templating),
    **GitHub Actions** (CI/CD — already landed, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.md)),
    **Prometheus** (metrics collection), **Grafana** (metrics dashboards), **Terraform**
-   (infrastructure as code). S3 (object storage) is this task's remaining storage
+   (infrastructure as code), and — **planned after Terraform** — **Istio** (service mesh over
+   the cluster: traffic management, mTLS, mesh telemetry). S3 (object storage) is this task's remaining storage
    work: the `FileStorage` port-adapter itself (section 4) already landed 2026-08-07
    ([ADR 0029](ADR/0029-storage-port-adapter.md)), so what's left here is switching
    `STORAGE_DRIVER=s3` against a real bucket. Each not-yet-landed component takes its
@@ -388,7 +390,7 @@ Deployment is the terminal act of the whole plan — done once everything else i
 operable — so it carries **no execution number**; a number here only re-invites the Stage
 4/Stage 5 ordering confusion the plan already had to untangle. The task **immediately before**
 the deploy act is the production DevOps stack introduction (AWS · Docker · Kubernetes · Helm ·
-GitHub Actions · Prometheus · Grafana · Terraform). The rows below keep their internal
+GitHub Actions · Prometheus · Grafana · Terraform · Istio [planned after Terraform]). The rows below keep their internal
 dependency order, and the deploy act is deliberately the last row.
 
 | Task | Rationale / dependencies |
@@ -419,6 +421,7 @@ the status of each is scannable rather than buried in prose (as of 2026-08-08). 
 | **Prometheus** | Metrics collection | 🆕 | Metrics export layered on the Nest `Logger` observability stance. | own ADR (planned); on [0017](ADR/0017-logging-conventions.md) |
 | **Grafana** | Dashboards | 🆕 | Dashboards/alerts over the Prometheus datasource. | own ADR (planned) |
 | **Terraform** | Infrastructure as code | 🆕 | Declaratively provision the AWS resources (network, cluster, S3, secrets). | own ADR (planned) |
+| **Istio** | Service mesh | 🆕 | **Planned after Terraform** — a service mesh over the Kubernetes cluster (traffic management, mTLS between workloads, and mesh-level telemetry into Prometheus/Grafana). Introduced once the IaC-provisioned cluster exists; forward-looking for multi-service scaling. | own ADR (planned); after Terraform |
 | **AWS** | Cloud / deploy target | 🆕 | The container deploy target the rows above build toward. | deployment ADR (planned) |
 
 ### Stage 5 — Operational surface (admin console) — added 2026-07-30
