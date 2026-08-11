@@ -1,12 +1,13 @@
 // Purpose: browser-level verification of the "Posts to home" route reshuffle (App.tsx) — the
-//   NavBar, the PostBoard/DashboardPage split between "/" and "/files", and the "/posts/:id"
-//   placeholder route.
+//   NavBar and the PostBoard/DashboardPage split between "/" and "/files"/"/posts/:id".
 // Usage: run via `pnpm test:e2e`; builds on the shared harness (playwright.config.ts).
 // Rationale: this reshuffle depends on the dev proxy (vite.config.ts) NOT swallowing "/files"
 //   or "/posts/:id" into the backend — a plain '/file'/'/post' proxy prefix would otherwise
 //   404 those routes before the SPA router ever sees them (found live while building this
-//   spec's target routes). Regex-anchoring ('^/file($|/)', '^/post($|/)') fixes it; this spec
-//   is the regression guard for that fix specifically, on top of the general nav flow.
+//   spec's target routes). Regex-anchoring ('^/file($|[/?])', '^/post($|[/?])') fixes it; this
+//   spec is the regression guard for that fix specifically, on top of the general nav flow.
+//   PostBoard/PostDetailPage write-path coverage (create/edit/delete, comments) lives in
+//   posts.spec.ts — this file stays scoped to routing/proxy behavior.
 
 import { test, expect } from '@playwright/test'
 import { registerAndSignIn, goToFiles, uniqueEmail } from './helpers'
@@ -48,15 +49,19 @@ test('a direct load of /files renders the file board (regex-anchored proxy, not 
   await expect(page.getByLabel('Title', { exact: true })).toBeVisible()
 })
 
-test('a direct load of /posts/:id renders the post detail placeholder (regex-anchored proxy, not a backend 404)', async ({
+test('a direct load of /posts/:id renders PostDetailPage (regex-anchored proxy, not a backend 404)', async ({
   page,
 }) => {
   await registerAndSignIn(page, uniqueEmail('nav-post-detail'))
 
+  // A non-existent id still proves the SPA router (not the backend) handled the route: a
+  // proxied-through-to-backend 404 would render as raw JSON, not this app's error message.
   await page.goto('/posts/999999')
 
-  await expect(page.getByText('Post 999999 detail coming soon.')).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Posts' })).toBeVisible()
+  await expect(page.getByText('게시글을 찾을 수 없습니다.')).toBeVisible()
+  // exact: true — PostDetailPage's own error-state "Back to posts" link otherwise also
+  // matches a plain substring query for "Posts" (frontend/CLAUDE.md E2E gotchas).
+  await expect(page.getByRole('link', { name: 'Posts', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'My Files' })).toBeVisible()
 })
 
