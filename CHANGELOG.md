@@ -43,6 +43,25 @@ development line (package.json version).
   `posts.spec.ts` e2e spec (text-only post, file-attached post, and the `POST_FILE_TAKEN`
   conflict message); `frontend/README.md` (+ko) updated to match. `PostDetailPage` (post detail
   + comment thread) remains the one outstanding placeholder from the original groundwork.
+- **`frontend/`: post detail page + comment thread** (ADR 0023), closing out the routing
+  groundwork above — `PostDetailPage` (`/posts/:id`) is no longer a placeholder. It loads
+  `GET /post/:id` and renders the title/body/creator plus, when the post has an attachment,
+  the file itself via the same visibility-gated pattern `FileDetailPage` uses (a direct
+  `<video src>` for public/unlisted, an authenticated blob+objectURL fetch for private). The
+  creator (or an admin, server-enforced) gets inline title/body edit (`PATCH /post/:id` —
+  `fileId` is fixed at creation and not editable) and delete (`DELETE /post/:id`, confirm →
+  redirect home). Two new components: `CommentThread` lists `GET /post/:id/comment` — the
+  backend fixes thread order at `createdAt ASC` with no sort params, so paging is a "load
+  more" button that appends rather than a prev/next pager — and gives each comment's own
+  author (or an admin) inline edit/delete (`PATCH`/`DELETE /comment/:id`); `CommentForm`
+  posts a new comment (`POST /post/:id/comment`) and triggers a refetch, since there is no
+  realtime/polling infrastructure in this app. `src/api/types.ts` gains
+  `UpdatePostRequest`/`CreateCommentRequest`/`UpdateCommentRequest`. `posts.spec.ts`'s
+  detail-page assertion and `navigation.spec.ts`'s placeholder-text assertion were both
+  updated to match the real page; full suite 22/22 green. Includes a small layout fix found
+  in the process: the global `h1` (`index.css`, 56px, no explicit `line-height`) let a
+  wrapped two-line post title visually overlap the byline paragraph below it — fixed with an
+  explicit `line-height`/bottom margin scoped to this page's title.
 
 ### Changed
 - **ROADMAP Stage 4 restructured — deployment is unnumbered, with a production DevOps stack

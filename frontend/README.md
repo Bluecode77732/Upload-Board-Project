@@ -15,9 +15,11 @@ repo root) and consumes the backend REST API over HTTP; admin lives here as an
   (`auth`/`upload`/`board`/`detail` specs cover register-signin-signout, the two-phase
   video upload, the file board's search/sort/pagination/visibility badges, and
   FileDetailPage's access-control branches; `navigation` covers the "/" ⇄ "/files"
-  route split, the NavBar, and the dev-proxy regex-anchor fix that split depends on;
-  `posts` covers creating a post through PostForm — with and without an attached
-  file — and the resulting board row/detail link)
+  route split, the NavBar, the dev-proxy regex-anchor fix that split depends on, and a
+  direct load of `/posts/:id` rendering the real `PostDetailPage`; `posts` covers
+  creating a post through PostForm — with and without an attached file — and the
+  resulting board row/detail link, landing on the post's own title/body once
+  `PostDetailPage` stopped being a placeholder)
 - Plain `fetch` wrapper (`src/api/client.ts`) — no data-fetching or state library yet
   (plus an `XMLHttpRequest` path in the same file for upload-progress reporting,
   since `fetch` exposes no upload-progress event)
@@ -56,8 +58,15 @@ src/
     │             post are handled identically), and FilePicker (searches the signed-in
     │             user's own files via GET /file?creatorId=; the server alone enforces
     │             the unclaimed invariant via 409 POST_FILE_TAKEN). PostDetailPage
-    │             (protected, "/posts/:id") is still a placeholder — post detail and
-    │             the comment thread are the remaining follow-up task
+    │             (protected, "/posts/:id" — loads GET /post/:id; renders the attached
+    │             file, if any, via the same visibility-gated pattern FileDetailPage uses;
+    │             inline title/body edit and delete for the creator/admin, PATCH/DELETE
+    │             /post/:id), CommentThread (GET /post/:id/comment, thread order fixed at
+    │             createdAt ASC server-side so paging is an appending "load more" button,
+    │             not a prev/next pager; inline edit/delete per comment for that comment's
+    │             own author/admin, PATCH/DELETE /comment/:id), and CommentForm (POST
+    │             /post/:id/comment, triggers a refetch on success — no realtime/polling
+    │             infrastructure exists in this app)
     └── files/    DashboardPage (protected, "/files" — upload form (image/audio/video,
                   with upload-progress bar) + file board: search/sort/
                   creator filter/pagination + visibility badges, FileBoard.tsx) and

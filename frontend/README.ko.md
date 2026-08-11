@@ -15,9 +15,12 @@ REST API를 HTTP로 소비한다. 관리자 화면도 이 안에 `/admin` 라우
   (`auth`/`upload`/`board`/`detail` 스펙이 회원가입-로그인-로그아웃, 2단계 영상 업로드,
   파일 보드의 검색/정렬/페이지네이션/visibility 배지, FileDetailPage의 접근 제어
   분기를 검증하고, `navigation` 스펙이 "/" ⇄ "/files" 라우트 분리와 NavBar, 그
-  분리가 의존하는 dev 프록시 정규식 앵커링 수정을 검증한다; `posts` 스펙은
-  PostForm으로 게시글을 작성하는 흐름을 — 파일을 첨부하는 경우와 첨부하지
-  않는 경우 모두 — 그리고 그 결과로 보드 행/상세 링크가 반영되는지를 검증한다)
+  분리가 의존하는 dev 프록시 정규식 앵커링 수정, 그리고 `/posts/:id`를 직접 열었을 때
+  실제 `PostDetailPage`가 렌더링되는지를 검증한다; `posts` 스펙은 PostForm으로
+  게시글을 작성하는 흐름을 — 파일을 첨부하는 경우와 첨부하지 않는 경우 모두 —
+  그리고 그 결과로 보드 행/상세 링크가 반영되는지를 검증하며, `PostDetailPage`가
+  더 이상 자리표시자가 아니게 되면서 게시글 자신의 title/body에 도착하는지까지
+  확인한다)
 - 순수 `fetch` 래퍼(`src/api/client.ts`) — 데이터 페칭/상태 관리 라이브러리는 아직 없음
   (같은 파일에 업로드 진행률 보고용 `XMLHttpRequest` 경로도 함께 있다 —
   `fetch`는 업로드 진행률 이벤트를 제공하지 않기 때문)
@@ -56,8 +59,16 @@ src/
     │             재생(replay)과 201 신규 생성을 동일하게 처리한다), FilePicker
     │             (GET /file?creatorId=로 로그인한 사용자 소유 파일만 검색 —
     │             미첨부 상태 강제는 오직 서버가 409 POST_FILE_TAKEN으로
-    │             수행한다). PostDetailPage(보호됨, "/posts/:id")는 아직
-    │             자리표시자다 — 게시글 상세와 댓글 스레드가 남은 후속 작업이다
+    │             수행한다). PostDetailPage(보호됨, "/posts/:id" — GET /post/:id로
+    │             불러오며, 첨부파일이 있으면 FileDetailPage와 동일한 visibility
+    │             기반 재생 패턴을 그대로 따른다; 작성자/admin에게는 인라인
+    │             제목/본문 수정과 삭제 제공, PATCH/DELETE /post/:id), CommentThread
+    │             (GET /post/:id/comment — 스레드 순서는 서버에서 createdAt ASC로
+    │             고정되어 있어 페이징이 prev/next가 아니라 이어붙이는 "더 보기"
+    │             버튼이다; 각 댓글은 그 댓글의 작성자 본인/admin만 인라인
+    │             수정/삭제 가능, PATCH/DELETE /comment/:id), CommentForm(POST
+    │             /post/:id/comment — 성공 시 재fetch를 트리거한다, 이 앱에는
+    │             실시간/폴링 인프라가 없기 때문)
     └── files/    DashboardPage (보호됨, "/files" — 업로드 폼(이미지/오디오/비디오,
                   업로드 진행률 표시줄 포함) + 파일 보드: 검색/정렬/
                   작성자 필터/페이지네이션 + visibility 배지, FileBoard.tsx),

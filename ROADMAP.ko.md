@@ -553,9 +553,9 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   돌려준다. `frontend/docs/API-CONTRACT.md`와 목록 화면(검색창, 정렬 컨트롤, 작성자 필터)을
   함께 갱신해야 하며, 그전까지 프론트엔드는 기존처럼 `take`/`skip`만 보내면서 결정적 정렬만
   그대로 얻는다. 백엔드 변경은 저장소 경계에서 멈췄다([CLAUDE.md](CLAUDE.md) > Project Overview).
-- 게시글/댓글 API의 프론트엔드 반영 (2026-08-11 기록,
+- ~~게시글/댓글 API의 프론트엔드 반영~~ — ✅ **2026-08-11 해소** (2026-08-11 기록,
   [ADR 0023](ADR/0023-board-domain-schema.ko.md)) — 위 항목과 마찬가지로 **백엔드 작업이
-  아니라 프론트엔드 전용 과제가 담당한다.** 라우팅 기반 작업은 2026-08-11에 착지했다: `/`가
+  아니라 프론트엔드 전용 과제가 담당한다.** 라우팅 기반 작업이 먼저 착지했다: `/`가
   이제 앱의 홈(`PostBoard`)이고, 파일 보드는 `/files`로 옮겼으며, `/posts/:id`를
   예약해 뒀다(`PostDetailPage`). `PostResponse`/`CommentResponse`는 `src/api/types.ts`에서
   백엔드 DTO를 미러링하고 있고, `frontend/docs/API-CONTRACT.md`가 해당 라우트를 문서화한다.
@@ -563,8 +563,13 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   `FilePicker`가 고른 파일, `POST /post` — 200 재생(replay)과 201 신규 생성을 동일하게
   처리)과 게시글 목록 자체(`FileBoard`를 그대로 본뜬 검색/정렬/작성자 필터/페이지네이션,
   행마다 첨부파일 아이콘, ADR 0021)를 함께 호스팅하며, 새 `posts.spec.ts` e2e 스펙이
-  이를 검증한다. 게시글 상세와 댓글 스레드(`PostDetailPage`)는 여전히 자리표시자로
-  남아 있으며, 이 기반 작업에서 아직 남은 유일한 부분이다.
+  이를 검증한다. **게시글 상세 + 댓글 스레드가 마지막으로 착지하며 이 항목을 마무리했다**:
+  `PostDetailPage`는 게시글과 첨부파일을 불러오고(`FileDetailPage`와 동일한 visibility
+  기반 재생 패턴), 작성자/admin에게 인라인 수정/삭제를 제공한다. `CommentThread`는 순서가
+  고정된(`createdAt ASC`) 스레드를 "더 보기" 페이저와 함께 표시하고, 각 댓글은 그 댓글의
+  작성자 본인/admin만 인라인 수정/삭제할 수 있다. `CommentForm`은 새 댓글을 작성하고
+  재fetch를 트리거한다 — 이 앱에는 실시간/폴링 인프라가 없기 때문이다. 전체 Playwright
+  스위트: 22/22 통과.
 - ~~파일 가시성 + 미디어 확장의 프론트엔드 반영~~ — ✅ **2026-08-03 해소**
   (2026-07-31 기록, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md); 두 절반
   모두 2026-08-01 백엔드에서 착지 — 가시성은

@@ -44,6 +44,24 @@
   스펙(텍스트 전용 게시글, 파일 첨부 게시글, `POST_FILE_TAKEN` 충돌 메시지)으로 검증했고,
   `frontend/README.md`(+ko)도 함께 갱신했다. `PostDetailPage`(게시글 상세 + 댓글 스레드)는
   원래 기반 작업에서 남은 유일한 자리표시자로 남아 있다.
+- **`frontend/`: 게시글 상세 페이지 + 댓글 스레드**(ADR 0023) — 위 라우팅 기반 작업의 마지막
+  퍼즐 조각이다. `PostDetailPage`(`/posts/:id`)는 더 이상 자리표시자가 아니다. `GET /post/:id`로
+  게시글을 불러와 title/body/작성자를 보여주고, 첨부파일이 있으면 `FileDetailPage`와 동일한
+  visibility 기반 재생 패턴(public/unlisted는 `<video src>` 직접 재생, private는 인증된
+  blob+objectURL fetch)을 그대로 따른다. 작성자 본인(또는 서버가 최종 판정하는 admin)에게는
+  인라인 제목/본문 수정(`PATCH /post/:id` — `fileId`는 생성 시점에 고정되어 수정 대상이 아님)과
+  삭제(`DELETE /post/:id`, 확인 후 홈으로 이동) 버튼이 노출된다. 새 컴포넌트 두 개: `CommentThread`는
+  `GET /post/:id/comment`로 목록을 표시한다 — 백엔드가 스레드 순서를 `createdAt ASC`로 고정하고
+  정렬 파라미터를 받지 않으므로, 페이징은 prev/next가 아니라 이어붙이는 "더 보기" 버튼이다 —
+  그리고 각 댓글의 작성자 본인(또는 admin)에게 인라인 수정/삭제(`PATCH`/`DELETE /comment/:id`)를
+  제공한다. `CommentForm`은 새 댓글을 작성하고(`POST /post/:id/comment`) 재fetch를 트리거한다 —
+  이 앱에는 실시간/폴링 인프라가 없기 때문이다. `src/api/types.ts`에
+  `UpdatePostRequest`/`CreateCommentRequest`/`UpdateCommentRequest`를 추가했다. `posts.spec.ts`의
+  상세 페이지 검증과 `navigation.spec.ts`의 자리표시자 텍스트 검증을 모두 실제 화면에 맞게
+  갱신했다 — 전체 스위트 22/22 통과. 작업 중 발견한 작은 레이아웃 버그도 함께 고쳤다: 전역 `h1`
+  (`index.css`, 56px, 명시적 `line-height` 없음) 때문에 두 줄로 줄바꿈되는 긴 게시글 제목이 바로
+  아래 작성자 문단과 시각적으로 겹치는 문제가 있어, 이 페이지의 제목에만 명시적
+  `line-height`/하단 margin을 지정해 해결했다.
 
 ### 변경
 - **ROADMAP Stage 4 재구성 — 배포는 번호 없음, 배포 직전 작업으로 프로덕션 DevOps 스택
