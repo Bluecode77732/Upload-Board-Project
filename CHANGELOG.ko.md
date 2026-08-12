@@ -43,6 +43,15 @@
   확인) 같은 캐시(`id=pnpm-store`)를 build+prune RUN에도 마운트해 두 단계 모두에서 store가
   보이게 하는 방식으로 고쳤습니다. Dockerfile을 읽는 것만으로는 못 잡고, 실제로
   `docker build`를 실행해서야 발견했습니다.
+- **`.dockerignore`가 백엔드와 무관한 콘텐츠 약 926MB를 매 빌드마다 조용히 업로드하고
+  있었습니다.** `k8s`가 목록에 없어서 `k8s/infra/terraform/.terraform`(923MB —
+  Terraform provider 바이너리와 `vpc` 모듈 자체의 중첩 git 클론. 이전 커밋에서
+  `.gitignore`에는 이미 추가됐지만, `.dockerignore`는 `.gitignore`를 읽지 않는 별개의
+  메커니즘이라 반영되지 않았음)와 `assets/files/sample.mp4`(3MB, Dockerfile에서
+  참조하지 않는 README용 데모 파일)가 매번 빌드 컨텍스트에 포함됐고, 플랫폼별로 컨텍스트를
+  전송하는 멀티플랫폼 `buildx build`에서는 그만큼 더 낭비됐습니다. 둘 다 이제
+  제외했으며, 최상위 항목 전체를 `du -sh`로 재확인해 그 외에 빠뜨린 큰 항목이 없음을
+  확인했습니다.
 
 ### 추가
 - **`frontend/`: Posts를 홈으로 승격, 파일 보드를 `/files`로 이동 — 게시글/댓글 보드 UI를 위한

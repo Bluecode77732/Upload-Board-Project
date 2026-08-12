@@ -19,6 +19,9 @@ test
 # provider binaries and module git clones, none of it backend image content
 k8s
 
+# README/demo sample media — not read by the Dockerfile or backend
+assets
+
 # Secrets never get baked into the image (compose injects env at runtime)
 .env
 .env.*

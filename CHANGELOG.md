@@ -43,6 +43,14 @@ development line (package.json version).
   elsewhere (confirmed via `pnpm prune --help`), so the fix mounts the same cache
   (`id=pnpm-store`) on the build+prune RUN too, keeping the store visible for both. Caught
   only by actually running `docker build`, not by reading the Dockerfile.
+- **`.dockerignore` was silently uploading ~926MB of non-backend content on every build.**
+  `k8s` was never listed, so `k8s/infra/terraform/.terraform` (923MB: Terraform provider
+  binaries plus the `vpc` module's own nested git clone — `.gitignore`d per a prior commit,
+  but `.dockerignore` is a separate mechanism that doesn't read `.gitignore`) and
+  `assets/files/sample.mp4` (3MB, a README demo file, unreferenced by the Dockerfile) went
+  into the build context on every invocation, including a multi-platform `buildx build`
+  that transfers it per target platform. Both are now excluded; `du -sh` on every top-level
+  entry confirmed nothing else of consequence was left unlisted.
 
 ### Added
 - **`frontend/`: Posts promoted to home, file board moved to `/files` — routing/type groundwork
