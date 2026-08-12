@@ -44,13 +44,30 @@ REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" �
 | | |
 |---|---|
 | 출처 | Chat Project admin 콘솔, 2026-07-30 이식; 역할 관리 부분 2026-08-06 적응 |
-| 이 API에 적응됐는가? | **그렇다** — 로그인/대시보드/사용자/로그("무엇을 적응시켰는가" 참고). 배포 설정(`vercel.json`)은 손대지 않았고, 여전히 배포 대상이 없다 |
+| 이 API에 적응됐는가? | **그렇다** — 로그인/대시보드/사용자/로그("무엇을 적응시켰는가" 참고). `vercel.json`의 죽은 Chat Project CSP 호스트는 2026-08-13에 고쳤다(아래 "출처 정리" 참고), 여전히 배포 대상은 없다 |
 | 루트 도구 체계에 연결됐는가? | **아니다** — 린트 glob, Jest `roots`, `tsconfig.build.json`, `docker-compose.yml`, CI 모두의 바깥이다. 이것은 의도된 것이지(ADR 0022) 빈틈이 아니다 |
 | 의존성 | 자체 `package.json` / `node_modules`. pnpm 워크스페이스가 **아니다**(`frontend/`와 같은 선례). 채팅 도메인 삭제와 함께 `@apollo/client`, `graphql`, `rxjs`를 제거했다 |
 | 지금 실행되는가? | 그렇다, 실제 백엔드(`:3000`)를 대상으로 동작한다 — 필요한 일회성 `CORS_ORIGIN` 설정은 "로컬 명령" 참고(`admin`은 `frontend/`의 동일 출처 Vite 프록시와 달리 자체 출처 `:5174`에서 동작한다) |
 
 루트의 `pnpm lint`, `pnpm test`, `pnpm test:e2e`는 이 폴더에 닿을 수 없으므로, 여기 있는 어떤
 것도 백엔드 파이프라인을 깨뜨릴 수 없다.
+
+## 출처 정리 (2026-08-13)
+
+Chat Project 이식의 흔적 중 남아있던, 아래 기능 적응과는 무관한 두 가지 — 겉모습/죽은
+설정 문제를 정리했다. 색상과 레이아웃은 그대로 뒀다.
+
+- `index.html`의 `<title>`이 제네릭한 `"Admin Panel"`이었다 — `"Upload Board Admin"`으로
+  바꾸고, `<head>`에 연결한 `admin/public/favicon.svg`(단순한 "UB" 이니셜 마크)를 추가했다.
+- `vercel.json`의 CSP `connect-src`가 여전히 Chat Project의 실제 Railway 배포 주소
+  (`https://chat-project-production-3b22.up.railway.app`)를 가리키고 있었다 — 닿을 수 없는
+  죽은 설정이지만, 누군가 템플릿으로 참고하면 틀린 값이 된다. `http://localhost:3000`(이
+  백엔드의 로컬 개발 기본값 — 루트 `.env.example`의 `BASE_URL` 참고)으로 교체했다.
+  **이것은 실제 배포 도메인이 아니라 플레이스홀더다** — Stage 4(프로덕션 DevOps 스택,
+  CLAUDE.md > 알려진 미해결 지점 및 로드맵)가 아직 이 백엔드를 어디에 호스팅할지 정하지
+  않았으므로, 그 origin이 정해지면 `connect-src`를 다시 갱신해야 한다. 이 콘솔의 배포
+  대상은 여전히 Vercel로 유지하기로 했으나(개발자와 확인함), 실제 배포는 아직 설정되지
+  않았다.
 
 ## 무엇을 적응시켰는가
 
@@ -81,7 +98,8 @@ REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" �
 | 에러 처리 | 그때그때의 상태 코드·메시지 검사 | 동결된 `{ code, message }` 계약 — `code`로 분기 ([ADR 0011](../ADR/0011-error-code-contract.ko.md)) | `users-page.tsx`는 모든 분기(`AUTH_LAST_SUPERADMIN`, `USER_HAS_FILES`, `USER_FILES_IN_USE`, `FORBIDDEN`)에서 `axios.isAxiosError`로 `err.response.data.code`를 읽는다 |
 | 배포 설정 | CSP가 Chat Project의 Railway 호스트로 고정된 `vercel.json` | **배포 대상이 없다**; AWS는 Stage 4 로드맵 항목 | 이전처럼 손대지 않았다 — 이번 작업 범위 밖 |
 
-`vercel.json`은 의도적으로 그대로 뒀다 — 이 콘솔은 여전히 배포 대상이 없다.
+위 표는 2026-08-06 기능 적응 작업만을 반영한다; `vercel.json`의 죽은 CSP 호스트는 별도로
+2026-08-13에 고쳤다(위 "출처 정리" 참고) — 이 콘솔은 여전히 배포 대상이 없다.
 
 ## 이번 적응에서 내린 두 가지 결정
 

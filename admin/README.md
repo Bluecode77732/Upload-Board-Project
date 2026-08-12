@@ -46,13 +46,29 @@ rather than a rewrite from scratch.
 | | |
 |---|---|
 | Provenance | Chat Project admin console, imported 2026-07-30; role-management slice adapted 2026-08-06 |
-| Adapted to this API? | **Yes** — login/dashboard/users/logs (see "What was adapted"). Deploy config (`vercel.json`) is untouched; there is still no deploy target |
+| Adapted to this API? | **Yes** — login/dashboard/users/logs (see "What was adapted"). `vercel.json`'s dead Chat Project CSP host was fixed 2026-08-13 (see "Provenance cleanup" below); there is still no deploy target |
 | Wired into root tooling? | **No** — outside the lint glob, Jest `roots`, `tsconfig.build.json`, `docker-compose.yml`, and CI. This is deliberate (ADR 0022), not a gap |
 | Dependencies | Own `package.json` / `node_modules`; **not** a pnpm workspace (same precedent as `frontend/`). `@apollo/client`, `graphql`, and `rxjs` were dropped with the chat-domain deletion |
 | Runs today? | Yes, against a real backend on `:3000` — see "Local commands" for the one-time `CORS_ORIGIN` setup this needs (admin runs on its own origin, `:5174`, unlike `frontend/`'s same-origin Vite proxy) |
 
 Root `pnpm lint`, `pnpm test`, and `pnpm test:e2e` cannot reach this folder, so nothing in here
 can break the backend pipeline.
+
+## Provenance cleanup (2026-08-13)
+
+Two cosmetic/dead-config remnants of the Chat Project import, independent of the functional
+adaptation below — colors and layout are otherwise untouched:
+
+- `index.html`'s `<title>` was the generic `"Admin Panel"` — now `"Upload Board Admin"`, with a
+  matching `admin/public/favicon.svg` (a plain "UB" initials mark) linked from `<head>`.
+- `vercel.json`'s CSP `connect-src` still pointed at the Chat Project's live Railway deployment
+  (`https://chat-project-production-3b22.up.railway.app`) — unreachable dead config, but wrong if
+  ever read as a template. Replaced with `http://localhost:3000` (this backend's local dev
+  default; see `BASE_URL` in the root `.env.example`). **This is a placeholder, not a real deploy
+  domain** — Stage 4 (production DevOps stack, CLAUDE.md > Known Gaps & Roadmap) has not yet
+  decided where this backend is hosted, so `connect-src` needs updating again once that origin
+  exists. Vercel stays the intended deploy target for this console (confirmed with the developer);
+  no actual deployment has been set up.
 
 ## What was adapted
 
@@ -83,7 +99,9 @@ findings; one backend change landed in between — see the `FORBIDDEN` row).
 | Error handling | Ad-hoc status/message checks | Frozen `{ code, message }` contract — branch on `code` ([ADR 0011](../ADR/0011-error-code-contract.md)) | `users-page.tsx` reads `err.response.data.code` via `axios.isAxiosError` for every branch (`AUTH_LAST_SUPERADMIN`, `USER_HAS_FILES`, `USER_FILES_IN_USE`, `FORBIDDEN`) |
 | Deploy config | `vercel.json` with a CSP pinned to the Chat Project's Railway host | **No deploy target**; AWS is a Stage 4 roadmap item | Left untouched, as before — out of scope for this pass |
 
-`vercel.json` stays untouched deliberately — there is still no deploy target for this console.
+The row above reflects the 2026-08-06 functional-adaptation pass only; `vercel.json`'s dead CSP
+host was fixed separately on 2026-08-13 (see "Provenance cleanup" above) — there is still no
+deploy target for this console.
 
 ## Two decisions made for this adaptation
 
