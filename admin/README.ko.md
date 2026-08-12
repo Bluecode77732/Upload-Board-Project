@@ -91,7 +91,7 @@ Chat Project 이식의 흔적 중 남아있던, 아래 기능 적응과는 무�
 | 도메인 페이지 | `rooms-page.tsx`, `getOnlineUser`, `getUserNicknames` | 채팅방·접속 상태·닉네임이 없다 — 이 도메인은 **업로드된 영상 파일**이다 | `rooms-page.tsx`와 `graphql-operations.ts` 삭제; `App.tsx`에서 `/rooms` 라우트 제거; 삭제된 Apollo 계층에서만 쓰던 `rxjs`를 `package.json`에서 제거 |
 | 사용자 조작 | `POST /user/:id/ban` \| `/unban` \| `/force-logout` | **하나도 없다** — ROADMAP의 기본값은 여전히 "모더레이션 액션 없음" | `users-page.tsx`에서 세 가지 모두 삭제, 백엔드 쪽 대체 구현은 만들지 않았다(그것은 적응이 아니라 새 범위가 된다) |
 | 사용자 목록 조회 | `GET /user?page&take&sort&sortBy&search&status` | `take`/`skip`만, 고정 `createdAt DESC` 순서, 검색·정렬·상태 없음([ROADMAP 실행순서 #2](../ROADMAP.ko.md)) | `users-page.tsx`는 `take`/`skip`으로 페이지네이션한다; 검색창·정렬 토글 헤더·상태 필터는 제거했다(지금 보내면 400 `VALIDATION_FAILED` — `forbidNonWhitelisted`). ~~제거~~ **2026-08-12 재도입**: `GetUsersDto`에 `search`(이메일 `ILIKE`)와 `sortBy`/`order`(`id`/`email`/`createdAt`, `role`은 제외)가 추가됐다; 검색창과 클릭 가능한 ID/Email/Created 헤더가 다시 생겼고, 서버에 존재하지 않는 `status` 필터는 여전히 없다 |
-| 감사 로그 | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip`만; 고정 `createdAt DESC`; **`/export` 없음**, **`userId` 필터 없음** | `logs-page.tsx`는 액션 필터 + 페이지네이션만 남겼다; CSV 내보내기 버튼, 날짜 범위 필터, 사용자 필터는 제거했다. `userId` ~~없음~~ **2026-08-12 추가**: `AuditLogQueryDto`가 이제 `userId`를 받는다(actor 또는 target과 매칭); `logs-page.tsx` 자체는 아직 URL에서 이 파라미터를 읽지 않는다 — `users-page.tsx`의 새 "View all" 링크가 `/logs?userId=…`로 이동시키며, `logs-page.tsx`가 그 쿼리 파라미터를 실제로 소비하도록 연결하는 작업은 후속 변경으로 남겨뒀다. `/export`는 여전히 없다 |
+| 감사 로그 | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip`만; 고정 `createdAt DESC`; **`/export` 없음**, **`userId` 필터 없음**(이식 당시 기준) | `logs-page.tsx`는 처음엔 액션 필터 + 페이지네이션만 남겼다; CSV 내보내기 버튼, 날짜 범위 필터, 사용자 필터는 제거했다. `userId` ~~없음~~ **2026-08-12 추가**: `AuditLogQueryDto`가 이제 `userId`를 받고(actor 또는 target과 매칭), 같은 커밋에서 `logs-page.tsx`도 자신의 URL(`?userId=`)에서 이를 읽는다 — `users-page.tsx`의 "View all" 링크(`/logs?userId=…`)는 죽은 필터가 아니라 실제로 동작하는 필터다. CSV 내보내기는 ~~제거~~ **2026-08-12 클라이언트 쪽으로 재도입**: `/audit-log/export`는 여전히 없으므로, `exportCsv()`가 DTO의 `take` 상한(페이지당 100)만큼 `GET /audit-log`를 순회해 최대 1000건까지 모은 뒤 다운로드한다 |
 | 페이징 모델 | `page` + `take` | `take` + `skip`(오프셋) ([ADR 0021](../ADR/0021-list-query-search-filter-sort.ko.md)) | 두 목록 페이지 모두 `skip = (page - 1) * take`를 계산하고, `{ data, total, page, take }`가 아니라 `[data, total]` 튜플 응답을 읽는다 |
 | 사용자별 감사 조각 | 사용자 페이지 상세 패널이 `GET /audit-log?userId=…`를 호출 | `userId` 필터가 존재하지 않는다 | **근사하지 않고 제거했다** — 아래 "열린 사항" 참고. ~~제거~~ **2026-08-12 복원**: `AuditLogQueryDto`에 `userId`가 생기면서, 상세 패널이 `GET /audit-log?userId={id}&take=5`(actor 또는 target)를 호출해 "Recent activity" 절을 보여준다 |
 | 사용자 삭제 | 확인 없는 `DELETE /user/:id` | 계정이 파일을 가진 경우 `?deleteFiles=true` 필수, 없으면 409 `USER_HAS_FILES` ([ADR 0020](../ADR/0020-account-deletion-cascade.ko.md)) | `deleteUser()`가 `USER_HAS_FILES`를 잡아 응답 `message`의 파일 개수를 보여주고, 재확인 후 `?deleteFiles=true`로 재시도한다 |
@@ -148,10 +148,16 @@ pnpm e2e:seed    # superadmin 시딩. e2e/.env 필요(git 무시 대상)
 
 - ~~`GET /audit-log`에 `userId` 필터가 없다~~ — **2026-08-12 해소**: `AuditLogQueryDto`가
   이제 `userId`를 받는다; 위 "두 가지 결정" 참고.
-- **`logs-page.tsx`는 아직 자신의 URL에서 `userId` 쿼리 파라미터를 읽지 않는다** (2026-08-12
-  추가) — `users-page.tsx`의 상세 패널이 `/logs?userId={id}`로 링크하지만, `logs-page.tsx`는
-  여전히 `action`만 필터한다. `userId`를 읽어 적용하도록 연결하는 작업은 후속 변경으로
-  남겨뒀다.
+- ~~`logs-page.tsx`는 아직 자신의 URL에서 `userId` 쿼리 파라미터를 읽지 않는다~~ —
+  **2026-08-12, 같은 커밋에서 해소**: `useSearchParams`로 `?userId=`를 읽어 `GET /audit-log`
+  쿼리에 적용한다; `users-page.tsx`의 "View all" 링크(`/logs?userId={id}`)는 실제로 동작하는
+  필터다. ("무엇을 적응시켰는가" 표의 감사 로그 행이 예전엔 여전히 미해결이라고 적혀
+  있었다 — 2026-08-13에 바로잡았다.)
+- **2026-08-12에 추가된 기능들에 대한 e2e 커버리지가 없다.** `admin/e2e/logs.spec.ts`와
+  `admin/e2e/users.spec.ts` 어디에도 `userId` 필터/"View all" 링크, CSV 내보내기,
+  `users-page.tsx`의 검색창·정렬 가능 헤더에 대한 검증이 없다. 두 스펙의 헤더 주석은
+  2026-08-13에 이 기능들이 없다고 잘못 말하는 부분을 고쳤지만, 테스트 자체는 추가하지
+  않았다 — 테스트 작성은 이번 작업(문서·주석 정리)의 범위를 벗어나는 새 작업이다.
 - **`PATCH /file/:id { userId }` 파일 이전 필드는 어떤 결정으로도 정당화된 적이 없다**
   (CLAUDE.md > 알려진 미해결 지점) — 이 콘솔과는 무관하지만, 이번 작업이 손대지 않았고
   해결된 것으로 가정해서는 안 되므로 여기 적어둔다.

@@ -693,7 +693,7 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   each `이유` line pointing at its governing ADR. Not a drive-by: a repo-wide comment sweep is
   exactly the kind of change Scope Discipline keeps out of feature commits, so it lands as its
   own task once the staged work is done.
-- `GET /user` search/sort (recorded 2026-08-05, as a follow-up from execution #2's
+- ~~`GET /user` search/sort~~ (recorded 2026-08-05, as a follow-up from execution #2's
   `GET /user` pagination task, deferred to
   [Stage 5](#stage-5--operational-surface-admin-console--added-2026-07-30)) —
   the pagination task deliberately shipped **take/skip only**: the ROADMAP item named
@@ -707,22 +707,26 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `USER_SORT_FIELDS` tuple keyed the same way `FILE_SORT_FIELDS` is) rather than inventing a
   second read-layer pattern — no new ADR needed, same as the pagination task. Not scheduled
   as its own task: it is a plausible extension of Stage 5's console-adaptation row, not an
-  independent debt like pagination was. **Trigger reached, need did not materialize
-  (2026-08-06)**: the console adaptation landed without it — the rewritten `users-page.tsx`
-  paginates on `take`/`skip` only, with no search/sort UI, matching `GetUsersDto` exactly
-  rather than sending fields that would 400. This entry stays open for a future request, not
-  because the adaptation needed it and deferred it.
-- `GET /audit-log` has no `userId` filter (found 2026-08-06, during the Stage 5 console
+  independent debt like pagination was. Trigger reached, need did not materialize on
+  2026-08-06 — the console adaptation landed without it, matching `GetUsersDto` exactly rather
+  than sending fields that would 400. **Resolved 2026-08-12**: the need did materialize after
+  all — `GetUsersDto` gained `search` (email `ILIKE`) and `sortBy`/`order`
+  (`id`/`email`/`createdAt`, no `role`), and `users-page.tsx` gained the search box and
+  sortable ID/Email/Created headers in the same change (`admin/README.md` > "What was
+  adapted"). No `status` filter exists server-side, so that half of the original imported
+  page's surface stays out of scope
+- ~~`GET /audit-log` has no `userId` filter~~ (found 2026-08-06, during the Stage 5 console
   adaptation row above) — the imported users-page detail panel called
   `GET /audit-log?userId=…` for a per-user "recent activity" slice, but
-  `AuditLogQueryDto` filters on `action` only. Resolution for the console itself: the panel
-  section was **dropped, not approximated** — filtering an unfiltered page client-side would
-  silently miss a user's older entries once they fall off that page, which is worse than not
-  showing the slice at all (`admin/README.md` > "Two decisions made for this adaptation").
-  If a `userId` filter is wanted later, mirror `AuditLogQueryDto`'s existing `action` filter
-  shape (an optional indexed column filter, same DTO) — no new ADR needed. Not scheduled as
-  its own task; revisit only if an actual consumer needs it, same standard as the `GET /user`
-  search/sort item above.
+  `AuditLogQueryDto` filters on `action` only. Resolution for the console itself at the time:
+  the panel section was **dropped, not approximated** — filtering an unfiltered page
+  client-side would silently miss a user's older entries once they fall off that page, which
+  is worse than not showing the slice at all (`admin/README.md` > "Two decisions made for
+  this adaptation"). **Resolved 2026-08-12**: `AuditLogQueryDto` gained `userId` (matches
+  actor or target), mirroring the existing `action` filter shape as planned, no new ADR. The
+  same change restored the dropped panel as an exact `GET /audit-log?userId={id}&take=5`
+  fetch and wired `logs-page.tsx` to read `?userId=` from its own URL for the "View all" link
+  (`admin/README.md` > "Two decisions made for this adaptation" and "Open items")
 
 ## 8. Advisory notes
 

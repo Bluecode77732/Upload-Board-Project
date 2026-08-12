@@ -92,7 +92,7 @@ findings; one backend change landed in between — see the `FORBIDDEN` row).
 | Domain pages | `rooms-page.tsx`, `getOnlineUser`, `getUserNicknames` | No rooms, presence, or nicknames — this domain is **uploaded video files** | `rooms-page.tsx` and `graphql-operations.ts` deleted; the `/rooms` route removed from `App.tsx`; `rxjs` (only used by the deleted Apollo layer) dropped from `package.json` |
 | User actions | `POST /user/:id/ban` \| `/unban` \| `/force-logout` | **None exist** — ROADMAP's default stays "no moderation actions" | All three deleted from `users-page.tsx`, with no backend-side replacement built (that would be new scope, not adaptation) |
 | User list query | `GET /user?page&take&sort&sortBy&search&status` | `take`/`skip` only, fixed `createdAt DESC` order, no search/sort/status ([ROADMAP execution order #2](../ROADMAP.md)) | `users-page.tsx` paginates on `take`/`skip`; the search box, sort-toggle headers, and status filter were removed (they would 400 `VALIDATION_FAILED` today — `forbidNonWhitelisted`). ~~Removed~~ **re-added 2026-08-12**: `GetUsersDto` gained `search` (email `ILIKE`) and `sortBy`/`order` (`id`/`email`/`createdAt`, no `role`); the search box and clickable ID/Email/Created headers came back, still no `status` filter (none exists server-side) |
-| Audit log | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip` only; fixed `createdAt DESC`; **no `/export`**, **no `userId` filter** | `logs-page.tsx` keeps only the action filter + pagination; the CSV export button, date-range filters, and user filter were removed. `userId` ~~missing~~ **added 2026-08-12**: `AuditLogQueryDto` now accepts `userId` (matches actor or target); `logs-page.tsx` itself does not yet read it from the URL — `users-page.tsx`'s new "View all" link navigates to `/logs?userId=…`, and wiring `logs-page.tsx` to consume that query param is left for a follow-up change. `/export` still does not exist |
+| Audit log | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip` only; fixed `createdAt DESC`; **no `/export`**, **no `userId` filter** (at import time) | `logs-page.tsx` originally kept only the action filter + pagination; the CSV export button, date-range filters, and user filter were removed. `userId` ~~missing~~ **added 2026-08-12**: `AuditLogQueryDto` now accepts `userId` (matches actor or target), and `logs-page.tsx` reads it from its own URL (`?userId=`) the same commit — `users-page.tsx`'s "View all" link (`/logs?userId=…`) is a live filter, not a dead one. CSV export ~~removed~~ **re-added 2026-08-12**, client-side: `/audit-log/export` still does not exist, so `exportCsv()` pages through `GET /audit-log` at the DTO's `take` ceiling (100/page) up to a 1000-row cap and downloads the result |
 | Paging model | `page` + `take` | `take` + `skip` (offset) ([ADR 0021](../ADR/0021-list-query-search-filter-sort.md)) | Both list pages compute `skip = (page - 1) * take` and read the `[data, total]` tuple response, not `{ data, total, page, take }` |
 | Per-user audit slice | Users page's detail panel fetched `GET /audit-log?userId=…` | No `userId` filter exists | **Dropped**, not approximated — see "Open items" below. ~~Dropped~~ **restored 2026-08-12**: now that `AuditLogQueryDto` has `userId`, the detail panel fetches `GET /audit-log?userId={id}&take=5` (actor or target) for a "Recent activity" section |
 | User deletion | `DELETE /user/:id`, no confirmation | `?deleteFiles=true` required when the account owns files, else 409 `USER_HAS_FILES` ([ADR 0020](../ADR/0020-account-deletion-cascade.md)) | `deleteUser()` catches `USER_HAS_FILES`, shows the file count from the response `message`, and re-confirms before retrying with `?deleteFiles=true` |
@@ -149,10 +149,16 @@ folder's code can work around, and it is unset by default (`backend/.env.example
 
 - ~~`GET /audit-log` has no `userId` filter~~ — **resolved 2026-08-12**: `AuditLogQueryDto`
   now accepts `userId`; see "Two decisions" above.
-- **`logs-page.tsx` does not yet read a `userId` query param from its own URL** (added
-  2026-08-12) — `users-page.tsx`'s detail panel links to `/logs?userId={id}`, but
-  `logs-page.tsx` still only filters on `action`. Wiring it to read and apply `userId` is
-  left for a follow-up change.
+- ~~`logs-page.tsx` does not yet read a `userId` query param from its own URL~~ — **resolved
+  2026-08-12, same commit**: it reads `?userId=` via `useSearchParams` and applies it to the
+  `GET /audit-log` query; `users-page.tsx`'s "View all" link (`/logs?userId={id}`) is a live
+  filter. (The "What was adapted" table's Audit log row previously said this was still open —
+  corrected 2026-08-13.)
+- **No e2e coverage for the 2026-08-12 additions.** `admin/e2e/logs.spec.ts` and
+  `admin/e2e/users.spec.ts` assert none of: the `userId` filter / "View all" link, CSV export,
+  or `users-page.tsx`'s search box and sortable headers. Their header comments were corrected
+  2026-08-13 to stop claiming these features don't exist, but no test was added for them —
+  writing one is new scope, not this pass' doc/comment cleanup.
 - **`PATCH /file/:id { userId }` file-transfer field has never been justified by any
   decision** (CLAUDE.md > Known Gaps) — unrelated to this console, noted here only because
   nothing in this pass touches it and it should not be assumed settled.

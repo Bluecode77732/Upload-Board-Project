@@ -2,8 +2,10 @@
 // primary purpose (ADR 0022).
 // Usage: rendered at /users; linked from every page's nav bar.
 // Rationale: rewritten from the imported Chat Project page, which targeted a numeric 2-tier
-// role, unpaginated search/sort/status filters, and ban/unban/force-logout actions this API
-// does not have — see admin/README.md's backlog table for the full defect list.
+// role and ban/unban/force-logout actions this API does not have — see admin/README.md's
+// backlog table for the full defect list. Search (email `ILIKE`) and sortable ID/Email/Created
+// headers were re-added 2026-08-12 once GetUsersDto gained search/sortBy/order; there is still
+// no `status` filter (none exists server-side) and no moderation actions.
 
 import { useEffect, useState } from 'react';
 import { isAxiosError } from 'axios';

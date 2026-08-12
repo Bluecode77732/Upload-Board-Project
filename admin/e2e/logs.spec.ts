@@ -2,10 +2,12 @@
 // Usage: run via `pnpm e2e` in admin/; requires backend on :3000 with Postgres reachable,
 // and a seeded superadmin account (see e2e/.env.example).
 // Rationale: logs-page.tsx had zero coverage for filter interactions. Rewritten from the
-// imported Chat Project version, which asserted a client-side sort toggle, a userId/from/to
-// filter set, and a CSV export button this API does not have (GET /audit-log's order is
-// server-fixed at createdAt DESC and its only filter is `action`) — see admin/README.md's
-// backlog table for the full defect list this rewrite closes.
+// imported Chat Project version, which asserted a client-side sort toggle and a date-range
+// filter this API does not have (GET /audit-log's order is server-fixed at createdAt DESC).
+// The userId filter and CSV export button the Chat Project version also asserted do now exist
+// here (added 2026-08-12) but are not yet covered by this spec — see admin/README.md's "Open
+// items" for that gap. See admin/README.md's backlog table for the rest of the defect list
+// this rewrite closed.
 
 import { test, expect } from '@playwright/test';
 import { loginAsSuperadmin, registerTargetUser } from './helpers';

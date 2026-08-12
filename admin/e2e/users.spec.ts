@@ -2,9 +2,11 @@
 // Usage: run via `pnpm e2e` in admin/; requires backend on :3000 with Postgres reachable,
 // and a seeded superadmin account (see e2e/.env.example).
 // Rationale: users-page.tsx had zero coverage of these privileged, partly-irreversible actions.
-// Rewritten from the imported Chat Project version, which asserted a client-side sort toggle,
-// a search box, nickname text, and force-logout/ban actions this API does not have — see
-// admin/README.md's backlog table for the full defect list this rewrite closes.
+// Rewritten from the imported Chat Project version, which asserted nickname text and
+// force-logout/ban actions this API does not have — see admin/README.md's backlog table for
+// the full defect list this rewrite closed. The search box and sortable-header sort toggle the
+// Chat Project version also asserted do now exist here (re-added 2026-08-12) but are not yet
+// covered by this spec — see admin/README.md's "Open items" for that gap.
 
 import { test, expect } from '@playwright/test';
 import { loginAsSuperadmin, registerTargetUser } from './helpers';

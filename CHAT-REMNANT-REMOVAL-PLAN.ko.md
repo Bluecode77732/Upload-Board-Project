@@ -106,6 +106,47 @@ ADR 0022와 `admin/README.md`(.ko)에서 선언·날짜·출처가 모두 밝혀
 표현되어 있습니다. 이 저장소 자체의 기술 스택을 서술하는 항목은 하나도 없습니다.
 **발견된 잔재: 0건.**
 
+**정정 (2026-08-13) — 위 1·2번 항목은 이제 오래된 서술입니다. 삭제하지 않고 2026-07-30
+시점 검토가 무엇을 못 봤는지 정직하게 남겨둔 채, 아래에서 바로잡습니다.** 2번 항목의
+목록은 2026-07-30 시점의 스냅샷입니다 — 2026-08-06의 콘솔 적응 작업([ROADMAP.md](ROADMAP.md)
+> Stage 5, `admin/README.md` > "무엇을 적응시켰는가")이 `rooms-page.tsx`와
+`graphql-operations.ts`를 **아예 삭제**했습니다. "의도적으로 수정하지 않고 커밋"한 채 재작성을
+기다리는 상태가 아니라, 이제 존재하지 않는 파일입니다. `logs-page.tsx`도 이 API의 실제
+라우트를 기준으로 다시 작성되어 더 이상 채팅 도메인을 서술하지 않습니다. 그 작업 이후에도 살아
+남은 잔재는 `admin/vercel.json`의 CSP `connect-src` 하나뿐이었고, 이 역시 2026-08-13에 별도로
+고쳐졌습니다(커밋 `f306813`, `admin/README.md` > "출처 정리") — Railway 호스트 대신
+`localhost:3000` 플레이스홀더로 교체했습니다. 1번 항목이 지적한 공백(grep 세트가
+`admin/src/`를 훑은 적이 없다는 점)은 아래의 재검증으로 닫혔습니다 — 처음으로 코드까지 대상에
+넣었습니다.
+
+## 재검증 — 코드 범위 (2026-08-13)
+
+위 1번 항목을 닫습니다. 세트 A와 세트 B를 **원문 그대로**, 이번에는 처음으로 `admin/src/`,
+`admin/vercel.json`, `admin/index.html`, `admin/package.json`, `admin/e2e/`에 대해서도
+실행했습니다 — `*.md`/`ADR/`/`.env.example`만이 아닙니다.
+
+```bash
+grep -rniE "chat|redis|graphql|socket|pubsub|monorepo|railway|vercel|zustand|apollo|gemini|moderation|sendMessage|receiveMessage|resolver|gateway|subscription|frontend/|backend/|admin/|graphql-ws|ioredis|sentry|bullmq|session-guard|forceLogout|RoomEntity|ChatEntity|superadmin" \
+  admin/src admin/vercel.json admin/index.html admin/package.json admin/e2e
+
+grep -rniE "RbacGuard|GqlTransaction|QueryRunnerDecorator|RateLimitGuard|kickPrevious|AiService|AuditLog|MODERATION_|user_cache|SessionCache|EntityBase|schema\.gql|pnpm --filter|graphql-operations|errorLink|wsLink|reconnectSocket|protected-route|chat-page|DOMpurify|winston" \
+  admin/src admin/vercel.json admin/index.html admin/package.json admin/e2e
+```
+
+**발견된 잔재: 0건.** 모든 검색 결과를 분류하면:
+
+| 검색 결과 | 위치 | 분류 | 조치 |
+|---|---|---|---|
+| `superadmin`, `AuditLog`, `zustand` | `auth/role.ts`, `store/auth.store.ts`, `lib/audit.ts`, `pages/*.tsx`, `package.json` | 고유 기능 | 유지 — 이 저장소의 실제 RBAC·감사 로그 용어이자 실제 상태 관리 의존성이며, chat 프로젝트의 잔재가 아닙니다 |
+| "Chat Project" 산문 서술(예: "that was the Chat Project's domain", "Chat Project's numeric 0/1/2") | `pages/dashboard-page.tsx:11`, `pages/logs-page.tsx:4`, `pages/users-page.tsx:4`, `store/auth.store.ts:4`, `e2e/logs.spec.ts:5`, `e2e/users.spec.ts:5` | 설계 참조 | 유지 — 모두 이 저장소가 그 동작을 **갖고 있지 않다**고 말하기 위해 Chat Project를 인용합니다 |
+| "an axios 401 and an Apollo UNAUTHENTICATED error firing at the same time" | `auth/session-guard.ts:75` | 오탐 | 유지 — 경합 조건을 설명하는 가상의 비유일 뿐, (삭제된) Apollo 의존성에 대한 참조가 아닙니다 |
+| `session-guard.ts`, `protected-route.tsx`(파일명·import) | `admin/src` 전반 | 고유 기능 | 유지 — 이 저장소 자체의 파일입니다. 세트 A의 `session-guard` 용어는 같은 목적의 chat 프로젝트 파일을 잡기 위한 것이지, 이 파일을 겨냥한 것이 아닙니다 |
+| `admin/vercel.json` 내용 | — | — | 파일 자체 안에는 `railway`/`vercel`/`chat` 어느 것도 없습니다 — 위의 CSP 수정이 이미 유일한 잔재 문자열을 제거했습니다 |
+| `rooms-page.tsx`, `graphql-operations.ts` | — | — | 파일 검색과 grep 모두 결과 없음 — 2026-08-06에 삭제됐지, 격리된 상태가 아닙니다 |
+
+버킷 1 결과는 없습니다. `admin/`은 이번 재검증 기준으로 문서 범위와 코드 범위 모두에서
+깨끗합니다.
+
 ## 잔여 작업 (처리 예정)
 
 1. **Git 히스토리 결정** — `4d00bc2` 이전 커밋들에는 채팅 앱 `CLAUDE.md`가 여전히
@@ -120,8 +161,9 @@ ADR 0022와 `admin/README.md`(.ko)에서 선언·날짜·출처가 모두 밝혀
    - 다른 프로젝트나 과거 브랜치에서 내용을 붙여넣을 때
    - 저장소를 공개/태깅하기 직전
 
-   지금까지 1회 발동 — 위에 기록한 `admin/` 이식. 현재 작성된 세트는 문서만 훑으므로,
-   *코드*를 이식할 때는 범위를 손으로 넓혀야 합니다.
+   지금까지 2회 발동 — `admin/` 이식(2026-07-30, 문서 범위)과 위의 코드 범위 재검증
+   (2026-08-13, 첫 검토가 남긴 문서 전용 공백을 닫음). 앞으로 `admin/`을 다시 검토할 때도
+   문서만 보는 쪽으로 되돌아가지 말고 계속 코드까지 넓혀야 합니다.
 3. **메모리 위생** — 저장소 외부 메모리 파일은 2026-07-22 기준 클린; 프로젝트
    아키텍처를 언급하는 메모리 항목이 추가될 때마다 재확인.
 
