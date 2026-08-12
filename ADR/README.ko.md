@@ -42,6 +42,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0032](0032-migration-as-separate-deploy-step.ko.md) | 마이그레이션을 부팅이 아닌 별도 배포 스텝으로 분리 | 승인됨 | 2026-08-08 |
 | [0033](0033-secrets-delivery-target.ko.md) | 시크릿 전달 목표 — Kubernetes Secrets, AWS Secrets Manager는 보류 | 승인됨 (설계만) | 2026-08-08 |
 | [0034](0034-https-termination-stance.ko.md) | HTTPS 종단은 Ingress에서, 앱 안에서는 하지 않는다 | 승인됨 (설계만) | 2026-08-08 |
+| [0035](0035-arm64-bcrypt-source-rebuild.ko.md) | arm64 지원 — `onlyBuiltDependencies`로 bcrypt 소스 재컴파일, 0030 개정 | 승인됨 | 2026-08-12 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

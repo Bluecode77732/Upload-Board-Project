@@ -16,8 +16,12 @@ COPY package.json pnpm-lock.yaml ./
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
     pnpm install --frozen-lockfile --store-dir /pnpm-store
 COPY . .
-# Compile to dist/, then drop dev deps so production carries prod modules only
-# (bcrypt stays prebuilt from this glibc image — no recompile on the slim stage).
+# Compile to dist/, then drop dev deps so production carries prod modules only.
+# bcrypt uses its prebuilt glibc binary on amd64 (no recompile); on arm64, where
+# no prebuild exists, pnpm.onlyBuiltDependencies (package.json) lets its install
+# script run node-gyp against this stage's full toolchain instead (ADR 0035,
+# amends ADR 0030's "target architecture stays x64" stance) — untested against
+# real arm64 hardware/emulation.
 # Same cache mount as the install step: `pnpm prune` looks up the store path
 # node_modules was linked from, and without it mounted here it can't verify the
 # link and prompts to wipe + reinstall — a prompt with no stdin, which hangs.

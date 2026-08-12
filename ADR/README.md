@@ -43,6 +43,7 @@ each ADR records the *why* behind those rules.
 | [0032](0032-migration-as-separate-deploy-step.md) | Migrations run as a separate deploy step, not on container boot | Accepted | 2026-08-08 |
 | [0033](0033-secrets-delivery-target.md) | Secrets delivery target — Kubernetes Secrets, AWS Secrets Manager deferred | Accepted (design-only) | 2026-08-08 |
 | [0034](0034-https-termination-stance.md) | HTTPS termination happens at the ingress, not in the app | Accepted (design-only) | 2026-08-08 |
+| [0035](0035-arm64-bcrypt-source-rebuild.md) | arm64 support — rebuild bcrypt from source via `onlyBuiltDependencies`, amends 0030 | Accepted | 2026-08-12 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

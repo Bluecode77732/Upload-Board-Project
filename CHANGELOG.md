@@ -12,6 +12,25 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Added
+- **arm64 support for the Docker image — `bcrypt` rebuilds from source there**
+  ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.md), amends
+  [ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)'s "target architecture
+  stays x64" stance). Motivated by publishing a single multi-platform image
+  (`docker buildx build --platform linux/amd64,linux/arm64`) rather than the
+  Terraform/node-group decision ADR 0030 anticipated. Investigating surfaced that
+  pnpm 10 blocks dependency install scripts by default (`pnpm install`'s own
+  `Ignored build scripts: ... bcrypt` warning) — harmless on amd64, where bcrypt's
+  bundled glibc prebuilt binary loads without needing its script (verified locally),
+  but exactly the fallback arm64 needs, since no arm64 prebuild exists.
+  `package.json`'s `pnpm.onlyBuiltDependencies` now lists `bcrypt`, so its install
+  script is allowed to run and falls back to a `node-gyp` source compile on arm64;
+  the `development` build stage already has the full toolchain this needs. No
+  Dockerfile change beyond a comment — the official `node:24.8.0` tag already
+  resolves per-platform under `buildx`. Not yet verified against real arm64
+  hardware or QEMU emulation; `bcryptjs` stays the documented fallback if that
+  path proves too slow or unreliable.
+
 ### Changed
 - **`Dockerfile`/`docker-compose.yml`: build speed, image size, and local-dev tuning.**
   `pnpm install --frozen-lockfile` now runs under a BuildKit cache mount

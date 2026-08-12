@@ -12,6 +12,26 @@
 
 ## [Unreleased]
 
+### 추가
+- **Docker 이미지 arm64 지원 — `bcrypt`를 arm64에서는 소스로 재컴파일**
+  ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md), [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)의
+  "타겟 아키텍처는 x64 유지" 방침을 개정). ADR 0030이 상정했던 Terraform/노드
+  그룹 결정이 아니라, 아키텍처를 통일한 단일 멀티플랫폼 이미지를
+  (`docker buildx build --platform linux/amd64,linux/arm64`) 배포하려는 목적에서
+  시작됐습니다. 조사 과정에서 pnpm 10이 기본적으로 의존성 설치 스크립트를
+  차단한다는 사실을 발견했습니다(`pnpm install` 자체 출력의
+  `Ignored build scripts: ... bcrypt` 경고) — amd64에서는 무해합니다. bcrypt의
+  번들된 glibc prebuilt 바이너리가 설치 스크립트 없이도 로드되기 때문입니다(로컬
+  검증 완료). 하지만 arm64용 prebuilt는 아예 없어서, 그 차단된 스크립트가 정확히
+  arm64에 필요한 폴백 경로였습니다. 이제 `package.json`의
+  `pnpm.onlyBuiltDependencies`에 `bcrypt`를 등록해 설치 스크립트 실행을
+  허용했고, arm64에서는 `node-gyp` 소스 컴파일로 폴백합니다 —
+  `development` 빌드 스테이지에는 이미 필요한 전체 툴체인이 있습니다. Dockerfile은
+  코멘트 외에 변경할 필요가 없었습니다 — 공식 `node:24.8.0` 태그가 `buildx` 하에서
+  이미 플랫폼별로 알아서 해석되기 때문입니다. 실제 arm64 하드웨어나 QEMU
+  에뮬레이션으로는 아직 검증되지 않았고, 이 경로가 너무 느리거나 불안정하다고
+  판명되면 `bcryptjs`를 대체안으로 기록해뒀습니다.
+
 ### 변경
 - **`Dockerfile`/`docker-compose.yml`: 빌드 속도, 이미지 크기, 로컬 dev 튜닝.**
   `pnpm install --frozen-lockfile`가 이제 BuildKit 캐시 마운트
