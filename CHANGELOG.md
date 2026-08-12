@@ -12,6 +12,38 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Changed
+- **`Dockerfile`/`docker-compose.yml`: build speed, image size, and local-dev tuning.**
+  `pnpm install --frozen-lockfile` now runs under a BuildKit cache mount
+  (`--mount=type=cache,id=pnpm-store,target=/pnpm-store` + `--store-dir /pnpm-store`), so
+  pnpm's content-addressable store survives a lockfile change invalidating the layer
+  instead of re-downloading every package from the registry on each dependency bump —
+  build-time only, no runtime effect. The production stage no longer copies
+  `package.json`: nothing in `backend/` reads it at runtime (grepped for
+  `require`/`readFileSync` of it; Swagger's version is hardcoded `'1.0'` in `main.ts`), so
+  it was dead weight. `docker-compose.yml`'s `db`/`api` services now cap log growth
+  (`json-file` driver, `max-size: 10m`, `max-file: 3`) — the default driver has no size
+  cap, and a long-running local dev container's logs could otherwise grow unbounded.
+  Stage names changed from `build`/`runtime` to `development`/`production` (cosmetic only —
+  confirmed no other file references the old aliases via `--target`/`--from=`). distroless/
+  multi-arch and a compose `restart` policy were considered and left out: the former is
+  already deferred by ADR 0030's unmet preconditions, the latter has a real
+  convenience-vs-masking-a-crash-loop trade-off not decided here.
+
+### Fixed
+- **`Dockerfile`: `pnpm prune --prod` hung indefinitely**, introduced by the cache-mount
+  change above. The `--mount=type=cache` backing `pnpm install` only exists for the RUN
+  instruction it's attached to; the next RUN (`pnpm build && pnpm prune --prod`) no longer
+  had `/pnpm-store` available, and `pnpm prune` — finding `node_modules` linked from a
+  store it could no longer read — fell back to an interactive "wipe and reinstall from
+  scratch? (Y/n)" prompt. A Docker build has no stdin, so the prompt never resolves and
+  the build hangs forever (this, not a slow network, is why an earlier validation build
+  never finished — two orphaned BuildKit sessions from that hang had to be cleaned up with
+  `docker builder prune` afterward). `pnpm prune` has no `--store-dir` flag to point it
+  elsewhere (confirmed via `pnpm prune --help`), so the fix mounts the same cache
+  (`id=pnpm-store`) on the build+prune RUN too, keeping the store visible for both. Caught
+  only by actually running `docker build`, not by reading the Dockerfile.
+
 ### Added
 - **`frontend/`: Posts promoted to home, file board moved to `/files` — routing/type groundwork
   for the post/comment board UI** (backend Stage 3, ADR 0021/0023/0024). `App.tsx`: `/` now
@@ -89,6 +121,13 @@ development line (package.json version).
   2026-08-08 — reflecting the storage port-adapter ([ADR 0029](ADR/0029-storage-port-adapter.md)),
   the container/deploy hardening ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–[ADR 0034](ADR/0034-https-termination-stance.md)),
   and the base Kubernetes manifests (`k8s/`) that have since landed. Documentation only.
+- **Istio (service mesh) added to the DevOps stack, planned after Terraform** — a new 🆕
+  component row in the Stage 4 status table plus a mention in every stack list (Current
+  position, §6 execution order, Stage 4 header + introduction row, `CLAUDE.md` summary): a
+  service mesh over the Kubernetes cluster (traffic management, mTLS between workloads, mesh
+  telemetry into Prometheus/Grafana), introduced once the Terraform-provisioned cluster
+  exists — forward-looking for multi-service scaling. Its own ADR when the task lands.
+  Documentation only.
 
 ### Removed
 - **`frontend/src/features/admin/AdminPage.tsx` and its `/admin` route** (ROADMAP Stage 5,

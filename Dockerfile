@@ -1,30 +1,38 @@
 # syntax=docker/dockerfile:1
 
-# Build stage — full image (has compilers for bcrypt's native build). Node/pnpm
+# Development stage — full image (has compilers for bcrypt's native build). Node/pnpm
 # versions are pinned per ADR 0014 (.nvmrc / package.json packageManager), so the
 # base tag here has a single source of truth.
-FROM node:24.8.0 AS build
+FROM node:24.8.0 AS development
 WORKDIR /app
 RUN corepack enable
 # Install with dev deps (nest build needs them). Copying only the manifests first
 # keeps this layer cached until the lockfile actually changes.
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+# Cache mount keeps pnpm's content-addressable store across builds even when
+# this layer is invalidated by a lockfile change — avoids re-downloading every
+# package from the registry on each dependency bump. Build-time only; nothing
+# here is committed to an image layer.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
+    pnpm install --frozen-lockfile --store-dir /pnpm-store
 COPY . .
-# Compile to dist/, then drop dev deps so the runtime carries prod modules only
-# (bcrypt stays prebuilt from this glibc image — no recompile on the slim runtime).
-RUN pnpm build && pnpm prune --prod
+# Compile to dist/, then drop dev deps so production carries prod modules only
+# (bcrypt stays prebuilt from this glibc image — no recompile on the slim stage).
+# Same cache mount as the install step: `pnpm prune` looks up the store path
+# node_modules was linked from, and without it mounted here it can't verify the
+# link and prompts to wipe + reinstall — a prompt with no stdin, which hangs.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
+    pnpm build && pnpm prune --prod
 
-# Runtime stage — slim (no compilers needed; prod node_modules come from build).
+# Production stage — slim (no compilers needed; prod node_modules come from development).
 # Distroless was considered (ADR 0030) and deferred: an exact Node 24 tag is
 # unverified and this project has no ephemeral-debug-container tooling yet to
 # replace the shell it would remove.
-FROM node:24.8.0-slim AS runtime
+FROM node:24.8.0-slim AS production
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/package.json ./package.json
+COPY --from=development /app/node_modules ./node_modules
+COPY --from=development /app/dist ./dist
 # Both upload folders must exist for the temp_ -> granted_ promotion contract;
 # a compose volume mounts over this at runtime for persistence.
 RUN mkdir -p file/temp file/upload

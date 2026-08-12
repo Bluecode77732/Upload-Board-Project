@@ -12,6 +12,38 @@
 
 ## [Unreleased]
 
+### 변경
+- **`Dockerfile`/`docker-compose.yml`: 빌드 속도, 이미지 크기, 로컬 dev 튜닝.**
+  `pnpm install --frozen-lockfile`가 이제 BuildKit 캐시 마운트
+  (`--mount=type=cache,id=pnpm-store,target=/pnpm-store` + `--store-dir /pnpm-store`) 위에서
+  실행되어, lockfile 변경으로 레이어 캐시가 무효화되더라도 pnpm의 콘텐츠 주소 저장소(store)는
+  유지되므로 의존성이 바뀔 때마다 레지스트리에서 패키지를 전부 다시 받지 않습니다 — 빌드
+  전용이며 런타임에는 영향이 없습니다. production 스테이지는 더 이상 `package.json`을
+  복사하지 않습니다: `backend/` 어디에서도 런타임에 이를 읽지 않고(`require`/`readFileSync`
+  사용처를 grep으로 확인; Swagger 버전은 `main.ts`에 `'1.0'`으로 하드코딩됨) 죽은 파일이었기
+  때문입니다. `docker-compose.yml`의 `db`/`api` 서비스는 로그 증가를 제한합니다(`json-file`
+  드라이버, `max-size: 10m`, `max-file: 3`) — 기본 드라이버는 크기 제한이 없어 오래 켜두는
+  로컬 dev 컨테이너에서 로그가 무한정 쌓일 수 있었습니다. 스테이지 이름을 `build`/`runtime`에서
+  `development`/`production`으로 변경했습니다(순수 라벨 변경 — 다른 파일이 `--target`/
+  `--from=`으로 기존 별칭을 참조하지 않음을 확인함). distroless/multi-arch와 compose
+  `restart` 정책은 검토했지만 적용하지 않았습니다: 전자는 ADR 0030의 미충족 전제조건으로 이미
+  보류된 상태이고, 후자는 편의성과 크래시 루프를 조용히 감추는 것 사이의 실질적인 트레이드오프가
+  있어 이번에 임의로 결정하지 않았습니다.
+
+### 수정
+- **`Dockerfile`: `pnpm prune --prod`가 무한정 멈추는 문제** — 위 캐시 마운트 변경 때문에
+  발생했습니다. `pnpm install`에 붙인 `--mount=type=cache`는 그 RUN 명령에만 존재하는데,
+  다음 RUN(`pnpm build && pnpm prune --prod`)에는 더 이상 `/pnpm-store`가 없었고,
+  `pnpm prune`이 더 이상 읽을 수 없는 store에서 링크된 `node_modules`를 발견하고는
+  "처음부터 지우고 재설치할까요? (Y/n)"라는 대화형 프롬프트로 넘어갔습니다. Docker 빌드에는
+  표준 입력이 없으므로 이 프롬프트는 영원히 응답을 받지 못하고 빌드가 멈춥니다(네트워크가
+  느려서가 아니라 이것이 앞선 검증 빌드가 끝나지 않았던 진짜 이유이며, 그 과정에서 남은
+  orphan BuildKit 세션 두 개를 이후 `docker builder prune`으로 정리해야 했습니다).
+  `pnpm prune`에는 store 경로를 지정할 `--store-dir` 옵션이 없어서(`pnpm prune --help`로
+  확인) 같은 캐시(`id=pnpm-store`)를 build+prune RUN에도 마운트해 두 단계 모두에서 store가
+  보이게 하는 방식으로 고쳤습니다. Dockerfile을 읽는 것만으로는 못 잡고, 실제로
+  `docker build`를 실행해서야 발견했습니다.
+
 ### 추가
 - **`frontend/`: Posts를 홈으로 승격, 파일 보드를 `/files`로 이동 — 게시글/댓글 보드 UI를 위한
   라우팅·타입 기반 작업**(백엔드 Stage 3, ADR 0021/0023/0024). `App.tsx`: `/`는 이제
@@ -85,6 +117,11 @@
   2026-08-08 기준으로 표기 — 그간 랜딩한 스토리지 포트-어댑터([ADR 0029](ADR/0029-storage-port-adapter.ko.md)),
   컨테이너·배포 하드닝([ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)–[ADR 0034](ADR/0034-https-termination-stance.ko.md)),
   기본 Kubernetes 매니페스트(`k8s/`)를 반영. 문서 전용.
+- **Istio(서비스 메시)를 DevOps 스택에 추가, Terraform 이후 예정** — Stage 4 상태 표에 신규
+  🆕 구성요소 행을 추가하고 모든 스택 목록(현재 위치, 6절 실행 순번, Stage 4 헤더 + 도입 행,
+  `CLAUDE.md` 요약)에 명시: Kubernetes 클러스터 위의 서비스 메시(트래픽 관리, 워크로드 간
+  mTLS, 메시 텔레메트리를 Prometheus/Grafana로)로, Terraform으로 프로비저닝된 클러스터가
+  생긴 뒤 도입 — 향후 다중 서비스 확장을 내다본 것. 착수 시 자체 ADR. 문서 전용.
 
 ### 제거
 - **`frontend/src/features/admin/AdminPage.tsx`와 그 `/admin` 라우트** (ROADMAP Stage 5

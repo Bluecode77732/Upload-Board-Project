@@ -21,6 +21,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    # Default json-file driver has no size cap; bound it so a long-running
+    # local dev container doesn't fill the host disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
 
   # One-shot: applies committed migrations, then exits. Separated from `api`'s
   # boot so a scaled `api` never races `migration:run` against the same DB
@@ -58,6 +65,11 @@ services:
       # Linux hosts: the image runs as uid 1001 (ADR 0030) — chown this
       # directory once (`sudo chown -R 1001:1001 file/`) if writes fail.
       - ./file:/app/file
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
 
 volumes:
   db-data:
