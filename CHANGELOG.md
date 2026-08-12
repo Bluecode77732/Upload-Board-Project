@@ -13,23 +13,27 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
-- **arm64 support for the Docker image — `bcrypt` rebuilds from source there**
-  ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.md), amends
-  [ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)'s "target architecture
-  stays x64" stance). Motivated by publishing a single multi-platform image
+- **arm64 support for the Docker image — `bcrypt` already works there, no compile
+  needed** ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.md), corrects
+  [ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)'s "every bcrypt
+  prebuild is x64" claim). Motivated by publishing a single multi-platform image
   (`docker buildx build --platform linux/amd64,linux/arm64`) rather than the
   Terraform/node-group decision ADR 0030 anticipated. Investigating surfaced that
   pnpm 10 blocks dependency install scripts by default (`pnpm install`'s own
-  `Ignored build scripts: ... bcrypt` warning) — harmless on amd64, where bcrypt's
-  bundled glibc prebuilt binary loads without needing its script (verified locally),
-  but exactly the fallback arm64 needs, since no arm64 prebuild exists.
-  `package.json`'s `pnpm.onlyBuiltDependencies` now lists `bcrypt`, so its install
-  script is allowed to run and falls back to a `node-gyp` source compile on arm64;
-  the `development` build stage already has the full toolchain this needs. No
-  Dockerfile change beyond a comment — the official `node:24.8.0` tag already
-  resolves per-platform under `buildx`. Not yet verified against real arm64
-  hardware or QEMU emulation; `bcryptjs` stays the documented fallback if that
-  path proves too slow or unreliable.
+  `Ignored build scripts: ... bcrypt` warning), which combined with ADR 0030's
+  claim first looked like two compounding arm64 problems — `package.json` gained
+  `pnpm.onlyBuiltDependencies: ["bcrypt"]` to approve the script and let it fall
+  back to a `node-gyp` compile there, and this section originally said so.
+  **That was wrong**, caught by actually running it: `docker run --platform
+  linux/arm64 node:24.8.0 sh -c "npm install bcrypt"` shows only `node-gyp-build`
+  in the log — no compiler output at all — and `require('bcrypt').hashSync(...)`
+  succeeds in that same container. `bcrypt@6.0.0` bundles a working arm64/glibc
+  prebuild, resolved by `node-gyp-build` reading files already unpacked from the
+  tarball, not by a script — so pnpm's script-blocking was never a real threat to
+  it on either architecture. `onlyBuiltDependencies` stays in `package.json` as a
+  zero-cost safety net (guards a future version/platform that might actually lack
+  a bundled prebuild) but fixes nothing today. Verified via the isolated arm64
+  container run above, not yet via this Dockerfile's own `pnpm install`.
 
 ### Changed
 - **`Dockerfile`/`docker-compose.yml`: build speed, image size, and local-dev tuning.**

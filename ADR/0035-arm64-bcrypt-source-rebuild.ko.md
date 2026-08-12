@@ -1,68 +1,84 @@
-# ADR 0035: arm64 지원 — `onlyBuiltDependencies`로 bcrypt 소스 재컴파일
+# ADR 0035: arm64 지원 — bcrypt는 이미 잘 동작함, `onlyBuiltDependencies`는 안전장치로 유지
 
 - 상태: 승인됨
 - 날짜: 2026-08-12
 - 개정 대상: [ADR 0030](0030-container-non-root-and-arch-stance.ko.md) (결정: "타겟
-  아키텍처는 당분간 x64 유지 — 알려진 제약으로 기록만 하고 해결하지 않음")
+  아키텍처는 당분간 x64 유지" — 아래에서 단순 보류가 아니라 정정함)
 - English: [0035-arm64-bcrypt-source-rebuild.md](0035-arm64-bcrypt-source-rebuild.md)
 
 ## 맥락
 
-ADR 0030은 `bcrypt`가 glibc/x64용 prebuilt 바이너리만 제공한다는 점을 기록하고,
+ADR 0030은 `bcrypt`가 glibc/x64용 prebuilt 바이너리만 제공한다고 기록했고,
 arm64 지원 여부는 실제 배포 아키텍처가 정해진 뒤 "언젠가의 Terraform ADR"에서
-결정하기로 미뤄뒀습니다. 그런데 그 전제(Terraform 노드 그룹 결정)가 아니라 전혀
-다른 방향에서 필요가 생겼습니다 — 아키텍처를 통일한 하나의 이미지를 배포하려고
+결정하기로 미뤄뒀습니다. 그런데 그 전제가 아니라 전혀 다른 방향에서 필요가
+생겼습니다 — 아키텍처를 통일한 하나의 이미지를 배포하려고
 `docker buildx build --platform linux/amd64,linux/arm64`로 개인 Docker Hub
 저장소(`bluecode1775/sharenpo`)에 푸시하려는 시도였고, ADR 0030이 상정했던
 AWS/Terraform 노드 그룹 결정과는 무관합니다.
 
-실패 원인을 조사하다가 이전에는 기록되지 않았던 사실을 하나 더 발견했습니다:
-pnpm 10은 명시적으로 승인하지 않은 의존성의 설치 스크립트를 기본적으로 차단합니다
-(`pnpm install` 자체 출력: `Ignored build scripts: @scarf/scarf, bcrypt,
-unrs-resolver`). 다만 이게 amd64에서는 현재 아무 문제를 일으키지 않는다는 것도
-로컬에서 직접 확인했습니다(`node -e "require('bcrypt').hashSync(...)"` 정상 동작,
-기존 `node_modules` 기준) — `bcrypt`의 glibc/x64용 prebuilt 바이너리가 npm
-패키지 안에 이미 번들되어 있어서 별도 설치 스크립트 없이도 로드되기 때문입니다.
-반면 prebuilt가 아예 없는 arm64에서는, 원래라면 그 차단된 스크립트가 소스
-재컴파일로 폴백해야 하는 지점이라, "스크립트가 차단됐다"는 사실과 "해당
-아키텍처용 prebuilt가 없다"는 사실이 arm64에서만 겹쳐서 문제가 됩니다.
+조사 중에 pnpm 10이 기본적으로 의존성 설치 스크립트를 차단한다는 사실도
+발견했습니다(`pnpm install` 자체 출력: `Ignored build scripts: @scarf/scarf,
+bcrypt, unrs-resolver`). ADR 0030의 "prebuilt는 x64뿐" 주장과 합쳐서, 처음엔
+이걸 arm64에서 겹치는 두 가지 문제로 읽었습니다 — prebuilt도 없고, 소스
+컴파일로 폴백해야 할 설치 스크립트마저 차단됐다고요.
+
+**이 ADR은 원래 그 판단에 따라 작성·커밋됐는데, 틀렸습니다.** 실제로 끝까지
+검증해보니(`docker run --platform linux/arm64 node:24.8.0 sh -c "npm install
+bcrypt"` 실행 후 같은 컨테이너 안에서 `require('bcrypt').hashSync(...)` 호출)
+다음이 드러났습니다:
+- 설치 로그에는 `node-gyp-build` 실행만 있고 `gyp`/`make`/컴파일 관련 출력이
+  **전혀 없습니다**. `node-gyp-build`는 bcrypt가 쓰는 `prebuildify` 방식의 설치
+  헬퍼로, npm 패키지 안에 이미 번들된 prebuilt `.node` 바이너리를 찾아 쓰고,
+  그게 없을 때만 컴파일로 폴백합니다.
+- `bcrypt@6.0.0`은 `x64`뿐 아니라 동작하는 `linux-arm64`/glibc prebuilt도
+  번들하고 있습니다 — 이 프로젝트가 고정한 버전 기준으로는 ADR 0030의 전제가
+  성립하지 않습니다.
+- `require('bcrypt').hashSync(...)`가 QEMU 에뮬레이션 하에서 실제 해시를
+  만들어내며 성공했습니다 — 번들된 prebuilt가 실제로(단순히 존재만 하는 게
+  아니라) 쓰이고 있음을 확인한 것입니다.
+- prebuilt 탐색이 설치 시점의 *스크립트*가 아니라, tarball에서 이미 풀린 파일을
+  `node-gyp-build`가 require 시점에 읽는 방식으로 이뤄지기 때문에, pnpm의
+  스크립트 차단은 애초에 어느 아키텍처에서도 bcrypt에 위협이 된 적이
+  없습니다. 패키지 파일 압축 해제는 lifecycle 스크립트 실행 허용 여부와
+  무관하게 항상 일어나고, pnpm이 막는 건 스크립트 자체뿐입니다.
 
 ## 결정
 
-- **`package.json`의 `pnpm.onlyBuiltDependencies`에 `bcrypt`를 추가**해 설치
-  스크립트 실행을 명시적으로 승인합니다. amd64/glibc에서는 달라지는 게 없습니다
-  (원래도 동작하던 prebuilt 바이너리 경로, 이미 검증함). arm64에서는 이제 허용된
-  스크립트가 `node-gyp`를 통한 소스 컴파일로 폴백합니다 — `development` 빌드
-  스테이지는 이미 전체 컴파일러 툴체인(`node:24.8.0`, `-slim` 아님)을 갖고
-  있으므로 문제없습니다. bcrypt는 항상 그 스테이지에서만 빌드되고, `production`은
-  이미 빌드된 `node_modules`를 복사만 합니다.
-- Dockerfile 자체는 코멘트 외에 수정할 필요가 없었습니다: Docker Hub 공식
-  `node:24.8.0` 태그는 `buildx --platform` 하에서 타겟 플랫폼에 맞는 베이스를
-  자동으로 해석하고, full(비-slim) 버전은 소스 빌드에 필요한 컴파일러를 이미
-  포함하고 있습니다.
+- **기록을 정정합니다**: arm64는 `bcrypt`에 컴파일 단계가 필요 없고, 이 ADR이
+  원래 설명한 메커니즘으로는 애초에 컴파일이 일어날 일도 없었습니다. ADR
+  0030의 "타겟 아키텍처는 x64 유지" 제약은 단순 개정이 아니라 **철회**합니다 —
+  차단이 풀렸다는 정도가 아니라 실제로 동작함을 검증했습니다.
+- **`package.json`의 `pnpm.onlyBuiltDependencies: ["bcrypt"]`는 그래도
+  유지**합니다. 안전장치로서 비용이 없기 때문입니다: 지금은 아무 역할도 안 하지만
+  (prebuilt 경로가 애초에 스크립트를 필요로 한 적이 없으므로), 향후 `bcrypt`
+  버전이 올라가거나 이 프로젝트가 아직 타겟하지 않는 플랫폼에서 번들 prebuilt가
+  없어지는 경우가 오면, 그 폴백 컴파일이 이미 사전 승인되어 있어 조용히
+  스킵되는 것을 막아줍니다.
+- 코멘트 정정 외에 Dockerfile 변경은 필요 없습니다 — 아키텍처별로 빌드가
+  달라져야 할 이유가 없습니다.
 
 ## 검토했지만 채택하지 않은 대안
 
-- **`bcryptjs`(순수 JS, 네이티브 바인딩 없음, 모든 플랫폼에서 컴파일 없이 동일하게
-  동작)로 교체** — 이번엔 보류했을 뿐 완전히 배제하진 않았습니다. 아키텍처 문제
-  자체는 없애주지만 순수 JS 해싱이라 네이티브 바인딩보다 눈에 띄게 느리고,
-  `auth.service.spec.ts`를 비롯한 관련 목(mock)을 새 모듈 기준으로 재검증해야
-  합니다. 소스 재컴파일 경로가 `buildx`의 QEMU 에뮬레이션 하에서 너무 느리거나
-  불안정하다고 판명되면 쓸 대체안으로 남겨둡니다.
-- **ADR 0030의 x64 전용 방침을 그대로 유지** — 기각. 이 ADR이 지원하려는
-  멀티플랫폼 배포 자체가 깨지거나, arm64에서 비밀번호 해싱이 조용히 동작하지
-  않는 이미지가 나올 수 있습니다.
+- **`bcryptjs`로 교체** — 해결해야 할 문제 자체가 없어졌으므로 더 이상 진행하지
+  않습니다.
+- **`onlyBuiltDependencies`를 완전히 되돌리기** — 안전장치로 유지하는 쪽을
+  택했습니다(결정 참조): 비용이 없고, 지금은 잠재적이지만 실재하는 실패 모드를
+  막아줍니다(번들 prebuilt가 없는 미래 버전/플랫폼이 이 ADR이 조사한 것과 같은
+  차단된 스크립트 경로를 거쳐 조용히 실패하는 상황).
 
 ## 결과
 
-- `linux/arm64` 빌드는 이제 `development` 스테이지의 `pnpm install` 중에
-  `bcrypt`의 `node-gyp` 컴파일을 시도합니다 — **실제 arm64 하드웨어나 `buildx`의
-  QEMU 에뮬레이션으로는 아직 검증되지 않았습니다**. 동작을 확인했다고 단정하지
-  않고 미검증 제약으로 기록해두는 ADR 0030의 선례를 그대로 따릅니다. arm64
-  타겟의 빌드 시간은 (prebuilt 바이너리 fetch 대비 에뮬레이션 하의 네이티브
-  컴파일이라) 늘어날 가능성이 높습니다.
-- `linux/amd64` 동작은 변화 없음(bcrypt가 계속 prebuilt 바이너리를 로드함을
-  확인).
-- ADR 0030의 "타겟 아키텍처는 x64 유지" 항목만 개정하며, ADR 0030의 나머지 결정
-  (non-root 유저, `HEALTHCHECK`, distroless 보류)은 그대로입니다.
+- `linux/arm64` 빌드는 `linux/amd64`와 마찬가지로 bcrypt의 번들 prebuilt를
+  씁니다 — 컴파일 단계가 없고, 이 의존성 기준으로는 두 플랫폼 간 빌드 시간
+  차이가 의미 있게 없습니다. `--platform linux/arm64` 에뮬레이션 하의 독립된
+  `npm install bcrypt` + `require('bcrypt').hashSync(...)` 실행으로 검증했고,
+  전체 프로젝트의 `docker buildx build`로는 아직 검증하지 않았습니다(이
+  Dockerfile의 실제 `pnpm install` 안에서도 동일하게 성립하는지 최소 한 번은
+  확인해볼 가치가 있습니다).
+- 현재 고정된 `bcrypt@6.0.0` 기준으로 ADR 0030의 "bcrypt prebuilt는 전부 x64"
+  주장을 철회합니다 — ADR 0030의 나머지 결정(non-root 유저, `HEALTHCHECK`,
+  distroless 보류)은 그대로입니다.
+- 과정 기록: 이 ADR의 원래 버전은 나중에 뒤집힌 판단에 기반해 검증 없이
+  작성·커밋됐습니다 — Hallucination Prevention의 "모든 가정을 실제 출력으로
+  검증하라"는 코드뿐 아니라 ADR에도 그대로 적용됩니다.
 - 스키마, 엔티티, API 표면 변경 없음.

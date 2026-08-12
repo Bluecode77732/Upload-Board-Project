@@ -23,16 +23,15 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
 COPY . .
 
 # Compile to dist/, then drop dev deps so production only carries prod
-# modules. Two things this step depends on:
-#   - bcrypt: prebuilt glibc binary on amd64 (no recompile); on arm64, no
-#     prebuild exists, so pnpm.onlyBuiltDependencies (package.json) lets its
-#     install script run node-gyp against this stage's toolchain instead
-#     (ADR 0035, amends ADR 0030's "target architecture stays x64" stance —
-#     untested against real arm64 hardware/emulation).
-#   - same cache mount as the install step, required again here: `pnpm
-#     prune` looks up the store path node_modules was linked from, and
-#     without it mounted it can't verify the link — it prompts to wipe and
-#     reinstall instead, a prompt with no stdin, which just hangs the build.
+# modules. bcrypt needs no arch-specific handling here: it bundles a
+# working prebuild for both amd64 and arm64 glibc, resolved by
+# node-gyp-build at require-time from files already unpacked from the
+# tarball, not via a script — verified under arm64 emulation (ADR 0035,
+# corrects ADR 0030's "every bcrypt prebuild is x64" claim).
+# Same cache mount as the install step, required again here: `pnpm
+# prune` looks up the store path node_modules was linked from, and
+# without it mounted it can't verify the link — it prompts to wipe and
+# reinstall instead, a prompt with no stdin, which just hangs the build.
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
     pnpm build && pnpm prune --prod
 

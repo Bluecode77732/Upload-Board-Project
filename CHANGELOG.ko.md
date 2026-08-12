@@ -13,24 +13,28 @@
 ## [Unreleased]
 
 ### 추가
-- **Docker 이미지 arm64 지원 — `bcrypt`를 arm64에서는 소스로 재컴파일**
+- **Docker 이미지 arm64 지원 — `bcrypt`는 이미 잘 동작하고, 컴파일이 필요 없음**
   ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md), [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)의
-  "타겟 아키텍처는 x64 유지" 방침을 개정). ADR 0030이 상정했던 Terraform/노드
+  "bcrypt prebuilt는 전부 x64" 주장을 정정). ADR 0030이 상정했던 Terraform/노드
   그룹 결정이 아니라, 아키텍처를 통일한 단일 멀티플랫폼 이미지를
   (`docker buildx build --platform linux/amd64,linux/arm64`) 배포하려는 목적에서
   시작됐습니다. 조사 과정에서 pnpm 10이 기본적으로 의존성 설치 스크립트를
-  차단한다는 사실을 발견했습니다(`pnpm install` 자체 출력의
-  `Ignored build scripts: ... bcrypt` 경고) — amd64에서는 무해합니다. bcrypt의
-  번들된 glibc prebuilt 바이너리가 설치 스크립트 없이도 로드되기 때문입니다(로컬
-  검증 완료). 하지만 arm64용 prebuilt는 아예 없어서, 그 차단된 스크립트가 정확히
-  arm64에 필요한 폴백 경로였습니다. 이제 `package.json`의
-  `pnpm.onlyBuiltDependencies`에 `bcrypt`를 등록해 설치 스크립트 실행을
-  허용했고, arm64에서는 `node-gyp` 소스 컴파일로 폴백합니다 —
-  `development` 빌드 스테이지에는 이미 필요한 전체 툴체인이 있습니다. Dockerfile은
-  코멘트 외에 변경할 필요가 없었습니다 — 공식 `node:24.8.0` 태그가 `buildx` 하에서
-  이미 플랫폼별로 알아서 해석되기 때문입니다. 실제 arm64 하드웨어나 QEMU
-  에뮬레이션으로는 아직 검증되지 않았고, 이 경로가 너무 느리거나 불안정하다고
-  판명되면 `bcryptjs`를 대체안으로 기록해뒀습니다.
+  차단한다는 사실을 발견했고(`pnpm install` 자체 출력의
+  `Ignored build scripts: ... bcrypt` 경고), ADR 0030의 주장과 합쳐져 처음엔
+  arm64에서 겹치는 두 가지 문제로 보였습니다 — `package.json`에
+  `pnpm.onlyBuiltDependencies: ["bcrypt"]`를 추가해 스크립트 실행을 승인하고
+  arm64에서는 `node-gyp` 컴파일로 폴백하게 했고, 이 항목도 원래 그렇게
+  적었습니다. **틀렸습니다.** 실제로 돌려보고 나서야 잡았습니다: `docker run
+  --platform linux/arm64 node:24.8.0 sh -c "npm install bcrypt"`의 로그엔
+  `node-gyp-build` 실행만 있고 컴파일러 출력이 전혀 없으며, 같은 컨테이너 안에서
+  `require('bcrypt').hashSync(...)`가 성공합니다. `bcrypt@6.0.0`은 동작하는
+  arm64/glibc prebuilt도 번들하고 있고, 이건 스크립트가 아니라
+  `node-gyp-build`가 tarball에서 이미 풀린 파일을 읽어 찾아내는 방식이라 —
+  pnpm의 스크립트 차단은 어느 아키텍처에서도 bcrypt에 실질적인 위협이 된 적이
+  없습니다. `onlyBuiltDependencies`는 `package.json`에 비용 없는 안전장치로
+  남겨뒀지만(번들 prebuilt가 없는 미래 버전/플랫폼을 대비), 지금 당장 고치는
+  건 아무것도 없습니다. 위의 독립된 arm64 컨테이너 실행으로 검증했고, 이
+  Dockerfile 자체의 `pnpm install`로는 아직 검증하지 않았습니다.
 
 ### 변경
 - **`Dockerfile`/`docker-compose.yml`: 빌드 속도, 이미지 크기, 로컬 dev 튜닝.**
