@@ -30,9 +30,8 @@ function csvEscape(value: string): string {
     return `"${value.replace(/"/g, '""')}"`;
 }
 
-// 목적: 조회된 감사 로그 레코드를 CSV 텍스트로 직렬화한다.
-// 이유: /audit-log/export 엔드포인트가 없어 클라이언트에서 동일한 컬럼 구성으로 합성해야 한다.
-// 방법: 고정 컬럼 순서(id, createdAt, action, actorId, targetId, detail)로 각 값을 CSV 이스케이프해 조합한다.
+// Serializes fetched audit-log rows into CSV text with a fixed column order
+// (id, createdAt, action, actorId, targetId, detail), since there is no server-side export.
 function toCsv(rows: AuditLog[]): string {
     const header = CSV_COLUMNS.join(',');
     const lines = rows.map((row) =>
@@ -113,9 +112,9 @@ function LogsPage() {
         });
     };
 
-    // 목적: 현재 필터(action + userId)를 유지한 채 감사 로그 전체를 CSV로 내보낸다.
-    // 이유: 백엔드에 /audit-log/export가 없어, 목록 조회 API를 EXPORT_CAP까지 페이지 순회해 클라이언트에서 합성해야 한다.
-    // 방법: EXPORT_PAGE_SIZE(=take 상한 100)씩 skip을 늘려가며 수집하고, EXPORT_CAP 도달 또는 빈 페이지에서 멈춘 뒤 Blob으로 다운로드한다.
+    // exportCsv: pages through GET /audit-log at EXPORT_PAGE_SIZE (the DTO's take ceiling)
+    // with the current action/userId filters applied, stopping at EXPORT_CAP or an empty
+    // page, then downloads the result as CSV — there is no /audit-log/export endpoint.
     const exportCsv = async () => {
         setExporting(true);
         setExportError('');
