@@ -13,6 +13,22 @@
 ## [Unreleased]
 
 ### 추가
+- **`GET /user` 검색·정렬 추가, `GET /audit-log` 관련 유저 필터 추가** — 둘 다
+  `admin/README.md`의 "What was adapted" 표에 "이 백엔드가 지원하지 않아 제거"로
+  기록돼 있던 기능입니다(유저 검색은 admin 콘솔의 검색창, 관련 활동 필터는 유저 상세
+  패널용). `GetUsersDto`에 `search`(email에 대한 대소문자 구분 없는 부분일치, 와일드카드
+  이스케이프), `sortBy`(`createdAt`|`email`|`id`, `USER_SORT_FIELDS`로 화이트리스트),
+  `order`를 추가해 `GetFilesDto`의 ADR 0021 형태를 그대로 따랐습니다. `UserService.findAll`은
+  단순 `findAndCount()` 호출에서 `createQueryBuilder` 조립으로 바뀌었고, 페이지 경계를
+  결정적으로 만들기 위해 `id`를 tiebreaker로 덧붙입니다(`role`은 정렬 후보에서 의도적으로
+  제외 — 3단계 문자열 enum은 정렬 의미가 약함). `AuditLogQueryDto`에는 `userId`를
+  추가했고, `AuditLogService.findAll`은 `actorId = userId`와 `targetId = userId`를
+  OR로 묶어(둘 다 주어지면 각 브랜치에 `action`을 AND) "이 계정과 관련된 모든 기록"을
+  한쪽만이 아니라 양쪽 다 답하도록 했습니다. 마이그레이션은 없습니다 — `actorId`/`targetId`에는
+  아직 전용 인덱스가 없고(엔티티의 유일한 인덱스는 `(action, createdAt)`) 현재 데이터
+  규모에서는 무방하다고 판단했습니다; 실제 트래픽이 생기면 인덱스를 추가하면 됩니다. 새
+  ADR은 만들지 않았습니다 — 기존 GET /file parity 선례를 따랐습니다.
+
 - **Docker 이미지 arm64 지원 — `bcrypt`는 이미 잘 동작하고, 컴파일이 필요 없음**
   ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md), [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)의
   "bcrypt prebuilt는 전부 x64" 주장을 정정). ADR 0030이 상정했던 Terraform/노드

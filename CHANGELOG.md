@@ -13,8 +13,21 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
-- **arm64 support for the Docker image — `bcrypt` already works there, no compile
-  needed** ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.md), corrects
+- **`GET /user` search + sort, `GET /audit-log` related-user filter** — both were listed
+  as "removed, this backend doesn't support it" in `admin/README.md`'s "What was adapted"
+  table (user search for the admin console's search box; recent-activity filtering for its
+  user detail panel). `GetUsersDto` gains `search` (case-insensitive partial match on
+  email, wildcards escaped), `sortBy` (`createdAt`|`email`|`id`, whitelisted via
+  `USER_SORT_FIELDS`), and `order`, mirroring `GetFilesDto`'s ADR 0021 shape;
+  `UserService.findAll` moved from a bare `findAndCount()` to a `createQueryBuilder`
+  assembly with an `id` tiebreaker for deterministic paging (`role` deliberately excluded
+  from sort keys — a 3-tier string enum carries little sort meaning). `AuditLogQueryDto`
+  gains `userId`; `AuditLogService.findAll` ORs `actorId = userId` with
+  `targetId = userId` (ANDing `action` onto each branch when both are given) so the query
+  answers "everything related to this account", not just one side of it. No migration:
+  `actorId`/`targetId` have no dedicated index yet (the entity's only index is
+  `(action, createdAt)`) — acceptable at this project's data volume; add one if this
+  filter sees real traffic. No new ADR — follows the existing GET /file parity precedent. ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.md), corrects
   [ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)'s "every bcrypt
   prebuild is x64" claim). Motivated by publishing a single multi-platform image
   (`docker buildx build --platform linux/amd64,linux/arm64`) rather than the

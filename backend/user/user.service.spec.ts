@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ConfigService } from '@nestjs/config';
-import { DataSource } from 'typeorm';
+import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { UserRole } from 'backend/auth/role/role';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
 import { FileService } from 'backend/file/file.service';
@@ -26,10 +26,12 @@ jest.mock('bcrypt');
 
 describe('UserService', () => {
   let userService: UserService;
+  let userRepository: Repository<UserEntity>;
 
   const mockUserRepository = {
     findOne: jest.fn(),
     findAndCount: jest.fn(),
+    createQueryBuilder: jest.fn(),
     save: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
@@ -131,6 +133,9 @@ describe('UserService', () => {
     }).compile();
 
     userService = module.get<UserService>(UserService);
+    userRepository = module.get<Repository<UserEntity>>(
+      getRepositoryToken(UserEntity),
+    );
   });
 
   afterEach(() => {
@@ -138,18 +143,100 @@ describe('UserService', () => {
   });
 
   describe('findAll', () => {
-    it('should forward take/skip and sort deterministically by createdAt DESC, id DESC', async () => {
-      const rows = [{ id: 2 }, { id: 1 }];
-      mockUserRepository.findAndCount.mockResolvedValue([rows, 2]);
+    // The DTO instance the global pipe would hand the controller for a bare `GET /user`.
+    const listQuery = (overrides: Record<string, unknown> = {}) => ({
+      take: 20,
+      skip: 0,
+      sortBy: 'createdAt' as const,
+      order: 'DESC' as const,
+      ...overrides,
+    });
 
-      const result = await userService.findAll({ take: 10, skip: 5 });
+    let listQueryBuilder: Record<string, jest.Mock>;
 
-      expect(mockUserRepository.findAndCount).toHaveBeenCalledWith({
-        take: 10,
-        skip: 5,
-        order: { createdAt: 'DESC', id: 'DESC' },
-      });
-      expect(result).toEqual([rows, 2]);
+    beforeEach(() => {
+      listQueryBuilder = {
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        getManyAndCount: jest
+          .fn()
+          .mockResolvedValue([[{ id: 2 }, { id: 1 }], 2]),
+      };
+      jest
+        .spyOn(userRepository, 'createQueryBuilder')
+        .mockReturnValue(
+          listQueryBuilder as unknown as SelectQueryBuilder<UserEntity>,
+        );
+    });
+
+    it('should apply take and skip to the query', async () => {
+      const result = await userService.findAll(
+        listQuery({ take: 10, skip: 5 }),
+      );
+
+      expect(listQueryBuilder.take).toHaveBeenCalledWith(10);
+      expect(listQueryBuilder.skip).toHaveBeenCalledWith(5);
+      expect(result).toEqual([[{ id: 2 }, { id: 1 }], 2]);
+    });
+
+    it('should default to newest first with id as a tiebreaker', async () => {
+      await userService.findAll(listQuery());
+
+      expect(listQueryBuilder.orderBy).toHaveBeenCalledWith(
+        'user.createdAt',
+        'DESC',
+      );
+      expect(listQueryBuilder.addOrderBy).toHaveBeenCalledWith(
+        'user.id',
+        'DESC',
+      );
+    });
+
+    it('should map an allowed sort key to its column instead of interpolating it', async () => {
+      await userService.findAll(listQuery({ sortBy: 'email', order: 'ASC' }));
+
+      expect(listQueryBuilder.orderBy).toHaveBeenCalledWith(
+        'user.email',
+        'ASC',
+      );
+      expect(listQueryBuilder.addOrderBy).toHaveBeenCalledWith(
+        'user.id',
+        'ASC',
+      );
+    });
+
+    it('should not duplicate the tiebreaker when sorting by id', async () => {
+      await userService.findAll(listQuery({ sortBy: 'id' }));
+
+      expect(listQueryBuilder.orderBy).toHaveBeenCalledWith('user.id', 'DESC');
+      expect(listQueryBuilder.addOrderBy).not.toHaveBeenCalled();
+    });
+
+    it('should search the email with a case-insensitive partial match', async () => {
+      await userService.findAll(listQuery({ search: 'alice' }));
+
+      expect(listQueryBuilder.andWhere).toHaveBeenCalledWith(
+        "user.email ILIKE :term ESCAPE '\\'",
+        { term: '%alice%' },
+      );
+    });
+
+    it('should escape LIKE wildcards so they match literally', async () => {
+      await userService.findAll(listQuery({ search: '100%_a\\b' }));
+
+      expect(listQueryBuilder.andWhere).toHaveBeenCalledWith(
+        "user.email ILIKE :term ESCAPE '\\'",
+        { term: '%100\\%\\_a\\\\b%' },
+      );
+    });
+
+    it('should ignore a whitespace-only search term', async () => {
+      await userService.findAll(listQuery({ search: '   ' }));
+
+      expect(listQueryBuilder.andWhere).not.toHaveBeenCalled();
     });
   });
 

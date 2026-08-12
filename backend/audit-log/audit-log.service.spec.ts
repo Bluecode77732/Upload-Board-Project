@@ -79,5 +79,39 @@ describe('AuditLogService', () => {
         skip: 0,
       });
     });
+
+    it('should OR actorId/targetId when userId is given without an action', async () => {
+      mockRepository.findAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({ userId: 3, take: 20, skip: 0 });
+
+      expect(mockRepository.findAndCount).toHaveBeenCalledWith({
+        where: [{ actorId: 3 }, { targetId: 3 }],
+        order: { createdAt: 'DESC' },
+        take: 20,
+        skip: 0,
+      });
+    });
+
+    it('should AND action onto each userId branch when both are given', async () => {
+      mockRepository.findAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll({
+        userId: 3,
+        action: 'ROLE_CHANGE',
+        take: 20,
+        skip: 0,
+      });
+
+      expect(mockRepository.findAndCount).toHaveBeenCalledWith({
+        where: [
+          { action: 'ROLE_CHANGE', actorId: 3 },
+          { action: 'ROLE_CHANGE', targetId: 3 },
+        ],
+        order: { createdAt: 'DESC' },
+        take: 20,
+        skip: 0,
+      });
+    });
   });
 });

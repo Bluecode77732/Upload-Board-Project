@@ -128,12 +128,14 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 **사용자** — 사용자 생성은 `POST /auth/register`이며 `POST /user`는 없습니다.
 역할: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md))
 - `GET /user` — 사용자 목록 (admin만). `take`(1–100, 기본 20), `skip`(기본 0)로
-  페이지네이션하며 `createdAt DESC`로 정렬됩니다; 선언되지 않은 쿼리 파라미터는 조용히
-  무시되지 않고 400 `VALIDATION_FAILED`로 거부됩니다 — 전역 `ValidationPipe`의
-  `forbidNonWhitelisted`가 `?orderBy=email`같은 오타를 오류로 취급하는 것으로, `GET /file`이
-  이미 취하고 있는 것과 동일한 엄격 입력 방침입니다
-  ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)). 응답은 `GET /file`과 동일한
-  `[users, totalCount]` 튜플입니다
+  페이지네이션합니다; `search`는 email에 대한 대소문자 구분 없는 부분일치입니다(와일드카드는
+  이스케이프됨). `sortBy`(`createdAt`|`email`|`id`, 기본 `createdAt`)와
+  `order`(`ASC`|`DESC`, 기본 `DESC`)로 정렬을 제어하며, `id`가 항상 tiebreaker로
+  덧붙습니다 — `GET /file`이 이미 갖고 있는 것과 같은 검색/정렬 형태입니다
+  ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)). 선언되지 않은 쿼리
+  파라미터는 조용히 무시되지 않고 400 `VALIDATION_FAILED`로 거부됩니다 — 전역
+  `ValidationPipe`의 `forbidNonWhitelisted`가 `?orderby=email`같은 오타를 오류로
+  취급합니다. 응답은 `GET /file`과 동일한 `[users, totalCount]` 튜플입니다
 - `GET /user/:id` — 사용자 조회
 - `PATCH /user/:id` — 사용자 수정 (본인, 또는 자신보다 낮은 role의 계정에 대해서만 동작하는
   admin/superadmin — admin은 동급 admin이나 superadmin은 수정할 수 없다)
@@ -225,7 +227,7 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 작성자 본인이나 admin의 몫이며, 그 외 누구의 것도 아니다.
 
 **감사 로그**
-- `GET /audit-log` — ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE / COMMENT_DELETE 기록 조회 (admin만; 페이지네이션, `?action` 필터)
+- `GET /audit-log` — ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE / COMMENT_DELETE 기록 조회 (admin만; 페이지네이션, `?action` 필터). `?userId`는 해당 유저가 actor이거나 target인 기록만 반환합니다(둘 다 주어지면 두 필터가 AND로 묶입니다)
 
 **헬스 체크** (운영용 — 애플리케이션 소비자가 아니라 로드밸런서/오케스트레이터
 프로브를 위한 것이며, 설계상 인증 없음, [ADR 0031](ADR/0031-health-and-readiness-endpoints.ko.md))

@@ -127,11 +127,14 @@ All endpoints except `/auth/*` require a Bearer access token.
 **User** — user creation is `POST /auth/register`; there is no `POST /user`.
 Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.md))
 - `GET /user` — list users (admin only). `take` (1–100, default 20) and `skip` (default 0)
-  paginate, sorted `createdAt DESC`; an undeclared query param is rejected as 400
-  `VALIDATION_FAILED` rather than silently ignored — the global `ValidationPipe`'s
-  `forbidNonWhitelisted` treats a typo like `?orderBy=email` as an error, the same strict-input
-  stance `GET /file` already takes ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)).
-  Response is a `[users, totalCount]` tuple, matching `GET /file`
+  paginate; `search` does a case-insensitive partial match on email (wildcards escaped);
+  `sortBy` (`createdAt`|`email`|`id`, default `createdAt`) and `order` (`ASC`|`DESC`,
+  default `DESC`) control sort, with `id` always added as a tiebreaker — the same
+  search/sort shape `GET /file` already has
+  ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)). An undeclared query param is
+  rejected as 400 `VALIDATION_FAILED` rather than silently ignored — the global
+  `ValidationPipe`'s `forbidNonWhitelisted` treats a typo like `?orderby=email` as an
+  error. Response is a `[users, totalCount]` tuple, matching `GET /file`
 - `GET /user/:id` — get a user
 - `PATCH /user/:id` — update a user (self, or an admin/superadmin acting on a
   strictly lower-ranked account — an admin cannot modify a peer admin or a superadmin)
@@ -227,7 +230,9 @@ deleting are the comment author's or an admin's, and nobody else's.
 
 **Audit log**
 - `GET /audit-log` — review ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE /
-  COMMENT_DELETE records (admin only; paginated, `?action` filter)
+  COMMENT_DELETE records (admin only; paginated, `?action` filter). `?userId` returns
+  only records where that user was the actor or the target (the two filters AND
+  together when both are given)
 
 **Health** (operational — for load-balancer/orchestrator probes, not application
 consumers; unauthenticated by design, [ADR 0031](ADR/0031-health-and-readiness-endpoints.md))

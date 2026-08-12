@@ -8,7 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { GetUsersDto } from './dto/get-users.dto';
+import { GetUsersDto, UserSortField } from './dto/get-users.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserEntity } from './entity/user.entity';
 import { DataSource, Repository } from 'typeorm';
@@ -20,10 +20,20 @@ import { AuditLogService } from 'backend/audit-log/audit-log.service';
 import { FileService } from 'backend/file/file.service';
 import { PostService } from 'backend/post/post.service';
 import { CommentService } from 'backend/comment/comment.service';
+import { escapeLikePattern } from 'backend/common/escape-like-pattern';
 import {
   FILE_STORAGE,
   type FileStorage,
 } from 'backend/storage/file-storage.interface';
+
+// The sole bridge from a client sort key to a column (ADR 0021 pattern). Typed as a total
+// Record over UserSortField, so a key added to USER_SORT_FIELDS without a column here fails
+// to compile — the whitelist cannot silently drift out of sync with the query.
+const SORT_COLUMN: Record<UserSortField, string> = {
+  createdAt: 'user.createdAt',
+  email: 'user.email',
+  id: 'user.id',
+};
 
 @Injectable()
 export class UserService {
@@ -44,19 +54,34 @@ export class UserService {
     private readonly storage: FileStorage,
   ) {}
 
-  // 목적: 관리자용 전체 유저 목록을 개수와 함께 반환한다.
-  // 이유: 기존 findAndCount()가 무제한으로 전체 테이블을 반환해 Never Do G2(목록 페이지네이션 필수)를
-  //       위반하고 있었다 — ROADMAP 실행순서 #2로 확정된 독립 부채.
-  // 방법: GetFilesDto와 동일한 take/skip 경계를 받고, createdAt DESC + id 타이브레이커로 고정 정렬해
-  //       페이지 경계가 결정적이게 한다(검색/정렬 파라미터는 이번 범위에서 제외 — ADR 0021과 달리 클라이언트
-  //       에 노출하지 않음).
+  // 목적: 관리자용 유저 목록을 이메일 검색·화이트리스트 정렬과 함께 개수째 반환한다.
+  // 이유: 기존 findAndCount()가 검색·정렬 없이 무제한 전체 테이블을 반환해 Never Do G2(목록 페이지네이션
+  //       필수)를 위반하고 있었다(ROADMAP 실행순서 #2). admin 콘솔의 유저 검색은 이 백엔드가 지원하지
+  //       않아 제거됐던 기능인데(admin/README.md "What was adapted"), GET /file은 이미 ADR 0021로 이
+  //       패턴(search/sortBy/order)을 갖고 있어 GET /user만 뒤처져 있었다.
+  // 방법: GetFilesDto와 동일한 QueryBuilder 조립 — 검색어는 와일드카드를 이스케이프한 ILIKE로 email에
+  //       적용하고, 정렬 컬럼은 SORT_COLUMN 매핑으로만 결정해(문자열이 직접 컬럼명으로 보간되지 않음)
+  //       id를 tiebreaker로 덧붙여 페이징을 안정화한다(정렬 없는 OFFSET은 순서가 미정의).
   async findAll(query: GetUsersDto): Promise<[UserEntity[], number]> {
-    const { take, skip } = query;
-    return this.userRepository.findAndCount({
-      take,
-      skip,
-      order: { createdAt: 'DESC', id: 'DESC' },
-    });
+    const { take, skip, search, sortBy, order } = query;
+
+    const queryBuilder = this.userRepository.createQueryBuilder('user');
+
+    const term = search?.trim();
+    if (term) {
+      queryBuilder.andWhere("user.email ILIKE :term ESCAPE '\\'", {
+        term: `%${escapeLikePattern(term)}%`,
+      });
+    }
+
+    queryBuilder.orderBy(SORT_COLUMN[sortBy], order);
+    // A unique tiebreaker makes the page boundary deterministic when the sort column ties;
+    // sorting by id already is one, so adding it twice would only duplicate the clause.
+    if (sortBy !== 'id') {
+      queryBuilder.addOrderBy('user.id', order);
+    }
+
+    return queryBuilder.take(take).skip(skip).getManyAndCount();
   }
 
   async findOne(id: number) {

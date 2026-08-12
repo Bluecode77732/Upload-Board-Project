@@ -38,12 +38,16 @@ export class UserController {
   @ApiResponse({
     status: 200,
     description:
-      'A [users, totalCount] tuple. Defaults to the 20 newest accounts (createdAt DESC); take/skip paginate (ROADMAP execution order #2).',
+      'A [users, totalCount] tuple. Defaults to the 20 newest accounts (createdAt DESC); ' +
+      'take/skip paginate (ROADMAP execution order #2). search does a case-insensitive ' +
+      'partial match on email; sortBy (createdAt|email|id, default createdAt) and order ' +
+      '(ASC|DESC, default DESC) control sort, with id always added as a tiebreaker (ADR 0021 parity).',
   })
   @ApiResponse({
     status: 400,
     description:
-      'VALIDATION_FAILED — take is out of 1–100, skip is negative, or the request carries a ' +
+      'VALIDATION_FAILED — take is out of 1–100, skip is negative, search exceeds 100 ' +
+      'characters, sortBy/order is not one of the accepted values, or the request carries a ' +
       "query parameter GetUsersDto doesn't declare (e.g. a typo like ?orderBy=email). The " +
       'global ValidationPipe runs forbidNonWhitelisted, so an unrecognized parameter is ' +
       'rejected rather than silently ignored — the same strict-input stance GET /file already ' +
