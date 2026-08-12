@@ -9,6 +9,13 @@ FROM node:24.8.0 AS development
 WORKDIR /app
 RUN corepack enable
 
+# Without this, pnpm's own confirmation prompts (e.g. "modules directory will
+# be removed and reinstalled from scratch" on a store-dir mismatch between the
+# install step's --store-dir and a later plain `pnpm build`) block forever: a
+# Docker RUN step has no stdin/TTY to answer (Y/n), so the build just hangs.
+# CI=true is the standard signal pnpm (and most JS CLIs) checks to skip these.
+ENV CI=true
+
 # Manifests only, before the rest of the source — this layer (and the
 # install below) stays cached until the lockfile itself changes.
 COPY package.json pnpm-lock.yaml ./
