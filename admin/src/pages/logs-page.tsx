@@ -1,27 +1,59 @@
 // Purpose: read-only view of the privileged-action audit trail (backend ADR 0013).
-// Usage: rendered at /logs; linked from every page's nav bar.
+// Usage: rendered at /logs; linked from every page's nav bar, and from users-page.tsx's
+// "View all" link (`/logs?userId={id}`).
 // Rationale: rewritten from the imported Chat Project page, which targeted a userId/from/to
-// filter set, a client-side sort toggle, and a CSV export this API does not have — see
+// filter set, a client-side sort toggle, and a CSV export this API did not have — see
 // admin/README.md's backlog table. GET /audit-log's order is server-fixed at createdAt DESC
-// (no sort parameter exists), and its only filter is `action`.
+// (no sort parameter exists). `AuditLogQueryDto` gained `userId` (matches actor or target)
+// 2026-08-12; this page now reads it from the URL. There is still no `/audit-log/export`
+// endpoint, so CSV export is synthesized client-side by paging through the existing filtered
+// query and capping at EXPORT_CAP records.
 
 import { useEffect, useState } from 'react';
 import api from '../api/axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/auth.store';
-
-interface AuditLog {
-    id: number;
-    actorId: number;
-    targetId: number | null;
-    action: string;
-    detail: string | null;
-    createdAt: string;
-}
+import { actionColor, type AuditLog } from '../lib/audit';
 
 // Mirrors backend/audit-log/dto/audit-log-query.dto.ts's AUDIT_ACTIONS exactly.
 const ACTIONS = ['ROLE_CHANGE', 'USER_DELETE', 'FILE_DELETE', 'POST_DELETE', 'COMMENT_DELETE'];
 const TAKE = 20;
+// AuditLogQueryDto.take is capped at 100 (@Max(100)) — the largest page size export can
+// request per round trip.
+const EXPORT_PAGE_SIZE = 100;
+// Hard ceiling on rows included in a CSV download, independent of the real total — an
+// admin who needs more narrows the filter instead of exporting an unbounded file.
+const EXPORT_CAP = 1000;
+const CSV_COLUMNS = ['id', 'createdAt', 'action', 'actorId', 'targetId', 'detail'] as const;
+
+function csvEscape(value: string): string {
+    return `"${value.replace(/"/g, '""')}"`;
+}
+
+// 목적: 조회된 감사 로그 레코드를 CSV 텍스트로 직렬화한다.
+// 이유: /audit-log/export 엔드포인트가 없어 클라이언트에서 동일한 컬럼 구성으로 합성해야 한다.
+// 방법: 고정 컬럼 순서(id, createdAt, action, actorId, targetId, detail)로 각 값을 CSV 이스케이프해 조합한다.
+function toCsv(rows: AuditLog[]): string {
+    const header = CSV_COLUMNS.join(',');
+    const lines = rows.map((row) =>
+        [row.id, row.createdAt, row.action, row.actorId, row.targetId ?? '', row.detail ?? '']
+            .map((value) => csvEscape(String(value)))
+            .join(','),
+    );
+    return [header, ...lines].join('\n');
+}
+
+function downloadCsv(csv: string, filename: string) {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
 
 function LogsPage() {
     const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -30,14 +62,27 @@ function LogsPage() {
     const [action, setAction] = useState('');
     const [page, setPage] = useState(1);
     const [loadError, setLoadError] = useState('');
+    const [exporting, setExporting] = useState(false);
+    const [exportError, setExportError] = useState('');
+    const [exportCapped, setExportCapped] = useState(false);
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const clearTokens = useAuthStore((s) => s.clearTokens);
 
+    // Derived, not stateful — the URL (`?userId=`) is the single source of truth for this
+    // filter so a fresh navigation from users-page.tsx's "View all" link (`/logs?userId={id}`)
+    // is reflected with no separate sync step.
+    const userIdParam = searchParams.get('userId');
+    const userId = userIdParam !== null && /^\d+$/.test(userIdParam) ? Number(userIdParam) : null;
+
     // setLoading(true) is intentionally NOT in this effect body (react-hooks/set-state-in-effect) —
-    // changeAction() and changePage() each set it before updating the dependency that re-triggers this.
+    // changeAction(), changePage(), and clearUserFilter() each set it before updating the
+    // dependency that re-triggers this.
     useEffect(() => {
         let cancelled = false;
-        api.get('/audit-log', { params: { action: action || undefined, take: TAKE, skip: (page - 1) * TAKE } })
+        api.get('/audit-log', {
+            params: { action: action || undefined, userId: userId ?? undefined, take: TAKE, skip: (page - 1) * TAKE },
+        })
             .then((res) => {
                 if (cancelled) return;
                 const [data, count] = res.data as [AuditLog[], number];
@@ -48,7 +93,7 @@ function LogsPage() {
             .catch(() => { if (!cancelled) setLoadError('Failed to load logs.'); })
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [action, page]);
+    }, [action, page, userId]);
 
     const changeAction = (value: string) => {
         setLoading(true);
@@ -58,19 +103,51 @@ function LogsPage() {
 
     const changePage = (newPage: number) => { setLoading(true); setPage(newPage); };
 
+    const clearUserFilter = () => {
+        setLoading(true);
+        setPage(1);
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete('userId');
+            return next;
+        });
+    };
+
+    // 목적: 현재 필터(action + userId)를 유지한 채 감사 로그 전체를 CSV로 내보낸다.
+    // 이유: 백엔드에 /audit-log/export가 없어, 목록 조회 API를 EXPORT_CAP까지 페이지 순회해 클라이언트에서 합성해야 한다.
+    // 방법: EXPORT_PAGE_SIZE(=take 상한 100)씩 skip을 늘려가며 수집하고, EXPORT_CAP 도달 또는 빈 페이지에서 멈춘 뒤 Blob으로 다운로드한다.
+    const exportCsv = async () => {
+        setExporting(true);
+        setExportError('');
+        setExportCapped(false);
+        try {
+            const collected: AuditLog[] = [];
+            let skip = 0;
+            let serverTotal = Infinity;
+            while (collected.length < EXPORT_CAP && skip < serverTotal) {
+                const res = await api.get('/audit-log', {
+                    params: { action: action || undefined, userId: userId ?? undefined, take: EXPORT_PAGE_SIZE, skip },
+                });
+                const [data, count] = res.data as [AuditLog[], number];
+                serverTotal = count;
+                if (data.length === 0) break;
+                collected.push(...data);
+                skip += EXPORT_PAGE_SIZE;
+            }
+            const rows = collected.slice(0, EXPORT_CAP);
+            downloadCsv(toCsv(rows), 'audit-log.csv');
+            setExportCapped(rows.length < serverTotal);
+        } catch {
+            setExportError('Failed to export logs.');
+        } finally {
+            setExporting(false);
+        }
+    };
+
     const signOut = async () => {
         try { await api.post('/auth/signout'); } catch { /* best effort */ }
         clearTokens();
         navigate('/');
-    };
-
-    const actionColor = (action: string) => {
-        if (action === 'ROLE_CHANGE') return 'bg-indigo-100 text-indigo-700';
-        if (action === 'USER_DELETE') return 'bg-red-100 text-red-700';
-        if (action === 'FILE_DELETE') return 'bg-orange-100 text-orange-700';
-        if (action === 'POST_DELETE') return 'bg-rose-100 text-rose-700';
-        if (action === 'COMMENT_DELETE') return 'bg-amber-100 text-amber-700';
-        return 'bg-gray-100 text-gray-600';
     };
 
     const totalPages = Math.max(1, Math.ceil(total / TAKE));
@@ -100,10 +177,42 @@ function LogsPage() {
                             <option key={a} value={a}>{a}</option>
                         ))}
                     </select>
+
+                    {userId !== null && (
+                        <span data-testid="user-filter-banner" className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 rounded px-3 py-1">
+                            Filtering by user {userId}
+                            <button
+                                onClick={clearUserFilter}
+                                data-testid="clear-user-filter"
+                                className="text-blue-500 hover:text-blue-800 font-medium"
+                            >
+                                ✕
+                            </button>
+                        </span>
+                    )}
+
+                    <button
+                        onClick={() => { void exportCsv(); }}
+                        disabled={exporting}
+                        data-testid="export-csv-button"
+                        className="ml-auto text-sm px-3 py-1 rounded border border-blue-600 text-blue-600 hover:bg-blue-50 disabled:opacity-40"
+                    >
+                        {exporting ? 'Exporting...' : 'Export CSV'}
+                    </button>
                 </div>
 
                 {loadError && (
                     <p data-testid="load-error-message" className="mb-4 text-sm text-red-700 bg-red-50 rounded px-3 py-2">{loadError}</p>
+                )}
+
+                {exportError && (
+                    <p data-testid="export-error-message" className="mb-4 text-sm text-red-700 bg-red-50 rounded px-3 py-2">{exportError}</p>
+                )}
+
+                {exportCapped && (
+                    <p data-testid="export-capped-banner" className="mb-4 text-sm text-amber-700 bg-amber-50 rounded px-3 py-2">
+                        1000건까지만 포함되었습니다. 필터로 좁혀서 나머지를 확인하세요.
+                    </p>
                 )}
 
                 {loading ? (

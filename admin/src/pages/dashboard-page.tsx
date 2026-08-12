@@ -6,20 +6,15 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuthStore } from '../store/auth.store';
-
-interface AuditLog {
-    id: number;
-    actorId: number;
-    targetId: number | null;
-    action: string;
-    detail: string | null;
-    createdAt: string;
-}
+import { actionColor, type AuditLog } from '../lib/audit';
 
 // This backend has no presence/room concept (that was the Chat Project's domain) — the
-// dashboard's only cross-cutting stat is the user count, backed by GET /user's total.
+// dashboard's stat cards are the GET /user, GET /file, and GET /post totals (each read via
+// take=1 so the tuple's count is the only field used); no dedicated /stats endpoint exists.
 function DashboardPage() {
     const [userTotal, setUserTotal] = useState<number | null>(null);
+    const [fileTotal, setFileTotal] = useState<number | null>(null);
+    const [postTotal, setPostTotal] = useState<number | null>(null);
     const [recentLogs, setRecentLogs] = useState<AuditLog[]>([]);
     const [statsLoading, setStatsLoading] = useState(true);
     const navigate = useNavigate();
@@ -28,10 +23,14 @@ function DashboardPage() {
     useEffect(() => {
         Promise.all([
             api.get('/user', { params: { take: 1, skip: 0 } }),
+            api.get('/file', { params: { take: 1, skip: 0 } }),
+            api.get('/post', { params: { take: 1, skip: 0 } }),
             api.get('/audit-log', { params: { take: 5, skip: 0 } }),
         ])
-            .then(([usersRes, logsRes]) => {
+            .then(([usersRes, filesRes, postsRes, logsRes]) => {
                 setUserTotal((usersRes.data as [unknown[], number])[1]);
+                setFileTotal((filesRes.data as [unknown[], number])[1]);
+                setPostTotal((postsRes.data as [unknown[], number])[1]);
                 setRecentLogs((logsRes.data as [AuditLog[], number])[0]);
             })
             .finally(() => setStatsLoading(false));
@@ -41,15 +40,6 @@ function DashboardPage() {
         try { await api.post('/auth/signout'); } catch { /* best effort */ }
         clearTokens();
         navigate('/');
-    };
-
-    const actionColor = (action: string) => {
-        if (action === 'ROLE_CHANGE') return 'bg-indigo-100 text-indigo-700';
-        if (action === 'USER_DELETE') return 'bg-red-100 text-red-700';
-        if (action === 'FILE_DELETE') return 'bg-orange-100 text-orange-700';
-        if (action === 'POST_DELETE') return 'bg-rose-100 text-rose-700';
-        if (action === 'COMMENT_DELETE') return 'bg-amber-100 text-amber-700';
-        return 'bg-gray-100 text-gray-600';
     };
 
     return (
@@ -64,10 +54,18 @@ function DashboardPage() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                     <div data-testid="stat-users" className="bg-white rounded-xl shadow p-5">
                         <p className="text-sm text-gray-500 mb-1">Total Users</p>
                         <p className="text-3xl font-bold">{statsLoading ? '—' : userTotal}</p>
+                    </div>
+                    <div data-testid="stat-files" className="bg-white rounded-xl shadow p-5">
+                        <p className="text-sm text-gray-500 mb-1">Total Files</p>
+                        <p className="text-3xl font-bold">{statsLoading ? '—' : fileTotal}</p>
+                    </div>
+                    <div data-testid="stat-posts" className="bg-white rounded-xl shadow p-5">
+                        <p className="text-sm text-gray-500 mb-1">Total Posts</p>
+                        <p className="text-3xl font-bold">{statsLoading ? '—' : postTotal}</p>
                     </div>
                 </div>
 

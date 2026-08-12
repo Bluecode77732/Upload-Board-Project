@@ -11,6 +11,7 @@ import api from '../api/axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, type UserRole } from '../store/auth.store';
 import { ROLE_RANK, ROLE_LABEL } from '../auth/role';
+import { actionColor, type AuditLog } from '../lib/audit';
 
 interface User {
     id: number;
@@ -21,11 +22,25 @@ interface User {
 }
 
 const TAKE = 20;
+const SEARCH_DEBOUNCE_MS = 400;
+const RECENT_ACTIVITY_TAKE = 5;
 const ROLE_OPTIONS: UserRole[] = ['user', 'admin', 'superadmin'];
 const ROLE_COLOR: Record<UserRole, string> = {
     user: 'bg-gray-100 text-gray-600',
     admin: 'bg-purple-100 text-purple-700',
     superadmin: 'bg-red-100 text-red-700',
+};
+
+// Mirrors backend/user/dto/get-users.dto.ts's USER_SORT_FIELDS — `role` is deliberately
+// excluded there (a 3-tier string enum carries little sort meaning), so it is not a
+// clickable header here either.
+type SortField = 'id' | 'email' | 'createdAt';
+type SortOrder = 'ASC' | 'DESC';
+
+const COLUMN_LABEL: Record<SortField, string> = {
+    id: 'ID',
+    email: 'Email',
+    createdAt: 'Created',
 };
 
 // The frozen { code, message } contract (backend ADR 0011) — branch on code, not message.
@@ -52,16 +67,47 @@ function UsersPage() {
     const [refreshKey, setRefreshKey] = useState(0);
     const [actionMsg, setActionMsg] = useState('');
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [searchInput, setSearchInput] = useState('');
+    const [search, setSearch] = useState('');
+    const [sortBy, setSortBy] = useState<SortField>('createdAt');
+    const [order, setOrder] = useState<SortOrder>('DESC');
+    const [recentActivity, setRecentActivity] = useState<AuditLog[]>([]);
+    const [recentActivityLoading, setRecentActivityLoading] = useState(false);
 
     const navigate = useNavigate();
     const myRole = useAuthStore((s) => s.role);
     const clearTokens = useAuthStore((s) => s.clearTokens);
 
+    // Debounces searchInput into `search` (the value actually sent to GET /user) so every
+    // keystroke doesn't trigger a request; also resets to page 1 since a new search term
+    // invalidates the current page's offset. Guarded by a no-op check against the current
+    // `search` value — without it, the effect firing on mount (or after its own update)
+    // would setLoading(true) with no dependency change left to fetch and flip it back.
+    useEffect(() => {
+        const handle = setTimeout(() => {
+            const trimmed = searchInput.trim();
+            if (trimmed === search) return;
+            setLoading(true);
+            setSearch(trimmed);
+            setPage(1);
+        }, SEARCH_DEBOUNCE_MS);
+        return () => clearTimeout(handle);
+    }, [searchInput, search]);
+
     // setLoading(true) is intentionally NOT in this effect body (react-hooks/set-state-in-effect) —
-    // refresh() and changePage() each set it before updating the dependency that re-triggers this.
+    // refresh(), changePage(), toggleSort(), and the search debounce above each set it before
+    // updating the dependency that re-triggers this.
     useEffect(() => {
         let cancelled = false;
-        api.get('/user', { params: { take: TAKE, skip: (page - 1) * TAKE } })
+        api.get('/user', {
+            params: {
+                take: TAKE,
+                skip: (page - 1) * TAKE,
+                search: search || undefined,
+                sortBy,
+                order,
+            },
+        })
             .then((res) => {
                 if (cancelled) return;
                 const [data, count] = res.data as [User[], number];
@@ -71,11 +117,46 @@ function UsersPage() {
             .catch(() => { if (!cancelled) setActionMsg('Failed to load users.'); })
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [page, refreshKey]);
+    }, [page, refreshKey, search, sortBy, order]);
+
+    // Fetches the 5 most recent audit-log records naming this user (actor or target) for
+    // the detail panel's "Recent activity" section. No-op while the panel is closed —
+    // stale data is harmless since the panel that would show it is unmounted.
+    // setRecentActivityLoading(true) is intentionally NOT in this effect body
+    // (react-hooks/set-state-in-effect) — selectRow() sets it before selecting the user
+    // that re-triggers this, the same pattern refresh()/changePage() use above.
+    useEffect(() => {
+        if (!selectedUser) return;
+        let cancelled = false;
+        api.get('/audit-log', { params: { userId: selectedUser.id, take: RECENT_ACTIVITY_TAKE, skip: 0 } })
+            .then((res) => {
+                if (cancelled) return;
+                const [data] = res.data as [AuditLog[], number];
+                setRecentActivity(data);
+            })
+            .catch(() => { if (!cancelled) setRecentActivity([]); })
+            .finally(() => { if (!cancelled) setRecentActivityLoading(false); });
+        return () => { cancelled = true; };
+    }, [selectedUser]);
 
     const refresh = () => { setLoading(true); setRefreshKey((k) => k + 1); };
 
     const changePage = (next: number) => { setLoading(true); setPage(next); };
+
+    const selectRow = (u: User) => { setRecentActivityLoading(true); setSelectedUser(u); };
+
+    // toggleSort: clicking the active column flips its direction; clicking a different
+    // column switches to it, defaulting to ascending.
+    const toggleSort = (field: SortField) => {
+        setLoading(true);
+        if (sortBy === field) {
+            setOrder((o) => (o === 'ASC' ? 'DESC' : 'ASC'));
+        } else {
+            setSortBy(field);
+            setOrder('ASC');
+        }
+        setPage(1);
+    };
 
     const totalPages = Math.max(1, Math.ceil(total / TAKE));
 
@@ -181,6 +262,17 @@ function UsersPage() {
                     <p data-testid="action-message" className="mb-4 text-sm text-blue-700 bg-blue-50 rounded px-3 py-2">{actionMsg}</p>
                 )}
 
+                <div className="mb-4">
+                    <input
+                        type="text"
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        placeholder="Search by email..."
+                        data-testid="user-search-input"
+                        className="w-full max-w-sm text-sm border rounded px-3 py-2"
+                    />
+                </div>
+
                 {loading ? (
                     <p className="text-gray-500">Loading...</p>
                 ) : (
@@ -188,10 +280,20 @@ function UsersPage() {
                         <table className="w-full text-sm">
                             <thead className="bg-gray-100 text-left">
                                 <tr>
-                                    <th className="px-4 py-3">ID</th>
-                                    <th className="px-4 py-3">Email</th>
+                                    {(['id', 'email', 'createdAt'] as SortField[]).map((field) => (
+                                        <th
+                                            key={field}
+                                            onClick={() => toggleSort(field)}
+                                            data-testid={`user-sort-${field}`}
+                                            className="px-4 py-3 cursor-pointer select-none hover:bg-gray-200"
+                                        >
+                                            {COLUMN_LABEL[field]}
+                                            {sortBy === field && (
+                                                <span className="ml-1">{order === 'ASC' ? '▲' : '▼'}</span>
+                                            )}
+                                        </th>
+                                    ))}
                                     <th className="px-4 py-3">Role</th>
-                                    <th className="px-4 py-3">Created</th>
                                     <th className="px-4 py-3">Actions</th>
                                 </tr>
                             </thead>
@@ -200,18 +302,18 @@ function UsersPage() {
                                     <tr
                                         key={u.id}
                                         data-testid={`user-row-${u.id}`}
-                                        onClick={() => setSelectedUser(u)}
+                                        onClick={() => selectRow(u)}
                                         className={`border-t cursor-pointer hover:bg-gray-50${selectedUser?.id === u.id ? ' bg-blue-50' : ''}`}
                                     >
                                         <td className="px-4 py-3">{u.id}</td>
                                         <td className="px-4 py-3">{u.email}</td>
+                                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                                            {new Date(u.createdAt).toLocaleString()}
+                                        </td>
                                         <td className="px-4 py-3">
                                             <span data-testid={`user-role-${u.id}`} className={`px-2 py-0.5 rounded text-xs font-medium ${ROLE_COLOR[u.role]}`}>
                                                 {ROLE_LABEL[u.role]}
                                             </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
-                                            {new Date(u.createdAt).toLocaleString()}
                                         </td>
                                         <td className="px-4 py-3 flex gap-2 flex-wrap items-center" onClick={(e) => e.stopPropagation()}>
                                             {myRole === 'superadmin' && (
@@ -267,10 +369,8 @@ function UsersPage() {
             </div>
 
             {/* User detail panel — slides in from the right when a row is clicked. Shows
-                only fields the list response already carries; this backend has no per-user
-                audit-log filter (GET /audit-log takes no userId), so unlike the imported
-                page there is no recent-activity slice here (tracked as a backend follow-up
-                in ROADMAP.md > Unscheduled). */}
+                the fields the list response already carries, plus a "Recent activity"
+                slice from GET /audit-log?userId=... (actor or target, newest 5). */}
             {selectedUser && (
                 <div
                     className="fixed inset-0 z-40"
@@ -316,6 +416,40 @@ function UsersPage() {
                                 <span className="text-gray-500">Updated</span>
                                 <span className="text-gray-600">{new Date(selectedUser.updatedAt).toLocaleString()}</span>
                             </div>
+                        </div>
+
+                        <div className="border-t px-5 py-4">
+                            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-3">Recent activity</h3>
+                            {recentActivityLoading ? (
+                                <p className="text-sm text-gray-400">Loading...</p>
+                            ) : recentActivity.length === 0 ? (
+                                <p className="text-sm text-gray-400">No activity yet.</p>
+                            ) : (
+                                <ul data-testid="recent-activity-list" className="space-y-2">
+                                    {recentActivity.map((log) => (
+                                        <li key={log.id} data-testid={`recent-activity-${log.id}`} className="text-sm">
+                                            <div className="flex items-center justify-between">
+                                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${actionColor(log.action)}`}>
+                                                    {log.action}
+                                                </span>
+                                                <span className="text-gray-400 text-xs">
+                                                    {new Date(log.createdAt).toLocaleString()}
+                                                </span>
+                                            </div>
+                                            {log.detail && (
+                                                <p className="text-gray-500 text-xs mt-1">{log.detail}</p>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            <button
+                                onClick={() => navigate(`/logs?userId=${selectedUser.id}`)}
+                                data-testid="recent-activity-view-all"
+                                className="mt-3 text-sm text-blue-600 hover:underline"
+                            >
+                                View all →
+                            </button>
                         </div>
                     </div>
                 </div>

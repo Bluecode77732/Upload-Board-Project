@@ -73,10 +73,10 @@ REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" �
 | 로그아웃 라우트 | `POST /auth/signOut` | `POST /auth/signout` (소문자) | 로그아웃하는 모든 페이지에서 수정 |
 | 도메인 페이지 | `rooms-page.tsx`, `getOnlineUser`, `getUserNicknames` | 채팅방·접속 상태·닉네임이 없다 — 이 도메인은 **업로드된 영상 파일**이다 | `rooms-page.tsx`와 `graphql-operations.ts` 삭제; `App.tsx`에서 `/rooms` 라우트 제거; 삭제된 Apollo 계층에서만 쓰던 `rxjs`를 `package.json`에서 제거 |
 | 사용자 조작 | `POST /user/:id/ban` \| `/unban` \| `/force-logout` | **하나도 없다** — ROADMAP의 기본값은 여전히 "모더레이션 액션 없음" | `users-page.tsx`에서 세 가지 모두 삭제, 백엔드 쪽 대체 구현은 만들지 않았다(그것은 적응이 아니라 새 범위가 된다) |
-| 사용자 목록 조회 | `GET /user?page&take&sort&sortBy&search&status` | `take`/`skip`만, 고정 `createdAt DESC` 순서, 검색·정렬·상태 없음([ROADMAP 실행순서 #2](../ROADMAP.ko.md)) | `users-page.tsx`는 `take`/`skip`으로 페이지네이션한다; 검색창·정렬 토글 헤더·상태 필터는 제거했다(지금 보내면 400 `VALIDATION_FAILED` — `forbidNonWhitelisted`) |
-| 감사 로그 | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip`만; 고정 `createdAt DESC`; **`/export` 없음**, **`userId` 필터 없음** | `logs-page.tsx`는 액션 필터 + 페이지네이션만 남겼다; CSV 내보내기 버튼, 날짜 범위 필터, 사용자 필터는 제거했다 |
+| 사용자 목록 조회 | `GET /user?page&take&sort&sortBy&search&status` | `take`/`skip`만, 고정 `createdAt DESC` 순서, 검색·정렬·상태 없음([ROADMAP 실행순서 #2](../ROADMAP.ko.md)) | `users-page.tsx`는 `take`/`skip`으로 페이지네이션한다; 검색창·정렬 토글 헤더·상태 필터는 제거했다(지금 보내면 400 `VALIDATION_FAILED` — `forbidNonWhitelisted`). ~~제거~~ **2026-08-12 재도입**: `GetUsersDto`에 `search`(이메일 `ILIKE`)와 `sortBy`/`order`(`id`/`email`/`createdAt`, `role`은 제외)가 추가됐다; 검색창과 클릭 가능한 ID/Email/Created 헤더가 다시 생겼고, 서버에 존재하지 않는 `status` 필터는 여전히 없다 |
+| 감사 로그 | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip`만; 고정 `createdAt DESC`; **`/export` 없음**, **`userId` 필터 없음** | `logs-page.tsx`는 액션 필터 + 페이지네이션만 남겼다; CSV 내보내기 버튼, 날짜 범위 필터, 사용자 필터는 제거했다. `userId` ~~없음~~ **2026-08-12 추가**: `AuditLogQueryDto`가 이제 `userId`를 받는다(actor 또는 target과 매칭); `logs-page.tsx` 자체는 아직 URL에서 이 파라미터를 읽지 않는다 — `users-page.tsx`의 새 "View all" 링크가 `/logs?userId=…`로 이동시키며, `logs-page.tsx`가 그 쿼리 파라미터를 실제로 소비하도록 연결하는 작업은 후속 변경으로 남겨뒀다. `/export`는 여전히 없다 |
 | 페이징 모델 | `page` + `take` | `take` + `skip`(오프셋) ([ADR 0021](../ADR/0021-list-query-search-filter-sort.ko.md)) | 두 목록 페이지 모두 `skip = (page - 1) * take`를 계산하고, `{ data, total, page, take }`가 아니라 `[data, total]` 튜플 응답을 읽는다 |
-| 사용자별 감사 조각 | 사용자 페이지 상세 패널이 `GET /audit-log?userId=…`를 호출 | `userId` 필터가 존재하지 않는다 | **근사하지 않고 제거했다** — 아래 "열린 사항" 참고 |
+| 사용자별 감사 조각 | 사용자 페이지 상세 패널이 `GET /audit-log?userId=…`를 호출 | `userId` 필터가 존재하지 않는다 | **근사하지 않고 제거했다** — 아래 "열린 사항" 참고. ~~제거~~ **2026-08-12 복원**: `AuditLogQueryDto`에 `userId`가 생기면서, 상세 패널이 `GET /audit-log?userId={id}&take=5`(actor 또는 target)를 호출해 "Recent activity" 절을 보여준다 |
 | 사용자 삭제 | 확인 없는 `DELETE /user/:id` | 계정이 파일을 가진 경우 `?deleteFiles=true` 필수, 없으면 409 `USER_HAS_FILES` ([ADR 0020](../ADR/0020-account-deletion-cascade.ko.md)) | `deleteUser()`가 `USER_HAS_FILES`를 잡아 응답 `message`의 파일 개수를 보여주고, 재확인 후 `?deleteFiles=true`로 재시도한다 |
 | 에러 처리 | 그때그때의 상태 코드·메시지 검사 | 동결된 `{ code, message }` 계약 — `code`로 분기 ([ADR 0011](../ADR/0011-error-code-contract.ko.md)) | `users-page.tsx`는 모든 분기(`AUTH_LAST_SUPERADMIN`, `USER_HAS_FILES`, `USER_FILES_IN_USE`, `FORBIDDEN`)에서 `axios.isAxiosError`로 `err.response.data.code`를 읽는다 |
 | 배포 설정 | CSP가 Chat Project의 Railway 호스트로 고정된 `vercel.json` | **배포 대상이 없다**; AWS는 Stage 4 로드맵 항목 | 이전처럼 손대지 않았다 — 이번 작업 범위 밖 |
@@ -85,13 +85,15 @@ REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" �
 
 ## 이번 적응에서 내린 두 가지 결정
 
-1. **사용자별 감사 조각: 근사하지 않고 제거했다.** `GET /audit-log`에는 `userId` 필터가
-   없어서, 이식된 패널의 "이 사용자의 최근 로그" 절은 필터 없는 페이지를 가져와
-   클라이언트 쪽에서 걸러내는 방식으로만 흉내 낼 수 있었다 — 이 방식은 사용자의 실제
-   활동이 그 페이지 밖으로 밀려나면 오래된 항목을 조용히 빠뜨린다. 절을 제거하는 쪽이
-   정확하고, 흉내 내는 쪽은 그렇지 않다. 빠진 필터 자체는 이제
-   [ROADMAP.md](../ROADMAP.ko.md) > 미예정 항목에 백엔드 후속 작업으로 기록돼 있으며,
-   여기서 해결한 것은 아니다.
+1. **사용자별 감사 조각: 근사하지 않고 제거했다(2026-08-06); 2026-08-12 복원.**
+   `GET /audit-log`에는 `userId` 필터가 없어서, 이식된 패널의 "이 사용자의 최근 로그" 절은
+   필터 없는 페이지를 가져와 클라이언트 쪽에서 걸러내는 방식으로만 흉내 낼 수 있었다 — 이
+   방식은 사용자의 실제 활동이 그 페이지 밖으로 밀려나면 오래된 항목을 조용히 빠뜨린다.
+   절을 제거하는 쪽이 정확했고, 흉내 내는 쪽은 그렇지 않았다. 백엔드가
+   `AuditLogQueryDto.userId`를 얻으면서(2026-08-12, 이 결정이 기록해 둔
+   [ROADMAP.md](../ROADMAP.ko.md) > 미예정 항목의 후속 작업이 닫혔다) 패널의 "Recent
+   activity" 절이 클라이언트 쪽 필터링 없이 정확한 `GET /audit-log?userId={id}&take=5`
+   호출로 돌아왔다.
 2. **역할 변경 UI: 이식된 이진 토글이 아니라 3단계 `<select>`.** 이식된 승격/강등 토글은
    행을 두 상태 사이로만 옮길 수 있고 `superadmin`을 전혀 표현하지 못한다 —
    [ADR 0022](../ADR/0022-admin-console-import-from-chat-project.ko.md)가 이 콘솔이
@@ -126,8 +128,12 @@ pnpm e2e:seed    # superadmin 시딩. e2e/.env 필요(git 무시 대상)
 
 ## 열린 사항 (이번 작업으로 해결되지 않음)
 
-- **`GET /audit-log`에 `userId` 필터가 없다** — 위 "두 가지 결정" 참고. ROADMAP.md > 미예정
-  항목에 백엔드 후속 작업으로 기록돼 있다.
+- ~~`GET /audit-log`에 `userId` 필터가 없다~~ — **2026-08-12 해소**: `AuditLogQueryDto`가
+  이제 `userId`를 받는다; 위 "두 가지 결정" 참고.
+- **`logs-page.tsx`는 아직 자신의 URL에서 `userId` 쿼리 파라미터를 읽지 않는다** (2026-08-12
+  추가) — `users-page.tsx`의 상세 패널이 `/logs?userId={id}`로 링크하지만, `logs-page.tsx`는
+  여전히 `action`만 필터한다. `userId`를 읽어 적용하도록 연결하는 작업은 후속 변경으로
+  남겨뒀다.
 - **`PATCH /file/:id { userId }` 파일 이전 필드는 어떤 결정으로도 정당화된 적이 없다**
   (CLAUDE.md > 알려진 미해결 지점) — 이 콘솔과는 무관하지만, 이번 작업이 손대지 않았고
   해결된 것으로 가정해서는 안 되므로 여기 적어둔다.

@@ -75,10 +75,10 @@ findings; one backend change landed in between — see the `FORBIDDEN` row).
 | Sign-out route | `POST /auth/signOut` | `POST /auth/signout` (lower-case) | Fixed in every page that signs out |
 | Domain pages | `rooms-page.tsx`, `getOnlineUser`, `getUserNicknames` | No rooms, presence, or nicknames — this domain is **uploaded video files** | `rooms-page.tsx` and `graphql-operations.ts` deleted; the `/rooms` route removed from `App.tsx`; `rxjs` (only used by the deleted Apollo layer) dropped from `package.json` |
 | User actions | `POST /user/:id/ban` \| `/unban` \| `/force-logout` | **None exist** — ROADMAP's default stays "no moderation actions" | All three deleted from `users-page.tsx`, with no backend-side replacement built (that would be new scope, not adaptation) |
-| User list query | `GET /user?page&take&sort&sortBy&search&status` | `take`/`skip` only, fixed `createdAt DESC` order, no search/sort/status ([ROADMAP execution order #2](../ROADMAP.md)) | `users-page.tsx` paginates on `take`/`skip`; the search box, sort-toggle headers, and status filter were removed (they would 400 `VALIDATION_FAILED` today — `forbidNonWhitelisted`) |
-| Audit log | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip` only; fixed `createdAt DESC`; **no `/export`**, **no `userId` filter** | `logs-page.tsx` keeps only the action filter + pagination; the CSV export button, date-range filters, and user filter were removed |
+| User list query | `GET /user?page&take&sort&sortBy&search&status` | `take`/`skip` only, fixed `createdAt DESC` order, no search/sort/status ([ROADMAP execution order #2](../ROADMAP.md)) | `users-page.tsx` paginates on `take`/`skip`; the search box, sort-toggle headers, and status filter were removed (they would 400 `VALIDATION_FAILED` today — `forbidNonWhitelisted`). ~~Removed~~ **re-added 2026-08-12**: `GetUsersDto` gained `search` (email `ILIKE`) and `sortBy`/`order` (`id`/`email`/`createdAt`, no `role`); the search box and clickable ID/Email/Created headers came back, still no `status` filter (none exists server-side) |
+| Audit log | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip` only; fixed `createdAt DESC`; **no `/export`**, **no `userId` filter** | `logs-page.tsx` keeps only the action filter + pagination; the CSV export button, date-range filters, and user filter were removed. `userId` ~~missing~~ **added 2026-08-12**: `AuditLogQueryDto` now accepts `userId` (matches actor or target); `logs-page.tsx` itself does not yet read it from the URL — `users-page.tsx`'s new "View all" link navigates to `/logs?userId=…`, and wiring `logs-page.tsx` to consume that query param is left for a follow-up change. `/export` still does not exist |
 | Paging model | `page` + `take` | `take` + `skip` (offset) ([ADR 0021](../ADR/0021-list-query-search-filter-sort.md)) | Both list pages compute `skip = (page - 1) * take` and read the `[data, total]` tuple response, not `{ data, total, page, take }` |
-| Per-user audit slice | Users page's detail panel fetched `GET /audit-log?userId=…` | No `userId` filter exists | **Dropped**, not approximated — see "Open items" below |
+| Per-user audit slice | Users page's detail panel fetched `GET /audit-log?userId=…` | No `userId` filter exists | **Dropped**, not approximated — see "Open items" below. ~~Dropped~~ **restored 2026-08-12**: now that `AuditLogQueryDto` has `userId`, the detail panel fetches `GET /audit-log?userId={id}&take=5` (actor or target) for a "Recent activity" section |
 | User deletion | `DELETE /user/:id`, no confirmation | `?deleteFiles=true` required when the account owns files, else 409 `USER_HAS_FILES` ([ADR 0020](../ADR/0020-account-deletion-cascade.md)) | `deleteUser()` catches `USER_HAS_FILES`, shows the file count from the response `message`, and re-confirms before retrying with `?deleteFiles=true` |
 | Error handling | Ad-hoc status/message checks | Frozen `{ code, message }` contract — branch on `code` ([ADR 0011](../ADR/0011-error-code-contract.md)) | `users-page.tsx` reads `err.response.data.code` via `axios.isAxiosError` for every branch (`AUTH_LAST_SUPERADMIN`, `USER_HAS_FILES`, `USER_FILES_IN_USE`, `FORBIDDEN`) |
 | Deploy config | `vercel.json` with a CSP pinned to the Chat Project's Railway host | **No deploy target**; AWS is a Stage 4 roadmap item | Left untouched, as before — out of scope for this pass |
@@ -87,12 +87,14 @@ findings; one backend change landed in between — see the `FORBIDDEN` row).
 
 ## Two decisions made for this adaptation
 
-1. **Per-user audit slice: dropped, not approximated.** `GET /audit-log` has no `userId`
-   filter, so the imported panel's "recent logs for this user" section could only be
-   approximated by fetching an unfiltered page and filtering client-side — which silently
-   drops older entries once a user's real activity falls off that page. Dropping the section
-   is exact; approximating it is not. The missing filter itself is now tracked as a backend
-   follow-up in [ROADMAP.md](../ROADMAP.md) > Unscheduled, not solved here.
+1. **Per-user audit slice: dropped, not approximated (2026-08-06); restored 2026-08-12.**
+   `GET /audit-log` had no `userId` filter, so the imported panel's "recent logs for this
+   user" section could only be approximated by fetching an unfiltered page and filtering
+   client-side — which silently drops older entries once a user's real activity falls off
+   that page. Dropping the section was exact; approximating it was not. Once the backend
+   gained `AuditLogQueryDto.userId` (2026-08-12, closing the [ROADMAP.md](../ROADMAP.md) >
+   Unscheduled follow-up this decision recorded), the panel's "Recent activity" section came
+   back as an exact `GET /audit-log?userId={id}&take=5` fetch — no client-side filtering.
 2. **Role-change UI: a 3-option `<select>`, not the imported binary toggle.** The imported
    promote/demote toggle can only move a row between two states and cannot express
    `superadmin` at all — the exact gap [ADR 0022](../ADR/0022-admin-console-import-from-chat-project.md)
@@ -127,8 +129,12 @@ folder's code can work around, and it is unset by default (`backend/.env.example
 
 ## Open items (not solved by this pass)
 
-- **`GET /audit-log` has no `userId` filter** — see "Two decisions" above. Tracked in
-  ROADMAP.md > Unscheduled as a backend follow-up.
+- ~~`GET /audit-log` has no `userId` filter~~ — **resolved 2026-08-12**: `AuditLogQueryDto`
+  now accepts `userId`; see "Two decisions" above.
+- **`logs-page.tsx` does not yet read a `userId` query param from its own URL** (added
+  2026-08-12) — `users-page.tsx`'s detail panel links to `/logs?userId={id}`, but
+  `logs-page.tsx` still only filters on `action`. Wiring it to read and apply `userId` is
+  left for a follow-up change.
 - **`PATCH /file/:id { userId }` file-transfer field has never been justified by any
   decision** (CLAUDE.md > Known Gaps) — unrelated to this console, noted here only because
   nothing in this pass touches it and it should not be assumed settled.
