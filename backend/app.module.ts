@@ -70,6 +70,11 @@ import { join } from 'node:path';
         entities: ENTITIES,
         synchronize: false,
         autoLoadEntities: true,
+        ...(configService.getOrThrow('NODE_ENV') === 'production' && {
+          ssl: {
+            rejectUnauthorized: false,
+          },
+        }),
       }),
       inject: [ConfigService],
     }),
@@ -101,4 +106,4 @@ import { join } from 'node:path';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }
