@@ -3,7 +3,7 @@
 
 services:
   db:
-    image: bluecode1775/sharenpo
+    image: postgres:16
     environment:
       POSTGRES_USER: ${DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
@@ -29,7 +29,7 @@ services:
   # boot so a scaled `api` never races `migration:run` against the same DB
   # (ADR 0032) — the local model for the eventual Kubernetes Job.
   migrate:
-    image: upload-board-project-bluecode1775/sharenpo
+    image: bluecode1775/sharenpo
     depends_on:
       db:
         condition: service_healthy
@@ -40,7 +40,7 @@ services:
     restart: 'no'
 
   api:
-    image: upload-board-project-bluecode1775/sharenpo
+    image: bluecode1775/sharenpo
     depends_on:
       db:
         condition: service_healthy
