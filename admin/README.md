@@ -154,11 +154,11 @@ folder's code can work around, and it is unset by default (`backend/.env.example
   `GET /audit-log` query; `users-page.tsx`'s "View all" link (`/logs?userId={id}`) is a live
   filter. (The "What was adapted" table's Audit log row previously said this was still open —
   corrected 2026-08-13.)
-- **No e2e coverage for the 2026-08-12 additions.** `admin/e2e/logs.spec.ts` and
-  `admin/e2e/users.spec.ts` assert none of: the `userId` filter / "View all" link, CSV export,
-  or `users-page.tsx`'s search box and sortable headers. Their header comments were corrected
-  2026-08-13 to stop claiming these features don't exist, but no test was added for them —
-  writing one is new scope, not this pass' doc/comment cleanup.
+- ~~No e2e coverage for the 2026-08-12 additions~~ — **resolved 2026-08-13**:
+  `admin/e2e/logs.spec.ts` gained a test for the `userId` filter / "View all" link (with its
+  clear button) and one for CSV export (downloads the file, asserts the header row and the
+  expected data rows); `admin/e2e/users.spec.ts` gained a search-box test and a sortable-header
+  test. `pnpm e2e` — 10/10 passing.
 - **`PATCH /file/:id { userId }` file-transfer field has never been justified by any
   decision** (CLAUDE.md > Known Gaps) — unrelated to this console, noted here only because
   nothing in this pass touches it and it should not be assumed settled.

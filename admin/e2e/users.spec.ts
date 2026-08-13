@@ -5,8 +5,7 @@
 // Rewritten from the imported Chat Project version, which asserted nickname text and
 // force-logout/ban actions this API does not have — see admin/README.md's backlog table for
 // the full defect list this rewrite closed. The search box and sortable-header sort toggle the
-// Chat Project version also asserted do now exist here (re-added 2026-08-12) but are not yet
-// covered by this spec — see admin/README.md's "Open items" for that gap.
+// Chat Project version also asserted do now exist here (re-added 2026-08-12, covered 2026-08-13).
 
 import { test, expect } from '@playwright/test';
 import { loginAsSuperadmin, registerTargetUser } from './helpers';
@@ -71,4 +70,28 @@ test('superadmin can delete a user', async ({ page, request }) => {
 
     await expect(page.getByTestId('action-message')).toHaveText(`User ${target.id} deleted.`);
     await expect(page.getByTestId(`user-row-${target.id}`)).toHaveCount(0);
+});
+
+test('search box filters the users table to matching emails', async ({ page, request }) => {
+    const target = await registerTargetUser(request, 'search');
+    await loginAsSuperadmin(page);
+
+    // The local-part is generated from uniqueSuffix() (timestamp + random), so it cannot
+    // collide with any other account in a shared local/CI database — searching it narrows
+    // the table to exactly this one row.
+    const localPart = target.email.split('@')[0];
+    await page.getByTestId('user-search-input').fill(localPart);
+    await expect(page.getByTestId(`user-row-${target.id}`)).toBeVisible();
+    await expect(page.locator('tbody tr')).toHaveCount(1);
+});
+
+test('clicking a sortable column header toggles the sort direction indicator', async ({ page }) => {
+    await loginAsSuperadmin(page);
+
+    const emailHeader = page.getByTestId('user-sort-email');
+    await emailHeader.click();
+    await expect(emailHeader).toContainText('▲');
+
+    await emailHeader.click();
+    await expect(emailHeader).toContainText('▼');
 });
