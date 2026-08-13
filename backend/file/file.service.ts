@@ -12,6 +12,7 @@ import {
 import { UploadFileDto } from './dto/create-uploadFile.dto';
 import {
   DataSource,
+  DeleteResult,
   EntityManager,
   QueryFailedError,
   Repository,
@@ -310,9 +311,12 @@ export class FileService {
 
   // 목적: temp 업로드를 소유 파일로 승격하고, 같은 요청의 재제출을 멱등하게 처리한다.
   // 이유: DB 저장과 물리 승격이 따로 실패하면 행이 없는 파일을 가리키고, 재시도는 모호한 400이나 500을 받는다.
+  //       post-commit 재조회에 relations: ['creator']가 빠지면 신규 생성(201) 응답만 creator가 없어
+  //       updateFile의 응답 모양과 달라진다.
   // 방법: 서버 발급 파일명을 1회용 청구 토큰으로 삼아 선청구 여부를 먼저 판정(replay/409)하고, 미청구일 때만
   //       QueryRunner 트랜잭션 하나로 insert → FileStorage 포트 promote → commit; 실패 시 rollback, release()는 finally.
-  //       물리 이동은 어댑터(LocalDiskStorage/S3Storage)에 위임한다(ADR 0029).
+  //       물리 이동은 어댑터(LocalDiskStorage/S3Storage)에 위임한다(ADR 0029). 재조회는 updateFile과 동일하게
+  //       relations: ['creator']를 포함해 두 쓰기 경로의 응답 모양을 통일한다.
   async uploadFile(
     uploadFileDto: UploadFileDto,
     userId: number,
@@ -405,8 +409,12 @@ export class FileService {
     }
 
     // Post-commit re-read stays outside the try: a read failure here must not
-    // attempt a rollback of the already-committed transaction.
-    const saved = await this.fileRepository.findOne({ where: { id: fileId } });
+    // attempt a rollback of the already-committed transaction. relations: ['creator']
+    // mirrors updateFile's re-read so both write paths return the same response shape.
+    const saved = await this.fileRepository.findOne({
+      where: { id: fileId },
+      relations: ['creator'],
+    });
     if (!saved) {
       throw new NotFoundException({
         code: ErrorCode.FILE_NOT_FOUND,
@@ -418,9 +426,15 @@ export class FileService {
 
   // 목적: 파일 메타데이터(제목/경로/소유자/가시성)를 갱신한다.
   // 이유: 가시성 토글(ADR 0025 D1)이 새 엔드포인트가 아니라 기존 소유자-가드 쓰기 경로를 재사용하도록
-  //       결정됐으므로, 공유 토큰 발급/회전/폐기도 같은 트랜잭션에 들어가야 한다.
+  //       결정됐으므로, 공유 토큰 발급/회전/폐기도 같은 트랜잭션에 들어가야 한다. title 사전 체크(459-468행)는
+  //       잠금 없는 읽기라 동시에 같은 title로 PATCH하는 요청 둘이 모두 통과할 수 있고, uploadFile과 달리
+  //       catch에서 이를 걸러내지 않으면 UNIQUE 위반이 타입 없는 500으로 새어 나간다(AllExceptionsFilter는
+  //       HttpException이 아닌 에러를 전부 INTERNAL_ERROR로 뭉갠다).
   // 방법: 단일 QueryRunner 트랜잭션(기존 패턴 유지) 안에서 필드를 갱신 — visibility가 'unlisted'로
   //       진입할 때만(또는 rotateShareToken 명시 시) 새 토큰을 발급하고, 벗어나면 토큰/만료를 비운다.
+  //       catch에서 isPgErrorCode(error, UNIQUE_VIOLATION)만 가로채 400 FILE_TITLE_TAKEN으로 번역한다 —
+  //       PATCH의 title은 uploadFile의 filePath 같은 1회용 청구 토큰이 아니라 임의 필드 갱신이므로
+  //       승자를 재조회해 replay 판정을 하지 않고, 다른 모든 에러는 기존처럼 그대로 rethrow한다.
   async updateFile(
     id: number,
     updateFileDto: UpdateFileDto,
@@ -534,6 +548,16 @@ export class FileService {
       await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
+      // The title precheck above is an unlocked read; a concurrent PATCH racing on the
+      // same title can both pass it before the unique constraint picks a winner. Only
+      // that race is intercepted — every other error (including the typed HttpExceptions
+      // thrown above) rethrows unchanged, as before.
+      if (this.isPgErrorCode(error, UNIQUE_VIOLATION)) {
+        throw new BadRequestException({
+          code: ErrorCode.FILE_TITLE_TAKEN,
+          message: 'Title already in use.',
+        });
+      }
       throw error;
     } finally {
       await queryRunner.release();
@@ -612,9 +636,13 @@ export class FileService {
 
   // 목적: 파일 메타데이터 행과 그에 대응하는 물리 파일을 함께 제거하되, 게시글이 참조 중이면 거절한다.
   // 이유: 행만 지우던 기존 동작은 granted_ 파일을 영구 고아로 남겼고(ADR 0020), 이제는 post가 이 행을
-  //       참조할 수 있어 FK 위반이 그대로 500으로 새어 나갈 수 있다(ADR 0023 D4).
+  //       참조할 수 있어 FK 위반이 그대로 500으로 새어 나갈 수 있다(ADR 0023 D4). findOne과 delete 사이의
+  //       경합 창에서 동시 삭제 요청이 먼저 행을 지우면 affected가 0인데도 unlink/감사 로그를 또 실행해
+  //       FILE_DELETE 감사 로그가 중복될 수 있다.
   // 방법: 권한 확인 → 행 삭제(23503이면 409 FILE_IN_USE로 번역, 사전 조회는 하지 않는다 — 경합이 남으므로)
-  //       → 커밋된 뒤에만 unlink(실패는 warn 로그) → 감사 로그 순서로, 되돌릴 수 없는 작업을 맨 뒤에 둔다.
+  //       → affected === 0이면(동시 삭제로 이미 사라짐) unlink/감사 로그를 건너뛰고 404로 처리(uploadFile의
+  //       post-commit 재조회 실패 패턴과 동일) → 커밋된 뒤에만 unlink(실패는 warn 로그) → 감사 로그 순서로,
+  //       되돌릴 수 없는 작업을 맨 뒤에 둔다.
   async deleteFile(id: number, requester: Requester): Promise<string> {
     const file = await this.fileRepository.findOne({
       where: { id },
@@ -638,8 +666,9 @@ export class FileService {
     // No pre-check query: asking post_entity here would make FileModule depend on
     // PostModule (a cycle, since PostService already asks this service about ownership)
     // and would still leave a race window. The database is the authority (ADR 0023 D4).
+    let deleteResult: DeleteResult;
     try {
-      await this.fileRepository.delete(id);
+      deleteResult = await this.fileRepository.delete(id);
     } catch (error) {
       if (this.isPgErrorCode(error, FOREIGN_KEY_VIOLATION)) {
         throw new ConflictException({
@@ -648,6 +677,16 @@ export class FileService {
         });
       }
       throw error;
+    }
+
+    // A concurrent delete already removed the row between the findOne read above and
+    // this delete: unlinking or auditing again would duplicate both for a row that is
+    // already gone, so report the same 404 as "not found" instead.
+    if (deleteResult.affected === 0) {
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
     }
 
     // Stored file goes only after the row is gone: unlink cannot be rolled back, so the

@@ -206,6 +206,13 @@ describe('FileService', () => {
         id: 1,
         title: 'Test File',
         fileUrl: 'http://localhost:3000/file/1/content',
+        // The post-commit re-read must load the creator relation so a freshly
+        // promoted file's response shape matches updateFile's.
+        creator: { id: 1, email: 'creator@test.com' },
+      });
+      expect(fileRepository.findOne).toHaveBeenNthCalledWith(3, {
+        where: { id: 1 },
+        relations: ['creator'],
       });
       expect(queryRunner.connect).toHaveBeenCalled();
       expect(queryRunner.startTransaction).toHaveBeenCalled();
@@ -409,6 +416,65 @@ describe('FileService', () => {
 
       expect(result).toMatchObject({ title: 'By Admin' });
       expect(queryRunner.commitTransaction).toHaveBeenCalled();
+    });
+
+    // The precheck at line ~459 is an unlocked read, so a concurrent PATCH racing on
+    // the same title can pass it before the unique constraint decides a winner.
+    describe('title race (23505)', () => {
+      const uniqueViolation = () =>
+        new QueryFailedError(
+          'UPDATE',
+          [],
+          Object.assign(new Error('duplicate key'), { code: '23505' }),
+        );
+
+      it('should translate a concurrent title race into 400 FILE_TITLE_TAKEN, not a raw 500', async () => {
+        queryRunner.manager.findOne = jest
+          .fn()
+          .mockResolvedValue(mockFileEntity);
+        // Duplicate-title precheck passes (the race is still open).
+        jest.spyOn(fileRepository, 'findOne').mockResolvedValueOnce(null);
+
+        const mockUpdateQueryBuilder = {
+          update: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockRejectedValue(uniqueViolation()),
+        };
+        queryRunner.manager.createQueryBuilder = jest
+          .fn()
+          .mockReturnValue(mockUpdateQueryBuilder);
+
+        await expect(
+          fileService.updateFile(1, { title: 'Racing Title' }, owner),
+        ).rejects.toThrow(BadRequestException);
+        expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+        expect(queryRunner.release).toHaveBeenCalled();
+      });
+
+      it('should rethrow an unrelated update failure unchanged', async () => {
+        queryRunner.manager.findOne = jest
+          .fn()
+          .mockResolvedValue(mockFileEntity);
+        jest.spyOn(fileRepository, 'findOne').mockResolvedValueOnce(null);
+
+        const failure = new Error('connection lost');
+        const mockUpdateQueryBuilder = {
+          update: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockRejectedValue(failure),
+        };
+        queryRunner.manager.createQueryBuilder = jest
+          .fn()
+          .mockReturnValue(mockUpdateQueryBuilder);
+
+        await expect(
+          fileService.updateFile(1, { title: 'X' }, owner),
+        ).rejects.toThrow(failure);
+        expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+        expect(queryRunner.release).toHaveBeenCalled();
+      });
     });
 
     it("should throw BadRequestException for 'temp_' file path", async () => {
@@ -820,6 +886,11 @@ describe('FileService', () => {
   describe('deleteFile', () => {
     beforeEach(() => {
       mockStorage.unlink.mockResolvedValue({ deleted: 1, failures: [] });
+      // Default: the row this test's findOne mock returned is the one actually deleted.
+      // Individual tests override this (23503 rejection, affected: 0) as needed.
+      jest
+        .spyOn(fileRepository, 'delete')
+        .mockResolvedValue({ raw: [], affected: 1 });
     });
 
     it('should delete a file owned by the requester and audit FILE_DELETE', async () => {
@@ -916,6 +987,22 @@ describe('FileService', () => {
         ConflictException,
       );
       // The row survived, so its stored file must not be unlinked.
+      expect(mockStorage.unlink).not.toHaveBeenCalled();
+      expect(mockAuditLogService.log).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException and skip unlink/audit when a concurrent delete already removed the row', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
+      jest
+        .spyOn(fileRepository, 'delete')
+        .mockResolvedValue({ raw: [], affected: 0 });
+
+      // affected: 0 means another request deleted the row between this request's
+      // findOne read and its delete call — report it the same as "not found" rather
+      // than running unlink/audit a second time for a row that is already gone.
+      await expect(fileService.deleteFile(1, owner)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(mockStorage.unlink).not.toHaveBeenCalled();
       expect(mockAuditLogService.log).not.toHaveBeenCalled();
     });
