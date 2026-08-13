@@ -29,6 +29,33 @@ development line (package.json version).
   here; this entry only records the finding. Tracked in ROADMAP > Unscheduled.
 
 ### Added
+- **ADR 0036: presigned S3 redirect for `GET /file/:id/content` — design-only, no code
+  change** ([ADR 0036](ADR/0036-s3-presigned-content-redirect.md), extends the
+  `FileStorage` port from [ADR 0029](ADR/0029-storage-port-adapter.md); amends
+  [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)/[ADR 0026](ADR/0026-file-visibility-implementation.md)'s
+  serving mechanism, not their access-check contract). Under `STORAGE_DRIVER=s3`, every
+  granted-file read still proxies its bytes through the app server today (`S3Storage`
+  mirrors `LocalDiskStorage`'s `Readable`-piping shape) — the exact bandwidth/CPU cost
+  profile the S3 adapter was meant to move off the app tier. Designed fix: `FileStorage`
+  gains `getSignedReadUrl(key, contentType): Promise<string | null>` — `null` for
+  `LocalDiskStorage` (falls back to today's stream/Range/206/416 path, unchanged), a
+  presigned `GetObjectCommand` URL for `S3Storage` (via the new `@aws-sdk/s3-request-presigner`
+  dependency, TTL read once from `ConfigService` at construction, not per call). The
+  content controller calls it after `resolveContentAccess` passes — for all three
+  visibility tiers, not just `public` — and issues a `302` redirect when non-null,
+  skipping `stat()`/`createReadStream()` entirely; `null` keeps today's flow untouched.
+  No caching or reuse of an issued URL: every request re-derives access and re-signs
+  fresh. TTL (`CONTENT_SIGNED_URL_TTL_SECONDS`, new env var) confirmed at 300 seconds
+  after asking rather than assuming (Documentation Authoring Protocol > 질문); three
+  longer alternatives were weighed and rejected in the ADR. Explicitly flagged, not
+  fixed: a redirected signed URL is a bearer credential for private/unlisted content
+  until it expires, independent of the requester's JWT/share-token — a real trust-model
+  change from today's per-byte-range re-check, accepted given the short TTL and the
+  stated bandwidth goal; and whether `frontend/`/`admin/`'s `<video>`/`<audio>` elements
+  handle Range-seeking correctly across the redirect boundary is unverified, left as a
+  residual risk for those repos' own scope. `ROADMAP.md`'s S3 component-status row and
+  `ADR/README.md` are updated to cite the new ADR; no code, schema, dependency, or env
+  var actually added yet.
 - **CI: `frontend-e2e`/`admin-e2e` Playwright jobs, plus lint/unit coverage for `frontend/` and
   `admin/`** — both had working scripts (`pnpm lint`, `pnpm test`, `pnpm e2e`) that no CI job
   ever ran, so changes to either merged unverified. `frontend-lint` (oxlint) and
