@@ -106,4 +106,4 @@ import { join } from 'node:path';
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}

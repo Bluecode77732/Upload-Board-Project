@@ -99,9 +99,13 @@ export class UserService {
 
   // 목적: 계정 정보(email/password)를 갱신하되, 본인이거나 대상보다 role이 낮은 admin 이상만 허용한다.
   // 이유: 기존에는 actor.role이 admin 이상인지만 컨트롤러에서 확인하고 대상의 role은 보지 않아, admin이
-  //       동급 admin이나 상위 superadmin 계정까지 수정할 수 있는 권한 역전 결함이 있었다.
+  //       동급 admin이나 상위 superadmin 계정까지 수정할 수 있는 권한 역전 결함이 있었다. 그 결함을 고치며
+  //       컨트롤러가 갖고 있던 "본인이 아니고 admin도 아니면 거부" 검사를 서비스로 옮기지 않아, plain user가
+  //       다른 plain user를 수정하려 할 때도 랭크 비교 분기로 흘러 FORBIDDEN_NOT_OWNER 대신 FORBIDDEN이
+  //       나가는 회귀가 있었다.
   // 방법: 대상 엔티티를 먼저 읽어 role을 확보해 두고(이미 존재 확인용으로 읽던 조회를 재사용), 본인이 아니면
-  //       target rank가 actor rank보다 낮을 때만 통과시킨다 — 동급/상위 대상은 본인이 아닌 한 항상 거부된다.
+  //       ① actor가 admin 미만이면 소유자가 아니라는 이유로 즉시 거부(FORBIDDEN_NOT_OWNER), ② admin
+  //       이상이면 target rank가 actor rank보다 낮을 때만 통과시킨다 — 동급/상위 대상은 거부(FORBIDDEN).
   async update(
     actorId: number,
     actorRole: UserRole,
@@ -119,11 +123,20 @@ export class UserService {
       });
     }
 
-    if (actorId !== id && ROLE_RANK[user.role] >= ROLE_RANK[actorRole]) {
-      throw new ForbiddenException({
-        code: ErrorCode.FORBIDDEN,
-        message: 'Cannot modify an account with an equal or higher role.',
-      });
+    if (actorId !== id) {
+      if (ROLE_RANK[actorRole] < ROLE_RANK[UserRole.admin]) {
+        throw new ForbiddenException({
+          code: ErrorCode.FORBIDDEN_NOT_OWNER,
+          message: 'You can only update your own account.',
+        });
+      }
+
+      if (ROLE_RANK[user.role] >= ROLE_RANK[actorRole]) {
+        throw new ForbiddenException({
+          code: ErrorCode.FORBIDDEN,
+          message: 'Cannot modify an account with an equal or higher role.',
+        });
+      }
     }
 
     if (password) {
@@ -205,11 +218,15 @@ export class UserService {
   //       연쇄 삭제는 되돌릴 수 없으므로 동의 없이 일어나서는 안 된다(ADR 0020). 게시글·댓글이 추가되면서
   //       두 테이블이 유저를 참조하게 되어, 삭제 순서에 댓글 → 게시글이 먼저 들어와야 한다(ADR 0023 D5).
   //       기존에는 대상의 role을 보지 않아 admin이 동급/상위(superadmin) 계정까지 삭제할 수 있는 권한
-  //       역전 결함도 있었다.
-  // 방법: 트랜잭션 안에서 유저를 먼저 읽어 role을 확보하고, 본인이 아니면 target rank가 actor rank보다
-  //       낮을 때만 통과시킨 뒤, 보유 파일 경로를 읽어 미확인이면 409로 거절하고, 확인 시 댓글 행 → 게시글
-  //       행 → 파일 행 → 유저 행 순서로 지운다. 댓글과 게시글은 확인 플래그 없이 무조건 삭제된다(D5 — 플래그는
-  //       파일 바이트만 지킨다). 물리 파일 unlink는 커밋 이후에만(롤백 불가), 감사 로그는 그 뒤에 남긴다.
+  //       역전 결함도 있었다. 그 결함을 고치며 컨트롤러의 "본인이 아니고 admin도 아니면 거부" 검사를
+  //       서비스로 옮기지 않아, plain user가 다른 plain user를 삭제하려 할 때도 FORBIDDEN_NOT_OWNER
+  //       대신 FORBIDDEN이 나가는 회귀가 있었다.
+  // 방법: 트랜잭션 안에서 유저를 먼저 읽어 role을 확보하고, 본인이 아니면 ① actor가 admin 미만이면
+  //       소유자가 아니라는 이유로 즉시 거부(FORBIDDEN_NOT_OWNER), ② admin 이상이면 target rank가
+  //       actor rank보다 낮을 때만 통과시킨다(동급/상위는 FORBIDDEN). 통과 후 보유 파일 경로를 읽어
+  //       미확인이면 409로 거절하고, 확인 시 댓글 행 → 게시글 행 → 파일 행 → 유저 행 순서로 지운다.
+  //       댓글과 게시글은 확인 플래그 없이 무조건 삭제된다(D5 — 플래그는 파일 바이트만 지킨다). 물리 파일
+  //       unlink는 커밋 이후에만(롤백 불가), 감사 로그는 그 뒤에 남긴다.
   async remove(
     actorId: number,
     actorRole: UserRole,
@@ -229,11 +246,20 @@ export class UserService {
           });
         }
 
-        if (actorId !== id && ROLE_RANK[user.role] >= ROLE_RANK[actorRole]) {
-          throw new ForbiddenException({
-            code: ErrorCode.FORBIDDEN,
-            message: 'Cannot delete an account with an equal or higher role.',
-          });
+        if (actorId !== id) {
+          if (ROLE_RANK[actorRole] < ROLE_RANK[UserRole.admin]) {
+            throw new ForbiddenException({
+              code: ErrorCode.FORBIDDEN_NOT_OWNER,
+              message: 'You can only delete your own account.',
+            });
+          }
+
+          if (ROLE_RANK[user.role] >= ROLE_RANK[actorRole]) {
+            throw new ForbiddenException({
+              code: ErrorCode.FORBIDDEN,
+              message: 'Cannot delete an account with an equal or higher role.',
+            });
+          }
         }
 
         const paths = await this.fileService.findStoredPathsOfCreator(

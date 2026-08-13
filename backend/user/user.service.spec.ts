@@ -13,6 +13,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { ConfigService } from '@nestjs/config';
 import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { UserRole } from 'backend/auth/role/role';
+import { ErrorCode } from 'backend/common/error-code';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
 import { FileService } from 'backend/file/file.service';
 import { PostService } from 'backend/post/post.service';
@@ -316,6 +317,18 @@ describe('UserService', () => {
       ).rejects.toThrow(ForbiddenException);
       expect(mockUserRepository.update).not.toHaveBeenCalled();
     });
+
+    it('should reject a plain user (non-admin, non-owner) with FORBIDDEN_NOT_OWNER', async () => {
+      const target = { id: 2, email: 'b@c.com', role: UserRole.user };
+      jest.spyOn(mockUserRepository, 'findOne').mockResolvedValue(target);
+
+      await expect(
+        userService.update(1, UserRole.user, 2, { email: 'x@y.com' }),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCode.FORBIDDEN_NOT_OWNER },
+      });
+      expect(mockUserRepository.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateRole', () => {
@@ -521,6 +534,23 @@ describe('UserService', () => {
       await expect(userService.remove(1, UserRole.admin, 2)).rejects.toThrow(
         ForbiddenException,
       );
+      expect(mockFileService.findStoredPathsOfCreator).not.toHaveBeenCalled();
+      expect(mockManager.delete).not.toHaveBeenCalled();
+      expect(mockAuditLogService.log).not.toHaveBeenCalled();
+    });
+
+    it('should reject a plain user (non-admin, non-owner) with FORBIDDEN_NOT_OWNER', async () => {
+      mockManager.findOne.mockResolvedValue({
+        id: 2,
+        email: 'b@c.com',
+        role: UserRole.user,
+      });
+
+      await expect(
+        userService.remove(1, UserRole.user, 2),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCode.FORBIDDEN_NOT_OWNER },
+      });
       expect(mockFileService.findStoredPathsOfCreator).not.toHaveBeenCalled();
       expect(mockManager.delete).not.toHaveBeenCalled();
       expect(mockAuditLogService.log).not.toHaveBeenCalled();

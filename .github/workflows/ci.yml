@@ -157,7 +157,12 @@ jobs:
       - run: mkdir -p file/temp file/upload
       - run: pnpm run migration:run
       - name: Start backend
-        run: node dist/main &
+        # Output must not stay attached to this step's stdout/stderr pipe: once the step
+        # ends, the runner closes it, and Node's next log write throws EPIPE (or the
+        # process gets SIGPIPE), killing the server before the health check below ever
+        # gets a response. Redirect to a file instead, and nohup so a stray SIGHUP can't
+        # take it down either.
+        run: nohup node dist/main > backend.log 2>&1 &
       - name: Wait for backend
         run: |
           for i in $(seq 1 30); do
@@ -169,6 +174,7 @@ jobs:
             sleep 2
           done
           echo "Backend failed to start within timeout" >&2
+          cat backend.log >&2
           exit 1
       - name: Install frontend dependencies
         working-directory: frontend
@@ -231,7 +237,12 @@ jobs:
       - run: mkdir -p file/temp file/upload
       - run: pnpm run migration:run
       - name: Start backend
-        run: node dist/main &
+        # Output must not stay attached to this step's stdout/stderr pipe: once the step
+        # ends, the runner closes it, and Node's next log write throws EPIPE (or the
+        # process gets SIGPIPE), killing the server before the health check below ever
+        # gets a response. Redirect to a file instead, and nohup so a stray SIGHUP can't
+        # take it down either.
+        run: nohup node dist/main > backend.log 2>&1 &
       - name: Wait for backend
         run: |
           for i in $(seq 1 30); do
@@ -243,6 +254,7 @@ jobs:
             sleep 2
           done
           echo "Backend failed to start within timeout" >&2
+          cat backend.log >&2
           exit 1
       - name: Install admin dependencies
         working-directory: admin
