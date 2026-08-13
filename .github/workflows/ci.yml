@@ -1,14 +1,17 @@
-# Minimal CI (ADR 0016): lint + unit tests, plus e2e against a Postgres service.
+# CI (ADR 0016): backend lint + unit + e2e, plus frontend/admin lint and admin
+# unit tests. frontend/ and admin/ are independent projects with their own
+# pnpm-lock.yaml (not a pnpm workspace), so each gets its own job with
+# `working-directory` and its own install.
 # Toolchain comes from the ADR 0014 pin (.nvmrc + packageManager via Corepack);
 # the e2e DB image matches ADR 0015 (postgres:16).
 
-name: CI
+name: Sharenpo CI/CD
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
-    branches: [main, dev]
+    branches: [main]
 
 permissions:
   contents: read
@@ -18,11 +21,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Corepack activates the pnpm version pinned in package.json (packageManager);
+      # it must run before setup-node's cache step, which shells out to pnpm to
+      # resolve the store path.
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      # Corepack activates the pnpm version pinned in package.json (packageManager).
-      - run: corepack enable
+          cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint:ci
       - run: pnpm test
@@ -62,11 +68,45 @@ jobs:
       REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
     steps:
       - uses: actions/checkout@v4
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - run: corepack enable
+          cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Upload folders are runtime dirs (untracked); the promotion test needs both.
       - run: mkdir -p file/temp file/upload
       - run: pnpm run test:e2e
+
+  frontend-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+
+  admin-lint-and-unit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: admin/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run test
