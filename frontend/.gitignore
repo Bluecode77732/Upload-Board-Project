@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+
 # Local env (committed template is .env.example)
 .env
 .env.*

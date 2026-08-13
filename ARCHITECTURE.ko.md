@@ -20,8 +20,8 @@ AppModule
 ├── TypeOrmModule       — PostgreSQL, synchronize: false, 엔티티: FileEntity, UserEntity, AuditLogEntity
 ├── ServeStaticModule   — ./file 폴더를 URL 접두사 /file 로 정적 서빙
 ├── AuthModule          — 토큰 전담: Basic 파싱, JWT 발급/검증, Passport 전략; RBAC RolesGuard/@Roles + role enum (ADR 0013)
-├── UserModule          — 사용자 CRUD 전담; 역할 부여(superadmin) + 부팅 superadmin 시드; UserService export
-├── FileModule          — 파일 *메타데이터* 전담: FileEntity 행 + temp 승격 트랜잭션
+├── UserModule          — 사용자 CRUD 전담; 역할 부여(superadmin) + 부팅 superadmin 시드; UserService export; 계정 삭제 연쇄를 위해 FileModule import (ADR 0020)
+├── FileModule          — 파일 *메타데이터* 전담: FileEntity 행 + temp 승격 트랜잭션 + 행·물리 파일 삭제; FileService export (UserModule이 소비)
 ├── UploadModule        — *물리* 파일 전담: Multer diskStorage; 컨트롤러 전용, DB 접근 없음
 ├── AuditLogModule      — append-only 특권 행위 기록; AuditLogService export (User/File이 소비); admin 전용 GET /audit-log (ADR 0013)
 └── APP_FILTER          — AllExceptionsFilter (backend/common/filter/): 모든 에러를 ErrorBody 계약으로 성형 (ADR 0011)
@@ -66,10 +66,10 @@ AppModule
 
 | 라우트 | 동작 |
 |---|---|
-| `GET /user` | 사용자 목록 (`findAndCount`) |
+| `GET /user` | 페이지네이션 목록 — `GetUsersDto`: `take` 1–100(기본 20), `skip` ≥ 0(기본 0), `search`(email에 대한 대소문자 구분 없는 부분일치), `sortBy`/`order`(`createdAt`\|`email`\|`id`, 기본 `createdAt` `DESC`), tiebreaker로 `id` 추가 — `GetFilesDto`와 같은 형태(ADR 0021 대응) |
 | `GET /user/:id` | 단일 사용자 또는 404 |
 | `PATCH /user/:id` | **본인만** — 비밀번호 제공 시 `HASH_ROUNDS`로 재해싱 |
-| `DELETE /user/:id` | **본인만** — 하드 삭제 |
+| `DELETE /user/:id` | **본인 또는 admin** — 하드 삭제. 파일을 보유한 계정은 `?deleteFiles=true`가 있어야 하며, 이때 파일 행과 물리 파일까지 연쇄 삭제된다. 없으면 409 `USER_HAS_FILES` (ADR 0020) |
 
 - **`POST /user`는 의도적으로 없습니다** — 등록은 `POST /auth/register`입니다.
 - 본인 확인은 `@UserId()`(JWT 신원)와 경로 id를 비교해 불일치 시 `ForbiddenException`을
@@ -78,6 +78,10 @@ AppModule
   채운 `request.user.id`를 읽습니다 — 신원은 절대 body에서 오지 않습니다.
 - `UserModule`은 `UserService`를 export하며, 이것이 모듈의 공개 계약입니다
   (`JwtStrategy`의 토큰 검증에 소비됨).
+- 삭제 트랜잭션은 `UserService.remove`가 소유합니다 — 경계 안이 순수 DB 쓰기뿐이므로
+  `dataSource.transaction()`을 씁니다. 파일 행은 `FileEntity`를 직접 다루지 않고
+  `FileService`에 위임해, 파일 메타데이터가 FileModule의 책임으로 남습니다. 물리 파일
+  unlink는 커밋 **이후**에 실행됩니다 ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)).
 
 ### FileModule (`backend/file/`)
 
@@ -87,14 +91,24 @@ AppModule
 |---|---|
 | `GET /file` | 페이지네이션 목록 — `GetFilesDto`: `take` 1–100(기본 20), `skip` ≥ 0(기본 0) |
 | `GET /file/:id` | 메타데이터 + creator 조인, 없으면 404 |
-| `POST /file` | temp 파일 승격: DB insert + 물리 rename을 한 트랜잭션에서 수행 |
+| `POST /file` | temp 파일 승격: DB insert + 물리 rename을 한 트랜잭션에서 수행. 파일명은 1회용 청구 토큰이라, 재제출 시 청구자 본인에게는 replay(200), 타인에게는 409 `FILE_ALREADY_CLAIMED` (ADR 0019) |
 | `PATCH /file/:id` | **작성자만** — 제목(중복 검사), `granted_` filePath, 소유권 재할당 |
-| `DELETE /file/:id` | **작성자만** — 메타데이터 행 하드 삭제 |
+| `DELETE /file/:id` | **작성자 또는 admin** — 메타데이터 행을 하드 삭제한 뒤 저장된 `granted_` 파일을 unlink한다 (ADR 0020) |
 
 - `FileService.uploadFile` / `updateFile`은 **수동 QueryRunner** 트랜잭션 패턴을 사용합니다
   (`createQueryRunner → connect → startTransaction → commit/rollback → release`,
   `release()`는 항상 `finally`). 비-DB 부수효과(물리 `rename`)가 트랜잭션 경계 안에
   들어가야 하기 때문입니다 ([ADR 0004](ADR/0004-transaction-pattern-selection.ko.md)).
+- 삭제는 그 경계의 반대편에 섭니다: 물리 `unlink`는 행이 사라진 **뒤에** 실행합니다.
+  `unlink`는 롤백이 불가능하므로, 트랜잭션 안에 두면 커밋 실패 시 행 없는 파일이 남지만
+  바깥에 두면 실패해도 복구 가능한 고아 파일만 남습니다(`warn` 로그).
+  `unlinkStoredFiles`(`backend/common/unlink-stored-files.ts`)는 `file/upload/` 바깥
+  경로를 거부합니다.
+- `FileService.findStoredPathsOfCreator` / `deleteFilesOfCreator`는 호출자의
+  `EntityManager`를 받아, 계정 연쇄 삭제가 `UserService`의 트랜잭션 안에서 실행되면서도
+  파일 행 규칙은 이곳에 남게 합니다. 삭제는 미리 읽어 둔 id 목록이 아니라 `creatorId`
+  기준이므로, 연쇄와 경합한 업로드가 살아남아 FK 위반을 다시 일으킬 수 없습니다
+  ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)).
 - 응답은 `FileService.toResponse()`가 `FileResponseDto`로 변환하며, `fileUrl`은
   `ConfigService`를 통해 `{BASE_URL}/{filePath}`로 조합됩니다. 엔티티에는 표현 로직이
   없습니다(엔티티의 구 `@Transform` URL은 의도적으로 제거됨).
@@ -154,10 +168,16 @@ enableImplicitConversion`을 실행합니다 — DTO에 선언되지 않은 요�
       └─ Multer가 file/temp/temp_{uuid}_{ts}.{ext} 기록  → { filename } 반환
 
 2. POST /file  { title, filePath: <그 파일명> }
-      └─ FileService.uploadFile, 하나의 QueryRunner 트랜잭션 안에서:
+      └─ FileService.uploadFile, 트랜잭션을 열기 전에 (ADR 0019):
+           0a. 이 사용자가 이미 청구  → 기존 행을 200으로 replay
+               다른 사용자가 청구     → 409 FILE_ALREADY_CLAIMED
+           0b. 뒤를 받쳐 줄 temp 없음 → 400 FILE_INVALID_PATH
+         미청구 파일명일 때만, 하나의 QueryRunner 트랜잭션 안에서:
            a. FileEntity INSERT (filePath를 file/upload/granted_... 로 재작성)
            b. file/temp/temp_...  →  file/upload/granted_...  물리 rename
            c. commit  (실패 시 rollback; release()는 finally)
+              23505 경합 시: 승자가 같은 파일명을 가져갔으면 replay,
+              아니면 400 FILE_TITLE_TAKEN
 
 3. 파일은 {BASE_URL}/file/upload/granted_... 로 공개 서빙 (ServeStaticModule)
    API 응답에서는 FileResponseDto의 fileUrl로 노출.
@@ -168,7 +188,11 @@ enableImplicitConversion`을 실행합니다 — DTO에 선언되지 않은 요�
 `UpdateFileDto.filePath`는 `temp_` 값을 거부하고 `granted_` 값만 허용합니다. 파일명은
 서버가 생성(uuid + timestamp)하며 클라이언트는 그것을 되돌려줄 뿐이므로, 클라이언트가
 선택한 경로 조각이 파일시스템에 닿는 일이 없습니다
-([ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)).
+([ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)). 이 "되돌려주기"는
+`UploadFileDto.filePath`의 `@Matches(TEMP_FILENAME_PATTERN)`으로 강제되어, 형식이 어긋난
+값은 경계에서 `VALIDATION_FAILED`로 거절됩니다
+([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)). 끝내 청구되지 않은 `temp_` 파일은
+스케줄 스윕이 회수합니다([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)).
 
 ## 엔티티 (TypeORM)
 

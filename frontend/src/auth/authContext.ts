@@ -9,6 +9,9 @@ export type AuthStatus = 'loading' | 'authenticated' | 'anonymous'
 
 export interface AuthContextValue {
   status: AuthStatus
+  // The signed-in user's id (decoded from the access token's `sub` claim), or null when
+  // signed out. A UI hint for canManage only — the server's 403 is the real authority.
+  currentUserId: number | null
   signIn: (email: string, password: string) => Promise<void>
   register: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>

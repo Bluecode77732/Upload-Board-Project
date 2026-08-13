@@ -2,16 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { CronJob } from 'cron';
-import * as fs from 'fs/promises';
-import { join } from 'path';
 import { TempCleanupService } from './temp-cleanup.service';
+import {
+  FILE_STORAGE,
+  FileStorage,
+} from 'backend/storage/file-storage.interface';
 
-jest.mock('fs/promises');
 jest.mock('cron');
 
-const readdir = fs.readdir as unknown as jest.Mock;
-const stat = fs.stat as unknown as jest.Mock;
-const unlink = fs.unlink as unknown as jest.Mock;
 const cronFrom = CronJob.from as unknown as jest.Mock;
 
 // Mutable config the mock ConfigService reads from — reset in beforeEach.
@@ -22,13 +20,7 @@ const config = {
   dryRun: false,
 };
 
-const tempPath = (name: string): string =>
-  join(process.cwd(), 'file', 'temp', name);
-
 const hoursAgo = (h: number): number => Date.now() - h * 60 * 60 * 1000;
-
-// stat() resolves to a file whose mtime is `h` hours in the past.
-const fileStat = (h: number) => ({ isFile: () => true, mtimeMs: hoursAgo(h) });
 
 describe('TempCleanupService', () => {
   let service: TempCleanupService;
@@ -48,6 +40,16 @@ describe('TempCleanupService', () => {
 
   const mockSchedulerRegistry = { addCronJob: jest.fn() };
 
+  const mockStorage: jest.Mocked<FileStorage> = {
+    saveTemp: jest.fn(),
+    existsTemp: jest.fn(),
+    promote: jest.fn(),
+    stat: jest.fn(),
+    createReadStream: jest.fn(),
+    unlink: jest.fn(),
+    listTemp: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     config.enabled = true;
@@ -60,6 +62,7 @@ describe('TempCleanupService', () => {
         TempCleanupService,
         { provide: ConfigService, useValue: mockConfigService },
         { provide: SchedulerRegistry, useValue: mockSchedulerRegistry },
+        { provide: FILE_STORAGE, useValue: mockStorage },
       ],
     }).compile();
 
@@ -67,71 +70,49 @@ describe('TempCleanupService', () => {
   });
 
   describe('sweep', () => {
-    it('deletes only temp_ files older than the TTL, never touching other entries', async () => {
-      readdir.mockResolvedValue([
-        'temp_old.mp4',
-        'temp_fresh.mp4',
-        'granted_keep.mp4',
-        'random.txt',
+    it('deletes only entries the port lists as expired', async () => {
+      mockStorage.listTemp.mockResolvedValue([
+        { key: 'temp_old.mp4', mtimeMs: hoursAgo(25) },
+        { key: 'temp_fresh.mp4', mtimeMs: hoursAgo(1) },
       ]);
-      stat.mockImplementation((p: string) =>
-        Promise.resolve(p.includes('temp_old') ? fileStat(25) : fileStat(1)),
-      );
-      unlink.mockResolvedValue(undefined);
+      mockStorage.unlink.mockResolvedValue({ deleted: 1, failures: [] });
 
       await service.sweep();
 
-      expect(unlink).toHaveBeenCalledTimes(1);
-      expect(unlink).toHaveBeenCalledWith(tempPath('temp_old.mp4'));
-      // Prefix guard: non-temp_ entries are never even stat'd.
-      expect(stat).not.toHaveBeenCalledWith(tempPath('granted_keep.mp4'));
-      expect(stat).not.toHaveBeenCalledWith(tempPath('random.txt'));
+      expect(mockStorage.unlink).toHaveBeenCalledWith(['temp_old.mp4']);
     });
 
     it('does not delete anything in dry-run mode', async () => {
       config.dryRun = true;
-      readdir.mockResolvedValue(['temp_old.mp4']);
-      stat.mockResolvedValue(fileStat(100));
+      mockStorage.listTemp.mockResolvedValue([
+        { key: 'temp_old.mp4', mtimeMs: hoursAgo(100) },
+      ]);
 
       await service.sweep();
 
-      expect(unlink).not.toHaveBeenCalled();
+      expect(mockStorage.unlink).not.toHaveBeenCalled();
     });
 
-    it('treats an absent file/temp directory (ENOENT) as an empty no-op', async () => {
-      readdir.mockRejectedValue(
-        Object.assign(new Error('missing'), { code: 'ENOENT' }),
-      );
-
-      await expect(service.sweep()).resolves.toBeUndefined();
-      expect(stat).not.toHaveBeenCalled();
-      expect(unlink).not.toHaveBeenCalled();
-    });
-
-    it('continues sweeping when one unlink fails', async () => {
-      readdir.mockResolvedValue(['temp_a.mp4', 'temp_b.mp4']);
-      stat.mockResolvedValue(fileStat(50));
-      unlink
-        .mockRejectedValueOnce(new Error('EBUSY'))
-        .mockResolvedValueOnce(undefined);
-
-      await expect(service.sweep()).resolves.toBeUndefined();
-      expect(unlink).toHaveBeenCalledTimes(2);
-    });
-
-    it('skips a file that vanishes mid-sweep (stat rejects)', async () => {
-      readdir.mockResolvedValue(['temp_gone.mp4', 'temp_here.mp4']);
-      stat.mockImplementation((p: string) =>
-        p.includes('temp_gone')
-          ? Promise.reject(new Error('ENOENT'))
-          : Promise.resolve(fileStat(50)),
-      );
-      unlink.mockResolvedValue(undefined);
+    it('does nothing when nothing is expired', async () => {
+      mockStorage.listTemp.mockResolvedValue([
+        { key: 'temp_fresh.mp4', mtimeMs: hoursAgo(1) },
+      ]);
 
       await service.sweep();
 
-      expect(unlink).toHaveBeenCalledTimes(1);
-      expect(unlink).toHaveBeenCalledWith(tempPath('temp_here.mp4'));
+      expect(mockStorage.unlink).not.toHaveBeenCalled();
+    });
+
+    it('logs but does not throw when the port reports a failed unlink', async () => {
+      mockStorage.listTemp.mockResolvedValue([
+        { key: 'temp_a.mp4', mtimeMs: hoursAgo(50) },
+      ]);
+      mockStorage.unlink.mockResolvedValue({
+        deleted: 0,
+        failures: [{ key: 'temp_a.mp4', reason: 'EBUSY' }],
+      });
+
+      await expect(service.sweep()).resolves.toBeUndefined();
     });
   });
 

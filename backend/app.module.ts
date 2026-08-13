@@ -7,14 +7,15 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import * as Joi from 'joi';
-import { FileEntity } from './file/entity/file.entity';
-import { UserEntity } from './user/entity/user.entity';
-import { AuditLogEntity } from './audit-log/audit-log.entity';
+import { ENTITIES } from './entities';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { UploadModule } from './upload/upload.module';
+import { PostModule } from './post/post.module';
+import { CommentModule } from './comment/comment.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TempCleanupModule } from './temp-cleanup/temp-cleanup.module';
+import { HealthModule } from './health/health.module';
 import { join } from 'node:path';
 
 @Module({
@@ -42,6 +43,18 @@ import { join } from 'node:path';
         TEMP_SWEEP_CRON: Joi.string().default('0 * * * *'),
         TEMP_SWEEP_TTL_HOURS: Joi.number().default(24),
         TEMP_SWEEP_DRY_RUN: Joi.boolean().default(false),
+        // Storage port-adapter (ADR 0029): selects the FileStorage implementation.
+        // AWS credentials are deliberately not here — the SDK's own default provider
+        // chain resolves them, since our code never reads them itself.
+        STORAGE_DRIVER: Joi.string().valid('local', 's3').default('local'),
+        S3_BUCKET: Joi.string().when('STORAGE_DRIVER', {
+          is: 's3',
+          then: Joi.required(),
+        }),
+        AWS_REGION: Joi.string().when('STORAGE_DRIVER', {
+          is: 's3',
+          then: Joi.required(),
+        }),
       }),
       isGlobal: true,
     }),
@@ -53,23 +66,36 @@ import { join } from 'node:path';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        entities: [FileEntity, UserEntity, AuditLogEntity],
+        // One list, shared with backend/data-source.ts — see backend/entities.ts.
+        entities: ENTITIES,
         synchronize: false,
         autoLoadEntities: true,
+        ...(configService.getOrThrow('NODE_ENV') === 'production' && {
+          ssl: {
+            rejectUnauthorized: false,
+          },
+        }),
       }),
       inject: [ConfigService],
     }),
+    // file/upload is deliberately NOT served here — every granted read now goes
+    // through the access-controlled GET /file/:id/content (ADR 0025 D2). file/temp
+    // stays statically exposed; its lifecycle is the orphan-sweep's concern (ADR 0018),
+    // unaffected by visibility.
     ServeStaticModule.forRoot({
-      rootPath: join(process.cwd(), 'file'),
-      serveRoot: 'file',
+      rootPath: join(process.cwd(), 'file', 'temp'),
+      serveRoot: 'file/temp',
     }),
     ScheduleModule.forRoot(),
     FileModule,
     UserModule,
+    PostModule,
+    CommentModule,
     AuthModule,
     UploadModule,
     AuditLogModule,
     TempCleanupModule,
+    HealthModule,
   ],
   providers: [
     // Global error-contract filter (ADR 0011) — APP_FILTER keeps it DI-managed
@@ -80,4 +106,4 @@ import { join } from 'node:path';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

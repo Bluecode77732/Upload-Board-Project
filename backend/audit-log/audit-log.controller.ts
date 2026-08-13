@@ -28,7 +28,13 @@ export class AuditLogController {
 
   @Get()
   @Roles(UserRole.admin)
-  @ApiResponse({ status: 200, description: 'Paginated audit records.' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Paginated audit records, newest first. action filters by the action type; ' +
+      'userId returns only records where that user was the actor or the target ' +
+      '(the two filters AND together when both are given).',
+  })
   @ApiResponse({ status: 403, description: 'Admin role required.' })
   findAll(@Query() query: AuditLogQueryDto) {
     return this.auditLogService.findAll(query);

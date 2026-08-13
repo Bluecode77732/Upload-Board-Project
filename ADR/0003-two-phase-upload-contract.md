@@ -29,6 +29,10 @@ Upload is two requests with a prefix state machine:
 `UpdateFileDto.filePath` rejects `temp_` values and accepts only `granted_` ones.
 Filenames are always server-generated (uuid + timestamp); the client only echoes them
 back — no client-chosen path segment ever reaches the filesystem.
+(2026-07-27: that echo is now *enforced* rather than assumed — `UploadFileDto.filePath`
+carries `@Matches(TEMP_FILENAME_PATTERN)`, and the filename doubles as a one-shot claim
+token that defines the duplicate-submission behavior —
+[ADR 0019](0019-upload-claim-idempotency.md).)
 
 ## Consequences
 
@@ -38,4 +42,11 @@ back — no client-chosen path segment ever reaches the filesystem.
   — a scheduled sweep deletes `temp_` files past a TTL, [ADR 0018](0018-orphan-temp-file-cleanup.md).)
 - The DB insert + rename pairing is why `FileService` uses the manual QueryRunner
   pattern (see [ADR 0004](0004-transaction-pattern-selection.md)).
-- Path traversal is prevented by construction, not by sanitization.
+- Path traversal is prevented by construction, not by sanitization. (2026-07-27: this
+  held for the *generated* name but was never checked on the way back in — an unvalidated
+  `filePath` reached `rename` as a source, so a `../` segment could register a row pointing
+  at another user's `granted_` file. Closed by the DTO pattern in
+  [ADR 0019](0019-upload-claim-idempotency.md).)
+- Duplicate submission was left undefined here. (2026-07-27: defined —
+  [ADR 0019](0019-upload-claim-idempotency.md) makes the attach-issued filename a one-shot
+  claim token: a resubmit replays for its claimant, 409s for anyone else.)

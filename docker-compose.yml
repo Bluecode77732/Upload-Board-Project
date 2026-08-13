@@ -1,6 +1,7 @@
-# Local dev/build stack (ADR 0015). Supersedes the manually-created `upload-board-pg`
-# container: stop that one first (it holds host port 5435) before `docker compose up`.
-# DB credentials, port, and secrets are read from .env — the same values the app uses.
+# Local dev/build stack (ADR 0015; migration/hardening updates ADR 0030/0032). Supersedes
+# the manually-created `upload-board-pg` container: stop that one first (it holds host
+# port 5435) before `docker compose up`. DB credentials, port, and secrets are read from
+# .env — the same values the app uses.
 
 services:
   db:
@@ -20,12 +21,38 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    # Default json-file driver has no size cap; bound it so a long-running
+    # local dev container doesn't fill the host disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
 
-  api:
+  # One-shot: applies committed migrations, then exits. Separated from `api`'s
+  # boot so a scaled `api` never races `migration:run` against the same DB
+  # (ADR 0032) — the local model for the eventual Kubernetes Job.
+  migrate:
     build: .
+    image: upload-board-project-api:local
     depends_on:
       db:
         condition: service_healthy
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+    command: ['node', 'node_modules/typeorm/cli.js', 'migration:run', '-d', 'dist/data-source.js']
+    restart: 'no'
+
+  api:
+    build: .
+    image: upload-board-project-api:local
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     env_file: .env
     environment:
       # Inside the compose network the DB is reachable as `db:5432`, not localhost:5435.
@@ -35,7 +62,14 @@ services:
       - '3000:3000'
     volumes:
       # Persist uploaded files (temp_/granted_) across container restarts.
+      # Linux hosts: the image runs as uid 1001 (ADR 0030) — chown this
+      # directory once (`sudo chown -R 1001:1001 file/`) if writes fail.
       - ./file:/app/file
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
 
 volumes:
   db-data:

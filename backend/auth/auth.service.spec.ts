@@ -8,6 +8,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { createHash } from 'crypto';
+import { UserRole } from 'backend/auth/role/role';
 
 jest.mock('bcrypt');
 
@@ -23,6 +24,7 @@ describe('AuthService', () => {
     id: 1,
     email: 'test@gmail.com',
     password: 'Test123Password',
+    role: UserRole.user,
     refreshTokenHash: null,
     creator: [],
     createdAt: new Date(),
@@ -220,7 +222,7 @@ describe('AuthService', () => {
   });
 
   describe('issueToken', () => {
-    const user = { id: 1 };
+    const user = { id: 1, role: UserRole.admin };
     const token = 'token';
 
     beforeEach(() => {
@@ -238,23 +240,24 @@ describe('AuthService', () => {
       jest.spyOn(jwtService, 'signAsync').mockResolvedValue(token);
     });
 
-    it('should issue a refresh token', async () => {
+    it('should issue a refresh token with no role claim', async () => {
       const result = await authService.issueToken(user, true);
 
       expect(jwtService.signAsync).toHaveBeenCalledWith(
         // jti: every refresh token is unique so reuse detection can tell
-        // rotated-out tokens apart (ADR 0012).
+        // rotated-out tokens apart (ADR 0012). No role — refresh payloads
+        // stay minimal (ADR 0028).
         { sub: user.id, type: 'refresh', jti: expect.any(String) as string },
         { secret: 'refresh_secret', expiresIn: 3600 },
       );
       expect(result).toBe(token);
     });
 
-    it('should issue an access token', async () => {
+    it('should issue an access token carrying the role claim', async () => {
       const result = await authService.issueToken(user, false);
 
       expect(jwtService.signAsync).toHaveBeenCalledWith(
-        { sub: user.id, type: 'access' },
+        { sub: user.id, type: 'access', role: user.role },
         { secret: 'access_secret', expiresIn: 900 },
       );
       expect(result).toBe(token);
@@ -269,7 +272,10 @@ describe('AuthService', () => {
         .mockResolvedValueOnce('access-token');
       mockUserRepository.update.mockResolvedValue(undefined);
 
-      const result = await authService.issueTokenPair({ id: 1 });
+      const result = await authService.issueTokenPair({
+        id: 1,
+        role: UserRole.user,
+      });
 
       expect(mockUserRepository.update).toHaveBeenCalledWith(1, {
         refreshTokenHash: sha256('refresh-token'),

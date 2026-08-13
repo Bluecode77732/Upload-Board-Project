@@ -1,7 +1,9 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { LoginPage } from './features/auth/LoginPage'
 import { DashboardPage } from './features/files/DashboardPage'
-import { AdminPage } from './features/admin/AdminPage'
+import { FileDetailPage } from './features/files/FileDetailPage'
+import { PostBoard } from './features/posts/PostBoard'
+import { PostDetailPage } from './features/posts/PostDetailPage'
 import { RequireAuth } from './auth/RequireAuth'
 
 function App() {
@@ -12,15 +14,35 @@ function App() {
         path="/"
         element={
           <RequireAuth>
-            <DashboardPage />
+            <PostBoard />
+          </RequireAuth>
+        }
+      />
+      {/* Safe against the dev proxy: vite.config.ts anchors '/post' as the regex
+          '^/post($|/)' specifically so it does not also swallow "/posts/...". */}
+      <Route
+        path="/posts/:id"
+        element={
+          <RequireAuth>
+            <PostDetailPage />
           </RequireAuth>
         }
       />
       <Route
-        path="/admin"
+        path="/files"
         element={
           <RequireAuth>
-            <AdminPage />
+            <DashboardPage />
+          </RequireAuth>
+        }
+      />
+      {/* Not "/file/:id" — the dev proxy forwards any path starting with /file to the
+          backend API (vite.config.ts), which would shadow this client route entirely. */}
+      <Route
+        path="/view/:id"
+        element={
+          <RequireAuth>
+            <FileDetailPage />
           </RequireAuth>
         }
       />

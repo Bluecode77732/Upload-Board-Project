@@ -11,8 +11,14 @@ export enum ErrorCode {
   AUTH_EMAIL_TAKEN = 'AUTH_EMAIL_TAKEN',
   FILE_TITLE_TAKEN = 'FILE_TITLE_TAKEN',
   FILE_INVALID_PATH = 'FILE_INVALID_PATH',
+  // An unlisted file's content was requested with a missing, wrong, or expired
+  // share token (ADR 0025 D2/D6).
+  FILE_SHARE_INVALID = 'FILE_SHARE_INVALID',
   UPLOAD_FILE_REQUIRED = 'UPLOAD_FILE_REQUIRED',
   UPLOAD_INVALID_TYPE = 'UPLOAD_INVALID_TYPE',
+  // More than one of the three type-specific fields (image/audio/video) was attached
+  // to the same POST /upload/attach request (ADR 0025 D5).
+  UPLOAD_MULTIPLE_FIELDS = 'UPLOAD_MULTIPLE_FIELDS',
   // Refused: demoting the last remaining superadmin would lock the role system (ADR 0013).
   AUTH_LAST_SUPERADMIN = 'AUTH_LAST_SUPERADMIN',
 
@@ -29,7 +35,27 @@ export enum ErrorCode {
   // 404
   USER_NOT_FOUND = 'USER_NOT_FOUND',
   FILE_NOT_FOUND = 'FILE_NOT_FOUND',
+  POST_NOT_FOUND = 'POST_NOT_FOUND',
+  COMMENT_NOT_FOUND = 'COMMENT_NOT_FOUND',
   NOT_FOUND = 'NOT_FOUND',
+
+  // 409
+  // The referenced temp upload was already promoted by a different user — the
+  // one-shot claim token is spent (ADR 0019).
+  FILE_ALREADY_CLAIMED = 'FILE_ALREADY_CLAIMED',
+  // The account still owns files, and the request did not confirm the cascade —
+  // deleting it would irreversibly destroy those files too (ADR 0020).
+  USER_HAS_FILES = 'USER_HAS_FILES',
+  // The cascade is confirmed, but another user's post references one of the account's
+  // files, so the file rows cannot go. Raised from the FK violation itself, since
+  // FileService cannot query post_entity without a module cycle (ADR 0024).
+  USER_FILES_IN_USE = 'USER_FILES_IN_USE',
+  // The file is already attached to one of the requester's posts, and the repeated
+  // submission carries different text — so it is a new post, not a retry (ADR 0023 D1).
+  POST_FILE_TAKEN = 'POST_FILE_TAKEN',
+  // The file is referenced by a post, so its row cannot be deleted. Raised from the
+  // FK violation itself rather than a pre-check, which would race (ADR 0023 D4).
+  FILE_IN_USE = 'FILE_IN_USE',
 
   // 413
   PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',

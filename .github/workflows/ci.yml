@@ -1,14 +1,17 @@
-# Minimal CI (ADR 0016): lint + unit tests, plus e2e against a Postgres service.
+# CI (ADR 0016): backend lint + unit + e2e, plus frontend/admin lint and admin
+# unit tests. frontend/ and admin/ are independent projects with their own
+# pnpm-lock.yaml (not a pnpm workspace), so each gets its own job with
+# `working-directory` and its own install.
 # Toolchain comes from the ADR 0014 pin (.nvmrc + packageManager via Corepack);
 # the e2e DB image matches ADR 0015 (postgres:16).
 
-name: CI
+name: Sharenpo CI/CD
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
-    branches: [main, dev]
+    branches: [main]
 
 permissions:
   contents: read
@@ -18,11 +21,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Corepack activates the pnpm version pinned in package.json (packageManager);
+      # it must run before setup-node's cache step, which shells out to pnpm to
+      # resolve the store path.
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      # Corepack activates the pnpm version pinned in package.json (packageManager).
-      - run: corepack enable
+          cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint:ci
       - run: pnpm test
@@ -62,11 +68,222 @@ jobs:
       REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
     steps:
       - uses: actions/checkout@v4
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - run: corepack enable
+          cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Upload folders are runtime dirs (untracked); the promotion test needs both.
       - run: mkdir -p file/temp file/upload
       - run: pnpm run test:e2e
+
+  frontend-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+
+  admin-lint-and-unit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: admin/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run test
+
+  frontend-e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENV: dev
+      DB_TYPE: postgres
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: postgres
+      HASH_ROUNDS: 10
+      ACCESS_TOKEN_SECRET: ci-access-secret
+      REFRESH_TOKEN_SECRET: ci-refresh-secret
+      ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
+      REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
+      # frontend/vite.config.ts proxies API calls to :3000 same-origin, so the
+      # frontend itself needs no VITE_API_* var — only the backend needs to
+      # know which browser origin to allow.
+      CORS_ORIGIN: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      # Upload folders are runtime dirs (untracked); the app writes into both on boot.
+      - run: mkdir -p file/temp file/upload
+      - run: pnpm run migration:run
+      - name: Start backend
+        run: node dist/main &
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health/live > /dev/null; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            echo "Waiting for backend ($i/30)..."
+            sleep 2
+          done
+          echo "Backend failed to start within timeout" >&2
+          exit 1
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run frontend e2e tests
+        working-directory: frontend
+        run: pnpm run test:e2e
+
+  admin-e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENV: dev
+      DB_TYPE: postgres
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: postgres
+      HASH_ROUNDS: 10
+      ACCESS_TOKEN_SECRET: ci-access-secret
+      REFRESH_TOKEN_SECRET: ci-refresh-secret
+      ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
+      REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
+      # Admin has no dev-server proxy (unlike frontend) — it calls the backend
+      # directly via admin/src/api/axios.ts's VITE_API_URL, and runs on a
+      # different origin (:5174) than frontend (:5173).
+      CORS_ORIGIN: http://localhost:5174
+      VITE_API_URL: http://localhost:3000
+      # No in-app flow can create a superadmin (admin/e2e/seed-superadmin.mjs
+      # inserts one directly via SQL). This DB is fresh and thrown away after
+      # the job, so a fixed CI-only credential here is not a real secret.
+      E2E_SUPERADMIN_EMAIL: e2e-superadmin@ci.local
+      E2E_SUPERADMIN_PASSWORD: ci-superadmin-pw-e2e
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - run: mkdir -p file/temp file/upload
+      - run: pnpm run migration:run
+      - name: Start backend
+        run: node dist/main &
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health/live > /dev/null; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            echo "Waiting for backend ($i/30)..."
+            sleep 2
+          done
+          echo "Backend failed to start within timeout" >&2
+          exit 1
+      - name: Install admin dependencies
+        working-directory: admin
+        run: pnpm install --frozen-lockfile
+      - name: Seed superadmin account
+        working-directory: admin
+        run: pnpm run e2e:seed
+      - name: Install Playwright browsers
+        working-directory: admin
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run admin e2e tests
+        working-directory: admin
+        run: pnpm run e2e
+
+  docker-publish:
+    needs: [lint-and-unit, e2e, frontend-lint, admin-lint-and-unit, frontend-e2e, admin-e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      # QEMU lets the amd64 runner cross-build the arm64 half of the manifest.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      # Same build as build-and-push.sh (multi-arch, production target), with
+      # --push added: a multi-platform buildx build with no --push/--output
+      # just builds and discards each arch (buildx warns, nothing is loaded
+      # locally), so the script's separate `docker push` afterward has
+      # nothing new to push. `--push` publishes straight from the build.
+      - name: Build and push Docker image
+        run: >-
+          docker buildx build
+          --platform linux/amd64,linux/arm64
+          -t bluecode1775/sharenpo:latest
+          -t bluecode1775/sharenpo:${{ github.sha }}
+          -f ./Dockerfile
+          --target production
+          --push
+          .

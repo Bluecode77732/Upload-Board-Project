@@ -41,6 +41,12 @@ API 표면은 동결되었고([ADR 0010](0010-frontend-split-and-api-surface-fre
   `FILE_INVALID_PATH`, `UPLOAD_FILE_REQUIRED`, `UPLOAD_INVALID_TYPE`,
   `VALIDATION_FAILED`)와 상태 기반 폴백(`BAD_REQUEST`, `FORBIDDEN`, `NOT_FOUND`,
   `PAYLOAD_TOO_LARGE`, `INTERNAL_ERROR`).
+  (2026-07-27: 위 목록은 살아 있는 색인이 아니라 **결정 시점의 스냅샷**이다 — 정본
+  카탈로그는 `backend/common/error-code.ts`이며 이후 코드가 늘었다. 예:
+  `AUTH_REFRESH_REUSED`([ADR 0012](0012-refresh-cookie-rotation.ko.md)),
+  `AUTH_LAST_SUPERADMIN`([ADR 0013](0013-rbac-and-audit-log.ko.md)),
+  `FILE_ALREADY_CLAIMED`([ADR 0019](0019-upload-claim-idempotency.ko.md)). 코드 추가는
+  자유이며 이를 도입한 ADR에 기록한다. 코드가 늘 때마다 이 ADR을 고치지는 않는다.)
 - **스로우 지점에서 부여, 새 예외 클래스 없음** — 코드는 표준 Nest 예외에 실어
   던진다:
 

@@ -12,7 +12,21 @@ coverage
 
 # Not part of the backend image
 frontend
+admin
 test
+
+# Local Terraform provider/module cache (k8s/infra/terraform/.terraform) — gigabytes of
+# provider binaries and module git clones, none of it backend image content
+k8s
+
+# README/demo sample media — not read by the Dockerfile or backend
+assets
+
+# Docs and Kubernetes/CI config — not read by the Dockerfile or backend
+*.md
+ADR
+helm
+.github
 
 # Secrets never get baked into the image (compose injects env at runtime)
 .env

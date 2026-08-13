@@ -23,9 +23,17 @@ Pattern choice is a design-time decision, made per handler from this table:
 | `dataSource.transaction(cb)` | TypeORM-managed begin/commit/rollback/release | Pure multi-DB writes, no side effect | Allowed; no current usage — preferred for new pure-DB cases (release can't be missed) |
 | `@Transaction()` decorator | — | — | **Forbidden** (removed in TypeORM 0.3) |
 
+(2026-07-30: the **Project status** column is the snapshot at decision time, not a live
+index — `CLAUDE.md` > Transaction Boundary is the authoritative one. `dataSource.transaction(cb)`
+is no longer unused: `UserService.updateRole` adopted it ([ADR 0013](0013-rbac-and-audit-log.md))
+and `UserService.remove` uses it for the account-deletion cascade
+([ADR 0020](0020-account-deletion-cascade.md)). The *selection rule* below is unchanged.)
+
 The rename is placed *before* `commitTransaction` — the minimal divergence window this
 design accepts: a rename failure rolls the insert back; only a commit failure after a
-successful rename can diverge.
+successful rename can diverge. The reverse holds for deletion: `unlink` has no rollback, so
+it runs *after* the commit and its only failure mode is a recoverable orphan on disk
+([ADR 0020](0020-account-deletion-cascade.md)).
 
 ## Consequences
 

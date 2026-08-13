@@ -7,8 +7,8 @@
 
 > 한국어 버전: [README.ko.md](README.ko.md)
 
-A NestJS REST API where authenticated users upload and manage video files.
-JWT auth (Passport), PostgreSQL via TypeORM, Multer disk storage, transaction-safe
+A NestJS REST API where authenticated users upload and manage image, audio, and video
+files. JWT auth (Passport), PostgreSQL via TypeORM, Multer disk storage, transaction-safe
 file promotion, Swagger documentation. A local/portfolio backend project — no
 deploy pipeline. A React + Vite browser frontend lives in the `frontend/`
 subfolder of this repository ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md));
@@ -85,11 +85,16 @@ Stop the legacy `upload-board-pg` container first — it holds host port 5435.
 
 ```bash
 cp .env.example .env        # fill in secrets; DB_* can stay as-is for compose
-docker compose up --build   # db (postgres:16) + api on :3000; migrations run on boot
+docker compose up --build   # db (postgres:16) → migrate (one-shot) → api on :3000
 ```
 
 The `db` service publishes `${DB_PORT}` (5435), so host-run `pnpm test:e2e` and
-`pnpm migration:*` reach the same database.
+`pnpm migration:*` reach the same database. Migrations run as their own `migrate`
+service, not inside `api`'s boot ([ADR 0032](ADR/0032-migration-as-separate-deploy-step.md))
+— `api` waits for `migrate` to exit 0. The image runs as a non-root user
+([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)); on a native Linux host, if
+the bind-mounted `./file` directory fails to write, `chown` it once:
+`sudo chown -R 1001:1001 file/` (Windows/Mac Docker Desktop is unaffected).
 
 ### Environment variables
 
@@ -121,31 +126,129 @@ All endpoints except `/auth/*` require a Bearer access token.
 
 **User** — user creation is `POST /auth/register`; there is no `POST /user`.
 Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.md))
-- `GET /user` — list users (admin only)
+- `GET /user` — list users (admin only). `take` (1–100, default 20) and `skip` (default 0)
+  paginate; `search` does a case-insensitive partial match on email (wildcards escaped);
+  `sortBy` (`createdAt`|`email`|`id`, default `createdAt`) and `order` (`ASC`|`DESC`,
+  default `DESC`) control sort, with `id` always added as a tiebreaker — the same
+  search/sort shape `GET /file` already has
+  ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)). An undeclared query param is
+  rejected as 400 `VALIDATION_FAILED` rather than silently ignored — the global
+  `ValidationPipe`'s `forbidNonWhitelisted` treats a typo like `?orderby=email` as an
+  error. Response is a `[users, totalCount]` tuple, matching `GET /file`
 - `GET /user/:id` — get a user
-- `PATCH /user/:id` — update a user (self or admin)
+- `PATCH /user/:id` — update a user (self, or an admin/superadmin acting on a
+  strictly lower-ranked account — an admin cannot modify a peer admin or a superadmin)
 - `PATCH /user/:id/role` — assign a role (superadmin only; the last superadmin cannot be demoted)
-- `DELETE /user/:id` — delete a user (self or admin)
+- `DELETE /user/:id` — delete a user (self, or an admin/superadmin acting on a
+  strictly lower-ranked account, with the same peer/higher-rank restriction as above).
+  An account that owns files is
+  refused with 409 `USER_HAS_FILES` unless the request confirms the cascade with
+  `?deleteFiles=true`, which deletes the account together with its files — irreversibly
+  ([ADR 0020](ADR/0020-account-deletion-cascade.md)). The account's **posts are always
+  deleted with it**, with no confirmation of their own: the flag deliberately guards
+  media bytes only ([ADR 0023](ADR/0023-board-domain-schema.md)). A confirmed cascade is
+  still refused with 409 `USER_FILES_IN_USE` when one of the account's files is attached
+  to *another user's* post — delete that post first
+  ([ADR 0024](ADR/0024-account-cascade-fk-refusal.md))
 
 **File**
-- `POST /upload/attach` — upload a video to temp storage (multipart field `video`, 100 MB limit)
-- `GET /file` — list files (paginated: `take` 1–100, default 20 / `skip` default 0)
-- `GET /file/:id` — get file metadata
-- `POST /file` — promote a temp file to permanent storage (transactional)
-- `PATCH /file/:id` — update file metadata (creator or admin)
-- `DELETE /file/:id` — delete file metadata (creator or admin)
+- `POST /upload/attach` — upload a file to temp storage, 100 MB limit. Exactly one of three
+  multipart fields, each with its own class allowlist: `image` (jpg/jpeg/png/webp), `audio`
+  (mp3), `video` (mp4/mov/webm). Zero fields is 400 `UPLOAD_FILE_REQUIRED`; more than one is
+  400 `UPLOAD_MULTIPLE_FIELDS`; a file that does not match its field's allowlist is 400
+  `UPLOAD_INVALID_TYPE` ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D4/D5,
+  [ADR 0027](ADR/0027-media-type-expansion-implementation.md))
+- `GET /file` — list files. All query parameters are optional and combinable; an undeclared
+  one is rejected as 400 `VALIDATION_FAILED` ([ADR 0021](ADR/0021-list-query-search-filter-sort.md))
+
+  | Parameter | Values | Default |
+  |---|---|---|
+  | `take` | 1–100 | `20` |
+  | `skip` | ≥ 0 | `0` |
+  | `search` | title substring, case-insensitive, ≤100 chars (`%` and `_` match literally) | — |
+  | `sortBy` | `createdAt` \| `title` \| `id` | `createdAt` |
+  | `order` | `DESC` \| `ASC` | `DESC` |
+  | `creatorId` | user id | — |
+
+  Example: `GET /file?search=holiday&creatorId=3&sortBy=title&order=ASC&take=10`
+- `GET /file/:id` — get file metadata. A `private`/`unlisted` file is 404 `FILE_NOT_FOUND`
+  for anyone but its creator/admin — existence itself is hidden
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md),
+  [ADR 0026](ADR/0026-file-visibility-implementation.md))
+- `GET /file/:id/content` — stream the file's stored bytes, gated by `visibility`: `public`
+  needs no auth, `private` needs a creator/admin Bearer token (403
+  `FORBIDDEN_NOT_OWNER` otherwise), `unlisted` needs a matching `?share=<token>` (no login
+  required; 403 `FILE_SHARE_INVALID` if missing/wrong/expired). Supports `Range` requests
+  for video/audio seeking. This is the **only** path that serves granted bytes —
+  `ServeStaticModule` no longer exposes `file/upload`
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2,
+  [ADR 0026](ADR/0026-file-visibility-implementation.md))
+- `POST /file` — promote a temp file to permanent storage (transactional), defaulting to
+  `visibility: private`. The attached filename is a one-shot claim token: resubmitting it
+  returns the existing file with 200 (idempotent retry) for the user who claimed it, and
+  409 `FILE_ALREADY_CLAIMED` for anyone else ([ADR 0019](ADR/0019-upload-claim-idempotency.md))
+- `PATCH /file/:id` — update file metadata (creator or admin), including toggling
+  `visibility`. Switching to `unlisted` issues a `shareToken` (returned as `shareUrl`, owner/
+  admin only); `rotateShareToken: true` regenerates it, invalidating every previously shared
+  link; an optional `shareExpiresAt` bounds it (default: no expiry)
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D3)
+- `DELETE /file/:id` — delete file metadata and the stored file (creator or admin). A file
+  attached to a post is refused with 409 `FILE_IN_USE` — delete the post first
+  ([ADR 0023](ADR/0023-board-domain-schema.md))
+
+**Post** — the board itself ([ADR 0023](ADR/0023-board-domain-schema.md)). A post carries
+text plus an optional reference to **one** file the author created; the file is *referenced*,
+never owned, so deleting a post leaves it intact
+- `GET /post` — list posts. Same query-parameter contract as `GET /file` above
+  (`take` / `skip` / `search` / `sortBy` / `order` / `creatorId`), with the same defaults
+- `GET /post/:id` — get a post with its author and attached file
+- `POST /post` — create a post (`{ title, body, fileId? }`). `fileId` must be a file the
+  requester created (403 `FORBIDDEN_NOT_OWNER` otherwise, 404 `FILE_NOT_FOUND` if it does not
+  exist) and one no other post holds. It doubles as the idempotency key: resubmitting the
+  **identical** payload returns the existing post with 200, while the same `fileId` with
+  different text is 409 `POST_FILE_TAKEN`. A post without `fileId` has no natural key, so a
+  repeat creates a second post
+- `PATCH /post/:id` — update `title` / `body` (author or admin). The attachment is fixed at
+  creation; detaching a video means deleting the post
+- `DELETE /post/:id` — delete a post (author or admin), irreversibly. Its comments go with
+  it through the FK cascade; its attached file does not
+
+**Comment** — the thread under a post ([ADR 0023](ADR/0023-board-domain-schema.md)). Flat —
+there are no replies to replies
+- `GET /post/:postId/comment` — list one post's comments, **oldest first** (the opposite of
+  the newest-first file and post lists; the order is fixed and takes no sort parameters).
+  `take` / `skip` paginate. 404 `POST_NOT_FOUND` if the post does not exist
+- `POST /post/:postId/comment` — comment on a post (`{ body }`, ≤1,000 chars). 404
+  `POST_NOT_FOUND` if the post is gone. A comment has no unique column and therefore no
+  idempotency key, so an identical resubmission creates a **second** comment
+- `PATCH /comment/:id` — update `body` (author or admin)
+- `DELETE /comment/:id` — delete a comment (author or admin), irreversibly. The post is
+  untouched
+
+A post's author gets **no** special power over the comments on their post — editing and
+deleting are the comment author's or an admin's, and nobody else's.
 
 **Audit log**
-- `GET /audit-log` — review ROLE_CHANGE / USER_DELETE / FILE_DELETE records (admin only; paginated, `?action` filter)
+- `GET /audit-log` — review ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE /
+  COMMENT_DELETE records (admin only; paginated, `?action` filter). `?userId` returns
+  only records where that user was the actor or the target (the two filters AND
+  together when both are given)
+
+**Health** (operational — for load-balancer/orchestrator probes, not application
+consumers; unauthenticated by design, [ADR 0031](ADR/0031-health-and-readiness-endpoints.md))
+- `GET /health/live` — the process is running; no dependency checks
+- `GET /health/ready` — additionally checks DB connectivity; 503 if unreachable
 
 ### Typical flow
 
 ```
 POST /auth/register   (Basic)          → user created
 POST /auth/signin     (Basic)          → { accessToken } + Set-Cookie: refreshToken (httpOnly)
-POST /upload/attach   (Bearer, video)  → { filename: "temp_..." }
+POST /upload/attach   (Bearer, one of image/audio/video) → { filename: "temp_..." }
 POST /file            (Bearer, { title, filePath: "temp_..." })
-                                       → promoted; served at {BASE_URL}/file/upload/granted_...
+                                       → promoted (visibility: private); served at
+                                         {BASE_URL}/file/:id/content (Bearer required until
+                                         PATCH /file/:id sets visibility to public/unlisted)
 ```
 
 ### Error responses
@@ -184,14 +287,27 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full request and data flow.
 ## Known Limitations
 
 Tracked in [ROADMAP.md](ROADMAP.md) — since 2026-07-23 the full staged project
-plan. Highlights: toolchain pinning and Docker/compose landed 2026-07-25 and the
-e2e suite now covers the auth/ownership/pagination/promotion paths, while CI and
-logging infrastructure are still pending (Stage 1 roadmap items).
-**Uploaded files are served unauthenticated at public URLs**
-(`{BASE_URL}/file/upload/granted_...`) until the Stage 4 VOD access-control task
-— anyone with the link can fetch them ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)).
-Uploads enforce an mp4/mov/webm allowlist and `pnpm lint` is clean as of
-2026-07-22.
+plan. Highlights: **Stage 1 foundation is complete** — toolchain pinning,
+Docker/compose, CI (GitHub Actions), logging conventions, and the e2e rewrite all
+landed 2026-07-25 (ADR 0014–0017), and the e2e suite covers the
+auth/ownership/pagination/promotion paths. **Stage 2 has begun** — orphan temp-file
+cleanup landed 2026-07-26 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)).
+**File visibility landed 2026-08-01** — every stored file now has a
+`public`/`private`/`unlisted` state (default `private`) and is served only through the
+access-controlled `GET /file/:id/content`; `file/upload` is no longer statically exposed
+([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6,
+[ADR 0026](ADR/0026-file-visibility-implementation.md)). **Media-type expansion also
+landed 2026-08-01** — `POST /upload/attach` now takes one of three type-specific fields
+(`image`/`audio`/`video`), each with its own allowlist
+([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D4/D5,
+[ADR 0027](ADR/0027-media-type-expansion-implementation.md)). Both changes are breaking
+for the live `frontend/` consumer, which has not yet adopted either. **Container hardening
+landed 2026-08-08** — non-root image user, liveness/readiness endpoints, and migrations
+moved to their own deploy step ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–
+[ADR 0032](ADR/0032-migration-as-separate-deploy-step.md)); a distroless runtime base, a
+real secrets manager, and HTTPS termination stay open items ([ADR 0033](ADR/0033-secrets-delivery-target.md),
+[ADR 0034](ADR/0034-https-termination-stance.md), and ROADMAP.md > Unscheduled for
+distroless). `pnpm lint` is clean as of 2026-07-22.
 
 ## Author
 

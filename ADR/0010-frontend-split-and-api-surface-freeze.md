@@ -42,6 +42,25 @@ consumers** — every breaking API change is still free. Opt-in CORS
   `CLAUDE.md`. It consumes the backend over HTTP (dev: a Vite proxy;
   prod: `CORS_ORIGIN`). Keeping both in one repo makes an API-contract change
   and its client update land in one commit, at near-zero structural cost.
+> **Amended 2026-07-30 (admin placement)** by
+> [ADR 0022](0022-admin-console-import-from-chat-project.md): the admin bullet below is
+> superseded. RBAC has since landed ([ADR 0013](0013-rbac-and-audit-log.md)), meeting this
+> ADR's own precondition for reconsideration, and an admin console targeting the same
+> three-tier role model was imported from the author's Chat Project as the top-level
+> `admin/` folder — a declared modification base, not working code. Admin therefore
+> **begins as a separate application at `admin/`**, not as an `/admin` route section.
+> Everything else in this ADR (the surface freeze, the in-repo non-workspace structure,
+> the static-serving constraint) stands.
+>
+> **Further amended 2026-08-06** — the open question above is resolved. Once
+> [ADR 0022](0022-admin-console-import-from-chat-project.md)'s import was adapted against
+> this backend's real routes, it proved not to be "mostly deletable": only its chat-domain
+> remnant was, while the role-management substance survived intact. `admin/` is therefore
+> the sole admin surface, and the `/admin` route section this bullet originally produced
+> (`frontend/src/features/admin/AdminPage.tsx`, a stub with no backend calls) has been
+> deleted, not built out. Admin is no longer a route section inside `frontend/` in any
+> form — resolution recorded in ADR 0022's 2026-08-06 note.
+
 - **Admin starts as a route section (`/admin/*`) inside the frontend**, not as
   a third application. Promotion to a dedicated admin app is reconsidered only
   after RBAC lands and real admin requirements exist. A three-way split today

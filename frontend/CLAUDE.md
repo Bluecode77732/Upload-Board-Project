@@ -61,6 +61,12 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
 - Keep `src/api/errorCodes.ts` and `src/api/types.ts` in sync with the backend
   when its contract changes — update [docs/API-CONTRACT.md](docs/API-CONTRACT.md)
   in the same change.
+- Every `DELETE` route in this API returns a plain-text `200` body, not JSON
+  (see [docs/API-CONTRACT.md](docs/API-CONTRACT.md#delete-responses-are-plain-text-not-json)).
+  `client.ts`'s `request()` handles this centrally (Content-Type-gated JSON parse,
+  `undefined` otherwise) — found after it originally crashed every successful
+  delete with a `SyntaxError` that surfaced as a generic "Network error". Don't
+  add a caller that expects a parsed body from `api.delete()`.
 
 ## Conventions
 
@@ -71,15 +77,38 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   `src/auth/`).
 - **File header comment** (new files only): three lines — Purpose / Usage /
   Rationale — above the imports, matching the existing files.
-- **Admin**: `/admin` is a route section inside this app (backend ADR 0010),
-  a stub until backend RBAC lands — it must not imply elevated access yet.
+- **Admin**: there is no `/admin` route in this app. ADR 0010 originally reserved one
+  as a stub; ADR 0022 imported a standalone Chat Project console to `admin/` instead as
+  the operator surface, and once that console's role-management slice was adapted to
+  this backend (2026-08-06), the stub route was deleted rather than built out — see
+  ROADMAP.md's Stage 5 "resolve the duplicate admin surface" row. Do not re-add an
+  `/admin` route here; the operator surface lives in the sibling `admin/` app.
 - **TypeScript**: no `any`; the build runs `tsc -b` with `noUnusedLocals`/
   `noUnusedParameters` — keep it green.
+
+### Playwright E2E gotchas (`frontend/e2e/`)
+
+Two failure modes discovered writing `auth`/`upload`/`board.spec.ts` (2026-08-03)
+that will resurface in any new spec unless avoided up front:
+
+- **Re-setting the same file input path is a silent no-op.** `locator.setInputFiles(path)`
+  called twice in a row with the *identical* path (e.g. re-attaching the same fixture
+  after a form reset) does not reliably fire the input's `change` event, so React state
+  never updates and the form submits as if no file were chosen. Clear first:
+  `await input.setInputFiles([]); await input.setInputFiles(path)`.
+- **`getByLabel`/`getByRole` name matching is substring + case-insensitive by default**,
+  and this app's generated content can collide with it: a `<select>` nested inside a
+  `<label>` exposes its accessible name as the label text concatenated with every
+  `<option>` text (`getByLabel('Title')` matched FileBoard's "Sort by" select because
+  its options spell out "...title..."), and a test-generated email containing a common
+  word can match an unrelated button (`getByRole('button', { name: 'Upload' })` matched
+  a creator-filter button whose accessible name was `e2e-upload-...@example.com`). Pass
+  `{ exact: true }` on any label/role query whose text is a short common word.
 
 ## Commands
 
 ```bash
-pnpm dev      # Vite dev server on :5173 (proxies /auth,/file,/user,/upload → :3000)
+pnpm dev      # Vite dev server on :5173 (proxies /auth,/file,/user,/upload,/post,/comment → :3000)
 pnpm build    # tsc -b type-check + vite production build
 pnpm lint     # oxlint
 pnpm preview  # serve the production build

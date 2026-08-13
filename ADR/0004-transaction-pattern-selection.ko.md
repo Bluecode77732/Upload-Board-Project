@@ -24,9 +24,17 @@
 | `dataSource.transaction(cb)` | TypeORM이 begin/commit/rollback/release 관리 | 순수 다중 DB 쓰기, 부수효과 없음 | 허용; 현재 사용처 없음 — 새 순수 DB 사례에 권장 (release 누락 불가능) |
 | `@Transaction()` 데코레이터 | — | — | **금지** (TypeORM 0.3에서 제거) |
 
+(2026-07-30: **프로젝트 상태** 열은 결정 시점의 스냅샷이며 최신 색인이 아닙니다 —
+권위 있는 표는 `CLAUDE.md` > Transaction Boundary입니다. `dataSource.transaction(cb)`은
+더 이상 미사용이 아닙니다: `UserService.updateRole`이 채택했고([ADR 0013](0013-rbac-and-audit-log.ko.md)),
+`UserService.remove`가 계정 연쇄 삭제에 사용합니다([ADR 0020](0020-account-deletion-cascade.ko.md)).
+아래의 *선택 기준* 자체는 그대로입니다.)
+
 rename은 `commitTransaction` *앞에* 둡니다 — DB와 파일시스템이 어긋날 수 있는 구간을
 이 설계에서 가장 작게 만드는 배치입니다: rename이 실패하면 insert가 롤백되고, rename
-성공 후 커밋이 실패하는 경우에만 어긋남이 생길 수 있습니다.
+성공 후 커밋이 실패하는 경우에만 어긋남이 생길 수 있습니다. 삭제는 반대입니다: `unlink`는
+롤백이 없으므로 커밋 *이후에* 실행하며, 유일한 실패 결과는 복구 가능한 디스크 고아 파일입니다
+([ADR 0020](0020-account-deletion-cascade.ko.md)).
 
 ## 결과
 

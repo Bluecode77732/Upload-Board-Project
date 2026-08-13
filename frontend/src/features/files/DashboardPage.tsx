@@ -1,55 +1,24 @@
-// Purpose: the authenticated landing page — lists files and hosts the two-phase upload form.
-// Usage: rendered at / behind RequireAuth.
-// Rationale: a protected GET exercises the Bearer header + transparent-refresh path; the upload form
-//   beside it makes this the app's first write path, refreshing the list on a successful promotion.
+// Purpose: the file board screen — hosts the two-phase upload form and the file board.
+// Usage: rendered at /files behind RequireAuth.
+// Rationale: the upload form and the searchable/sortable/paginated file board (FileBoard) are two
+//   concerns of one screen; a successful upload bumps refreshSignal so the board re-runs its own query.
 
-import { useCallback, useEffect, useState } from 'react'
-import { api, ApiError } from '../../api/client'
-import type { FileListResponse, FileResponse } from '../../api/types'
-import { useAuth } from '../../auth/useAuth'
+import { useState } from 'react'
+import { NavBar } from '../../shared/NavBar'
+import { FileBoard } from './FileBoard'
 import { UploadForm } from './UploadForm'
 
 export function DashboardPage() {
-  const { signOut } = useAuth()
-  const [files, setFiles] = useState<FileResponse[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const loadFiles = useCallback(() => {
-    // GET /file returns a [rows, total] tuple (getManyAndCount), not a bare array.
-    api
-      .get<FileListResponse>('/file?take=20&skip=0')
-      .then(([rows]) => {
-        setFiles(rows)
-        setError(null)
-      })
-      .catch((err: unknown) =>
-        setError(err instanceof ApiError ? err.message : 'Failed to load files.'),
-      )
-  }, [])
-
-  useEffect(() => {
-    loadFiles()
-  }, [loadFiles])
+  // Has no meaning of its own — FileBoard only uses a change in this value as a signal to
+  // re-fetch its current query; the upload form doesn't know or care what that query is.
+  const [refreshSignal, setRefreshSignal] = useState(0)
 
   return (
     <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1>Upload Board</h1>
-        <button type="button" onClick={() => void signOut()}>
-          Sign out
-        </button>
-      </header>
-      <UploadForm onUploaded={loadFiles} />
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-      {files === null && !error && <p>Loading files…</p>}
-      {files && files.length === 0 && <p>No files yet.</p>}
-      {files && files.length > 0 && (
-        <ul>
-          {files.map((file) => (
-            <li key={file.id}>{file.title}</li>
-          ))}
-        </ul>
-      )}
+      <NavBar />
+      <h1>Files</h1>
+      <UploadForm onUploaded={() => setRefreshSignal((n) => n + 1)} />
+      <FileBoard refreshSignal={refreshSignal} />
     </main>
   )
 }

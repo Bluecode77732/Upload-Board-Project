@@ -1,30 +1,21 @@
 import { Module } from '@nestjs/common';
 import { UploadController } from './upload.controller';
+import { UploadService } from './upload.service';
 import { MulterModule } from '@nestjs/platform-express';
-import { join } from 'node:path';
-import { diskStorage } from 'multer';
-import { v4 } from 'uuid';
+import { memoryStorage } from 'multer';
+import { StorageModule } from 'backend/storage/storage.module';
 
 @Module({
   imports: [
     MulterModule.register({
-      storage: diskStorage({
-        destination: join(process.cwd(), 'file', 'temp'),
-        filename: (req, file, cb) => {
-          const split = file.originalname.split('.');
-
-          const tempLabel = 'temp';
-          let fileType = 'mp4';
-
-          if (split.length > 1) {
-            fileType = split[split.length - 1];
-          }
-
-          cb(null, `${tempLabel}_${v4()}_${Date.now()}.${fileType}`);
-        },
-      }),
+      // Buffers into memory instead of writing to local disk directly — the
+      // physical write now happens through the FileStorage port (UploadService),
+      // so a driver switch actually reaches temp bytes too (ADR 0029 D4).
+      storage: memoryStorage(),
     }),
+    StorageModule,
   ],
   controllers: [UploadController],
+  providers: [UploadService],
 })
 export class UploadModule {}

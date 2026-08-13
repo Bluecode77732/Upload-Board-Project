@@ -26,6 +26,23 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0016](0016-github-actions-ci.ko.md) | GitHub Actions 기반 지속적 통합(CI) | 승인됨 | 2026-07-25 |
 | [0017](0017-logging-conventions.ko.md) | Nest 내장 Logger 기반 로깅 규약 | 승인됨 | 2026-07-25 |
 | [0018](0018-orphan-temp-file-cleanup.ko.md) | 미청구 temp 파일 스케줄 정리 | 승인됨 | 2026-07-26 |
+| [0019](0019-upload-claim-idempotency.ko.md) | 업로드 중복 제출 정책 — attach 파일명을 1회용 청구 토큰으로 | 승인됨 | 2026-07-27 |
+| [0020](0020-account-deletion-cascade.ko.md) | 삭제 정책 — soft delete 대신 확인 기반 계정 연쇄 삭제 | 승인됨 | 2026-07-30 |
+| [0021](0021-list-query-search-filter-sort.ko.md) | 목록 조회 — 화이트리스트 정렬, ILIKE 제목 검색, 작성자 필터 | 승인됨 | 2026-07-30 |
+| [0022](0022-admin-console-import-from-chat-project.ko.md) | Chat Project에서 가져온 admin 콘솔 — 수정 기반으로서의 이식 | 승인됨 | 2026-07-30 |
+| [0023](0023-board-domain-schema.ko.md) | Board 도메인 스키마 — post와 comment | 승인됨 | 2026-07-30 |
+| [0024](0024-account-cascade-fk-refusal.ko.md) | 계정 연쇄 삭제 — FK 위반 500 대신 타입 있는 거절 | 승인됨 | 2026-07-31 |
+| [0025](0025-file-visibility-and-media-expansion.ko.md) | 파일 가시성, 접근 제어 서빙, 미디어 타입 확장 | 승인됨 — 구현 완료(0026, 0027) | 2026-07-31 |
+| [0026](0026-file-visibility-implementation.ko.md) | 파일 가시성 구현 — 서빙 방식, 메타데이터 필터링, 콘텐츠/메타데이터 노출 정책 분리 | 승인됨 | 2026-08-01 |
+| [0027](0027-media-type-expansion-implementation.ko.md) | 미디어 타입 확장 구현 — 타입별 업로드 필드 | 승인됨 | 2026-08-01 |
+| [0028](0028-access-token-role-claim.ko.md) | 액세스 토큰에 `role` 클레임 추가 | 승인됨 | 2026-08-05 |
+| [0029](0029-storage-port-adapter.ko.md) | 스토리지 포트-어댑터 — `FileStorage` 인터페이스, 0005 개정 | 승인됨 | 2026-08-07 |
+| [0030](0030-container-non-root-and-arch-stance.ko.md) | 컨테이너 non-root 실행 — distroless·멀티아치는 보류 | 승인됨 | 2026-08-08 |
+| [0031](0031-health-and-readiness-endpoints.ko.md) | Liveness/Readiness 엔드포인트 | 승인됨 | 2026-08-08 |
+| [0032](0032-migration-as-separate-deploy-step.ko.md) | 마이그레이션을 부팅이 아닌 별도 배포 스텝으로 분리 | 승인됨 | 2026-08-08 |
+| [0033](0033-secrets-delivery-target.ko.md) | 시크릿 전달 목표 — Kubernetes Secrets, AWS Secrets Manager는 보류 | 승인됨 (설계만) | 2026-08-08 |
+| [0034](0034-https-termination-stance.ko.md) | HTTPS 종단은 Ingress에서, 앱 안에서는 하지 않는다 | 승인됨 (설계만) | 2026-08-08 |
+| [0035](0035-arm64-bcrypt-source-rebuild.ko.md) | arm64 지원 — bcrypt는 원래 잘 동작함(검증됨), `onlyBuiltDependencies`는 안전장치로 유지, 0030 정정 | 승인됨 | 2026-08-12 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

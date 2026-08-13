@@ -28,8 +28,9 @@ migration tooling replaced it, leaving schema changes without any managed path.
 ## Consequences
 
 - No environment can silently mutate the production-shaped schema.
-- The manual window has a real cost: entity edits and DB state can drift until
-  migrations land — this is the top roadmap item ([ROADMAP.md](../ROADMAP.md)).
+- The manual window had a real cost: entity edits and DB state could drift until
+  migrations landed — which they did (2026-07-22; this ADR records that adoption),
+  so the window is now closed ([ROADMAP.md](../ROADMAP.md)).
 - `CLAUDE.md` Scope Discipline forbids running `migration:generate` as a drive-by;
   schema changes are always described in plain text and approved first.
 

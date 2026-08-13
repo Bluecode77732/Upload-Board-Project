@@ -6,13 +6,15 @@ contract the app depends on. When the backend changes it, update this file
 **and** the mirrored types in `src/api/` in the same change.
 
 Backend decisions referenced here live in the repo-root `ADR/` (0001, 0010,
-0011, 0012) — this file restates only what a client must obey.
+0011, 0012, 0021, 0023, 0024) — this file restates only what a client must obey.
 
 ## Base URL & transport
 
 - Dev: calls are same-origin via the Vite proxy (`vite.config.ts` forwards
-  `/auth`, `/file`, `/user`, `/upload` to `http://localhost:3000`). `VITE_API_BASE`
-  stays empty.
+  `/auth`, `/file`, `/user`, `/upload`, `/post`, `/comment` to
+  `http://localhost:3000`; `/file` and `/post` are regex-anchored there so the
+  proxy's prefix match doesn't also swallow the client routes `/files` and
+  `/posts/:id`). `VITE_API_BASE` stays empty.
 - Prod: set `VITE_API_BASE` to the real backend origin; the backend must allow
   that origin via its `CORS_ORIGIN` env (backend ADR 0008).
 - **Every** request sends `credentials: 'include'` so the httpOnly refresh
@@ -90,18 +92,54 @@ Every error is the frozen `ErrorBody` shape:
 
 | Method | Path | Notes |
 |---|---|---|
-| `GET` | `/file?take=&skip=` | paginated (`take` 1–100 default 20) |
-| `GET` | `/file/:id` | metadata + creator |
-| `POST` | `/file` | promote a temp upload to permanent |
-| `PATCH` | `/file/:id` | creator-only |
-| `DELETE` | `/file/:id` | creator-only |
-| `POST` | `/upload/attach` | multipart field `video`, 100 MB, mp4/mov/webm |
+| `GET` | `/file?take=&skip=&search=&sortBy=&order=&creatorId=` | tuple `[rows, total]`; hides non-public rows from non-owner/admin (ADR 0026 D7) |
+| — | — | `take` 1–100 (default 20), `skip` ≥0 (default 0), `search` ≤100 chars (title ILIKE, blank = absent), `sortBy` one of `createdAt`\|`title`\|`id` (default `createdAt`), `order` `ASC`\|`DESC` (default `DESC`), `creatorId` a positive integer — any other value is `400 VALIDATION_FAILED` (ADR 0021, backend `GetFilesDto`) |
+| `GET` | `/file/:id` | metadata + creator; 404 for a hidden file (existence hidden, ADR 0026 D8) |
+| `GET` | `/file/:id/content?share=` | the **only** path serving bytes — access-gated by visibility (ADR 0025/0026); Range-aware |
+| `POST` | `/file` | promote a temp upload to permanent (new rows default `visibility: private`) |
+| `PATCH` | `/file/:id` | creator/admin; toggles visibility + rotates share token here |
+| `DELETE` | `/file/:id` | creator/admin; 409 `FILE_IN_USE` if a post references it |
+| `POST` | `/upload/attach` | multipart — exactly one of `image`/`audio`/`video`, 100 MB (ADR 0027) |
 | `GET` | `/user`, `/user/:id` | |
-| `PATCH`/`DELETE` | `/user/:id` | self-only |
+| `PATCH`/`DELETE` | `/user/:id` | self/admin |
+| `GET` | `/post?take=&skip=&search=&sortBy=&order=&creatorId=` | tuple `[rows, total]`; same query shape as `/file` (ADR 0021 read layer reused), `sortBy` one of `createdAt`\|`title`\|`id` |
+| `GET` | `/post/:id` | post + creator + attached `file` (`FileResponseDto`, absent for a text-only post); 404 `POST_NOT_FOUND` |
+| `POST` | `/post` | `{ title, body, fileId? }`; `fileId` must be the requester's own file, unclaimed by another post — identical resubmit for the same `fileId` replays `200`, a differing title/body is `409 POST_FILE_TAKEN` (ADR 0023 D1) |
+| `PATCH` | `/post/:id` | `{ title?, body? }` only — creator/admin; `fileId` is not editable, an attachment is fixed at creation (ADR 0023 D1) |
+| `DELETE` | `/post/:id` | creator/admin; takes its comments with it (the schema's only `ON DELETE CASCADE`, ADR 0023 D3) but leaves the attached file row untouched |
+| `GET` | `/post/:postId/comment?take=&skip=` | tuple `[rows, total]`; order is **fixed** `createdAt` ASC (a thread reads oldest-first) — no `sortBy`/`order` params exist here |
+| `POST` | `/post/:postId/comment` | `{ body }` (≤1,000 chars); no idempotency key — an identical resubmit creates a second comment (ADR 0023 D1) |
+| `PATCH` | `/comment/:id` | `{ body? }` — creator/admin; the post's own author gains no extra power over a comment they didn't write |
+| `DELETE` | `/comment/:id` | creator/admin |
 
-Uploading is two-phase: `POST /upload/attach` (multipart field `video`, sent via
-`api.postForm` so the browser sets the boundary `Content-Type`) returns `{ filename }`,
-then `POST /file` `{ title, filePath: filename }` promotes it (backend `temp_`→`granted_`).
+Uploading is two-phase: `POST /upload/attach` (multipart — exactly one of the
+type-specific fields `image` jpg/jpeg/png/webp · `audio` mp3 · `video` mp4/mov/webm,
+sent via `api.postForm` so the browser sets the boundary `Content-Type`) returns
+`{ filename }`; attaching more than one field is `400 UPLOAD_MULTIPLE_FIELDS`. Then
+`POST /file` `{ title, filePath: filename }` promotes it (backend `temp_`→`granted_`),
+returning `201` (fresh) or `200` (idempotent replay of the same claim, ADR 0019).
 
-Uploaded files are served at public URLs (`fileUrl` in responses) — unauthenticated
-until the backend's Stage 4 VOD access-control task. Treat those URLs as public.
+`fileUrl` in responses is the **access-controlled** content endpoint
+`/file/:id/content`, NOT a static/public path (ADR 0025/0026): a `public` file streams
+without a token, `private` needs the creator/admin bearer, `unlisted` needs a matching
+`?share=<token>`. New files default to `private`. `shareUrl` is returned only to a
+manager of an unlisted file.
+
+A comment's `postId` in its response is the bare id, never an embedded post — a
+20-comment thread would otherwise repeat the same post body and file on every
+row. Comment routes span two prefixes: listing/creating hang off the post
+(`/post/:postId/comment`), while editing/deleting address a comment by its own
+id (`/comment/:id`) — there is deliberately no `GET /comment/:id`.
+
+### DELETE responses are plain text, not JSON
+
+Every `DELETE` route in this API (`/file/:id`, `/user/:id`, `/post/:id`, `/comment/:id`)
+resolves its handler to a bare string (e.g. `"File 12 deleted."`), which Nest sends as a
+`200 text/html` body — there is no `ErrorBody`-shaped or JSON success payload to parse.
+`src/api/client.ts`'s `request()` handles this centrally: it only calls `response.json()`
+when the response's `Content-Type` says so, otherwise resolving `undefined`. This was
+found the hard way — an earlier version called `response.json()` unconditionally on every
+non-204 2xx response, which threw a `SyntaxError` on every successful delete and made
+`FileDetailPage`'s delete look like a network failure even though the backend had already
+deleted the row. Do not add a caller that expects a parsed body from `api.delete()`.
+

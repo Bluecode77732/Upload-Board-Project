@@ -1,0 +1,60 @@
+# Test dev/build purposed file. It downloads the image of bluecode1775/sharenpo,
+# which tests bases on that image for a test before actual upload.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_DATABASE:-postgres}
+    ports:
+      # Same host port the app's .env expects (DB_PORT), so host-run e2e/migrations hit it too.
+      - "${DB_PORT:-5435}:5432"
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-postgres}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Default json-file driver has no size cap; bound it so a long-running
+    # local dev container doesn't fill the host disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  # One-shot: applies committed migrations, then exits. Separated from `api`'s
+  # boot so a scaled `api` never races `migration:run` against the same DB
+  # (ADR 0032) — the local model for the eventual Kubernetes Job.
+  migrate:
+    image: bluecode1775/sharenpo
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+    restart: 'no'
+
+  api:
+    image: bluecode1775/sharenpo
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      # Inside the compose network the DB is reachable as `db:5432`, not localhost:5435.
+      DB_HOST: db
+      DB_PORT: 5432
+    ports:
+      - '3000:3000'
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'

@@ -37,6 +37,24 @@ API였다. 이제 브라우저 프론트엔드가 필요해졌고, 그 순간 �
   추적한다. 이것은 pnpm workspace 모노레포가 *아니다* — 백엔드는 자체
   `package.json`·툴링·루트 `CLAUDE.md`를 유지하고, `frontend/` 폴더는 자체
   `package.json`·툴링·스코프 `CLAUDE.md`를 가진다.
+> **2026-07-30 개정 (admin 배치)** —
+> [ADR 0022](0022-admin-console-import-from-chat-project.ko.md)에 의해 아래 admin 항목은
+> 대체된다. 그 사이 RBAC이 도입돼([ADR 0013](0013-rbac-and-audit-log.ko.md)) 이 ADR이
+> 스스로 걸어둔 재검토 조건이 충족됐고, 같은 3단계 역할 모델을 대상으로 만들어진 admin
+> 콘솔을 저자의 Chat Project에서 최상위 `admin/` 폴더로 가져왔다 — 동작하는 코드가 아니라
+> 선언된 수정 기반이다. 따라서 admin은 `/admin` 라우트 구역이 아니라
+> **`admin/`의 독립 애플리케이션으로 출발한다**. 이 ADR의 나머지(표면 동결, 저장소 내
+> 비워크스페이스 구조, 정적 서빙 제약)는 그대로다.
+>
+> **2026-08-06 추가 개정** — 위 미결 질문이 해소됐다.
+> [ADR 0022](0022-admin-console-import-from-chat-project.ko.md)의 이식본을 이 백엔드의 실제
+> 라우트에 맞게 적응시켜 보니 "대부분 삭제 가능"한 것으로 밝혀지지 **않았다** — 삭제 가능했던
+> 건 채팅 도메인 잔재뿐이었고, 역할 관리 본체는 그대로 살아남았다. 따라서 `admin/`이 유일한
+> admin 화면이며, 이 항목이 원래 만들어낸 `/admin` 라우트 구역
+> (`frontend/src/features/admin/AdminPage.tsx`, 백엔드 호출이 없는 stub)은 구현되지 않고
+> 삭제됐다. admin은 이제 `frontend/` 안의 라우트 구역으로 어떤 형태로도 존재하지 않는다 —
+> 해소 내용은 ADR 0022의 2026-08-06 추가 기록에 남겼다.
+
 - **admin은 프론트엔드 내부의 라우트 구역(`/admin/*`)으로 시작한다** — 세 번째
   애플리케이션이 아니다. 별도 admin 앱으로의 승격은 RBAC이 랜딩하고 실제 admin
   요구사항이 쌓인 뒤에만 재검토한다. 지금 3분리를 하면 백엔드가 구분조차 못

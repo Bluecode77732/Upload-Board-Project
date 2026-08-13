@@ -18,12 +18,17 @@ Before making any change:
 1. Inspect the codebase thoroughly — read the relevant files, grep for symbols, trace the actual call chain.
    Concern-to-entrypoint map (check these first):
    - Auth flow change      → read `backend/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `backend/auth/strategy/`; grep `JwtAuthGuard`, `LocalAuthGuard`
-   - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract)
-   - Physical upload change→ read `backend/upload/upload.module.ts` (Multer diskStorage, `temp_{uuid}_{timestamp}` naming) and `upload.controller.ts` (100MB size limit)
+   - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract, one-shot claim resolution in `uploadFile` — ADR 0019). Content reads go through the separate `backend/file/file-content.controller.ts` (`GET /file/:id/content`, `OptionalJwtAuthGuard`) → `FileService.resolveContentAccess` — the visibility gate (ADR 0025/0026)
+   - Physical upload change→ read `backend/upload/upload.module.ts` (Multer `memoryStorage`) and `upload.controller.ts` (100MB size limit) together with `backend/upload/upload.service.ts` (`stageTemp` — `temp_{uuid}_{timestamp}` naming, calls the `FileStorage` port, ADR 0029 D4)
+   - Storage adapter change→ read `backend/storage/file-storage.interface.ts` (the `FileStorage` port + `FILE_STORAGE` token), `local-disk.storage.ts` / `s3.storage.ts` (the two implementations), and `storage.module.ts` (the `STORAGE_DRIVER`-keyed factory, ADR 0029)
+   - Container/deploy change→ read `Dockerfile` (non-root `USER`, `HEALTHCHECK`, migration removed from `CMD` — ADR 0030/0032) and `docker-compose.yml` (the one-shot `migrate` service) together with `backend/health/` (`GET /health/live`/`GET /health/ready` — ADR 0031)
+   - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `LocalDiskStorage.unlink`/`S3Storage.unlink` (post-commit unlink through the `FileStorage` port, ADR 0020/0023/0029)
+   - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
+   - Comment/thread change → read `backend/comment/comment.service.ts` (fixed `createdAt ASC` order, `canManage`, `deleteCommentsOfCreator`) and `PostService.assertPostExists` — the one thing CommentModule asks PostModule for. Routes live in **two** controllers (`post-comment.controller.ts` for `/post/:postId/comment`, `comment.controller.ts` for `/comment/:id`); post deletion removes comments via the FK, not the service (ADR 0023 D3)
    - Orphan temp cleanup   → read `backend/temp-cleanup/temp-cleanup.service.ts` (`@nestjs/schedule` `SchedulerRegistry` cron, `temp_`-prefix + TTL sweep of `file/temp`, ADR 0018) and its `selectExpiredTempFiles` pure core
    - Env var change        → read the Joi schema in `backend/app.module.ts` AND `.env.example` — both must stay in sync
-   - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides
-   - Static file serving   → read the `ServeStaticModule` block in `app.module.ts` (`rootPath: file/`, `serveRoot: 'file'`)
+   - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides. `backend/post/entity/post.entity.ts` and `backend/comment/entity/comment.entity.ts` are deliberately **unidirectional** (no inverse property on User/File/Post) — do not "fix" that (ADR 0023). A new entity is registered in **`backend/entities.ts` and nowhere else** — `app.module.ts` and `backend/data-source.ts` both import that one `ENTITIES` array, so an entity cannot be live in the app but invisible to `migration:generate` (it was two hand-maintained lists until 2026-07-31, and that divergence made `generate` report success while omitting a whole table). The e2e suite still needs its own line: `test/e2e-utils.ts` (`MIGRATIONS` + `TABLES`) — but omitting it fails loudly on the next run
+   - Static file serving   → read the `ServeStaticModule` block in `app.module.ts` (`rootPath: file/temp`, `serveRoot: 'file/temp'` — `file/upload` is deliberately not mounted; granted reads go through `GET /file/:id/content` instead, ADR 0025/0026)
 2. Never invent APIs, files, functions, or types that you have not confirmed exist in the codebase.
 3. Reuse existing patterns only; do not introduce new abstractions unless explicitly asked.
 4. Verify every assumption with actual code, search results, or test output — not memory or inference alone.
@@ -56,7 +61,7 @@ Do not make any of the following unless explicitly requested:
 - New dependency additions — confirm via pnpm before installing; check license type (MIT/Apache-2/BSD preferred); runtime-bundled GPL/AGPL carries copyleft risk — note this before adding. Run `pnpm audit` for known CVEs.
 - Schema changes — if an entity change is needed, describe the required column/relation change in plain text and stop. Migration tooling exists (adopted 2026-07-22: `migration:*` scripts + `backend/data-source.ts` + `backend/migrations/`) — never run `migration:generate` without a prior plain-text description, and always review its output line-by-line before running. The baseline migration uses readable constraint names (not TypeORM hashes), so `generate` may emit spurious constraint-rename statements — strip them, keep only the intended change.
 - Large-scale formatting edits
-- Permanent data deletion paths (hard-delete service methods, cascade-delete relations) — `UserService.remove` and `FileService.deleteFile` are hard deletes; before adding another, describe the cascade depth (`FileEntity.creator` is `nullable: false` — deleting a user with files will hit an FK constraint) and confirm the operation is intentionally irreversible before writing any code
+- Permanent data deletion paths (hard-delete service methods, cascade-delete relations) — soft delete is deliberately **not** adopted (ADR 0020), so every delete here is irreversible: `UserService.remove` hard-deletes and, on an explicit `deleteFiles=true`, cascades into the account's file rows **and their stored files**; `FileService.deleteFile` hard-deletes the row **and unlinks the stored file**. Before adding another, describe the cascade depth (DB rows *and* disk) and confirm the operation is intentionally irreversible before writing any code. Physical `unlink` always runs **after** the owning transaction commits — it cannot be rolled back, so the only reachable failure must be a recoverable orphan on disk, never a row pointing at a missing file
 
 High-blast-radius files — require explicit approval before any edit (a change here
 radiates repo-wide, so the blast radius is never "just this file": `app.module.ts` wires
@@ -83,6 +88,8 @@ Before implementing anything non-trivial, ask the one question that applies:
 | New env var                              | Is it added to **both** the Joi schema (`app.module.ts`) and `.env.example`, and accessed via `ConfigService` only? |
 | Any change touching `filePath`           | Does the `temp_` → `granted_` prefix contract between `UploadModule` and `FileService.uploadFile` still hold end to end? |
 | New DTO field                            | The global pipe runs `whitelist + forbidNonWhitelisted` — is the field declared on the DTO, or will the request be rejected/stripped? |
+| New write endpoint                       | What happens when the identical request arrives twice (network retry, double-click)? Name the natural idempotency key (a server-issued token, a unique column) and the typed outcome of a repeat — replay, or which `ErrorCode` (ADR 0019). |
+| Architecturally significant decision (schema change, new module, an alternative weighed and rejected) | Describe the alternatives and the trade-off in plain text first, and confirm whether this needs its own ADR — do not settle the decision in code before it is written down. |
 
 Ask one focused question rather than a list. Do not proceed on assumptions when intent is ambiguous.
 
@@ -110,6 +117,7 @@ When planning an implementation, answer the following before proceeding:
   - Does this add a NestJS provider? → which module's `providers[]` needs it? Cross-module use goes through `exports`/`imports` only — never re-declare another module's service in your own `providers[]`
   - Does this change transaction scope? → pick a row from the transaction-pattern table (Project-Specific Principles > Transaction Boundary) and state why
   - Does this add or change an endpoint? → Swagger decorators (`@ApiTags`, `@ApiResponse`, auth decorator) are required; verify `/doc` renders it correctly
+  - Does a new handler/service method decide identity/ownership, or act on a loaded relation? → the decision lives in the layer that owns the authoritative state, never re-derived by reaching through a loaded relation in an outer layer (Law of Demeter / Tell Don't Ask); no `a.b.c` reach-through — tell the owning service, don't ask-then-act
 
 ### Modification Analysis (수정)
 For each change being made, explicitly state:
@@ -139,7 +147,7 @@ After completing any implementation, apply the review perspective that matches w
 **After a Modification:**
 - Do the changes work correctly? Run `pnpm lint` and `pnpm test` to verify.
   - QueryRunner used → verify `release()` is in a `finally` block and every path either commits or rolls back
-  - `filePath` logic changed → verify the `temp_`/`granted_` prefix state machine end to end (`upload.module.ts` naming → `file.service.ts` rename → `ServeStaticModule` URL)
+  - `filePath` logic changed → verify the `temp_`/`granted_` prefix state machine end to end (`upload.module.ts` naming → `file.service.ts` rename → `GET /file/:id/content` access check, not a static URL — ADR 0025/0026)
   - Endpoint changed → verify the Swagger doc at `/doc` still describes the real behavior
 - Are there any regressions in existing functionality?
 - What side effects or hidden risks does this change introduce?
@@ -155,6 +163,7 @@ After completing any task, always append a brief summary in this format:
 ## Change Summary
 - What changed: <one line per file or concern>
 - Why: <the stated reason>
+- Trade-offs / ADR: <if the task made an architecturally significant decision — a schema change, a new module, an alternative weighed and rejected, a resolved principle conflict — name the ADR that records the trade-off (write one if the decision has no home yet); omit for routine changes with no alternative to weigh>
 - Side effects: <impact on: DB schema / file-directory contract (temp_/granted_) / Swagger doc / Joi schema + .env.example>
 - Guard impact: <any endpoint whose guard coverage changed — list affected routes; omit if no guard was touched>
 - README impact: <update README.md if a user-visible feature or endpoint was added, modified, or removed; omit if no feature surface changed>
@@ -235,6 +244,40 @@ exempt. When writing or updating any `.ko.md` document:
   for any reason, re-read the whole file and fix unnatural passages in the same
   change — this is the one sanctioned exception to "no drive-by edits", scoped to
   Korean fluency only (never content changes the English sibling doesn't have).
+
+## Documentation Authoring Protocol (문서 작성 프로토콜)
+
+Scope: the project-level documents — `README.md`, `ARCHITECTURE.md`, `CHANGELOG.md`,
+`ROADMAP.md`, `CONTRIBUTING.md`, and `ADR/` — plus their `.ko.md` siblings. (Source-code
+comments are governed instead by File Creation Convention.) When asked to author or overhaul
+any of these, run the five roles **in order** — do not collapse them, and do not start writing
+before the earlier roles are done:
+
+1. **조사 (Investigate)** — read the actual code, git history, and existing docs before
+   writing a word. This is Hallucination Prevention applied to documentation: every claim
+   traces to a file, a commit, or test output, never to memory. Evidence expires — re-read the
+   file a claim is about before concluding (Hallucination Prevention #10), especially when
+   parallel sessions may have touched the repo.
+2. **계획 (Plan)** — decide the document set, each document's scope, and its end-to-end
+   structure (Analysis Protocol > Structure Analysis). State which documents change and why
+   before editing any of them.
+3. **질문 (Question)** — **do not guess what the code cannot tell you.** Implementation
+   *intent*, the *reason* a technology was chosen, and the *background* of a past decision live
+   in the author's head, not the source — ask for them first (Clarification Protocol). Precede
+   a choice question with a compact options × criteria table so the developer decides from the
+   table, not from prose. A rationale is written only after it is confirmed — never inferred
+   and presented as fact.
+4. **작성 (Write)** — write the English document, then its `.ko.md` sibling in the same change
+   (Documentation Convention). Record the trade-off and the rejected alternatives, not only the
+   outcome (Change Summary > Trade-offs / ADR); an architecturally significant decision gets its
+   own ADR. Cite the ADR or file that carries each rationale rather than restating it.
+5. **검증 (Verify)** — Result Review for docs: relative links resolve, EN/KO structure stays
+   symmetric, endpoint/behavior claims match the real routes, and nothing is stated as done
+   that is not actually committed. Run the link and symmetry checks — do not eyeball them.
+
+Goal: a documentation pass is investigate → plan → ask → write → verify, and the "ask" step is
+load-bearing. The specific failure this protocol exists to prevent is a confidently-worded
+document built on an inferred rationale the author never actually held.
 
 ## Never Do — Forbidden Patterns
 These patterns defeat the purpose of TypeScript and cause production failures.
@@ -368,14 +411,16 @@ return user  // without serialization
 
 // ❌ File upload without validation → malicious file, storage exhaustion
 @UploadedFile() file: Express.Multer.File  // no limits, no type check
-// ✅ Enforce size limit AND a mimetype/extension allowlist in FileInterceptor config —
-//    the existing upload.controller.ts pattern (100MB; mp4/mov/webm); new upload
+// ✅ Enforce size limit AND a mimetype/extension allowlist in FileInterceptor/
+//    FileFieldsInterceptor config — the existing upload.controller.ts pattern (100MB;
+//    a per-field allowlist keyed on file.fieldname for image/audio/video); new upload
 //    endpoints must include both. Client-supplied mimetype is an allowlist, not a guarantee
 
 // ❌ Serving user-supplied paths → path traversal
 res.sendFile(req.query.path)
-// ✅ Static serving only via ServeStaticModule rooted at file/; filePath values are
-//    server-constructed (uuid + timestamp), never client-chosen paths
+// ✅ file/temp is the only ServeStaticModule root; granted (file/upload) bytes stream only
+//    through GET /file/:id/content, gated by FileService.resolveContentAccess (ADR 0025/0026).
+//    filePath values are always server-constructed (uuid + timestamp), never client-chosen paths
 
 // ❌ AI tool reading attacker-controlled content → prompt injection
 // Any file read or query that retrieves content written by a potential attacker
@@ -441,13 +486,21 @@ Principle Conflict Protocol.
   mechanism; no new rule needed
 - Command–Query Separation — reflected in the existing controller method split
 - Favor Explicit Interfaces — enforced via `any` ban / `unknown` narrowing
-- Law of Demeter, Tell Don't Ask — judgment calls, no current violation identified
+- Law of Demeter, Tell Don't Ask — enforced at planning time via the Structure Analysis
+  checklist (no `a.b.c` reach-through; tell the owning service rather than ask-then-act)
 
 ### Maintainability
 - DRY, Fail Fast, Testability, Input Validation — covered by Testing conventions
   and Never Do Groups 1–3
-- Idempotence — `register` guards against duplicate email; new write endpoints must
-  state their duplicate-submission behavior rather than assuming idempotency
+- Idempotence — `register` guards against duplicate email; `POST /file` replays a
+  claimed upload for its claimant and 409s for anyone else (ADR 0019). New write
+  endpoints must state their duplicate-submission behavior rather than assuming
+  idempotency: prefer a **server-issued token or an existing unique column** as the
+  natural idempotency key over a client-supplied one (a client value is identification
+  only, never authority — Never Do Group 3), and make the repeat a typed outcome, never
+  a 500. A client-key store (`Idempotency-Key` + response snapshot table) was considered
+  and rejected for the upload flow; it stays available for a future endpoint that has no
+  natural token, but it is a schema change and needs its own ADR
 - Comments — every new or modified function carries the mandatory 목적/이유/방법 block
   (File Creation Convention > Function Comments). *Beyond* that block, comments stay
   WHY-only and never restate what the code already says
@@ -549,41 +602,91 @@ one of these is violated, follow Principle Conflict Protocol.
 - **UserModule** owns user CRUD only. It exports `UserService` (consumed by
   `JwtStrategy` for token validation) — that export is the module's public contract.
 - **FileModule** owns file *metadata* only: the `FileEntity` row, title/creator/filePath,
-  and the transaction that promotes a temp file.
-- **UploadModule** owns the *physical* file only: Multer disk storage into `file/temp`,
-  size limit, temp naming. It has no service and no DB access — keep it that way.
+  and the transaction that promotes a temp file. It also answers two questions for
+  PostModule — may this user attach this file (`assertAttachableBy`, identity-only) and what
+  is its public URL (`toResponse`) — and never imports PostModule in return (ADR 0023 D4).
+- **PostModule** owns board post content only: the `PostEntity` row, its optional 1:1
+  reference to a file, and post CRUD. It never reads `file.creator` — attachability is
+  FileModule's judgment to make. It exports `PostService` for the account cascade and for
+  the one question CommentModule asks it (`assertPostExists`).
+- **CommentModule** owns thread content only: the `CommentEntity` row and comment CRUD. It
+  never queries `post_entity` — whether a post exists is PostModule's judgment to make — and
+  PostModule never imports it back, which is what lets post deletion stay a database cascade
+  (ADR 0023 D3). It exports `CommentService` for the account cascade.
+- **UploadModule** owns the physical *temp* write only, through the injected
+  `FileStorage` port — a thin `UploadService`, not a metadata/DB layer. Multer uses
+  `memoryStorage` (buffers the upload, does not write to disk itself);
+  `UploadService.stageTemp` generates the `temp_{uuid}_{timestamp}` name and calls
+  `storage.saveTemp`. **Revised from "no service and no DB access" (2026-08-07,
+  ADR 0029 D4)**: a bare controller cannot hold the `FileStorage` dependency a
+  driver-agnostic temp write requires, so the module gained the minimum service that
+  makes that true — it still knows nothing about `FileEntity`, ownership, or claims.
+- **StorageModule** (ADR 0029) is an *operational* module, not a domain one: it hosts
+  the `FileStorage` port and the `STORAGE_DRIVER`-keyed factory that selects
+  `LocalDiskStorage` or `S3Storage`. `UploadModule`, `FileModule`, `UserModule`, and
+  `TempCleanupModule` all `imports: [StorageModule]` and inject the `FILE_STORAGE`
+  token — it cannot live inside any one of them (mirrors the TempCleanupModule
+  precedent below: infrastructure consumed by multiple domain modules gets its own
+  module rather than being bolted onto one).
 - **TempCleanupModule** (ADR 0018) is an *operational* module, not a domain one: it hosts
-  the scheduled sweep that deletes orphaned `temp_` files from `file/temp` past a TTL
-  (`@nestjs/schedule`, imperative `SchedulerRegistry` registration; no DB). It is the
+  the scheduled sweep that deletes orphaned `temp_` objects past a TTL (`@nestjs/schedule`,
+  imperative `SchedulerRegistry` registration; no DB) — reading/deleting through the
+  `FileStorage` port (ADR 0029) so the sweep works under either adapter. It is the
   **sanctioned exception** to "the module set maps to the four domain concerns" —
   operational / cross-cutting maintenance gets its own module rather than being bolted
   onto a domain module. It deliberately does **not** live in UploadModule: keeping
-  UploadModule controller-only (above) was chosen over co-locating the sweep with the
-  `file/temp` writer (Principle Conflict Protocol resolution, ADR 0018).
+  UploadModule's own concern narrow to staging temp writes (above) was chosen over
+  co-locating the sweep with it (Principle Conflict Protocol resolution, ADR 0018).
+- **HealthModule** (ADR 0031) is another *operational* module, mirroring the
+  TempCleanupModule precedent: it hosts `GET /health/live` (no dependency checks) and
+  `GET /health/ready` (pings the DB via the injected `DataSource`), both deliberately
+  unauthenticated since kubelet/LB probes carry no bearer token. It owns no domain state
+  and imports nothing beyond the globally-available `DataSource` — no domain module gets
+  a health-check responsibility bolted onto it.
 - Goal: a change request that spans "physical file" and "file metadata" is two modules'
   work by design; do not merge the concerns into one service for convenience.
 
 ### Two-Phase Upload Contract (temp_ → granted_)
 
-- Breakdown: `POST /upload/attach` writes `file/temp/temp_{uuid}_{timestamp}.{ext}` and
-  returns only the filename (`upload.module.ts` diskStorage). `POST /file`
-  then, inside a transaction, inserts the `FileEntity` row with
-  `filePath = file/upload/granted_...` and physically renames the file from `file/temp`
-  to `file/upload` (`file.service.ts` `uploadFile`). `UpdateFileDto.filePath` rejects
-  `temp_` values and accepts only `granted_` ones.
+- Breakdown: `POST /upload/attach` stages `temp_{uuid}_{timestamp}.{ext}` through the
+  `FileStorage` port (`UploadService.stageTemp`, ADR 0029 D4) and returns only the
+  filename. `POST /file` then, inside a transaction, inserts the `FileEntity` row with
+  `filePath = file/upload/granted_...` and calls `storage.promote()` to move the object
+  from its temp key to that granted key (`file.service.ts` `uploadFile`).
+  `UpdateFileDto.filePath` rejects `temp_` values and accepts only `granted_` ones.
 - Rationale: the prefix is a state machine — `temp_` means "uploaded but unclaimed",
-  `granted_` means "owned by a DB row". Static serving (`ServeStaticModule`, rootPath
-  `file/`) exposes both folders, so the prefix is the only marker of a file's lifecycle
-  state.
+  `granted_` means "owned by a DB row". `ServeStaticModule` now roots only at `file/temp`
+  (ADR 0025/0026) — a `granted_` file's bytes are never statically reachable; the sole
+  read path is `GET /file/:id/content`, gated by `FileEntity.visibility`
+  (`public`/`private`/`unlisted`, default `private`). The prefix still marks lifecycle
+  state; visibility is an orthogonal, separately-gated concern layered on top of a
+  `granted_` row. Under `STORAGE_DRIVER=s3` the `ServeStaticModule` route serves nothing
+  (temp bytes never touch local disk) — an accepted residual, not a break, since nothing
+  in the live flow reads through it (ADR 0029 D6).
 - Goal: any new code that touches `filePath` preserves the prefix state machine end to
   end. Never construct a `filePath` from client-supplied path segments — the server
-  generates names (uuid + timestamp); the client only echoes them back.
-- Orphan cleanup (ADR 0018): a `temp_` file that is never claimed (`POST /file` never
+  generates names (uuid + timestamp); the client only echoes them back. That echo is
+  enforced, not assumed: `UploadFileDto.filePath` carries
+  `@Matches(TEMP_FILENAME_PATTERN)` (ADR 0019), so a malformed value is rejected at the
+  boundary as `VALIDATION_FAILED` and never reaches `storage.promote()`. `UpdateFileDto`
+  deliberately **omits** the inherited `filePath` and redeclares it — the two endpoints
+  sit on opposite sides of the state machine, so the pattern must not be inherited.
+- Duplicate submission (ADR 0019): the attach-issued filename is a **one-shot claim
+  token**. `FileService.uploadFile` resolves the claim *before* opening a transaction —
+  already claimed by the same user ⇒ replay the existing row (`{ replayed: true }`, the
+  controller answers 200); claimed by another user ⇒ 409 `FILE_ALREADY_CLAIMED`
+  (identity-only — RBAC governs managing a file, never claiming one); well-formed but
+  no temp file behind it ⇒ 400 `FILE_INVALID_PATH`. A concurrent double-submit is
+  settled by the unique constraint: a `23505` whose winner claimed the same filename is
+  replayed, otherwise it is 400 `FILE_TITLE_TAKEN`. New code on this path keeps every
+  duplicate outcome typed — a foreseeable client repeat must never surface as a 500.
+- Orphan cleanup (ADR 0018): a `temp_` object that is never claimed (`POST /file` never
   called) is deleted by the scheduled sweep in `TempCleanupModule` once it exceeds
-  `TEMP_SWEEP_TTL_HOURS` (default 24h, hourly cron). The sweep only ever deletes
-  `temp_`-prefixed files in `file/temp`; `granted_` / `file/upload` are never candidates
-  — the prefix state machine above is exactly what makes "still in `file/temp` with a
-  `temp_` prefix ⇒ unclaimed orphan" a safe, DB-free identification.
+  `TEMP_SWEEP_TTL_HOURS` (default 24h, hourly cron), reading/deleting through
+  `storage.listTemp()`/`storage.unlink()` (ADR 0029) so the sweep works under either
+  adapter. The sweep only ever considers `temp_`-prefixed objects; `granted_` objects
+  are never candidates — the prefix state machine above is exactly what makes "still
+  listed as `temp_` ⇒ unclaimed orphan" a safe, DB-free identification.
 
 ### Transaction Boundary per Multi-Write (트랜잭션 패턴 선택 기준)
 
@@ -592,9 +695,9 @@ effect), choose the pattern explicitly from this table — state the choice and 
 
 | 패턴 | Lifecycle 관리 | 적용 대상 | 이 프로젝트 상태 |
 |------|----------------|-----------|------------------|
-| Plain repository call (`repository.save/update/delete`) | TypeORM implicit (auto-commit) | 단일 쓰기, 부수효과 없음 | 기본값 — `UserService`, `FileService.deleteFile` |
+| Plain repository call (`repository.save/update/delete`) | TypeORM implicit (auto-commit) | 단일 쓰기 (비-DB 부수효과는 커밋 밖에서만) | 기본값 — `UserService.update`, `FileService.deleteFile`(행 삭제 후 커밋 밖 unlink, ADR 0020) |
 | Manual QueryRunner (`createQueryRunner → connect → startTransaction → commit/rollback → release`) | 개발자가 전 단계 직접 관리 | 다중 쓰기 **+ 트랜잭션 중간에 비-DB 부수효과**(파일 rename 등)를 끼워 넣어야 할 때 | 확립된 패턴 — `FileService.uploadFile` / `updateFile`. `release()`는 반드시 `finally`, rollback은 `catch`, 외부 노출 에러는 generic |
-| `dataSource.transaction(async manager => …)` | TypeORM이 begin/commit/rollback/release 자동 관리 | 순수 다중 DB 쓰기 (비-DB 부수효과 없음) | 허용 — 아직 사용처 없음; 새 코드에서 조건 충족 시 이쪽이 더 안전 (release 누락 불가능) |
+| `dataSource.transaction(async manager => …)` | TypeORM이 begin/commit/rollback/release 자동 관리 | 순수 다중 DB 쓰기 (비-DB 부수효과 없음 — 필요하면 커밋 밖으로 뺀다) | 확립된 패턴 — `UserService.updateRole`(SERIALIZABLE + row lock, ADR 0013), `UserService.remove`(계정 연쇄 삭제, unlink는 커밋 후, ADR 0020). 조건 충족 시 수동 QueryRunner보다 안전 (release 누락 불가능) |
 | `@Transaction()` decorator | — | — | **금지** — TypeORM 0.3에서 제거된 API |
 
 - Rationale: `uploadFile`의 DB insert와 물리 `rename`은 함께 성공/실패해야 하며, rename을
@@ -617,9 +720,9 @@ effect), choose the pattern explicitly from this table — state the choice and 
   token even though both are structurally valid JWTs; the stored hash makes a
   rotated-out token's replay detectable and the session revocable.
 - Goal: any new token consumer verifies both the secret and the `type` claim — never
-  one without the other. `issueToken` takes `Pick<UserEntity, 'id'>` so a bare JWT
-  payload (`{ id: payload.sub }`) can be re-tokenized without a DB round trip — keep
-  that signature. New refresh-token consumers must also preserve the hash-anchor
+  one without the other. `issueToken` takes `Pick<UserEntity, 'id' | 'role'>` (widened
+  from `id`-only by ADR 0028 so the access-token branch can embed `role`) — keep that
+  signature. New refresh-token consumers must also preserve the hash-anchor
   contract (`issueTokenPair` stores, `rotateRefreshToken` compares, `signOut` clears).
 
 ### Boundary Validation & Response Shaping
@@ -658,7 +761,9 @@ Do not suggest alternatives to these decisions without explicit request.
 - Registration & sign-in: `Authorization: Basic base64(email:password)` header —
   parsed by `parseBasicToken`, not body DTOs
 - Token pair: accessToken + refreshToken, separate secrets, separate expiry env vars
-  (`*_EXPIRES_IN`, numeric); payload shape `{ sub: userId, type: 'access' | 'refresh' }`
+  (`*_EXPIRES_IN`, numeric); payload shape `{ sub: userId, type: 'access' | 'refresh' }`,
+  plus an access-token-only `role` claim (ADR 0028) so a client can read its own role
+  without an extra request — `RolesGuard`/`AuthUser` never read this claim themselves
 - Guards: `JwtAuthGuard` (Passport strategy name `"jwt-auth-guard"`) protects all
   non-auth controllers at class level; `LocalAuthGuard` (`"local-auth-guard"`) exists
   for `POST /auth/signin/local` only
@@ -697,9 +802,12 @@ Do not suggest alternatives to these decisions without explicit request.
   `pnpm migration:run -- --fake` once to mark it applied. Entity change requests are
   described in plain text first (Scope Discipline), and `migration:generate` output is
   always reviewed line-by-line before running
-- Entities registered explicitly in `app.module.ts` (`entities: [...]`) AND
-  `autoLoadEntities: true` — keep both in sync when adding an entity (requires
-  approval: high-blast-radius)
+- Entities are registered **explicitly by name, in one list**: `backend/entities.ts`
+  exports `ENTITIES`, which both `app.module.ts` (alongside `autoLoadEntities: true`) and
+  `backend/data-source.ts` import. Add a new entity there only — editing either consumer's
+  list back into existence recreates the divergence that let `migration:generate` silently
+  omit a table (2026-07-31). A glob was considered and rejected: registering by name is the
+  deliberate choice, so the fix was one list, not a filesystem rule
 - Relations always explicit: `FileEntity.creator` (ManyToOne, `nullable: false`,
   `cascade: true`) ↔ `UserEntity.creator` (OneToMany). The relation property is named
   `creator` on **both** sides — follow that naming
@@ -708,17 +816,62 @@ Do not suggest alternatives to these decisions without explicit request.
   without prior plain-text description of the entity change
 
 ### File Storage
-- Local disk only: Multer `diskStorage` into `file/temp`, promoted to `file/upload`
-- Served statically by `ServeStaticModule` (`rootPath: file/`, `serveRoot: 'file'`);
-  public URLs composed as `{BASE_URL}/{filePath}` in `toResponse()`
-- Upload constraint: single field `video`, `fileSize` limit 100,000,000 bytes (100MB) —
-  a single-video domain needs exactly one field, and the 100MB ceiling caps disk usage and
-  bounds an upload-based denial-of-service
-- **Never suggest**: S3/cloud storage, streaming/chunked upload, CDN — unless explicitly requested
-  (2026-07-23: AWS deployment, VOD playback access control, and a storage
-  port-adapter are now explicitly decided roadmap items — ROADMAP.md Stage 4.
-  Local disk stays the operative decision until those dedicated tasks land,
-  each with its own ADR)
+- **Storage port-adapter (landed 2026-08-07, [ADR 0029](ADR/0029-storage-port-adapter.md),
+  amends this section's former "local disk only" framing)**: physical-file operations go
+  through a `FileStorage` interface (`backend/storage/`) selected at boot by
+  `STORAGE_DRIVER` (`'local'` default | `'s3'`). `LocalDiskStorage` ports ADR 0005's
+  original disk mechanics unchanged; `S3Storage` is the ISP-required second
+  implementation, unit-tested only (SDK mocked) — it has never run against a live
+  bucket. `UploadModule`'s Multer uses `memoryStorage`, not `diskStorage`, so the very
+  first byte of a temp upload also goes through the port (`UploadService.stageTemp`) —
+  the precondition for `STORAGE_DRIVER=s3` to actually fix the multi-instance gap ADR
+  0005 recorded, not just the promoted-file half of it. `local` stays the operative
+  default; switching a real deployment to `s3` is Stage 4 work (ROADMAP.md). Promotion
+  (temp → `file/upload/granted_...`) goes through `storage.promote()`
+  (`file.service.ts` `uploadFile`)
+- **File visibility (landed 2026-08-01, ADR 0025 D1/D2/D3/D6 + ADR 0026)**: `FileEntity`
+  carries `visibility` (`public`/`private`/`unlisted`, **default `private`**), a nullable
+  `shareToken` (server-generated random opaque string, set only while `unlisted`), and a
+  nullable `shareExpiresAt` TTL. `ServeStaticModule` now roots **only** at `file/temp`
+  (`rootPath: file/temp`, `serveRoot: 'file/temp'`) — `file/upload` is not statically
+  exposed. The **only** path that serves granted bytes is `GET /file/:id/content`
+  (`backend/file/file-content.controller.ts`, `FileService.resolveContentAccess`),
+  Range-aware, guarded by `OptionalJwtAuthGuard` so `public`/`unlisted`+token access works
+  with no bearer token: `public` → unauthenticated; `private` → creator/admin only (403
+  `FORBIDDEN_NOT_OWNER` otherwise); `unlisted` → a matching, unexpired `?share=<token>`,
+  no login required (403 `FILE_SHARE_INVALID` otherwise). Visibility toggling and share-token
+  rotation reuse the existing `PATCH /file/:id` write path — there is no separate
+  visibility-only endpoint. `GET /file` and `GET /file/:id` also filter `private`/`unlisted`
+  rows from non-owner/non-admin requesters (ADR 0026 D7); a hidden `GET /file/:id` answers
+  404 `FILE_NOT_FOUND` (existence hidden), while content access answers 403 for the same
+  requester (existence confirmed, bytes refused) — the two endpoints disclose differently on
+  purpose (ADR 0026 D8). `FileResponseDto.fileUrl` is the content-endpoint URL, not a static
+  path; `shareUrl` appears only for a manager of an unlisted file. Public URLs are no longer
+  composed as `{BASE_URL}/{filePath}` — `toResponse()` builds `{BASE_URL}/file/:id/content`
+  instead
+- **Upload constraint (media-type expansion landed 2026-08-01, ADR 0025 D4/D5 + [ADR
+  0027](ADR/0027-media-type-expansion-implementation.md))**: `POST /upload/attach` accepts
+  exactly one of three type-specific multipart fields, each with its own class allowlist —
+  `image` (jpg/jpeg/png/webp), `audio` (mp3), `video` (mp4/mov/webm, unchanged) — via
+  `FileFieldsInterceptor` and a shared `fileFilter` keyed on `file.fieldname`
+  (`backend/upload/upload.controller.ts`). All three share the same `fileSize` limit,
+  100,000,000 bytes (100MB), which caps disk usage and bounds an upload-based denial-of-
+  service. Zero fields attached is 400 `UPLOAD_FILE_REQUIRED`; more than one is 400
+  `UPLOAD_MULTIPLE_FIELDS`. This **revises** [ADR 0003](ADR/0003-two-phase-upload-contract.md)
+  (the two-phase contract's field) and [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)
+  (the frozen surface) — a breaking change against the live `frontend/`, which has not yet
+  adopted it. The `temp_{uuid}_{timestamp}.{ext}` naming (extension read off
+  `file.originalname`) moved from Multer's `diskStorage` callback to
+  `UploadService.stageTemp` (ADR 0029 D4) but is otherwise unaffected — it was already
+  field-name-agnostic. Two other extension-keyed lookups widened in step so promotion
+  and serving stay correct for the new classes: `TEMP_FILENAME_PATTERN`
+  (`backend/file/dto/create-uploadFile.dto.ts`) and `CONTENT_TYPE_BY_EXTENSION`
+  (`backend/file/file-content.controller.ts`)
+- **Never suggest**: streaming/chunked upload, CDN — unless explicitly requested. S3 is no
+  longer in this list: the storage port-adapter (ADR 0029, above) landed both an
+  `S3Storage` implementation and the `STORAGE_DRIVER` switch, but `local` stays the
+  operative default — treat `S3Storage` as unverified-in-anger until Stage 4's cutover
+  exercises it against a live bucket (ROADMAP.md)
 
 ### API Layer
 - REST only, documented via Swagger at `/doc` (`persistAuthorization: true` keeps the
@@ -734,6 +887,53 @@ Do not suggest alternatives to these decisions without explicit request.
 - **Never suggest**: GraphQL, WebSocket, gRPC — the small request/response CRUD surface
   does not justify the schema layer, client story, or operational overhead each would add
   (full reasoning: ADR 0009)
+
+### Deletion (ADR 0020, ADR 0024)
+- **Soft delete is not adopted.** Every delete in this project is a hard delete; there is
+  no `@DeleteDateColumn`, no `withDeleted` policy, and no recovery path. Introducing soft
+  delete is a schema change on high-blast-radius entities and needs its own ADR
+- `DELETE /user/:id` cascades **only on an explicit `?deleteFiles=true`** (validated by
+  `DeleteUserQueryDto`): comment rows → post rows → file rows → user row in one
+  `dataSource.transaction()`, then the stored files are unlinked. Unconfirmed against an
+  account that owns files = 409 `USER_HAS_FILES` with the count in the message;
+  `deleteFiles=false` counts as unconfirmed.
+  **Posts and comments are deleted unconditionally** — the flag deliberately guards media
+  bytes only, and widening it (or adding a second flag) was rejected (ADR 0023 D5). Comments
+  go **first** and that order is load-bearing: the account's comments on *other people's*
+  posts are unreachable through the post FK cascade, which fires only when the owning post is
+  deleted. The audit detail counts files and posts but **not** comments — the cascaded half is
+  uncountable, so a partial count would read as a total (ADR 0023)
+- `DELETE /post/:id` hard-deletes the post row, **takes its comments with it through the FK**
+  (`ON DELETE CASCADE` — the schema's only one), and **leaves its attached file untouched** —
+  a post references a file, it never owns it. `DELETE /comment/:id` deletes just that row.
+  `DELETE /file/:id` on a file a post references is
+  refused with 409 `FILE_IN_USE`, translated from the FK's `23503` with no pre-check query
+  (a pre-check would create a `File ↔ Post` module cycle *and* still race — ADR 0023 D4)
+- The confirmation flag is a **string literal** (`'true' | 'false'`), never a boolean:
+  the global pipe's `enableImplicitConversion` truthiness-casts `"false"` to `true` before
+  any custom `@Transform` (measured, pinned by `delete-user-query.dto.spec.ts`). Any future
+  boolean-ish query flag on a destructive path follows the same shape
+- Physical deletion is **post-commit and best-effort** via
+  `unlinkStoredFiles` (`backend/common/`), which refuses paths outside `file/upload/` and
+  reports failures for the caller to log at `warn`. Nothing sweeps `file/upload` — a
+  `granted_` sweep would need a DB join (unlike ADR 0018's filename-only decision)
+- File rows stay `FileService`'s responsibility even during an account cascade:
+  `UserService` owns the transaction and passes its `EntityManager` to
+  `findStoredPathsOfCreator` / `deleteFilesOfCreator`
+- Both file-row delete paths translate the FK's `23503` rather than pre-checking:
+  `deleteFile` → 409 `FILE_IN_USE`, `deleteFilesOfCreator` → 409 `USER_FILES_IN_USE`
+  (ADR 0024 — reachable because `PATCH /file/:id { userId }` can reassign a file out from
+  under a post, so the account cascade can meet a stranger's post). A new file-row delete
+  path translates it too; letting `23503` reach the client as a 500 is the defect both
+  ADR 0020 and ADR 0024 exist to remove
+- `comment.postId` is the **only** `ON DELETE CASCADE` in this schema and is scoped by an
+  argument, not a precedent: a database cascade is used where the child has no independent
+  existence and no non-DB side effect; a service cascade is used where the parent is an
+  account, because that path needs confirmation, an audit row, and physical unlinking. Cite
+  ADR 0023 D3 before any future FK asks for one
+- **Never suggest**: adding `ON DELETE CASCADE` to the `FileEntity.creator` FK (the cascade
+  is deliberately explicit in the service, where the paths to unlink are read), or an
+  unconfirmed account cascade
 
 ### Config
 - All env vars Joi-validated at startup (`app.module.ts`); missing vars throw on boot
@@ -760,6 +960,15 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
   Decisions > Auth
 - ~~Ownership checks~~ — **landed 2026-07-22** (commit `0549ca4`): user writes self-only,
   file writes creator-only
+- ~~Storage port-adapter (`FileStorage` interface)~~ — **landed 2026-08-07**
+  ([ADR 0029](ADR/0029-storage-port-adapter.md)): the code-first slice of the Stage 4
+  cloud-native infrastructure task — see Architecture Decisions > File Storage. `local`
+  stays the operative default; the real S3 cutover is still Stage 4 work
+- ~~Container/deploy hardening (non-root, health endpoints, migration deploy step)~~ —
+  **landed 2026-08-08** ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–
+  [ADR 0034](ADR/0034-https-termination-stance.md)): the container/deploy hardening ADR
+  0015 deferred — see CI/CD and Module Responsibility > HealthModule. Distroless, a real
+  secrets manager, HTTPS termination, and multi-arch stay open (ROADMAP.md > Unscheduled)
 - Chat-project remnant handling — docs audited clean 2026-07-22; pending git-history
   decision + re-verification trigger. See `CHAT-REMNANT-REMOVAL-PLAN.md` and
   ROADMAP.md > Unscheduled / open decisions
@@ -772,10 +981,26 @@ in-repo `frontend/` subfolder [structure amended 2026-07-24], admin as an
 `/admin` route section inside it) → Stage 0
 RBAC → Stage 1 foundation (Node/pnpm pinning, Docker/compose, CI, logging
 conventions, E2E rewrite) → Stage 2 mechanism hardening (orphan temp-file
-cleanup, deletion policy, upload idempotency) → Stage 3 board-domain expansion
-(search/filter/sort, post/comment modules) → Stage 4 production transition (AWS
-container deploy, VOD playback access control, storage port-adapter, performance
-criteria). ROADMAP.md is the single source for the plan; items there that this
+cleanup, deletion policy, upload idempotency) → ~~Stage 3 board-domain expansion
+(search/filter/sort, post/comment modules)~~ — **complete 2026-07-31** (ADR 0021,
+ADR 0023 + its two implementation halves, with ADR 0024 settling the invariant gap
+between them) → Stage 4 production transition (~~file visibility + access-controlled
+serving~~ [**landed 2026-08-01**, ADR 0025 D1/D2/D3/D6 + ADR 0026 — generalizes the former
+"VOD playback access control" row, pulled ahead of deployment as its own task] +
+~~media-type expansion~~ [**landed 2026-08-01**, ADR 0025 D4/D5 + ADR 0027 — completes
+ADR 0025's design gate], then a **production DevOps stack introduction (AWS · Docker ·
+Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform · Istio [planned after
+Terraform] — the industry-standard toolchain, for a real-world-like dev/deploy/ops environment
+and future scaling; Docker + CI already landed in Stage 1, S3 is the storage port-adapter's
+concrete form)** as the immediate
+pre-deploy task, performance criteria, and finally **deployment itself — the terminal act,
+deliberately carrying no execution number** (a number only re-invited the Stage 4/Stage 5
+ordering confusion; it is simply the last work) → **Stage 5 operational surface — admin console (appended 2026-07-30,
+ADR 0022**: role-delivery decision, adapting the imported `admin/` console,
+`GET /user` pagination, resolving the duplicate admin surface, and deciding whether
+moderation actions exist at all). Stage 5's number is **not** dependency order — it
+depends only on Stage 0 (RBAC) plus its own first row, not on Stage 4, and may run
+before it. ROADMAP.md is the single source for the plan; items there that this
 file marks "never suggest" entered the plan by that explicit decision, but each
 still lands only as its own dedicated task with its own ADR — until then, the
 Architecture Decisions above remain operative.
@@ -792,9 +1017,42 @@ Architecture Decisions above remain operative.
 - `test/app.e2e-spec.ts` is the untouched Nest template: it targets `GET /`, which
   does not exist in this app, and booting AppModule needs a live DB — the e2e suite
   needs a real rewrite before it verifies anything
-- Deleting a user who owns files hits an FK constraint (`FileEntity.creator` is
-  `nullable: false`; no cascade path on `DELETE /user/:id`) — surfaces as a
-  confusing 500; a cascade/ownership-transfer policy decision is needed first
+- ~~Deleting a user who owns files hits an FK constraint~~ — **resolved 2026-07-30**
+  (ADR 0020): `DELETE /user/:id?deleteFiles=true` cascades (post rows → file rows →
+  user row → stored files; posts joined the order 2026-07-31, ADR 0023); unconfirmed,
+  it is a typed 409 `USER_HAS_FILES`. Residual, accepted:
+  nothing sweeps `file/upload`, so a failed unlink (or a file inserted between the
+  path read and the delete) leaves an orphan on disk — logged at `warn`, not repaired
+  (reclamation needs a DB-joined design; tracked in ROADMAP > Unscheduled).
+  The one path this left as a 500 — a stranger's post referencing the account's file — was
+  closed separately by ADR 0024; see the next entry
+- ~~File ownership reassignment can produce an FK-violation 500 on account deletion~~ —
+  **resolved 2026-07-31** (ADR 0024): `FileService.deleteFilesOfCreator` translates the
+  `23503` into a typed 409 `USER_FILES_IN_USE`, the same technique its sibling `deleteFile`
+  already used. Two things this deliberately did **not** do, and both still bind new code:
+  the post↔file same-creator rule is now a **creation-time rule, not an invariant** — ADR 0023
+  D1's "structurally unreachable" no longer holds, because `PATCH /file/:id { userId }`
+  reassigns ownership after `FileService.assertAttachableBy` has run, so anything wanting that
+  property as a *guarantee* must first adopt ADR 0024's recorded composite-FK shape; and
+  **`PostService.resolveAttachment`'s author-identity check stays reachable** — it is the other
+  consequence of the same break, so do not "simplify" it away as an unreachable guard.
+  Accepted residual: an account whose file is attached to *another user's* post cannot be
+  deleted until that post is removed (409, actionable — any admin can delete the blocking post)
+- **`PATCH /file/:id { userId }` has never been justified by any decision** (recorded
+  2026-07-31, ADR 0024 > Consequences). The field transfers a file to another account
+  outright — the previous owner loses every write right, the recipient never consents, and
+  `canManage` lets an admin transfer a third party's file. ADR 0007 mentions it only to say
+  the guard is creator-only; nothing argues why the capability exists. It is the sole cause of
+  the invariant break above. Do not build on it as though it were a settled feature, and do
+  not remove it as drive-by cleanup: dropping it would turn ADR 0024's `23503` branch **and**
+  `PostService.resolveAttachment`'s author check into unreachable guards, so that is an ADR
+  that supersedes 0024, not a patch. Candidates are in ROADMAP > Unscheduled
+- `ARCHITECTURE.md` (+ko) lags the code: its "Non-Existent Infrastructure" section still
+  claims no CI workflow, no Dockerfile, and no Nest `Logger` usage (all three exist —
+  ADR 0015/0016/0017), Jest `roots` is written as `["src"]` (actually `["backend"]`), the
+  Testing section describes no e2e suite, and the `PATCH` rows still read "Self only" /
+  "Creator only" from before RBAC (ADR 0013). Verify against code, not against that file;
+  fixing it is a dedicated doc-audit task (tracked in ROADMAP > Unscheduled)
 - License mismatch: `package.json` says `UNLICENSED` while the pre-rewrite README
   claimed MIT — needs an explicit decision before the repo is published
 - CORS is opt-in via the optional `CORS_ORIGIN` env var (added 2026-07-22): unset =
@@ -820,6 +1078,33 @@ scoped `frontend/CLAUDE.md` and tooling, and is not a pnpm-workspace monorepo:
 the backend at the root is untouched (its Jest roots, migration paths, and lint
 globs do not include `frontend/`). Do not edit backend files from a frontend
 task or vice versa.
+
+`admin/` (added 2026-07-30, ADR 0022; role-management slice adapted 2026-08-06) is
+**imported code from a different project, not a from-scratch admin client**. It is
+the author's Chat Project admin console, originally copied in wholesale and
+committed unmodified as a *modification base*, for two stated purposes: (1) to
+become the **operator surface for the RBAC role hierarchy** that ADR 0013 shipped
+without one — role listing, promotion/demotion via superadmin-only
+`PATCH /user/:id/role`, and a `ROLE_CHANGE` audit viewer; (2) **token economy** —
+that console was already built for this same three-tier hierarchy, so importing it
+cost a fraction of the LLM tokens regenerating it would have. As of 2026-08-06, the
+role-management slice (login, dashboard, users, audit log) has been adapted against
+this backend's real routes — string `UserRole`, the access-token `role` claim
+(ADR 0028), `take`/`skip` pagination, `{ code, message }` error branching — so **that
+slice now does describe this repo's contracts**; verify current behavior against
+`admin/src/` directly, not against this paragraph or ADR 0022's original backlog
+(`admin/README.md` > "What was adapted" is the up-to-date record). The chat-domain
+remnant (Apollo/`/graphql`, rooms, ban/force-logout) was deleted in the same pass,
+not adapted — nothing chat-related remains to be read as reference material. It is
+still wired into no root tooling (outside the lint glob, Jest `roots`,
+`tsconfig.build.json`, compose, and CI) and still carries its own `package.json` and
+tooling, like `frontend/`. **This is now the sole admin surface** — the other
+candidate, `frontend/src/features/admin/AdminPage.tsx` (a 17-line stub with no
+backend calls), was deleted 2026-08-06 once this console's adaptation proved the
+import was not "mostly deletable," settling Stage 5's last open row (ROADMAP.md
+> Stage 5). Do not re-add an `/admin` route to `frontend/`. Do not edit `admin/`
+from a backend task, and do not cite its adapted code as precedent for a backend
+pattern (it is a frontend consumer of the backend, not the reverse).
 
 ## Commands
 
@@ -850,9 +1135,11 @@ pnpm test -- file.service
 
 **AppModule** wires together:
 - `ConfigModule` — global, Joi-validated env (see `.env.example`)
-- `TypeOrmModule` — PostgreSQL, `synchronize: false`, entities `FileEntity` + `UserEntity`
-- `ServeStaticModule` — serves the `file/` directory at `/file`
-- `FileModule`, `UserModule`, `AuthModule`, `UploadModule`
+- `TypeOrmModule` — PostgreSQL, `synchronize: false`, entities `FileEntity`, `UserEntity`,
+  `AuditLogEntity`, `PostEntity`, `CommentEntity`
+- `ServeStaticModule` — serves only `file/temp` at `/file/temp`; `file/upload` is not
+  statically served (granted reads go through `GET /file/:id/content`, ADR 0025/0026)
+- `FileModule`, `UserModule`, `PostModule`, `CommentModule`, `AuthModule`, `UploadModule`
 
 **AuthModule** (`backend/auth/`)
 - REST: `POST /auth/register`, `POST /auth/signin` (both Basic token),
@@ -869,15 +1156,59 @@ pnpm test -- file.service
 
 **UserModule** (`backend/user/`)
 - REST (all behind `JwtAuthGuard`): `GET /user`, `GET /user/:id`, `PATCH /user/:id`,
-  `DELETE /user/:id` — no `POST /user` by design (registration is `POST /auth/register`)
-- `UserService` — CRUD; re-hashes password on update via `HASH_ROUNDS`
-- Exports `UserService`
+  `DELETE /user/:id` (optional `?deleteFiles=true` — confirmed cascade, ADR 0020) — no
+  `POST /user` by design (registration is `POST /auth/register`)
+- `UserService` — CRUD; re-hashes password on update via `HASH_ROUNDS`; `remove` owns the
+  deletion transaction and delegates comment rows to `CommentService`, post rows to
+  `PostService` and file rows to `FileService` (comments first — the account's comments on
+  other people's posts are unreachable through the post FK cascade; posts next — both post
+  FKs are `ON DELETE NO ACTION`)
+- Exports `UserService`; imports `FileModule`, `PostModule` and `CommentModule` for the
+  account cascade
+
+**PostModule** (`backend/post/`)
+- REST (all behind `JwtAuthGuard`): `GET /post`, `GET /post/:id`, `POST /post`,
+  `PATCH /post/:id`, `DELETE /post/:id` (ADR 0023)
+- `PostService` — post CRUD; every write is a single DB write (transaction table row 1).
+  `create` resolves the `fileId` claim before writing — identical resubmission replays
+  (`{ replayed: true }` → 200), differing text 409s `POST_FILE_TAKEN`; the listing reuses
+  the ADR 0021 read layer. `deletePostsOfCreator` serves the account cascade inside
+  `UserService`'s transaction
+- Imports `FileModule` (attachability + URL composition) and `AuditLogModule`
+  (`POST_DELETE`); exports `PostService`
+
+**CommentModule** (`backend/comment/`)
+- REST (all behind `JwtAuthGuard`), across **two** controllers because the routes span two
+  prefixes (ADR 0023): `PostCommentController` serves `GET /post/:postId/comment` and
+  `POST /post/:postId/comment`; `CommentController` serves `PATCH /comment/:id` and
+  `DELETE /comment/:id`. There is deliberately no `GET /comment/:id` — the ADR did not
+  decide one
+- `CommentService` — comment CRUD; every write is a single DB write (transaction table
+  row 1). The listing order is **fixed** at `createdAt ASC` + `id` tiebreaker (a thread reads
+  oldest-first) and takes no sort parameters. `deleteCommentsOfCreator` serves the account
+  cascade inside `UserService`'s transaction
+- Imports `PostModule` (`assertPostExists` — existence is PostModule's judgment, never a
+  `post_entity` query from here) and `AuditLogModule` (`COMMENT_DELETE`); exports
+  `CommentService`
 
 **FileModule** (`backend/file/`)
-- REST (all behind `JwtAuthGuard`): `GET /file`, `GET /file/:id`, `POST /file`,
-  `PATCH /file/:id`, `DELETE /file/:id`
+- REST — two controllers (ADR 0026, mirroring `CommentModule`'s split, here for an
+  auth-requirement reason rather than a prefix one): `FileController` (behind
+  `JwtAuthGuard`): `GET /file`, `GET /file/:id`, `POST /file`, `PATCH /file/:id`,
+  `DELETE /file/:id`; `FileContentController` (behind `OptionalJwtAuthGuard`):
+  `GET /file/:id/content`, the sole path serving granted bytes
 - `FileService` — metadata CRUD; `uploadFile`/`updateFile` use the manual QueryRunner
-  transaction pattern; `toResponse()` shapes `FileResponseDto` with `BASE_URL`
+  transaction pattern; `toResponse()` shapes `FileResponseDto` with `BASE_URL`, composing
+  `fileUrl` as the content-endpoint URL and including `shareUrl` only for a manager of an
+  unlisted file. `uploadFile` returns `{ replayed, file }` — the claim outcome (ADR 0019),
+  which the controller maps to 200 (replay) or 201 (fresh promotion), defaulting the new
+  row to `visibility: 'private'`. `getFiles`/`getFileById` filter `private`/`unlisted`
+  rows from non-owner/non-admin requesters (ADR 0026 D7); `resolveContentAccess` is the
+  visibility gate `GET /file/:id/content` calls (ADR 0025 D1/D2, ADR 0026 D8). `deleteFile`
+  also unlinks the stored file after the row is gone; `findStoredPathsOfCreator` /
+  `deleteFilesOfCreator` serve the account cascade inside `UserService`'s transaction
+  (ADR 0020)
+- Exports `FileService` (consumed by `UserModule` for the account cascade)
 
 **UploadModule** (`backend/upload/`)
 - REST: `POST /upload/attach` (behind `JwtAuthGuard`) — multipart field `video`,
@@ -889,19 +1220,37 @@ pnpm test -- file.service
 1. `POST /upload/attach` (multipart, field `video`) → Multer writes
    `file/temp/temp_{uuid}_{ts}.{ext}` → responds with the generated filename
 2. Client calls `POST /file` with `{ title, filePath: <that filename> }`
-3. `FileService.uploadFile()` opens a QueryRunner transaction: inserts `FileEntity`
-   (`filePath` rewritten to `file/upload/granted_...`), renames the physical file from
-   `file/temp` to `file/upload`, commits; rollback on failure, `release()` in `finally`
-4. The file is now publicly served at `{BASE_URL}/file/upload/granted_...` via
-   `ServeStaticModule`; API responses expose it as `fileUrl` in `FileResponseDto`
+3. `FileService.uploadFile()` first resolves the claim (ADR 0019) — a filename already
+   promoted by the same user replays (200), by another user 409s, and one with no temp
+   file behind it 400s — then, only for an unclaimed filename, opens a QueryRunner
+   transaction: inserts `FileEntity` (`filePath` rewritten to `file/upload/granted_...`),
+   renames the physical file from `file/temp` to `file/upload`, commits; rollback on
+   failure, `release()` in `finally`
+4. The row defaults to `visibility: 'private'`. Its bytes are now reachable only through
+   `GET /file/:id/content` (creator/admin only until the owner switches visibility to
+   `public` or `unlisted` via `PATCH /file/:id`); API responses expose that endpoint's URL
+   as `fileUrl` in `FileResponseDto` (ADR 0025/0026)
 
 ### Entities (TypeORM)
 - `UserEntity` — email (unique), hashed password (`@Exclude` on serialization),
   `creator: FileEntity[]` (OneToMany), timestamps
 - `FileEntity` — title (unique), `filePath`, `creator: UserEntity` (ManyToOne,
   `nullable: false`, `cascade: true`), timestamps
-- No shared base entity; timestamps declared per entity — with only two entities a shared
-  base would be premature abstraction (YAGNI) and add inheritance coupling for no reuse
+- `PostEntity` — title (**not** unique — deliberately unlike `FileEntity.title`), `body`
+  (text), `creator: UserEntity` (ManyToOne, `nullable: false`), `file: FileEntity | null`
+  (OneToOne + `@JoinColumn`, unique + nullable — the idempotency key for `POST /post`),
+  timestamps. Relations are **unidirectional**: neither `UserEntity` nor `FileEntity` gains
+  an inverse collection, because the one inverse that exists (`UserEntity.creator`) is read
+  by zero queries (ADR 0023)
+- `CommentEntity` — `body` (text; ≤1,000 bounded at the DTO, not the column),
+  `creator: UserEntity` (ManyToOne, `nullable: false`), `post: PostEntity` (ManyToOne,
+  `nullable: false`, **`onDelete: 'CASCADE'`** — the schema's only DB-level cascade, ADR 0023
+  D3), timestamps, and `@Index('IDX_comment_entity_postId_createdAt', ['post', 'createdAt'])`
+  for the one query shape this table has. Unidirectional like `PostEntity`: neither
+  `UserEntity` nor `PostEntity` gains an inverse collection. There is deliberately no
+  `parentId` — comments are flat, and threading is an additive migration if ever wanted
+- No shared base entity; timestamps declared per entity — a shared base would be premature
+  abstraction (YAGNI) and add inheritance coupling for no reuse
 
 ## Key Conventions
 
@@ -975,7 +1324,9 @@ cosmetic — a missing or wrong one is a documentation bug caught in Result Revi
 CI: GitHub Actions (`.github/workflows/ci.yml`, ADR 0016) runs lint (`lint:ci` — the
 0-error gate, no `--fix`) + unit tests and a separate e2e job (against a `postgres:16`
 service) on push/PR to `main`/`dev`. Local containerization: a multi-stage `Dockerfile`
-+ `docker-compose.yml` (ADR 0015). There is **no deploy target and no git hooks** — AWS
-container deployment is a Stage 4 roadmap item (ROADMAP.md), and no git-hook tooling is
-installed. Do not assume a deploy pipeline or hooks; adding either is explicit-request
-work under Scope Discipline.
++ `docker-compose.yml` (ADR 0015; hardened 2026-08-08 — non-root `USER`, a `HEALTHCHECK`
+against `GET /health/live`, and migrations moved out of `CMD` into `docker-compose.yml`'s
+one-shot `migrate` service, ADR 0030–0032). There is **no deploy target and no git
+hooks** — AWS container deployment is a Stage 4 roadmap item (ROADMAP.md), and no
+git-hook tooling is installed. Do not assume a deploy pipeline or hooks; adding either is
+explicit-request work under Scope Discipline.

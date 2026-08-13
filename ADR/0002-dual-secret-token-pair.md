@@ -36,6 +36,14 @@ window. Session-based auth was ruled out (stateless API, no session store).
 > token now travels as an httpOnly cookie and `parseBearerToken`'s bare
 > verification core lives on as `verifyToken`.
 
+> 2026-08-05: the `Payload` shape is amended by
+> [ADR 0028](0028-access-token-role-claim.md) — access tokens (not refresh tokens)
+> now carry an optional `role: UserRole` claim so a client can read its own role
+> without an extra request. The dual-secret + `type`-claim decision, and
+> `verifyToken`'s secret+type check, are unchanged; the new claim is read by
+> clients only and is never consulted by `RolesGuard`/`AuthUser`, which continue
+> to source `role` from a live per-request database lookup.
+
 ## Consequences
 
 - Refresh-as-access replay is structurally impossible: wrong secret fails verification,

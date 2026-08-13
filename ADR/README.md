@@ -27,6 +27,23 @@ each ADR records the *why* behind those rules.
 | [0016](0016-github-actions-ci.md) | Continuous integration with GitHub Actions | Accepted | 2026-07-25 |
 | [0017](0017-logging-conventions.md) | Logging conventions with Nest's built-in Logger | Accepted | 2026-07-25 |
 | [0018](0018-orphan-temp-file-cleanup.md) | Scheduled orphan temp-file cleanup | Accepted | 2026-07-26 |
+| [0019](0019-upload-claim-idempotency.md) | Upload duplicate-submission policy — attach filename as a one-shot claim token | Accepted | 2026-07-27 |
+| [0020](0020-account-deletion-cascade.md) | Deletion policy — confirmed account cascade over soft delete | Accepted | 2026-07-30 |
+| [0021](0021-list-query-search-filter-sort.md) | List query — whitelisted sort, ILIKE title search, creator filter | Accepted | 2026-07-30 |
+| [0022](0022-admin-console-import-from-chat-project.md) | Admin console imported from the Chat Project as a modification base | Accepted | 2026-07-30 |
+| [0023](0023-board-domain-schema.md) | Board domain schema — post and comment | Accepted | 2026-07-30 |
+| [0024](0024-account-cascade-fk-refusal.md) | Account cascade — a typed refusal instead of an FK-violation 500 | Accepted | 2026-07-31 |
+| [0025](0025-file-visibility-and-media-expansion.md) | File visibility, access-controlled serving, and media-type expansion | Accepted — implemented (0026, 0027) | 2026-07-31 |
+| [0026](0026-file-visibility-implementation.md) | File visibility implementation — serving mechanism, metadata filtering, and the content/metadata disclosure split | Accepted | 2026-08-01 |
+| [0027](0027-media-type-expansion-implementation.md) | Media-type expansion implementation — type-specific upload fields | Accepted | 2026-08-01 |
+| [0028](0028-access-token-role-claim.md) | Access token carries a `role` claim | Accepted | 2026-08-05 |
+| [0029](0029-storage-port-adapter.md) | Storage port-adapter — `FileStorage` interface, amends 0005 | Accepted | 2026-08-07 |
+| [0030](0030-container-non-root-and-arch-stance.md) | Container runs non-root; distroless and multi-arch deferred | Accepted | 2026-08-08 |
+| [0031](0031-health-and-readiness-endpoints.md) | Liveness and readiness endpoints | Accepted | 2026-08-08 |
+| [0032](0032-migration-as-separate-deploy-step.md) | Migrations run as a separate deploy step, not on container boot | Accepted | 2026-08-08 |
+| [0033](0033-secrets-delivery-target.md) | Secrets delivery target — Kubernetes Secrets, AWS Secrets Manager deferred | Accepted (design-only) | 2026-08-08 |
+| [0034](0034-https-termination-stance.md) | HTTPS termination happens at the ingress, not in the app | Accepted (design-only) | 2026-08-08 |
+| [0035](0035-arm64-bcrypt-source-rebuild.md) | arm64 support — bcrypt already works (verified), `onlyBuiltDependencies` kept as a safety net, corrects 0030 | Accepted | 2026-08-12 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status
