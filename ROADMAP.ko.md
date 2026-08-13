@@ -671,6 +671,13 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   `GET /audit-log?userId={id}&take=5` 호출로 복원했고, `logs-page.tsx`도 "View all" 링크를
   위해 자신의 URL에서 `?userId=`를 읽도록 연결했다(`admin/README.md` > "이번 적응에서 내린
   두 가지 결정" 및 "열린 사항")
+- 게시글 상세/댓글 UI가 한국어로 하드코딩됨(2026-08-13, 게시글/댓글 보드를 브라우저로
+  직접 조작하는 QA 도중 발견 — 전체 기록은 CHANGELOG > 알려진 문제) — **미착수 이유**:
+  구현이 아니라 테스트 중에 드러났고, 문구는 정확히 세 파일에만 있다
+  (`PostDetailPage.tsx`, `CommentThread.tsx`, `CommentForm.tsx`, `f239a6c`/`d542661`에서
+  랜딩). 고치는 건 영어로 그대로 바꿔 끼우는 작업일 뿐(설계 판단도, ADR도, 백엔드 변경도
+  불필요) — 작은 독립 프론트엔드 작업으로 나중에 처리. 교체할 문구의 톤/어투는
+  `UploadForm.tsx`/`FileDetailPage.tsx`를 전례로 삼는다.
 
 ## 8. Advisory 노트
 

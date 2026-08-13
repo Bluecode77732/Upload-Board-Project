@@ -12,6 +12,21 @@
 
 ## [Unreleased]
 
+### 알려진 문제
+- **게시글 상세/댓글 UI(`PostDetailPage.tsx`, `CommentThread.tsx`, `CommentForm.tsx`)의
+  사용자 노출 문구가 전부 한국어로 박혀 있다** — 앱의 나머지(`LoginPage`, `UploadForm`,
+  `FileBoard`, `FileDetailPage`, `NavBar`)는 전부 영어라 일관성이 깨진다. 2026-08-13,
+  게시글/댓글 보드(`f239a6c`/`d542661`에서 랜딩)를 브라우저로 직접 조작하며 QA하던 중
+  발견했다. 영향 범위: 버튼 전부(`저장`/`취소`/`수정`/`삭제`/`댓글 작성`), 삭제 확인
+  대화상자, 댓글 placeholder·빈 상태·더 보기 문구, 세 파일 전체의
+  `messageForError`/`messageForManageError`/`messageForPlaybackError` 분기 전부. 같은
+  파일 안에서도 `<label>Title</label>`/`<label>Body</label>`는 영어로 남아있는데 바로
+  옆 버튼만 한국어인 걸 보면, 의도적인 로케일 선택이라기보다 이 프로젝트의 "코드
+  **주석**은 한국어" 관례(CLAUDE.md > File Creation Convention)와 항상 영어여야 하는
+  사용자 노출 문구를 혼동한 것으로 보인다. 기능 자체는 멀쩡하다 — 같은 QA 세션에서
+  (한국어) 버튼을 그대로 눌러 댓글 작성/수정/삭제, 게시글 수정 전부 정상 동작을
+  확인했다. 여기서는 발견 사실만 기록하고 고치지 않았다. ROADMAP > 미배정에서 추적.
+
 ### 추가
 - **CI: `frontend-e2e`/`admin-e2e` Playwright 잡, `frontend/`·`admin/`의 lint/unit
   커버리지 추가** — 둘 다 `pnpm lint`, `pnpm test`, `pnpm e2e` 스크립트가 있었지만 어떤

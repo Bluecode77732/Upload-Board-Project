@@ -12,6 +12,22 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Known issue
+- **Post detail / comment UI (`PostDetailPage.tsx`, `CommentThread.tsx`, `CommentForm.tsx`)
+  renders every user-facing string in Korean**, inconsistent with the rest of the app
+  (English throughout — `LoginPage`, `UploadForm`, `FileBoard`, `FileDetailPage`, `NavBar`).
+  Found 2026-08-13 during a manual browser walkthrough of the post/comment board (landed
+  `f239a6c`/`d542661`). Affected: every button (`저장`/`취소`/`수정`/`삭제`/`댓글 작성`), the
+  delete confirmation dialogs, the comment placeholder/empty-state/load-more text, and every
+  `messageForError`/`messageForManageError`/`messageForPlaybackError` branch across all three
+  files — even within the same file, `<label>Title</label>`/`<label>Body</label>` stayed
+  English while the buttons next to them did not, so this reads as a mix-up between the
+  project's Korean-only code-**comment** convention (CLAUDE.md > File Creation Convention)
+  and user-facing text, which stays English everywhere else, rather than a deliberate
+  locale choice. Functionally unaffected — comment create/edit/delete and post edit/delete
+  all verified working through the (Korean) buttons during the same walkthrough. Not fixed
+  here; this entry only records the finding. Tracked in ROADMAP > Unscheduled.
+
 ### Added
 - **CI: `frontend-e2e`/`admin-e2e` Playwright jobs, plus lint/unit coverage for `frontend/` and
   `admin/`** — both had working scripts (`pnpm lint`, `pnpm test`, `pnpm e2e`) that no CI job
