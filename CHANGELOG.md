@@ -27,7 +27,27 @@ development line (package.json version).
   answers "everything related to this account", not just one side of it. No migration:
   `actorId`/`targetId` have no dedicated index yet (the entity's only index is
   `(action, createdAt)`) — acceptable at this project's data volume; add one if this
-  filter sees real traffic. No new ADR — follows the existing GET /file parity precedent. ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.md), corrects
+  filter sees real traffic. No new ADR — follows the existing GET /file parity precedent.
+
+- **Admin console now consumes both filters** — `admin/src/pages/users-page.tsx` gains a
+  400ms-debounced email search box wired to `search`, and clickable ID/Email/Created
+  headers that toggle `sortBy`/`order` with a ▲/▼ indicator (`role` excluded, matching
+  `USER_SORT_FIELDS`). The user detail panel gains a "Recent activity" section
+  (`GET /audit-log?userId={id}&take=5`, actor-or-target) with a "View all →" link into
+  `logs-page.tsx`, which now reads `?userId=` from its own URL via `useSearchParams` and
+  filters on it (ANDed with the existing `action` filter) — restoring the per-user
+  audit slice `admin/README.md` had recorded as "dropped, not approximated" pending this
+  backend filter. `actionColor`/`AuditLog` were deduplicated out of `dashboard-page.tsx`,
+  `logs-page.tsx`, and `users-page.tsx` into `admin/src/lib/audit.ts` in the same pass, since
+  the new "Recent activity" section would have made it a fourth identical copy.
+  `dashboard-page.tsx` separately gained file/post total stat cards
+  (`GET /file`/`GET /post` with `take: 1`, reading the tuple's count). `admin/README.md`
+  and its `.ko.md` sibling are updated to reflect the previously-dropped capabilities coming
+  back. No backend files touched; no new ADR — this is admin's frontend consuming DTOs the
+  entry above already introduced.
+
+- **ADR 0035: Docker image arm64 support — `bcrypt` already works, no compile needed**
+  ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.md), corrects
   [ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)'s "every bcrypt
   prebuild is x64" claim). Motivated by publishing a single multi-platform image
   (`docker buildx build --platform linux/amd64,linux/arm64`) rather than the

@@ -29,6 +29,23 @@
   규모에서는 무방하다고 판단했습니다; 실제 트래픽이 생기면 인덱스를 추가하면 됩니다. 새
   ADR은 만들지 않았습니다 — 기존 GET /file parity 선례를 따랐습니다.
 
+- **admin 콘솔이 두 필터를 모두 소비하도록 연결** — `admin/src/pages/users-page.tsx`에
+  400ms 디바운스가 걸린 이메일 검색창(`search`에 연결)과, 클릭하면 `sortBy`/`order`를
+  ▲/▼ 표시와 함께 토글하는 ID/Email/Created 헤더가 추가됐습니다(`role`은
+  `USER_SORT_FIELDS`와 마찬가지로 제외). 유저 상세 패널에는 "Recent activity" 절이
+  생겼고(`GET /audit-log?userId={id}&take=5`, actor 또는 target), 하단의 "View all →"
+  링크가 `logs-page.tsx`로 연결됩니다. `logs-page.tsx`는 이제 자신의 URL에서
+  `useSearchParams`로 `?userId=`를 읽어 필터에 반영하며(기존 `action` 필터와 AND) —
+  이 백엔드 필터가 없어서 `admin/README.md`에 "근사하지 않고 제거"로 기록됐던 사용자별
+  감사 조각이 복원됐습니다. `actionColor`/`AuditLog`는 같은 작업에서
+  `dashboard-page.tsx`, `logs-page.tsx`, `users-page.tsx`에서 `admin/src/lib/audit.ts`로
+  분리했습니다 — 새 "Recent activity" 절까지 더하면 동일 로직이 네 번째로 중복될
+  참이었습니다. `dashboard-page.tsx`는 별도로 file/post 총계 통계 카드를 얻었습니다
+  (`GET /file`/`GET /post`를 `take: 1`로 호출해 튜플의 개수만 읽음). `admin/README.md`와
+  그 `.ko.md`가 이전에 제거했던 기능이 돌아온 것을 반영하도록 갱신됐습니다. 백엔드
+  파일은 건드리지 않았고, 새 ADR도 없습니다 — 위 항목이 이미 도입한 DTO를 admin
+  프런트엔드가 소비하는 것뿐입니다.
+
 - **Docker 이미지 arm64 지원 — `bcrypt`는 이미 잘 동작하고, 컴파일이 필요 없음**
   ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md), [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)의
   "bcrypt prebuilt는 전부 x64" 주장을 정정). ADR 0030이 상정했던 Terraform/노드
