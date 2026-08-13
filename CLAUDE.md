@@ -454,12 +454,12 @@ Principle Conflict Protocol.
 - Separation of Concerns, Modularity, High Cohesion & Low Coupling — basis of the
   four-module split (Auth = tokens only, User = CRUD only, File = metadata only,
   Upload = physical files only); see Project-Specific Principles > Module Responsibility
-- Information Hiding, Encapsulation — reflected in centralized config access
-  (ConfigService only) and response shaping via `toResponse()`
+- Information Hiding, Encapsulation — see Architecture Decisions > Config
+  (centralized config access) and Project-Specific Principles > Boundary
+  Validation & Response Shaping (entity-to-DTO shaping)
 - Composition over Inheritance — prefer composition via dependency injection over
-  building new class hierarchies; the only sanctioned inheritance is the Passport
-  strategy/guard pattern (`extends PassportStrategy`, `extends AuthGuard`) and DTO
-  `PartialType` mapping, both framework idioms
+  building new class hierarchies; see Project-Specific Principles > Sanctioned
+  Inheritance Points for the two framework-idiom exceptions
 - Abstraction — conflicts with "no new abstractions unless asked"; routed through
   Principle Conflict Protocol
 - Layered Architecture, Dependency Direction — Controller → Service → Repository;
@@ -473,8 +473,8 @@ Principle Conflict Protocol.
 - OCP — extend via new classes/strategies (e.g. a new Passport strategy), don't
   modify existing logic in place to add a new case
 - DIP — favor constructor injection over direct instantiation; cross-module
-  dependencies via `exports`/`imports` only (e.g. `UserModule` exports `UserService`
-  for `JwtStrategy`)
+  dependencies via `exports`/`imports` only (see Project-Specific Principles >
+  Module Responsibility for the concrete export contracts)
 - LSP — watch for subclasses that strengthen a parent method's precondition; prefer
   composition when adding a stricter variant of existing behavior
 - ISP — DTO role separation: CreateDto / UpdateDto / ResponseDto are independent
@@ -543,9 +543,7 @@ Principle Conflict Protocol.
   storage-side: upload size limits
 
 ### Collaboration & Quality
-- Consistent Naming, Coding Standards — covered by Code Style and the existing
-  file-naming pattern (`{name}.{layer}.ts`, folders per concern: `dto/`, `entity/`,
-  `guard/`, `strategy/`, `interface/`, `decorator/`)
+- Consistent Naming, Coding Standards — covered by Code Style
 - Automated Testing — covered by Testing conventions; CI runs lint + unit + e2e on push/PR (see CI/CD)
 - Code Reviews, Version Control Discipline — out of scope for this file
 - Documentation as Code — Swagger decorators are the API documentation; the Change
@@ -689,6 +687,23 @@ one of these is violated, follow Principle Conflict Protocol.
   adapter. The sweep only ever considers `temp_`-prefixed objects; `granted_` objects
   are never candidates — the prefix state machine above is exactly what makes "still
   listed as `temp_` ⇒ unclaimed orphan" a safe, DB-free identification.
+
+### Sanctioned Inheritance Points
+
+- Breakdown: this project favors composition (DI) over building new class
+  hierarchies. The only class-extension inheritance in the codebase sits at two
+  framework-mandated points — Passport auth (`JwtStrategy`/`LocalStrategy extends
+  PassportStrategy`; `JwtAuthGuard`/`LocalAuthGuard`/`OptionalJwtAuthGuard extends
+  AuthGuard`) and DTO composition (`UpdateCommentDto`/`UpdateFileDto`/`UpdatePostDto`/
+  `UpdateUserDto extends PartialType(CreateXDto)`).
+- Rationale: both are framework idioms — Passport's strategy/guard contract and
+  `@nestjs/mapped-types`' `PartialType` helper — not project-invented hierarchies;
+  extending them is how this codebase plugs into the framework, not a design
+  choice weighed against composition.
+- Goal: any new class hierarchy outside these two points needs an explicit
+  decision (Scope Discipline > Architectural changes); do not add a new `extends`
+  relationship as a shortcut for shared behavior — prefer a shared service
+  injected into both call sites.
 
 ### Transaction Boundary per Multi-Write (트랜잭션 패턴 선택 기준)
 
