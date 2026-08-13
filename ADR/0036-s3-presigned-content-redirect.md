@@ -1,6 +1,6 @@
 # ADR 0036: Presigned S3 Redirect for `GET /file/:id/content`
 
-- Status: Accepted (design-only — no code yet, mirrors ADR 0033/0034)
+- Status: Accepted — implemented 2026-08-13
 - Date: 2026-08-13
 - Amends: [ADR 0025](0025-file-visibility-and-media-expansion.md) /
   [ADR 0026](0026-file-visibility-implementation.md) (the access-check contract
@@ -167,16 +167,22 @@ specific mapping," which matches the actual lifetime of what's being handed out.
   `STORAGE_DRIVER=s3` once this lands — no `GetObjectCommand` proxying, no
   `HeadObjectCommand` `stat()` call on the redirect path. This is the change's
   stated motivation.
-- `local-disk.storage.spec.ts` and `s3.storage.spec.ts` each need a new test case
-  for `getSignedReadUrl` (asserting `null` and asserting the signed-URL call
-  shape respectively) once implemented — both files already exist and mock their
-  respective SDKs/`fs/promises` (CLAUDE.md > Testing).
-- `file-content.controller.ts` has no `*.spec.ts` today — controllers sit outside
-  the coverage-measured layer (CLAUDE.md > Testing), so no new *unit* test
-  obligation is created by this change, but the redirect branch should be
-  exercised by `pnpm test:e2e` once `STORAGE_DRIVER=s3` is exercised in CI (it
-  currently is not — the e2e suite runs against the local adapter).
-- ROADMAP.md's S3 component-status row gets a citation to this ADR, recording
-  that the redirect design is now settled ahead of the cutover — see the same
-  change's ROADMAP.md/.ko.md edit.
+- `local-disk.storage.spec.ts` and `s3.storage.spec.ts` gained a `getSignedReadUrl`
+  test case each (asserting `null`, and asserting the signed-URL call shape
+  respectively) in the same change — both files already existed and mock their
+  respective SDKs/`fs/promises` (CLAUDE.md > Testing). `pnpm lint` clean, all 211
+  unit tests passing.
+- `file-content.controller.ts` has no `*.spec.ts` — controllers sit outside the
+  coverage-measured layer (CLAUDE.md > Testing), so no new *unit* test obligation
+  was created, but the redirect branch is still unverified by `pnpm test:e2e`:
+  the e2e suite runs against the local adapter only, `STORAGE_DRIVER=s3` is not
+  exercised in CI. Residual, not blocking — same status as `S3Storage`'s other
+  methods since ADR 0029.
+- ROADMAP.md's S3 component-status row, `ADR/README.md`, and `README.md`'s
+  `GET /file/:id/content` line all cite this ADR and reflect the landed redirect
+  in the same change (EN+KO).
+- New runtime dependency added: `@aws-sdk/s3-request-presigner@^3.1109.0`
+  (Apache-2.0, `pnpm audit --prod` shows zero new findings — all 5 pre-existing
+  advisories trace through `aws-sdk`/`@nestjs/swagger`/`typeorm`, none through
+  this package).
 - No schema change, no change to `FileEntity`, no change to any DTO.

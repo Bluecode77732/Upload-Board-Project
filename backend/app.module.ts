@@ -55,6 +55,9 @@ import { join } from 'node:path';
           is: 's3',
           then: Joi.required(),
         }),
+        // Presigned-redirect TTL for GET /file/:id/content (ADR 0036). Only S3Storage
+        // reads it — harmless unused default under STORAGE_DRIVER=local.
+        CONTENT_SIGNED_URL_TTL_SECONDS: Joi.number().default(300),
       }),
       isGlobal: true,
     }),

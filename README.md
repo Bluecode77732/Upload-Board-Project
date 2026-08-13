@@ -182,7 +182,10 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.m
   for video/audio seeking. This is the **only** path that serves granted bytes —
   `ServeStaticModule` no longer exposes `file/upload`
   ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2,
-  [ADR 0026](ADR/0026-file-visibility-implementation.md))
+  [ADR 0026](ADR/0026-file-visibility-implementation.md)). Under `STORAGE_DRIVER=s3`,
+  a passing access check returns a `302` redirect to a short-lived presigned S3 URL
+  instead of streaming the bytes itself; under the default `local` driver, behavior is
+  unchanged ([ADR 0036](ADR/0036-s3-presigned-content-redirect.md))
 - `POST /file` — promote a temp file to permanent storage (transactional), defaulting to
   `visibility: private`. The attached filename is a one-shot claim token: resubmitting it
   returns the existing file with 200 (idempotent retry) for the user who claimed it, and

@@ -1,6 +1,6 @@
 # ADR 0036: `GET /file/:id/content`의 S3 presigned 리다이렉트
 
-- 상태: 채택됨 (설계만, 코드 없음 — ADR 0033/0034와 동일한 패턴)
+- 상태: 채택됨 — 2026-08-13 구현 완료
 - 날짜: 2026-08-13
 - 개정 대상: [ADR 0025](0025-file-visibility-and-media-expansion.ko.md) /
   [ADR 0026](0026-file-visibility-implementation.ko.md) (`GET /file/:id/content`가
@@ -153,16 +153,20 @@ ADR은 "누가 서명-또는-스트리밍 분기까지 도달할 수 있는가"�
   대역폭·CPU 비용이 거의 0으로 떨어진다 — 리다이렉트 경로에서는
   `GetObjectCommand` 프록시도, `stat()`을 위한 `HeadObjectCommand`도 일어나지
   않는다. 이것이 이 변경의 본래 동기다.
-- `local-disk.storage.spec.ts`와 `s3.storage.spec.ts`는 구현 시점에 각각
-  `getSignedReadUrl`에 대한 새 테스트 케이스가 필요하다(각각 `null` 반환과 서명
-  URL 호출 형태를 검증) — 두 파일 모두 이미 존재하며 각자의 SDK/`fs/promises`를
-  모킹하고 있다(CLAUDE.md > 테스트).
-- `file-content.controller.ts`에는 오늘 `*.spec.ts`가 없다 — 컨트롤러는 커버리지
-  측정 대상 계층 밖이라(CLAUDE.md > 테스트) 이 변경이 새 단위 테스트 의무를
-  만들지는 않지만, `STORAGE_DRIVER=s3`가 CI에서 실제로 돌게 되면(지금은 e2e
-  스위트가 로컬 어댑터로만 돈다) 리다이렉트 분기도 `pnpm test:e2e`로 검증되어야
-  한다.
-- ROADMAP.md의 S3 컴포넌트 상태 행에 이 ADR을 인용해 둔다 — 리다이렉트 설계가
-  컷오버보다 먼저 정리됐다는 사실을 남기기 위해서다. 같은 변경에서
-  ROADMAP.md/.ko.md도 함께 수정한다.
+- `local-disk.storage.spec.ts`와 `s3.storage.spec.ts`는 같은 변경에서 각각
+  `getSignedReadUrl` 테스트 케이스를 얻었다(각각 `null` 반환과 서명 URL 호출
+  형태를 검증) — 두 파일 모두 이미 존재하며 각자의 SDK/`fs/promises`를 모킹하고
+  있다(CLAUDE.md > 테스트). `pnpm lint` 클린, 단위 테스트 211개 전부 통과.
+- `file-content.controller.ts`에는 `*.spec.ts`가 없다 — 컨트롤러는 커버리지
+  측정 대상 계층 밖이라(CLAUDE.md > 테스트) 새 단위 테스트 의무는 없지만,
+  리다이렉트 분기는 아직 `pnpm test:e2e`로 검증되지 않는다 — e2e 스위트가
+  로컬 어댑터로만 돌고 CI에서 `STORAGE_DRIVER=s3`를 실행하지 않기 때문이다.
+  잔여 사항일 뿐 막는 요소는 아니다 — ADR 0029 이후 `S3Storage`의 다른
+  메서드들과 같은 상태다.
+- ROADMAP.md의 S3 컴포넌트 상태 행, `ADR/README.md`, `README.md`의
+  `GET /file/:id/content` 설명 모두 같은 변경에서 이 ADR을 인용하고 반영된
+  리다이렉트를 반영하도록 갱신했다(EN+KO).
+- 신규 런타임 의존성 추가: `@aws-sdk/s3-request-presigner@^3.1109.0`
+  (Apache-2.0, `pnpm audit --prod` 결과 새로운 취약점 없음 — 기존 5건 전부
+  `aws-sdk`/`@nestjs/swagger`/`typeorm` 경로이며 이 패키지를 거치지 않음).
 - 스키마 변경 없음, `FileEntity` 변경 없음, DTO 변경 없음.

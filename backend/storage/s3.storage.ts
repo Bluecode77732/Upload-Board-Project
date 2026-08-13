@@ -15,6 +15,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
 import {
   FileStorage,
@@ -32,6 +33,7 @@ export class S3Storage implements FileStorage {
   private readonly logger = new Logger(S3Storage.name);
   private readonly client: S3Client;
   private readonly bucket: string;
+  private readonly signedUrlTtlSeconds: number;
 
   constructor(configService: ConfigService) {
     // No explicit credentials: the SDK's default provider chain (env vars, shared
@@ -41,6 +43,11 @@ export class S3Storage implements FileStorage {
       region: configService.getOrThrow<string>('AWS_REGION'),
     });
     this.bucket = configService.getOrThrow<string>('S3_BUCKET');
+    // Read once at construction, not per call — TTL is an adapter-internal
+    // concern the controller never sees (ADR 0036 D1).
+    this.signedUrlTtlSeconds = configService.getOrThrow<number>(
+      'CONTENT_SIGNED_URL_TTL_SECONDS',
+    );
   }
 
   // 목적: 첨부 직후 temp 바이트를 버킷에 올린다.
@@ -198,5 +205,22 @@ export class S3Storage implements FileStorage {
     } while (continuationToken);
 
     return result;
+  }
+
+  // 목적: 앱 서버를 거치지 않고 클라이언트가 S3에서 직접 바이트를 받아갈 수 있는 서명 URL을 만든다.
+  // 이유: 프록시 스트리밍은 바이트마다 앱 서버의 대역폭·CPU를 소모한다 — S3를 도입한
+  //       본래 목적(대역폭 이전)을 실제로 달성하려면 리다이렉트가 필요하다(ADR 0036).
+  // 방법: GetObjectCommand에 ResponseContentType을 실어 presigned URL을 생성한다 — 네트워크
+  //       왕복 없는 로컬 SigV4 서명이며, TTL은 생성 시점에 읽어 둔 값을 그대로 쓴다.
+  async getSignedReadUrl(key: string, contentType: string): Promise<string> {
+    return getSignedUrl(
+      this.client,
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ResponseContentType: contentType,
+      }),
+      { expiresIn: this.signedUrlTtlSeconds },
+    );
   }
 }

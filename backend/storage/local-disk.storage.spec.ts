@@ -176,4 +176,12 @@ describe('LocalDiskStorage', () => {
       await expect(storage.listTemp()).resolves.toEqual([]);
     });
   });
+
+  describe('getSignedReadUrl', () => {
+    it('always returns null — local disk has no presign concept (ADR 0036)', async () => {
+      await expect(
+        storage.getSignedReadUrl('file/upload/granted_a.mp4', 'video/mp4'),
+      ).resolves.toBeNull();
+    });
+  });
 });

@@ -53,4 +53,12 @@ export interface FileStorage {
 
   /** Lists every temp object with its age, for the orphan sweep (ADR 0018). */
   listTemp(): Promise<StorageTempEntry[]>;
+
+  /**
+   * A time-limited URL the client can fetch `key` from directly, bypassing the
+   * app server (ADR 0036). `null` means the adapter has no such concept —
+   * callers fall back to `stat()`/`createReadStream()`. TTL is adapter-internal
+   * (read from config at construction), not a parameter here.
+   */
+  getSignedReadUrl(key: string, contentType: string): Promise<string | null>;
 }

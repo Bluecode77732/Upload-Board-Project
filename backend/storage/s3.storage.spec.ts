@@ -2,6 +2,7 @@ import { Readable } from 'stream';
 import { S3Storage } from './s3.storage';
 
 const send = jest.fn();
+const getSignedUrl = jest.fn();
 
 jest.mock('@aws-sdk/client-s3', () => {
   const actual =
@@ -14,10 +15,16 @@ jest.mock('@aws-sdk/client-s3', () => {
   };
 });
 
+jest.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: (...args: unknown[]) =>
+    (getSignedUrl as (...args: unknown[]) => unknown)(...args),
+}));
+
 const mockConfigService = {
   getOrThrow: jest.fn((key: string) => {
     if (key === 'AWS_REGION') return 'ap-northeast-2';
     if (key === 'S3_BUCKET') return 'upload-board-test-bucket';
+    if (key === 'CONTENT_SIGNED_URL_TTL_SECONDS') return 300;
     throw new Error(`unexpected key ${key}`);
   }),
 } as unknown as import('@nestjs/config').ConfigService;
@@ -240,6 +247,30 @@ describe('S3Storage', () => {
       send.mockRejectedValue(new Error('network error'));
 
       await expect(storage.listTemp()).resolves.toEqual([]);
+    });
+  });
+
+  describe('getSignedReadUrl', () => {
+    it('signs a GetObjectCommand with the response content type and configured TTL (ADR 0036)', async () => {
+      getSignedUrl.mockResolvedValue('https://bucket.s3.amazonaws.com/signed');
+
+      const result = await storage.getSignedReadUrl(
+        'file/upload/granted_a.mp4',
+        'video/mp4',
+      );
+
+      expect(result).toBe('https://bucket.s3.amazonaws.com/signed');
+      expect(getSignedUrl).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          input: {
+            Bucket: 'upload-board-test-bucket',
+            Key: 'file/upload/granted_a.mp4',
+            ResponseContentType: 'video/mp4',
+          },
+        }),
+        { expiresIn: 300 },
+      );
     });
   });
 });

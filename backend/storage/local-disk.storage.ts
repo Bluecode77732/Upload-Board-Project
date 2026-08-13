@@ -158,6 +158,17 @@ export class LocalDiskStorage implements FileStorage {
     return result;
   }
 
+  // 목적: presigned 읽기 URL을 요청받았을 때 이 어댑터가 지원 불가함을 알린다.
+  // 이유: 로컬 디스크에는 서명 URL 개념이 없다 — 컨트롤러가 null을 받아 기존
+  //       stat()/createReadStream() 스트리밍 경로로 폴백하도록 하는 신호가 필요하다(ADR 0036).
+  // 방법: 항상 null을 반환한다 — 예외를 던지지 않는다(existsTemp의 boolean 계약과 같은 성격).
+  getSignedReadUrl(key: string, contentType: string): Promise<string | null> {
+    // Deliberately unused — kept named to match the FileStorage arity (ADR 0036).
+    void key;
+    void contentType;
+    return Promise.resolve(null);
+  }
+
   private resolveUnlinkPath(key: string): string | null {
     if (key.startsWith(UPLOAD_PREFIX)) return join(process.cwd(), key);
     if (key.startsWith('temp_')) return join(process.cwd(), TEMP_DIR, key);

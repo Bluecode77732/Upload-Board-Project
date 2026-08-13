@@ -28,33 +28,38 @@
   확인했다. 여기서는 발견 사실만 기록하고 고치지 않았다. ROADMAP > 미배정에서 추적.
 
 ### 추가
-- **ADR 0036: `GET /file/:id/content`의 S3 presigned URL 리다이렉트 — 설계만, 코드 변경
-  없음** ([ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md), [ADR 0029](ADR/0029-storage-port-adapter.ko.md)의
-  `FileStorage` 포트를 확장; [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)/
+- **ADR 0036: `GET /file/:id/content`의 S3 presigned URL 리다이렉트 — 같은 변경에서
+  설계와 구현을 함께 반영** ([ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md),
+  [ADR 0029](ADR/0029-storage-port-adapter.ko.md)의 `FileStorage` 포트를 확장;
+  [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)/
   [ADR 0026](ADR/0026-file-visibility-implementation.ko.md)의 서빙 방식만 바꿀 뿐 접근
-  검사 계약은 그대로 둠). `STORAGE_DRIVER=s3`에서도 오늘은 승인된 파일을 읽을 때마다
-  여전히 앱 서버가 바이트를 프록시한다(`S3Storage`가 `LocalDiskStorage`와 똑같이
-  `Readable`을 파이프하는 형태라서) — S3 어댑터를 도입해 앱 계층에서 덜어내려던 바로 그
-  대역폭·CPU 비용 구조가 그대로 남아있는 셈이다. 설계한 해법: `FileStorage`에
-  `getSignedReadUrl(key, contentType): Promise<string | null>`을 추가한다 —
-  `LocalDiskStorage`는 항상 `null`(오늘의 스트리밍/Range/206/416 경로로 폴백, 변경
+  검사 계약은 그대로 둠). `STORAGE_DRIVER=s3`에서도 이전에는 승인된 파일을 읽을 때마다
+  앱 서버가 바이트를 프록시했다(`S3Storage`가 `LocalDiskStorage`와 똑같이 `Readable`을
+  파이프하는 형태였음) — S3 어댑터를 도입해 앱 계층에서 덜어내려던 바로 그 대역폭·CPU
+  비용 구조가 그대로 남아있던 셈이다. `FileStorage`에
+  `getSignedReadUrl(key, contentType): Promise<string | null>`을 추가했다 —
+  `LocalDiskStorage`는 항상 `null`(기존 스트리밍/Range/206/416 경로로 폴백, 변경
   없음), `S3Storage`는 presigned `GetObjectCommand` URL을 돌려준다(신규 의존성
-  `@aws-sdk/s3-request-presigner` 사용, TTL은 호출마다가 아니라 생성 시점에
-  `ConfigService`로 한 번만 읽음). 콘텐츠 컨트롤러는 `resolveContentAccess` 통과
-  후(`public`뿐 아니라 세 가시성 등급 전부) 이 메서드를 호출해, 값이 있으면 `302`
-  리다이렉트하고 `stat()`/`createReadStream()`은 아예 건너뛴다 — `null`이면 오늘의
+  `@aws-sdk/s3-request-presigner`, Apache-2.0, `pnpm audit --prod`로 이 패키지발
+  취약점 없음 확인; TTL은 호출마다가 아니라 생성 시점에 `ConfigService`로 한 번만
+  읽음). `FileContentController.getContent`는 이제 `resolveContentAccess` 통과
+  직후(`public`뿐 아니라 세 가시성 등급 전부) 이 메서드를 호출해, 값이 있으면 `302`
+  리다이렉트하고 `stat()`/`createReadStream()`은 아예 건너뛴다 — `null`이면 기존
   흐름 그대로다. 발급한 URL은 캐싱·재사용하지 않는다: 요청마다 접근 판정과 서명을
-  새로 한다. TTL(`CONTENT_SIGNED_URL_TTL_SECONDS`, 신규 환경변수)은 임의로 정하지
-  않고 사용자에게 먼저 물어 300초로 확정했다(Documentation Authoring Protocol >
-  질문 단계) — ADR에서 더 긴 대안 세 가지도 검토하고 기각했다. 고쳐지지 않은 채
-  명시적으로만 남긴 것: 리다이렉트된 서명 URL은 만료 전까지 요청자의 JWT/공유
-  토큰과 무관하게 그 자체로 자격증명 역할을 하므로, private/unlisted 콘텐츠에
-  대해 지금의 "바이트 범위 요청마다 재검사"와는 분명히 다른 신뢰 모델이 된다 —
-  짧은 TTL과 대역폭 절감이라는 목표를 근거로 여기서는 받아들였다. 그리고
+  새로 한다. TTL(`CONTENT_SIGNED_URL_TTL_SECONDS`, 신규 Joi 항목 + `.env.example` 줄,
+  기본값 300)은 임의로 정하지 않고 사용자에게 먼저 물어 확정했다(Documentation
+  Authoring Protocol > 질문 단계) — ADR에서 더 긴 대안 세 가지도 검토하고 기각했다.
+  고치지 않은 채 명시적으로만 남긴 것: 리다이렉트된 서명 URL은 만료 전까지 요청자의
+  JWT/공유 토큰과 무관하게 그 자체로 자격증명 역할을 하므로, private/unlisted
+  콘텐츠에 대해 이전의 "바이트 범위 요청마다 재검사"와는 분명히 다른 신뢰 모델이
+  된다 — 짧은 TTL과 대역폭 절감이라는 목표를 근거로 받아들였다. 그리고
   `frontend/`·`admin/`의 `<video>`/`<audio>` 요소가 리다이렉트 경계를 넘는 Range
-  탐색을 제대로 처리하는지는 미검증으로, 해당 저장소들 자체의 범위로 남겨 뒀다.
-  `ROADMAP.md`의 S3 컴포넌트 상태 행과 `ADR/README.md`를 새 ADR을 인용하도록
-  갱신했다; 코드·스키마·의존성·환경변수는 아직 실제로 추가되지 않았다.
+  탐색을 제대로 처리하는지는 미검증으로, 해당 저장소들 자체의 범위로 남겨 뒀다(e2e
+  스위트는 로컬 어댑터만 돌리고 `STORAGE_DRIVER=s3`는 돌리지 않으므로 CI로도
+  검증되지 않는다). `local-disk.storage.spec.ts`와 `s3.storage.spec.ts` 각각에
+  `getSignedReadUrl` 테스트 케이스를 추가했다; `pnpm lint` 클린, 단위 테스트 211개
+  전부 통과. `ROADMAP.md`의 S3 컴포넌트 상태 행, `ADR/README.md`, `README.md`의
+  `GET /file/:id/content` 설명을 모두 맞춰 갱신했다(EN+KO 전체).
 - **CI: `frontend-e2e`/`admin-e2e` Playwright 잡, `frontend/`·`admin/`의 lint/unit
   커버리지 추가** — 둘 다 `pnpm lint`, `pnpm test`, `pnpm e2e` 스크립트가 있었지만 어떤
   CI 잡도 실행한 적이 없어서, 이 두 폴더의 변경 사항은 검증 없이 머지되고 있었습니다.

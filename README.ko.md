@@ -182,7 +182,10 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
   granted 바이트를 서빙하는 **유일한** 경로다 — `ServeStaticModule`은 더 이상 `file/upload`를
   노출하지 않는다
   ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D1/D2,
-  [ADR 0026](ADR/0026-file-visibility-implementation.ko.md))
+  [ADR 0026](ADR/0026-file-visibility-implementation.ko.md)). `STORAGE_DRIVER=s3`에서는
+  접근 검사를 통과하면 바이트를 직접 스트리밍하는 대신 수명이 짧은 presigned S3 URL로
+  `302` 리다이렉트한다 — 기본값인 `local` 드라이버에서는 동작이 그대로다
+  ([ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md))
 - `POST /file` — 임시 파일을 영구 저장소로 승격 (트랜잭션), 기본 `visibility: private`로
   시작한다. attach로 받은 파일명은 1회용 청구 토큰이라, 다시 제출하면 청구한 본인에게는 기존
   파일을 200으로 돌려주고(멱등 재시도), 다른 사용자에게는 409 `FILE_ALREADY_CLAIMED`를
