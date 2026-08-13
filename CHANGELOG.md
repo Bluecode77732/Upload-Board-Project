@@ -13,6 +13,34 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- **CI: `frontend-e2e`/`admin-e2e` Playwright jobs, plus lint/unit coverage for `frontend/` and
+  `admin/`** — both had working scripts (`pnpm lint`, `pnpm test`, `pnpm e2e`) that no CI job
+  ever ran, so changes to either merged unverified. `frontend-lint` (oxlint) and
+  `admin-lint-and-unit` (eslint + vitest) run scoped to their own working directory and
+  `pnpm-lock.yaml` (neither is a pnpm workspace); `frontend-e2e`/`admin-e2e` build+migrate+start
+  the backend (waiting on `GET /health/live` rather than a raw port check) against a job-scoped
+  Postgres service, then drive Playwright against it — `admin-e2e` also seeds a superadmin via
+  `admin/e2e/seed-superadmin.mjs` with fixed CI-only credentials (safe: each run gets a fresh,
+  disposable database). Also enabled `actions/setup-node`'s pnpm store cache on the existing
+  backend jobs by moving `corepack enable` ahead of `setup-node`, which needs pnpm on `PATH` to
+  resolve the cache path.
+- **Admin e2e coverage for the 2026-08-12 `userId` filter, CSV export, search, and sort** —
+  `admin/README.md`'s "Open items" had recorded these as untested. `logs.spec.ts` gained
+  assertions for the "View all" link's `userId` filter (plus its clear-filter button) and for
+  Export CSV (downloads a file, asserts the header row and the filtered data rows);
+  `users.spec.ts` gained a search-box test and a sortable-column-header test. `pnpm e2e` —
+  10/10 passing.
+- **CI: `docker-publish` job — auto-pushes the production image to Docker Hub.** Automates what
+  `build-and-push.sh` did manually: once the test jobs pass on a push to `main`, buildx-builds
+  the production target for `linux/amd64,linux/arm64` and pushes `bluecode1775/sharenpo` tagged
+  `:latest` and `:{sha}`, using `--push` directly (the script's separate build-then-`docker push`
+  steps discard a multi-platform build's per-arch output, since the build step has no
+  `--push`/`--output` — the same fix is applied to `build-and-push.sh`'s own tagging, which also
+  gained an explicit `:latest` tag, previously implicit). **Deliberately ahead of
+  `ROADMAP.md`'s stated plan** (GitHub Actions CD waits for the AWS deploy target and its own
+  ADR) and independent of [ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.md)'s existing,
+  personal `bluecode1775/sharenpo` push — added on explicit request. `ROADMAP.md`'s GitHub
+  Actions row now records this as a named exception rather than reading as already-planned work.
 - **`GET /user` search + sort, `GET /audit-log` related-user filter** — both were listed
   as "removed, this backend doesn't support it" in `admin/README.md`'s "What was adapted"
   table (user search for the admin console's search box; recent-activity filtering for its
@@ -87,6 +115,14 @@ development line (package.json version).
   convenience-vs-masking-a-crash-loop trade-off not decided here.
 
 ### Fixed
+- **`ARCHITECTURE.md`(.ko): `GET /user` row still described the pre-search/sort
+  `findAndCount()` call**, stale since `d889f73` replaced it with the
+  `GetUsersDto`/`createQueryBuilder` assembly. Updated to describe the actual
+  `take`/`skip`/`search`/`sortBy`/`order` shape, mirroring `GET /file`'s row (ADR 0021
+  parity). Other known-stale rows in that document (pre-RBAC `PATCH`/`DELETE /user`
+  wording, missing Post/Comment/Storage/Health/TempCleanup modules in the Module Map) stay
+  out of scope — CLAUDE.md's Known Gaps already tracks a full `ARCHITECTURE.md` audit as
+  its own dedicated task.
 - **`admin/`: generic "Admin Panel" branding and a dead Chat Project CSP domain in
   `vercel.json`** — leftovers from the unmodified 2026-07-30 import (the "Deploy config"
   row in `admin/README.md`'s adaptation table had left `vercel.json` untouched on

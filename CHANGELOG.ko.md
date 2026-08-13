@@ -13,6 +13,36 @@
 ## [Unreleased]
 
 ### 추가
+- **CI: `frontend-e2e`/`admin-e2e` Playwright 잡, `frontend/`·`admin/`의 lint/unit
+  커버리지 추가** — 둘 다 `pnpm lint`, `pnpm test`, `pnpm e2e` 스크립트가 있었지만 어떤
+  CI 잡도 실행한 적이 없어서, 이 두 폴더의 변경 사항은 검증 없이 머지되고 있었습니다.
+  `frontend-lint`(oxlint)와 `admin-lint-and-unit`(eslint + vitest)는 각자의 작업
+  디렉터리와 `pnpm-lock.yaml`에 범위를 한정합니다(둘 다 pnpm 워크스페이스가 아님).
+  `frontend-e2e`/`admin-e2e`는 잡 전용 Postgres 서비스를 대상으로 백엔드를
+  빌드+마이그레이션+기동한 뒤(원시 포트 체크 대신 `GET /health/live`를 기다림)
+  Playwright를 구동합니다 — `admin-e2e`는 `admin/e2e/seed-superadmin.mjs`로 고정된
+  CI 전용 자격 증명을 이용해 superadmin도 시딩합니다(매 실행마다 새로 만들고 버리는
+  DB라 안전). 기존 백엔드 잡들에도 `actions/setup-node`의 pnpm 스토어 캐시를 활성화했습니다
+  — 캐시 경로를 찾으려면 pnpm이 `PATH`에 있어야 해서 `corepack enable`을 `setup-node`
+  앞으로 옮겼습니다.
+- **2026-08-12에 추가된 `userId` 필터·CSV 내보내기·검색·정렬에 대한 admin e2e 커버리지** —
+  `admin/README.md`의 "Open items"에 테스트가 없다고 기록돼 있던 기능들입니다.
+  `logs.spec.ts`에 "View all" 링크의 `userId` 필터(그 해제 버튼 포함) 검증과 CSV 내보내기
+  검증(파일을 내려받아 헤더 행과 필터링된 데이터 행을 확인)이 추가됐고, `users.spec.ts`에
+  검색창 테스트와 정렬 가능한 헤더 테스트가 추가됐습니다. `pnpm e2e` — 10/10 통과.
+- **CI: `docker-publish` 잡 — 프로덕션 이미지를 Docker Hub에 자동 푸시.** `build-and-push.sh`가
+  수동으로 하던 일을 자동화했습니다: `main` 푸시에서 테스트 잡들이 통과하면
+  `linux/amd64,linux/arm64` 대상으로 프로덕션 스테이지를 buildx로 빌드해
+  `bluecode1775/sharenpo`를 `:latest`와 `:{sha}` 태그로 푸시합니다. `--push`를 직접
+  사용했습니다(스크립트의 별도 빌드 후 `docker push` 단계는, 빌드 단계에 `--push`/`--output`이
+  없어 멀티플랫폼 빌드의 아키텍처별 결과물을 버리게 되므로 — 같은 수정을
+  `build-and-push.sh`의 태깅에도 적용해, 이전엔 암묵적이던 `:latest` 태그를 명시했습니다).
+  **`ROADMAP.md`가 정한 계획보다 앞서 나간 것**입니다(GitHub Actions CD는 AWS 배포 대상이
+  정해질 때까지, 그리고 자체 ADR이 나올 때까지 기다리기로 돼 있었습니다), 그리고
+  [ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md)가 기록한 기존의 개인용
+  `bluecode1775/sharenpo` 푸시와도 별개입니다 — 명시적 요청으로 추가했습니다.
+  `ROADMAP.md`의 GitHub Actions 행은 이제 이것을 계획대로 된 일이 아니라 이름 붙인
+  예외로 기록합니다.
 - **`GET /user` 검색·정렬 추가, `GET /audit-log` 관련 유저 필터 추가** — 둘 다
   `admin/README.md`의 "What was adapted" 표에 "이 백엔드가 지원하지 않아 제거"로
   기록돼 있던 기능입니다(유저 검색은 admin 콘솔의 검색창, 관련 활동 필터는 유저 상세
@@ -88,6 +118,14 @@
   있어 이번에 임의로 결정하지 않았습니다.
 
 ### 수정
+- **`ARCHITECTURE.md`(.ko): `GET /user` 행이 여전히 검색/정렬 이전의 `findAndCount()`
+  호출을 서술하고 있었습니다** — `d889f73`가 이를 `GetUsersDto`/`createQueryBuilder`
+  조립으로 대체한 이후 오래된 상태였습니다. 실제
+  `take`/`skip`/`search`/`sortBy`/`order` 형태를 서술하도록 갱신했고, `GET /file` 행과
+  동일한 형태로 맞췄습니다(ADR 0021 대응). 이 문서의 다른 오래된 서술(RBAC 이전
+  `PATCH`/`DELETE /user` 문구, Module Map에서 빠진 Post/Comment/Storage/Health/
+  TempCleanup 모듈)은 이번 범위 밖입니다 — CLAUDE.md의 Known Gaps가 이미
+  `ARCHITECTURE.md` 전체 감사를 별도 작업으로 추적하고 있습니다.
 - **`admin/`: 제네릭한 "Admin Panel" 브랜딩과 `vercel.json`의 죽은 Chat Project CSP
   도메인** — 2026-07-30에 수정 없이 이식됐던 잔재입니다(`admin/README.md` 적응 표의
   "Deploy config" 행이 `vercel.json`을 의도적으로 손대지 않았다고 기록해 둔 부분).

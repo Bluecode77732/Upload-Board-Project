@@ -380,7 +380,7 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
 | 구성요소 | 역할 | 상태 | 완료/잔여 | ADR / 출처 |
 |---|---|---|---|---|
 | **Docker** | 컨테이너화 | ✅ + 하드닝 | 멀티스테이지 이미지(Stage 1); 이제 전용 **비루트** 사용자로 실행 + `HEALTHCHECK`. **distroless** 베이스와 **멀티아치(ARM/Graviton)** 빌드는 검토 후 **유예**(감수). | [0015](ADR/0015-docker-and-compose.ko.md), [0030](ADR/0030-container-non-root-and-arch-stance.ko.md) |
-| **GitHub Actions** | CI(/CD) | ✅ CI만 | push/PR에서 `lint`+unit+e2e 워크플로. **배포 파이프라인(CD)**은 아직 없음 — AWS가 대상이 될 때 추가. | [0016](ADR/0016-github-actions-ci.ko.md) |
+| **GitHub Actions** | CI(/CD) | 🔶 CI + 이미지 게시 | push/PR에서 `lint`+unit+e2e 워크플로 — 이제 `frontend-e2e`/`admin-e2e`와 `frontend/`/`admin/`의 lint/unit 잡도 포함(둘 다 이전엔 CI에서 검증되지 않았다). **AWS로의 배포 파이프라인(CD)은 여전히 없음** — AWS가 대상이 될 때 추가. **예외, 2026-08-13 기록**: 명시적 요청으로 `docker-publish` 잡이 추가됐다 — main 푸시마다 `linux/amd64,linux/arm64`를 buildx로 빌드해 `bluecode1775/sharenpo`를 Docker Hub에 푸시한다. 이것은 이미지 게시 CD이지 앱 배포가 아니며, 해당 커밋(`1b72ec9`) 자체가 이 행이 정한 계획(AWS가 대상이 될 때만 CD)을 대체하는 게 아니라 그보다 앞서 진행하는 것이라고 명시하고 있다. | [0016](ADR/0016-github-actions-ci.ko.md) |
 | **S3** | 오브젝트 스토리지 | 🔶 어댑터 ✅ / 컷오버 🆕 | `FileStorage` 포트 + `S3Storage` 구현 랜딩(단위테스트만, 실버킷 미실행). 잔여: 실버킷 **`STORAGE_DRIVER=s3` 전환**. `local`이 운영 기본값 유지. | [0029](ADR/0029-storage-port-adapter.ko.md) |
 | **헬스/레디니스** | 프로브 | ✅ | LB·오케스트레이터 프로브용 `GET /health/live` + `GET /health/ready`. | [0031](ADR/0031-health-and-readiness-endpoints.ko.md) |
 | **마이그레이션 분리 단계** | 배포 안전 | 🔶 compose ✅ / K8s Job 🆕 | `docker-compose.yml`의 원샷 `migrate` 서비스가 향후 **Kubernetes Job**을 모델링 — 스케일된 `api`가 `migration:run`을 경합하지 않도록. K8s Job 자체는 예정. | [0032](ADR/0032-migration-as-separate-deploy-step.ko.md) |
