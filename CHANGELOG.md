@@ -87,6 +87,18 @@ development line (package.json version).
   convenience-vs-masking-a-crash-loop trade-off not decided here.
 
 ### Fixed
+- **`admin/`: generic "Admin Panel" branding and a dead Chat Project CSP domain in
+  `vercel.json`** — leftovers from the unmodified 2026-07-30 import (the "Deploy config"
+  row in `admin/README.md`'s adaptation table had left `vercel.json` untouched on
+  purpose). `index.html`'s `<title>` is now `"Upload Board Admin"`, with a new
+  `admin/public/favicon.svg` (a plain "UB" initials mark) linked from `<head>` —
+  colors/layout untouched. `vercel.json`'s CSP `connect-src` no longer points at the
+  Chat Project's live Railway host (`https://chat-project-production-3b22.up.railway.app`);
+  replaced with `http://localhost:3000` (this backend's local dev default, `.env.example`'s
+  `BASE_URL`) as an explicit placeholder, not a real deploy domain — Stage 4 hasn't decided
+  where this backend is hosted, so the value needs updating again once it does. Vercel stays
+  the intended deploy target (confirmed with the developer); no actual deployment exists yet.
+  `admin/README.md`/`.ko.md` gain a "Provenance cleanup" section recording both fixes.
 - **`Dockerfile`: `pnpm prune --prod` hung indefinitely**, introduced by the cache-mount
   change above. The `--mount=type=cache` backing `pnpm install` only exists for the RUN
   instruction it's attached to; the next RUN (`pnpm build && pnpm prune --prod`) no longer

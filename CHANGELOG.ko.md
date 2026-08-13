@@ -88,6 +88,18 @@
   있어 이번에 임의로 결정하지 않았습니다.
 
 ### 수정
+- **`admin/`: 제네릭한 "Admin Panel" 브랜딩과 `vercel.json`의 죽은 Chat Project CSP
+  도메인** — 2026-07-30에 수정 없이 이식됐던 잔재입니다(`admin/README.md` 적응 표의
+  "Deploy config" 행이 `vercel.json`을 의도적으로 손대지 않았다고 기록해 둔 부분).
+  `index.html`의 `<title>`을 `"Upload Board Admin"`으로 바꾸고, `<head>`에 연결한 새
+  `admin/public/favicon.svg`("UB" 이니셜 마크)를 추가했습니다(색상·레이아웃은 그대로).
+  `vercel.json`의 CSP `connect-src`는 더 이상 Chat Project의 실제 Railway 배포 주소
+  (`https://chat-project-production-3b22.up.railway.app`)를 가리키지 않습니다 —
+  `http://localhost:3000`(이 백엔드의 로컬 개발 기본값, `.env.example`의 `BASE_URL`)으로
+  교체했으며, 이는 실제 배포 도메인이 아니라 명시적 플레이스홀더입니다: Stage 4가 아직 이
+  백엔드를 어디에 호스팅할지 정하지 않았으므로, 정해지면 다시 갱신해야 합니다. 배포
+  대상은 여전히 Vercel로 유지하기로 했으나(개발자와 확인함) 실제 배포는 아직 없습니다.
+  `admin/README.md`/`.ko.md`에 두 수정을 기록한 "출처 정리" 절이 추가됐습니다.
 - **`Dockerfile`: `pnpm prune --prod`가 무한정 멈추는 문제** — 위 캐시 마운트 변경 때문에
   발생했습니다. `pnpm install`에 붙인 `--mount=type=cache`는 그 RUN 명령에만 존재하는데,
   다음 RUN(`pnpm build && pnpm prune --prod`)에는 더 이상 `/pnpm-store`가 없었고,
