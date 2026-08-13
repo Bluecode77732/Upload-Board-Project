@@ -66,7 +66,7 @@ AppModule
 
 | 라우트 | 동작 |
 |---|---|
-| `GET /user` | 사용자 목록 (`findAndCount`) |
+| `GET /user` | 페이지네이션 목록 — `GetUsersDto`: `take` 1–100(기본 20), `skip` ≥ 0(기본 0), `search`(email에 대한 대소문자 구분 없는 부분일치), `sortBy`/`order`(`createdAt`\|`email`\|`id`, 기본 `createdAt` `DESC`), tiebreaker로 `id` 추가 — `GetFilesDto`와 같은 형태(ADR 0021 대응) |
 | `GET /user/:id` | 단일 사용자 또는 404 |
 | `PATCH /user/:id` | **본인만** — 비밀번호 제공 시 `HASH_ROUNDS`로 재해싱 |
 | `DELETE /user/:id` | **본인 또는 admin** — 하드 삭제. 파일을 보유한 계정은 `?deleteFiles=true`가 있어야 하며, 이때 파일 행과 물리 파일까지 연쇄 삭제된다. 없으면 409 `USER_HAS_FILES` (ADR 0020) |

@@ -66,7 +66,7 @@ All routes behind `JwtAuthGuard`; controller carries `ClassSerializerInterceptor
 
 | Route | Behavior |
 |---|---|
-| `GET /user` | List users (`findAndCount`) |
+| `GET /user` | Paginated list — `GetUsersDto`: `take` 1–100 (default 20), `skip` ≥ 0 (default 0), `search` (case-insensitive partial match on email), `sortBy`/`order` (`createdAt`\|`email`\|`id`, default `createdAt` `DESC`), `id` as a tiebreaker — mirrors `GetFilesDto`'s shape (ADR 0021 parity) |
 | `GET /user/:id` | Single user or 404 |
 | `PATCH /user/:id` | **Self only** — re-hashes password via `HASH_ROUNDS` if provided |
 | `DELETE /user/:id` | **Self or admin** — hard delete. An account owning files needs `?deleteFiles=true`, which cascades into its file rows and stored files; without it, 409 `USER_HAS_FILES` (ADR 0020) |
