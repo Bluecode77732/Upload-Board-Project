@@ -445,7 +445,7 @@ Principle Conflict Protocol.
 - Convention over Configuration — favor NestJS framework conventions and the existing
   Joi/class-validator setup over introducing custom configuration
 - Pragmatism over Perfection — conflicts with Never Do's zero-tolerance rules;
-  routed through Principle Conflict Protocol — does not excuse a violation by default
+  structurally non-negotiable — Never Do always wins, no case-by-case exception
 - Unix Philosophy, Orthogonality — treated as restatements of SRP/SoC, not distinct rules
 - Incremental Development — reflected in Introduction Analysis
 - Continuous Improvement — reflected in Result Review; in-session only
@@ -515,10 +515,15 @@ Principle Conflict Protocol.
 ### Reliability
 - Input Validation, Fail Securely — covered by Never Do Group 3; validation happens
   at the boundary only (DTO + global ValidationPipe) — services trust validated input
-- Defensive Programming — conflicts with the boundary-only validation stance; routed
-  through Principle Conflict Protocol — boundary-only wins by default
-- Robustness Principle (Postel's Law) — do not apply; strict input validation
-  (`forbidNonWhitelisted: true`) is the deliberate stance
+- Defensive Programming — scoped conflict with the boundary-only validation stance:
+  input-shape re-validation inside services is redundant and boundary-only wins,
+  structurally non-negotiable; entity-existence/null checks after a DB read are a
+  separate, mandatory rule (Never Do Group 1) and are unaffected by this scoping
+- Robustness Principle (Postel's Law) — partially applies, not rejected outright:
+  the "liberal in what you accept" axis is split — unknown fields are rejected
+  (`forbidNonWhitelisted: true`), but loosely-typed values are coerced
+  (`enableImplicitConversion`, see Project-Specific Principles > Boundary Validation
+  & Response Shaping) — do not cite this bullet to justify accepting undeclared fields
 - Error Transparency — internal detail belongs in server-side logs only; client-facing
   errors stay generic (the existing "Transaction aborted." pattern)
 - Retry Limits / Timeout — no external API integrations currently exist; these
@@ -528,11 +533,8 @@ Principle Conflict Protocol.
 ### Performance & Security
 - Secure by Default, Protect Sensitive Data, Fail Securely — covered by Never Do
   Group 3 and the serialization conventions
-- Principle of Least Privilege — ownership checks (2026-07-22) plus RBAC
-  (2026-07-25, ADR 0013): writes are "self/creator OR admin", role assignment is
-  superadmin-only, `GET /user` and `GET /audit-log` are admin-only. `role` is
-  server-controlled (not on any update DTO). New privileged endpoints follow the
-  same `@Roles` + rank-check pattern
+- Principle of Least Privilege — see Architecture Decisions > Auth for the
+  ownership/RBAC mechanism; new privileged endpoints follow the same pattern
 - Avoid Premature Optimization / Measure Before Optimizing — same principle, treat as one
 - Resource Efficiency — covered by the pagination/N+1 rules and the Multer size limit
 - Minimize Attack Surface — every non-auth endpoint sits behind `JwtAuthGuard`; new
@@ -829,6 +831,21 @@ Do not suggest alternatives to these decisions without explicit request.
   default; switching a real deployment to `s3` is Stage 4 work (ROADMAP.md). Promotion
   (temp → `file/upload/granted_...`) goes through `storage.promote()`
   (`file.service.ts` `uploadFile`)
+- **Presigned S3 redirect (landed 2026-08-13, [ADR 0036](ADR/0036-s3-presigned-content-redirect.md),
+  amends the storage port-adapter bullet above and the `GET /file/:id/content` description
+  below)**: `FileStorage` gains `getSignedReadUrl(key, contentType): Promise<string | null>`.
+  `LocalDiskStorage` always returns `null` (no presign concept — the controller falls back to
+  its existing stream/Range/206/416 path, unchanged); `S3Storage` returns a presigned
+  `GetObjectCommand` URL (`@aws-sdk/s3-request-presigner`, TTL read once at construction from
+  `CONTENT_SIGNED_URL_TTL_SECONDS`, default 300s — not a per-call parameter). In
+  `FileContentController.getContent`, this is called immediately after
+  `resolveContentAccess` passes — for all three visibility tiers, not just `public` — and a
+  non-null result short-circuits to a `302` redirect, skipping `stat()`/`createReadStream()`
+  entirely. Under `STORAGE_DRIVER=s3` this removes the app server from the byte-serving path;
+  under `local` nothing changes. No caching or reuse of an issued URL — every request
+  re-derives access and re-signs. Accepted trade-off: once redirected, the signed URL is a
+  bearer credential for private/unlisted content until it expires, independent of the
+  requester's JWT/share-token (ADR 0036 Consequences)
 - **File visibility (landed 2026-08-01, ADR 0025 D1/D2/D3/D6 + ADR 0026)**: `FileEntity`
   carries `visibility` (`public`/`private`/`unlisted`, **default `private`**), a nullable
   `shareToken` (server-generated random opaque string, set only while `unlisted`), and a
