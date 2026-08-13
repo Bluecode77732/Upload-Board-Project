@@ -110,3 +110,149 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint
       - run: pnpm run test
+
+  frontend-e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENV: dev
+      DB_TYPE: postgres
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: postgres
+      HASH_ROUNDS: 10
+      ACCESS_TOKEN_SECRET: ci-access-secret
+      REFRESH_TOKEN_SECRET: ci-refresh-secret
+      ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
+      REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
+      # frontend/vite.config.ts proxies API calls to :3000 same-origin, so the
+      # frontend itself needs no VITE_API_* var — only the backend needs to
+      # know which browser origin to allow.
+      CORS_ORIGIN: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      # Upload folders are runtime dirs (untracked); the app writes into both on boot.
+      - run: mkdir -p file/temp file/upload
+      - run: pnpm run migration:run
+      - name: Start backend
+        run: node dist/main &
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health/live > /dev/null; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            echo "Waiting for backend ($i/30)..."
+            sleep 2
+          done
+          echo "Backend failed to start within timeout" >&2
+          exit 1
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run frontend e2e tests
+        working-directory: frontend
+        run: pnpm run test:e2e
+
+  admin-e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENV: dev
+      DB_TYPE: postgres
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: postgres
+      HASH_ROUNDS: 10
+      ACCESS_TOKEN_SECRET: ci-access-secret
+      REFRESH_TOKEN_SECRET: ci-refresh-secret
+      ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
+      REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
+      # Admin has no dev-server proxy (unlike frontend) — it calls the backend
+      # directly via admin/src/api/axios.ts's VITE_API_URL, and runs on a
+      # different origin (:5174) than frontend (:5173).
+      CORS_ORIGIN: http://localhost:5174
+      VITE_API_URL: http://localhost:3000
+      # No in-app flow can create a superadmin (admin/e2e/seed-superadmin.mjs
+      # inserts one directly via SQL). This DB is fresh and thrown away after
+      # the job, so a fixed CI-only credential here is not a real secret.
+      E2E_SUPERADMIN_EMAIL: e2e-superadmin@ci.local
+      E2E_SUPERADMIN_PASSWORD: ci-superadmin-pw-e2e
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - run: mkdir -p file/temp file/upload
+      - run: pnpm run migration:run
+      - name: Start backend
+        run: node dist/main &
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health/live > /dev/null; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            echo "Waiting for backend ($i/30)..."
+            sleep 2
+          done
+          echo "Backend failed to start within timeout" >&2
+          exit 1
+      - name: Install admin dependencies
+        working-directory: admin
+        run: pnpm install --frozen-lockfile
+      - name: Seed superadmin account
+        working-directory: admin
+        run: pnpm run e2e:seed
+      - name: Install Playwright browsers
+        working-directory: admin
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run admin e2e tests
+        working-directory: admin
+        run: pnpm run e2e
