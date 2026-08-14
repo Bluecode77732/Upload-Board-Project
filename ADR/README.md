@@ -45,6 +45,8 @@ each ADR records the *why* behind those rules.
 | [0034](0034-https-termination-stance.md) | HTTPS termination happens at the ingress, not in the app | Accepted (design-only) | 2026-08-08 |
 | [0035](0035-arm64-bcrypt-source-rebuild.md) | arm64 support — bcrypt already works (verified), `onlyBuiltDependencies` kept as a safety net, corrects 0030 | Accepted | 2026-08-12 |
 | [0036](0036-s3-presigned-content-redirect.md) | S3 presigned-URL redirect for `GET /file/:id/content`, extends 0029 | Accepted — implemented | 2026-08-13 |
+| [0037](0037-helm-chart-scaffold.md) | Helm chart — scaffold landed, not yet project-specific | Accepted (scaffold only) | 2026-08-11 |
+| [0038](0038-terraform-iac-scaffold.md) | Terraform IaC — upstream EKS+Istio example landed, not yet project-specific | Accepted (scaffold only) | 2026-08-11 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

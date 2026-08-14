@@ -387,10 +387,10 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
 | **Kubernetes** | 오케스트레이션 | 🔶 매니페스트 | `k8s/` 아래 기본 매니페스트 랜딩(Pod, Deployment, ClusterIP Service, rolling-update). **실제 클러스터 배포**(AWS)는 미착수. | 커밋 `2aff42a` |
 | **시크릿 전달** | 시크릿 | 📝 설계만 | 대상 결정: 네이티브 **Kubernetes `Secret`**; **AWS Secrets Manager**는 Terraform 단계로 유예. 코드 없음. | [0033](ADR/0033-secrets-delivery-target.ko.md) |
 | **HTTPS 종단** | TLS | 📝 설계만 | **ingress / ALB**에서 종단, 인프로세스 금지(`ENV=prod`에서 `Secure` refresh 쿠키에 필요). 코드 없음. | [0034](ADR/0034-https-termination-stance.ko.md) |
-| **Helm** | 릴리스 패키징 | 🆕 | `k8s/` 매니페스트를 차트로 템플릿화(환경별 values, 릴리스 버전 관리). | 자체 ADR(예정) |
+| **Helm** | 릴리스 패키징 | 🔶 스캐폴딩만 | 2026-08-11 `helm create` 출력이 랜딩됐으나 지금까지 문서화되지 않았음. `Chart.yaml`의 description은 여전히 기본 보일러플레이트, `values.yaml.image.repository`는 placeholder인 `nginx`, `templates/`에는 `deployment.yml`뿐 — `k8s/`의 Service·두 번째 Deployment·rolling-update 매니페스트는 아직 템플릿화 안 됨. 남은 일: 실제 매니페스트 템플릿화, `bluecode1775/sharenpo` 이미지로 지정, 향후 K8s `Secret` 연결. | [0037](ADR/0037-helm-chart-scaffold.ko.md) |
 | **Prometheus** | 메트릭 수집 | 🆕 | Nest `Logger` 관측성 스탠스 위에 메트릭 익스포트. | 자체 ADR(예정); [0017](ADR/0017-logging-conventions.ko.md) 위 |
 | **Grafana** | 대시보드 | 🆕 | Prometheus 데이터소스 기반 대시보드/알림. | 자체 ADR(예정) |
-| **Terraform** | 코드형 인프라 | 🆕 | AWS 리소스(네트워크·클러스터·S3·시크릿) 선언적 프로비저닝. | 자체 ADR(예정) |
+| **Terraform** | 코드형 인프라 | 🔶 스캐폴딩만 | 2026-08-11 AWS `terraform-aws-eks-blueprints`의 "EKS Cluster w/ Istio" 예제가 **원문 그대로** 랜딩됐으나 지금까지 문서화되지 않았음 — README는 여전히 Istio 배포 절차를 설명하고, `main.tf`는 이 프로젝트의 S3 버킷·데이터베이스·시크릿·ingress가 아니라 범용 EKS+VPC+Istio 스택을 프로비저닝하며, `variables.tf`는 비어 있음. 남은 일: 이 프로젝트가 실제로 필요로 하는 리소스로 교체(ADR 0029/0033/0034), `variables.tf` 채우기, README 교체. | [0038](ADR/0038-terraform-iac-scaffold.ko.md) |
 | **Istio** | 서비스 메시 | 🆕 | **Terraform 이후 예정** — Kubernetes 클러스터 위의 서비스 메시(트래픽 관리, 워크로드 간 mTLS, 메시 레벨 텔레메트리를 Prometheus/Grafana로). IaC로 프로비저닝된 클러스터가 생긴 뒤 도입; 향후 다중 서비스 확장을 내다본 것. | 자체 ADR(예정); Terraform 이후 |
 | **AWS** | 클라우드 / 배포 대상 | 🆕 | 위 행들이 향하는 컨테이너 배포 대상. | 배포 ADR(예정) |
 
@@ -698,6 +698,19 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   전부에서 한글이든 영어든 하드코딩된 문자열을 발견한 그대로 두었다. 모든 전환은
   마크업/스타일 변경만 — API·DB·로직 변경 없음. 7개 항목 전체의 페이지별 상세는
   `CHANGELOG.md`의 `[Unreleased] > Added` 항목 참고.
+- **S3 리다이렉트 private 파일 재생 실패, 원인 규명 (2026-08-15 발견)** — 위의 "S3
+  CORS 문제" 항목과 ADR 0036 자체의 "`pnpm test:e2e`로 미검증" 잔여 사항은 별개가
+  아니라 같은 결함이었다: 로컬 `STORAGE_DRIVER=s3` 환경에서 `pnpm test:e2e`를
+  돌려보니(22개 중 21개 통과) 정확히 `frontend/e2e/detail.spec.ts:73` 한 건이
+  실패했다 — `FileDetailPage.tsx`의 **private** 티어 재생 경로가 `fetch()`+Blob으로
+  콘텐츠를 직접 가져오는데(`<video>` 태그는 `Bearer` 헤더를 실을 수 없음), 이 fetch가
+  ADR 0036의 `302`를 따라 교차 출처 S3 URL로 리다이렉트되면 응답 본문을 읽는 데
+  버킷에 없는 CORS 헤더가 필요하기 때문이다. `public`/`unlisted` 재생(평범한
+  `<video src>`, JS가 본문을 읽지 않음)은 영향받지 않고 통과한다. 전체 추적 내용은
+  ADR 0036 > "추가 기록 (2026-08-15)" 참고. 후보 해결책 두 가지를 기록만 해두고
+  이 문서에서 확정하지 않는다 — 버킷 CORS 설정, 그리고/또는
+  `detail.spec.ts:73`의 단언 갱신(CORS 여부와 무관하게 리다이렉트 체인의 잘못된
+  구간을 검사하고 있음).
 
 ## 8. Advisory 노트
 

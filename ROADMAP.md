@@ -417,10 +417,10 @@ the status of each is scannable rather than buried in prose (as of 2026-08-08). 
 | **Kubernetes** | Orchestration | 🔶 manifests | Base manifests landed under `k8s/` (Pod, Deployment, ClusterIP Service, rolling-update). A **live cluster deploy** (on AWS) is not done. | commit `2aff42a` |
 | **Secrets delivery** | Secrets | 📝 design-only | Target decided: native **Kubernetes `Secret`**; **AWS Secrets Manager** deferred to the Terraform step. No code yet. | [0033](ADR/0033-secrets-delivery-target.md) |
 | **HTTPS termination** | TLS | 📝 design-only | Terminate at **ingress / ALB**, never in-process (the `Secure` refresh cookie needs it when `ENV=prod`). No code yet. | [0034](ADR/0034-https-termination-stance.md) |
-| **Helm** | Release packaging | 🆕 | Template the `k8s/` manifests into a chart (per-env values, release versioning). | own ADR (planned) |
+| **Helm** | Release packaging | 🔶 scaffold only | `helm create` output landed 2026-08-11, undocumented until now. `Chart.yaml`'s description is still the generic boilerplate, `values.yaml.image.repository` is the placeholder `nginx`, and `templates/` has only `deployment.yml` — none of `k8s/`'s Service/second-Deployment/rolling-update manifests are templated in yet. Remaining: template the real manifests, point at `bluecode1775/sharenpo`, wire the eventual K8s `Secret`. | [0037](ADR/0037-helm-chart-scaffold.md) |
 | **Prometheus** | Metrics collection | 🆕 | Metrics export layered on the Nest `Logger` observability stance. | own ADR (planned); on [0017](ADR/0017-logging-conventions.md) |
 | **Grafana** | Dashboards | 🆕 | Dashboards/alerts over the Prometheus datasource. | own ADR (planned) |
-| **Terraform** | Infrastructure as code | 🆕 | Declaratively provision the AWS resources (network, cluster, S3, secrets). | own ADR (planned) |
+| **Terraform** | Infrastructure as code | 🔶 scaffold only | The **unmodified upstream** AWS `terraform-aws-eks-blueprints` "EKS Cluster w/ Istio" example landed 2026-08-11, undocumented until now — README still describes deploying Istio; `main.tf` provisions a generic EKS+VPC+Istio stack, not this project's S3 bucket/database/secrets/ingress; `variables.tf` is empty. Remaining: replace the resource set with what this project actually needs (ADR 0029/0033/0034), populate `variables.tf`, replace the README. | [0038](ADR/0038-terraform-iac-scaffold.md) |
 | **Istio** | Service mesh | 🆕 | **Planned after Terraform** — a service mesh over the Kubernetes cluster (traffic management, mTLS between workloads, and mesh-level telemetry into Prometheus/Grafana). Introduced once the IaC-provisioned cluster exists; forward-looking for multi-service scaling. | own ADR (planned); after Terraform |
 | **AWS** | Cloud / deploy target | 🆕 | The container deploy target the rows above build toward. | deployment ADR (planned) |
 
@@ -755,6 +755,18 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   Korean or English, exactly as it found it in all three converted files. Every conversion
   is markup/style-only — no API, DB, or logic change. Full per-page detail across all 7
   items: `CHANGELOG.md`'s `[Unreleased] > Added` entries.
+- **S3-redirect private-file playback failure, root-caused (found 2026-08-15)** — the "S3
+  CORS gap" bullet above and ADR 0036's own "unverified by `pnpm test:e2e`" residual turned
+  out to be the same defect, not two: running `pnpm test:e2e` against a local
+  `STORAGE_DRIVER=s3` environment (21/22 pass) failed exactly one test,
+  `frontend/e2e/detail.spec.ts:73`, because `FileDetailPage.tsx`'s **private**-tier
+  playback path fetches content via `fetch()`+Blob (a `<video>` tag can't carry a `Bearer`
+  header) — and once that fetch follows ADR 0036's `302` to a cross-origin S3 URL, reading
+  the response body needs bucket CORS headers that don't exist. `public`/`unlisted`
+  playback (plain `<video src>`, no JS body read) is unaffected and passes. Full trace:
+  ADR 0036 > "Addendum (2026-08-15)". Two undecided candidate fixes recorded there, not
+  resolved here — configure bucket CORS, and/or update `detail.spec.ts:73`'s assertion
+  (which checks the wrong leg of the redirect chain regardless of CORS).
 
 ## 8. Advisory notes
 

@@ -29,6 +29,24 @@ development line (package.json version).
   here; this entry only records the finding. Tracked in ROADMAP > Unscheduled.
 
 ### Added
+- **ADR 0037/0038: Helm chart and Terraform IaC scaffolds documented (landed 2026-08-11,
+  written up 2026-08-15)** — both `helm/upload-board-project/` (commit `ee75900`) and
+  `k8s/infra/terraform/` (commit `c661fc4`) landed with no CHANGELOG entry, no ROADMAP
+  component-status update, and no ADR — breaking the pattern every other Stage 4 component
+  follows. This entry closes that gap; it changes no code. [ADR 0037](ADR/0037-helm-chart-scaffold.md)
+  records the Helm chart as-is: `Chart.yaml`'s description is still `helm create`'s own
+  boilerplate text, `values.yaml`'s `image.repository` is the placeholder `nginx`, and
+  `templates/` has exactly one file (`deployment.yml`) — none of `k8s/`'s existing Service/
+  second-Deployment/rolling-update manifests have been templated in.
+  [ADR 0038](ADR/0038-terraform-iac-scaffold.md) records the Terraform directory as the
+  **unmodified upstream README and resource set** from AWS's `terraform-aws-eks-blueprints`
+  "EKS Cluster w/ Istio" example — provisions a generic EKS+VPC+Istio stack, not the S3
+  bucket/database/secrets/ingress this project's own ADRs (0029/0033/0034) call for, and
+  `variables.tf` is empty. Both ADRs record this as an accepted starting scaffold, not
+  finished or deployable work, and defer the project-specific adaptation pass to a future
+  task (ROADMAP > Unscheduled) rather than doing it as part of this documentation pass.
+  ROADMAP.md's Stage 4 component-status table updated to match (Helm/Terraform rows 🆕 → 🔶).
+
 - **`frontend/`: `PostDetailPage`, `CommentThread`, and `CommentForm` converted to CSS
   Modules and restyled — the last of the 5 route pages in the confirmed style overhaul**
   ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) item 7). Each component

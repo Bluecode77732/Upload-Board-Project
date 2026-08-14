@@ -28,6 +28,26 @@
   확인했다. 여기서는 발견 사실만 기록하고 고치지 않았다. ROADMAP > 미배정에서 추적.
 
 ### 추가
+- **ADR 0037/0038: Helm 차트·Terraform IaC 스캐폴딩 문서화(2026-08-11 랜딩,
+  2026-08-15 문서 작성)** — `helm/upload-board-project/`(커밋 `ee75900`)와
+  `k8s/infra/terraform/`(커밋 `c661fc4`) 둘 다 CHANGELOG 항목도 ROADMAP 상태표
+  갱신도 ADR도 없이 랜딩됐다 — Stage 4의 다른 모든 컴포넌트가 지켜온 관행을
+  깬 것이다. 이 항목은 그 공백만 메우며, 코드는 바꾸지 않는다.
+  [ADR 0037](ADR/0037-helm-chart-scaffold.ko.md)은 Helm 차트를 있는 그대로
+  기록한다: `Chart.yaml`의 description은 여전히 `helm create`의 기본 문구
+  그대로, `values.yaml`의 `image.repository`는 placeholder인 `nginx`,
+  `templates/`에는 `deployment.yml` 딱 하나뿐 — `k8s/`에 이미 있는 Service·두
+  번째 Deployment·rolling-update 매니페스트는 하나도 템플릿화되지 않았다.
+  [ADR 0038](ADR/0038-terraform-iac-scaffold.ko.md)은 Terraform 디렉터리를
+  AWS `terraform-aws-eks-blueprints`의 "EKS Cluster w/ Istio" 예제의 **원문
+  README와 리소스 구성을 그대로** 담고 있다고 기록한다 — 범용 EKS+VPC+Istio
+  스택을 프로비저닝할 뿐, 이 프로젝트 자신의 ADR(0029/0033/0034)이 요구하는
+  S3 버킷·데이터베이스·시크릿·ingress는 없고 `variables.tf`는 비어 있다. 두
+  ADR 모두 이걸 "완료된 배포 가능 작업"이 아니라 "받아들인 시작점 스캐폴딩"
+  으로 기록하고, 프로젝트 전용 적응 작업은 이번 문서화에 포함하지 않고
+  미래 작업(ROADMAP > 미배정)으로 미룬다. ROADMAP.md의 Stage 4 컴포넌트
+  상태표도 맞춰 갱신(Helm/Terraform 행 🆕 → 🔶).
+
 - **`frontend/`: `PostDetailPage`, `CommentThread`, `CommentForm`을 CSS Modules로
   전환·재디자인 — 확정된 스타일 전면 개편의 5개 라우트 페이지 중 마지막**
   ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) 항목 7). 각
