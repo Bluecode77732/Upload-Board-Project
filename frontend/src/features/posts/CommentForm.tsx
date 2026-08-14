@@ -15,11 +15,11 @@ function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.POST_NOT_FOUND:
-        return '게시글을 찾을 수 없습니다.'
+        return 'Post not found.'
       case ErrorCode.VALIDATION_FAILED:
         return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
       default:
-        return '댓글을 작성하지 못했습니다.'
+        return 'Failed to post the comment.'
     }
   }
   return 'Network error. Is the backend running?'
@@ -56,11 +56,11 @@ export function CommentForm({ postId, onCreated }: { postId: number; onCreated: 
         rows={3}
         required
         disabled={busy}
-        placeholder="댓글을 입력하세요…"
+        placeholder="Write a comment…"
       />
       {error && <p className={styles.error}>{error}</p>}
       <button type="submit" className={styles.submit} disabled={busy}>
-        {busy ? '작성 중…' : '댓글 작성'}
+        {busy ? 'Posting…' : 'Post comment'}
       </button>
     </form>
   )

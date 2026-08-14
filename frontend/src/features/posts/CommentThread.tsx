@@ -19,9 +19,9 @@ function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.POST_NOT_FOUND:
-        return '게시글을 찾을 수 없습니다.'
+        return 'Post not found.'
       default:
-        return '댓글을 불러오지 못했습니다.'
+        return 'Failed to load comments.'
     }
   }
   return 'Network error. Is the backend running?'
@@ -32,13 +32,13 @@ function messageForActionError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.COMMENT_NOT_FOUND:
-        return '댓글을 찾을 수 없습니다.'
+        return 'Comment not found.'
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return '작성자 또는 관리자만 가능합니다.'
+        return 'Only the author or an admin can do this.'
       case ErrorCode.VALIDATION_FAILED:
         return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
       default:
-        return '작업에 실패했습니다.'
+        return 'The action failed.'
     }
   }
   return 'Network error. Is the backend running?'
@@ -124,7 +124,7 @@ export function CommentThread({
   // 이유: 하드 삭제는 비가역이므로(ADR 0020) 확인 대화상자를 거친다.
   // 방법: DELETE /comment/:id → 성공 시 로컬 목록에서 제거하고 총 개수를 1 줄인다.
   function deleteComment(id: number) {
-    if (!window.confirm('댓글을 삭제하시겠습니까? 되돌릴 수 없습니다.')) return
+    if (!window.confirm('Delete this comment? This cannot be undone.')) return
     setActionError(null)
     setBusyId(id)
     api
@@ -141,11 +141,11 @@ export function CommentThread({
 
   return (
     <section className={styles.section}>
-      <h2 className={styles.heading}>댓글 {total > 0 ? `(${total})` : ''}</h2>
+      <h2 className={styles.heading}>Comments {total > 0 ? `(${total})` : ''}</h2>
       {error && <p className={styles.error}>{error}</p>}
       {actionError && <p className={styles.error}>{actionError}</p>}
-      {comments === null && !error && <p>댓글을 불러오는 중…</p>}
-      {comments && comments.length === 0 && <p className={styles.empty}>아직 댓글이 없습니다.</p>}
+      {comments === null && !error && <p>Loading comments…</p>}
+      {comments && comments.length === 0 && <p className={styles.empty}>No comments yet.</p>}
       {comments && comments.length > 0 && (
         <ul className={styles.list}>
           {comments.map((comment) => {
@@ -169,10 +169,10 @@ export function CommentThread({
                     />
                     <div className={styles.actions}>
                       <button type="button" className={styles.button} disabled={busy} onClick={() => submitEdit(comment.id)}>
-                        저장
+                        Save
                       </button>
                       <button type="button" className={styles.button} disabled={busy} onClick={cancelEdit}>
-                        취소
+                        Cancel
                       </button>
                     </div>
                   </div>
@@ -182,7 +182,7 @@ export function CommentThread({
                     {canManage && (
                       <div className={styles.actions}>
                         <button type="button" className={styles.button} disabled={busy} onClick={() => startEdit(comment)}>
-                          수정
+                          Edit
                         </button>
                         <button
                           type="button"
@@ -190,7 +190,7 @@ export function CommentThread({
                           disabled={busy}
                           onClick={() => deleteComment(comment.id)}
                         >
-                          삭제
+                          Delete
                         </button>
                       </div>
                     )}
@@ -203,7 +203,7 @@ export function CommentThread({
       )}
       {canLoadMore && (
         <button type="button" className={styles.loadMoreButton} disabled={loadingMore} onClick={loadMore}>
-          {loadingMore ? '불러오는 중…' : '더 보기'}
+          {loadingMore ? 'Loading…' : 'Load more'}
         </button>
       )}
     </section>

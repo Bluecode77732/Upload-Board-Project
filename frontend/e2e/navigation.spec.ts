@@ -58,7 +58,7 @@ test('a direct load of /posts/:id renders PostDetailPage (regex-anchored proxy, 
   // proxied-through-to-backend 404 would render as raw JSON, not this app's error message.
   await page.goto('/posts/999999')
 
-  await expect(page.getByText('게시글을 찾을 수 없습니다.')).toBeVisible()
+  await expect(page.getByText('Post not found.')).toBeVisible()
   // exact: true — PostDetailPage's own error-state "Back to posts" link otherwise also
   // matches a plain substring query for "Posts" (frontend/CLAUDE.md E2E gotchas).
   await expect(page.getByRole('link', { name: 'Posts', exact: true })).toBeVisible()

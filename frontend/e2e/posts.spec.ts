@@ -92,5 +92,5 @@ test('submitting a post with a file already attached to another of my posts surf
   await page.getByRole('button', { name: 'Post', exact: true }).click()
 
   // PostForm's messageForError maps ErrorCode.POST_FILE_TAKEN to this fixed string.
-  await expect(page.getByText('이 파일은 이미 다른 글에 첨부되어 있습니다.')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('That file is already attached to another post.')).toBeVisible({ timeout: 15_000 })
 })

@@ -727,13 +727,14 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   same change restored the dropped panel as an exact `GET /audit-log?userId={id}&take=5`
   fetch and wired `logs-page.tsx` to read `?userId=` from its own URL for the "View all" link
   (`admin/README.md` > "Two decisions made for this adaptation" and "Open items")
-- Post detail/comment UI hardcoded in Korean (found 2026-08-13, during a manual QA
-  walkthrough of the post/comment board — full record in CHANGELOG > Known issue) — **not
-  started because** it surfaced during testing, not implementation, and every string lives
-  in exactly three files (`PostDetailPage.tsx`, `CommentThread.tsx`, `CommentForm.tsx`,
-  landed `f239a6c`/`d542661`). Fixing it is a straight string swap to English (no design
-  decision, no ADR, no backend change) — revisit as a small standalone frontend task; use
-  `UploadForm.tsx`/`FileDetailPage.tsx` for tone/phrasing precedent on the replacement copy.
+- ~~Post detail/comment UI hardcoded in Korean~~ (found 2026-08-13, during a manual QA
+  walkthrough of the post/comment board — full record in CHANGELOG > Known issue /
+  Fixed) — **resolved 2026-08-15**: every Korean user-facing string in
+  `PostDetailPage.tsx`, `CommentThread.tsx`, `CommentForm.tsx`, and (found mid-fix,
+  same defect class) `PostForm.tsx` swapped to English, matching
+  `UploadForm.tsx`/`FileDetailPage.tsx`'s existing phrasing; two `frontend/e2e/*`
+  assertions matching the old Korean text updated to match. Pure string swap — no
+  design decision, no ADR, no backend change.
 - ~~Frontend style overhaul (CSS Modules + brand palette + explicit dark/light toggle)~~ —
   decided **and fully landed 2026-08-14**. A live UI/UX walkthrough (headless Playwright
   screenshots plus a headed pass) surfaced that every screen styled itself with inline

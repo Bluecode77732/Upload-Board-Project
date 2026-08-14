@@ -13,6 +13,11 @@
 ## [Unreleased]
 
 ### 알려진 문제
+> 2026-08-15 해소 — 아래 **수정** 참고. `PostDetailPage.tsx`/`CommentThread.tsx`/
+> `CommentForm.tsx`(그리고 수정 도중 추가로 발견된 `PostForm.tsx`)의 사용자 노출
+> 한국어 문구가 전부 영어로 바뀌었다 — "코드 **주석**은 한국어" 관례는 그대로 유지
+> (애초에 그 관례가 문제였던 적은 없다).
+
 - **게시글 상세/댓글 UI(`PostDetailPage.tsx`, `CommentThread.tsx`, `CommentForm.tsx`)의
   사용자 노출 문구가 전부 한국어로 박혀 있다** — 앱의 나머지(`LoginPage`, `UploadForm`,
   `FileBoard`, `FileDetailPage`, `NavBar`)는 전부 영어라 일관성이 깨진다. 2026-08-13,
@@ -25,7 +30,23 @@
   **주석**은 한국어" 관례(CLAUDE.md > File Creation Convention)와 항상 영어여야 하는
   사용자 노출 문구를 혼동한 것으로 보인다. 기능 자체는 멀쩡하다 — 같은 QA 세션에서
   (한국어) 버튼을 그대로 눌러 댓글 작성/수정/삭제, 게시글 수정 전부 정상 동작을
-  확인했다. 여기서는 발견 사실만 기록하고 고치지 않았다. ROADMAP > 미배정에서 추적.
+  확인했다.
+
+### 수정
+- **게시글/댓글/게시글 작성 폼 UI의 한국어 하드코딩 문구를 영어로 교체** — 위 "알려진
+  문제"를 해소한다. 발견 당시 범위 그대로 `PostDetailPage.tsx`, `CommentThread.tsx`,
+  `CommentForm.tsx`를 고쳤고, 여기에 `PostForm.tsx`의 `POST_FILE_TAKEN`/
+  `FILE_NOT_FOUND`/`FORBIDDEN_NOT_OWNER` 분기 세 곳도 추가로 고쳤다 —
+  `frontend/src/features/posts/` 전체를 한글 문자 기준으로 grep하다 중간에 발견한
+  것으로 원래 보고 범위는 아니었지만 같은 결함 종류다(이 파일의 `default:` 분기는
+  이미 영어였다 — 같은 주석/UI 문구 혼동이 네 번째 파일에서도 있었던 것). 교체 문구는
+  같은 에러코드·확인창 형태에 대해 `UploadForm.tsx`/`FileDetailPage.tsx`가 이미 쓰던
+  영어 표현을 그대로 따랐다. `frontend/e2e/navigation.spec.ts`와
+  `frontend/e2e/posts.spec.ts`에 옛 한국어 문구를 assertion으로 쓰던 곳이 각각 한 곳씩
+  있어 새 문구에 맞게 갱신했다. frontend e2e 전체 재실행 결과 관련 테스트 22/22 통과
+  (`detail.spec.ts`의 무관한 사전 실패 1건은 다른 세션이 남긴 로컬
+  `STORAGE_DRIVER=s3` 설정 때문에 200 대신 302가 오는 것 — 이번 변경과 무관, 범위
+  밖). 백엔드 변경 없음, ADR 불필요(설계 판단 없는 순수 문자열 교체).
 
 ### 추가
 - **ADR 0037/0038: Helm 차트·Terraform IaC 스캐폴딩 문서화(2026-08-11 랜딩,

@@ -15,11 +15,11 @@ function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.POST_FILE_TAKEN:
-        return '이 파일은 이미 다른 글에 첨부되어 있습니다.'
+        return 'That file is already attached to another post.'
       case ErrorCode.FILE_NOT_FOUND:
-        return '선택한 파일을 찾을 수 없습니다.'
+        return 'The selected file could not be found.'
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return '본인이 올린 파일만 첨부할 수 있습니다.'
+        return 'You can only attach files you uploaded yourself.'
       case ErrorCode.VALIDATION_FAILED:
         return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
       default:

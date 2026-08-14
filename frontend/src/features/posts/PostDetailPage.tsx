@@ -22,9 +22,9 @@ function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.POST_NOT_FOUND:
-        return '게시글을 찾을 수 없습니다.'
+        return 'Post not found.'
       default:
-        return '게시글을 불러오지 못했습니다.'
+        return 'Failed to load the post.'
     }
   }
   return 'Network error. Is the backend running?'
@@ -36,13 +36,13 @@ function messageForManageError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return '작성자 또는 관리자만 가능합니다.'
+        return 'Only the author or an admin can do this.'
       case ErrorCode.POST_NOT_FOUND:
-        return '게시글을 찾을 수 없습니다.'
+        return 'Post not found.'
       case ErrorCode.VALIDATION_FAILED:
         return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
       default:
-        return '작업에 실패했습니다.'
+        return 'The action failed.'
     }
   }
   return 'Network error. Is the backend running?'
@@ -52,13 +52,13 @@ function messageForPlaybackError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.FILE_NOT_FOUND:
-        return '파일을 찾을 수 없습니다.'
+        return 'File not found.'
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return '이 파일을 볼 권한이 없습니다.'
+        return 'You do not have permission to view this file.'
       case ErrorCode.FILE_SHARE_INVALID:
-        return '공유 링크가 없거나 유효하지 않습니다.'
+        return 'This share link is missing, invalid, or expired.'
       default:
-        return '파일을 불러오지 못했습니다.'
+        return 'Failed to load the file.'
     }
   }
   return 'Network error. Is the backend running?'
@@ -130,7 +130,7 @@ export function PostDetailPage() {
     if (!file) return
     api
       .getBlob(`/file/${file.id}/content`)
-      .then(() => setPlaybackError('재생에 실패했습니다 — 브라우저가 이 파일을 재생할 수 없습니다.'))
+      .then(() => setPlaybackError('Playback failed — the browser could not play this file.'))
       .catch((err: unknown) => setPlaybackError(messageForPlaybackError(err)))
   }
 
@@ -174,7 +174,7 @@ export function PostDetailPage() {
   // 방법: 확인 대화상자 → DELETE /post/:id → 성공 시 홈으로 이동.
   function handleDelete() {
     if (!post) return
-    if (!window.confirm(`"${post.title}" 게시글을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return
+    if (!window.confirm(`Delete "${post.title}"? This cannot be undone.`)) return
     setActionError(null)
     setBusy(true)
     api
@@ -242,10 +242,10 @@ export function PostDetailPage() {
           {actionError && <p className={styles.error}>{actionError}</p>}
           <div className={styles.actions}>
             <button type="button" className={styles.primaryButton} disabled={busy} onClick={submitEdit}>
-              저장
+              Save
             </button>
             <button type="button" className={styles.button} disabled={busy} onClick={cancelEdit}>
-              취소
+              Cancel
             </button>
           </div>
         </div>
@@ -264,7 +264,7 @@ export function PostDetailPage() {
                 objectUrl ? (
                   <video controls src={objectUrl} className={styles.player} />
                 ) : (
-                  !playbackError && <p className={styles.loadingText}>파일을 불러오는 중…</p>
+                  !playbackError && <p className={styles.loadingText}>Loading content…</p>
                 )
               ) : (
                 <video
@@ -280,10 +280,10 @@ export function PostDetailPage() {
           {canManage && (
             <div className={styles.actions}>
               <button type="button" className={styles.button} disabled={busy} onClick={startEdit}>
-                수정
+                Edit
               </button>
               <button type="button" className={styles.deleteButton} disabled={busy} onClick={handleDelete}>
-                삭제
+                Delete
               </button>
             </div>
           )}

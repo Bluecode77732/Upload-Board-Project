@@ -13,6 +13,11 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Known issue
+> Resolved 2026-08-15 — see **Fixed** below. All Korean user-facing strings across
+> `PostDetailPage.tsx`/`CommentThread.tsx`/`CommentForm.tsx` (and `PostForm.tsx`, found
+> during the fix — see Fixed) are now English; the mandated Korean 목적/이유/방법 code
+> **comments** are untouched (that convention was never the issue).
+
 - **Post detail / comment UI (`PostDetailPage.tsx`, `CommentThread.tsx`, `CommentForm.tsx`)
   renders every user-facing string in Korean**, inconsistent with the rest of the app
   (English throughout — `LoginPage`, `UploadForm`, `FileBoard`, `FileDetailPage`, `NavBar`).
@@ -25,8 +30,23 @@ development line (package.json version).
   project's Korean-only code-**comment** convention (CLAUDE.md > File Creation Convention)
   and user-facing text, which stays English everywhere else, rather than a deliberate
   locale choice. Functionally unaffected — comment create/edit/delete and post edit/delete
-  all verified working through the (Korean) buttons during the same walkthrough. Not fixed
-  here; this entry only records the finding. Tracked in ROADMAP > Unscheduled.
+  all verified working through the (Korean) buttons during the same walkthrough.
+
+### Fixed
+- **Korean-hardcoded post/comment/post-form UI strings translated to English** — closes the
+  Known issue above. Fixed `PostDetailPage.tsx`, `CommentThread.tsx`, and `CommentForm.tsx`
+  exactly as scoped by the finding, and additionally `PostForm.tsx`'s three
+  `POST_FILE_TAKEN`/`FILE_NOT_FOUND`/`FORBIDDEN_NOT_OWNER` branches — discovered mid-fix via
+  a directory-wide grep for Korean characters across `frontend/src/features/posts/`, not part
+  of the original finding's scope but the same defect class (its `default:` branch was
+  already English, so this was the same comment/UI-text mix-up in a fourth file). Replacement
+  copy follows `UploadForm.tsx`/`FileDetailPage.tsx`'s existing English phrasing for the same
+  error codes and confirm-dialog shape. `frontend/e2e/navigation.spec.ts` and
+  `frontend/e2e/posts.spec.ts` each had one assertion matching the old Korean text, updated to
+  match; full frontend e2e suite re-run (22/22 relevant tests pass — one unrelated,
+  pre-existing failure in `detail.spec.ts` traced to a parallel session's `STORAGE_DRIVER=s3`
+  local env setting causing a 200-vs-302 mismatch, not caused by this change and out of scope
+  here). No backend change, no ADR (pure string replacement, no design decision).
 
 ### Added
 - **ADR 0037/0038: Helm chart and Terraform IaC scaffolds documented (landed 2026-08-11,
