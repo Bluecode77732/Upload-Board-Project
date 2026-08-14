@@ -12,6 +12,7 @@ import { POST_SORT_FIELDS, SORT_ORDERS } from '../../api/types'
 import type { PostListResponse, PostResponse, PostSortField, SortOrder } from '../../api/types'
 import { NavBar } from '../../shared/NavBar'
 import { PostForm } from './PostForm'
+import styles from './PostBoard.module.css'
 
 const TAKE = 20
 
@@ -90,25 +91,26 @@ export function PostBoard() {
   const filtersActive = search !== '' || sortBy !== 'createdAt' || order !== 'DESC' || creatorIdInput !== ''
 
   return (
-    <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+    <main className={styles.page}>
       <NavBar />
       <h1>Posts</h1>
       <PostForm onCreated={() => setRefreshSignal((n) => n + 1)} />
 
-      <section style={{ marginTop: 24 }}>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12 }}>
-          <label style={{ display: 'grid', gap: 4 }}>
+      <section className={styles.board}>
+        <div className={styles.filters}>
+          <label className={styles.field}>
             Search
             <input
+              className={styles.input}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               maxLength={100}
               placeholder="Title contains…"
             />
           </label>
-          <label style={{ display: 'grid', gap: 4 }}>
+          <label className={styles.field}>
             Sort by
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as PostSortField)}>
+            <select className={styles.select} value={sortBy} onChange={(e) => setSortBy(e.target.value as PostSortField)}>
               {POST_SORT_FIELDS.map((field) => (
                 <option key={field} value={field}>
                   {field}
@@ -116,9 +118,9 @@ export function PostBoard() {
               ))}
             </select>
           </label>
-          <label style={{ display: 'grid', gap: 4 }}>
+          <label className={styles.field}>
             Order
-            <select value={order} onChange={(e) => setOrder(e.target.value as SortOrder)}>
+            <select className={styles.select} value={order} onChange={(e) => setOrder(e.target.value as SortOrder)}>
               {SORT_ORDERS.map((direction) => (
                 <option key={direction} value={direction}>
                   {direction === 'ASC' ? 'Ascending' : 'Descending'}
@@ -126,19 +128,20 @@ export function PostBoard() {
               ))}
             </select>
           </label>
-          <label style={{ display: 'grid', gap: 4 }}>
+          <label className={styles.field}>
             Creator ID
             <input
+              className={`${styles.input} ${styles.creatorInput}`}
               value={creatorIdInput}
               onChange={(e) => setCreatorIdInput(e.target.value)}
               inputMode="numeric"
               placeholder="Any"
-              style={{ width: 80 }}
             />
           </label>
           {filtersActive && (
             <button
               type="button"
+              className={styles.clearButton}
               onClick={() => {
                 setSearch('')
                 setSortBy('createdAt')
@@ -151,27 +154,17 @@ export function PostBoard() {
           )}
         </div>
 
-        {!creatorIdValid && <p style={{ color: 'crimson' }}>Creator ID must be a positive whole number.</p>}
-        {error && <p style={{ color: 'crimson' }}>{error}</p>}
+        {!creatorIdValid && <p className={styles.error}>Creator ID must be a positive whole number.</p>}
+        {error && <p className={styles.error}>{error}</p>}
         {posts === null && !error && <p>Loading posts…</p>}
         {posts && posts.length === 0 && <p>No posts match the current filters.</p>}
         {posts && posts.length > 0 && (
-          <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 8 }}>
+          <ul className={styles.list}>
             {posts.map((post) => {
               const creator = post.creator
               return (
-                <li
-                  key={post.id}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '8px 12px',
-                    border: '1px solid #ddd',
-                    borderRadius: 6,
-                  }}
-                >
-                  <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <li key={post.id} className={styles.row}>
+                  <span className={styles.rowInfo}>
                     {post.file && <span title="Has an attached file">📎</span>}
                     <Link to={`/posts/${post.id}`}>{post.title}</Link>
                   </span>
@@ -179,8 +172,8 @@ export function PostBoard() {
                     <button
                       type="button"
                       title="Filter the list to this creator"
+                      className={styles.creatorButton}
                       onClick={() => setCreatorIdInput(String(creator.id))}
-                      style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer' }}
                     >
                       {creator.email}
                     </button>
@@ -192,14 +185,24 @@ export function PostBoard() {
         )}
 
         {posts && total > 0 && (
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12 }}>
-            <button type="button" disabled={!canGoPrev} onClick={() => setSkip((s) => Math.max(0, s - TAKE))}>
+          <div className={styles.pagination}>
+            <button
+              type="button"
+              className={styles.pageButton}
+              disabled={!canGoPrev}
+              onClick={() => setSkip((s) => Math.max(0, s - TAKE))}
+            >
               Previous
             </button>
             <span>
               {Math.min(skip + 1, total)}–{Math.min(skip + TAKE, total)} of {total}
             </span>
-            <button type="button" disabled={!canGoNext} onClick={() => setSkip((s) => s + TAKE)}>
+            <button
+              type="button"
+              className={styles.pageButton}
+              disabled={!canGoNext}
+              onClick={() => setSkip((s) => s + TAKE)}
+            >
               Next
             </button>
           </div>

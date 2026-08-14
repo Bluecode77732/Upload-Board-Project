@@ -8,6 +8,7 @@ import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { CreatePostRequest, PostResponse } from '../../api/types'
 import { FilePicker } from './FilePicker'
+import styles from './PostForm.module.css'
 
 // Branch on the stable code (backend ADR 0011), never on the human-readable message.
 function messageForError(error: unknown): string {
@@ -54,18 +55,23 @@ export function PostForm({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      style={{ display: 'grid', gap: 12, margin: '16px 0', padding: 16, border: '1px solid #ddd', borderRadius: 8 }}
-    >
-      <h2 style={{ margin: 0, fontSize: '1.1rem' }}>New post</h2>
-      <label style={{ display: 'grid', gap: 4 }}>
+    <form onSubmit={onSubmit} className={styles.form}>
+      <h2 className={styles.heading}>New post</h2>
+      <label className={styles.field}>
         Title
-        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} required disabled={busy} />
+        <input
+          className={styles.input}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={100}
+          required
+          disabled={busy}
+        />
       </label>
-      <label style={{ display: 'grid', gap: 4 }}>
+      <label className={styles.field}>
         Body
         <textarea
+          className={styles.textarea}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           maxLength={10000}
@@ -75,8 +81,8 @@ export function PostForm({ onCreated }: { onCreated: () => void }) {
         />
       </label>
       <FilePicker value={fileId} onChange={setFileId} disabled={busy} />
-      {error && <p style={{ color: 'crimson', margin: 0 }}>{error}</p>}
-      <button type="submit" disabled={busy}>
+      {error && <p className={styles.error}>{error}</p>}
+      <button type="submit" className={styles.submit} disabled={busy}>
         {busy ? 'Posting…' : 'Post'}
       </button>
     </form>

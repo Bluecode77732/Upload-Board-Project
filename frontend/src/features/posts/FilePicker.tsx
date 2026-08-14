@@ -9,6 +9,7 @@ import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { FileListResponse, FileResponse } from '../../api/types'
 import { useAuth } from '../../auth/useAuth'
+import styles from './FilePicker.module.css'
 
 const TAKE = 50
 
@@ -66,10 +67,11 @@ export function FilePicker({
   }, [loadFiles])
 
   return (
-    <div style={{ display: 'grid', gap: 8 }}>
-      <label style={{ display: 'grid', gap: 4 }}>
+    <div className={styles.wrapper}>
+      <label className={styles.field}>
         Attach a file (optional)
         <input
+          className={styles.input}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           maxLength={100}
@@ -77,10 +79,10 @@ export function FilePicker({
           disabled={disabled}
         />
       </label>
-      {error && <p style={{ color: 'crimson', margin: 0 }}>{error}</p>}
-      {files === null && !error && <p style={{ margin: 0, color: '#555' }}>Loading your files…</p>}
-      <div style={{ maxHeight: 160, overflowY: 'auto', border: '1px solid #ddd', borderRadius: 6, padding: 8 }}>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      {error && <p className={styles.error}>{error}</p>}
+      {files === null && !error && <p className={styles.loadingText}>Loading your files…</p>}
+      <div className={styles.listBox}>
+        <label className={styles.radioLabel}>
           <input
             type="radio"
             name="filePicker"
@@ -90,9 +92,9 @@ export function FilePicker({
           />
           No file
         </label>
-        {files && files.length === 0 && <p style={{ margin: '4px 0', color: '#555' }}>No files found.</p>}
+        {files && files.length === 0 && <p className={styles.emptyText}>No files found.</p>}
         {files?.map((file) => (
-          <label key={file.id} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <label key={file.id} className={styles.radioLabel}>
             <input
               type="radio"
               name="filePicker"
