@@ -170,3 +170,54 @@ ADR은 "누가 서명-또는-스트리밍 분기까지 도달할 수 있는가"�
   (Apache-2.0, `pnpm audit --prod` 결과 새로운 취약점 없음 — 기존 5건 전부
   `aws-sdk`/`@nestjs/swagger`/`typeorm` 경로이며 이 패키지를 거치지 않음).
 - 스키마 변경 없음, `FileEntity` 변경 없음, DTO 변경 없음.
+
+### 추가 기록 (2026-08-15) — 리다이렉트 분기는 더 이상 "미검증"이 아니라, 검증했더니 한 티어에서 실패한다
+
+위 항목은 리다이렉트 분기를 "CI가 안 돌려서 미검증"이라고만 적었다. 어느
+로컬 세션이 `.env`의 `STORAGE_DRIVER=s3`(CI 설정이 아니라 상시 켜둔 "로컬
+브라우저 테스트 세션" 오버라이드) 상태에서 `pnpm test:e2e`를 직접 돌려봤다 —
+단위 테스트 목이 아니라 실제로 S3 드라이버 아래서 이 분기가 실행된 첫
+사례다. 결과: 22개 중 21개 통과, 실패한 1건은
+`frontend/e2e/detail.spec.ts:73`("a private file plays for its owner via an
+authenticated blob fetch…")다 — `expect(contentResponse.status()).toBe(200)`가
+`200`이 아니라 `302`를 받는다.
+
+원인을 끝까지 추적하면:
+
+- `FileDetailPage.tsx`의 **private** 티어 재생 경로는 `<video src>`를 쓰지
+  않고 직접 콘텐츠를 fetch한다 — `<video>` 요소는 `Bearer` 헤더를 실어 보낼
+  수 없기 때문이다. `frontend/src/api/client.ts:100-121`의
+  `requestBlob()`/`api.getBlob()` 참고.
+- `STORAGE_DRIVER=s3`에서는 이 `fetch()`가 이제 이 ADR이 만든 `302`를
+  받아 교차 출처(S3) URL로 리다이렉트된다. 브라우저는 리다이렉트를 자동으로
+  따라가지만, 교차 출처 응답의 *본문*을 JS에 넘겨주려면(`response.blob()`)
+  S3 응답에 CORS 헤더가 있어야 하는데 버킷에는 그게 없다. 이것은
+  2026-08-14 프론트엔드 스타일 개편 UI 점검에서 별도로 표시했던 "S3 CORS
+  문제"(`frontend/docs/STYLE-PLAN.md` > "범위 밖이지만 관련된 사항")와 같은
+  현상이다 — 별개의 두 번째 결함이 아니라, 같은 문제를 두 번 관찰한 것이다.
+- `public`/`unlisted` 재생은 영향받지 않는다: 이 두 티어는 평범한
+  `<video src="/file/:id/content">`로 스트리밍하고(`detail.spec.ts:112`,
+  `:142` 둘 다 통과) — 인라인 미디어 로드는 *재생*에 CORS가 필요 없고 JS가
+  바이트를 읽을 때만 필요하므로, 교차 출처 리다이렉트가 blob-fetch 경로처럼
+  막히지 않는다.
+- 별개로, CORS를 고치더라도 `detail.spec.ts:95`의 단언은 갱신이 필요하다:
+  Playwright의 `waitForResponse` 조건은 URL에 `/file/${id}/content`
+  부분 문자열이 포함되는지로 매칭하는데, 이는 리다이렉트의 *첫* 홉(`302`
+  자체)에만 매칭되고 — 최종 S3 응답은 URL이 달라서 매칭되지 않는다. 이
+  단언은 바이트가 실제로 도착하는지와 무관하게 체인의 잘못된 구간을 검사하고
+  있다.
+
+정리하면: D6의 "미검증" 서술은 private 파일 경로에 한해 **갱신됐다** — 그
+경로는 이제 검증됐고, `STORAGE_DRIVER=s3`에서 실패한다. `public`/`unlisted`는
+검증됐고 통과한다.
+
+여기서 결정하지 않은 것(후보 해결책 두 가지, 둘 다 필요할 수도 있음 — 이
+기록은 발견 사실만 남기며 해결책을 정하지 않는다):
+
+1. S3 버킷의 CORS 정책을 프론트엔드/admin origin에 대해 `GetObject` 응답에
+   허용하도록 설정 — 이것 없이는 테스트가 무엇을 단언하든 상관없이
+   `STORAGE_DRIVER=s3`에서 private 파일 blob-fetch가 동작할 수 없다.
+2. `detail.spec.ts:73`의 단언을 리다이렉트의 실제 모양에 맞게 갱신하거나,
+   `public`/`unlisted`의 직접 스트리밍 태그와 달리 *private* 티어의
+   blob-fetch 경로에는 리다이렉트가 애초에 맞는 답인지 재검토 — 이 ADR도,
+   이 추가 기록도 내리지 않은 판단이다.

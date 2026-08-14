@@ -186,3 +186,56 @@ specific mapping," which matches the actual lifetime of what's being handed out.
   advisories trace through `aws-sdk`/`@nestjs/swagger`/`typeorm`, none through
   this package).
 - No schema change, no change to `FileEntity`, no change to any DTO.
+
+### Addendum (2026-08-15) — the redirect branch is no longer "unverified," it's verified and failing for one tier
+
+The bullet above framed the redirect branch as merely untested by CI. A local
+session with `.env`'s `STORAGE_DRIVER=s3` set (a standing "local
+browser-testing session" override, not a CI config) ran `pnpm test:e2e`
+against it directly — the first time this branch has executed under the S3
+driver outside unit-test mocks. Result: 21/22 pass; the one failure is
+`frontend/e2e/detail.spec.ts:73` ("a private file plays for its owner via an
+authenticated blob fetch…") — `expect(contentResponse.status()).toBe(200)`
+receives `302`.
+
+Root cause, traced end to end:
+
+- `FileDetailPage.tsx`'s **private**-tier playback path fetches content
+  itself rather than using a plain `<video src>`, because a `<video>` element
+  cannot carry a `Bearer` header — see `requestBlob()`/`api.getBlob()` in
+  `frontend/src/api/client.ts:100-121`.
+- Under `STORAGE_DRIVER=s3`, that `fetch()` now receives this ADR's `302` to
+  a cross-origin (S3) URL. Browsers auto-follow the redirect, but handing the
+  cross-origin response's *body* back to JS (`response.blob()`) requires the
+  S3 response to carry CORS headers — which the bucket doesn't have. This is
+  the same "S3 CORS gap" flagged separately during the 2026-08-14 frontend
+  style-overhaul UI walkthrough (`frontend/docs/STYLE-PLAN.md` > "Related but
+  out of scope") — not a second, independent defect, this one observed
+  twice.
+- `public`/`unlisted` playback is unaffected: those tiers stream via a plain
+  `<video src="/file/:id/content">` (`detail.spec.ts:112`, `:142`, both
+  passing) — an inline media load doesn't need CORS to *play*, only to let JS
+  read the bytes, so the cross-origin redirect doesn't block them the way it
+  blocks the blob-fetch path.
+- Separately, the assertion at `detail.spec.ts:95` would need updating even
+  once CORS is fixed: Playwright's `waitForResponse` predicate matches on the
+  URL substring `/file/${id}/content`, which only matches the *first* hop of
+  the redirect (the `302` itself) — the final S3 response has a different URL
+  and never matches. The assertion checks the wrong leg of the chain,
+  independent of whether the bytes ultimately arrive.
+
+So: D6's "unverified" framing is superseded for the private-file path
+specifically — that path is now verified, and it fails, under
+`STORAGE_DRIVER=s3`. `public`/`unlisted` are verified and pass.
+
+Not decided here (two separate candidate fixes, either or both may be
+needed — this addendum records the finding, not a resolution):
+
+1. Configure the S3 bucket's CORS policy to allow the frontend/admin origins
+   on `GetObject` responses — without it, the private-file blob-fetch cannot
+   work under `STORAGE_DRIVER=s3` no matter what the test asserts.
+2. Update `detail.spec.ts:73`'s assertion to match the redirect's actual
+   shape, or reconsider whether a redirect is the right answer for the
+   *private*-tier blob-fetch path specifically as opposed to
+   `public`/`unlisted`'s direct-stream tags — a call this ADR did not make
+   and should not be assumed settled by this addendum.

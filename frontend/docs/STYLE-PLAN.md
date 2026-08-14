@@ -129,7 +129,12 @@ because whoever touches these files for restyling will see them:
   presigned S3 URL (backend ADR 0036) that the browser can't fetch — the
   bucket has no CORS policy allowing the frontend origin. This is an AWS
   bucket configuration issue, not frontend or backend source code — separate
-  task, separate owner.
+  task, separate owner. **Root-caused 2026-08-15**: this is specifically the
+  `FileDetailPage.tsx` private-tier blob-fetch path (`requestBlob()` in
+  `src/api/client.ts`) hitting the redirect's cross-origin body read — not a
+  separate defect from the `pnpm test:e2e` failure at `detail.spec.ts:73`.
+  Full trace and two undecided candidate fixes: ADR 0036 > "Addendum
+  (2026-08-15)".
 - **Korean/English UI-text split**: `features/posts/*` (PostForm, PostDetailPage,
   CommentThread, CommentForm) hardcodes Korean UI strings and error messages;
   `features/auth/*` and `features/files/*` are English-only. Not an i18n

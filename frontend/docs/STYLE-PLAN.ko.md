@@ -130,6 +130,11 @@
   리다이렉트하는데(백엔드 ADR 0036) 브라우저가 이를 fetch하지 못함 —
   버킷에 프론트엔드 origin을 허용하는 CORS 정책이 없음. 이것은 프론트엔드나
   백엔드 소스 코드가 아니라 AWS 버킷 설정 문제 — 별도 작업, 별도 담당.
+  **2026-08-15 원인 규명**: 정확히는 `FileDetailPage.tsx`의 private 티어
+  blob-fetch 경로(`src/api/client.ts`의 `requestBlob()`)가 리다이렉트의
+  교차 출처 본문 읽기에서 걸리는 것이며, `pnpm test:e2e`의
+  `detail.spec.ts:73` 실패와 별개의 결함이 아니다. 전체 추적 내용과 미확정
+  후보 해결책 두 가지: ADR 0036 > "추가 기록 (2026-08-15)" 참고.
 - **한글/영어 UI 텍스트 혼용**: `features/posts/*`(PostForm, PostDetailPage,
   CommentThread, CommentForm)는 UI 문자열과 에러 메시지가 한글로
   하드코딩돼 있고, `features/auth/*`와 `features/files/*`는 영어만
