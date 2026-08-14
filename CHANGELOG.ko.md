@@ -12,6 +12,26 @@
 
 ## [Unreleased]
 
+### 보안
+- **프로덕션 DB 연결에서 `rejectUnauthorized: false`를 제거**
+  (`backend/app.module.ts`) — `NODE_ENV=production`일 때 TLS 인증서 검증을
+  꺼버리던 설정이었다. 이 설정을 도입한 커밋의 메시지("SSL validation on")와
+  달리 실제로는 정반대 동작이었다. 손대기 전에 먼저 조사했다
+  ([ADR 0039](ADR/0039-db-tls-verification-stance.ko.md) 참고): 개발자에게
+  확인한 결과 AWS 수동 연결 검증을 통과시키기 위한 일회성 우회였고, 이
+  저장소에서 추적되는 것 중 지금 이 설정에 의존하는 건 없음을 확인했다 —
+  Terraform에 데이터베이스 리소스가 없고, `NODE_ENV=production`으로 실제
+  DB에 붙는 CI 잡도 없으며, ROADMAP의 AWS 행도 여전히 🆕다. 조사 도중 독립적인
+  두 번째 결함도 발견했다: 이 설정이 `NODE_ENV`로 분기하는데 이는 Joi 검증
+  스키마에도 없고 이 프로젝트의 관례도 아니다 — `auth.controller.ts`의 쿠키
+  `Secure` 플래그가 이미 쓰는 `ENV === 'prod'` 체크가 정석이다. 구체적인
+  프로덕션 DB 대상이 아직 없어 대체할 설정의 형태를 잡을 근거가 없으므로
+  스텁으로 남기지 않고 완전히 제거했다(Scope Discipline / YAGNI) —
+  [ADR 0039](ADR/0039-db-tls-verification-stance.ko.md)가 실제 대상이 생겼을 때의
+  정석 패턴(`ssl: { ca: <실제 CA> }`, `ENV`로 게이팅)을 기록해뒀으니 시간에
+  쫓겨 다시 검증을 끄는 일은 없을 것이다. dev·CI·Docker 이미지 부팅 시퀀스
+  어디도 동작 변화 없음 — 제거된 분기는 그 어느 것도 실행한 적이 없었다.
+
 ### 알려진 문제
 > 2026-08-15 해소 — 아래 **수정** 참고. `PostDetailPage.tsx`/`CommentThread.tsx`/
 > `CommentForm.tsx`(그리고 수정 도중 추가로 발견된 `PostForm.tsx`)의 사용자 노출

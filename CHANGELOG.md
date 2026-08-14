@@ -12,6 +12,25 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Security
+- **Removed `rejectUnauthorized: false` from the production DB connection**
+  (`backend/app.module.ts`), which disabled TLS certificate validation for
+  `NODE_ENV=production` — despite the introducing commit's message ("Switched SSL
+  validation on"), the setting did the opposite. Investigated before touching anything
+  (see [ADR 0039](ADR/0039-db-tls-verification-stance.md)): confirmed with the developer it
+  was a deliberate, one-time workaround to pass a manual AWS connectivity check, and
+  confirmed nothing currently tracked in this repo depends on it — no database resource
+  exists in Terraform, no CI job runs `NODE_ENV=production` against a real database, and
+  ROADMAP's AWS row is still 🆕. Also found a second, independent bug while investigating:
+  the setting branched on `NODE_ENV`, which isn't in the Joi validation schema and isn't
+  this project's convention — the existing `ENV === 'prod'` check (already used for
+  `auth.controller.ts`'s cookie `Secure` flag) is the established pattern for this. Removed
+  outright rather than stubbed, since no concrete production DB target exists yet to shape
+  a replacement around (Scope Discipline / YAGNI) — [ADR 0039](ADR/0039-db-tls-verification-stance.md)
+  records the correct pattern (`ssl: { ca: <real CA> }`, gated on `ENV`, once a target
+  exists) so it isn't reintroduced under time pressure. No behavior change in dev, CI, or
+  the Docker image's boot sequence — the removed branch was never exercised by any of them.
+
 ### Known issue
 > Resolved 2026-08-15 — see **Fixed** below. All Korean user-facing strings across
 > `PostDetailPage.tsx`/`CommentThread.tsx`/`CommentForm.tsx` (and `PostForm.tsx`, found

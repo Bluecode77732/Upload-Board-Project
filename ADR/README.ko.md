@@ -46,6 +46,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0036](0036-s3-presigned-content-redirect.ko.md) | `GET /file/:id/content`의 S3 presigned URL 리다이렉트, 0029 확장 | 승인됨 — 구현 완료 | 2026-08-13 |
 | [0037](0037-helm-chart-scaffold.ko.md) | Helm 차트 — 스캐폴딩만 랜딩, 아직 이 프로젝트 전용은 아님 | 승인됨 (스캐폴딩만) | 2026-08-11 |
 | [0038](0038-terraform-iac-scaffold.ko.md) | Terraform IaC — upstream EKS+Istio 예제가 그대로 랜딩, 아직 이 프로젝트 전용은 아님 | 승인됨 (스캐폴딩만) | 2026-08-11 |
+| [0039](0039-db-tls-verification-stance.ko.md) | 프로덕션 DB TLS — `rejectUnauthorized: false` 제거, 실제 대상이 생기면 정식 CA로 검증 | 승인됨 | 2026-08-15 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

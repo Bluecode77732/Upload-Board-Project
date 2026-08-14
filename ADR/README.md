@@ -47,6 +47,7 @@ each ADR records the *why* behind those rules.
 | [0036](0036-s3-presigned-content-redirect.md) | S3 presigned-URL redirect for `GET /file/:id/content`, extends 0029 | Accepted — implemented | 2026-08-13 |
 | [0037](0037-helm-chart-scaffold.md) | Helm chart — scaffold landed, not yet project-specific | Accepted (scaffold only) | 2026-08-11 |
 | [0038](0038-terraform-iac-scaffold.md) | Terraform IaC — upstream EKS+Istio example landed, not yet project-specific | Accepted (scaffold only) | 2026-08-11 |
+| [0039](0039-db-tls-verification-stance.md) | Production DB TLS — remove `rejectUnauthorized: false`, verify via a real CA when a target exists | Accepted | 2026-08-15 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status
