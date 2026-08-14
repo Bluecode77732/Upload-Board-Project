@@ -48,7 +48,7 @@ describe('S3Storage', () => {
         expect.objectContaining({
           input: {
             Bucket: 'upload-board-test-bucket',
-            Key: 'temp_a.mp4',
+            Key: 'temp/temp_a.mp4',
             Body: Buffer.from('data'),
           },
         }),
@@ -80,8 +80,8 @@ describe('S3Storage', () => {
         expect.objectContaining({
           input: {
             Bucket: 'upload-board-test-bucket',
-            CopySource: 'upload-board-test-bucket/temp_a.mp4',
-            Key: 'file/upload/granted_a.mp4',
+            CopySource: 'upload-board-test-bucket/temp%2Ftemp_a.mp4',
+            Key: 'granted/granted_a.mp4',
           },
         }),
       );
@@ -90,7 +90,7 @@ describe('S3Storage', () => {
         expect.objectContaining({
           input: {
             Bucket: 'upload-board-test-bucket',
-            Key: 'temp_a.mp4',
+            Key: 'temp/temp_a.mp4',
           },
         }),
       );
@@ -104,6 +104,14 @@ describe('S3Storage', () => {
       await expect(storage.stat('file/upload/granted_a.mp4')).resolves.toEqual({
         size: 5678,
       });
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: {
+            Bucket: 'upload-board-test-bucket',
+            Key: 'granted/granted_a.mp4',
+          },
+        }),
+      );
     });
 
     it('defaults to 0 when ContentLength is missing', async () => {
@@ -129,7 +137,7 @@ describe('S3Storage', () => {
         expect.objectContaining({
           input: {
             Bucket: 'upload-board-test-bucket',
-            Key: 'file/upload/granted_a.mp4',
+            Key: 'granted/granted_a.mp4',
           },
         }),
       );
@@ -148,7 +156,7 @@ describe('S3Storage', () => {
         expect.objectContaining({
           input: {
             Bucket: 'upload-board-test-bucket',
-            Key: 'file/upload/granted_a.mp4',
+            Key: 'granted/granted_a.mp4',
             Range: 'bytes=0-9',
           },
         }),
@@ -181,8 +189,8 @@ describe('S3Storage', () => {
             Bucket: 'upload-board-test-bucket',
             Delete: {
               Objects: [
-                { Key: 'file/upload/granted_a.mp4' },
-                { Key: 'temp_b.mp4' },
+                { Key: 'granted/granted_a.mp4' },
+                { Key: 'temp/temp_b.mp4' },
               ],
             },
           },
@@ -197,9 +205,9 @@ describe('S3Storage', () => {
       ]);
     });
 
-    it('reports per-key errors returned by DeleteObjects', async () => {
+    it('reports per-key errors returned by DeleteObjects, translated back to the logical key', async () => {
       send.mockResolvedValue({
-        Errors: [{ Key: 'file/upload/granted_a.mp4', Message: 'AccessDenied' }],
+        Errors: [{ Key: 'granted/granted_a.mp4', Message: 'AccessDenied' }],
       });
 
       const result = await storage.unlink(['file/upload/granted_a.mp4']);
@@ -223,20 +231,30 @@ describe('S3Storage', () => {
   });
 
   describe('listTemp', () => {
-    it('paginates through ListObjectsV2 and collects temp entries', async () => {
+    it('paginates through ListObjectsV2 under the temp/ prefix and strips it from the returned keys', async () => {
       const lastModified = new Date('2026-08-01T00:00:00Z');
       send
         .mockResolvedValueOnce({
-          Contents: [{ Key: 'temp_a.mp4', LastModified: lastModified }],
+          Contents: [{ Key: 'temp/temp_a.mp4', LastModified: lastModified }],
           NextContinuationToken: 'token-2',
         })
         .mockResolvedValueOnce({
-          Contents: [{ Key: 'temp_b.mp4', LastModified: lastModified }],
+          Contents: [{ Key: 'temp/temp_b.mp4', LastModified: lastModified }],
         });
 
       const result = await storage.listTemp();
 
       expect(send).toHaveBeenCalledTimes(2);
+      expect(send).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          input: {
+            Bucket: 'upload-board-test-bucket',
+            Prefix: 'temp/',
+            ContinuationToken: undefined,
+          },
+        }),
+      );
       expect(result).toEqual([
         { key: 'temp_a.mp4', mtimeMs: lastModified.getTime() },
         { key: 'temp_b.mp4', mtimeMs: lastModified.getTime() },
@@ -265,7 +283,7 @@ describe('S3Storage', () => {
         expect.objectContaining({
           input: {
             Bucket: 'upload-board-test-bucket',
-            Key: 'file/upload/granted_a.mp4',
+            Key: 'granted/granted_a.mp4',
             ResponseContentType: 'video/mp4',
           },
         }),
