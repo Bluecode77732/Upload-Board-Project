@@ -28,6 +28,28 @@
   확인했다. 여기서는 발견 사실만 기록하고 고치지 않았다. ROADMAP > 미배정에서 추적.
 
 ### 추가
+- **`frontend/`: `PostDetailPage`, `CommentThread`, `CommentForm`을 CSS Modules로
+  전환·재디자인 — 확정된 스타일 전면 개편의 5개 라우트 페이지 중 마지막**
+  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) 항목 7). 각
+  컴포넌트마다 동일 위치에 `*.module.css`를 배치했다(`PostDetailPage.module.css`,
+  `CommentThread.module.css`, `CommentForm.module.css`) — 마크업 구조·상태·API 호출은
+  그대로 두고 `style={{}}` → `className={styles.x}`만 바꿨다. `PostDetailPage`의
+  헤더/수정 폼/플레이어/관리 버튼 영역은 `FileDetailPage.module.css`(항목 5)가 확립한
+  상세 페이지 형태를 따랐고, `CommentThread`의 목록 행은 `PostBoard`(항목 6)의 목록
+  행과 동일한 카드 처리(`--surface-raised` 배경, 테두리, 둥근 모서리)를 얻었으며,
+  `CommentForm`은 이전에 없던 카드 래퍼(패딩/배경/테두리)를 `PostForm`과 맞춰
+  새로 얻었다. `PostDetailPage.tsx`에 남아 있던, 이제는 불필요해진 스코프 인라인
+  `lineHeight: 1.25` `<h1>` 오버라이드도 함께 제거했다 — 항목 5에서 착륙한 전역 `h1`
+  `line-height: 118%` 수정이 이미 그 문제를 해결하며(이 항목이 해당 파일을 전환할 때
+  지우도록 그때 남겨둔 항목이었다). 위 "알려진 문제" 항목 및 STYLE-PLAN.md의 범위 밖
+  기록에 따라, 세 파일의 한글 하드코딩 UI 문자열은 손대지 않고 그대로 두었다 — 순수
+  스타일/마크업 변경이며 문자열 내용은 바뀌지 않았다. `pnpm build`/`pnpm lint` 클린.
+  `pnpm test:e2e`로 검증: `PostDetailPage`를 실제로 거치는 `posts.spec.ts`와
+  `navigation.spec.ts`는 수정 없이 통과; `detail.spec.ts`의 무관한 기존 실패 1건
+  (`FileDetailPage`의 private 재생 어서션이 `200`을 기대하지만, 이 환경의
+  `STORAGE_DRIVER=s3` 설정([ADR 0036](ADR/0036-s3-presigned-content-redirect.md))
+  때문에 `302`가 반환됨)은 이번 변경과 무관 — 이 작업이 건드린 파일은 그 실패에
+  관여하지 않는다.
 - **`frontend/`: `PostBoard`, `PostForm`, `FilePicker`를 CSS Modules로 전환·재디자인.**
   확정된 스타일 전면 개편의 4단계
   ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) 항목 6). 각 컴포넌트마다

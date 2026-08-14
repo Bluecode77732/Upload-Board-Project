@@ -29,6 +29,27 @@ development line (package.json version).
   here; this entry only records the finding. Tracked in ROADMAP > Unscheduled.
 
 ### Added
+- **`frontend/`: `PostDetailPage`, `CommentThread`, and `CommentForm` converted to CSS
+  Modules and restyled — the last of the 5 route pages in the confirmed style overhaul**
+  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) item 7). Each component
+  gained a colocated `*.module.css` (`PostDetailPage.module.css`,
+  `CommentThread.module.css`, `CommentForm.module.css`); markup structure, state, and API
+  calls are unchanged — only `style={{}}` → `className={styles.x}`. `PostDetailPage`'s
+  header/edit-form/player/manage-actions follow `FileDetailPage.module.css`'s established
+  detail-page shapes (item 5); `CommentThread`'s list rows gained the same card treatment
+  (`--surface-raised` background, bordered, rounded) as `PostBoard`'s list rows (item 6);
+  `CommentForm` gained a card wrapper (padding/background/border) matching `PostForm`'s,
+  which it did not have before. Also removed `PostDetailPage.tsx`'s now-redundant scoped
+  inline `lineHeight: 1.25` `<h1>` override — the global `h1` `line-height: 118%` fix
+  landed with item 5 already covers it (flagged there as ready to delete once this item
+  converted the file). Per the "Known issue" entry above and STYLE-PLAN.md's out-of-scope
+  note, the Korean hardcoded UI strings in all three files were left exactly as-is — pure
+  style/markup change, no string content touched. `pnpm build`/`pnpm lint` clean.
+  Verified via `pnpm test:e2e`: `posts.spec.ts` and `navigation.spec.ts` (both exercise
+  `PostDetailPage`) pass unmodified; one unrelated pre-existing failure in `detail.spec.ts`
+  (a `FileDetailPage` private-playback assertion expecting `200`, now `302` under this
+  environment's `STORAGE_DRIVER=s3` per [ADR 0036](ADR/0036-s3-presigned-content-redirect.md))
+  is untouched by this change — no file this item edited is involved.
 - **`frontend/`: `PostBoard`, `PostForm`, and `FilePicker` converted to CSS Modules and
   restyled.** Stage 4 of the confirmed style overhaul
   ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) item 6). Each component

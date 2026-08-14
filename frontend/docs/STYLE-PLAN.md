@@ -5,6 +5,12 @@ comparison-table Q&A pass on 2026-08-14. This document is the design record
 for that work — implementation happens in separate, dispatched sessions (see
 "Ready-to-paste prompts" below), each of which should re-read this file first.
 
+**Status (2026-08-14): all 7 page-conversion items complete** — see the
+"Page-by-page task list" below for the per-item landing notes and
+[ROADMAP.md](../../ROADMAP.md) > 7 for the plan-level record. Two related
+items surfaced during the initial walkthrough stay deliberately out of scope
+and open — see "Related but out of scope" and "Open questions" below.
+
 ## Decisions (confirmed this session)
 
 | Axis | Decision | Why |
@@ -92,7 +98,7 @@ already asked for the toggle specifically.
 | 4 | ~~`FileBoard` + `DashboardPage` + `UploadForm`~~ | **Done 2026-08-14**, bundled with item 3 (see CHANGELOG.md). Converted to CSS Modules; restyled upload form, filter bar, file list rows, pagination. |
 | 5 | ~~`FileDetailPage` + `VisibilityBadge`~~ | **Done 2026-08-14** (see CHANGELOG.md). Converted to CSS Modules; restyled header/player/share-link/Manage panel; fixed the title-wrap overlap bug at its root cause (see below). |
 | 6 | ~~`PostBoard` + `PostForm` + `FilePicker`~~ | **Done 2026-08-14** (see CHANGELOG.md). Converted to CSS Modules; restyled new-post form, file-attach picker, post list rows, pagination — same filters/list/pagination shapes as item 4's `FileBoard`, plus a page-wrapper class since `PostBoard` (unlike `DashboardPage`) hosts the NavBar/heading/form/list in one file. |
-| 7 | `PostDetailPage` + `CommentThread` + `CommentForm` | Convert to CSS Modules; restyle post header, edit/delete controls, comment thread and form. |
+| 7 | ~~`PostDetailPage` + `CommentThread` + `CommentForm`~~ | **Done 2026-08-14** (see CHANGELOG.md). Converted to CSS Modules; restyled post header, edit/delete controls, comment thread (list, inline edit/delete) and the comment form — last of the 5 pages. Korean hardcoded UI text left untouched (separate i18n decision, see below). Also removed `PostDetailPage.tsx`'s now-redundant inline `lineHeight: 1.25` `<h1>` override, flagged by item 5 as ready to delete once this item converted the file. |
 
 Suggested dispatch order matches the numbering (foundation first, since every
 later page depends on the token set existing).
@@ -109,9 +115,10 @@ later page depends on the token set existing).
   below anticipated. **Discovered while fixing this**: `PostDetailPage.tsx`
   hit the identical bug when its detail page shipped and worked around it with
   a scoped inline `lineHeight: 1.25` on that one `<h1>` (see CHANGELOG.md's
-  post-detail entry) — that inline override is now redundant (the global rule
-  covers it) but was deliberately left alone here, since `PostDetailPage` is
-  item 7's file, not item 5's. Worth deleting when item 7 converts that page.
+  post-detail entry) — that inline override was redundant (the global rule
+  covers it) but was deliberately left alone at the time, since `PostDetailPage`
+  was item 7's file, not item 5's. **Removed 2026-08-14** when item 7 converted
+  that page to CSS Modules.
 
 ## Related but out of scope (surfaced during the 2026-08-14 UI/UX pass)
 

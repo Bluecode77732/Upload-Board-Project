@@ -678,6 +678,26 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   랜딩). 고치는 건 영어로 그대로 바꿔 끼우는 작업일 뿐(설계 판단도, ADR도, 백엔드 변경도
   불필요) — 작은 독립 프론트엔드 작업으로 나중에 처리. 교체할 문구의 톤/어투는
   `UploadForm.tsx`/`FileDetailPage.tsx`를 전례로 삼는다.
+- 프론트엔드 스타일 전면 개편(CSS Modules + 브랜드 팔레트 + 명시적 다크/라이트 토글) —
+  **2026-08-14 결정과 동시에 전부 랜딩**. 헤드리스 Playwright 스크린샷 + 헤드풀 점검으로
+  구성된 라이브 UI/UX 점검에서 모든 화면이 디자인 시스템 없이 인라인 `style={{}}`로만
+  스타일링돼 있다는 사실이 드러났다. 비교표 기반 Q&A 패스로 CSS Modules(신규 의존성
+  없음 — Vite가 `*.module.css`를 기본 내장 지원해 frontend/CLAUDE.md의 "CSS 프레임워크
+  도입 전 제안 필요" 조건에 걸리지 않음), 브랜드 지향 방향 + 명시적 토글(기존
+  `prefers-color-scheme` OS 전용 방식을 넘어섬), 전체 5개 라우트 페이지 + `NavBar`
+  적용 범위를 확정했다. 결정 전체 기록, 확정된 브랜드 퍼플 토큰 표, 페이지별 작업
+  목록은 `frontend/docs/STYLE-PLAN.md`(+ `.ko.md`)에 있다. 7개 항목 전부 같은 날
+  랜딩: 토큰 기반 + `ThemeProvider`/토글 + `NavBar`; `LoginPage`; 파일 게시판
+  (`DashboardPage`+`FileBoard`+`UploadForm`); `FileDetailPage`+`VisibilityBadge`(오래된
+  파일 상세 제목 겹침 버그 수정과 함께 처리 — 근본 원인은 전역 `h1` 규칙에
+  `line-height`가 없던 것); 게시글 게시판(`PostBoard`+`PostForm`+`FilePicker`); 마지막으로
+  `PostDetailPage`+`CommentThread`+`CommentForm`(제목 버그 수정으로 불필요해진 스코프
+  인라인 `lineHeight` 임시 조치도 이때 함께 제거). 같은 점검에서 드러났지만 의도적으로
+  포함하지 않아 여전히 열려 있는 항목 2건: 영상 재생을 막는 S3 CORS 문제(AWS 버킷 설정,
+  소스 코드 문제 아님)와 위의 한글/영어 UI 문구 혼용 — 이번 스타일 작업은 전환한 세 파일
+  전부에서 한글이든 영어든 하드코딩된 문자열을 발견한 그대로 두었다. 모든 전환은
+  마크업/스타일 변경만 — API·DB·로직 변경 없음. 7개 항목 전체의 페이지별 상세는
+  `CHANGELOG.md`의 `[Unreleased] > Added` 항목 참고.
 
 ## 8. Advisory 노트
 

@@ -734,6 +734,27 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   landed `f239a6c`/`d542661`). Fixing it is a straight string swap to English (no design
   decision, no ADR, no backend change) — revisit as a small standalone frontend task; use
   `UploadForm.tsx`/`FileDetailPage.tsx` for tone/phrasing precedent on the replacement copy.
+- ~~Frontend style overhaul (CSS Modules + brand palette + explicit dark/light toggle)~~ —
+  decided **and fully landed 2026-08-14**. A live UI/UX walkthrough (headless Playwright
+  screenshots plus a headed pass) surfaced that every screen styled itself with inline
+  `style={{}}` and no design system; a comparison-table Q&A pass locked in CSS Modules (zero
+  new dependency — Vite's native `*.module.css` support avoids frontend/CLAUDE.md's
+  "propose a CSS framework first" gate), a brand-forward direction with an explicit toggle
+  (beyond the prior OS-only `prefers-color-scheme` split), and all 5 route pages + `NavBar`
+  in scope. Full decision record, the confirmed brand-purple token table, and the
+  page-by-page task breakdown live in `frontend/docs/STYLE-PLAN.md` (+ `.ko.md`). All 7
+  items landed the same day: token foundation + `ThemeProvider`/toggle + `NavBar`;
+  `LoginPage`; file board (`DashboardPage`+`FileBoard`+`UploadForm`);
+  `FileDetailPage`+`VisibilityBadge` (bundled with the long-standing file-detail
+  title-overlap bug fix, root-caused to the global `h1` rule's missing `line-height`); post
+  board (`PostBoard`+`PostForm`+`FilePicker`); and last, `PostDetailPage`+`CommentThread`+
+  `CommentForm` (which also removed the scoped inline `lineHeight` workaround the title fix
+  superseded). Two items the same walkthrough surfaced were deliberately **not** folded in
+  and remain open: the S3 CORS gap blocking video playback (AWS bucket config, not source)
+  and the Korean/English UI-text split above — the style pass left every hardcoded string,
+  Korean or English, exactly as it found it in all three converted files. Every conversion
+  is markup/style-only — no API, DB, or logic change. Full per-page detail across all 7
+  items: `CHANGELOG.md`'s `[Unreleased] > Added` entries.
 
 ## 8. Advisory notes
 
