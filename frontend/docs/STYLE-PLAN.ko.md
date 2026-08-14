@@ -91,7 +91,7 @@
 | 3 | ~~`LoginPage`~~ | **2026-08-14 완료** (CHANGELOG.md 참고). CSS Module로 전환; 카드/입력창/모드 전환 링크 재디자인. |
 | 4 | ~~`FileBoard` + `DashboardPage` + `UploadForm`~~ | **2026-08-14 완료**, 3번과 같은 작업에서 함께 처리(CHANGELOG.md 참고). CSS Modules로 전환; 업로드 폼, 필터 바, 파일 목록 행, 페이지네이션 재디자인. |
 | 5 | ~~`FileDetailPage` + `VisibilityBadge`~~ | **2026-08-14 완료** (CHANGELOG.md 참고). CSS Modules로 전환; 헤더/플레이어/공유 링크/Manage 패널 재디자인; 제목 겹침 버그를 근본 원인 수준에서 수정(아래 참고). |
-| 6 | `PostBoard` + `PostForm` + `FilePicker` | CSS Modules로 전환; 새 글 작성 폼, 파일 첨부 피커, 게시글 목록 행, 페이지네이션 재디자인. |
+| 6 | ~~`PostBoard` + `PostForm` + `FilePicker`~~ | **2026-08-14 완료** (CHANGELOG.md 참고). CSS Modules로 전환; 새 글 작성 폼, 파일 첨부 피커, 게시글 목록 행, 페이지네이션 재디자인 — 4번 항목 `FileBoard`와 동일한 필터/목록/페이지네이션 구조를 그대로 따르되, `PostBoard`는 (`DashboardPage`와 달리) NavBar/제목/폼/목록을 한 파일에서 모두 호스팅하므로 페이지 래퍼 클래스를 추가했습니다. |
 | 7 | `PostDetailPage` + `CommentThread` + `CommentForm` | CSS Modules로 전환; 게시글 헤더, 수정/삭제 컨트롤, 댓글 스레드/폼 재디자인. |
 
 권장 디스패치 순서는 번호 순서와 동일합니다 — 이후 모든 페이지가 토큰

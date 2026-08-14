@@ -91,7 +91,7 @@ already asked for the toggle specifically.
 | 3 | ~~`LoginPage`~~ | **Done 2026-08-14** (see CHANGELOG.md). Converted to CSS Module; restyled the card, inputs, mode-switch link. |
 | 4 | ~~`FileBoard` + `DashboardPage` + `UploadForm`~~ | **Done 2026-08-14**, bundled with item 3 (see CHANGELOG.md). Converted to CSS Modules; restyled upload form, filter bar, file list rows, pagination. |
 | 5 | ~~`FileDetailPage` + `VisibilityBadge`~~ | **Done 2026-08-14** (see CHANGELOG.md). Converted to CSS Modules; restyled header/player/share-link/Manage panel; fixed the title-wrap overlap bug at its root cause (see below). |
-| 6 | `PostBoard` + `PostForm` + `FilePicker` | Convert to CSS Modules; restyle new-post form, file-attach picker, post list rows, pagination. |
+| 6 | ~~`PostBoard` + `PostForm` + `FilePicker`~~ | **Done 2026-08-14** (see CHANGELOG.md). Converted to CSS Modules; restyled new-post form, file-attach picker, post list rows, pagination — same filters/list/pagination shapes as item 4's `FileBoard`, plus a page-wrapper class since `PostBoard` (unlike `DashboardPage`) hosts the NavBar/heading/form/list in one file. |
 | 7 | `PostDetailPage` + `CommentThread` + `CommentForm` | Convert to CSS Modules; restyle post header, edit/delete controls, comment thread and form. |
 
 Suggested dispatch order matches the numbering (foundation first, since every

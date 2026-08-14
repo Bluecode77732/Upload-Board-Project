@@ -28,6 +28,22 @@
   확인했다. 여기서는 발견 사실만 기록하고 고치지 않았다. ROADMAP > 미배정에서 추적.
 
 ### 추가
+- **`frontend/`: `PostBoard`, `PostForm`, `FilePicker`를 CSS Modules로 전환·재디자인.**
+  확정된 스타일 전면 개편의 4단계
+  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) 항목 6). 각 컴포넌트마다
+  동일 위치에 `*.module.css`를 배치했다(`PostBoard.module.css`, `PostForm.module.css`,
+  `FilePicker.module.css`) — 마크업 구조·상태·API 호출은 그대로 두고 `style={{}}` →
+  `className={styles.x}`만 바꿨다. `PostBoard.module.css`는 (`DashboardPage.module.css`를
+  본뜬) `.page` 래퍼와 (`FileBoard.module.css`를 본뜬) 필터/목록/페이지네이션 클래스를 한
+  파일에 함께 담았다 — 파일 게시판이 `DashboardPage`+`FileBoard`로 나뉜 것과 달리
+  `PostBoard.tsx`는 NavBar·제목·폼·목록을 한 컴포넌트에서 전부 호스팅하기 때문이다.
+  `frontend/e2e/*.spec.ts`는 `getByLabel`/`getByRole`의 접근성 이름 매칭에 의존하므로,
+  전환 과정에서 라벨 문구·role·버튼/헤딩 이름을 모두 그대로 유지했다 — 새로 수동 검증만
+  한 것이 아니라 기존 `posts`/`upload` 스펙을 수정 없이 그대로 돌려 확인했다(`pnpm
+  test:e2e`, 둘 다 통과). `pnpm build`/`pnpm lint` 클린. 헤드리스 스크린샷으로 직접
+  검증했다(임시 가입 계정, `FilePicker`로 파일을 첨부해 클레임한 업로드, 첨부 유무 각각의
+  게시글 작성, 검색 필터 적용, 라이트·다크 테마 전부) — 필터 바, `FilePicker`의 스크롤
+  가능한 라디오 목록, 행 레이아웃, 페이지네이션 어디에서도 시각적 회귀가 없었다.
 - **`frontend/`: `FileDetailPage`와 `VisibilityBadge`를 CSS Modules로 전환·재디자인하고,
   오래된 제목 겹침 버그를 근본 원인 수준에서 수정.** 확정된 스타일 전면 개편의 3단계
   ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) 항목 5). 두 컴포넌트 모두

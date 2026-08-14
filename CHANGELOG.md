@@ -29,6 +29,24 @@ development line (package.json version).
   here; this entry only records the finding. Tracked in ROADMAP > Unscheduled.
 
 ### Added
+- **`frontend/`: `PostBoard`, `PostForm`, and `FilePicker` converted to CSS Modules and
+  restyled.** Stage 4 of the confirmed style overhaul
+  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) item 6). Each component
+  gained a colocated `*.module.css` (`PostBoard.module.css`, `PostForm.module.css`,
+  `FilePicker.module.css`); markup structure, state, and API calls are unchanged — only
+  `style={{}}` → `className={styles.x}`. `PostBoard.module.css` carries both a `.page`
+  wrapper (mirroring `DashboardPage.module.css`'s) and the filters/list/pagination classes
+  (mirroring `FileBoard.module.css`'s) in one file, since `PostBoard.tsx` — unlike the file
+  board's `DashboardPage`+`FileBoard` split — hosts the NavBar, heading, form, and list in a
+  single component. `frontend/e2e/*.spec.ts` relies on `getByLabel`/`getByRole`
+  accessible-name matching, so every label text, role, and button/heading name was kept
+  identical through the conversion — confirmed by running the existing `posts`/`upload`
+  specs unmodified (`pnpm test:e2e`, both pass) rather than only the new manual pass.
+  `pnpm build`/`pnpm lint` clean. Verified live with headless screenshots (a throwaway
+  registered account, an uploaded file claimed via `FilePicker`, a post created with and
+  without that attachment, the search filter applied, and both light/dark themes) — no
+  visual regressions in the filter bar, `FilePicker`'s scrollable radio list, row layout, or
+  pagination.
 - **`frontend/`: `FileDetailPage` and `VisibilityBadge` converted to CSS Modules and
   restyled, and the long-standing title-overlap bug fixed at its root cause.** Stage 3 of
   the confirmed style overhaul ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md)
