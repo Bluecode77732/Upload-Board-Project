@@ -29,6 +29,29 @@ development line (package.json version).
   here; this entry only records the finding. Tracked in ROADMAP > Unscheduled.
 
 ### Added
+- **`frontend/`: token-based theming foundation — `ThemeProvider` + explicit light/dark
+  toggle, `NavBar` converted to CSS Modules.** Stage 1 of the confirmed style overhaul
+  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md), decided 2026-08-14) — every
+  later page-restyle prompt depends on this token set. `index.css`'s prior
+  `--accent`/`--bg`/`--text-h` block is **replaced**, not extended, with the palette
+  STYLE-PLAN.md confirmed the same day: `--brand`/`--brand-hover`/`--brand-contrast`,
+  `--surface`/`--surface-raised`, `--text`/`--text-muted`/`--text-heading`, `--success`,
+  `--danger`/`--danger-bg` (kept the existing `--accent` purple as the brand seed rather than
+  an unrelated hue). A new `src/theme/` folder (`themeContext.ts`/`useTheme.ts`/
+  `ThemeProvider.tsx`, mirroring `src/auth/`'s context/hook/provider file split for
+  fast-refresh) drives a `data-theme="light"|"dark"` attribute on `<html>`: an explicit pick
+  persists to `localStorage` (`ui-theme`) and wins over `prefers-color-scheme`, while an
+  unvisited/never-toggled session still tracks the OS preference live — `index.css`'s
+  `@media (prefers-color-scheme: dark)` block is now guarded with
+  `:not([data-theme='light'])` so an explicit light pick can override a dark OS setting.
+  `NavBar.tsx` is the first component converted to a CSS Module (`NavBar.module.css`) and
+  gains the toggle button (☀️/🌙); wired into the tree via `main.tsx`. Confirmed via grep
+  before the rename that no other file consumed the old CSS var names, so no other screen's
+  rendering changed — verified live in a browser (registered a throwaway account, toggled
+  both directions, confirmed the `data-theme` transitions and the post board below NavBar was
+  pixel-identical to before). `pnpm build`/`pnpm lint` clean; no new dependency (CSS Modules
+  is Vite-native). The remaining STYLE-PLAN pages (LoginPage, File board, FileDetailPage, Post
+  board, Post detail) are separate follow-up prompts, not yet dispatched.
 - **ADR 0036: presigned S3 redirect for `GET /file/:id/content`, designed and
   implemented in the same change** ([ADR 0036](ADR/0036-s3-presigned-content-redirect.md),
   extends the `FileStorage` port from [ADR 0029](ADR/0029-storage-port-adapter.md);

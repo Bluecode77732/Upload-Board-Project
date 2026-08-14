@@ -28,6 +28,28 @@
   확인했다. 여기서는 발견 사실만 기록하고 고치지 않았다. ROADMAP > 미배정에서 추적.
 
 ### 추가
+- **`frontend/`: 토큰 기반 테마 기반 작업 — `ThemeProvider` + 명시적 라이트/다크 토글,
+  `NavBar`를 CSS Modules로 전환.** 확정된 스타일 전면 개편의 1단계
+  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md), 2026-08-14 결정) — 이후
+  페이지별 재디자인 프롬프트가 전부 이 토큰 세트에 의존한다. `index.css`의 기존
+  `--accent`/`--bg`/`--text-h` 블록을 병기가 아니라 **교체**했다 — 같은 날 STYLE-PLAN.md가
+  확정한 팔레트로: `--brand`/`--brand-hover`/`--brand-contrast`,
+  `--surface`/`--surface-raised`, `--text`/`--text-muted`/`--text-heading`, `--success`,
+  `--danger`/`--danger-bg`(기존 `--accent` 퍼플을 브랜드 시드로 그대로 유지, 무관한 색상으로
+  바꾸지 않음). 신규 `src/theme/` 폴더(`themeContext.ts`/`useTheme.ts`/`ThemeProvider.tsx`,
+  fast-refresh를 위해 context/hook/provider를 파일로 분리하는 `src/auth/`의 패턴을 그대로
+  따름)가 `<html>`의 `data-theme="light"|"dark"` 속성을 제어한다: 명시적으로 선택하면
+  `localStorage`(`ui-theme`)에 영속화되어 `prefers-color-scheme`보다 우선하고, 한 번도
+  토글하지 않은 세션은 여전히 OS 설정을 실시간으로 따라간다 — `index.css`의
+  `@media (prefers-color-scheme: dark)` 블록에 `:not([data-theme='light'])` 가드를 추가해,
+  OS가 다크여도 명시적 라이트 선택이 이를 덮어쓸 수 있게 했다. `NavBar.tsx`가 CSS Module로
+  전환된 첫 컴포넌트이며(`NavBar.module.css`) 토글 버튼(☀️/🌙)이 추가됐다 — `main.tsx`에서
+  트리에 연결. 이름을 바꾸기 전에 grep으로 다른 파일이 옛 CSS 변수명을 쓰는 곳이 없음을
+  확인했으므로 다른 화면의 렌더링은 바뀌지 않았다 — 브라우저에서 직접 검증도 마쳤다(임시
+  계정으로 회원가입, 양방향 토글 후 `data-theme` 전환과 NavBar 아래 게시글 목록이 기존과
+  픽셀 단위로 동일함을 확인). `pnpm build`/`pnpm lint` 클린, 신규 의존성 없음(CSS Modules는
+  Vite 내장). 남은 STYLE-PLAN 페이지(LoginPage, 파일 게시판, FileDetailPage, 게시글 게시판,
+  게시글 상세)는 별도의 후속 프롬프트로, 아직 착수하지 않았다.
 - **ADR 0036: `GET /file/:id/content`의 S3 presigned URL 리다이렉트 — 같은 변경에서
   설계와 구현을 함께 반영** ([ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md),
   [ADR 0029](ADR/0029-storage-port-adapter.ko.md)의 `FileStorage` 포트를 확장;

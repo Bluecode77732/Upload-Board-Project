@@ -86,8 +86,8 @@ already asked for the toggle specifically.
 
 | # | Page/component | Work |
 |---|---|---|
-| 1 | Token foundation | Replace `index.css`'s token block with the palette above; add `ThemeProvider` + `data-theme` CSS; no visual change to page layouts yet. |
-| 2 | `NavBar` | Convert to CSS Module; add the theme toggle control. |
+| 1 | ~~Token foundation~~ | **Done 2026-08-14** (see CHANGELOG.md). Replaced `index.css`'s token block with the palette above; added `ThemeProvider` + `data-theme` CSS; no visual change to page layouts other than NavBar (verified live). |
+| 2 | ~~`NavBar`~~ | **Done 2026-08-14**, bundled with item 1 (see CHANGELOG.md). Converted to CSS Module; added the theme toggle control. |
 | 3 | `LoginPage` | Convert to CSS Module; restyle the card, inputs, mode-switch link. |
 | 4 | `FileBoard` + `DashboardPage` + `UploadForm` | Convert to CSS Modules; restyle upload form, filter bar, file list rows, pagination. |
 | 5 | `FileDetailPage` + `VisibilityBadge` | Convert to CSS Modules; fix the title-wrap overlap bug (see below) while restyling the header; restyle the Manage panel. |
