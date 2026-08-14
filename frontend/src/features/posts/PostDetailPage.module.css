@@ -1,0 +1,158 @@
+.page {
+  max-width: 720px;
+  margin: 5vh auto;
+  padding: 24px;
+  text-align: left;
+}
+
+.backLink {
+  color: var(--brand);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.backLink:hover {
+  color: var(--brand-hover);
+  text-decoration: underline;
+}
+
+.header {
+  margin: 16px 0;
+}
+
+.title {
+  margin: 0 0 8px;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.body {
+  margin: 16px 0;
+  white-space: pre-wrap;
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.playerWrapper {
+  margin: 16px 0;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.player {
+  display: block;
+  width: 100%;
+}
+
+.loadingText {
+  margin: 0;
+  padding: 40px 0;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.editForm {
+  display: grid;
+  gap: 14px;
+  margin: 16px 0;
+  padding: 20px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.input,
+.textarea {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.textarea {
+  resize: vertical;
+}
+
+.input:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.button {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.primaryButton {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  background: var(--brand);
+  color: var(--brand-contrast);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: var(--brand-hover);
+}
+
+.deleteButton {
+  padding: 8px 14px;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--danger);
+  font: inherit;
+  cursor: pointer;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+
+.button:disabled,
+.primaryButton:disabled,
+.deleteButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

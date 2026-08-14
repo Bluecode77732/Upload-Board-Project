@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { CommentListResponse, CommentResponse, UpdateCommentRequest } from '../../api/types'
+import styles from './CommentThread.module.css'
 
 const TAKE = 20
 
@@ -139,54 +140,55 @@ export function CommentThread({
   const canLoadMore = comments !== null && comments.length < total
 
   return (
-    <section style={{ marginTop: 24 }}>
-      <h2 style={{ fontSize: '1.1rem' }}>댓글 {total > 0 ? `(${total})` : ''}</h2>
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-      {actionError && <p style={{ color: 'crimson' }}>{actionError}</p>}
+    <section className={styles.section}>
+      <h2 className={styles.heading}>댓글 {total > 0 ? `(${total})` : ''}</h2>
+      {error && <p className={styles.error}>{error}</p>}
+      {actionError && <p className={styles.error}>{actionError}</p>}
       {comments === null && !error && <p>댓글을 불러오는 중…</p>}
-      {comments && comments.length === 0 && <p style={{ color: '#555' }}>아직 댓글이 없습니다.</p>}
+      {comments && comments.length === 0 && <p className={styles.empty}>아직 댓글이 없습니다.</p>}
       {comments && comments.length > 0 && (
-        <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 8 }}>
+        <ul className={styles.list}>
           {comments.map((comment) => {
             const canManage = currentUserId !== null && comment.creator?.id === currentUserId
             const busy = busyId === comment.id
             return (
-              <li key={comment.id} style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#555', fontSize: '0.85rem' }}>
+              <li key={comment.id} className={styles.item}>
+                <div className={styles.itemHeader}>
                   <span>{comment.creator?.email ?? 'unknown'}</span>
                   <span>{new Date(comment.createdAt).toLocaleString()}</span>
                 </div>
                 {editingId === comment.id ? (
-                  <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                  <div className={styles.editBox}>
                     <textarea
+                      className={styles.textarea}
                       value={editBody}
                       onChange={(e) => setEditBody(e.target.value)}
                       maxLength={1000}
                       rows={3}
                       disabled={busy}
                     />
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" disabled={busy} onClick={() => submitEdit(comment.id)}>
+                    <div className={styles.actions}>
+                      <button type="button" className={styles.button} disabled={busy} onClick={() => submitEdit(comment.id)}>
                         저장
                       </button>
-                      <button type="button" disabled={busy} onClick={cancelEdit}>
+                      <button type="button" className={styles.button} disabled={busy} onClick={cancelEdit}>
                         취소
                       </button>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <p style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>{comment.body}</p>
+                    <p className={styles.commentBody}>{comment.body}</p>
                     {canManage && (
-                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                        <button type="button" disabled={busy} onClick={() => startEdit(comment)}>
+                      <div className={styles.actions}>
+                        <button type="button" className={styles.button} disabled={busy} onClick={() => startEdit(comment)}>
                           수정
                         </button>
                         <button
                           type="button"
+                          className={styles.deleteButton}
                           disabled={busy}
                           onClick={() => deleteComment(comment.id)}
-                          style={{ color: 'crimson' }}
                         >
                           삭제
                         </button>
@@ -200,7 +202,7 @@ export function CommentThread({
         </ul>
       )}
       {canLoadMore && (
-        <button type="button" disabled={loadingMore} onClick={loadMore} style={{ marginTop: 12 }}>
+        <button type="button" className={styles.loadMoreButton} disabled={loadingMore} onClick={loadMore}>
           {loadingMore ? '불러오는 중…' : '더 보기'}
         </button>
       )}

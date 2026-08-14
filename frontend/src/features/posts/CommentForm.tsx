@@ -9,6 +9,7 @@ import { useState, type FormEvent } from 'react'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { CommentResponse, CreateCommentRequest } from '../../api/types'
+import styles from './CommentForm.module.css'
 
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -46,8 +47,9 @@ export function CommentForm({ postId, onCreated }: { postId: number; onCreated: 
   }
 
   return (
-    <form onSubmit={onSubmit} style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+    <form onSubmit={onSubmit} className={styles.form}>
       <textarea
+        className={styles.textarea}
         value={body}
         onChange={(e) => setBody(e.target.value)}
         maxLength={1000}
@@ -56,8 +58,8 @@ export function CommentForm({ postId, onCreated }: { postId: number; onCreated: 
         disabled={busy}
         placeholder="댓글을 입력하세요…"
       />
-      {error && <p style={{ color: 'crimson', margin: 0 }}>{error}</p>}
-      <button type="submit" disabled={busy} style={{ justifySelf: 'start' }}>
+      {error && <p className={styles.error}>{error}</p>}
+      <button type="submit" className={styles.submit} disabled={busy}>
         {busy ? '작성 중…' : '댓글 작성'}
       </button>
     </form>

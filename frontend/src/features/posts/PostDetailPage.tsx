@@ -15,6 +15,7 @@ import { useAuth } from '../../auth/useAuth'
 import { NavBar } from '../../shared/NavBar'
 import { CommentForm } from './CommentForm'
 import { CommentThread } from './CommentThread'
+import styles from './PostDetailPage.module.css'
 
 // Branch on the stable code (backend ADR 0011), never on the human-readable message.
 function messageForError(error: unknown): string {
@@ -187,17 +188,19 @@ export function PostDetailPage() {
 
   if (metaError) {
     return (
-      <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+      <main className={styles.page}>
         <NavBar />
-        <p style={{ color: 'crimson' }}>{metaError}</p>
-        <Link to="/">Back to posts</Link>
+        <p className={styles.error}>{metaError}</p>
+        <Link to="/" className={styles.backLink}>
+          Back to posts
+        </Link>
       </main>
     )
   }
 
   if (!post) {
     return (
-      <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+      <main className={styles.page}>
         <NavBar />
         <p>Loading…</p>
       </main>
@@ -205,15 +208,18 @@ export function PostDetailPage() {
   }
 
   return (
-    <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+    <main className={styles.page}>
       <NavBar />
-      <Link to="/">Back to posts</Link>
+      <Link to="/" className={styles.backLink}>
+        Back to posts
+      </Link>
 
       {editing ? (
-        <div style={{ display: 'grid', gap: 8, margin: '16px 0' }}>
-          <label style={{ display: 'grid', gap: 4 }}>
+        <div className={styles.editForm}>
+          <label className={styles.field}>
             Title
             <input
+              className={styles.input}
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               maxLength={100}
@@ -221,9 +227,10 @@ export function PostDetailPage() {
               disabled={busy}
             />
           </label>
-          <label style={{ display: 'grid', gap: 4 }}>
+          <label className={styles.field}>
             Body
             <textarea
+              className={styles.textarea}
               value={editBody}
               onChange={(e) => setEditBody(e.target.value)}
               maxLength={10000}
@@ -232,58 +239,55 @@ export function PostDetailPage() {
               disabled={busy}
             />
           </label>
-          {actionError && <p style={{ color: 'crimson', margin: 0 }}>{actionError}</p>}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" disabled={busy} onClick={submitEdit}>
+          {actionError && <p className={styles.error}>{actionError}</p>}
+          <div className={styles.actions}>
+            <button type="button" className={styles.primaryButton} disabled={busy} onClick={submitEdit}>
               저장
             </button>
-            <button type="button" disabled={busy} onClick={cancelEdit}>
+            <button type="button" className={styles.button} disabled={busy} onClick={cancelEdit}>
               취소
             </button>
           </div>
         </div>
       ) : (
         <>
-          <header style={{ margin: '16px 0' }}>
-            {/* Global h1 is 56px with no line-height set (index.css) — long post titles wrap to
-                2+ lines and, without an explicit line-height, the box collapses to one line's
-                height, so the wrapped line visually overlaps the byline below it. */}
-            <h1 style={{ margin: '0 0 8px', lineHeight: 1.25 }}>{post.title}</h1>
-            {post.creator && <p style={{ color: '#555' }}>{post.creator.email}</p>}
+          <header className={styles.header}>
+            <h1 className={styles.title}>{post.title}</h1>
+            {post.creator && <p className={styles.meta}>{post.creator.email}</p>}
           </header>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{post.body}</p>
+          <p className={styles.body}>{post.body}</p>
 
           {post.file && (
-            <div style={{ margin: '16px 0' }}>
-              {playbackError && <p style={{ color: 'crimson' }}>{playbackError}</p>}
+            <div className={styles.playerWrapper}>
+              {playbackError && <p className={styles.error}>{playbackError}</p>}
               {post.file.visibility === 'private' ? (
                 objectUrl ? (
-                  <video controls src={objectUrl} style={{ width: '100%' }} />
+                  <video controls src={objectUrl} className={styles.player} />
                 ) : (
-                  !playbackError && <p>파일을 불러오는 중…</p>
+                  !playbackError && <p className={styles.loadingText}>파일을 불러오는 중…</p>
                 )
               ) : (
                 <video
                   controls
                   src={post.file.visibility === 'unlisted' ? (post.file.shareUrl ?? post.file.fileUrl) : post.file.fileUrl}
                   onError={diagnosePlaybackError}
-                  style={{ width: '100%' }}
+                  className={styles.player}
                 />
               )}
             </div>
           )}
 
           {canManage && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button type="button" disabled={busy} onClick={startEdit}>
+            <div className={styles.actions}>
+              <button type="button" className={styles.button} disabled={busy} onClick={startEdit}>
                 수정
               </button>
-              <button type="button" disabled={busy} onClick={handleDelete} style={{ color: 'crimson' }}>
+              <button type="button" className={styles.deleteButton} disabled={busy} onClick={handleDelete}>
                 삭제
               </button>
             </div>
           )}
-          {actionError && <p style={{ color: 'crimson' }}>{actionError}</p>}
+          {actionError && <p className={styles.error}>{actionError}</p>}
         </>
       )}
 
