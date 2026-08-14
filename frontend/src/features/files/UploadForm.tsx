@@ -8,6 +8,7 @@ import { useState, type FormEvent } from 'react'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { AttachResponse, FileResponse } from '../../api/types'
+import styles from './UploadForm.module.css'
 
 // Mirrors the backend's per-field allowlist (upload.controller.ts UPLOAD_ALLOWLIST, ADR 0027):
 // exactly one of these three multipart fields, each with its own extensions/mimetypes, 100MB cap.
@@ -99,18 +100,15 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      style={{ display: 'grid', gap: 12, margin: '16px 0', padding: 16, border: '1px solid #ddd', borderRadius: 8 }}
-    >
-      <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Upload a file</h2>
-      <label style={{ display: 'grid', gap: 4 }}>
+    <form onSubmit={onSubmit} className={styles.form}>
+      <h2 className={styles.heading}>Upload a file</h2>
+      <label className={styles.field}>
         Title
-        <input value={title} onChange={(e) => setTitle(e.target.value)} required />
+        <input className={styles.input} value={title} onChange={(e) => setTitle(e.target.value)} required />
       </label>
-      <div style={{ display: 'flex', gap: 16 }}>
+      <div className={styles.radioGroup}>
         {(Object.keys(FIELD_CONFIG) as UploadFieldType[]).map((type) => (
-          <label key={type} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <label key={type} className={styles.radioLabel}>
             <input
               type="radio"
               name="uploadFieldType"
@@ -123,23 +121,24 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
           </label>
         ))}
       </div>
-      <label style={{ display: 'grid', gap: 4 }}>
+      <label className={styles.field}>
         {FIELD_CONFIG[fieldType].label} file ({FIELD_CONFIG[fieldType].hint} · max 100 MB)
         <input
           type="file"
+          className={styles.fileInput}
           accept={FIELD_CONFIG[fieldType].accept}
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           disabled={busy}
         />
       </label>
       {progress !== null && (
-        <div style={{ display: 'grid', gap: 4 }}>
-          <progress value={progress} max={100} style={{ width: '100%' }} />
-          <span style={{ fontSize: '0.85rem', color: '#555' }}>{progress}%</span>
+        <div className={styles.progress}>
+          <progress value={progress} max={100} className={styles.progressBar} />
+          <span className={styles.progressText}>{progress}%</span>
         </div>
       )}
-      {error && <p style={{ color: 'crimson', margin: 0 }}>{error}</p>}
-      <button type="submit" disabled={busy}>
+      {error && <p className={styles.error}>{error}</p>}
+      <button type="submit" className={styles.submit} disabled={busy}>
         {busy ? 'Uploading…' : 'Upload'}
       </button>
     </form>

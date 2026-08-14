@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
+import styles from './LoginPage.module.css'
 
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -53,44 +54,48 @@ export function LoginPage() {
   }
 
   return (
-    <main style={{ maxWidth: 360, margin: '10vh auto', padding: 24 }}>
-      <h1>{mode === 'signin' ? 'Sign in' : 'Register'}</h1>
-      <form onSubmit={onSubmit} style={{ display: 'grid', gap: 12 }}>
-        <label style={{ display: 'grid', gap: 4 }}>
-          Email
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-          />
-        </label>
-        <label style={{ display: 'grid', gap: 4 }}>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-          />
-        </label>
-        {error && <p style={{ color: 'crimson', margin: 0 }}>{error}</p>}
-        <button type="submit" disabled={busy}>
-          {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Register & sign in'}
+    <main className={styles.page}>
+      <div className={styles.card}>
+        <h1 className={styles.heading}>{mode === 'signin' ? 'Sign in' : 'Register'}</h1>
+        <form onSubmit={onSubmit} className={styles.form}>
+          <label className={styles.field}>
+            Email
+            <input
+              type="email"
+              className={styles.input}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+          </label>
+          <label className={styles.field}>
+            Password
+            <input
+              type="password"
+              className={styles.input}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+            />
+          </label>
+          {error && <p className={styles.error}>{error}</p>}
+          <button type="submit" className={styles.submit} disabled={busy}>
+            {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Register & sign in'}
+          </button>
+        </form>
+        <button
+          type="button"
+          className={styles.switchButton}
+          onClick={() => {
+            setMode(mode === 'signin' ? 'register' : 'signin')
+            setError(null)
+          }}
+        >
+          {mode === 'signin' ? 'Need an account? Register' : 'Have an account? Sign in'}
         </button>
-      </form>
-      <button
-        type="button"
-        onClick={() => {
-          setMode(mode === 'signin' ? 'register' : 'signin')
-          setError(null)
-        }}
-        style={{ marginTop: 12, background: 'none', border: 'none', color: '#646cff', cursor: 'pointer' }}
-      >
-        {mode === 'signin' ? 'Need an account? Register' : 'Have an account? Sign in'}
-      </button>
+      </div>
     </main>
   )
 }

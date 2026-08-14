@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { NavBar } from '../../shared/NavBar'
 import { FileBoard } from './FileBoard'
 import { UploadForm } from './UploadForm'
+import styles from './DashboardPage.module.css'
 
 export function DashboardPage() {
   // Has no meaning of its own — FileBoard only uses a change in this value as a signal to
@@ -14,7 +15,7 @@ export function DashboardPage() {
   const [refreshSignal, setRefreshSignal] = useState(0)
 
   return (
-    <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+    <main className={styles.page}>
       <NavBar />
       <h1>Files</h1>
       <UploadForm onUploaded={() => setRefreshSignal((n) => n + 1)} />
