@@ -29,6 +29,34 @@ development line (package.json version).
   here; this entry only records the finding. Tracked in ROADMAP > Unscheduled.
 
 ### Added
+- **`frontend/`: `FileDetailPage` and `VisibilityBadge` converted to CSS Modules and
+  restyled, and the long-standing title-overlap bug fixed at its root cause.** Stage 3 of
+  the confirmed style overhaul ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md)
+  item 5). Both components gained a colocated `*.module.css`
+  (`FileDetailPage.module.css`, `VisibilityBadge.module.css`); the player is now wrapped
+  in a bordered/rounded panel, the share-link box and Manage panel were restyled onto the
+  token set, and `.page` is explicitly `text-align: left` to stop the app-wide
+  `#root { text-align: center }` rule from centering this page's meta line and "Manage"
+  heading against the left-anchored flex rows (header, controls) beside them. Root cause
+  of the overlap: the global `h1` rule (`index.css`) sets `font-size: 56px` but never its
+  own `line-height`, so it inherited `:root`'s `line-height: 145%` computed against the
+  *root* font-size (18px ≈ 26px) — far smaller than 56px glyphs, so a wrapped title's
+  lines visually overlapped. Fixed with an explicit `line-height: 118%` on the global `h1`
+  rule (matching `h2`'s existing ratio) rather than a page-scoped override. **Found while
+  fixing it**: `PostDetailPage.tsx:251` already carries a scoped inline
+  `lineHeight: 1.25` workaround for this identical bug from when the post-detail page
+  shipped — that inline override is now redundant under the global fix but was
+  deliberately left in place, since `PostDetailPage` is item 7's file, not item 5's (see
+  STYLE-PLAN.md's "Resolved during this work" section). `index.css` also gained
+  `--success-bg`/`--warning`/`--warning-bg` tokens (mirroring the existing
+  `--danger`/`--danger-bg` pair) so `VisibilityBadge`'s three states (public/private/
+  unlisted) draw from the token set instead of hardcoded hex. `pnpm build`/`pnpm lint`
+  clean; the full relevant e2e suite (`detail`/`upload`/`auth`/`board`/`navigation`/
+  `posts`/`smoke`, 21 of 22) passes — the one failure is the same pre-existing
+  `detail.spec.ts` S3-redirect mismatch noted below, unrelated to this change. Verified
+  live with headless screenshots: a stress-test 5-line-wrapped title (no overlap, in both
+  light and dark), a short title, and all three visibility states (private/public/unlisted,
+  including the share-link box and video playback for public/unlisted).
 - **`frontend/`: `LoginPage` and the file board (`DashboardPage` + `FileBoard` +
   `UploadForm`) converted to CSS Modules and restyled.** Stage 2 of the confirmed style
   overhaul ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) items 3-4), the

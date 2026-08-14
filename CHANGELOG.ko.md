@@ -28,6 +28,32 @@
   확인했다. 여기서는 발견 사실만 기록하고 고치지 않았다. ROADMAP > 미배정에서 추적.
 
 ### 추가
+- **`frontend/`: `FileDetailPage`와 `VisibilityBadge`를 CSS Modules로 전환·재디자인하고,
+  오래된 제목 겹침 버그를 근본 원인 수준에서 수정.** 확정된 스타일 전면 개편의 3단계
+  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) 항목 5). 두 컴포넌트 모두
+  동일 위치에 `*.module.css`를 배치했다(`FileDetailPage.module.css`,
+  `VisibilityBadge.module.css`) — 플레이어를 테두리·둥근 모서리 패널로 감쌌고, 공유 링크
+  박스와 Manage 패널을 토큰 체계로 재디자인했으며, 앱 전역 `#root { text-align: center }`
+  규칙이 이 페이지의 메타 줄과 "Manage" 헤딩을 옆의 좌측 정렬 flex 행(헤더, 컨트롤)과
+  어긋나게 가운데 정렬하는 것을 막기 위해 `.page`에 `text-align: left`를 명시했다. 겹침의
+  근본 원인: 전역 `h1` 규칙(`index.css`)이 `font-size: 56px`만 지정하고 자체
+  `line-height`는 없어서, `:root`의 `line-height: 145%`가 *루트* 폰트 크기(18px ≈ 26px)
+  기준으로 계산된 값을 그대로 물려받았다 — 56px 글자에 비해 턱없이 작아 제목이
+  줄바꿈되면 줄끼리 겹쳐 보였다. 페이지별 오버라이드가 아니라 전역 `h1` 규칙 자체에
+  (`h2`가 이미 쓰던 비율과 맞춰) `line-height: 118%`를 명시해 고쳤다. **수정하다가 함께
+  발견한 사실**: `PostDetailPage.tsx:251`은 게시글 상세 페이지가 나올 때 이미 똑같은
+  버그를 겪었고 그 하나의 `<h1>`에만 인라인 `lineHeight: 1.25`로 우회해 뒀다 — 전역
+  수정으로 이제 그 인라인 오버라이드는 불필요해졌지만, `PostDetailPage`는 5번이 아니라
+  7번 항목의 파일이라 일부러 손대지 않았다(STYLE-PLAN.md의 "이번 작업으로 해결된 사항"
+  참고). `index.css`에는 `--success-bg`/`--warning`/`--warning-bg` 토큰도 추가했다(기존
+  `--danger`/`--danger-bg` 쌍을 그대로 본떠서) — `VisibilityBadge`의 세 상태
+  (public/private/unlisted)가 하드코딩된 16진수 대신 토큰 체계를 쓰도록. `pnpm
+  build`/`pnpm lint` 클린; 관련 e2e 스펙 전체
+  (`detail`/`upload`/`auth`/`board`/`navigation`/`posts`/`smoke`, 22개 중 21개) 통과 —
+  유일한 실패는 아래에 적힌 것과 동일한, 기존부터 있던 `detail.spec.ts`의 S3 리다이렉트
+  불일치이며 이번 변경과 무관하다. 헤드리스 스크린샷으로 직접 검증했다: 5줄로 줄바꿈되는
+  스트레스 테스트용 긴 제목(라이트·다크 모두 겹침 없음), 짧은 제목, 그리고 세 가시성 상태
+  전부(private/public/unlisted — 공유 링크 박스와 public/unlisted의 실제 영상 재생 포함).
 - **`frontend/`: `LoginPage`와 파일 게시판(`DashboardPage` + `FileBoard` + `UploadForm`)을
   CSS Modules로 전환하고 재디자인.** 확정된 스타일 전면 개편의 2단계
   ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) 항목 3-4), 아래 토큰 기반

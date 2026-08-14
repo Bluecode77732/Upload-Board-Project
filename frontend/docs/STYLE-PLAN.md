@@ -90,22 +90,34 @@ already asked for the toggle specifically.
 | 2 | ~~`NavBar`~~ | **Done 2026-08-14**, bundled with item 1 (see CHANGELOG.md). Converted to CSS Module; added the theme toggle control. |
 | 3 | ~~`LoginPage`~~ | **Done 2026-08-14** (see CHANGELOG.md). Converted to CSS Module; restyled the card, inputs, mode-switch link. |
 | 4 | ~~`FileBoard` + `DashboardPage` + `UploadForm`~~ | **Done 2026-08-14**, bundled with item 3 (see CHANGELOG.md). Converted to CSS Modules; restyled upload form, filter bar, file list rows, pagination. |
-| 5 | `FileDetailPage` + `VisibilityBadge` | Convert to CSS Modules; fix the title-wrap overlap bug (see below) while restyling the header; restyle the Manage panel. |
+| 5 | ~~`FileDetailPage` + `VisibilityBadge`~~ | **Done 2026-08-14** (see CHANGELOG.md). Converted to CSS Modules; restyled header/player/share-link/Manage panel; fixed the title-wrap overlap bug at its root cause (see below). |
 | 6 | `PostBoard` + `PostForm` + `FilePicker` | Convert to CSS Modules; restyle new-post form, file-attach picker, post list rows, pagination. |
 | 7 | `PostDetailPage` + `CommentThread` + `CommentForm` | Convert to CSS Modules; restyle post header, edit/delete controls, comment thread and form. |
 
 Suggested dispatch order matches the numbering (foundation first, since every
 later page depends on the token set existing).
 
+## Resolved during this work
+
+- **File detail title overlap** — **fixed 2026-08-14** as part of item 5. Root
+  cause confirmed: the global `h1` rule (`index.css`) sets `font-size: 56px`
+  but never its own `line-height`, so it inherited `:root`'s `line-height: 145%`
+  computed against the *root* font-size (18px ≈ 26px) — far smaller than 56px
+  glyphs, so a wrapped title's lines overlapped. Fixed with an explicit
+  `line-height: 118%` on the global `h1` rule itself (matching `h2`'s existing
+  ratio), not a per-page override — this is the root-cause fix the diagnosis
+  below anticipated. **Discovered while fixing this**: `PostDetailPage.tsx`
+  hit the identical bug when its detail page shipped and worked around it with
+  a scoped inline `lineHeight: 1.25` on that one `<h1>` (see CHANGELOG.md's
+  post-detail entry) — that inline override is now redundant (the global rule
+  covers it) but was deliberately left alone here, since `PostDetailPage` is
+  item 7's file, not item 5's. Worth deleting when item 7 converts that page.
+
 ## Related but out of scope (surfaced during the 2026-08-14 UI/UX pass)
 
 Not part of this styling work unless separately requested — noted here only
 because whoever touches these files for restyling will see them:
 
-- **File detail title overlap**: long titles visually overlap themselves on
-  `/view/:id` (`FileDetailPage.tsx`) — likely a `line-height`/`margin`
-  interaction with the global `h1` rule in `index.css`. Folded into item 5
-  above as a fix riding along with that page's restyle, not a separate task.
 - **S3 CORS on video playback**: `GET /file/:id/content` redirects to a
   presigned S3 URL (backend ADR 0036) that the browser can't fetch — the
   bucket has no CORS policy allowing the frontend origin. This is an AWS
@@ -120,8 +132,8 @@ because whoever touches these files for restyling will see them:
 
 1. ~~Confirm the proposed palette~~ — **confirmed 2026-08-14**, kept the
    existing purple brand seed. Item 1 is clear to dispatch.
-2. Confirm whether the three "related but out of scope" items above should
-   be picked up later as their own tasks, or intentionally left alone.
+2. Confirm whether the two remaining "related but out of scope" items above
+   should be picked up later as their own tasks, or intentionally left alone.
 
 ## Ready-to-paste prompts
 
