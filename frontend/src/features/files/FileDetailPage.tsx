@@ -12,6 +12,7 @@ import type { FileResponse, FileVisibility, UpdateFileVisibilityRequest } from '
 import { useAuth } from '../../auth/useAuth'
 import { NavBar } from '../../shared/NavBar'
 import { VisibilityBadge } from './VisibilityBadge'
+import styles from './FileDetailPage.module.css'
 
 const VISIBILITY_OPTIONS: FileVisibility[] = ['public', 'private', 'unlisted']
 
@@ -180,17 +181,19 @@ export function FileDetailPage() {
 
   if (metaError) {
     return (
-      <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+      <main className={styles.page}>
         <NavBar />
-        <p style={{ color: 'crimson' }}>{metaError}</p>
-        <Link to="/files">Back to files</Link>
+        <p className={styles.error}>{metaError}</p>
+        <Link to="/files" className={styles.backLink}>
+          Back to files
+        </Link>
       </main>
     )
   }
 
   if (!file) {
     return (
-      <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+      <main className={styles.page}>
         <NavBar />
         <p>Loading…</p>
       </main>
@@ -198,52 +201,57 @@ export function FileDetailPage() {
   }
 
   return (
-    <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+    <main className={styles.page}>
       <NavBar />
-      <Link to="/files">Back to files</Link>
-      <header style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '16px 0' }}>
+      <Link to="/files" className={styles.backLink}>
+        Back to files
+      </Link>
+      <header className={styles.header}>
         <VisibilityBadge visibility={file.visibility} />
-        <h1 style={{ margin: 0 }}>{file.title}</h1>
+        <h1 className={styles.title}>{file.title}</h1>
       </header>
-      {file.creator && <p style={{ color: '#555' }}>Uploaded by {file.creator.email}</p>}
+      {file.creator && <p className={styles.meta}>Uploaded by {file.creator.email}</p>}
 
-      {playbackError && <p style={{ color: 'crimson' }}>{playbackError}</p>}
+      {playbackError && <p className={styles.error}>{playbackError}</p>}
 
-      {file.visibility === 'private' ? (
-        objectUrl ? (
-          <video controls src={objectUrl} style={{ width: '100%' }} />
+      <div className={styles.playerWrapper}>
+        {file.visibility === 'private' ? (
+          objectUrl ? (
+            <video controls src={objectUrl} className={styles.player} />
+          ) : (
+            !playbackError && <p className={styles.loadingText}>Loading content…</p>
+          )
         ) : (
-          !playbackError && <p>Loading content…</p>
-        )
-      ) : (
-        <video
-          controls
-          src={file.visibility === 'unlisted' ? (file.shareUrl ?? file.fileUrl) : file.fileUrl}
-          onError={diagnosePlaybackError}
-          style={{ width: '100%' }}
-        />
-      )}
+          <video
+            controls
+            src={file.visibility === 'unlisted' ? (file.shareUrl ?? file.fileUrl) : file.fileUrl}
+            onError={diagnosePlaybackError}
+            className={styles.player}
+          />
+        )}
+      </div>
 
       {file.visibility === 'unlisted' && file.shareUrl && (
-        <p style={{ marginTop: 12 }}>
-          Share link: <code>{file.shareUrl}</code>
+        <p className={styles.shareBox}>
+          Share link: <code className={styles.shareCode}>{file.shareUrl}</code>
           {canManage && (
-            <button type="button" onClick={handleCopyShareLink} style={{ marginLeft: 8 }}>
+            <button type="button" onClick={handleCopyShareLink} className={styles.copyButton}>
               Copy
             </button>
           )}
-          {copyFeedback && <span style={{ marginLeft: 8, color: '#1e7e34' }}>{copyFeedback}</span>}
+          {copyFeedback && <span className={styles.copyFeedback}>{copyFeedback}</span>}
         </p>
       )}
 
       {canManage && (
-        <section style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #ddd' }}>
-          <h2 style={{ fontSize: '1rem' }}>Manage</h2>
-          {actionError && <p style={{ color: 'crimson' }}>{actionError}</p>}
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <section className={styles.manage}>
+          <h2 className={styles.manageHeading}>Manage</h2>
+          {actionError && <p className={styles.error}>{actionError}</p>}
+          <div className={styles.controls}>
+            <label className={styles.visibilityLabel}>
               Visibility
               <select
+                className={styles.select}
                 value={file.visibility}
                 disabled={busy}
                 onChange={(e) => handleVisibilityChange(e.target.value as FileVisibility)}
@@ -256,16 +264,11 @@ export function FileDetailPage() {
               </select>
             </label>
             {file.visibility === 'unlisted' && (
-              <button type="button" disabled={busy} onClick={handleRotateShareToken}>
+              <button type="button" disabled={busy} onClick={handleRotateShareToken} className={styles.rotateButton}>
                 Rotate share link
               </button>
             )}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={handleDelete}
-              style={{ color: 'crimson', marginLeft: 'auto' }}
-            >
+            <button type="button" disabled={busy} onClick={handleDelete} className={styles.deleteButton}>
               Delete file
             </button>
           </div>

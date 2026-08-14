@@ -1,0 +1,174 @@
+.page {
+  max-width: 720px;
+  margin: 5vh auto;
+  padding: 24px;
+  text-align: left;
+}
+
+.backLink {
+  color: var(--brand);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.backLink:hover {
+  color: var(--brand-hover);
+  text-decoration: underline;
+}
+
+.header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 16px 0;
+}
+
+.title {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.meta {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.playerWrapper {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.player {
+  display: block;
+  width: 100%;
+}
+
+.loadingText {
+  margin: 0;
+  padding: 40px 0;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.shareBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.shareCode {
+  overflow-wrap: anywhere;
+}
+
+.copyButton {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.copyButton:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.copyFeedback {
+  color: var(--success);
+}
+
+.manage {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.manageHeading {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+
+.controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.visibilityLabel {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.rotateButton {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.rotateButton:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.rotateButton:disabled,
+.select:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.deleteButton {
+  margin-left: auto;
+  padding: 8px 14px;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+
+.deleteButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

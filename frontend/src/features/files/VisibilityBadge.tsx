@@ -5,27 +5,20 @@
 //   very low despite touching two files instead of one.
 
 import type { FileVisibility } from '../../api/types'
+import styles from './VisibilityBadge.module.css'
 
-const VISIBILITY_STYLE: Record<FileVisibility, { label: string; background: string; color: string }> = {
-  public: { label: 'Public', background: '#e6f4ea', color: '#1e7e34' },
-  private: { label: 'Private', background: '#fdecea', color: '#b3261e' },
-  unlisted: { label: 'Unlisted', background: '#fff4e0', color: '#996a13' },
+const VISIBILITY_LABEL: Record<FileVisibility, string> = {
+  public: 'Public',
+  private: 'Private',
+  unlisted: 'Unlisted',
+}
+
+const VISIBILITY_CLASS: Record<FileVisibility, string> = {
+  public: styles.public,
+  private: styles.private,
+  unlisted: styles.unlisted,
 }
 
 export function VisibilityBadge({ visibility }: { visibility: FileVisibility }) {
-  const { label, background, color } = VISIBILITY_STYLE[visibility]
-  return (
-    <span
-      style={{
-        fontSize: '0.75rem',
-        fontWeight: 600,
-        padding: '2px 8px',
-        borderRadius: 999,
-        background,
-        color,
-      }}
-    >
-      {label}
-    </span>
-  )
+  return <span className={`${styles.badge} ${VISIBILITY_CLASS[visibility]}`}>{VISIBILITY_LABEL[visibility]}</span>
 }

@@ -9,6 +9,9 @@
   --text-muted: #6b6375;
   --text-heading: #08060d;
   --success: #1a7f37;
+  --success-bg: #e6f4ea;
+  --warning: #996a13;
+  --warning-bg: #fff4e0;
   --danger: #c92a2a;
   --danger-bg: #fdecec;
   --code-bg: #f4f3ec;
@@ -47,6 +50,9 @@
     --text-muted: #9ca3af;
     --text-heading: #f3f4f6;
     --success: #3fb950;
+    --success-bg: #123821;
+    --warning: #fbbf24;
+    --warning-bg: #3a2c0a;
     --danger: #f87171;
     --danger-bg: #3b1b1b;
     --code-bg: #1f2028;
@@ -67,6 +73,9 @@
   --text-muted: #9ca3af;
   --text-heading: #f3f4f6;
   --success: #3fb950;
+  --success-bg: #123821;
+  --warning: #fbbf24;
+  --warning-bg: #3a2c0a;
   --danger: #f87171;
   --danger-bg: #3b1b1b;
   --code-bg: #1f2028;
@@ -99,6 +108,7 @@ h2 {
 
 h1 {
   font-size: 56px;
+  line-height: 118%;
   letter-spacing: -1.68px;
   margin: 32px 0;
   @media (max-width: 1024px) {

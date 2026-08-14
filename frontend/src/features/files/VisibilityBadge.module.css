@@ -1,0 +1,25 @@
+.badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.public {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.private {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.unlisted {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
