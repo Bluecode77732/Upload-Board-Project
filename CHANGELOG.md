@@ -29,6 +29,23 @@ development line (package.json version).
   here; this entry only records the finding. Tracked in ROADMAP > Unscheduled.
 
 ### Added
+- **`frontend/`: `LoginPage` and the file board (`DashboardPage` + `FileBoard` +
+  `UploadForm`) converted to CSS Modules and restyled.** Stage 2 of the confirmed style
+  overhaul ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) items 3-4), the
+  first pages built on the token foundation below. Each component gained a colocated
+  `*.module.css` (`LoginPage.module.css`, `DashboardPage.module.css`, `FileBoard.module.css`,
+  `UploadForm.module.css`); markup structure, state, and API calls are unchanged — only
+  `style={{}}` → `className={styles.x}`. `VisibilityBadge.tsx` was deliberately left as
+  inline styling, out of scope until item 5 (FileDetailPage) per the plan.
+  `frontend/e2e/*.spec.ts` relies on `getByLabel`/`getByRole` accessible-name matching, so
+  every label text, role, and button/heading name was kept identical through the
+  conversion. `pnpm build`/`pnpm lint` clean; `auth`/`board`/`upload`/`navigation`/`smoke`
+  specs (21 of the relevant 22 tests) pass — the one failure (`detail.spec.ts`, a private
+  file's content request returning 302 instead of 200) is unrelated to this change and was
+  confirmed pre-existing by reproducing it against the pre-change code via `git stash`; it
+  is the already-documented S3 presigned-redirect/CORS residual (ADR 0036), not a
+  regression from this pass. Verified live with headless screenshots of both pages in
+  light and dark mode.
 - **`frontend/`: token-based theming foundation — `ThemeProvider` + explicit light/dark
   toggle, `NavBar` converted to CSS Modules.** Stage 1 of the confirmed style overhaul
   ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md), decided 2026-08-14) — every

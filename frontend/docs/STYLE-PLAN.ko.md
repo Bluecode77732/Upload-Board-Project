@@ -88,8 +88,8 @@
 |---|---|---|
 | 1 | ~~토큰 기반 작업~~ | **2026-08-14 완료** (CHANGELOG.md 참고). `index.css`의 토큰 블록을 위 팔레트로 교체; `ThemeProvider` + `data-theme` CSS 추가; NavBar를 제외한 페이지 레이아웃은 비주얼 변경 없음(브라우저에서 직접 검증). |
 | 2 | ~~`NavBar`~~ | **2026-08-14 완료**, 1번과 같은 작업에서 함께 처리(CHANGELOG.md 참고). CSS Module로 전환; 테마 토글 컨트롤 추가. |
-| 3 | `LoginPage` | CSS Module로 전환; 카드/입력창/모드 전환 링크 재디자인. |
-| 4 | `FileBoard` + `DashboardPage` + `UploadForm` | CSS Modules로 전환; 업로드 폼, 필터 바, 파일 목록 행, 페이지네이션 재디자인. |
+| 3 | ~~`LoginPage`~~ | **2026-08-14 완료** (CHANGELOG.md 참고). CSS Module로 전환; 카드/입력창/모드 전환 링크 재디자인. |
+| 4 | ~~`FileBoard` + `DashboardPage` + `UploadForm`~~ | **2026-08-14 완료**, 3번과 같은 작업에서 함께 처리(CHANGELOG.md 참고). CSS Modules로 전환; 업로드 폼, 필터 바, 파일 목록 행, 페이지네이션 재디자인. |
 | 5 | `FileDetailPage` + `VisibilityBadge` | CSS Modules로 전환; 헤더 재디자인과 함께 제목 겹침 버그(아래 참고) 수정; Manage 패널 재디자인. |
 | 6 | `PostBoard` + `PostForm` + `FilePicker` | CSS Modules로 전환; 새 글 작성 폼, 파일 첨부 피커, 게시글 목록 행, 페이지네이션 재디자인. |
 | 7 | `PostDetailPage` + `CommentThread` + `CommentForm` | CSS Modules로 전환; 게시글 헤더, 수정/삭제 컨트롤, 댓글 스레드/폼 재디자인. |

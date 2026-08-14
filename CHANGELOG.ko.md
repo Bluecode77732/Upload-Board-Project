@@ -28,6 +28,22 @@
   확인했다. 여기서는 발견 사실만 기록하고 고치지 않았다. ROADMAP > 미배정에서 추적.
 
 ### 추가
+- **`frontend/`: `LoginPage`와 파일 게시판(`DashboardPage` + `FileBoard` + `UploadForm`)을
+  CSS Modules로 전환하고 재디자인.** 확정된 스타일 전면 개편의 2단계
+  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) 항목 3-4), 아래 토큰 기반
+  작업 위에 올라간 첫 페이지들이다. 각 컴포넌트마다 동일 위치에 `*.module.css`를
+  배치했다(`LoginPage.module.css`, `DashboardPage.module.css`, `FileBoard.module.css`,
+  `UploadForm.module.css`) — 마크업 구조·상태·API 호출은 그대로이고 `style={{}}` →
+  `className={styles.x}` 치환만 이뤄졌다. `VisibilityBadge.tsx`는 계획대로 5번 항목
+  (FileDetailPage)까지 범위 밖으로 남겨 인라인 스타일 그대로 뒀다.
+  `frontend/e2e/*.spec.ts`가 `getByLabel`/`getByRole`의 접근성 이름 매칭에 의존하므로,
+  전환 과정에서 모든 label 텍스트·role·버튼/헤딩 이름을 동일하게 유지했다. `pnpm
+  build`/`pnpm lint` 클린; 관련 `auth`/`board`/`upload`/`navigation`/`smoke` 스펙(관련
+  22개 중 21개) 통과 — 유일한 실패(`detail.spec.ts`, private 파일 콘텐츠 요청이 200 대신
+  302를 반환)는 이번 변경과 무관하며, `git stash`로 변경 전 코드에서도 동일하게
+  재현됨을 확인해 회귀가 아님을 검증했다 — 이미 기록된 S3 presigned-redirect/CORS
+  잔여 이슈(ADR 0036)다. 라이트/다크 모드 각각 헤드리스 스크린샷으로 실제 렌더링을
+  확인했다.
 - **`frontend/`: 토큰 기반 테마 기반 작업 — `ThemeProvider` + 명시적 라이트/다크 토글,
   `NavBar`를 CSS Modules로 전환.** 확정된 스타일 전면 개편의 1단계
   ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md), 2026-08-14 결정) — 이후
