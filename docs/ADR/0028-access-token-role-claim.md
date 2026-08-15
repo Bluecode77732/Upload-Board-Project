@@ -58,7 +58,7 @@ decoded by a client for UI purposes, so there is nothing for it to carry.
 | Extra request per app load/refresh | **None** — decoded from the token already in hand | One | One |
 | Role freshness | Bounded by access-token TTL (locally 180s; env-configurable) | Always live (DB read) | Always live (`request.user`, no extra query) |
 | Client must already know its own id | No | Yes — still needs to decode `sub` to call the route | No |
-| Fit with existing client pattern | **Matches** — the frontend already decodes the access token client-side for `sub` ([Frontend Repo memory](../CLAUDE.md); no frontend ADR), and the imported `admin/` console already assumes `jwtDecode<{ sub, role }>` | Piggybacks on a route with **no ownership guard today** (any authenticated user can already read any other user's row by id) | New surface on `AuthModule`, which otherwise owns tokens only (Module Responsibility) |
+| Fit with existing client pattern | **Matches** — the frontend already decodes the access token client-side for `sub` ([Frontend Repo memory](../../CLAUDE.md); no frontend ADR), and the imported `admin/` console already assumes `jwtDecode<{ sub, role }>` | Piggybacks on a route with **no ownership guard today** (any authenticated user can already read any other user's row by id) | New surface on `AuthModule`, which otherwise owns tokens only (Module Responsibility) |
 
 Option A was chosen for two reasons that outweigh its one real cost:
 

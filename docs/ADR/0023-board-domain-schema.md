@@ -10,7 +10,7 @@ ROADMAP §5 (domain plan) and the Stage 3 "Board domain" row: the *board* in thi
 project's name is unimplemented. The API today manages video files and nothing else.
 
 This ADR is the **design gate that precedes that implementation**, not the implementation.
-[CLAUDE.md](../CLAUDE.md) > Scope Discipline requires an entity change to be described in
+[CLAUDE.md](../../CLAUDE.md) > Scope Discipline requires an entity change to be described in
 plain text before any migration is generated; this document is that description for both
 new entities at once. **No entity, migration, DTO, or service code lands with this ADR.**
 
@@ -93,7 +93,7 @@ stranger's post referencing my file would resurrect the exact `23503` → 500 th
 was written to eliminate.
 
 The unique constraint also supplies the idempotency key that `title` cannot
-([CLAUDE.md](../CLAUDE.md) > Maintainability > Idempotence requires new write endpoints to
+([CLAUDE.md](../../CLAUDE.md) > Maintainability > Idempotence requires new write endpoints to
 name one). `POST /post` resolves a repeat submission as:
 
 | Repeat submission of `POST /post` | Outcome |

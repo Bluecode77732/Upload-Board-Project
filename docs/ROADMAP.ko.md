@@ -15,7 +15,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 **Stage 4의 "VOD 재생 접근 제어" 행을 일반화**했다 — 파일 가시성(공개/비공개/
 링크공유), 전체 미디어의 접근 제어 서빙, 미디어 타입 확장으로, 프로젝트 창립 목표를
 다시 정리하며 드러난 공백이다. 아래 모든 항목은 각각 독립된 설계·검토를 거치는
-전용 작업으로 진행한다 ([CLAUDE.md](CLAUDE.md) > Scope Discipline).
+전용 작업으로 진행한다 ([CLAUDE.md](../CLAUDE.md) > Scope Discipline).
 
 > **정합성 안내**: 이 계획의 항목 중 CLAUDE.md가 "명시적 요청 없이는 제안 금지"로
 > 표시한 것들(CI, Docker, 클라우드 스토리지/배포)은 **2026-07-23 명시적 결정**으로
@@ -137,14 +137,14 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
 ## 2. 방법론
 
 - **전용 작업 단위.** 모든 로드맵 항목은 자체 설계·검토·문서화를 갖춘 독립
-  작업이다 — [CLAUDE.md](CLAUDE.md) > Scope Discipline의 로드맵 차원 재서술이다.
+  작업이다 — [CLAUDE.md](../CLAUDE.md) > Scope Discipline의 로드맵 차원 재서술이다.
   묶음 처리도, 부수 작업도 없다.
 - 6절의 단계(Stage)는 **의존 순서에 따른 묶음일 뿐 마일스톤이 아니다**: 진행은
   항목 단위로 이뤄지며, 단계 경계를 넘는 데 별도의 의식은 없다.
 
 ## 3. 설계 기준
 
-**동결 (변경 없음)** — 기존 3축, [CLAUDE.md](CLAUDE.md)의 Never Do 그룹 1–3:
+**동결 (변경 없음)** — 기존 3축, [CLAUDE.md](../CLAUDE.md)의 Never Do 그룹 1–3:
 런타임 안전, 데이터 무결성, 보안. 모든 로드맵 작업은 이 기준을 통과해야 하며,
 기준 자체는 로드맵의 대상이 아니다.
 
@@ -205,7 +205,7 @@ Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방
   미구현이다.
 - **결정**: 실제 업로드 게시판으로 확장 — 게시글이 업로드 파일을 참조하는
   post/comment 도메인. 엔티티 관계(post ↔ `FileEntity`, comment ↔ post/user)는
-  ([CLAUDE.md](CLAUDE.md) > Scope Discipline의 스키마 변경 규약에 따라) 먼저 평문으로
+  ([CLAUDE.md](../CLAUDE.md) > Scope Discipline의 스키마 변경 규약에 따라) 먼저 평문으로
   기술했고, 검토된 마이그레이션은 후속 구현 과제에서 반영한다.
 - **스키마는 2026-07-30 확정됐다** ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) —
   구현에 앞선 설계 게이트이며 코드는 없다. 글은 자기 작성자가 올린 파일 하나만
@@ -495,7 +495,7 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   replay)도 응답하고, 409 `FILE_ALREADY_CLAIMED`는 이 API가 처음 내보내는 상태
   코드다. `frontend/docs/API-CONTRACT.md`와 클라이언트 업로드 흐름을 함께 갱신해야
   하며, 그전까지 프론트엔드는 replay를 새 생성으로 취급하고 409 분기도 갖고 있지
-  않다. 백엔드 변경은 저장소 경계에서 의도적으로 멈췄다([CLAUDE.md](CLAUDE.md) >
+  않다. 백엔드 변경은 저장소 경계에서 의도적으로 멈췄다([CLAUDE.md](../CLAUDE.md) >
   Project Overview: `frontend/`는 자체 CLAUDE.md와 툴체인을 가지며, 백엔드 작업에서
   프론트엔드 파일을 편집하지 않는다).
 - 삭제 계약의 프론트엔드 반영 (2026-07-30 기록,
@@ -505,7 +505,7 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   개수 포함)를 낸다. 경고 다이얼로그, 확인 후 재요청, 409 분기는 모두 `frontend/`의 몫이다.
   `frontend/docs/API-CONTRACT.md`와 계정 삭제 흐름을 함께 갱신해야 하며, 그전까지 프론트엔드
   에는 확인을 통과시킬 경로가 없다. 백엔드 변경은 저장소 경계에서 멈췄다
-  ([CLAUDE.md](CLAUDE.md) > Project Overview).
+  ([CLAUDE.md](../CLAUDE.md) > Project Overview).
 - 고아 `granted_` 파일 회수 (2026-07-30 기록,
   [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — 삭제는 이제 커밋 이후 best-effort로
   물리 파일을 unlink하므로, 행 없이 `file/upload`에 바이트만 남는 경우가 두 가지 남는다:
@@ -555,7 +555,7 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   `search`, `sortBy`, `order`, `creatorId`를 받고, 이전에는 임의였던 순서를 기본 최신순으로
   돌려준다. `frontend/docs/API-CONTRACT.md`와 목록 화면(검색창, 정렬 컨트롤, 작성자 필터)을
   함께 갱신해야 하며, 그전까지 프론트엔드는 기존처럼 `take`/`skip`만 보내면서 결정적 정렬만
-  그대로 얻는다. 백엔드 변경은 저장소 경계에서 멈췄다([CLAUDE.md](CLAUDE.md) > Project Overview).
+  그대로 얻는다. 백엔드 변경은 저장소 경계에서 멈췄다([CLAUDE.md](../CLAUDE.md) > Project Overview).
 - ~~게시글/댓글 API의 프론트엔드 반영~~ — ✅ **2026-08-11 해소** (2026-08-11 기록,
   [ADR 0023](ADR/0023-board-domain-schema.ko.md)) — 위 항목과 마찬가지로 **백엔드 작업이
   아니라 프론트엔드 전용 과제가 담당한다.** 라우팅 기반 작업이 먼저 착지했다: `/`가
@@ -625,7 +625,7 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
 - 사전-의무화 서비스의 코드 내 트레이드오프 문서화 공백 (2026-08-02 기록) — 코드베이스
   전수 조사 결과, 트레이드오프 서술은 촘촘하되 **계층화**되어 있다: ADR은 결정 수준
   트레이드오프를 빠짐없이 담고(`## Consequences` 절 + 기각안, ADR당 마커 5~39개), 호출
-  지점 수준 — 의무 목적/이유/방법 블록의 `이유` 라인([CLAUDE.md](CLAUDE.md) > File Creation
+  지점 수준 — 의무 목적/이유/방법 블록의 `이유` 라인([CLAUDE.md](../CLAUDE.md) > File Creation
   Convention) — 은 게시판/가시성 세대 서비스에서는 촘촘하지만(`file.service` 17블록,
   `post.service` 12, `comment.service` 8), **가장 오래된 `auth.service.ts`에는 0블록으로
   부재**하며 그 트레이드오프는 [ADR 0001](ADR/0001-basic-token-authentication.ko.md) /

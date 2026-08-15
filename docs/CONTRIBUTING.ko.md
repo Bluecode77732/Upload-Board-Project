@@ -24,7 +24,7 @@
 
 ## 개발 환경 설정
 
-[README.ko.md](README.ko.md) > 빠른 시작 참조. 요약: `pnpm install`,
+[README.ko.md](../README.ko.md) > 빠른 시작 참조. 요약: `pnpm install`,
 `.env.example` → `.env` 복사, `file/temp/`와 `file/upload/` 존재 확인,
 데이터베이스 생성 후 `pnpm migration:run`으로 스키마 적용(수동 생성된 기존
 DB라면 `pnpm migration:run -- --fake` 1회 —

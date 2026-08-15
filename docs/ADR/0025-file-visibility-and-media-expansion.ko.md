@@ -170,7 +170,7 @@ Clarification Protocol에 따른다(새 서빙 메커니즘은 착수 전 질의
 - **살아 있는 소비자에 대한 breaking 변경.** Stage F 동결(소비자 0)과 달리 `frontend/`
   하위 폴더가 이 API를 소비한다. `video`→`image`/`audio`/`video` 필드 변경, 신규 콘텐츠
   엔드포인트, 가시성 필드 전부 프론트엔드 반영이 필요하다: `frontend/docs/API-CONTRACT.md`
-  와 업로드/목록/재생 화면이 이를 받아들여야 한다. [CLAUDE.md](../CLAUDE.md) > Project
+  와 업로드/목록/재생 화면이 이를 받아들여야 한다. [CLAUDE.md](../../CLAUDE.md) > Project
   Overview에 따라 그 작업은 **프론트엔드 스코프 과제**이며, 백엔드 변경은 저장소 경계에서
   멈춘다. ROADMAP > 미배정에서 추적.
 - **Range 요청(영상·오디오 탐색)**은 `ServeStaticModule`에서 공짜였다(Express가 처리);

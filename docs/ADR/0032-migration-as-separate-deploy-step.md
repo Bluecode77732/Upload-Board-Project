@@ -19,7 +19,7 @@ TypeORM's migration runner is not designed for concurrent execution: two
 instances can both read "migration X not yet applied," both attempt to run it,
 and the loser fails or (worse, depending on the migration's shape) partially
 applies DDL concurrently with the winner. This is exactly the risk
-[CLAUDE.md](../CLAUDE.md) > Scope Discipline flags migrations as requiring
+[CLAUDE.md](../../CLAUDE.md) > Scope Discipline flags migrations as requiring
 review for — ROADMAP.md > Stage 4 lists "migrations as a separate deploy step"
 as a named precondition for going multi-instance.
 

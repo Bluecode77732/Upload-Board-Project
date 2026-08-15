@@ -7,7 +7,7 @@ for that work — implementation happens in separate, dispatched sessions (see
 
 **Status (2026-08-14): all 7 page-conversion items complete** — see the
 "Page-by-page task list" below for the per-item landing notes and
-[ROADMAP.md](../../ROADMAP.md) > 7 for the plan-level record. Two related
+[ROADMAP.md](../../docs/ROADMAP.md) > 7 for the plan-level record. Two related
 items surfaced during the initial walkthrough stay deliberately out of scope
 and open — see "Related but out of scope" and "Open questions" below.
 

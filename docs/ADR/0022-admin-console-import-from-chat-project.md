@@ -92,7 +92,7 @@ case; together they select this specific import over the alternatives:
    project's working admin client.
 2. **Committed as-is, adapted later.** This change adds the folder and the documentation around
    it, and changes not one line of the imported source. Adaptation is its own dedicated task
-   under [CLAUDE.md](../CLAUDE.md) > Scope Discipline, with the modification backlog below as
+   under [CLAUDE.md](../../CLAUDE.md) > Scope Discipline, with the modification backlog below as
    its brief. **Scheduled as ROADMAP Stage 5 (operational surface — admin console), appended
    2026-07-30 by this ADR** — the 11-axis review had scheduled no stage for the admin surface
    even though ADR 0010 decided its placement, so the work was a decision with no home in the
@@ -234,7 +234,7 @@ Verified against this repository's code on 2026-07-30, not inferred. Each row is
   the end of this ADR.)*
 - **The `.ko.md` sibling requirement extends into `admin/`.** `admin/README.md` is a tracked
   document, so `admin/README.ko.md` accompanies it, per
-  [CLAUDE.md](../CLAUDE.md) > Documentation Convention.
+  [CLAUDE.md](../../CLAUDE.md) > Documentation Convention.
 - **[ADR 0013](0013-rbac-and-audit-log.md)'s closing gap is now assigned, not closed.** That ADR
   ended with the role system "ready for the frontend `/admin` section" and the dedicated-app
   question deferred to ADR 0010. This ADR answers the question (a dedicated app at `admin/`) and

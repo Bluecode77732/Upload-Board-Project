@@ -87,7 +87,7 @@ ROADMAP은 이 프로젝트의 RBAC 설계를 "Chat-project style"로 기록해 
    API와 도메인을 서술한다. `admin/README.md`가 폴더 현장에서 이 사실을 밝히므로, ADR을 읽지 않고
    그 폴더에 들어온 사람도 이것을 이 프로젝트의 동작하는 admin 클라이언트로 오해할 수 없다.
 2. **지금은 그대로 커밋하고, 적응은 나중에 한다.** 이 변경은 폴더와 그 주변 문서를 추가하며,
-   이식된 소스는 한 줄도 건드리지 않는다. 적응은 [CLAUDE.md](../CLAUDE.md) > 범위 준수에 따라
+   이식된 소스는 한 줄도 건드리지 않는다. 적응은 [CLAUDE.md](../../CLAUDE.md) > 범위 준수에 따라
    별도의 전용 작업이며, 위 백로그가 그 작업 지시서 역할을 한다. **이 ADR로 2026-07-30에
    ROADMAP Stage 5(운영 화면 — admin 콘솔)가 추가되면서 스케줄됐다** — 11축 검토는 ADR 0010이
    배치를 결정해 뒀음에도 admin 화면에 어떤 단계도 배정하지 않았고, 그래서 이 작업은 계획에
@@ -222,7 +222,7 @@ A안은 명시한 두 목적에서 동시에 이긴다 — 토큰이 가장 싸�
   `frontend/src/features/admin/AdminPage.tsx`와 이번 `admin/` 앱. 해소는 ROADMAP > 미예정
   항목에서 추적한다. *(2026-08-06 해소 — 이 ADR 끝의 추가 기록 참고.)*
 - **`.ko.md` 형제 문서 규약이 `admin/` 안까지 확장된다.** `admin/README.md`는 추적되는 문서이므로
-  [CLAUDE.md](../CLAUDE.md) > 문서 규약에 따라 `admin/README.ko.md`가 함께 존재한다.
+  [CLAUDE.md](../../CLAUDE.md) > 문서 규약에 따라 `admin/README.ko.md`가 함께 존재한다.
 - **[ADR 0013](0013-rbac-and-audit-log.ko.md)이 남긴 빈 구멍은 닫힌 것이 아니라 담당자가
   정해진 것이다.** 그 ADR은 역할 체계가 "프론트엔드 `/admin` 구역을 받을 준비가 됐다"며 전용 앱
   여부를 ADR 0010으로 미뤘다. 이 ADR이 그 질문에 답하고(`admin/`의 전용 앱) 화면의 담당자를

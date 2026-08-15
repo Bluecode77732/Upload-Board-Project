@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> 한국어 버전: [CLAUDE.ko.md](CLAUDE.ko.md)
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **How to read the rules here.** Rules are stated as directives so they can be applied
@@ -833,7 +835,7 @@ Do not suggest alternatives to these decisions without explicit request.
   without prior plain-text description of the entity change
 
 ### File Storage
-- **Storage port-adapter (landed 2026-08-07, [ADR 0029](ADR/0029-storage-port-adapter.md),
+- **Storage port-adapter (landed 2026-08-07, [ADR 0029](docs/ADR/0029-storage-port-adapter.md),
   amends this section's former "local disk only" framing)**: physical-file operations go
   through a `FileStorage` interface (`backend/storage/`) selected at boot by
   `STORAGE_DRIVER` (`'local'` default | `'s3'`). `LocalDiskStorage` ports ADR 0005's
@@ -846,7 +848,7 @@ Do not suggest alternatives to these decisions without explicit request.
   default; switching a real deployment to `s3` is Stage 4 work (ROADMAP.md). Promotion
   (temp → `file/upload/granted_...`) goes through `storage.promote()`
   (`file.service.ts` `uploadFile`)
-- **Presigned S3 redirect (landed 2026-08-13, [ADR 0036](ADR/0036-s3-presigned-content-redirect.md),
+- **Presigned S3 redirect (landed 2026-08-13, [ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md),
   amends the storage port-adapter bullet above and the `GET /file/:id/content` description
   below)**: `FileStorage` gains `getSignedReadUrl(key, contentType): Promise<string | null>`.
   `LocalDiskStorage` always returns `null` (no presign concept — the controller falls back to
@@ -882,15 +884,15 @@ Do not suggest alternatives to these decisions without explicit request.
   composed as `{BASE_URL}/{filePath}` — `toResponse()` builds `{BASE_URL}/file/:id/content`
   instead
 - **Upload constraint (media-type expansion landed 2026-08-01, ADR 0025 D4/D5 + [ADR
-  0027](ADR/0027-media-type-expansion-implementation.md))**: `POST /upload/attach` accepts
+  0027](docs/ADR/0027-media-type-expansion-implementation.md))**: `POST /upload/attach` accepts
   exactly one of three type-specific multipart fields, each with its own class allowlist —
   `image` (jpg/jpeg/png/webp), `audio` (mp3), `video` (mp4/mov/webm, unchanged) — via
   `FileFieldsInterceptor` and a shared `fileFilter` keyed on `file.fieldname`
   (`backend/upload/upload.controller.ts`). All three share the same `fileSize` limit,
   100,000,000 bytes (100MB), which caps disk usage and bounds an upload-based denial-of-
   service. Zero fields attached is 400 `UPLOAD_FILE_REQUIRED`; more than one is 400
-  `UPLOAD_MULTIPLE_FIELDS`. This **revises** [ADR 0003](ADR/0003-two-phase-upload-contract.md)
-  (the two-phase contract's field) and [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)
+  `UPLOAD_MULTIPLE_FIELDS`. This **revises** [ADR 0003](docs/ADR/0003-two-phase-upload-contract.md)
+  (the two-phase contract's field) and [ADR 0010](docs/ADR/0010-frontend-split-and-api-surface-freeze.md)
   (the frozen surface) — a breaking change against the live `frontend/`, which has not yet
   adopted it. The `temp_{uuid}_{timestamp}.{ext}` naming (extension read off
   `file.originalname`) moved from Multer's `diskStorage` callback to
@@ -993,12 +995,12 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
 - ~~Ownership checks~~ — **landed 2026-07-22** (commit `0549ca4`): user writes self-only,
   file writes creator-only
 - ~~Storage port-adapter (`FileStorage` interface)~~ — **landed 2026-08-07**
-  ([ADR 0029](ADR/0029-storage-port-adapter.md)): the code-first slice of the Stage 4
+  ([ADR 0029](docs/ADR/0029-storage-port-adapter.md)): the code-first slice of the Stage 4
   cloud-native infrastructure task — see Architecture Decisions > File Storage. `local`
   stays the operative default; the real S3 cutover is still Stage 4 work
 - ~~Container/deploy hardening (non-root, health endpoints, migration deploy step)~~ —
-  **landed 2026-08-08** ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–
-  [ADR 0034](ADR/0034-https-termination-stance.md)): the container/deploy hardening ADR
+  **landed 2026-08-08** ([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.md)–
+  [ADR 0034](docs/ADR/0034-https-termination-stance.md)): the container/deploy hardening ADR
   0015 deferred — see CI/CD and Module Responsibility > HealthModule. Distroless, a real
   secrets manager, HTTPS termination, and multi-arch stay open (ROADMAP.md > Unscheduled)
 - Chat-project remnant handling — docs audited clean 2026-07-22; pending git-history
@@ -1104,7 +1106,7 @@ paginated; `.env.example` documents `BASE_URL`; the "300MB" comment is fixed;
 NestJS REST API for authenticated video-file upload and management. JWT auth
 (Passport), PostgreSQL via TypeORM, Multer disk storage, Swagger documentation.
 A local/portfolio project, no deployment pipeline. **This CLAUDE.md governs the
-backend at the repo root** (`backend/`, `ADR/`, `test/`). A React + Vite frontend
+backend at the repo root** (`backend/`, `docs/ADR/`, `test/`). A React + Vite frontend
 was added 2026-07-24 as the `frontend/` subfolder (ADR 0010) — it has its own
 scoped `frontend/CLAUDE.md` and tooling, and is not a pnpm-workspace monorepo:
 the backend at the root is untouched (its Jest roots, migration paths, and lint

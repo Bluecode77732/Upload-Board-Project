@@ -17,7 +17,7 @@ which **generalizes the Stage 4 "VOD playback access control" row** into file
 visibility (public/private/unlisted), access-controlled serving of all media, and a
 media-type expansion — a gap surfaced by restating the project's founding goals. Every
 item below lands as its own dedicated, designed change
-([CLAUDE.md](CLAUDE.md) > Scope Discipline).
+([CLAUDE.md](../CLAUDE.md) > Scope Discipline).
 
 > **Consistency note**: items in this plan that CLAUDE.md marks "never suggest
 > unless explicitly requested" (CI, Docker, cloud storage/deployment) entered
@@ -149,14 +149,14 @@ item below lands as its own dedicated, designed change
 
 - **Dedicated task units.** Every roadmap item is an independent task with its
   own design, review, and documentation — the roadmap-level restatement of
-  [CLAUDE.md](CLAUDE.md) > Scope Discipline. No bundling, no drive-by scope.
+  [CLAUDE.md](../CLAUDE.md) > Scope Discipline. No bundling, no drive-by scope.
 - The stages in section 6 are **dependency groupings, not milestones**: work
   proceeds item by item, and crossing a stage boundary carries no ceremony.
 
 ## 3. Design criteria
 
 **Frozen (unchanged)** — the three existing axes, Never Do Groups 1–3 in
-[CLAUDE.md](CLAUDE.md): runtime safety, data integrity, security. All roadmap
+[CLAUDE.md](../CLAUDE.md): runtime safety, data integrity, security. All roadmap
 work must pass them; they are not themselves roadmap subjects.
 
 **Adopted 2026-07-23** — five new axes that govern this plan:
@@ -222,7 +222,7 @@ work must pass them; they are not themselves roadmap subjects.
 - **Decided**: expand into an actual upload board — a post/comment domain whose
   posts reference uploaded files. Entity relations (post ↔ `FileEntity`,
   comment ↔ post/user) were described in plain text first, per
-  [CLAUDE.md](CLAUDE.md) > Scope Discipline (schema changes), and land as
+  [CLAUDE.md](../CLAUDE.md) > Scope Discipline (schema changes), and land as
   reviewed migrations in the follow-up implementation task.
 - **Schema settled 2026-07-30** ([ADR 0023](ADR/0023-board-domain-schema.md)) —
   the design gate ahead of that implementation, with no code: a post references
@@ -534,7 +534,7 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   before. `frontend/docs/API-CONTRACT.md` and the client's upload flow must both be
   updated; until then the frontend treats a replay as a fresh creation and has no
   branch for 409. The backend change deliberately stopped at the repo boundary
-  ([CLAUDE.md](CLAUDE.md) > Project Overview: `frontend/` has its own scoped
+  ([CLAUDE.md](../CLAUDE.md) > Project Overview: `frontend/` has its own scoped
   CLAUDE.md and tooling — do not edit frontend files from a backend task).
 - Frontend adoption of the deletion contract (recorded 2026-07-30,
   [ADR 0020](ADR/0020-account-deletion-cascade.md)) — **owned by a frontend-scoped task,
@@ -544,7 +544,7 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   retry, and the 409 branch all live in `frontend/`. `frontend/docs/API-CONTRACT.md` and
   the account-deletion flow must both take it up; until they do, the frontend has no path
   that can pass the confirmation. The backend change stopped at the repo boundary
-  ([CLAUDE.md](CLAUDE.md) > Project Overview).
+  ([CLAUDE.md](../CLAUDE.md) > Project Overview).
 - Reclaiming orphaned `granted_` files (recorded 2026-07-30,
   [ADR 0020](ADR/0020-account-deletion-cascade.md)) — deletion now unlinks stored files
   post-commit and best-effort, so two narrow cases can still leave bytes in `file/upload`
@@ -604,7 +604,7 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `frontend/docs/API-CONTRACT.md` and the list view (search box, sort control, author
   filter) must both take it up; until they do, the frontend simply keeps sending
   `take`/`skip` and gets the new deterministic ordering for free. The backend change stopped
-  at the repo boundary ([CLAUDE.md](CLAUDE.md) > Project Overview).
+  at the repo boundary ([CLAUDE.md](../CLAUDE.md) > Project Overview).
 - ~~Frontend adoption of the post/comment API~~ — ✅ **resolved 2026-08-11** (recorded
   2026-08-11, [ADR 0023](ADR/0023-board-domain-schema.md)) — **owned by a frontend-scoped
   task, not by backend work**, like the item above. Routing groundwork landed first: `/` is
@@ -677,7 +677,7 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   a full-codebase survey found trade-off reasoning is dense but **tiered**: the ADRs carry
   every decision-level trade-off (a `## Consequences` section plus rejected alternatives,
   5–39 markers each), while the call-site layer — the `이유` line of the mandatory
-  목적/이유/방법 block ([CLAUDE.md](CLAUDE.md) > File Creation Convention) — is dense in the
+  목적/이유/방법 block ([CLAUDE.md](../CLAUDE.md) > File Creation Convention) — is dense in the
   board/visibility-era services (`file.service` 17 blocks, `post.service` 12, `comment.service`
   8) but **absent in the oldest service, `auth.service.ts` (0 blocks)**, whose trade-offs live
   only in [ADR 0001](ADR/0001-basic-token-authentication.md) /

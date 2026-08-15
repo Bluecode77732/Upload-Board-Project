@@ -184,7 +184,7 @@ extension, not the field name.
   the `frontend/` subfolder consumes this API. The `video`→`image`/`audio`/`video` field
   change, the new content endpoint, and the visibility fields all require frontend uptake:
   `frontend/docs/API-CONTRACT.md` and the upload/list/playback views must adopt them. Per
-  [CLAUDE.md](../CLAUDE.md) > Project Overview, that work is a **frontend-scoped task**;
+  [CLAUDE.md](../../CLAUDE.md) > Project Overview, that work is a **frontend-scoped task**;
   the backend change stops at the repo boundary. Tracked in ROADMAP > Unscheduled.
 - **Range requests (video/audio seeking)** were free under `ServeStaticModule` (Express
   handles them); the content endpoint must handle `Range` explicitly (`StreamableFile` +

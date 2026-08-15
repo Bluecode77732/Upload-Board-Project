@@ -9,7 +9,7 @@
 ROADMAP §5(도메인 계획)와 Stage 3의 "Board domain" 항목 — 프로젝트 이름에 들어 있는 *board*가
 아직 구현되지 않았다. 지금의 API는 영상 파일만 관리한다.
 
-이 ADR은 그 구현이 아니라 **구현에 앞선 설계 게이트**다. [CLAUDE.md](../CLAUDE.md)의 Scope
+이 ADR은 그 구현이 아니라 **구현에 앞선 설계 게이트**다. [CLAUDE.md](../../CLAUDE.md)의 Scope
 Discipline은 엔티티 변경을 마이그레이션 생성 전에 평문으로 먼저 기술하도록 요구하는데, 이
 문서가 두 엔티티 모두에 대한 그 기술이다. **이 ADR과 함께 들어가는 엔티티·마이그레이션·DTO·
 서비스 코드는 없다.**
@@ -88,7 +88,7 @@ comment를 나중에 설계하면 comment 작업 도중에 post의 삭제 경로
 구조적으로 도달 불가능해진다. N:1이었다면 남의 글이 내 파일을 참조하는 순간 ADR 0020이 없애려던
 바로 그 `23503` → 500이 되살아난다.
 
-unique 제약은 `title`이 주지 못하는 idempotency 키도 제공한다([CLAUDE.md](../CLAUDE.md) >
+unique 제약은 `title`이 주지 못하는 idempotency 키도 제공한다([CLAUDE.md](../../CLAUDE.md) >
 Maintainability > Idempotence는 새 쓰기 엔드포인트가 그 키를 명시하도록 요구한다). `POST /post`의
 중복 제출 처리는 다음과 같다.
 
