@@ -189,7 +189,9 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](docs/ADR/0013-rbac-and-audit-
 - `POST /file` — promote a temp file to permanent storage (transactional), defaulting to
   `visibility: private`. The attached filename is a one-shot claim token: resubmitting it
   returns the existing file with 200 (idempotent retry) for the user who claimed it, and
-  409 `FILE_ALREADY_CLAIMED` for anyone else ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md))
+  409 `FILE_ALREADY_CLAIMED` for anyone else ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md)).
+  The response's `mediaType` (`image`/`audio`/`video`) is derived from the file's extension
+  server-side, never client-supplied ([ADR 0040](docs/ADR/0040-persisted-media-type-for-playback.md))
 - `PATCH /file/:id` — update file metadata (creator or admin), including toggling
   `visibility`. Switching to `unlisted` issues a `shareToken` (returned as `shareUrl`, owner/
   admin only); `rotateShareToken: true` regenerates it, invalidating every previously shared

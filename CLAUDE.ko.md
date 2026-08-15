@@ -924,6 +924,24 @@ Conflict Protocol을 따른다.
   클래스에 대해 승격과 서빙이 올바르게 동작하도록 함께 넓어졌다:
   `TEMP_FILENAME_PATTERN`(`backend/file/dto/create-uploadFile.dto.ts`)과
   `CONTENT_TYPE_BY_EXTENSION`(`backend/file/file-content.controller.ts`)
+- **재생 태그 선택을 위한 영속 매체 종류(2026-08-16 도입, [ADR
+  0040](docs/ADR/0040-persisted-media-type-for-playback.ko.md))**: `FileEntity`에
+  `mediaType`이 추가됐다(새 `FileMediaType` enum: `image`/`audio`/`video`,
+  **`NOT NULL`**, backend/file/entity/file-media-type.enum.ts). `FileService.
+  uploadFile()`이 저장 경로의 확장자로부터 전용 private 메서드
+  `mediaTypeFromExtension()`을 통해 직접 판정한다 — 클라이언트가 보내는 값이
+  아니며, `UploadFileDto`에 새 필드도 없고 `upload.controller.ts`/
+  `upload.service.ts`도 바뀌지 않는다. 위의 `TEMP_FILENAME_PATTERN`,
+  `CONTENT_TYPE_BY_EXTENSION`에 이은 **세 번째** 확장자 기반 조회다 — 앞의 두
+  조회도 지금까지 하나로 합쳐진 적이 없었던 것과 마찬가지로, 이것도 독립된
+  매핑으로 남겨뒀다(ADR 0040 D6). 네 번째로 허용되는 확장자가 생기면 세 곳
+  모두 함께 갱신해야 한다. 기존에 이미 존재하던 모든 행은 손으로 작성한
+  마이그레이션으로 백필했다(`ADD`로 nullable 컬럼 추가 → 확장자 기반
+  `UPDATE` → `SET NOT NULL` — `migration:generate`는 백필이 필요하다는 사실
+  자체를 알 방법이 없다). `frontend/`의 `FileDetailPage.tsx`/
+  `PostDetailPage.tsx`는 이제 `FileResponseDto.mediaType`을 기준으로
+  `<img>`/`<audio controls>`/`<video controls>` 태그를 고른다 — 이전에는
+  무조건 `<video>`만 렌더링해 업로드된 이미지나 mp3가 재생되지 않았다
 - **절대 제안 금지**: 스트리밍/청크 업로드, CDN — 명시적으로 요청받지 않는 한.
   S3는 더 이상 이 목록에 없다: 스토리지 포트-어댑터(위 ADR 0029)가
   `S3Storage` 구현체와 `STORAGE_DRIVER` 스위치를 둘 다 이미 도입했지만,

@@ -52,6 +52,31 @@ development line (package.json version).
   all verified working through the (Korean) buttons during the same walkthrough.
 
 ### Fixed
+- **`FileDetailPage`/`PostDetailPage` always rendered `<video>` for file playback,
+  regardless of the uploaded file's actual type.** An uploaded image or mp3 was fully
+  reachable through `GET /file/:id/content` (ADR 0025/0026), but never displayed or
+  played correctly, because neither `FileEntity` nor `FileResponseDto` carried any
+  signal of which of the three upload classes (`image`/`audio`/`video`, ADR 0025
+  D4/D5) a given file belonged to — `POST /upload/attach`'s type-specific multipart
+  fields were validated on the way in but never persisted past the write path. Fixed
+  by adding a `mediaType` column (`FileEntity`, new `FileMediaType` enum) derived
+  server-side from the file's extension inside `FileService.uploadFile()` — never
+  client-supplied, reusing the same three extension groups `TEMP_FILENAME_PATTERN`
+  already enumerates — and backfilled for every pre-existing row via a hand-authored
+  migration (`ADD` nullable → extension-derived `UPDATE` → `SET NOT NULL`, since
+  `migration:generate` has no way to know a backfill is needed; its own generated diff
+  also carried the baseline's usual spurious FK/index rename noise, stripped before
+  review). `FileResponseDto` now carries `mediaType`; `FileDetailPage.tsx`/
+  `PostDetailPage.tsx` pick `<img>`/`<audio controls>`/`<video controls>` from it,
+  leaving the existing visibility-driven source-fetching logic (private authenticated
+  blob fetch vs. public/unlisted direct `src`) untouched. Verified end-to-end against a
+  local server (`STORAGE_DRIVER=local` override for this check only — this
+  environment's `.env` points at a real S3 bucket, avoided so no test objects were
+  written there): uploaded a real jpg/mp3/mp4 through the full attach→promote flow and
+  confirmed `mediaType` came back `image`/`audio`/`video` respectively; `pnpm lint`/
+  `pnpm test` (216/216) on backend, `pnpm build`/`pnpm lint` clean on frontend. Browser-
+  level visual confirmation of the rendered tags was not performed (no browser tool
+  available in this session). [ADR 0040](ADR/0040-persisted-media-type-for-playback.md)
 - **Korean-hardcoded post/comment/post-form UI strings translated to English** — closes the
   Known issue above. Fixed `PostDetailPage.tsx`, `CommentThread.tsx`, and `CommentForm.tsx`
   exactly as scoped by the finding, and additionally `PostForm.tsx`'s three

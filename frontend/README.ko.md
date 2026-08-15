@@ -73,8 +73,10 @@ src/
                   업로드 진행률 표시줄 포함) + 파일 보드: 검색/정렬/
                   작성자 필터/페이지네이션 + visibility 배지, FileBoard.tsx),
                   FileDetailPage (보호됨, "/view/:id" — 메타데이터 + visibility별
-                  재생: public/unlisted은 <video src> 직접 재생, private은 인증된
-                  blob+objectURL 페치; 작성자 또는 admin에게는 관리 섹션도 노출된다
+                  재생: public/unlisted은 src 직접 재생, private은 인증된
+                  blob+objectURL 페치이며, 파일의 mediaType(ADR 0040)에 따라
+                  <img>/<audio>/<video>로 렌더링된다; 작성자 또는 admin에게는 관리
+                  섹션도 노출된다
                   — visibility 전환, unlisted 공유 링크 복사/회전, 삭제를 모두
                   PATCH/DELETE /file/:id로 처리)
 ```

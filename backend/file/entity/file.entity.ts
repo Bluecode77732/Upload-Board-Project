@@ -1,6 +1,7 @@
 import { IsNotEmpty, IsString } from 'class-validator';
 import { UserEntity } from 'backend/user/entity/user.entity';
 import { FileVisibility } from './file-visibility.enum';
+import { FileMediaType } from './file-media-type.enum';
 import {
   Column,
   CreateDateColumn,
@@ -30,6 +31,11 @@ export class FileEntity {
   @IsNotEmpty()
   @IsString()
   filePath!: string;
+
+  // Which playback tag the content is (image/audio/video); server-derived from the
+  // filePath extension at upload time, never client-supplied (ADR 0040 D2).
+  @Column({ type: 'varchar' })
+  mediaType!: FileMediaType;
 
   // Gates access to the stored bytes via GET /file/:id/content (ADR 0025 D1/D2).
   // Default private: a fresh upload is unreachable until the owner opts in.

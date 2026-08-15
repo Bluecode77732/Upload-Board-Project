@@ -21,6 +21,7 @@ import { UserEntity } from 'backend/user/entity/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FileEntity } from './entity/file.entity';
 import { FileVisibility } from './entity/file-visibility.enum';
+import { FileMediaType } from './entity/file-media-type.enum';
 import path, { join } from 'path';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { UpdateFileDto } from './dto/update-uploadFile.dto';
@@ -115,8 +116,10 @@ export class FileService {
   // 목적: FileEntity를 공개 URL이 붙은 응답 DTO로 변환한다.
   // 이유: BASE_URL 합성은 한 곳에만 있어야 하는데, 게시글 응답도 첨부 파일 URL을 담아야 한다(ADR 0023).
   //       fileUrl은 이제 정적 경로가 아니라 접근 검사를 거치는 콘텐츠 엔드포인트를 가리킨다(ADR 0025 D2).
+  //       mediaType이 응답에 없으면 상세 페이지가 재생 태그를 고를 신호가 없다(ADR 0040 D4).
   // 방법: private에서 public으로만 올린다 — PostService가 자기 쪽에서 URL을 다시 조립하지 않고 이 메서드에
   //       위임한다. shareUrl은 요청자가 관리 권한을 가진 unlisted 파일에만, 그 외에는 절대 노출하지 않는다.
+  //       mediaType은 판정 없이 엔티티 값을 그대로 복사한다 — 판정은 uploadFile 한 곳에서만 한다.
   toResponse(file: FileEntity, requester?: Requester): FileResponseDto {
     const baseUrl = this.configService.get<string>(
       'BASE_URL',
@@ -134,6 +137,7 @@ export class FileService {
       title: file.title,
       fileUrl: contentUrl,
       visibility: file.visibility,
+      mediaType: file.mediaType,
       ...(isManager &&
         file.visibility === FileVisibility.unlisted &&
         file.shareToken && {
@@ -239,6 +243,22 @@ export class FileService {
       .replace(/\\/g, '/');
   }
 
+  // 목적: 저장 경로의 확장자로부터 매체 종류(image/audio/video)를 판정한다.
+  // 이유: 상세 페이지가 옳은 재생 태그를 고르려면 매체 종류가 DB에 영속돼야 하는데(ADR 0040 D2),
+  //       확장자는 TEMP_FILENAME_PATTERN으로 이미 검증된 서버 발급 값이므로 클라이언트를 다시
+  //       신뢰할 필요가 없다.
+  // 방법: TEMP_FILENAME_PATTERN과 동일한 세 확장자 그룹으로 분기 — 그 외(mp4/mov/webm)는 video.
+  private mediaTypeFromExtension(storedPath: string): FileMediaType {
+    const extension = storedPath.split('.').pop()?.toLowerCase() ?? '';
+    if (['jpg', 'jpeg', 'png', 'webp'].includes(extension)) {
+      return FileMediaType.image;
+    }
+    if (extension === 'mp3') {
+      return FileMediaType.audio;
+    }
+    return FileMediaType.video;
+  }
+
   // 목적: 해당 저장 경로를 이미 점유한 FileEntity 행을 찾는다.
   // 이유: 서버 발급 파일명은 1회용 청구 토큰이므로, 그 행의 존재 자체가 "이미 청구됨"의 증거다.
   // 방법: filePath 정확 일치로 조회하되 creator를 함께 로드해 재제출자 본인 여부를 판정할 수 있게 한다.
@@ -312,11 +332,12 @@ export class FileService {
   // 목적: temp 업로드를 소유 파일로 승격하고, 같은 요청의 재제출을 멱등하게 처리한다.
   // 이유: DB 저장과 물리 승격이 따로 실패하면 행이 없는 파일을 가리키고, 재시도는 모호한 400이나 500을 받는다.
   //       post-commit 재조회에 relations: ['creator']가 빠지면 신규 생성(201) 응답만 creator가 없어
-  //       updateFile의 응답 모양과 달라진다.
+  //       updateFile의 응답 모양과 달라진다. mediaType이 비면 상세 페이지가 재생 태그를 고를 수 없다(ADR 0040).
   // 방법: 서버 발급 파일명을 1회용 청구 토큰으로 삼아 선청구 여부를 먼저 판정(replay/409)하고, 미청구일 때만
-  //       QueryRunner 트랜잭션 하나로 insert → FileStorage 포트 promote → commit; 실패 시 rollback, release()는 finally.
-  //       물리 이동은 어댑터(LocalDiskStorage/S3Storage)에 위임한다(ADR 0029). 재조회는 updateFile과 동일하게
-  //       relations: ['creator']를 포함해 두 쓰기 경로의 응답 모양을 통일한다.
+  //       QueryRunner 트랜잭션 하나로 insert(확장자로 판정한 mediaType 포함) → FileStorage 포트 promote → commit;
+  //       실패 시 rollback, release()는 finally. 물리 이동은 어댑터(LocalDiskStorage/S3Storage)에 위임한다
+  //       (ADR 0029). 재조회는 updateFile과 동일하게 relations: ['creator']를 포함해 두 쓰기 경로의 응답
+  //       모양을 통일한다.
   async uploadFile(
     uploadFileDto: UploadFileDto,
     userId: number,
@@ -365,6 +386,7 @@ export class FileService {
           title: uploadFileDto.title,
           creator: { id: userId },
           filePath: storedPath,
+          mediaType: this.mediaTypeFromExtension(storedPath),
         })
         .execute();
 

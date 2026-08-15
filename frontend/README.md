@@ -71,8 +71,9 @@ src/
                   with upload-progress bar) + file board: search/sort/
                   creator filter/pagination + visibility badges, FileBoard.tsx) and
                   FileDetailPage (protected, "/view/:id" — metadata + visibility-gated
-                  playback: direct <video src> for public/unlisted, an authenticated
-                  blob+objectURL fetch for private; for the creator or an admin, a
+                  playback: direct src for public/unlisted, an authenticated
+                  blob+objectURL fetch for private, rendered as <img>/<audio>/<video>
+                  per the file's mediaType (ADR 0040); for the creator or an admin, a
                   management section — visibility toggle, unlisted share-link copy/
                   rotation, and delete — all via PATCH/DELETE /file/:id)
 ```

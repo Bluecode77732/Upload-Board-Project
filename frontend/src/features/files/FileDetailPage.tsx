@@ -8,7 +8,12 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
-import type { FileResponse, FileVisibility, UpdateFileVisibilityRequest } from '../../api/types'
+import type {
+  FileMediaType,
+  FileResponse,
+  FileVisibility,
+  UpdateFileVisibilityRequest,
+} from '../../api/types'
 import { useAuth } from '../../auth/useAuth'
 import { NavBar } from '../../shared/NavBar'
 import { VisibilityBadge } from './VisibilityBadge'
@@ -51,6 +56,24 @@ function messageForManageError(error: unknown): string {
     }
   }
   return 'Network error. Is the backend running?'
+}
+
+// 목적: mediaType(image/audio/video)에 맞는 재생 태그를 고른다.
+// 이유: 이전에는 항상 <video>만 렌더링해 이미지/오디오 파일이 재생되지 않았다(ADR 0040).
+// 방법: visibility 분기가 결정한 src/onError를 그대로 받아 태그 종류만 바꾼다 — 소스를
+//   가져오는 방식(blob objectURL vs 직접 src)은 두 호출부 모두 이 함수 밖에서 그대로 유지된다.
+function renderMediaElement(
+  mediaType: FileMediaType,
+  title: string,
+  props: { src: string; className: string; onError?: () => void },
+) {
+  if (mediaType === 'image') {
+    return <img src={props.src} alt={title} className={props.className} />
+  }
+  if (mediaType === 'audio') {
+    return <audio controls src={props.src} className={props.className} onError={props.onError} />
+  }
+  return <video controls src={props.src} className={props.className} onError={props.onError} />
 }
 
 export function FileDetailPage() {
@@ -217,17 +240,19 @@ export function FileDetailPage() {
       <div className={styles.playerWrapper}>
         {file.visibility === 'private' ? (
           objectUrl ? (
-            <video controls src={objectUrl} className={styles.player} />
+            renderMediaElement(file.mediaType, file.title, {
+              src: objectUrl,
+              className: styles.player,
+            })
           ) : (
             !playbackError && <p className={styles.loadingText}>Loading content…</p>
           )
         ) : (
-          <video
-            controls
-            src={file.visibility === 'unlisted' ? (file.shareUrl ?? file.fileUrl) : file.fileUrl}
-            onError={diagnosePlaybackError}
-            className={styles.player}
-          />
+          renderMediaElement(file.mediaType, file.title, {
+            src: file.visibility === 'unlisted' ? (file.shareUrl ?? file.fileUrl) : file.fileUrl,
+            className: styles.player,
+            onError: diagnosePlaybackError,
+          })
         )}
       </div>
 

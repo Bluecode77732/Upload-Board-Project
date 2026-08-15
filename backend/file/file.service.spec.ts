@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { FileEntity } from './entity/file.entity';
 import { FileVisibility } from './entity/file-visibility.enum';
+import { FileMediaType } from './entity/file-media-type.enum';
 import { GetFilesDto } from './dto/get-files.dto';
 import { UserEntity } from 'backend/user/entity/user.entity';
 import {
@@ -61,6 +62,7 @@ describe('FileService', () => {
     filePath: 'file/upload/granted_test.mp4',
     creator: { id: 1, email: 'creator@test.com' } as UserEntity,
     visibility: FileVisibility.public,
+    mediaType: FileMediaType.video,
     shareToken: null,
     shareExpiresAt: null,
     createdAt: new Date(),
@@ -185,13 +187,12 @@ describe('FileService', () => {
     });
 
     it('should successfully upload a file', async () => {
+      const builder = insertQueryBuilder(
+        jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
+      );
       queryRunner.manager.createQueryBuilder = jest
         .fn()
-        .mockReturnValue(
-          insertQueryBuilder(
-            jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
-          ),
-        );
+        .mockReturnValue(builder);
       // findOne order: claim pre-check (unclaimed), duplicate-title pre-check, post-commit re-read.
       jest
         .spyOn(fileRepository, 'findOne')
@@ -214,11 +215,64 @@ describe('FileService', () => {
         where: { id: 1 },
         relations: ['creator'],
       });
+      // The insert derives mediaType from the .mp4 extension in uploadFileDto.filePath
+      // itself, never from a client-supplied field (ADR 0040 D2).
+      expect(builder.values).toHaveBeenCalledWith(
+        expect.objectContaining({ mediaType: FileMediaType.video }),
+      );
       expect(queryRunner.connect).toHaveBeenCalled();
       expect(queryRunner.startTransaction).toHaveBeenCalled();
       expect(queryRunner.commitTransaction).toHaveBeenCalled();
       expect(queryRunner.release).toHaveBeenCalled();
       expect(mockStorage.promote).toHaveBeenCalled();
+    });
+
+    it('derives mediaType image for a jpg upload, not the field the temp filename happens to use', async () => {
+      const imageDto = {
+        title: 'New Image',
+        filePath: 'temp_67ff0c79-a1f0-4d4f-865c-681af920378d_1764581241716.jpg',
+      };
+      const builder = insertQueryBuilder(
+        jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
+      );
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(builder);
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(mockFileEntity);
+
+      await fileService.uploadFile(imageDto, 1);
+
+      expect(builder.values).toHaveBeenCalledWith(
+        expect.objectContaining({ mediaType: FileMediaType.image }),
+      );
+    });
+
+    it('derives mediaType audio for an mp3 upload', async () => {
+      const audioDto = {
+        title: 'New Audio',
+        filePath: 'temp_67ff0c79-a1f0-4d4f-865c-681af920378d_1764581241716.mp3',
+      };
+      const builder = insertQueryBuilder(
+        jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
+      );
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(builder);
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(mockFileEntity);
+
+      await fileService.uploadFile(audioDto, 1);
+
+      expect(builder.values).toHaveBeenCalledWith(
+        expect.objectContaining({ mediaType: FileMediaType.audio }),
+      );
     });
 
     it('should replay the existing file when the same user resubmits a claimed filename', async () => {

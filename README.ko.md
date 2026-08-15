@@ -189,7 +189,9 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 - `POST /file` — 임시 파일을 영구 저장소로 승격 (트랜잭션), 기본 `visibility: private`로
   시작한다. attach로 받은 파일명은 1회용 청구 토큰이라, 다시 제출하면 청구한 본인에게는 기존
   파일을 200으로 돌려주고(멱등 재시도), 다른 사용자에게는 409 `FILE_ALREADY_CLAIMED`를
-  반환합니다 ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.ko.md))
+  반환합니다 ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.ko.md)). 응답의 `mediaType`
+  (`image`/`audio`/`video`)은 파일 확장자로부터 서버가 판정하며, 클라이언트가 보내는 값이
+  아니다 ([ADR 0040](docs/ADR/0040-persisted-media-type-for-playback.ko.md))
 - `PATCH /file/:id` — 파일 메타데이터 수정 (작성자 또는 admin), `visibility` 토글 포함.
   `unlisted`로 전환하면 `shareToken`이 발급되어 `shareUrl`로 반환된다(소유자·admin에게만);
   `rotateShareToken: true`는 이를 재발급해 이전에 공유된 링크를 모두 무효화한다; 선택적

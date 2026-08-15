@@ -53,6 +53,31 @@
   확인했다.
 
 ### 수정
+- **`FileDetailPage`/`PostDetailPage`가 업로드된 파일의 실제 종류와 무관하게 항상
+  `<video>`로만 재생을 시도했다.** 이미지나 mp3 파일도 `GET /file/:id/content`
+  (ADR 0025/0026)로 완전히 접근 가능했지만, 화면에는 제대로 표시·재생되지 않았다 —
+  `FileEntity`에도 `FileResponseDto`에도 해당 파일이 세 업로드 종류(`image`/`audio`/
+  `video`, ADR 0025 D4/D5) 중 어디에 속하는지 알려주는 필드가 아예 없었기 때문이다.
+  `POST /upload/attach`가 타입별 멀티파트 필드를 받을 때는 검증하면서도, 그 결과를
+  쓰기 경로 너머까지 저장해 두지 않았던 것이 근본 원인이다. `FileEntity`에 새
+  `mediaType` 컬럼(신규 `FileMediaType` enum)을 추가하고, `FileService.uploadFile()`
+  내부에서 파일 확장자로 서버가 직접 판정하도록(클라이언트가 보내는 값이 아님,
+  `TEMP_FILENAME_PATTERN`이 이미 나열해 둔 동일한 세 확장자 그룹을 그대로 재사용)
+  고쳤다. 기존에 이미 존재하던 모든 행은 손으로 작성한 마이그레이션으로 백필했다
+  (`ADD`로 nullable 컬럼 추가 → 확장자 기반 `UPDATE` → `SET NOT NULL` — `migration:
+  generate`는 백필이 필요하다는 사실 자체를 알 방법이 없다; 이때 자동 생성된 diff에도
+  베이스라인 특유의 스퓨리어스 FK/인덱스 재해시 구문이 그대로 섞여 나와, 검토 전에
+  제거했다). `FileResponseDto`도 이제 `mediaType`을 실어 보내고, `FileDetailPage.tsx`/
+  `PostDetailPage.tsx`는 이 값으로 `<img>`/`<audio controls>`/`<video controls>`를
+  고른다 — visibility에 따른 기존 소스 획득 로직(private는 인증된 blob fetch,
+  public/unlisted는 직접 `src`)은 그대로 유지했다. 로컬 서버로 엔드투엔드 검증했다
+  (이번 확인에 한해서만 `STORAGE_DRIVER=local`로 오버라이드 — 이 환경의 `.env`가
+  실제 AWS S3 버킷을 가리키고 있어 거기에 테스트 객체를 쓰지 않으려 피했다): 실제
+  jpg/mp3/mp4를 attach→승격 전체 흐름으로 업로드해 `mediaType`이 각각 `image`/
+  `audio`/`video`로 정확히 돌아오는 것을 확인했고, 백엔드 `pnpm lint`/`pnpm test`
+  (216/216), 프런트엔드 `pnpm build`/`pnpm lint` 모두 클린이다. 다만 렌더링된 태그를
+  실제 브라우저에서 시각적으로 확인하지는 못했다(이 세션에는 브라우저 도구가 없음).
+  [ADR 0040](ADR/0040-persisted-media-type-for-playback.ko.md)
 - **게시글/댓글/게시글 작성 폼 UI의 한국어 하드코딩 문구를 영어로 교체** — 위 "알려진
   문제"를 해소한다. 발견 당시 범위 그대로 `PostDetailPage.tsx`, `CommentThread.tsx`,
   `CommentForm.tsx`를 고쳤고, 여기에 `PostForm.tsx`의 `POST_FILE_TAKEN`/

@@ -20,6 +20,10 @@ export interface User {
 // to `private`; only `public` is readable without the owner/admin or a share token.
 export type FileVisibility = 'public' | 'private' | 'unlisted'
 
+// Which playback tag the content is (backend FileMediaType enum, ADR 0040) — server-derived
+// from the upload's extension, never client-supplied.
+export type FileMediaType = 'image' | 'audio' | 'video'
+
 // GET /file, GET /file/:id — FileResponseDto. `creator` is present when the backend
 // joins the relation (list + detail). `fileUrl` is the access-controlled content
 // endpoint (`/file/:id/content`, ADR 0025/0026), NOT a static path — reading it obeys
@@ -29,6 +33,7 @@ export interface FileResponse {
   title: string
   fileUrl: string
   visibility: FileVisibility
+  mediaType: FileMediaType
   shareUrl?: string
   creator?: {
     id: number

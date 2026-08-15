@@ -125,6 +125,11 @@ without a token, `private` needs the creator/admin bearer, `unlisted` needs a ma
 `?share=<token>`. New files default to `private`. `shareUrl` is returned only to a
 manager of an unlisted file.
 
+`FileResponseDto` also carries `mediaType` (`image`\|`audio`\|`video`, ADR 0040) —
+server-derived from the upload's extension, never client-supplied. Use it to pick a
+playback tag; do not infer media type from `fileUrl`'s extension or from which
+`POST /upload/attach` field was used.
+
 A comment's `postId` in its response is the bare id, never an embedded post — a
 20-comment thread would otherwise repeat the same post body and file on every
 row. Comment routes span two prefixes: listing/creating hang off the post

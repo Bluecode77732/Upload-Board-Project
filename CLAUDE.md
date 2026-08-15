@@ -901,6 +901,22 @@ Do not suggest alternatives to these decisions without explicit request.
   and serving stay correct for the new classes: `TEMP_FILENAME_PATTERN`
   (`backend/file/dto/create-uploadFile.dto.ts`) and `CONTENT_TYPE_BY_EXTENSION`
   (`backend/file/file-content.controller.ts`)
+- **Persisted media type for playback (landed 2026-08-16, [ADR
+  0040](docs/ADR/0040-persisted-media-type-for-playback.md))**: `FileEntity` gains
+  `mediaType` (new `FileMediaType` enum: `image`/`audio`/`video`, **`NOT NULL`**,
+  backend/file/entity/file-media-type.enum.ts). `FileService.uploadFile()` derives it
+  from the stored path's extension via a private `mediaTypeFromExtension()` — never
+  client-supplied, no new `UploadFileDto` field, no change to `upload.controller.ts`/
+  `upload.service.ts`. This is a **third** extension-keyed lookup alongside
+  `TEMP_FILENAME_PATTERN` and `CONTENT_TYPE_BY_EXTENSION` above — kept as its own
+  unshared mapping, consistent with those two never having been merged either (ADR
+  0040 D6); a fourth accepted extension needs all three updated together. Every
+  pre-existing row was backfilled by a hand-authored migration (`ADD` nullable →
+  extension-derived `UPDATE` → `SET NOT NULL` — `migration:generate` cannot know a
+  backfill is needed). `FileResponseDto.mediaType` is what `frontend/`'s
+  `FileDetailPage.tsx`/`PostDetailPage.tsx` now branch their `<img>`/`<audio
+  controls>`/`<video controls>` tag on, replacing an unconditional `<video>` that
+  couldn't play an uploaded image or mp3
 - **Never suggest**: streaming/chunked upload, CDN — unless explicitly requested. S3 is no
   longer in this list: the storage port-adapter (ADR 0029, above) landed both an
   `S3Storage` implementation and the `STORAGE_DRIVER` switch, but `local` stays the
