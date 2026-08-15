@@ -1302,8 +1302,10 @@ pnpm test -- file.service
 - `FileService` — 메타데이터 CRUD; `uploadFile`/`updateFile`은 수동
   QueryRunner 트랜잭션 패턴을 쓴다; `toResponse()`는 `BASE_URL`로
   `FileResponseDto`를 성형하며, `fileUrl`을 콘텐츠 엔드포인트 URL로
-  구성하고 `shareUrl`은 unlisted 파일의 관리자에게만 포함시킨다.
-  `uploadFile`은 `{ replayed, file }`을 반환하며 — claim 결과를 나타낸다
+  구성하고, `shareUrl`은 unlisted 파일의 관리자에게만 포함시키며,
+  재생 태그 선택을 위한 `mediaType`(`image`/`audio`/`video`, 확장자에서
+  도출, ADR 0040)도 함께 담는다. `uploadFile`은 `{ replayed, file }`을
+  반환하며 — claim 결과를 나타낸다
   (ADR 0019) — 컨트롤러는 이를 200(replay) 또는 201(신규 승격)으로
   매핑하고, 새 행의 기본값은 `visibility: 'private'`이다. `getFiles`/
   `getFileById`는 owner/admin이 아닌 요청자로부터 `private`/`unlisted` 행을
@@ -1341,8 +1343,9 @@ pnpm test -- file.service
 ### 엔티티 (TypeORM)
 - `UserEntity` — email(고유), 해시된 비밀번호(직렬화 시 `@Exclude`),
   `creator: FileEntity[]`(OneToMany), 타임스탬프
-- `FileEntity` — title(고유), `filePath`, `creator: UserEntity`(ManyToOne,
-  `nullable: false`, `cascade: true`), 타임스탬프
+- `FileEntity` — title(고유), `filePath`, `mediaType`(`FileMediaType` enum:
+  `image`/`audio`/`video`, `NOT NULL`, 확장자에서 도출, ADR 0040),
+  `creator: UserEntity`(ManyToOne, `nullable: false`, `cascade: true`), 타임스탬프
 - `PostEntity` — title(`FileEntity.title`과 달리 의도적으로 **고유하지
   않음**), `body`(text), `creator: UserEntity`(ManyToOne, `nullable: false`),
   `file: FileEntity | null`(OneToOne + `@JoinColumn`, 고유 + nullable —

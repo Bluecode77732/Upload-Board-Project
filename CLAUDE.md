@@ -1249,8 +1249,9 @@ pnpm test -- file.service
   `GET /file/:id/content`, the sole path serving granted bytes
 - `FileService` — metadata CRUD; `uploadFile`/`updateFile` use the manual QueryRunner
   transaction pattern; `toResponse()` shapes `FileResponseDto` with `BASE_URL`, composing
-  `fileUrl` as the content-endpoint URL and including `shareUrl` only for a manager of an
-  unlisted file. `uploadFile` returns `{ replayed, file }` — the claim outcome (ADR 0019),
+  `fileUrl` as the content-endpoint URL, including `shareUrl` only for a manager of an
+  unlisted file, and `mediaType` (`image`/`audio`/`video`, extension-derived, ADR 0040) for
+  playback tag selection. `uploadFile` returns `{ replayed, file }` — the claim outcome (ADR 0019),
   which the controller maps to 200 (replay) or 201 (fresh promotion), defaulting the new
   row to `visibility: 'private'`. `getFiles`/`getFileById` filter `private`/`unlisted`
   rows from non-owner/non-admin requesters (ADR 0026 D7); `resolveContentAccess` is the
@@ -1284,8 +1285,9 @@ pnpm test -- file.service
 ### Entities (TypeORM)
 - `UserEntity` — email (unique), hashed password (`@Exclude` on serialization),
   `creator: FileEntity[]` (OneToMany), timestamps
-- `FileEntity` — title (unique), `filePath`, `creator: UserEntity` (ManyToOne,
-  `nullable: false`, `cascade: true`), timestamps
+- `FileEntity` — title (unique), `filePath`, `mediaType` (`FileMediaType` enum:
+  `image`/`audio`/`video`, `NOT NULL`, extension-derived, ADR 0040), `creator: UserEntity`
+  (ManyToOne, `nullable: false`, `cascade: true`), timestamps
 - `PostEntity` — title (**not** unique — deliberately unlike `FileEntity.title`), `body`
   (text), `creator: UserEntity` (ManyToOne, `nullable: false`), `file: FileEntity | null`
   (OneToOne + `@JoinColumn`, unique + nullable — the idempotency key for `POST /post`),
