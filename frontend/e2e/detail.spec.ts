@@ -31,6 +31,10 @@ async function uploadVideo(page: Page, title: string): Promise<void> {
 // upload defaults to `visibility: private`, so this is the authenticated blob request). The
 // waitForResponse is armed *before* the click so it cannot miss a request that completes faster
 // than the caller gets back around to awaiting it.
+//
+// `contentResponse` is only ever the *first* hop of that request: under `STORAGE_DRIVER=s3`
+// (ADR 0036) the backend answers `302` to a cross-origin presigned S3 URL, and that final S3
+// response never matches this predicate (different URL) — so callers must not assume `200` here.
 async function openDetailPage(page: Page, title: string): Promise<{ id: number; contentResponse: Response }> {
   const link = page.locator('li', { hasText: title }).getByRole('link', { name: title })
   const href = await link.getAttribute('href')
@@ -92,9 +96,15 @@ test('a private file plays for its owner via an authenticated blob fetch and rev
   await uploadVideo(page, title)
   const { contentResponse } = await openDetailPage(page, title)
 
-  expect(contentResponse.status()).toBe(200)
+  // 200 under STORAGE_DRIVER=local (direct stream); 302 under STORAGE_DRIVER=s3 (ADR 0036
+  // presigned redirect — this is only the first hop, see openDetailPage above). Either is a
+  // correct first hop; the real proof of success is the blob: src assertion below, which can
+  // only be set once the browser actually follows the redirect, reads the S3 response body,
+  // and FileDetailPage turns it into an objectURL.
+  expect([200, 302]).toContain(contentResponse.status())
   await expect(page.getByText('Private', { exact: true })).toBeVisible()
-  await expect(page.locator('video')).toHaveAttribute('src', /^blob:/)
+  await expect(page.locator('video')).toHaveAttribute('src', /^blob:/, { timeout: 15_000 })
+  await expect(page.getByText('Network error. Is the backend running?')).toHaveCount(0)
 
   // Manage controls are visible to the creator; no share link exists for a private file.
   await expect(page.getByRole('heading', { name: 'Manage' })).toBeVisible()
