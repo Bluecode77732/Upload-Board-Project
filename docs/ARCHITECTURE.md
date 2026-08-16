@@ -232,6 +232,11 @@ REST only, documented via Swagger at `/doc` (`persistAuthorization: true`)
 ([ADR 0009](ADR/0009-rest-only-api-with-swagger.md)). Every controller carries `@ApiTags`;
 protected controllers `@ApiBearerAuth`; Basic-token endpoints `@ApiBasicAuth`.
 
+Unlike the error-response `stack` field and refresh-cookie `Secure` flag above (Error
+responses; Auth), `/doc` is **not** gated by `ENV` — it stays reachable in `prod` too. Swagger
+is this project's only API documentation, not a debug tool to hide behind an environment
+check (ADR 0009).
+
 ## Testing
 
 - Unit tests live alongside source as `*.spec.ts`; Jest config is embedded in `package.json`

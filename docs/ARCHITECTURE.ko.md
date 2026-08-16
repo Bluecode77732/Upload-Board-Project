@@ -232,6 +232,11 @@ REST 전용이며 `/doc`의 Swagger로 문서화됩니다(`persistAuthorization:
 ([ADR 0009](ADR/0009-rest-only-api-with-swagger.ko.md)). 모든 컨트롤러는 `@ApiTags`,
 보호된 컨트롤러는 `@ApiBearerAuth`, Basic 토큰 엔드포인트는 `@ApiBasicAuth`를 답니다.
 
+앞서 나온 에러 응답의 `stack` 필드나 refresh 쿠키의 `Secure` 플래그(에러 응답; 인증)와
+달리, `/doc`은 `ENV`로 게이팅되지 **않습니다** — `prod`에서도 그대로 열려 있습니다.
+Swagger는 이 프로젝트의 유일한 API 문서이지, 환경변수 뒤에 숨길 디버그용 도구가
+아니기 때문입니다(ADR 0009).
+
 ## 테스트
 
 - 단위 테스트는 소스 옆의 `*.spec.ts`이며, Jest 설정은 `package.json`에 내장
