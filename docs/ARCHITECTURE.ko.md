@@ -52,6 +52,9 @@ AppModule
   `UserEntity.refreshTokenHash`에 앵커로 저장되고 `POST /auth/token/refresh`가 회전시킵니다 —
   회수된 토큰을 재사용하면 세션 전체가 401 `AUTH_REFRESH_REUSED`로 무효화됩니다
   ([ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md)). 계정당 1세션입니다.
+  `Secure`는 `ENV=prod`에서만 켜집니다 — prod는 HTTPS로 운영된다고 가정하므로 평문 HTTP로
+  쿠키가 새는 걸 막기 위함이고, `dev`는 TLS 인증서 없이 로컬 HTTP로도 같은 흐름이 돌아가게
+  꺼둡니다.
 - 전략: `JwtStrategy`(이름 `"jwt-auth-guard"`, 액세스 토큰 검증, `UserService.findOne`으로
   사용자 로드 후 `password` 제거), `LocalStrategy`(이름 `"local-auth-guard"`).
 - `JwtModule.register({})`가 비어 있는 것은 의도된 것입니다 — 두 개의 시크릿이 쓰이므로
@@ -159,7 +162,9 @@ enableImplicitConversion`을 실행합니다 — DTO에 선언되지 않은 요�
 `VALIDATION_FAILED`(ValidationPipe의 시그니처)로 분류되고, `HttpException`이 아닌
 오류는 바깥으로 `"Internal server error"`만 남깁니다
 ([ADR 0011](ADR/0011-error-code-contract.ko.md)). 클라이언트 분기는 `code`로만 —
-`message`는 언제든 바뀔 수 있습니다.
+`message`는 언제든 바뀔 수 있습니다. `stack`이 `ENV=dev`에서만 나가는 이유는 내부
+파일 경로와 호출 체인을 노출하기 때문입니다 — 로컬 디버깅에는 유용하지만 배포된
+인스턴스를 공격하는 정보로도 쓰일 수 있어, `prod`에서는 감춥니다.
 
 ### 2단계 업로드 (`temp_` → `granted_`)
 

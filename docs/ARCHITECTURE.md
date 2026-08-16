@@ -52,6 +52,9 @@ a change spanning "physical file" and "file metadata" is two modules' work by de
   in `UserEntity.refreshTokenHash`, and `POST /auth/token/refresh` rotates it — replaying a
   rotated-out token invalidates the whole session with 401 `AUTH_REFRESH_REUSED`
   ([ADR 0012](ADR/0012-refresh-cookie-rotation.md)). One session per account.
+  `Secure` is gated on `ENV=prod` because prod is expected to run behind HTTPS, so a
+  plaintext-HTTP leak of the cookie is refused there; `dev` leaves it off so the same
+  flow works over local HTTP without a TLS cert.
 - Strategies: `JwtStrategy` (name `"jwt-auth-guard"`, validates access tokens, loads the user
   via `UserService.findOne`, strips `password`), `LocalStrategy` (name `"local-auth-guard"`).
 - `JwtModule.register({})` is intentionally empty — secrets are supplied per call in
@@ -159,7 +162,9 @@ thrown without a code get a status-based fallback, a 400 carrying a message arra
 labeled `VALIDATION_FAILED` (the ValidationPipe signature), and non-`HttpException`
 errors leave only `"Internal server error"` outward
 ([ADR 0011](ADR/0011-error-code-contract.md)). Clients branch on `code` only — `message`
-is free to change.
+is free to change. `stack` is gated on `ENV=dev` because it exposes internal file paths
+and the call chain — useful for local debugging, but information an attacker can use
+against a deployed instance; `prod` withholds it.
 
 ### Two-phase upload (`temp_` → `granted_`)
 
