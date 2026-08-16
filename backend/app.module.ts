@@ -35,6 +35,7 @@ import { join } from 'node:path';
         REFRESH_TOKEN_SECRET_EXPIRES_IN: Joi.number().required(),
         ACCESS_TOKEN_SECRET_EXPIRES_IN: Joi.number().required(),
         BASE_URL: Joi.string().default('http://localhost:3000'),
+        PORT: Joi.number().default(3000),
         CORS_ORIGIN: Joi.string(),
         // Optional: email of the account auto-promoted to superadmin on boot (ADR 0013).
         SUPERADMIN_EMAIL: Joi.string().email(),

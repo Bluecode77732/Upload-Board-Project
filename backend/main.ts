@@ -5,12 +5,16 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 
+// 목적: Nest 앱을 부트스트랩하고 CORS/쿠키/검증/Swagger를 구성한 뒤 리슨을 시작한다.
+// 이유: PORT를 process.env에서 직접 읽으면 Joi 검증을 우회해 Config 정책(ConfigService만 사용)을 깨뜨린다.
+// 방법: ConfigService 인스턴스를 한 번만 얻어 CORS_ORIGIN과 PORT 조회에 재사용한다.
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
 
   // CORS stays off unless CORS_ORIGIN is set — same-origin/Swagger use needs none;
   // a browser frontend on another origin sets a comma-separated allowlist.
-  const corsOrigin = app.get(ConfigService).get<string>('CORS_ORIGIN');
+  const corsOrigin = configService.get<string>('CORS_ORIGIN');
   if (corsOrigin) {
     app.enableCors({
       origin: corsOrigin.split(',').map((origin) => origin.trim()),
@@ -52,7 +56,7 @@ async function bootstrap() {
     },
   });
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(configService.get<number>('PORT', 3000));
 }
 bootstrap().catch((err: unknown) => {
   console.error(err);

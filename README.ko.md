@@ -104,11 +104,18 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 `ACCESS_TOKEN_SECRET`, `REFRESH_TOKEN_SECRET`, `ACCESS_TOKEN_SECRET_EXPIRES_IN`,
 `REFRESH_TOKEN_SECRET_EXPIRES_IN`.
 
-선택: `BASE_URL`(기본 `http://localhost:3000`; 공개 파일 URL 조합에 사용),
-`CORS_ORIGIN`(미설정 = CORS 비활성; 콤마 구분 허용 목록 —
-[ADR 0008](docs/ADR/0008-opt-in-cors.ko.md)), `PORT`(기본 3000),
-`SUPERADMIN_EMAIL`(미설정 = 비활성; 부팅 시 해당 계정을 superadmin으로 승격 —
-[ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md)).
+선택 (모두 Joi로 기본값이 검증되거나 각자의 조건으로 게이팅됨 — 예시를 포함한 전체
+목록은 `.env.example` 참고): `BASE_URL`(기본 `http://localhost:3000`; 공개 파일 URL
+조합에 사용), `PORT`(기본 `3000`), `CORS_ORIGIN`(미설정 = CORS 비활성; 콤마 구분
+허용 목록 — [ADR 0008](docs/ADR/0008-opt-in-cors.ko.md)), `SUPERADMIN_EMAIL`(미설정 =
+비활성; 부팅 시 해당 계정을 superadmin으로 승격 —
+[ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md)), `TEMP_SWEEP_ENABLED` /
+`TEMP_SWEEP_CRON` / `TEMP_SWEEP_TTL_HOURS` / `TEMP_SWEEP_DRY_RUN`(고아 temp 파일
+정리 — [ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.ko.md)), `STORAGE_DRIVER`
+(`local` 기본 | `s3`, `s3`일 때 `S3_BUCKET`/`AWS_REGION` 필수 —
+[ADR 0029](docs/ADR/0029-storage-port-adapter.ko.md)), `CONTENT_SIGNED_URL_TTL_SECONDS`
+(S3 presigned 리다이렉트 TTL, `local`에서는 미사용 —
+[ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.ko.md)).
 
 ## API 엔드포인트
 

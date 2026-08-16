@@ -103,11 +103,19 @@ Required (Joi-validated at boot — missing vars fail fast): `ENV`, `DB_TYPE`
 `HASH_ROUNDS`, `ACCESS_TOKEN_SECRET`, `REFRESH_TOKEN_SECRET`,
 `ACCESS_TOKEN_SECRET_EXPIRES_IN`, `REFRESH_TOKEN_SECRET_EXPIRES_IN`.
 
-Optional: `BASE_URL` (default `http://localhost:3000`; composes public file URLs),
+Optional (all Joi-validated with a default, or gated by their own condition — see
+`.env.example` for the full list with examples): `BASE_URL` (default
+`http://localhost:3000`; composes public file URLs), `PORT` (default `3000`),
 `CORS_ORIGIN` (unset = CORS disabled; comma-separated allowlist —
-[ADR 0008](docs/ADR/0008-opt-in-cors.md)), `PORT` (default 3000),
-`SUPERADMIN_EMAIL` (unset = disabled; promotes that account to superadmin on boot —
-[ADR 0013](docs/ADR/0013-rbac-and-audit-log.md)).
+[ADR 0008](docs/ADR/0008-opt-in-cors.md)), `SUPERADMIN_EMAIL` (unset = disabled;
+promotes that account to superadmin on boot —
+[ADR 0013](docs/ADR/0013-rbac-and-audit-log.md)), `TEMP_SWEEP_ENABLED` /
+`TEMP_SWEEP_CRON` / `TEMP_SWEEP_TTL_HOURS` / `TEMP_SWEEP_DRY_RUN` (orphan temp-file
+sweep — [ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.md)), `STORAGE_DRIVER`
+(`local` default | `s3`, with `S3_BUCKET`/`AWS_REGION` required when `s3` —
+[ADR 0029](docs/ADR/0029-storage-port-adapter.md)), and
+`CONTENT_SIGNED_URL_TTL_SECONDS` (S3 presigned-redirect TTL, unused under `local` —
+[ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md)).
 
 ## API Endpoints
 
