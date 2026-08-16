@@ -134,10 +134,11 @@ because whoever touches these files for restyling will see them:
   `src/api/client.ts`) hitting the redirect's cross-origin body read — not a
   separate defect from the `pnpm test:e2e` failure at `detail.spec.ts:73`.
   Full trace and two undecided candidate fixes: ADR 0036 > "Addendum
-  (2026-08-15)". **Bucket CORS configured 2026-08-16** (candidate fix 1) —
-  private-tier playback verified working live via Playwright; the remaining
-  `detail.spec.ts:73` assertion fix (candidate fix 2) is still open. See ADR
-  0036 > "Addendum (2026-08-16)".
+  (2026-08-15)". **Both candidate fixes landed 2026-08-16**: bucket CORS
+  configured (private-tier playback verified working live via Playwright),
+  and `detail.spec.ts:73`'s stale redirect-leg assertion fixed the same day —
+  nothing from this finding remains open. See ADR 0036 > "Addendum
+  (2026-08-16)".
 - **Korean/English UI-text split**: `features/posts/*` (PostForm, PostDetailPage,
   CommentThread, CommentForm) hardcodes Korean UI strings and error messages;
   `features/auth/*` and `features/files/*` are English-only. Not an i18n

@@ -68,10 +68,20 @@
   영상이 소유자에게 진짜로 재생됨을 확인했다(`readyState: 4`, 실제
   `videoWidth`/`videoHeight`, CORS 콘솔 에러 없음) — 단순히 에러 없는 HTTP
   상태만 본 게 아니다. `public`/`unlisted` 재생은 원래부터 영향받지 않았다. 같은
-  추가 기록의 잔여 사항 한 가지는 여기서 고치지 않고 남아 있다:
-  `frontend/e2e/detail.spec.ts:73`의 단언은 수정 후에도 여전히 실패하는데, 리다이렉트
-  체인의 잘못된 구간(최종 응답이 아니라 첫 번째 `302` 홉)을 검사하고 있기 때문이다 —
-  작지만 별도의 테스트 코드 수정 사항이다.
+  추가 기록의 잔여 사항 한 가지는 당시 시점엔 남아 있었다 —
+  `frontend/e2e/detail.spec.ts:73`의 단언이 리다이렉트 체인의 잘못된 구간을
+  검사하고 있던 문제 — 이건 같은 날 별도로 아래에서 고쳤다.
+  [ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md) > 추가 기록 (2026-08-16)
+- **`frontend/e2e/detail.spec.ts:73`의 오래된 리다이렉트-구간 단언 — ADR 0036 추가
+  기록의 마지막 미해결 항목을 마무리.** `expect(contentResponse.status()).toBe(200)`은
+  리다이렉트의 *첫* 홉만 매칭했는데, `STORAGE_DRIVER=s3`(ADR 0036)에서는 이게 정상적으로
+  `302`이므로, 이 드라이버에서는 재생이 실제로 되는지와 무관하게 이 단언이 절대
+  통과할 수 없었다. `expect([200, 302]).toContain(contentResponse.status())`로 완화하고,
+  실제 성공의 진짜 증거는 이미 있던 `video[src^="blob:"]` 단언(타임아웃 15초로 강화)과
+  "Network error" 메시지가 없다는 새 단언이 대신 맡도록 했다. `STORAGE_DRIVER=local`과
+  `STORAGE_DRIVER=s3` **양쪽 모두**에서 5/5 통과를 확인했다(각 확인마다 `.env`
+  오버라이드를 전환하고 백엔드를 재기동한 뒤, 원래 값으로 복원). 프런트엔드
+  `pnpm build`/`pnpm lint` 클린.
   [ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md) > 추가 기록 (2026-08-16)
 - **ADR 0040의 mediaType 태그 선택 로직을 실제 브라우저에서 시각적으로 검증
   완료.** 아래 항목은 원래 "렌더링된 태그를 실제 브라우저에서 시각적으로

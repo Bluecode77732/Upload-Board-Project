@@ -67,9 +67,20 @@ development line (package.json version).
   now genuinely plays for its owner in a real Chromium session (`readyState: 4`, real
   `videoWidth`/`videoHeight`, no CORS console error) — not merely a non-error HTTP status.
   `public`/`unlisted` playback was already unaffected. One residual from the same addendum
-  remains open, not fixed here: `frontend/e2e/detail.spec.ts:73`'s own assertion still
-  fails post-fix because it checks the wrong leg of the redirect chain (the first `302`
-  hop, not the final response) — a small, separate test-code fix.
+  remained open at the time — `frontend/e2e/detail.spec.ts:73`'s own assertion checked the
+  wrong leg of the redirect chain — fixed separately below, same day.
+  [ADR 0036](ADR/0036-s3-presigned-content-redirect.md) > Addendum (2026-08-16)
+- **`frontend/e2e/detail.spec.ts:73`'s stale redirect-leg assertion — the last open item
+  from ADR 0036's addendum, now closed.** `expect(contentResponse.status()).toBe(200)`
+  only ever matched the redirect's *first* hop, which is legitimately `302` under
+  `STORAGE_DRIVER=s3` (ADR 0036) — the assertion could never pass under that driver
+  regardless of whether playback actually worked. Relaxed to
+  `expect([200, 302]).toContain(contentResponse.status())` and let the real proof of
+  success carry the weight instead: the already-present `video[src^="blob:"]` assertion
+  (now with an explicit 15s timeout) plus a new check that no "Network error" message is
+  shown. Verified 5/5 green under **both** `STORAGE_DRIVER=local` and `STORAGE_DRIVER=s3`
+  (the `.env` override was flipped and the backend restarted for each check, then restored
+  to its original value). `pnpm build`/`pnpm lint` clean on frontend.
   [ADR 0036](ADR/0036-s3-presigned-content-redirect.md) > Addendum (2026-08-16)
 - **ADR 0040's mediaType tag selection, now visually verified in a real browser.** The
   entry below originally noted "browser-level visual confirmation of the rendered tags

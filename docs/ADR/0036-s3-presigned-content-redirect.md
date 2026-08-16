@@ -240,7 +240,7 @@ needed — this addendum records the finding, not a resolution):
    `public`/`unlisted`'s direct-stream tags — a call this ADR did not make
    and should not be assumed settled by this addendum.
 
-### Addendum (2026-08-16) — candidate fix 1 applied and verified; candidate fix 2 still open
+### Addendum (2026-08-16) — both candidate fixes applied and verified
 
 Candidate fix 1 above is resolved. Querying the bucket
 (`GetBucketCorsCommand`) showed `NoSuchCORSConfiguration` — not a
@@ -274,13 +274,24 @@ console error, and no "Network error" message — genuine playback, not just a
 non-error status code. `public`/`unlisted` playback was already unaffected
 and remains so.
 
-Candidate fix 2 is **still open, untouched by this addendum**. Re-running
-`detail.spec.ts` after the CORS fix: 4 of 5 pass; the one failure is still
-`detail.spec.ts:73`'s `expect(contentResponse.status()).toBe(200)`, and it
-still fails for exactly the reason recorded above — the assertion matches
-the redirect's *first* hop (the `302` itself, correct under this ADR), never
-the final response, so it cannot pass regardless of whether playback works.
-A separate, throwaway Playwright check (not committed) confirmed actual
-playback succeeds despite the assertion's failure. Fixing the assertion — or
-reconsidering the private-tier blob-fetch mechanism itself — remains a small,
-separate, explicit-request change; not made here.
+Candidate fix 2 was initially left open by this addendum. Re-running
+`detail.spec.ts` after the CORS fix: 4 of 5 pass; the one failure was still
+`detail.spec.ts:73`'s `expect(contentResponse.status()).toBe(200)`, for
+exactly the reason recorded above — the assertion matched the redirect's
+*first* hop (the `302` itself, correct under this ADR), never the final
+response, so it could not pass regardless of whether playback worked. A
+separate, throwaway Playwright check (not committed) confirmed actual
+playback succeeded despite the assertion's failure.
+
+**Candidate fix 2 landed the same day**: relaxed the assertion to
+`expect([200, 302]).toContain(contentResponse.status())` (both are correct
+first hops, depending on driver), and let the already-present
+`video[src^="blob:"]` assertion — which can only pass once the browser has
+actually followed the redirect, read the S3 response body under real CORS
+headers, and `FileDetailPage` has turned it into an objectURL — carry the
+real proof of success, plus a new assertion that no "Network error" message
+is shown. Verified 5/5 green under **both** `STORAGE_DRIVER=local` and
+`STORAGE_DRIVER=s3` (the `.env` override was flipped, the backend restarted,
+tested, then flipped back and restarted again — the environment was left
+exactly as found). This closes the addendum: nothing from either candidate
+fix remains open.
