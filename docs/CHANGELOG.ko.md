@@ -12,6 +12,34 @@
 
 ## [Unreleased]
 
+### 수정
+- **`docker-compose-test.yml`의 `migrate` 서비스가 실제로는 마이그레이션을 한 번도 실행하지
+  않았다 — 마이그레이션이 안 된 DB를 대상으로 앱 전체를 그냥 부팅해버렸다.** 이 파일에 대한
+  테스트 실행 기록은 저장소 어디에도 없었다(`docs/CHANGELOG.md`, `docs/ROADMAP.md`,
+  `docs/ADR/*sharenpo*`가 걸린 문서, `git log -p`를 모두 확인). 파일 자체의 이력(`4ac830a`,
+  `529ae43`)도 파일을 작성하고 이미지 이름을 고친 것뿐, 끝까지 실행해본 적은 없었다. 첫 실제
+  기록을 남기기 위해 직접 실행했으며, 실제 개발 스택과 분리하기 위해
+  `docker compose -p sharenpo-test -f docker-compose-test.yml`(별도 프로젝트명)를 사용하고
+  `DB_PORT=5437`, `api`엔 `-p 3002:3000` 오버라이드를 줘서 5435의 실 개발 DB나 로컬
+  `pnpm start:dev`(3000)를 건드리지 않게 했다. 첫 실행 결과: `db`는 healthy로 떴지만
+  `migrate`는 exit 1 — `SuperadminSeedService.onApplicationBootstrap`이
+  `relation "user_entity" does not exist`로 실패했는데, `migrate`에 `command:` 오버라이드가
+  없어 `migration:run` 대신 이미지의 기본 CMD(앱 자체)가 실행됐기 때문이었다. 근본 원인:
+  이 파일이 `docker-compose.yml`에서 복사될 때(`4ac830a`)
+  `command: ['node', 'node_modules/typeorm/cli.js', 'migration:run', '-d', 'dist/data-source.js']`
+  줄이 로컬 빌드 전용 필드들과 함께 삭제됐는데, 다른 필드들과 달리 이 줄은 새 DB를 상대로도
+  여전히 필요했다. 이 한 줄을 복원했다. 깨끗하게 다시 실행한 결과: `migrate`가 커밋된
+  마이그레이션 7개를 모두 적용하고 exit 0으로 종료했고, `api`는 에러 없이 부팅했으며,
+  격리된 컨테이너에서 `GET /health/live`, `GET /health/ready`, `GET /doc` 모두 `200`을
+  응답했다. 격리 스택은 이후 완전히 정리했다(`down -v`) — 이번 실행에서 남은 것은 없다.
+  **사고 기록**: 이 실행을 처음 격리하려던 시도에서 `-p` 프로젝트명을 지정하지 않았는데,
+  그 결과 Compose가 `docker-compose-test.yml`의 이름 없는 `db` 서비스를 이미 떠 있던 실제
+  개발 스택의 `uploadboardproject-db-1` 컨테이너(동일한 기본 프로젝트명, 동일한 서비스명)로
+  매칭시켜 포트 5436으로 재생성해버렸다. 명명된 볼륨(`uploadboardproject_db-data`)은 그대로
+  이어져 데이터 손실은 없었다 — 사후에 `docker compose -f docker-compose.yml up -d db`를
+  다시 실행해(포트 5435 복구) 사고 전 상태와 테이블/행 개수를 대조해 확인했다 — 다만 이
+  때문에 이후 이 세션의 모든 명령에는 예외 없이 `-p sharenpo-test`를 명시했다.
+
 ### 보안
 - **프로덕션 DB 연결에서 `rejectUnauthorized: false`를 제거**
   (`backend/app.module.ts`) — `NODE_ENV=production`일 때 TLS 인증서 검증을

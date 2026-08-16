@@ -37,6 +37,7 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 5432
+    command: ['node', 'node_modules/typeorm/cli.js', 'migration:run', '-d', 'dist/data-source.js']
     restart: 'no'
 
   api:

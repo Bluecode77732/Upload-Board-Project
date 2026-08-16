@@ -12,6 +12,35 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Fixed
+- **`docker-compose-test.yml`'s `migrate` service never actually ran migrations — it silently
+  booted the full app against an unmigrated DB.** No test-execution record for this file
+  existed anywhere in the repo (checked `docs/CHANGELOG.md`, `docs/ROADMAP.md`, every
+  `docs/ADR/*sharenpo*` hit, and `git log -p`) — the file's own history (`4ac830a`, `529ae43`)
+  only covers authoring it and correcting its image names, never running it end to end. Ran it
+  to produce a first real record, isolated from the live dev stack via
+  `docker compose -p sharenpo-test -f docker-compose-test.yml` (a distinct project name;
+  `DB_PORT=5437` and a `-p 3002:3000` override on `api` so neither container touched the real
+  dev DB on 5435 or the local `pnpm start:dev` on 3000). First run: `db` came up healthy, but
+  `migrate` exited 1 — `SuperadminSeedService.onApplicationBootstrap` failed with
+  `relation "user_entity" does not exist`, because `migrate` had no `command:` override and so
+  ran the image's default CMD (the app itself) instead of `migration:run`. Root cause: when this
+  file was copied from `docker-compose.yml` (`4ac830a`), the
+  `command: ['node', 'node_modules/typeorm/cli.js', 'migration:run', '-d', 'dist/data-source.js']`
+  line was dropped along with the other local-build-only fields, but unlike those it was still
+  required against a fresh DB. Restored that one line. Re-ran clean: `migrate` applied all 7
+  committed migrations and exited 0, `api` booted with no errors, and `GET /health/live`,
+  `GET /health/ready`, and `GET /doc` each answered `200` on the isolated container. Isolated
+  stack fully torn down afterward (`down -v`) — nothing from this run persists.
+  **Incident note**: the first attempt at isolating this run used no `-p` project name, so
+  Compose matched `docker-compose-test.yml`'s unqualified `db` service to the real dev stack's
+  already-running `uploadboardproject-db-1` container (same default project name, same service
+  name) and recreated it on port 5436. The named volume (`uploadboardproject_db-data`) carried
+  over intact and no data was lost — confirmed after the fact by re-running
+  `docker compose -f docker-compose.yml up -d db` (restored port 5435) and checking table/row
+  counts against the pre-incident state — but this is why every subsequent command in this
+  session explicitly passed `-p sharenpo-test`.
+
 ### Security
 - **Removed `rejectUnauthorized: false` from the production DB connection**
   (`backend/app.module.ts`), which disabled TLS certificate validation for
