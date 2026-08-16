@@ -52,6 +52,33 @@ development line (package.json version).
   all verified working through the (Korean) buttons during the same walkthrough.
 
 ### Fixed
+- **Private-file playback under `STORAGE_DRIVER=s3` was completely broken for the
+  file's own owner — fixed via S3 bucket CORS configuration, no source change.**
+  `FileDetailPage.tsx`'s private-tier playback path fetches content via `fetch()`+Blob
+  (`requestBlob()`, since a `<video>`/`<audio>`/`<img>` tag can't carry a Bearer token),
+  and this project's `sharenpo` S3 bucket had **no CORS configuration at all** —
+  `GetBucketCorsCommand` returned `NoSuchCORSConfiguration` — so the browser refused to
+  let JS read the response body after following [ADR 0036](ADR/0036-s3-presigned-content-redirect.md)'s
+  `302` redirect. This is exactly the residual ADR 0036's 2026-08-15 addendum left open
+  as "candidate fix 1." Applied a single CORS rule directly to the bucket (`GET` only,
+  restricted to this backend's own two local dev origins already allowlisted in
+  `CORS_ORIGIN`) — an AWS console/API-level change, not a code change; no new dependency
+  (reused the already-installed `@aws-sdk/client-s3`). Re-verified live: a private video
+  now genuinely plays for its owner in a real Chromium session (`readyState: 4`, real
+  `videoWidth`/`videoHeight`, no CORS console error) — not merely a non-error HTTP status.
+  `public`/`unlisted` playback was already unaffected. One residual from the same addendum
+  remains open, not fixed here: `frontend/e2e/detail.spec.ts:73`'s own assertion still
+  fails post-fix because it checks the wrong leg of the redirect chain (the first `302`
+  hop, not the final response) — a small, separate test-code fix.
+  [ADR 0036](ADR/0036-s3-presigned-content-redirect.md) > Addendum (2026-08-16)
+- **ADR 0040's mediaType tag selection, now visually verified in a real browser.** The
+  entry below originally noted "browser-level visual confirmation of the rendered tags
+  was not performed (no browser tool available in this session)." Booted the app
+  (backend + frontend + db) and drove a real Playwright/Chromium session against it:
+  confirmed a fresh image upload renders `<img>` (loaded, correct
+  `naturalWidth`/`naturalHeight`), and a fresh mp3 upload renders `<audio controls>` —
+  neither falls back to `<video>` — with the API response carrying the correct
+  `mediaType` in both cases. Verification only, no code change.
 - **`FileDetailPage`/`PostDetailPage` always rendered `<video>` for file playback,
   regardless of the uploaded file's actual type.** An uploaded image or mp3 was fully
   reachable through `GET /file/:id/content` (ADR 0025/0026), but never displayed or

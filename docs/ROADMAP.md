@@ -768,6 +768,14 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   ADR 0036 > "Addendum (2026-08-15)". Two undecided candidate fixes recorded there, not
   resolved here — configure bucket CORS, and/or update `detail.spec.ts:73`'s assertion
   (which checks the wrong leg of the redirect chain regardless of CORS).
+  **Candidate fix 1 landed 2026-08-16**: the bucket had zero CORS rules configured;
+  applied one (`GET` only, scoped to this backend's own two local `CORS_ORIGIN` dev
+  origins) and re-verified live via Playwright that a private video genuinely plays for
+  its owner now (`readyState: 4`, real dimensions, no CORS console error) — not just an
+  HTTP-status check. Full record: ADR 0036 > "Addendum (2026-08-16)". **Candidate fix 2
+  is still open**: `detail.spec.ts:73`'s own assertion still fails post-fix, because it
+  checks the wrong leg of the redirect chain (the first `302` hop, not the final
+  response) — a small, separate test-code fix, not made here.
 
 ## 8. Advisory notes
 

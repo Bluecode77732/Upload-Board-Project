@@ -221,3 +221,45 @@ authenticated blob fetch…")다 — `expect(contentResponse.status()).toBe(200)
    `public`/`unlisted`의 직접 스트리밍 태그와 달리 *private* 티어의
    blob-fetch 경로에는 리다이렉트가 애초에 맞는 답인지 재검토 — 이 ADR도,
    이 추가 기록도 내리지 않은 판단이다.
+
+### 추가 기록 (2026-08-16) — 후보 해결책 1 적용·검증 완료, 후보 해결책 2는 여전히 미해결
+
+위의 후보 해결책 1은 해결됐다. 버킷 설정을 조회해 보니(`GetBucketCorsCommand`)
+`NoSuchCORSConfiguration`이 나왔다 — 규칙이 잘못 설정된 게 아니라 아예 없었다.
+`PutBucketCorsCommand`로 규칙 하나를 적용했다(이 프로젝트에 이미 있는
+`@aws-sdk/client-s3` 의존성을 쓴 임시 스크립트 — 신규 의존성 없음, 소스 코드
+변경 없음, 스크립트 자체도 커밋하지 않았다):
+
+```json
+{
+  "AllowedOrigins": ["http://localhost:5173", "http://localhost:5174"],
+  "AllowedMethods": ["GET"],
+  "AllowedHeaders": ["*"],
+  "MaxAgeSeconds": 300
+}
+```
+
+두 origin은 이 백엔드 자체의 `CORS_ORIGIN`(`.env`)과 정확히 같다 — 프런트엔드와
+admin 개발 서버뿐, 그 이상으로 넓히지 않았다. `GET`만 허용한 이유는, presigned
+`GetObject` 응답을 읽는 것이 이 프로젝트의 어떤 소비자든 만드는 유일한 교차 출처
+읽기이기 때문이다. 아직 프로덕션 origin은 없다 — 배포는 여전히 ROADMAP.md의
+번호 없는 마지막 미착수 항목이다 — 그러니 배포가 착지하면 그때 프로덕션
+origin을 추가할 것이며, 지금 도메인을 추측해 넣지 않는다.
+
+단순히 HTTP 상태만 다시 확인한 게 아니라 실제로 재검증했다: 실제 Chromium
+세션(Playwright)에서 새로 올린 private 영상을 소유자 본인이 끝까지 재생했다.
+`<video>` 요소가 `readyState: 4`(`HAVE_ENOUGH_DATA`)에 도달했고
+`videoWidth`/`videoHeight`도 0이 아닌 실제 값이었으며, CORS 콘솔 에러도
+"Network error" 메시지도 없었다 — 상태 코드만 정상인 게 아니라 실제로 재생됐다.
+`public`/`unlisted` 재생은 원래부터 영향받지 않았고 지금도 그렇다.
+
+후보 해결책 2는 **이 추가 기록에서 건드리지 않아 여전히 미해결**이다. CORS를
+고친 뒤 `detail.spec.ts`를 다시 돌려보면 5개 중 4개는 통과하지만, 여전히
+`detail.spec.ts:73`의 `expect(contentResponse.status()).toBe(200)`이 실패한다 —
+이유도 위에서 기록한 그대로다: 이 단언은 리다이렉트의 *첫* 홉(`302` 자체, 이
+ADR 아래서는 정상)에만 매칭되고 최종 응답에는 매칭되지 않으므로, 재생이
+실제로 되는지와 무관하게 통과할 수 없는 단언이다. 별도의, 커밋하지 않은
+임시 Playwright 점검으로 단언 실패와 별개로 실제 재생은 성공함을 확인했다.
+이 단언을 고치는 것 — 또는 private 티어 blob-fetch 메커니즘 자체를 재검토하는
+것 — 은 여전히 작지만 별도의, 명시적 요청이 필요한 변경으로 남아 있다 — 여기서
+처리하지 않았다.

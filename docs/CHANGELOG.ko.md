@@ -53,6 +53,34 @@
   확인했다.
 
 ### 수정
+- **`STORAGE_DRIVER=s3`에서 private 파일의 소유자 본인조차 재생이 완전히 안 되던
+  문제 — S3 버킷 CORS 설정으로 해결, 소스 코드 변경 없음.** `FileDetailPage.tsx`의
+  private 티어 재생 경로는 `fetch()`+Blob으로 콘텐츠를 직접 가져오는데(`<video>`/
+  `<audio>`/`<img>` 태그는 Bearer 토큰을 실어 보낼 수 없어서), 이 프로젝트의
+  `sharenpo` S3 버킷에는 **CORS 설정이 아예 없었다** — `GetBucketCorsCommand`가
+  `NoSuchCORSConfiguration`을 반환했다 — 그래서 [ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md)의
+  `302` 리다이렉트를 따라간 뒤 브라우저가 JS의 응답 본문 읽기를 거부했다. 이것이
+  바로 ADR 0036의 2026-08-15 추가 기록이 "후보 해결책 1"로 남겨둔 잔여 사항이다.
+  버킷에 CORS 규칙 하나를 직접 적용했다(`GET`만 허용, 이 백엔드 자체
+  `CORS_ORIGIN`에 이미 있는 로컬 개발 origin 두 개로 제한) — 코드 변경이 아니라
+  AWS 콘솔/API 수준의 변경이며, 신규 의존성도 없다(이미 설치된
+  `@aws-sdk/client-s3`를 재사용). 실제 재검증: 실제 Chromium 세션에서 private
+  영상이 소유자에게 진짜로 재생됨을 확인했다(`readyState: 4`, 실제
+  `videoWidth`/`videoHeight`, CORS 콘솔 에러 없음) — 단순히 에러 없는 HTTP
+  상태만 본 게 아니다. `public`/`unlisted` 재생은 원래부터 영향받지 않았다. 같은
+  추가 기록의 잔여 사항 한 가지는 여기서 고치지 않고 남아 있다:
+  `frontend/e2e/detail.spec.ts:73`의 단언은 수정 후에도 여전히 실패하는데, 리다이렉트
+  체인의 잘못된 구간(최종 응답이 아니라 첫 번째 `302` 홉)을 검사하고 있기 때문이다 —
+  작지만 별도의 테스트 코드 수정 사항이다.
+  [ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md) > 추가 기록 (2026-08-16)
+- **ADR 0040의 mediaType 태그 선택 로직을 실제 브라우저에서 시각적으로 검증
+  완료.** 아래 항목은 원래 "렌더링된 태그를 실제 브라우저에서 시각적으로
+  확인하지는 못했다(이 세션에는 브라우저 도구가 없음)"고 적혀 있었다. 앱을
+  기동해(백엔드+프런트엔드+DB) 실제 Playwright/Chromium 세션으로 확인한 결과:
+  새로 올린 이미지는 `<img>`로 렌더링되고(로드 완료, `naturalWidth`/`naturalHeight`
+  정상), 새로 올린 mp3는 `<audio controls>`로 렌더링되며 — 둘 다 `<video>`로
+  떨어지지 않았고 — API 응답의 `mediaType`도 두 경우 모두 정확했다. 검증만
+  진행했고 코드 변경은 없다.
 - **`FileDetailPage`/`PostDetailPage`가 업로드된 파일의 실제 종류와 무관하게 항상
   `<video>`로만 재생을 시도했다.** 이미지나 mp3 파일도 `GET /file/:id/content`
   (ADR 0025/0026)로 완전히 접근 가능했지만, 화면에는 제대로 표시·재생되지 않았다 —

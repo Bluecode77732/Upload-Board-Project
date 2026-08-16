@@ -135,6 +135,10 @@
   교차 출처 본문 읽기에서 걸리는 것이며, `pnpm test:e2e`의
   `detail.spec.ts:73` 실패와 별개의 결함이 아니다. 전체 추적 내용과 미확정
   후보 해결책 두 가지: ADR 0036 > "추가 기록 (2026-08-15)" 참고.
+  **2026-08-16에 버킷 CORS를 설정함**(후보 해결책 1) — Playwright로 실제
+  재검증해 private 티어 재생이 정상 동작함을 확인했다. 남은
+  `detail.spec.ts:73` 단언 수정(후보 해결책 2)은 여전히 미해결이다. ADR 0036
+  > "추가 기록 (2026-08-16)" 참고.
 - **한글/영어 UI 텍스트 혼용**: `features/posts/*`(PostForm, PostDetailPage,
   CommentThread, CommentForm)는 UI 문자열과 에러 메시지가 한글로
   하드코딩돼 있고, `features/auth/*`와 `features/files/*`는 영어만

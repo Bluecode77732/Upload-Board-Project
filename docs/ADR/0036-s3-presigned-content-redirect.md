@@ -239,3 +239,48 @@ needed — this addendum records the finding, not a resolution):
    *private*-tier blob-fetch path specifically as opposed to
    `public`/`unlisted`'s direct-stream tags — a call this ADR did not make
    and should not be assumed settled by this addendum.
+
+### Addendum (2026-08-16) — candidate fix 1 applied and verified; candidate fix 2 still open
+
+Candidate fix 1 above is resolved. Querying the bucket
+(`GetBucketCorsCommand`) showed `NoSuchCORSConfiguration` — not a
+misconfigured rule, an absent one. Applied a single rule via
+`PutBucketCorsCommand` (an ad-hoc script using the `@aws-sdk/client-s3`
+dependency this project already has — no new dependency, no source change,
+the script itself was not committed):
+
+```json
+{
+  "AllowedOrigins": ["http://localhost:5173", "http://localhost:5174"],
+  "AllowedMethods": ["GET"],
+  "AllowedHeaders": ["*"],
+  "MaxAgeSeconds": 300
+}
+```
+
+The two origins mirror this backend's own `CORS_ORIGIN` (`.env`) exactly —
+the frontend and admin dev servers, nothing wider. `GET` only, since a
+presigned `GetObject` response is the sole cross-origin read any consumer in
+this project ever makes. No production origin exists yet — deployment is
+still ROADMAP.md's unlanded, unnumbered terminal item — so this rule will
+need a production origin added once that lands; revisit then rather than
+guessing a domain now.
+
+Re-verified live, not merely re-checking the HTTP status: a fresh private
+video upload was played end to end by its own owner in a real Chromium
+session (Playwright). The `<video>` element reached `readyState: 4`
+(`HAVE_ENOUGH_DATA`) with real, non-zero `videoWidth`/`videoHeight`, no CORS
+console error, and no "Network error" message — genuine playback, not just a
+non-error status code. `public`/`unlisted` playback was already unaffected
+and remains so.
+
+Candidate fix 2 is **still open, untouched by this addendum**. Re-running
+`detail.spec.ts` after the CORS fix: 4 of 5 pass; the one failure is still
+`detail.spec.ts:73`'s `expect(contentResponse.status()).toBe(200)`, and it
+still fails for exactly the reason recorded above — the assertion matches
+the redirect's *first* hop (the `302` itself, correct under this ADR), never
+the final response, so it cannot pass regardless of whether playback works.
+A separate, throwaway Playwright check (not committed) confirmed actual
+playback succeeds despite the assertion's failure. Fixing the assertion — or
+reconsidering the private-tier blob-fetch mechanism itself — remains a small,
+separate, explicit-request change; not made here.
