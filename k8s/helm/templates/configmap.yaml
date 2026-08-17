@@ -5,22 +5,22 @@ metadata:
   labels:
     {{- include "upload-board-project.labels" . | nindent 4 }}
   annotations:
-    # Without a hook, this ConfigMap is a normal resource created only after
-    # ALL pre-install hooks finish — but migration-job.yml's pre-install hook
-    # needs it to already exist (envFrom.configMapRef). Hooking it in too, at
-    # an earlier weight, puts it in the same early phase as that Job.
-    # before-hook-creation (not hook-succeeded) keeps it alive afterward, so
-    # the Deployment/Service created in the normal phase can still read it.
+    # hook이 아니면 이 ConfigMap은 일반 리소스라 모든 pre-install hook이 끝난 뒤에야
+    # 생성된다 — 그런데 migration-job.yml의 pre-install hook은 이 ConfigMap이
+    # 이미 존재해야 한다(envFrom.configMapRef). 그래서 이것도 함께 hook으로
+    # 지정하되, 더 이른 weight를 줘서 그 Job과 같은 이른 단계에 두었다.
+    # hook-succeeded가 아니라 before-hook-creation을 쓴 이유는, 그래야 일반
+    # 단계에서 만들어지는 Deployment/Service가 나중에도 이걸 읽을 수 있어서다.
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-5"
     "helm.sh/hook-delete-policy": before-hook-creation
 data:
   {{- range $key, $value := .Values.env }}
-  {{- /* An empty string is not the same as unset: Joi.string() (no
-  .allow('')) rejects "" but accepts an absent var for optional keys —
-  the same contract .env.example expresses by commenting these out rather
-  than setting them blank. Omit rather than emit "" so an unconfigured
-  optional var reaches the app as absent, not as an invalid empty string. */}}
+  {{- /* 빈 문자열은 "값이 없는 것"과 다르다: Joi.string()은(.allow('') 없이는)
+  ""는 거부하지만 선택적 키가 아예 없는 건 허용한다 — .env.example이 이런
+  선택적 var를 빈 값으로 두지 않고 주석 처리해두는 것과 같은 계약이다. 그래서
+  ""를 그대로 내보내지 않고 생략한다 — 설정 안 된 선택적 var는 앱 입장에서
+  "없음"으로 도달해야지, "잘못된 빈 문자열"로 도달하면 안 된다. */}}
   {{- if ne ($value | toString) "" }}
   {{ $key }}: {{ $value | toString | quote }}
   {{- end }}

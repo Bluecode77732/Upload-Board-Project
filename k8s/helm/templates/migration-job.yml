@@ -1,9 +1,10 @@
+{{- /* migration.enabled이 false면 이 Job 자체를 렌더링하지 않는다. */}}
 {{- if .Values.migration.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  # Suffixed with the release revision — Job specs are immutable, so each
-  # upgrade needs a new object rather than patching the previous one.
+  # 릴리스 revision을 이름 뒤에 붙인다 — Job spec은 불변이라, 업그레이드할
+  # 때마다 기존 오브젝트를 고치는 게 아니라 매번 새 오브젝트를 만들어야 한다.
   name: {{ include "upload-board-project.fullname" . }}-migrate-{{ .Release.Revision }}
   labels:
     {{- include "upload-board-project.labels" . | nindent 4 }}
@@ -31,8 +32,10 @@ spec:
           {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          # Mirrors docker-compose.yml's one-shot `migrate` service (ADR 0032).
+          # docker-compose.yml의 한 번만 도는 `migrate` 서비스를 그대로 본떴다(ADR 0032).
           command: ["node", "node_modules/typeorm/cli.js", "migration:run", "-d", "dist/data-source.js"]
+          # Deployment와 동일하게 ConfigMap+existingSecret에서 env를 가져온다 —
+          # 앱과 마이그레이션이 같은 DB 접속 정보를 보도록 보장한다.
           envFrom:
             - configMapRef:
                 name: {{ include "upload-board-project.fullname" . }}

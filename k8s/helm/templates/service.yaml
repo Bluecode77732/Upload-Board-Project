@@ -1,3 +1,4 @@
+{{- /* ClusterIP 서비스 — 클러스터 내부에서만 접근. 외부 노출은 ingress.yaml(기본 비활성)이 맡는다. */}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -8,6 +9,8 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.service.port }}
+      # targetPort는 숫자가 아니라 컨테이너 포트 이름("http")으로 참조 — deployment.yml에서
+      # containerPort 값이 바뀌어도 이 파일을 따로 고칠 필요가 없다.
       targetPort: http
       protocol: TCP
       name: http

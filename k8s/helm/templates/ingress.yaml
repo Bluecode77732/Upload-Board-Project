@@ -1,3 +1,9 @@
+{{- /*
+ingress.enabled이 false(기본값)면 이 파일은 아무것도 렌더링하지 않는다.
+TLS 종료는 여기(ingress/ALB)에서만 하고 앱 프로세스 안에서는 하지 않는다(ADR 0034).
+실제로 켜려면 살아있는 클러스터·DNS·인증서 메커니즘이 필요 — values.yaml의
+ingress 블록 주석 참고.
+*/}}
 {{- if .Values.ingress.enabled -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -26,6 +32,7 @@ spec:
           - path: {{ .path }}
             pathType: {{ .pathType }}
             backend:
+              # 이 차트가 만드는 Service를 그대로 가리킨다 — 별도 백엔드 없음.
               service:
                 name: {{ include "upload-board-project.fullname" $ }}
                 port:

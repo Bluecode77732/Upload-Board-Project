@@ -25,12 +25,14 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- /* Pod 레벨 보안 컨텍스트 — Dockerfile의 non-root uid/gid와 맞춤(ADR 0030). */}}
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
+          {{- /* 컨테이너 레벨 보안 컨텍스트 — capabilities drop 등 세부 강화. */}}
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -41,15 +43,18 @@ spec:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
+          {{- /* 비밀 아닌 값은 ConfigMap, 비밀값은 existingSecret에서 온다 — 이 차트는 Secret을 직접 만들지 않는다(ADR 0033/0041). */}}
           envFrom:
             - configMapRef:
                 name: {{ include "upload-board-project.fullname" . }}
             - secretRef:
                 name: {{ required "secrets.existingSecret is required — create the Secret first, see k8s/helm/README.md" .Values.secrets.existingSecret }}
+          {{- /* liveness: DB 상태와 무관 — 프로세스 자체만 확인(ADR 0031). */}}
           {{- with .Values.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- /* readiness: DB 연결까지 확인 — DB가 죽었을 때 트래픽만 빼고 재시작은 하지 않음(ADR 0031). */}}
           {{- with .Values.readinessProbe }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}

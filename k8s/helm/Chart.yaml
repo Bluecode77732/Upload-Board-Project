@@ -3,8 +3,8 @@ name: upload-board-project
 description: NestJS REST API backend for the Upload Board Project — authenticated file upload and board management (ADR 0041)
 type: application
 
-# Chart version — bump on any template/values change (SemVer).
+# 차트 버전 — 템플릿/values를 바꿀 때마다 올린다(SemVer).
 version: 0.2.0
 
-# Tracks backend/package.json's version, not this chart's own version.
+# 이 차트 자체의 버전이 아니라 backend/package.json의 버전을 따라간다.
 appVersion: "0.0.1"
