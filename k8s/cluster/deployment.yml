@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx-deployment
-spec: 
+  name: upload-board-api
+spec:
   replicas: 3
   selector:
     matchLabels:
-      app: nginx
-  template: 
+      app: upload-board-api
+  template:
     metadata:
-      labels: 
-        app: nginx
+      labels:
+        app: upload-board-api
     spec:
-      containers:   
-        - name: nginx
-          image: nginx
+      containers:
+        - name: upload-board-api
+          image: bluecode1775/sharenpo:latest
           ports:
-            - containerPort: 80
+            - containerPort: 3000

@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: nginx-app
-  labels: 
-    app: nginx-app
+  name: upload-board-api
+  labels:
+    app: upload-board-api
     type: back-end
 
-spec: 
-  containers: 
-    - name: nginx-containers
-      image: nginx
+spec:
+  containers:
+    - name: upload-board-api
+      image: bluecode1775/sharenpo:latest
       ports:
-        - containerPort: 80
+        - containerPort: 3000
