@@ -51,6 +51,7 @@ each ADR records the *why* behind those rules.
 | [0040](0040-persisted-media-type-for-playback.md) | Persisted `mediaType` column for playback tag selection, extends 0025/0027 | Accepted | 2026-08-16 |
 | [0041](0041-helm-chart-project-adaptation.md) | Helm chart project adaptation — lifting ADR 0037's deferral | Accepted | 2026-08-17 |
 | [0042](0042-k8s-helm-directory-consolidation.md) | Consolidate `k8s/` and `helm/` — one Kubernetes directory, not two | Accepted | 2026-08-17 |
+| [0043](0043-terraform-project-adaptation.md) | Terraform project adaptation — real AWS resources, verified via live apply, amends 0038 | Accepted (design-only) | 2026-08-18 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status
