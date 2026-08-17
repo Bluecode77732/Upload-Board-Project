@@ -1,0 +1,41 @@
+{{- if .Values.migration.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Suffixed with the release revision — Job specs are immutable, so each
+  # upgrade needs a new object rather than patching the previous one.
+  name: {{ include "upload-board-project.fullname" . }}-migrate-{{ .Release.Revision }}
+  labels:
+    {{- include "upload-board-project.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        {{- include "upload-board-project.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Mirrors docker-compose.yml's one-shot `migrate` service (ADR 0032).
+          command: ["node", "node_modules/typeorm/cli.js", "migration:run", "-d", "dist/data-source.js"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "upload-board-project.fullname" . }}
+            - secretRef:
+                name: {{ required "secrets.existingSecret is required — create the Secret first, see helm/upload-board-project/README.md" .Values.secrets.existingSecret }}
+{{- end }}

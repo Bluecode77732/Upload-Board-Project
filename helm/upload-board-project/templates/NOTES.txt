@@ -1,0 +1,22 @@
+{{ include "upload-board-project.fullname" . }} has been deployed.
+
+Service: {{ include "upload-board-project.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+{{- if not .Values.secrets.existingSecret }}
+
+WARNING: secrets.existingSecret is not set — envFrom will fail to resolve and
+the pod (and the migration Job) will not start. Create the Secret first; see
+helm/upload-board-project/README.md.
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+
+Ingress hosts:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+
+Ingress is disabled (values.yaml ingress.enabled: false) — reach the service
+from inside the cluster, or `kubectl port-forward`.
+{{- end }}
