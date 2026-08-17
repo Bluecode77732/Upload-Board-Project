@@ -190,6 +190,34 @@
   밖). 백엔드 변경 없음, ADR 불필요(설계 판단 없는 순수 문자열 교체).
 
 ### 추가
+- **ADR 0041: Helm 차트 프로젝트 적응, ADR 0037의 유예 해제(2026-08-17)** —
+  `helm/upload-board-project/`는 더 이상 `nginx`를 패키징하지 않는다. ADR 0037이
+  적어둔 "`k8s/` 매니페스트를 먼저 템플릿화한다"는 이유를 확인하려다, `k8s/` 자체가
+  여전히 미수정 `nginx`/`nginx-app` placeholder 파일 다섯 개였다는 사실을 발견했다
+  (Helm 차트와 같은 부류의 스캐폴딩이지, 템플릿화할 실제 원본이 아니었다) — 이건
+  먼저 별도로 바로잡았다(커밋 `48a89f2`): 이제 다섯 파일 모두 `app: upload-board-api`
+  라벨, `bluecode1775/sharenpo:latest` 이미지, `Dockerfile`의 `EXPOSE 3000`과 맞춘
+  컨테이너 포트 3000을 쓴다. [ADR 0041](ADR/0041-helm-chart-project-adaptation.ko.md)
+  (커밋 `3609729`)은 그다음 ADR 0037의 "적응 작업을 미룬다"는 결정을 해제한 걸
+  기록한다 — `helm lint --strict`/`helm template`이 살아있는 클러스터 없이도
+  템플릿을 검증해주므로, 차트가 더 이상 클러스터가 생기길 기다릴 필요가 없다.
+  차트 자체(커밋 `b591825`)는 `k8s/`가 아니라 `Dockerfile`/`docker-compose.yml`/Joi
+  env 스키마에서 유도했다: 실제 이미지와 포트, `/health/live`+`/health/ready`
+  probe(ADR 0031), non-root `securityContext`(ADR 0030), 비밀이 아닌 env var를 담는
+  `ConfigMap`, `existingSecret` 참조 방식만 지원하는 `Secret` 소비 — 차트는 `Secret`을
+  직접 만들지도, `values.yaml`에 비밀값을 리터럴로 받지도 않는다(ADR 0033의 목표
+  형태) —, `docker-compose.yml`의 한 번만 도는 `migrate` 서비스를 본뜬 migration
+  `Job`(ADR 0032), 그리고 기본 비활성인 `Ingress`(TLS는 여기서 종료, 앱 내부에서는
+  안 함, ADR 0034). `replicaCount` 기본값은 3에서 1로 낮췄다: 기본
+  `STORAGE_DRIVER=local`에서는 각 pod의 `file/temp`/`file/upload`가 그 pod만의
+  디스크라, 한 replica로 업로드한 파일이 다른 replica에서는 안 보인다(스토리지
+  계층에 대해 [ADR 0029](ADR/0029-storage-port-adapter.ko.md)가 이미 기록한 것과
+  같은 다중 인스턴스 문제) — `STORAGE_DRIVER=s3`로 전환한 뒤에만 올려도 안전하다.
+  살아있는 클러스터에 대한 `helm install` 검증은 여전히 안 된 상태다 — 아직 클러스터
+  자체가 없다. ROADMAP.md의 Stage 4 컴포넌트 상태표도 맞춰 갱신(Helm 행 🔶
+  스캐폴딩만 → 🔶 프로젝트 적응 완료; Kubernetes 행의 "기본 매니페스트 랜딩" 설명도
+  처음으로 정확해짐).
+
 - **ADR 0037/0038: Helm 차트·Terraform IaC 스캐폴딩 문서화(2026-08-11 랜딩,
   2026-08-15 문서 작성)** — `helm/upload-board-project/`(커밋 `ee75900`)와
   `k8s/infra/terraform/`(커밋 `c661fc4`) 둘 다 CHANGELOG 항목도 ROADMAP 상태표

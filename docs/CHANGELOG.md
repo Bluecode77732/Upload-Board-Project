@@ -191,6 +191,32 @@ development line (package.json version).
   here). No backend change, no ADR (pure string replacement, no design decision).
 
 ### Added
+- **ADR 0041: Helm chart project-adapted, lifting ADR 0037's deferral (2026-08-17)** —
+  `helm/upload-board-project/` no longer packages `nginx`. Verifying ADR 0037's stated
+  reason to template `k8s/`'s manifests in first turned up that `k8s/` itself was still
+  five unmodified `nginx`/`nginx-app` placeholder files (same class of scaffold as the
+  Helm chart, not a real source) — fixed independently first (commit `48a89f2`): all five
+  now carry `app: upload-board-api`, `bluecode1775/sharenpo:latest`, and container port
+  3000 (matching the `Dockerfile`'s `EXPOSE 3000`). [ADR 0041](ADR/0041-helm-chart-project-adaptation.md)
+  (commit `3609729`) then records lifting ADR 0037's "defer the adaptation pass" decision —
+  `helm lint --strict`/`helm template` verify templates without needing a live cluster, so
+  the chart no longer has to wait for one. The chart itself (commit `b591825`) is derived
+  from `Dockerfile`/`docker-compose.yml`/the Joi env schema, not from `k8s/`: real image and
+  port, `/health/live`+`/health/ready` probes (ADR 0031), non-root `securityContext`
+  (ADR 0030), a `ConfigMap` for non-secret env vars, `Secret` consumption via
+  `existingSecret` reference only — the chart never creates a `Secret` or accepts a literal
+  secret value in `values.yaml` (ADR 0033's target shape) — a migration `Job` mirroring
+  `docker-compose.yml`'s one-shot `migrate` service (ADR 0032), and a disabled-by-default
+  `Ingress` (TLS terminates there, not in-process, per ADR 0034). `replicaCount` default
+  lowered from 3 to 1: the default `STORAGE_DRIVER=local` means each pod's `file/temp`/
+  `file/upload` is that pod's own disk, so a file uploaded through one replica is invisible
+  to the others (the multi-instance gap [ADR 0029](ADR/0029-storage-port-adapter.md) already
+  recorded for the storage layer) — raising it is safe only once `STORAGE_DRIVER=s3`.
+  `helm install` against a live cluster remains unverified — none exists yet. ROADMAP.md's
+  Stage 4 component-status table updated to match (Helm row 🔶 scaffold-only → 🔶
+  project-adapted; Kubernetes row's "base manifests" description now accurate for the first
+  time).
+
 - **ADR 0037/0038: Helm chart and Terraform IaC scaffolds documented (landed 2026-08-11,
   written up 2026-08-15)** — both `helm/upload-board-project/` (commit `ee75900`) and
   `k8s/infra/terraform/` (commit `c661fc4`) landed with no CHANGELOG entry, no ROADMAP
