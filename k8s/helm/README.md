@@ -3,10 +3,10 @@
 > 한국어: [README.ko.md](README.ko.md)
 
 Packages this repo's backend (`Dockerfile`, `bluecode1775/sharenpo` on Docker
-Hub) for Kubernetes. See [ADR 0042](../../../docs/ADR/0042-k8s-helm-directory-consolidation.md)
+Hub) for Kubernetes. See [ADR 0042](../../docs/ADR/0042-k8s-helm-directory-consolidation.md)
 for why this chart lives under `k8s/` rather than a sibling `helm/` directory,
-[ADR 0041](../../../docs/ADR/0041-helm-chart-project-adaptation.md) for why the
-chart is shaped the way it is, and [ADR 0037](../../../docs/ADR/0037-helm-chart-scaffold.md)
+[ADR 0041](../../docs/ADR/0041-helm-chart-project-adaptation.md) for why the
+chart is shaped the way it is, and [ADR 0037](../../docs/ADR/0037-helm-chart-scaffold.md)
 for its scaffold history.
 
 **Status**: `helm install --wait` verified end-to-end against a throwaway local

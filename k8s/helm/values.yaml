@@ -71,7 +71,7 @@ env:
 #   kubectl create secret generic <name> \
 #     --from-literal=DB_USERNAME=... --from-literal=DB_PASSWORD=... \
 #     --from-literal=ACCESS_TOKEN_SECRET=... --from-literal=REFRESH_TOKEN_SECRET=...
-# then set existingSecret to <name>. See k8s/helm/upload-board-project/README.md.
+# then set existingSecret to <name>. See k8s/helm/README.md.
 secrets:
   existingSecret: ""
 

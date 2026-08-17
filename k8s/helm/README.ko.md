@@ -5,10 +5,10 @@
 이 저장소의 백엔드(`Dockerfile`, Docker Hub의 `bluecode1775/sharenpo`)를
 Kubernetes용으로 패키징합니다. 이 차트가 별도 `helm/` 폴더가 아니라 `k8s/`
 아래에 있는 이유는
-[ADR 0042](../../../docs/ADR/0042-k8s-helm-directory-consolidation.ko.md)를,
+[ADR 0042](../../docs/ADR/0042-k8s-helm-directory-consolidation.ko.md)를,
 차트가 왜 이런 모양인지는
-[ADR 0041](../../../docs/ADR/0041-helm-chart-project-adaptation.ko.md)을,
-스캐폴딩 이력은 [ADR 0037](../../../docs/ADR/0037-helm-chart-scaffold.ko.md)을
+[ADR 0041](../../docs/ADR/0041-helm-chart-project-adaptation.ko.md)을,
+스캐폴딩 이력은 [ADR 0037](../../docs/ADR/0037-helm-chart-scaffold.ko.md)을
 참고하세요.
 
 **상태**: 로컬 임시 `kind` 클러스터에 대해 `helm install --wait`로 종단 간 검증

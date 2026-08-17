@@ -92,3 +92,24 @@ ROADMAP.md의 Stage 4 설명은 Helm의 역할을 "**`k8s/` 매니페스트 위�
 - 스키마·엔티티·API 표면 변경 없음. `helm lint --strict`와
   `helm template`을 새 경로에서 다시 실행해, 이동 전과 동일하게 통과함을
   확인했다.
+
+### 추가 기록 (2026-08-17) — 한 단계 더 평탄화: `k8s/helm/upload-board-project/`가 아니라 `k8s/helm/`
+
+위 결정은 차트를 `k8s/helm/upload-board-project/`로 옮겨, `k8s/` 아래
+`helm/` 아래에 다시 차트 이름을 한 번 더 중첩시켰다. 다시 보니 차트가 이미
+Helm 전용 위치에 있는 상태에서 디렉터리 이름을 또 반복하는 건 의미가
+없다 — `k8s/helm/`만으로도 "Helm 차트"라는 뜻이 명확하므로, 그 아래
+`upload-board-project/` 단계를 추가해도 정보는 늘지 않고 깊이만 늘어난다
+(`k8s/infra/terraform/`과는 다르다 — 거기선 `infra/`와 `terraform/`이 각각
+서로 다른 이름 역할을 한다).
+
+이제 차트는 **`k8s/helm/`**에 바로 있다(`Chart.yaml`, `values.yaml`,
+`templates/`, `README.md`+`.ko.md`, `.helmignore` 전부 위 결정이 둔 위치에서
+한 단계 위로; 비어 있던 `charts/` 스캐폴딩 하위 디렉터리 — Helm의 서브차트
+의존성 관례용, 여기선 미사용 — 는 옮기지 않고 삭제했다). 이전과 같은 종류의
+내부 경로 인용을 다시 갱신했다: `required()` 가드 메시지 두 곳,
+`templates/NOTES.txt`, `values.yaml` 주석, README의 상대 ADR 링크(이제
+`../../docs/ADR/...`, 위 결정의 `../../../`보다 한 단계 얕음). `helm lint
+--strict`/`helm template`도 이 경로에서 다시 검증, 동일한 출력. `Chart.yaml`의
+`name: upload-board-project` 필드는 영향받지 않는다 — 차트의 정체성은
+디렉터리 이름이 아니라 그 필드에서 온다.

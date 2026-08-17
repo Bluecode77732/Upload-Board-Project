@@ -13,6 +13,17 @@
 ## [Unreleased]
 
 ### 변경
+- **`k8s/helm/upload-board-project/`를 `k8s/helm/`로 평탄화(2026-08-17, 아래 항목의 당일
+  후속 조치, [ADR 0042](ADR/0042-k8s-helm-directory-consolidation.ko.md) 추가 기록)** —
+  차트를 `helm/` 아래 `upload-board-project/` 아래에 중첩시키면 "여기가 Helm 차트다"라는
+  신호를 정보 증가 없이 두 번 반복하는 셈이다 — 각 구간이 서로 다른 걸 가리키는
+  `k8s/infra/terraform/`과는 다르다. `Chart.yaml`, `values.yaml`, `templates/`,
+  `README.md`+`.ko.md`, `.helmignore`를 한 단계 위로 옮겼고, 비어 있던 미사용
+  서브차트-의존성 스캐폴딩 `charts/`는 옮기지 않고 삭제했다. 경로 인용을 다시
+  갱신했다(`required()` 가드 메시지 두 곳, `NOTES.txt`, `values.yaml` 주석, README의 상대
+  ADR 링크 — 이제 `../../docs/ADR/...`). `helm lint --strict`/`helm template` 재검증, 출력
+  동일. `Chart.yaml`의 `name: upload-board-project` 필드는 영향 없음.
+
 - **`helm/upload-board-project/`를 `k8s/helm/upload-board-project/`로 이동; `k8s/`의 독립
   정적 매니페스트 5개(`k8s/pod/pod.yml`, `k8s/deployment/deployment.yml`,
   `k8s/deployment/rolling_update.yml`, `k8s/cluster/deployment.yml`,

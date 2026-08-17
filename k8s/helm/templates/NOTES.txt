@@ -6,7 +6,7 @@ Service: {{ include "upload-board-project.fullname" . }}.{{ .Release.Namespace }
 
 WARNING: secrets.existingSecret is not set — envFrom will fail to resolve and
 the pod (and the migration Job) will not start. Create the Secret first; see
-k8s/helm/upload-board-project/README.md.
+k8s/helm/README.md.
 {{- end }}
 
 {{- if .Values.ingress.enabled }}

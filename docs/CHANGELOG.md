@@ -13,6 +13,17 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **`k8s/helm/upload-board-project/` flattened to `k8s/helm/` (2026-08-17, same-day follow-up
+  to the entry below, [ADR 0042](ADR/0042-k8s-helm-directory-consolidation.md) addendum)** —
+  nesting the chart under both `helm/` and `upload-board-project/` repeated the "this is the
+  Helm chart" signal twice for no added information, unlike `k8s/infra/terraform/` where each
+  segment names something distinct. `Chart.yaml`, `values.yaml`, `templates/`, `README.md`+
+  `.ko.md`, `.helmignore` moved up one level; the empty, unused `charts/` subchart-dependency
+  scaffold was deleted rather than relocated. Path citations updated again (the two `required()`
+  guard messages, `NOTES.txt`, a `values.yaml` comment, and the README's relative ADR links, now
+  `../../docs/ADR/...`). `helm lint --strict`/`helm template` re-verified, unchanged output.
+  `Chart.yaml`'s `name: upload-board-project` field is unaffected.
+
 - **`helm/upload-board-project/` moved to `k8s/helm/upload-board-project/`; `k8s/`'s five
   standalone static manifests (`k8s/pod/pod.yml`, `k8s/deployment/deployment.yml`,
   `k8s/deployment/rolling_update.yml`, `k8s/cluster/deployment.yml`,

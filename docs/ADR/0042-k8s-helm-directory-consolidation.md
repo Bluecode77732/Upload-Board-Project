@@ -97,3 +97,25 @@ content going stale because nothing forced the two to be checked together.
 - No schema, entity, or API surface change. `helm lint --strict` and
   `helm template` were re-run from the new path and pass identically to
   before the move.
+
+### Addendum (2026-08-17) — flattened one level further: `k8s/helm/`, not `k8s/helm/upload-board-project/`
+
+The Decision above moved the chart to `k8s/helm/upload-board-project/`,
+nesting the chart name under `helm/` under `k8s/`. On reflection this repeats
+the directory name for no reason once the chart already lives in a
+Helm-specific location — `k8s/helm/` unambiguously means "the Helm chart," so
+an additional `upload-board-project/` level adds depth without adding
+information (unlike `k8s/infra/terraform/`, where `infra/` and `terraform/`
+are each doing distinct naming work).
+
+The chart now lives at **`k8s/helm/`** directly (`Chart.yaml`, `values.yaml`,
+`templates/`, `README.md`+`.ko.md`, `.helmignore` all one level up from where
+the Decision above put them; the emptied `charts/` scaffold subdirectory —
+Helm's convention for subchart dependencies, unused here — was removed, not
+relocated). The same category of internal path citations updated again: the
+two `required()` guard messages, `templates/NOTES.txt`, the `values.yaml`
+comment, and the README's relative ADR links (now `../../docs/ADR/...`, one
+level shallower than the Decision above's `../../../`). `helm lint --strict`/
+`helm template` re-verified from this path too, same output. `Chart.yaml`'s
+`name: upload-board-project` field is unaffected — a chart's identity comes
+from that field, not its directory name.
