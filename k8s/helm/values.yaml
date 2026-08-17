@@ -39,8 +39,18 @@ service:
 
 # 비밀이 아닌 env var — 여기 있는 키 하나하나가 ConfigMap(templates/configmap.yaml)의
 # 항목 하나가 되고, envFrom을 통해 컨테이너에 연결된다. 이름과 필수 여부는
-# backend/app.module.ts의 Joi 스키마와 반드시 일치해야 한다 — Joi가 필수로 요구하는
-# var가 여기 빠지면, .env에서 빠졌을 때와 똑같이 pod가 부팅 중 crash-loop에 빠진다.
+# backend/app.module.ts의 Joi 스키마와 반드시 일치해야 한다.
+#
+# 아래 8개는 Joi가 기본값 없이 required로 요구하는 var만 남긴 것 — 여기서
+# 빠지면 ConfigMap에 안 잡히고(빈 문자열도 마찬가지, configmap.yaml이 생략함),
+# .env에서 빠졌을 때와 똑같이 pod가 부팅 중 crash-loop에 빠진다.
+#
+# 나머지 var(BASE_URL, PORT, CORS_ORIGIN, SUPERADMIN_EMAIL, TEMP_SWEEP_*,
+# STORAGE_DRIVER, S3_BUCKET, AWS_REGION, CONTENT_SIGNED_URL_TTL_SECONDS)는
+# 전부 Joi에 기본값이 있어서 일부러 여기 나열하지 않았다 — 생략하면 앱이
+# Joi의 기본값을 그대로 쓰고(.env를 안 채운 것과 동일한 동작), 다른 값이
+# 필요하면 배포 시점에 `--set env.<KEY>=<값>`으로 추가하면 된다. 어떤 var가
+# 있는지는 backend/app.module.ts의 Joi 스키마나 .env.example이 기준이다.
 env:
   ENV: "prod"
   DB_TYPE: "postgres"
@@ -50,18 +60,6 @@ env:
   HASH_ROUNDS: 10
   REFRESH_TOKEN_SECRET_EXPIRES_IN: 604800
   ACCESS_TOKEN_SECRET_EXPIRES_IN: 3600
-  BASE_URL: ""
-  PORT: 3000
-  CORS_ORIGIN: ""
-  SUPERADMIN_EMAIL: ""
-  TEMP_SWEEP_ENABLED: true
-  TEMP_SWEEP_CRON: "0 * * * *"
-  TEMP_SWEEP_TTL_HOURS: 24
-  TEMP_SWEEP_DRY_RUN: false
-  STORAGE_DRIVER: "local"
-  S3_BUCKET: ""
-  AWS_REGION: ""
-  CONTENT_SIGNED_URL_TTL_SECONDS: 300
 
 # 비밀 env var(DB_USERNAME, DB_PASSWORD, ACCESS_TOKEN_SECRET,
 # REFRESH_TOKEN_SECRET) — 이 차트는 Secret 리소스를 직접 만들지도, 비밀값을
