@@ -130,3 +130,41 @@ Two things have changed since:
   ADR 0034.
 - No schema, entity, or API surface change. No code outside `helm/` (and the
   already-independent `k8s/` fix) touched by this ADR.
+
+### Addendum (2026-08-17) — `helm install` verified against a throwaway `kind` cluster
+
+The "unverified beyond template rendering" line above no longer describes the
+chart's plumbing. A local `kind` cluster (`kind create cluster`, torn down
+afterward — not a persistent addition to this project's tooling) ran a full
+`helm install --wait`: a throwaway `postgres:16`, a fresh image built from
+current source (`bluecode1775/sharenpo:latest` on Docker Hub predates ADR
+0039's SSL fix and connection-refuses against a non-TLS Postgres — unusable
+for this, unrelated to the chart itself), the app Secret created out-of-band
+per this chart's own README, and `/health/live`, `/health/ready`, and `/doc`
+all answering `200` through the `Service`.
+
+That run found two real bugs `helm lint`/`helm template` could not have
+caught, both fixed in commit `0326199`:
+
+1. **Hook ordering.** `migration-job.yml`'s `pre-install` hook read the
+   ConfigMap via `envFrom`, but pre-install hooks run *before* any of the
+   chart's normal (non-hook) resources — the ConfigMap didn't exist yet when
+   the Job tried to start. Fixed by hooking the ConfigMap in too, at an
+   earlier weight than the Job, with a `before-hook-creation` (not
+   `hook-succeeded`) delete policy so it survives into the normal install
+   phase for the Deployment/Service to read.
+2. **Empty-string optional env vars.** `values.yaml`'s optional keys
+   (`CORS_ORIGIN`, `SUPERADMIN_EMAIL`, `S3_BUCKET`, `AWS_REGION`) defaulted to
+   `""`, which the ConfigMap rendered as a literal empty string — but
+   `Joi.string()` (no `.allow('')`) in `backend/app.module.ts` rejects `""`
+   even though the same var being *absent* is valid (the same contract
+   `.env.example` expresses by commenting these out rather than setting them
+   blank). The app crash-looped on `ConfigModule` validation. The ConfigMap
+   template now omits empty-valued keys instead of emitting them.
+
+**Still not verified**: a real target cluster (AWS/EKS). The `kind` run
+proves the chart's own templates, hook ordering, and env wiring are correct —
+it says nothing about infrastructure that doesn't exist yet (ROADMAP.md >
+Stage 4). `kind`/the local image were both discarded after the run; nothing
+from this addendum is a persisted addition to the repo or this machine beyond
+the two bug fixes.

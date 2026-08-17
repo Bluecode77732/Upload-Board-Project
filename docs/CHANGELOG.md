@@ -13,6 +13,26 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Fixed
+- **Helm chart: two real bugs found by an actual `helm install --wait` against a throwaway
+  local `kind` cluster (2026-08-17, commit `0326199`, addendum to
+  [ADR 0041](ADR/0041-helm-chart-project-adaptation.md))** — the prior `helm lint --strict`/
+  `helm template` pass couldn't catch either, since both only manifest once a real API server
+  applies the resources. (1) `migration-job.yml`'s `pre-install` hook read the `ConfigMap` via
+  `envFrom`, but pre-install hooks run before any of the chart's normal (non-hook) resources —
+  the Job failed with `configmap "..." not found` because the ConfigMap didn't exist yet.
+  Fixed by hooking the ConfigMap in too, at an earlier weight, with a `before-hook-creation`
+  delete policy so it survives into the normal install phase. (2) `values.yaml`'s optional env
+  vars (`CORS_ORIGIN`, `SUPERADMIN_EMAIL`, `S3_BUCKET`, `AWS_REGION`) defaulted to `""`, which
+  the ConfigMap rendered as a literal empty string; `Joi.string()` in `backend/app.module.ts`
+  (no `.allow('')`) rejects `""` even though the same var being absent is valid, so the app
+  crash-looped on `ConfigModule` validation. The ConfigMap template now omits empty-valued keys
+  instead of emitting them. After both fixes, a fresh `helm install --wait` (throwaway
+  `postgres:16`, an image built from current source — `bluecode1775/sharenpo:latest` on Docker
+  Hub predates [ADR 0039](ADR/0039-db-tls-verification-stance.md)'s SSL fix and is unusable for
+  this) succeeded, with `/health/live`, `/health/ready`, and `/doc` all answering `200` through
+  the `Service`. `kind` cluster and the local image were both discarded afterward. A real target
+  cluster (AWS/EKS) is still unverified — this only proves the chart's own plumbing.
+
 - **`docker-compose-test.yml`'s `migrate` service never actually ran migrations — it silently
   booted the full app against an unmigrated DB.** No test-execution record for this file
   existed anywhere in the repo (checked `docs/CHANGELOG.md`, `docs/ROADMAP.md`, every

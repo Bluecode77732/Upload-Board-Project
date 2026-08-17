@@ -7,9 +7,15 @@ Hub) for Kubernetes. See [ADR 0041](../../docs/ADR/0041-helm-chart-project-adapt
 for why the chart is shaped the way it is, and [ADR 0037](../../docs/ADR/0037-helm-chart-scaffold.md)
 for its scaffold history.
 
-**Status**: templates render and pass `helm lint --strict` / `helm template`.
-`helm install` has never been run against a live cluster — there isn't one yet
-(ROADMAP.md > Stage 4). Treat this as unverified beyond template rendering.
+**Status**: `helm install --wait` verified end-to-end against a throwaway local
+`kind` cluster (2026-08-17) — a fresh image built from current source (not the
+`bluecode1775/sharenpo:latest` Docker Hub tag, which predates ADR 0039's SSL
+fix), a throwaway `postgres:16`, and `/health/live`/`/health/ready`/`/doc` all
+answered `200` through the Service. That run found and fixed two real bugs
+(hook ordering, empty-string env vars — commit `0326199`).
+**Still unverified**: a real target cluster (AWS/EKS) — nothing has been
+deployed there yet (ROADMAP.md > Stage 4). The `kind` run proves the chart's
+own plumbing works, not that the target infrastructure exists.
 
 ## Before installing: create the Secret
 

@@ -8,10 +8,15 @@ Kubernetes용으로 패키징합니다. 차트가 왜 이런 모양인지는
 스캐폴딩 이력은 [ADR 0037](../../docs/ADR/0037-helm-chart-scaffold.ko.md)을
 참고하세요.
 
-**상태**: 템플릿은 렌더링되고 `helm lint --strict` / `helm template`을 통과합니다.
-`helm install`은 살아있는 클러스터에 대해 한 번도 실행된 적이 없습니다 —
-아직 클러스터 자체가 없습니다(ROADMAP.md > Stage 4). 템플릿 렌더링 이상은
-검증되지 않았다고 보세요.
+**상태**: 로컬 임시 `kind` 클러스터에 대해 `helm install --wait`로 종단 간 검증
+완료(2026-08-17) — Docker Hub의 `bluecode1775/sharenpo:latest`(ADR 0039의 SSL
+수정 이전 이미지)가 아니라 현재 소스로 새로 빌드한 이미지, 임시
+`postgres:16`, 그리고 `/health/live`/`/health/ready`/`/doc` 모두 Service를
+통해 `200`을 응답했습니다. 이 실행에서 실제 버그 2개를 발견해 고쳤습니다(hook
+순서, 빈 문자열 env var — 커밋 `0326199`). **여전히 미검증**: 실제 대상
+클러스터(AWS/EKS) — 아직 거기엔 아무것도 배포된 적이 없습니다(ROADMAP.md >
+Stage 4). `kind` 실행은 차트 자체의 배관이 동작한다는 것만 증명하지, 대상
+인프라가 존재한다는 뜻은 아닙니다.
 
 ## 설치 전: Secret 먼저 만들기
 

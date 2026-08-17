@@ -121,3 +121,39 @@ ADR 0037은 Helm 차트를 `helm create`의 미수정 스캐폴딩으로 기록�
   클러스터, DNS, 인증서 메커니즘이 필요하다 — ADR 0034에서 바뀌는 것 없음.
 - 스키마·엔티티·API 표면 변경 없음. `helm/`(그리고 이미 별도로 처리된 `k8s/`
   수정) 밖의 코드는 이 ADR에서 건드리지 않는다.
+
+### 추가 기록 (2026-08-17) — 임시 `kind` 클러스터에 대해 `helm install` 검증 완료
+
+위의 "템플릿 렌더링 이상은 검증되지 않았다"는 문장은 더 이상 차트의 배관 상태를
+정확히 설명하지 못한다. 로컬 `kind` 클러스터(`kind create cluster`, 실행 후
+바로 삭제 — 이 프로젝트 도구 체계에 영구적으로 추가된 게 아님)에서 실제
+`helm install --wait`를 완주시켰다: 임시 `postgres:16`, 현재 소스로 새로
+빌드한 이미지(Docker Hub의 `bluecode1775/sharenpo:latest`는 ADR 0039의 SSL
+수정 이전 이미지라 TLS 없는 Postgres에 연결이 거부됨 — 차트 자체와는 무관한
+문제라 이 검증엔 쓸 수 없었음), 이 차트의 README가 안내하는 대로 별도로 만든
+앱 Secret, 그리고 `/health/live`, `/health/ready`, `/doc` 모두 `Service`를
+통해 `200`을 응답.
+
+이 실행에서 `helm lint`/`helm template`으로는 잡을 수 없었던 실제 버그
+2개를 발견해 커밋 `0326199`에서 고쳤다:
+
+1. **Hook 순서.** `migration-job.yml`의 `pre-install` hook이 `envFrom`으로
+   ConfigMap을 읽는데, pre-install hook은 차트의 일반(non-hook) 리소스보다
+   *먼저* 실행된다 — Job이 시작될 때 ConfigMap이 아직 존재하지 않았다.
+   ConfigMap도 함께 hook으로 지정하되 Job보다 이른 weight를 주고,
+   `hook-succeeded`가 아니라 `before-hook-creation` delete policy를 붙여
+   일반 설치 단계까지 살아남아 Deployment/Service가 읽을 수 있도록 고쳤다.
+2. **빈 문자열 선택적 env var.** `values.yaml`의 선택적 키들(`CORS_ORIGIN`,
+   `SUPERADMIN_EMAIL`, `S3_BUCKET`, `AWS_REGION`)이 기본값 `""`였는데,
+   ConfigMap이 이걸 리터럴 빈 문자열로 렌더링했다 — 그런데
+   `backend/app.module.ts`의 `Joi.string()`(`.allow('')` 없음)은 그 var가
+   *없는* 건 허용하면서도 `""`는 거부한다(`.env.example`이 이런 선택적
+   var를 빈 값으로 설정하지 않고 주석 처리해두는 것과 같은 계약). 앱이
+   `ConfigModule` 검증 단계에서 crash-loop에 빠졌다. ConfigMap 템플릿은
+   이제 빈 값인 키를 렌더링하지 않고 건너뛴다.
+
+**여전히 검증 안 됨**: 실제 대상 클러스터(AWS/EKS). 이번 `kind` 실행은 차트
+자체의 템플릿, hook 순서, env 연결이 올바르다는 것만 증명하지, 아직 존재하지
+않는 인프라에 대해서는 아무것도 말해주지 않는다(ROADMAP.md > Stage 4). `kind`와
+로컬 이미지는 실행 후 모두 폐기했다 — 이 추가 기록에서 저장소나 이 머신에
+영구적으로 남은 건 버그 수정 2건뿐이다.

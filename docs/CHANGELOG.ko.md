@@ -13,6 +13,25 @@
 ## [Unreleased]
 
 ### 수정
+- **Helm 차트: 임시 로컬 `kind` 클러스터에 대한 실제 `helm install --wait`로 발견한 진짜 버그
+  2개(2026-08-17, 커밋 `0326199`, [ADR 0041](ADR/0041-helm-chart-project-adaptation.ko.md)
+  추가 기록)** — 앞서 진행한 `helm lint --strict`/`helm template` 검증으로는 둘 다 못 잡았다,
+  실제 API 서버가 리소스를 적용해봐야만 드러나는 문제였기 때문이다. (1) `migration-job.yml`의
+  `pre-install` hook이 `envFrom`으로 `ConfigMap`을 읽는데, pre-install hook은 차트의 일반
+  (non-hook) 리소스보다 먼저 실행된다 — ConfigMap이 아직 없어서 Job이
+  `configmap "..." not found`로 실패했다. ConfigMap도 함께 hook으로 지정하되 더 이른 weight를
+  주고, `before-hook-creation` delete policy를 붙여 일반 설치 단계까지 살아남도록 고쳤다.
+  (2) `values.yaml`의 선택적 env var(`CORS_ORIGIN`, `SUPERADMIN_EMAIL`, `S3_BUCKET`,
+  `AWS_REGION`)가 기본값 `""`였는데, ConfigMap이 이걸 리터럴 빈 문자열로 렌더링했다;
+  `backend/app.module.ts`의 `Joi.string()`(`.allow('')` 없음)은 그 var가 없는 건 허용하면서도
+  `""`는 거부해서, 앱이 `ConfigModule` 검증 단계에서 crash-loop에 빠졌다. ConfigMap 템플릿은
+  이제 빈 값인 키를 렌더링하지 않고 건너뛴다. 두 수정 후 다시 `helm install --wait`(임시
+  `postgres:16`, 현재 소스로 빌드한 이미지 — Docker Hub의 `bluecode1775/sharenpo:latest`는
+  [ADR 0039](ADR/0039-db-tls-verification-stance.ko.md)의 SSL 수정 이전 이미지라 이 검증엔
+  쓸 수 없었음)를 실행하니 성공했고, `/health/live`, `/health/ready`, `/doc` 모두 `Service`를
+  통해 `200`을 응답했다. `kind` 클러스터와 로컬 이미지는 이후 모두 폐기했다. 실제 대상
+  클러스터(AWS/EKS)는 여전히 미검증 — 이번 검증은 차트 자체의 배관만 증명한다.
+
 - **`docker-compose-test.yml`의 `migrate` 서비스가 실제로는 마이그레이션을 한 번도 실행하지
   않았다 — 마이그레이션이 안 된 DB를 대상으로 앱 전체를 그냥 부팅해버렸다.** 이 파일에 대한
   테스트 실행 기록은 저장소 어디에도 없었다(`docs/CHANGELOG.md`, `docs/ROADMAP.md`,
