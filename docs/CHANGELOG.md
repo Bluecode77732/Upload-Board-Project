@@ -12,6 +12,27 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Changed
+- **`helm/upload-board-project/` moved to `k8s/helm/upload-board-project/`; `k8s/`'s five
+  standalone static manifests (`k8s/pod/pod.yml`, `k8s/deployment/deployment.yml`,
+  `k8s/deployment/rolling_update.yml`, `k8s/cluster/deployment.yml`,
+  `k8s/cluster/cluster_IP.yml`) deleted (2026-08-17, [ADR 0042](ADR/0042-k8s-helm-directory-consolidation.md))** —
+  the repo had two sibling top-level directories for the same subject: `k8s/`'s raw manifests
+  had no consumer (no CI job, no compose reference) and represented a strict subset of what
+  the Helm chart's templates already render (a `Deployment`/`Service`, with no `ConfigMap`,
+  `Secret` wiring, migration `Job`, or `Ingress` equivalent) — exactly the kind of unsynchronized
+  duplicate description that produced [ADR 0037](ADR/0037-helm-chart-scaffold.md)'s original
+  factual error about `k8s/` holding real manifests. Consolidated to one top-level Kubernetes
+  directory rather than exporting `helm template`'s output as new static files (which would have
+  discarded `values.yaml` parameterization, the `existingSecret` `required()` guard, and the
+  pre-install hook ordering fixed in the entry below). Chart content unchanged — only internal
+  path citations pointing at the old location were updated (the two `required()` guard messages,
+  `templates/NOTES.txt`, a `values.yaml` comment, and the `README.md`/`README.ko.md` relative
+  ADR links, now one directory level deeper). `helm lint --strict`/`helm template` re-verified
+  from the new path, unchanged output. ADR 0037/0041's own bodies are untouched — their
+  historical/decision text is accurate for when it was written; only ROADMAP.md's Kubernetes and
+  Helm rows were updated to cite the new path.
+
 ### Fixed
 - **Helm chart: two real bugs found by an actual `helm install --wait` against a throwaway
   local `kind` cluster (2026-08-17, commit `0326199`, addendum to

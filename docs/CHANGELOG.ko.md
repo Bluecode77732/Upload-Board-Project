@@ -12,6 +12,28 @@
 
 ## [Unreleased]
 
+### 변경
+- **`helm/upload-board-project/`를 `k8s/helm/upload-board-project/`로 이동; `k8s/`의 독립
+  정적 매니페스트 5개(`k8s/pod/pod.yml`, `k8s/deployment/deployment.yml`,
+  `k8s/deployment/rolling_update.yml`, `k8s/cluster/deployment.yml`,
+  `k8s/cluster/cluster_IP.yml`) 삭제(2026-08-17,
+  [ADR 0042](ADR/0042-k8s-helm-directory-consolidation.ko.md))** — 저장소에는 같은
+  대상을 다루는 최상위 형제 디렉터리가 두 개 있었다: `k8s/`의 raw 매니페스트는 소비하는
+  곳이 없었고(CI 잡도, compose 참조도 없음) Helm 차트의 템플릿이 이미 렌더링하는 것의
+  엄격한 부분집합(`Deployment`/`Service`뿐, `ConfigMap`·`Secret` 연결·migration
+  `Job`·`Ingress` 대응물 없음)이었다 — 정확히
+  [ADR 0037](ADR/0037-helm-chart-scaffold.ko.md)의 "`k8s/`에 실제 매니페스트가 있다"는
+  원래 사실 오류를 만들어낸 것과 같은, 동기화 안 된 중복 서술 패턴이다.
+  `helm template`의 출력을 새 정적 파일로 추출하는 대신(그러면 `values.yaml`
+  파라미터화, `existingSecret`의 `required()` 가드, 아래 항목에서 고친 pre-install hook
+  순서가 전부 사라진다) 최상위 Kubernetes 디렉터리를 하나로 통합했다. 차트 내용은
+  바뀌지 않았고 — 예전 위치를 가리키던 내부 경로 인용만 갱신했다(`required()` 가드
+  메시지 두 곳, `templates/NOTES.txt`, `values.yaml` 주석 한 줄, `README.md`/
+  `README.ko.md`의 상대 ADR 링크, 디렉터리 한 단계 더 깊어짐). `helm lint --strict`/
+  `helm template`을 새 경로에서 재검증, 출력 동일. ADR 0037/0041 본문은 손대지 않았다 —
+  그 배경/결정 서술은 작성 당시 기준으로 정확하다; ROADMAP.md의 Kubernetes·Helm 행만
+  새 경로를 인용하도록 갱신했다.
+
 ### 수정
 - **Helm 차트: 임시 로컬 `kind` 클러스터에 대한 실제 `helm install --wait`로 발견한 진짜 버그
   2개(2026-08-17, 커밋 `0326199`, [ADR 0041](ADR/0041-helm-chart-project-adaptation.ko.md)

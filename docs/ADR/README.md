@@ -50,6 +50,7 @@ each ADR records the *why* behind those rules.
 | [0039](0039-db-tls-verification-stance.md) | Production DB TLS — remove `rejectUnauthorized: false`, verify via a real CA when a target exists | Accepted | 2026-08-15 |
 | [0040](0040-persisted-media-type-for-playback.md) | Persisted `mediaType` column for playback tag selection, extends 0025/0027 | Accepted | 2026-08-16 |
 | [0041](0041-helm-chart-project-adaptation.md) | Helm chart project adaptation — lifting ADR 0037's deferral | Accepted | 2026-08-17 |
+| [0042](0042-k8s-helm-directory-consolidation.md) | Consolidate `k8s/` and `helm/` — one Kubernetes directory, not two | Accepted | 2026-08-17 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

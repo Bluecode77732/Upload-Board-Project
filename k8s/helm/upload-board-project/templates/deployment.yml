@@ -45,7 +45,7 @@ spec:
             - configMapRef:
                 name: {{ include "upload-board-project.fullname" . }}
             - secretRef:
-                name: {{ required "secrets.existingSecret is required — create the Secret first, see helm/upload-board-project/README.md" .Values.secrets.existingSecret }}
+                name: {{ required "secrets.existingSecret is required — create the Secret first, see k8s/helm/upload-board-project/README.md" .Values.secrets.existingSecret }}
           {{- with .Values.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
