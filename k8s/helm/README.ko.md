@@ -62,8 +62,11 @@ env var 누락으로 crash-loop에 빠지는 대신 설치 자체가 명확한 �
 | `migration-job.yml` | Job (Helm hook) | pre-install/pre-upgrade 시점에 `migration:run` 실행, `docker-compose.yml`의 `migrate` 서비스를 본뜸(ADR 0032) |
 | `ingress.yaml` | Ingress | 기본 비활성(`ingress.enabled: false`) — TLS는 여기서 종료, 앱 내부에서는 안 함(ADR 0034) |
 
-`serviceAccount`, `autoscaling`, `httpRoute` 값은 `values.yaml`에 남아있지만
-아직 어떤 템플릿도 소비하지 않습니다 — ADR 0041의 결과 섹션 참고.
+`values.yaml`엔 실제로 템플릿이 읽는 키만 남아 있습니다 — 어떤 템플릿도 소비하지
+않던 `serviceAccount`/`autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride`
+스캐폴딩 잔재는 제거했습니다. 나중에 ServiceAccount·HPA·Gateway API
+`HTTPRoute`를 추가하려면 새 템플릿과 `values.yaml` 블록을 함께 다시 넣어야지,
+값만 되살려선 안 됩니다.
 
 ## Env var
 

@@ -17,8 +17,6 @@ image:
   tag: "latest"
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
 
 # Dockerfile이 만들고 USER로 전환하는 non-root uid/gid다(ADR 0030).
 podSecurityContext:
@@ -126,34 +124,3 @@ volumeMounts: []
 nodeSelector: {}
 tolerations: []
 affinity: {}
-
-# --- 이번 작업(ADR 0041)에서는 템플릿화하지 않음 — 나중을 위해 값만 남겨둠,
-# 아직 어떤 템플릿도 이 값들을 소비하지 않아서 여기서 바꿔도 지금 당장은
-# 아무 효과가 없다.
-serviceAccount:
-  create: true
-  automount: true
-  annotations: {}
-  name: ""
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-
-# 위 `ingress`의 Gateway API 대안 — 비활성 상태로 둠; 이걸 소비할 Istio는
-# 아직 ADR이 없고 Terraform 이후로 계획돼 있다(ROADMAP.md).
-httpRoute:
-  enabled: false
-  annotations: {}
-  parentRefs:
-    - name: gateway
-      sectionName: http
-  hostnames:
-    - chart-example.local
-  rules:
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /headers

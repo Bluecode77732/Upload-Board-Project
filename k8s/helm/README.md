@@ -58,8 +58,11 @@ if it's unset, rather than the pod crash-looping on a missing env var.
 | `migration-job.yml` | Job (Helm hook) | Runs `migration:run` pre-install/pre-upgrade, mirrors `docker-compose.yml`'s `migrate` service (ADR 0032) |
 | `ingress.yaml` | Ingress | Disabled by default (`ingress.enabled: false`) — TLS terminates here, never in-process (ADR 0034) |
 
-`serviceAccount`, `autoscaling`, and `httpRoute` values exist in `values.yaml`
-but nothing consumes them yet — see ADR 0041's Consequences.
+`values.yaml` carries only keys a template actually reads — the unused
+`serviceAccount`/`autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride`
+scaffold leftovers (never consumed by any template) were removed. Adding a
+ServiceAccount, HPA, or Gateway API `HTTPRoute` in the future needs both a new
+template and its `values.yaml` block added back together, not just the values.
 
 ## Env vars
 
