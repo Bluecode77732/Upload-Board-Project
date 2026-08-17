@@ -24,6 +24,7 @@ Before making any change:
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer `memoryStorage`) and `upload.controller.ts` (100MB size limit) together with `backend/upload/upload.service.ts` (`stageTemp` — `temp_{uuid}_{timestamp}` naming, calls the `FileStorage` port, ADR 0029 D4)
    - Storage adapter change→ read `backend/storage/file-storage.interface.ts` (the `FileStorage` port + `FILE_STORAGE` token), `local-disk.storage.ts` / `s3.storage.ts` (the two implementations), and `storage.module.ts` (the `STORAGE_DRIVER`-keyed factory, ADR 0029)
    - Container/deploy change→ read `Dockerfile` (non-root `USER`, `HEALTHCHECK`, migration removed from `CMD` — ADR 0030/0032) and `docker-compose.yml` (the one-shot `migrate` service) together with `backend/health/` (`GET /health/live`/`GET /health/ready` — ADR 0031)
+   - Helm/K8s deploy change→ read `k8s/helm/` (`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/disabled-by-default Ingress) and its `README.md` (Secret creation runbook, `existingSecret`-only consumption). `k8s/` holds no manifests outside this chart — the standalone raw manifests once at `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/` were deleted (ADR 0042); do not re-add static manifests alongside the chart (ADR 0037/0041/0042)
    - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `LocalDiskStorage.unlink`/`S3Storage.unlink` (post-commit unlink through the `FileStorage` port, ADR 0020/0023/0029)
    - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
    - Comment/thread change → read `backend/comment/comment.service.ts` (fixed `createdAt ASC` order, `canManage`, `deleteCommentsOfCreator`) and `PostService.assertPostExists` — the one thing CommentModule asks PostModule for. Routes live in **two** controllers (`post-comment.controller.ts` for `/post/:postId/comment`, `comment.controller.ts` for `/comment/:id`); post deletion removes comments via the FK, not the service (ADR 0023 D3)
@@ -1022,6 +1023,17 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
 - Chat-project remnant handling — docs audited clean 2026-07-22; pending git-history
   decision + re-verification trigger. See `CHAT-REMNANT-REMOVAL-PLAN.md` and
   ROADMAP.md > Unscheduled / open decisions
+- ~~Helm chart project adaptation + `k8s/`/`helm/` directory consolidation~~ —
+  **landed 2026-08-17** ([ADR 0041](docs/ADR/0041-helm-chart-project-adaptation.md),
+  [ADR 0042](docs/ADR/0042-k8s-helm-directory-consolidation.md), lifting ADR 0037's
+  deferral): the chart at `k8s/helm/` now ships real image/port, health probes,
+  non-root `securityContext`, a `ConfigMap`, `existingSecret`-only `Secret`
+  consumption, a migration `Job`, and a disabled-by-default `Ingress` —
+  `helm install --wait` verified end-to-end against a throwaway local `kind`
+  cluster (found and fixed 2 real bugs: hook ordering, empty-string env vars).
+  `k8s/`'s five standalone static manifests (unwired, duplicating a strict subset
+  of the chart) were deleted rather than kept in sync. A real target cluster
+  (AWS/EKS) is still not deployed — Stage 4 work
 
 **Full roadmap plan (decided 2026-07-23)**: an 11-axis decision review fixed the
 overall plan in ROADMAP.md — staged dedicated tasks: Stage F frontend

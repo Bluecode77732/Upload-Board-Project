@@ -24,6 +24,7 @@
    - 물리 업로드 변경      → `backend/upload/upload.module.ts`(Multer `memoryStorage`)와 `upload.controller.ts`(100MB 크기 제한)를 `backend/upload/upload.service.ts`(`stageTemp` — `temp_{uuid}_{timestamp}` 네이밍, `FileStorage` 포트 호출, ADR 0029 D4)와 함께 읽는다
    - 스토리지 어댑터 변경  → `backend/storage/file-storage.interface.ts`(`FileStorage` 포트 + `FILE_STORAGE` 토큰), `local-disk.storage.ts` / `s3.storage.ts`(두 구현체), `storage.module.ts`(`STORAGE_DRIVER` 기반 팩토리, ADR 0029)를 읽는다
    - 컨테이너/배포 변경    → `Dockerfile`(non-root `USER`, `HEALTHCHECK`, `CMD`에서 마이그레이션 제거 — ADR 0030/0032)과 `docker-compose.yml`(원샷 `migrate` 서비스)을 `backend/health/`(`GET /health/live`/`GET /health/ready` — ADR 0031)와 함께 읽는다
+   - Helm/K8s 배포 변경    → `k8s/helm/`(`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/기본 비활성 Ingress)과 그 `README.md`(Secret 생성 절차, `existingSecret` 전용 소비 방식)를 읽는다. `k8s/`엔 이 차트 밖의 매니페스트가 없다 — 예전 `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/`에 있던 독립 raw 매니페스트는 삭제됐다(ADR 0042); 차트 옆에 정적 매니페스트를 다시 추가하지 않는다(ADR 0037/0041/0042)
    - 삭제 경로 변경        → `backend/user/user.service.ts`(`remove` — 확인된 연쇄 삭제), `backend/file/file.service.ts`(`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts`(`deletePost`, `deletePostsOfCreator`), `LocalDiskStorage.unlink`/`S3Storage.unlink`(`FileStorage` 포트를 통한 커밋 후 unlink, ADR 0020/0023/0029)를 읽는다
    - 게시글/게시판 변경    → `backend/post/post.service.ts`(`fileId`에 대한 claim 해석, `canManage`, ADR 0021 읽기 레이어 재사용)를 `FileService.assertAttachableBy` / `toResponse` — PostModule이 FileModule에 묻는 두 가지 질문 — 와 함께 읽는다(ADR 0023)
    - 댓글/스레드 변경      → `backend/comment/comment.service.ts`(고정된 `createdAt ASC` 정렬, `canManage`, `deleteCommentsOfCreator`)와 `PostService.assertPostExists` — CommentModule이 PostModule에 묻는 유일한 질문 — 를 읽는다. 라우트는 **두** 컨트롤러에 나뉘어 있다(`/post/:postId/comment`용 `post-comment.controller.ts`, `/comment/:id`용 `comment.controller.ts`); 게시글 삭제는 서비스가 아니라 FK를 통해 댓글을 제거한다(ADR 0023 D3)
@@ -1060,6 +1061,16 @@ Conflict Protocol을 따른다.
   git 히스토리 관련 결정과 재검증 트리거가 남아 있다.
   `docs/CHAT-REMNANT-REMOVAL-PLAN.md`와 ROADMAP.md > Unscheduled / open decisions
   참고
+- ~~Helm 차트 프로젝트 적응 + `k8s/`/`helm/` 디렉터리 통합~~ — **2026-08-17 도입**
+  ([ADR 0041](docs/ADR/0041-helm-chart-project-adaptation.ko.md),
+  [ADR 0042](docs/ADR/0042-k8s-helm-directory-consolidation.ko.md), ADR 0037의 유예
+  해제): `k8s/helm/`에 있는 차트는 이제 실제 이미지/포트, 헬스 probe, non-root
+  `securityContext`, `ConfigMap`, `existingSecret` 전용 `Secret` 소비, migration
+  `Job`, 기본 비활성 `Ingress`를 갖춘다 — 임시 로컬 `kind` 클러스터에 대해
+  `helm install --wait`로 종단 간 검증 완료(실제 버그 2개 발견해 수정: hook
+  순서, 빈 문자열 env var). `k8s/`의 독립 정적 매니페스트 5개(어디에도 연결
+  안 됐고 차트의 엄격한 부분집합만 중복)는 동기화하는 대신 삭제했다. 실제 대상
+  클러스터(AWS/EKS) 배포는 여전히 안 됨 — Stage 4 작업
 
 **전체 로드맵 계획(2026-07-23 결정)**: 11개 축에 걸친 결정 검토가 ROADMAP.md의
 전체 계획을 확정했다 — 단계별 전용 작업: Stage F 프론트엔드 준비(라우트
