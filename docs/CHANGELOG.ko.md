@@ -40,6 +40,36 @@
   다시 실행해(포트 5435 복구) 사고 전 상태와 테이블/행 개수를 대조해 확인했다 — 다만 이
   때문에 이후 이 세션의 모든 명령에는 예외 없이 `-p sharenpo-test`를 명시했다.
 
+### 알려진 이슈
+- **게시된 `bluecode1775/sharenpo:latest` Docker Hub 이미지(2026-08-12 빌드)는 아직도
+  [ADR 0039](ADR/0039-db-tls-verification-stance.ko.md) 이전의 SSL 버그를 그대로 담고 있어
+  non-SSL DB에 연결할 수 없다 — 정확히 `docker-compose-test.yml`이 실제 업로드 전에 잡아내야
+  할 바로 그 상황이다.** `migrate` 커맨드 버그를 고친 직후(위 **수정** 참고) 발견했다: 격리된
+  `db`→`migrate`→`api` 스택(`-p sharenpo-test`)이 이제 깨끗하게 부팅된 상태에서, 다음 단계로
+  게시된 이미지를 대상으로 실제 기능(회원가입 → 로그인 → `POST /upload/attach` →
+  `POST /file` → `GET /file/:id/content`)을 그대로 걸어봤는데 첫 요청부터 실패했다. `api`
+  컨테이너가 준비 상태에 도달하지 못하고 계속 재시도했다: `Error: The server does not support
+  SSL connections`. 근본 원인: 이 이미지는 커밋 `41c8c2c`(2026-08-12 06:46 UTC, 14:26 UTC
+  빌드보다 먼저 반영됨) 기준으로 빌드됐는데, 이 커밋은 `NODE_ENV === 'production'`이면
+  `ssl: { rejectUnauthorized: false }`를 강제로 켠다 — Dockerfile의 런타임 스테이지는 항상 이
+  조건을 만족시키고(`Dockerfile:53`, `ENV NODE_ENV=production`), 격리 테스트의 평범한
+  `postgres:16`은 SSL을 지원하지 않는다. 이 버그는 사흘 뒤 `4f1142b`(2026-08-14, ADR
+  0039)에서 이미 소스상으로는 고쳐졌지만, 그 수정은 `dev`에만 있고 이미지는 재빌드된 적이
+  없으며, `docker-publish` CI(`.github/workflows/ci.yml`)는 `main` 푸시에만 걸리는데 이
+  수정은 아직 `main`에 닿지 않았다. 수정이 실제로 문제를 해결하는지도 확인했다: 현재 `dev`
+  기준으로 프로덕션 스테이지를 로컬 빌드하고(`docker build -t bluecode1775/sharenpo:latest
+  --target production .`, 로컬 태그만, push 없음) 동일한 격리 스택을 다시 돌리니 DB 연결,
+  마이그레이션, 회원가입, 로그인, temp 업로드, `granted_` 승격,
+  `GET /file/:id/content`(`302` → presigned S3 URL, [ADR
+  0036](ADR/0036-s3-presigned-content-redirect.ko.md))까지 기능 흐름 전체가 성공했다.
+  **이번 조사로 고쳐지지 않은 잔여 사항**: 공개된 `bluecode1775/sharenpo:latest` 태그 자체는
+  여전히 낡고 고장난 빌드 그대로다 — 고쳐진 공개 이미지에 도달하려면 `dev`에서
+  `build-and-push.sh`를 수동 실행하거나 `dev`를 `main`에 병합해 `docker-publish` CI를
+  트리거해야 하는데, 둘 다 "테스트" 행위가 아니라서 이번 조사에서는 하지 않았다. 정상 동작
+  이미지 검증 중 알게 된 부수 사항: 이 저장소의 `.env`처럼 `STORAGE_DRIVER=s3`인 경우, temp
+  업로드·승격 테스트가 샌드박스가 아니라 **실제 운영 `sharenpo` S3 버킷**에 진짜 객체를
+  쓴다 — 테스트 컨테이너를 대상으로 `DELETE /file/:id`를 호출해 정리해야 한다.
+
 ### 보안
 - **프로덕션 DB 연결에서 `rejectUnauthorized: false`를 제거**
   (`backend/app.module.ts`) — `NODE_ENV=production`일 때 TLS 인증서 검증을

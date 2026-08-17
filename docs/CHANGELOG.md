@@ -41,6 +41,37 @@ development line (package.json version).
   counts against the pre-incident state — but this is why every subsequent command in this
   session explicitly passed `-p sharenpo-test`.
 
+### Known issue
+- **The published `bluecode1775/sharenpo:latest` Docker Hub image (built 2026-08-12) still
+  carries the pre-[ADR 0039](ADR/0039-db-tls-verification-stance.md) SSL bug and cannot connect
+  to a non-SSL database — the exact scenario `docker-compose-test.yml` exists to catch before
+  an actual upload.** Found immediately after fixing that file's `migrate` command bug (see
+  **Fixed** above): with the isolated `db`→`migrate`→`api` stack (`-p sharenpo-test`) now
+  booting cleanly, the next step — walking the real feature through the published image
+  (register → sign in → `POST /upload/attach` → `POST /file` → `GET /file/:id/content`) —
+  failed at the very first request. The `api` container never reached a ready state, retrying
+  forever: `Error: The server does not support SSL connections`. Root cause: this image was
+  built from commit `41c8c2c` (2026-08-12 06:46 UTC, landed before the 14:26 UTC build), which
+  forces `ssl: { rejectUnauthorized: false }` whenever `NODE_ENV === 'production'` — a condition
+  the Dockerfile's runtime stage always sets (`Dockerfile:53`, `ENV NODE_ENV=production`) and
+  the isolated test's plain `postgres:16` does not support. That bug was already fixed in source
+  three days later by `4f1142b` (2026-08-14, ADR 0039) — but the fix landed only on `dev`, the
+  image was never rebuilt, and `docker-publish` CI (`.github/workflows/ci.yml`) only triggers on
+  a push to `main`, which this fix hasn't reached. Confirmed the fix resolves it: building the
+  production target locally from current `dev`
+  (`docker build -t bluecode1775/sharenpo:latest --target production .`, local tag only, no
+  push) and re-running the identical isolated stack completed the entire feature flow —
+  DB connect, migrations, register, sign-in, temp upload, `granted_` promotion, and
+  `GET /file/:id/content` (`302` → presigned S3 URL, [ADR 0036](ADR/0036-s3-presigned-content-redirect.md))
+  all succeeded. **Residual, not fixed by this investigation**: the public
+  `bluecode1775/sharenpo:latest` tag itself is still the stale, broken build — reaching a
+  corrected public image needs either a manual `build-and-push.sh` run from `dev` or merging
+  `dev` into `main` (which triggers `docker-publish` CI); neither is a testing action, so
+  neither was done here. Side note found during the working-image verification: with
+  `STORAGE_DRIVER=s3` (this repo's `.env`), a temp upload/promote test writes real objects into
+  the live `sharenpo` S3 bucket, not a sandboxed store — `DELETE /file/:id` against the test
+  container is needed to clean it up afterward.
+
 ### Security
 - **Removed `rejectUnauthorized: false` from the production DB connection**
   (`backend/app.module.ts`), which disabled TLS certificate validation for
