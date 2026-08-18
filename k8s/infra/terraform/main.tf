@@ -2,6 +2,13 @@ provider "aws" {
   region = local.region
 }
 
+# 이 root 모듈 자신은 kubernetes_* 리소스를 직접 만들지 않는다(ADR 0043 D6로
+# istio_system 네임스페이스 리소스가 삭제된 뒤론 더더욱). 그래도 이 provider는
+# 필요하다 — module.eks_blueprints_addons(aws-ia/eks-blueprints-addons ~> 1.16)가
+# 자신의 required_providers에 kubernetes를 명시하고 있어서(v1.16.0 소스 확인),
+# root가 이 provider를 설정해 암묵적으로 넘겨주지 않으면 그 모듈이 깨진다.
+# module.eks(terraform-aws-modules/eks/aws ~> 20.11)는 kubernetes provider를
+# 요구하지 않는다 — 이 provider의 필요성은 전적으로 addons 모듈 때문이다.
 provider "kubernetes" {
   host                   = module.eks.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
@@ -14,6 +21,11 @@ provider "kubernetes" {
   }
 }
 
+# 위 kubernetes provider와 같은 이유로 필요하다 — module.eks_blueprints_addons가
+# enable_aws_load_balancer_controller/enable_external_secrets로 내부에서
+# helm_release 리소스를 만든다(v1.16.0 소스의 module "aws_load_balancer_controller",
+# module "external_secrets" 확인). root에 명시적 helm_release가 없다고 이
+# provider가 불필요한 것은 아니다.
 provider "helm" {
   kubernetes = {
     host                   = module.eks.cluster_endpoint
@@ -161,6 +173,11 @@ module "vpc" {
   private_subnets = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 4, k)]
   public_subnets  = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 48)]
 
+  # single_nat_gateway=true는 원본 스캐폴드에서 그대로 물려받은 값 — AZ 3개가
+  # NAT 게이트웨이 하나를 공유해 비용은 아끼지만, 그 NAT가 죽으면 3개 AZ의
+  # private 서브넷 아웃바운드가 전부 막히는 가용성 트레이드오프다. ADR 0043은
+  # 이 값을 바꾸기로 결정한 적이 없다 — 포트폴리오 규모에서 굳이 AZ별 NAT로
+  # 비용을 늘릴 이유를 찾지 못했기 때문.
   enable_nat_gateway = true
   single_nat_gateway = true
 
@@ -209,14 +226,22 @@ resource "aws_security_group" "rds" {
   tags = local.tags
 }
 
+# special=false — 특수문자를 넣으면 이 값이 지나가는 연결 문자열/셸 인용
+# (`psql` URI, docker-compose env, kubectl 명령 등) 어딘가에서 이스케이프
+# 문제가 생길 수 있다. length=24로 엔트로피는 충분히 확보하므로 그 위험을
+# 감수할 이유가 없다.
 resource "random_password" "db" {
   length  = 24
   special = false
 }
 
 resource "aws_db_instance" "db" {
-  identifier     = "${local.name}-db"
-  engine         = "postgres"
+  identifier = "${local.name}-db"
+  engine     = "postgres"
+  # 마이너 버전(예: "16.4")을 안 적고 메이저만 적은 건 실수가 아니다 — AWS가
+  # 최신 마이너를 자동으로 고르게 하고, apply를 반복할 때마다 Terraform이
+  # "16" vs 실제 반영된 "16.x"를 서로 다른 값으로 보고 diff를 내는 걸
+  # 피하려는 의도적 선택이다.
   engine_version = "16"
 
   instance_class    = var.db_instance_class
@@ -415,6 +440,9 @@ resource "aws_acm_certificate" "app" {
   validation_method = "DNS"
   tags              = local.tags
 
+  # create_before_destroy — 인증서를 교체해야 할 때(도메인 변경 등) 새 인증서를
+  # 먼저 발급하고 검증까지 끝낸 뒤에 이전 인증서를 지운다. 순서를 반대로 하면
+  # ALB Ingress가 잠깐 인증서 없는 상태에 놓여 다운타임이 생긴다.
   lifecycle {
     create_before_destroy = true
   }
