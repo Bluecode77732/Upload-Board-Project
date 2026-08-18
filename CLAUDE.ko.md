@@ -1470,7 +1470,9 @@ CI: GitHub Actions(`.github/workflows/ci.yml`, ADR 0016)가 lint
 hook 툴체인도 설치되어 있지 않다. 배포 파이프라인이나 hook이 있다고
 가정하지 않는다; 둘 중 하나를 추가하는 것은 명시적 요청이 필요한 작업이다.
 
-## 개발 도구 (MCP)
+## 개발 도구
+
+### MCP 서버
 
 프로젝트 범위 MCP 서버는 `.mcp.json`(커밋됨)에 선언되고, `.claude/settings.json`의
 `enabledMcpjsonServers`로 사전 승인된다 — 2026-08-18, Context7/Playwright/GitHub/
@@ -1498,3 +1500,25 @@ Sentry/DB MCP/Chrome DevTools/Linear/Jira를 이 저장소의 실제 공백에 �
 도중에는 반영되지 않는다). 위 네 가지 보류 항목은 누락이 아니라 전례이므로, 이
 저장소의 실제 공백에 대한 동일한 근거 기반 검토 없이 다른 MCP 서버를 추가하지
 않는다.
+
+### Hooks
+
+프로젝트 훅은 `.claude/hooks/*.js`(순수 Node 스크립트, `fs`/`path` 외 의존성 없음)에
+있고 `.claude/settings.json`의 `hooks` 블록에 연결된다 — 2026-08-18, 이 문서가 이미
+산문으로 적어둔 규칙 중 심각도가 가장 높은 것들에 대한 결정론적 안전장치로 추가했다.
+Auto Mode는 기본적으로 "웬만하면 안 멈추고 진행"하는 성향이라, 그 규칙들만큼은 모델의
+기억에만 의존하는 방식이 미덥지 않다는 판단이다:
+- **`check-ko-sibling.js`** (`PostToolUse`/`Edit|Write`) — `.ko.md` 파일이 아닌 `.md`
+  파일이 수정될 때마다, 같은 변경에서 `.ko.md` 짝도 업데이트하라고 상기시키거나
+  (Documentation Convention), 짝이 아직 없으면 만들라고 알려준다
+- **`check-blast-radius.js`** (`PreToolUse`/`Edit|Write`) — `app.module.ts`/`main.ts`/
+  `*.entity.ts`(Scope Discipline의 high-blast-radius 파일 목록)를 수정하기 전에 `ask`
+  승인 프롬프트를 강제로 띄운다
+- **`check-migration-generate.js`** (`PreToolUse`/`Bash`) — `migration:generate` 실행
+  전에 `ask` 승인 프롬프트를 강제로 띄운다(Scope Discipline의 사전 평문 설명 요건)
+
+셋 다 fail open이다(`2>/dev/null || true`) — 스크립트가 죽어도 실제 도구 호출을 막지
+않는다, 이 파일 자체의 규칙이 여전히 1차 안전장치이고 훅은 심층 방어(defense-in-depth)
+일 뿐 유일한 강제 수단이 아니기 때문이다. `migration:run`/`migration:revert`/
+`migration:show`는 `check-migration-generate.js`와 의도적으로 매치되지 않는다 — 사전
+설명 전제조건이 걸리는 건 `generate`뿐이다.

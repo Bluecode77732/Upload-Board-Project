@@ -1396,7 +1396,9 @@ hooks** — AWS container deployment is a Stage 4 roadmap item (ROADMAP.md), and
 git-hook tooling is installed. Do not assume a deploy pipeline or hooks; adding either is
 explicit-request work under Scope Discipline.
 
-## Development Tooling (MCP)
+## Development Tooling
+
+### MCP Servers
 
 Project-scoped MCP servers are declared in `.mcp.json` (committed) and pre-approved via
 `.claude/settings.json`'s `enabledMcpjsonServers` — added 2026-08-18 after an evidence-based
@@ -1420,3 +1422,26 @@ repo's actual gaps:
 Both require a session restart to take effect (MCP servers load at session start, not
 mid-session). Do not add further MCP servers without the same evidence-based check against
 this repo's actual gaps — the four rejections above are precedent, not an oversight.
+
+### Hooks
+
+Project hooks live in `.claude/hooks/*.js` (plain Node scripts, no dependency beyond `fs`/
+`path`) and are wired in `.claude/settings.json`'s `hooks` block — added 2026-08-18 as a
+deterministic backstop for rules this file already states in prose, on the reasoning that
+Auto Mode's bias toward proceeding without asking makes a model-memory-only safeguard
+unreliable for the highest-severity ones:
+- **`check-ko-sibling.js`** (`PostToolUse`/`Edit|Write`) — on any `.md` edit that isn't
+  itself a `.ko.md` file, reminds to update the `.ko.md` sibling in the same change
+  (Documentation Convention), or to create one if it doesn't exist yet
+- **`check-blast-radius.js`** (`PreToolUse`/`Edit|Write`) — forces an `ask` permission
+  prompt before any edit to `app.module.ts`/`main.ts`/`*.entity.ts` (Scope Discipline's
+  high-blast-radius file list)
+- **`check-migration-generate.js`** (`PreToolUse`/`Bash`) — forces an `ask` permission
+  prompt before any `migration:generate` invocation (Scope Discipline's prior-plain-text-
+  description requirement)
+
+All three fail open (`2>/dev/null || true`) — a script crash does not block the underlying
+tool call, since this file's own rules remain the primary safeguard and the hooks are
+defense-in-depth, not the sole enforcement. `migration:run`/`migration:revert`/`migration:show`
+deliberately do not match `check-migration-generate.js` — only `generate` carries the
+prior-description precondition.

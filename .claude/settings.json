@@ -12,6 +12,28 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/check-blast-radius.js 2>/dev/null || true",
+            "statusMessage": "Checking high-blast-radius file list..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/check-migration-generate.js 2>/dev/null || true",
+            "statusMessage": "Checking migration:generate precondition..."
+          }
+        ]
+      }
     ]
   }
 }
