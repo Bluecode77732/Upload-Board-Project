@@ -1,3 +1,17 @@
 {
-  "enabledMcpjsonServers": ["playwright", "context7"]
+  "enabledMcpjsonServers": ["playwright", "context7"],
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/check-ko-sibling.js 2>/dev/null || true",
+            "statusMessage": "Checking .ko.md sibling..."
+          }
+        ]
+      }
+    ]
+  }
 }
