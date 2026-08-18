@@ -1,7 +1,8 @@
 # ADR 0043: Terraform Project Adaptation — Real AWS Resources, Verified via Live Apply
 
-- Status: Accepted (design-only — no Terraform code changes in this ADR;
-  `main.tf`/`variables.tf`/`README.md` rewrite is a follow-up task)
+- Status: Accepted — implemented (`main.tf`/`variables.tf`/`outputs.tf`/
+  `versions.tf`/`README.md` rewritten against this design; see Addendum
+  below); not yet applied against real AWS
 - Date: 2026-08-18
 - Amends: [ADR 0038](0038-terraform-iac-scaffold.md) (lifts its "defer the rewrite"
   decision, the same way [ADR 0041](0041-helm-chart-project-adaptation.md) lifted
@@ -330,3 +331,56 @@ in `variables.tf`, a `.tfvars` file, or version control.
   times within the drafting of the very ADR meant to apply that lesson, and
   caught only because the developer kept asking why rather than accepting each
   answer at face value.
+
+### Addendum (2026-08-18) — Terraform code implemented, validated, not yet applied
+
+The "no Terraform code changes in this ADR" line this ADR's own Status
+originally carried no longer describes `k8s/infra/terraform/`. A follow-up
+implementation task rewrote `main.tf`/`variables.tf`/`outputs.tf`/
+`versions.tf`/`README.md` (+ `README.ko.md`) against D1–D10 above:
+`module.eks`'s two heterogeneous node groups (D3), `aws_db_instance` in
+private subnets reachable only from the EKS node security group (D2), a
+private `aws_s3_bucket` + a dedicated app IRSA role (D8),
+`aws_secretsmanager_secret` + `eks_blueprints_addons`'s
+`enable_external_secrets` flag (D7), and `aws_route53_zone` +
+`aws_acm_certificate` with DNS validation (D4/D5). The Istio-specific
+resources were deleted outright, not commented out (D6).
+
+`terraform init -backend=false`, `terraform fmt -check`, and `terraform
+validate` all pass. **`terraform apply` was not run** — no real AWS resources
+exist from this work; the recurring-AWS-charge consequence D1 accepted has
+not actually been incurred yet.
+
+Two things D7's own text had left open were resolved or decided during
+implementation:
+
+- **D7's "Unverified" flag is resolved.** `aws-ia/eks-blueprints-addons`
+  does carry `enable_external_secrets` (confirmed by reading the module
+  source at the pinned `~> 1.16` constraint, tag `v1.16.0`) — it installs
+  the ESO Helm release, creates its IRSA role, and annotates its service
+  account in one step. The hand-rolled `helm_release` + `aws_iam_role`
+  fallback D7 described was not needed.
+- **How the `SecretStore`/`ExternalSecret` objects actually get created —
+  not fully specified by D7.** Terraform's `kubernetes_manifest` resource
+  cannot declare a CRD instance in the same `apply` that installs the CRD
+  defining it (a documented provider limitation — ESO's own Helm release
+  must already be running for the schema to exist). Rather than splitting
+  `apply` into two phases, the manifest content is rendered as a plain
+  Terraform *output* (`external_secrets_manifest`) and applied once,
+  manually, via `kubectl apply` — the same shape D5 already uses for domain
+  registration (something that doesn't fit Terraform's idempotent-
+  convergence model either, so it stays a documented manual step).
+
+**New residual gap, documented in the rewritten README, not fixed here**:
+`aws_iam_role.app`'s trust policy targets
+`system:serviceaccount:default:default`, because the Helm chart
+(`k8s/helm/`) does not yet render a dedicated `ServiceAccount` — annotating
+`default` with this role's ARN grants S3 access to every pod in the
+namespace that uses it, not only this app's. A dedicated `ServiceAccount`
+template is a follow-up Helm-chart task, mirroring how D9 already left
+enabling the chart's `Ingress` as later work.
+
+This addendum is also the trigger for the doc updates this ADR's own
+Consequences section (above) named as a follow-up: `docs/ROADMAP.md`'s
+Terraform, Secrets delivery, and HTTPS termination rows, and this ADR's row
+in `docs/ADR/README.md`, are updated in the same change as this addendum.

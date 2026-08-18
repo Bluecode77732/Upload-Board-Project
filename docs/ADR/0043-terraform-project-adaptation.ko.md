@@ -1,7 +1,8 @@
 # ADR 0043: Terraform 프로젝트 적응 — 이 프로젝트의 실제 AWS 리소스, 실제 apply로 검증
 
-- 상태: 승인됨 (설계만 — 이 ADR 자체는 Terraform 코드를 바꾸지 않음.
-  `main.tf`/`variables.tf`/`README.md` 재작성은 후속 작업)
+- 상태: 승인됨 — 구현됨(`main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`/
+  `README.md`를 이 설계에 맞춰 재작성함 — 아래 Addendum 참고). 실제 AWS에
+  apply는 아직 안 함
 - 날짜: 2026-08-18
 - 개정: [ADR 0038](0038-terraform-iac-scaffold.md) ("재작성 유예" 결정을 해제 —
   Helm 쪽에서 [ADR 0041](0041-helm-chart-project-adaptation.md)이 [ADR
@@ -324,3 +325,53 @@ ACM 인증서를 가리킴)으로 켤 수 있게 된다 — [ADR
   ADR에도 적용되며 코드에만 국한되지 않는다")이, 바로 그 교훈을 적용하려던
   이 ADR의 초안 작성 중에 세 번 반복된 사례다 — 매 답변을 그대로 받아들이지
   않고 계속 "왜?"를 물은 개발자 덕분에 잡혔다.
+
+### Addendum (2026-08-18) — Terraform 코드 구현 완료, 검증 통과, 아직 미적용
+
+이 ADR 자신의 상태에 처음 있던 "이 ADR 자체는 Terraform 코드를 바꾸지
+않음"이라는 문장은 더 이상 `k8s/infra/terraform/`을 정확히 설명하지 않는다.
+후속 구현 작업에서 위 D1–D10에 맞춰 `main.tf`/`variables.tf`/`outputs.tf`/
+`versions.tf`/`README.md`(+ `README.ko.md`)를 다시 작성했다: `module.eks`의
+이기종 노드 그룹 두 개(D3), EKS 노드 보안 그룹에서만 접근 가능한 private
+서브넷의 `aws_db_instance`(D2), private `aws_s3_bucket` + 앱 전용 IRSA
+역할(D8), `aws_secretsmanager_secret` + `eks_blueprints_addons`의
+`enable_external_secrets` 플래그(D7), DNS 검증되는 `aws_route53_zone` +
+`aws_acm_certificate`(D4/D5). Istio 전용 리소스는 주석 처리가 아니라 완전히
+삭제했다(D6).
+
+`terraform init -backend=false`, `terraform fmt -check`, `terraform
+validate` 모두 통과했다. **`terraform apply`는 실행하지 않았다** — 이
+작업으로 만들어진 실제 AWS 리소스는 없으며, D1이 받아들인 "반복 과금"
+결과도 아직 실제로 발생하지 않았다.
+
+D7 본문이 열어뒀던 두 가지는 구현 과정에서 해소되거나 결정됐다:
+
+- **D7의 "미확인" 표시가 해소됨.** `aws-ia/eks-blueprints-addons`는 실제로
+  `enable_external_secrets`를 갖고 있다(핀된 `~> 1.16` 제약 범위 안의
+  `v1.16.0` 태그에서 모듈 소스를 직접 읽어 확인). 이 플래그 하나가 ESO
+  Helm 릴리스 설치, IRSA 역할 생성, 그 역할의 서비스 어카운트 주석까지
+  한 번에 처리한다. D7이 대안으로 적어둔 손으로 만든 `helm_release` +
+  `aws_iam_role`은 필요 없었다.
+- **`SecretStore`/`ExternalSecret` 객체를 실제로 어떻게 만드는지 — D7이
+  완전히 정하지 않았던 부분.** Terraform의 `kubernetes_manifest` 리소스는
+  자신을 정의하는 CRD를 설치하는 것과 같은 apply 안에서 그 CRD의
+  인스턴스를 선언할 수 없다(provider 문서에 명시된 제약 — ESO 자신의 Helm
+  릴리스가 먼저 떠서 스키마가 존재해야 함). apply를 두 단계로 쪼개는 대신,
+  매니페스트 내용을 그냥 Terraform *output*(`external_secrets_manifest`)으로
+  렌더링해 한 번만 수동으로 `kubectl apply`한다 — D5가 도메인 등록에 이미
+  쓰고 있는 것과 같은 모양이다(이 역시 Terraform의 멱등 수렴 모델에 맞지
+  않아서 문서화된 수동 단계로 남겨둔 것).
+
+**새로 생긴 잔여 한계, 새 README에 기록했지만 여기서 고치지는 않음**:
+`aws_iam_role.app`의 신뢰 정책은 `system:serviceaccount:default:default`를
+대상으로 한다 — Helm 차트(`k8s/helm/`)가 아직 전용 `ServiceAccount`를
+렌더링하지 않기 때문이다. `default`에 이 역할의 ARN을 주석으로 달면 이
+앱의 파드만이 아니라 그 SA를 쓰는 네임스페이스 안 모든 파드에 S3 권한이
+열린다. 전용 `ServiceAccount` 템플릿 추가는 별도의 Helm 차트 작업으로
+남으며, D9가 차트의 `Ingress` 활성화를 이미 후속 작업으로 남긴 것과 같은
+모양이다.
+
+이 addendum은 이 ADR의 결과 섹션(위)이 후속 작업으로 예고했던 문서
+갱신의 계기이기도 하다: `docs/ROADMAP.md`의 Terraform, Secrets delivery,
+HTTPS termination 행과 `docs/ADR/README.md`의 이 ADR 행을 이 addendum과
+같은 변경에서 갱신했다.

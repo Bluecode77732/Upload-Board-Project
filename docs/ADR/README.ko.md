@@ -50,7 +50,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0040](0040-persisted-media-type-for-playback.ko.md) | 재생 태그 선택을 위한 영속 `mediaType` 컬럼, 0025/0027 확장 | 승인됨 | 2026-08-16 |
 | [0041](0041-helm-chart-project-adaptation.ko.md) | Helm 차트 프로젝트 적응 — ADR 0037의 유예 해제 | 승인됨 | 2026-08-17 |
 | [0042](0042-k8s-helm-directory-consolidation.ko.md) | `k8s/`와 `helm/` 통합 — 둘이 아니라 하나의 Kubernetes 디렉터리로 | 승인됨 | 2026-08-17 |
-| [0043](0043-terraform-project-adaptation.ko.md) | Terraform 프로젝트 적응 — 이 프로젝트의 실제 AWS 리소스, 실제 apply로 검증, 0038 개정 | 승인됨 (설계만) | 2026-08-18 |
+| [0043](0043-terraform-project-adaptation.ko.md) | Terraform 프로젝트 적응 — 이 프로젝트의 실제 AWS 리소스, 실제 apply로 검증, 0038 개정 | 승인됨 — 구현됨, 미적용 (Addendum 참고) | 2026-08-18 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고
