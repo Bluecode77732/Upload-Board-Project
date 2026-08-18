@@ -1469,3 +1469,32 @@ CI: GitHub Actions(`.github/workflows/ci.yml`, ADR 0016)가 lint
 없다** — AWS 컨테이너 배포는 Stage 4 로드맵 항목이며(ROADMAP.md), git
 hook 툴체인도 설치되어 있지 않다. 배포 파이프라인이나 hook이 있다고
 가정하지 않는다; 둘 중 하나를 추가하는 것은 명시적 요청이 필요한 작업이다.
+
+## 개발 도구 (MCP)
+
+프로젝트 범위 MCP 서버는 `.mcp.json`(커밋됨)에 선언되고, `.claude/settings.json`의
+`enabledMcpjsonServers`로 사전 승인된다 — 2026-08-18, Context7/Playwright/GitHub/
+Sentry/DB MCP/Chrome DevTools/Linear/Jira를 이 저장소의 실제 공백에 대비해 근거
+기반으로 검토한 뒤 추가했다:
+- **Playwright MCP** (`@playwright/mcp`) — `frontend/`/`admin/` UI 변경 시 "개발
+  서버를 띄우고 브라우저에서 실제로 사용해보라"는 요구를 충족시킬 수단이 없던
+  공백을 메운다. 이게 없으면 이미 설치된 `@playwright/test` 의존성을 대상으로
+  매번 임시 스크립트를 짜고 스크린샷을 사후 확인하는 식일 뿐, "이동 → 클릭 →
+  확인"을 대화하듯 이어가는 상호작용형 검증은 불가능했다
+- **Context7 MCP** (`@upstash/context7-mcp`) — 이 저장소가 쓰는 빠르게 변하는
+  라이브러리(NestJS, TypeORM, Terraform의 AWS 프로바이더, `aws-sdk` v3)의 최신
+  문서를 제공한다. Never Do Group 2의 `@Transaction()` 데코레이터 금지 항목
+  (TypeORM 0.3에서 제거됨) 자체가, 이 MCP가 막으려는 "구버전 API를 사실로
+  오인하는" 실패가 실제로 있었다는 구체적 전례다
+- **도입 보류**: GitHub MCP(중복 — `gh` CLI가 이미 공식 도구), Sentry MCP(연결할
+  대상 자체가 없음 — 에러 트래킹은 아직 Stage 4/미배포), DB MCP(서비스 레이어의
+  가시성·소유권 게이트를 raw SQL로는 강제할 방법이 없어 우회 위험), Chrome
+  DevTools MCP(Playwright MCP와 목적 중복 — 하나만 고른다면 이 프로젝트가 이미
+  채택한 Playwright 기반 e2e 컨벤션과 일관된 쪽), Linear/Jira(이 저장소는 작업을
+  `docs/ADR/`/`docs/ROADMAP.md`/`docs/CHANGELOG.md`로 인repo 추적하며 외부
+  트래커를 쓰지 않음)
+
+둘 다 적용되려면 세션 재시작이 필요하다 (MCP 서버는 세션 시작 시 로드되며 세션
+도중에는 반영되지 않는다). 위 네 가지 보류 항목은 누락이 아니라 전례이므로, 이
+저장소의 실제 공백에 대한 동일한 근거 기반 검토 없이 다른 MCP 서버를 추가하지
+않는다.

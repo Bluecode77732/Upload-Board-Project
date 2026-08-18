@@ -1395,3 +1395,28 @@ one-shot `migrate` service, ADR 0030–0032). There is **no deploy target and no
 hooks** — AWS container deployment is a Stage 4 roadmap item (ROADMAP.md), and no
 git-hook tooling is installed. Do not assume a deploy pipeline or hooks; adding either is
 explicit-request work under Scope Discipline.
+
+## Development Tooling (MCP)
+
+Project-scoped MCP servers are declared in `.mcp.json` (committed) and pre-approved via
+`.claude/settings.json`'s `enabledMcpjsonServers` — added 2026-08-18 after an evidence-based
+review of Context7/Playwright/GitHub/Sentry/DB MCP/Chrome DevTools/Linear/Jira against this
+repo's actual gaps:
+- **Playwright MCP** (`@playwright/mcp`) — closes the "start the dev server and use the
+  feature in a browser" gap for `frontend/`/`admin/` UI changes: without it, verifying a
+  change means writing a throwaway script against the already-installed `@playwright/test`
+  dependency and reading back a screenshot, not an interactive navigate/click/observe loop
+- **Context7 MCP** (`@upstash/context7-mcp`) — up-to-date library docs for this repo's
+  fast-moving dependencies (NestJS, TypeORM, Terraform's AWS provider, `aws-sdk` v3); the
+  `@Transaction()` decorator ban in Never Do Group 2 (removed in TypeORM 0.3) is a concrete
+  precedent for the stale-API-knowledge failure this MCP targets
+- **Rejected**: GitHub MCP (redundant — `gh` CLI is already the sanctioned tool), Sentry MCP
+  (nothing to connect to; error tracking is still Stage 4/undeployed), DB MCP (would let
+  Claude bypass the service-layer visibility/ownership gates that raw SQL has no way to
+  enforce), Chrome DevTools MCP (overlaps Playwright MCP; picking one keeps it consistent
+  with the project's existing Playwright-based e2e convention), Linear/Jira (this repo tracks
+  work in-repo via `docs/ADR/`/`docs/ROADMAP.md`/`docs/CHANGELOG.md`, not an external tracker)
+
+Both require a session restart to take effect (MCP servers load at session start, not
+mid-session). Do not add further MCP servers without the same evidence-based check against
+this repo's actual gaps — the four rejections above are precedent, not an oversight.
