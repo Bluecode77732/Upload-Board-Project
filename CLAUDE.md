@@ -1445,3 +1445,22 @@ tool call, since this file's own rules remain the primary safeguard and the hook
 defense-in-depth, not the sole enforcement. `migration:run`/`migration:revert`/`migration:show`
 deliberately do not match `check-migration-generate.js` — only `generate` carries the
 prior-description precondition.
+
+### Skills
+
+Project skills live in `.claude/skills/<name>/SKILL.md` (+ `.ko.md` sibling, like any other
+tracked document) — added 2026-08-18 to turn three procedures this file already states in
+prose into invocable, step-by-step workflows:
+- **`migration-review`** — the `migration:generate` review sequence (Scope Discipline >
+  Schema changes): plain-text description first, line-by-line diff review, strip spurious
+  constraint-rename statements, separate approval before `migration:run`. Complements
+  `check-migration-generate.js` above — the hook stops you before running the command, this
+  skill is what to actually do once confirmed
+- **`doc-authoring`** — the Documentation Authoring Protocol's five roles
+  (조사→계획→질문→작성→검증) for README/ARCHITECTURE/CHANGELOG/ROADMAP/CONTRIBUTING/ADR work
+- **`adr-authoring`** — the `docs/ADR/README.md` convention (numbering, filename, MADR-lite
+  section layout, amends/extends/supersedes, README table sync) for writing a new ADR once a
+  decision is already confirmed
+
+Skills are read from disk at session start, same as MCP servers — a session restart is
+needed before a newly added or edited skill is invocable.

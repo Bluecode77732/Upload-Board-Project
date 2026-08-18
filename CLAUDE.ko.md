@@ -1522,3 +1522,21 @@ Auto Mode는 기본적으로 "웬만하면 안 멈추고 진행"하는 성향이
 일 뿐 유일한 강제 수단이 아니기 때문이다. `migration:run`/`migration:revert`/
 `migration:show`는 `check-migration-generate.js`와 의도적으로 매치되지 않는다 — 사전
 설명 전제조건이 걸리는 건 `generate`뿐이다.
+
+### Skills
+
+프로젝트 스킬은 `.claude/skills/<name>/SKILL.md`(다른 추적 문서와 마찬가지로 `.ko.md`
+짝 포함)에 있다 — 2026-08-18, 이 문서가 이미 산문으로 적어둔 세 가지 절차를 호출 가능한
+단계별 워크플로로 바꾸려고 추가했다:
+- **`migration-review`** — `migration:generate` 검토 순서(Scope Discipline > Schema
+  changes): 사전 평문 설명 → 생성된 diff 한 줄씩 검토 → 가짜 constraint-rename 구문
+  제거 → `migration:run` 전 별도 승인. 위 `check-migration-generate.js`와 짝을 이룬다 —
+  훅은 명령 실행 전에 멈춰 세우고, 이 스킬은 승인된 뒤 실제로 무엇을 해야 하는지를 다룬다
+- **`doc-authoring`** — README/ARCHITECTURE/CHANGELOG/ROADMAP/CONTRIBUTING/ADR 작업을
+  위한 Documentation Authoring Protocol의 5단계(조사→계획→질문→작성→검증)
+- **`adr-authoring`** — 결정이 이미 확정된 뒤 새 ADR을 쓰기 위한 `docs/ADR/README.md`
+  컨벤션(번호 체계, 파일명, MADR-lite 섹션 구성, amends/extends/supersedes, README 표
+  동기화)
+
+스킬은 MCP 서버와 마찬가지로 세션 시작 시 디스크에서 읽힌다 — 새로 추가하거나 수정한
+스킬을 호출하려면 세션 재시작이 필요하다.
