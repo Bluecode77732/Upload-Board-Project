@@ -1484,6 +1484,11 @@ prose into invocable, step-by-step workflows:
 - **`adr-authoring`** — the `docs/ADR/README.md` convention (numbering, filename, MADR-lite
   section layout, amends/extends/supersedes, README table sync) for writing a new ADR once a
   decision is already confirmed
+- **`principle-conflict`** (added 2026-08-19) — the Principle Conflict Protocol's five steps
+  (stop and explain → state a prevention plan → ask step-by-step → offer three resolution
+  paths → wait for the developer's choice) for when an Engineering Principle conflicts with
+  an existing rule, pattern, or implementation, including a violation discovered mid-task —
+  the one place Auto Mode's default bias toward proceeding does not apply
 
 Skills are read from disk at session start, same as MCP servers — a session restart is
 needed before a newly added or edited skill is invocable.

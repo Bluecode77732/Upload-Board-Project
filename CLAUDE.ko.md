@@ -1558,6 +1558,11 @@ Auto Mode는 기본적으로 "웬만하면 안 멈추고 진행"하는 성향이
 - **`adr-authoring`** — 결정이 이미 확정된 뒤 새 ADR을 쓰기 위한 `docs/ADR/README.md`
   컨벤션(번호 체계, 파일명, MADR-lite 섹션 구성, amends/extends/supersedes, README 표
   동기화)
+- **`principle-conflict`** (2026-08-19 추가) — Engineering Principle이 기존 규칙·패턴·
+  구현과 충돌할 때(작업 도중 발견한 위반 포함) 실행하는 Principle Conflict Protocol의
+  5단계(멈추고 설명 → 재발 방지 계획 제시 → 단계적으로 질문 → 세 가지 해결 경로 제시
+  → 개발자의 선택 대기) — Auto Mode의 "웬만하면 안 멈추고 진행"이라는 기본 성향이
+  적용되지 않는 유일한 지점이다
 
 스킬은 MCP 서버와 마찬가지로 세션 시작 시 디스크에서 읽힌다 — 새로 추가하거나 수정한
 스킬을 호출하려면 세션 재시작이 필요하다.
