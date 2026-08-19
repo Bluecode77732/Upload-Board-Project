@@ -26,7 +26,6 @@ JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, 트랜
 | [CHANGELOG.ko.md](docs/CHANGELOG.ko.md) | 버전 이력 |
 | [ROADMAP.ko.md](docs/ROADMAP.ko.md) | 단계별 전체 프로젝트 계획과 알려진 공백 |
 | [CONTRIBUTING.ko.md](docs/CONTRIBUTING.ko.md) | 개발 워크플로와 관례 |
-| [SESSION-LOG.ko.md](docs/SESSION-LOG.ko.md) | 각 Claude Code 세션이 언제, 어떤 브랜치에서 시작되거나 재개됐는지 자동 기록 |
 | [CLAUDE.md](CLAUDE.md) | AI 협업 개발을 위한 운영 규약 |
 
 각 문서에는 영어 원본(`.md`)과 한국어 버전(`.ko.md`)이 있습니다.

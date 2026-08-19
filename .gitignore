@@ -50,6 +50,12 @@ lerna-debug.log*
 # Uploaded media — runtime artifacts under file/temp and file/upload, never committed
 /file/
 
+# Session log — locally auto-appended by .claude/hooks/log-session-start.js and
+# log-session-title.js on every SessionStart/UserPromptSubmit; grows and churns
+# per developer machine, so it is local-only, not shared via git
+/docs/SESSION-LOG.md
+/docs/SESSION-LOG.ko.md
+
 # Runtime data
 pids
 *.pid

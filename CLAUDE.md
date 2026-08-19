@@ -1442,18 +1442,24 @@ unreliable for the highest-severity ones:
 - **`log-session-start.js`** (`SessionStart`, `matcher: "startup"` and `matcher: "resume"`
   as two separate hook entries — added 2026-08-19, `resume` added same day after
   confirming the audit trail should also cover resumed sessions) — on session start or
-  resume (not `clear`/`compact`/`fork`), appends one row to
-  [docs/SESSION-LOG.md](docs/SESSION-LOG.md) with the session id, UTC timestamp, and the
-  git branch checked out at that moment (`git rev-parse --abbrev-ref HEAD`, read via
-  `execFileSync` — no shell), leaving the row's title cell empty since no prompt exists
-  yet at this point
+  resume (not `clear`/`compact`/`fork`), appends one row to `docs/SESSION-LOG.md` with
+  the session id, UTC timestamp, and the git branch checked out at that moment
+  (`git rev-parse --abbrev-ref HEAD`, read via `execFileSync` — no shell), leaving the
+  row's title cell empty since no prompt exists yet at this point
 - **`log-session-title.js`** (`UserPromptSubmit`, added 2026-08-19 same day, after
   confirming that a session_id alone — a bare pointer to an untitled
   `~/.claude/projects/.../<session_id>.jsonl` transcript — carries no human-readable
-  information for later sorting) — fires on every prompt but only acts on
-  `turn_number === 1`, filling that session's most recent empty-title row in
-  [docs/SESSION-LOG.md](docs/SESSION-LOG.md) with a flattened, ~80-character excerpt of
-  the first message
+  information for later sorting) — fires on every prompt and fills that session's most
+  recent **empty-title** row in `docs/SESSION-LOG.md` with a flattened, ~80-character
+  excerpt of the prompt, writing at most once per row since a filled row no longer
+  matches. Originally gated on `turn_number === 1`; live log data the same day showed a
+  resumed session's row never gets a turn 1 (the turn count continues across resume
+  instead of resetting), so the gate was replaced with the empty-title match itself,
+  which fills correctly on both a fresh session's first prompt and a resumed session's
+  first post-resume prompt. `docs/SESSION-LOG.md` (+ `.ko.md`) is itself gitignored,
+  not committed — it churns per developer machine and per parallel session, so it stays
+  local-only rather than shared repo state; do not remove it from `.gitignore` as
+  drive-by cleanup
 - Read-only audit trail, not a gate: unlike the other three hooks, neither of these two
   ever forces an `ask` prompt
 
