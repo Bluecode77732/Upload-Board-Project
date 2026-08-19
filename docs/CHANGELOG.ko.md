@@ -13,6 +13,41 @@
 ## [Unreleased]
 
 ### 변경
+- **Terraform 3-state 분리: `k8s/infra/terraform/`를 단일 루트 모듈에서 `cluster/`/
+  `app-infra/`/`addons/`로 재구성(결정 2026-08-19, 세 작업에 걸쳐 구현 2026-08-20,
+  [ADR 0044](ADR/0044-terraform-three-state-split.ko.md))** — 기존 단일 `main.tf`는
+  EKS/VPC(cluster)와 RDS/S3+IRSA/Secrets Manager/Route53+ACM(app-infra)을 하나의
+  Terraform state에 묶고 있어, 클러스터를 데이터/시크릿/DNS 계층과 독립적으로
+  apply·destroy할 방법이 없었다. 독립적으로 apply 가능한 세 루트 모듈로 분리했다:
+  `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets
+  Manager/Route53+ACM, `terraform_remote_state`로 `cluster/`의 output을 읽음, backend
+  local), `addons/`(`module.eks_blueprints_addons` — ALB Controller + External
+  Secrets Operator, 다른 두 state의 output을 **둘 다** 읽는 유일한 state). Apply 순서:
+  `cluster` → `app-infra` → `addons`; destroy는 역순. 분리 구현 과정에서 설계(D5) 목록이
+  놓친 output 3개가 드러났다 — 기존 단일 루트 모듈이 `module.*` 직접 참조로 읽던 값이라
+  state 경계가 생기면 그 직접 참조가 불가능해지는 경우였다: `vpc_id`/`private_subnets`
+  (`app-infra/`의 RDS 서브넷 그룹/보안 그룹을 연결하며 발견, coupling point 1)와
+  `cluster_version`(`addons/`의 `eks_blueprints_addons` 입력을 연결하며 발견, coupling
+  point 4). 퇴역한 루트 `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`는 세
+  서브디렉터리와 나란히 남기지 않고 삭제했다; `k8s/infra/terraform/README.md`(+`.ko.md`)는
+  3단계 apply/destroy 순서에 맞게 다시 썼다. 세 디렉터리 모두 `terraform validate`/
+  `fmt -check` 통과 — 실제 AWS에 대한 `apply`는 실행하지 않았다.
+
+- **Terraform: 업스트림 EKS/VPC 스캐폴드를 이 프로젝트의 실제 인프라로 적응
+  (2026-08-18, [ADR 0043](ADR/0043-terraform-project-adaptation.ko.md))** —
+  [ADR 0038](ADR/0038-terraform-iac-scaffold.ko.md) 스캐폴드가 2026-08-11에 들어온 뒤
+  손대지 않았던 `k8s/infra/terraform/main.tf`가 업스트림 예제의 Istio 워크스루(주석
+  처리가 아니라 완전히 제거)를 대신해 이 프로젝트 자신의 리소스를 프로비저닝하게 됐다:
+  이기종 EKS 관리형 노드 그룹 2개(Graviton이 기본 용량, x64는 수동 failover용 유휴
+  그룹), EKS 워커 노드에서만 접근 가능한 private 서브넷의 관리형 RDS PostgreSQL, Helm
+  차트의 `default` ServiceAccount로 범위를 좁힌 전용 IRSA 역할이 딸린 private S3 버킷,
+  AWS Secrets Manager 항목 + External Secrets Operator 설치(`eks_blueprints_addons`의
+  `enable_external_secrets`)와 그것이 렌더링하는 1회성 `kubectl apply`용
+  `SecretStore`/`ExternalSecret` 매니페스트 output, ALB Ingress 경로용 Route53
+  호스팅 영역 + DNS 검증 ACM 인증서. `terraform validate`/`fmt -check` 통과; 실제
+  AWS에 대한 `apply`는 실행하지 않았다. 이틀 뒤 위의 3-state 분리로 대체됐다 — 이
+  단일 루트 모듈 형태는 프로덕션에 apply된 적이 없다.
+
 - **`k8s/helm/upload-board-project/`를 `k8s/helm/`로 평탄화(2026-08-17, 아래 항목의 당일
   후속 조치, [ADR 0042](ADR/0042-k8s-helm-directory-consolidation.ko.md) 추가 기록)** —
   차트를 `helm/` 아래 `upload-board-project/` 아래에 중첩시키면 "여기가 Helm 차트다"라는

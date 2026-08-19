@@ -13,6 +13,41 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Terraform three-state split: `k8s/infra/terraform/` reorganized from one root module into
+  `cluster/`/`app-infra/`/`addons/` (decided 2026-08-19, implemented 2026-08-20 across three
+  tasks, [ADR 0044](ADR/0044-terraform-three-state-split.md))** — the prior single `main.tf`
+  bundled EKS/VPC (cluster) together with RDS/S3+IRSA/Secrets Manager/Route53+ACM (app-infra)
+  in one Terraform state, so the cluster could never be applied or destroyed independently of
+  the data/secrets/DNS layer. Split into three independently-appliable root modules: `cluster/`
+  (`module.vpc`+`module.eks`), `app-infra/` (RDS/S3+IRSA/Secrets Manager/Route53+ACM, reads
+  `cluster/`'s outputs via `terraform_remote_state`, backend local), and `addons/`
+  (`module.eks_blueprints_addons` — ALB Controller + External Secrets Operator, the only state
+  reading **both** other states' outputs). Apply order: `cluster` → `app-infra` → `addons`;
+  destroy reverses. Implementing the split surfaced three outputs the design's own D5 list had
+  missed — each a value the old single root module read via a direct `module.*` reference that
+  becomes impossible once a state boundary sits between producer and consumer: `vpc_id`/
+  `private_subnets` (found wiring `app-infra/`'s RDS subnet group/security group, coupling
+  point 1) and `cluster_version` (found wiring `addons/`'s `eks_blueprints_addons` input,
+  coupling point 4). The retired root `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` were
+  deleted, not kept alongside the three subdirectories; `k8s/infra/terraform/README.md`
+  (+`.ko.md`) was rewritten for the three-step apply/destroy sequence. `terraform validate`/
+  `fmt -check` pass in all three directories — no `apply` was run against real AWS.
+
+- **Terraform: the upstream EKS/VPC scaffold adapted into this project's actual infrastructure
+  (2026-08-18, [ADR 0043](ADR/0043-terraform-project-adaptation.md))** — `k8s/infra/terraform/main.tf`
+  (unmodified since the [ADR 0038](ADR/0038-terraform-iac-scaffold.md) scaffold landed
+  2026-08-11) provisioned the project's own resources instead of the upstream example's Istio
+  walkthrough (removed entirely, not commented out): two heterogeneous EKS managed node groups
+  (Graviton default capacity, an idle x64 group for manual failover), a managed RDS PostgreSQL
+  instance in private subnets reachable only from EKS worker nodes, a private S3 bucket with a
+  dedicated app IRSA role scoped to the Helm chart's `default` ServiceAccount, an AWS Secrets
+  Manager entry + External Secrets Operator install (via `eks_blueprints_addons`'s
+  `enable_external_secrets`) rendering a one-time-`kubectl apply` `SecretStore`/`ExternalSecret`
+  manifest as an output, and a Route53-hosted-zone + DNS-validated ACM certificate for the ALB
+  Ingress path. `terraform validate`/`fmt -check` passed; no `apply` was run against real AWS.
+  Superseded two days later by the three-state split above — this single-root-module shape was
+  never applied in production.
+
 - **`k8s/helm/upload-board-project/` flattened to `k8s/helm/` (2026-08-17, same-day follow-up
   to the entry below, [ADR 0042](ADR/0042-k8s-helm-directory-consolidation.md) addendum)** —
   nesting the chart under both `helm/` and `upload-board-project/` repeated the "this is the
