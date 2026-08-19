@@ -1516,8 +1516,15 @@ Auto Mode는 기본적으로 "웬만하면 안 멈추고 진행"하는 성향이
   승인 프롬프트를 강제로 띄운다
 - **`check-migration-generate.js`** (`PreToolUse`/`Bash`) — `migration:generate` 실행
   전에 `ask` 승인 프롬프트를 강제로 띄운다(Scope Discipline의 사전 평문 설명 요건)
+- **`log-session-start.js`** (`SessionStart`, `matcher: "startup"`과 `matcher: "resume"`
+  두 항목으로 등록 — 2026-08-18 추가, 재개 세션도 감사 기록에 포함해야 한다는 확인을
+  거쳐 같은 날 `resume`를 추가) — 세션이 시작되거나 재개될 때마다(`clear`/`compact`/
+  `fork`는 제외) 세션ID·UTC 시각·그 순간 체크아웃되어 있던 git 브랜치
+  (`git rev-parse --abbrev-ref HEAD`, 셸을 거치지 않는 `execFileSync`로 조회)를
+  [docs/SESSION-LOG.md](docs/SESSION-LOG.md)에 한 행씩 append한다. 다른 세 훅과 달리
+  `ask` 프롬프트를 강제하지 않는, 읽기 전용 감사 기록일 뿐이다
 
-셋 다 fail open이다(`2>/dev/null || true`) — 스크립트가 죽어도 실제 도구 호출을 막지
+넷 다 fail open이다(`2>/dev/null || true`) — 스크립트가 죽어도 실제 도구 호출을 막지
 않는다, 이 파일 자체의 규칙이 여전히 1차 안전장치이고 훅은 심층 방어(defense-in-depth)
 일 뿐 유일한 강제 수단이 아니기 때문이다. `migration:run`/`migration:revert`/
 `migration:show`는 `check-migration-generate.js`와 의도적으로 매치되지 않는다 — 사전

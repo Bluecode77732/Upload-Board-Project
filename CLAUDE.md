@@ -1439,8 +1439,16 @@ unreliable for the highest-severity ones:
 - **`check-migration-generate.js`** (`PreToolUse`/`Bash`) — forces an `ask` permission
   prompt before any `migration:generate` invocation (Scope Discipline's prior-plain-text-
   description requirement)
+- **`log-session-start.js`** (`SessionStart`, `matcher: "startup"` and `matcher: "resume"`
+  as two separate hook entries — added 2026-08-19, `resume` added same day after
+  confirming the audit trail should also cover resumed sessions) — on session start or
+  resume (not `clear`/`compact`/`fork`), appends one row to
+  [docs/SESSION-LOG.md](docs/SESSION-LOG.md) with the session id, UTC timestamp, and the
+  git branch checked out at that moment (`git rev-parse --abbrev-ref HEAD`, read via
+  `execFileSync` — no shell). Read-only audit trail, not a gate: unlike the other three
+  hooks it never forces an `ask` prompt
 
-All three fail open (`2>/dev/null || true`) — a script crash does not block the underlying
+All four fail open (`2>/dev/null || true`) — a script crash does not block the underlying
 tool call, since this file's own rules remain the primary safeguard and the hooks are
 defense-in-depth, not the sole enforcement. `migration:run`/`migration:revert`/`migration:show`
 deliberately do not match `check-migration-generate.js` — only `generate` carries the

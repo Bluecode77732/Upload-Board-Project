@@ -26,6 +26,7 @@ this README covers the backend at the repo root.
 | [CHANGELOG.md](docs/CHANGELOG.md) | Version history |
 | [ROADMAP.md](docs/ROADMAP.md) | Full staged project plan and known gaps |
 | [CONTRIBUTING.md](docs/CONTRIBUTING.md) | Development workflow and conventions |
+| [SESSION-LOG.md](docs/SESSION-LOG.md) | Auto-logged record of when each Claude Code session started or resumed, and on which branch |
 | [CLAUDE.md](CLAUDE.md) | Operating contract for AI-assisted development |
 
 Each document has a Korean sibling (`*.ko.md`).
