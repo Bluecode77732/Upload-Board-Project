@@ -1,7 +1,8 @@
 # ADR 0044: Terraform 3-State 분리 — Cluster / Addons / App-Infra Lifecycle 분리
 
-- Status: Accepted (design-only) — 결정만 기록됨; `k8s/infra/terraform/`은 아직 이 ADR이
-  설명하는 3개 디렉토리로 재구성되지 않았음
+- Status: Accepted — 구현됨(`cluster/`/`app-infra/`/`addons/` 분리, 폐기된 루트
+  `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`, 3단계 apply 순서로 다시 쓴
+  `README.md`/`README.ko.md` — 아래 Addendum 참고); 실제 AWS에는 아직 apply하지 않음
 - Date: 2026-08-19
 - Amends: [ADR 0043](0043-terraform-project-adaptation.md) (무엇을 프로비저닝하고 왜인지를
   정한 D1~D10 리소스 결정은 그대로 유지 — 그 ADR이 구현한 단일 root module 패키징만
@@ -143,12 +144,8 @@ Terraform/infra 진입점, ADR 0038/0043, 이 저장소 README의 상호 링크)
 
 ## Consequences
 
-- 오늘의 단일 root module인 `k8s/infra/terraform/main.tf`/`variables.tf`/`outputs.tf`/
-  `versions.tf`는 D4의 3개 하위 디렉토리로 대체된다 — **이 ADR이 하는 작업이 아니라
-  구현 작업**이다. 이 ADR은 설계만 기록하며, 실제 `.tf` 파일 분할, `terraform_remote_state`
-  블록 배선, `k8s/infra/terraform/README.md`(+`.ko.md`)를
-  `cluster` → `app-infra` → `addons` 3단계 apply 순서에 맞게 다시 쓰는 작업은 별도
-  후속 작업이다.
+- 이전 단일 root module이던 `k8s/infra/terraform/main.tf`/`variables.tf`/`outputs.tf`/
+  `versions.tf`는 D4의 3개 하위 디렉토리로 대체된다 — **완료, 아래 Addendum 참고**.
 - apply/destroy 순서가 문서 관례가 아니라 데이터 의존성으로 강제된다: `cluster`가
   먼저, `app-infra`가 다음, `addons`가 마지막(D2). `cluster`만 destroy해서 RDS 데이터와
   Route53/ACM/Secrets Manager 설정은 그대로 둔 채 EKS/노드 그룹 비용만 끊는 것이 처음으로
@@ -157,8 +154,48 @@ Terraform/infra 진입점, ADR 0038/0043, 이 저장소 README의 상호 링크)
   D4가 설명하는 3개 디렉토리 어디에도 속하지 않는, `k8s/infra/` 바로 밑의 raw 파일이며,
   그 이름/위치는 여전히 [ADR 0042](0042-k8s-helm-directory-consolidation.md)가 금지하는
   패턴과 겹친다. 이 결정과 별개로 (삭제하거나, `cluster/` state의 자리표시자로 쓸
-  의도였다면 그쪽으로 흡수하는 등) 별도 처리가 필요하다.
-- CLAUDE.md의 Terraform/infra 진입점(concern-to-entrypoint map)에 ADR 0038/0043과 나란히
-  이 ADR을 언급해, 3-state 재설계가 결정되었지만 아직 구현되지 않았음을 후속 독자가 알 수
-  있게 해야 한다 — 이 ADR만으로 하는 변경이 아니라 후속 구현 작업의 일부로 처리한다.
-- 스키마, 엔티티, API 표면 변경 없음. 이 ADR 자체는 `docs/ADR/` 밖의 코드를 건드리지 않는다.
+  의도였다면 그쪽으로 흡수하는 등) 별도 처리가 필요하다 — 아래 구현에서도 의도적으로
+  건드리지 않았다.
+- CLAUDE.md의 Terraform/infra 진입점(concern-to-entrypoint map)은 이제 ADR 0038/0043과
+  나란히 이 ADR을 "구현됨"으로 인용한다 — 아래 Addendum 참고.
+- 스키마, 엔티티, API 표면 변경 없음. 이 ADR의 구현 작업이 건드린 코드는 `docs/ADR/`,
+  `k8s/infra/terraform/`, CLAUDE.md/`.ko.md`의 Terraform 진입점 줄,
+  `docs/ADR/README.md`/`.ko.md`의 색인 표뿐이다.
+
+### Addendum (2026-08-20) — 3-state 분리 구현 완료, apply는 아직
+
+위 설계가 이제 `k8s/infra/terraform/`의 실제 레이아웃이다. 후속 구현 작업(선행 두
+작업으로 `cluster/`, `app-infra/`를 먼저 만들고 이번이 세 번째)이 다음을 만들었다:
+
+- D1이 설명한 `cluster/`(`module.vpc` + `module.eks`)와 `app-infra/`(RDS, S3+IRSA,
+  Secrets Manager, Route53/ACM), 그리고 `app-infra/`가 `terraform_remote_state`로
+  `cluster/`의 출력값을 읽는 구조(D2).
+- `addons/`(`module.eks_blueprints_addons`만) — `cluster/`와 `app-infra/` **양쪽 모두**를
+  `terraform_remote_state`로 읽는 유일한 state(D2). 그 `kubernetes`/`helm` provider와
+  `external_secrets_secrets_manager_arns` 입력값은 D1의 교차 결합 4번 분석 그대로
+  배선되어 있다.
+- `cluster/outputs.tf`는 D5 목록(`node_security_group_id`, `oidc_provider_arn`,
+  `oidc_provider`, `cluster_certificate_authority_data`)에 더해, `app-infra/` 구현 중
+  발견한 2개(`vpc_id`, `private_subnets` — 교차 결합 1번)와 `addons/` 구현 중 발견한
+  1개(`cluster_version` — 기존 단일 root module이 `module.eks.cluster_version`을 직접
+  참조했던 `module.eks_blueprints_addons` 입력값으로, D5의 output 목록이 예상하지 못했던
+  값)를 함께 노출한다. 매번 같은 패턴이다: 같은 state 안 직접 module 참조로만 쓰이던
+  값이 state 경계가 생산자와 소비자 사이에 놓이는 순간 도달 불가능해지므로, output이
+  되어야 한다.
+- 폐기된 루트 `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`는 3개 하위 디렉토리
+  옆에 죽은 파일로 남겨두지 않고 삭제했다.
+- `k8s/infra/terraform/README.md`(+`.ko.md`)를 `cluster` → `app-infra` → `addons`
+  3단계 apply/destroy 순서에 맞게 다시 썼다 — D2의 remote-state 읽기 방향이 함의하지만
+  D1~D5 어디서도 명시하지 않았던 destroy 역순(`addons` → `app-infra` → `cluster`)도
+  포함한다.
+- `docs/ADR/README.md`(+`.ko.md`)의 색인 행과 CLAUDE.md(+`.ko.md`)의 Terraform/infra
+  진입점 줄을 이 ADR이 구현됨을 나타내도록 갱신했다.
+
+세 디렉토리 모두 `terraform init -backend=false`, `terraform fmt -check`,
+`terraform validate`가 통과한다. **어느 디렉토리에서도 `terraform apply`는 실행하지
+않았다** — 이 작업으로 실제 AWS 리소스가 생기지 않았으며, ADR 0043 자신의 미적용
+상태와 일치한다. 이 ADR이 그 상태를 바꾸지 않는다.
+
+`k8s/infra/cluster.yaml`은 (이번 작업의 명시적 지시에 따라) 발견된 그대로 손대지
+않았다 — 그 처리 방향은 여전히 위 Consequences가 설명하는 별도의 미결정 후속
+작업이다.

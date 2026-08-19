@@ -12,6 +12,11 @@
 # 중 이 두 output이 빠져 있으면 그 두 리소스가 참조할 값이 없다는 것이 확인되어
 # 여기 추가한다 — D5 목록의 누락을 메우는 것으로, coupling point 1 자체는 새로운
 # 결정이 아니다.
+#
+# cluster_version — 같은 이유로 addons/ 구현 중 추가한다. 기존 단일 main.tf의
+# module.eks_blueprints_addons가 cluster_version = module.eks.cluster_version을
+# 직접 참조했는데(D1 coupling point 4), 이 값도 D5 목록에 없었다 — 상태를
+# 분리하면 그 직접 참조가 불가능해지므로 반드시 output이 되어야 한다.
 
 output "configure_kubectl" {
   description = "Configure kubectl: make sure you're logged in with the correct AWS profile and run the following command to update your kubeconfig"
@@ -26,6 +31,11 @@ output "cluster_endpoint" {
 output "cluster_name" {
   description = "EKS 클러스터 이름"
   value       = module.eks.cluster_name
+}
+
+output "cluster_version" {
+  description = "EKS 클러스터 버전 — addons/의 eks_blueprints_addons가 이 값을 참조한다(ADR 0044 D1 coupling point 4, D5 목록 보완)"
+  value       = module.eks.cluster_version
 }
 
 output "node_security_group_id" {

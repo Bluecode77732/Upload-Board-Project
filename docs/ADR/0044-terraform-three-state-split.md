@@ -1,7 +1,9 @@
 # ADR 0044: Terraform Three-State Split — Cluster / Addons / App-Infra Lifecycle Separation
 
-- Status: Accepted (design-only) — decision recorded; `k8s/infra/terraform/` is not
-  yet reorganized into the three directories this ADR describes
+- Status: Accepted — implemented (`cluster/`/`app-infra/`/`addons/` split, the
+  retired root `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`, and
+  `README.md`/`README.ko.md` rewritten for the three-step apply order; see
+  Addendum below); not yet applied against real AWS
 - Date: 2026-08-19
 - Amends: [ADR 0043](0043-terraform-project-adaptation.md) (its D1–D10 resource
   decisions — what gets provisioned and why — are unchanged; only the single-root-module
@@ -150,12 +152,9 @@ state** via direct `module.eks.*` reference, and so are not yet outputs at all:
 
 ## Consequences
 
-- `k8s/infra/terraform/main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` (today's single
-  root module) are retired in favor of the three subdirectories in D4 — **implementation
-  work, not done by this ADR**. This ADR records the design; splitting the actual `.tf`
-  files, wiring the `terraform_remote_state` blocks, and rewriting
-  `k8s/infra/terraform/README.md`(+`.ko.md`) for the three-step
-  `cluster` → `app-infra` → `addons` apply sequence is separate follow-up work.
+- `k8s/infra/terraform/main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` (the former single
+  root module) are retired in favor of the three subdirectories in D4 — **done, see
+  Addendum below**.
 - Apply/destroy order becomes explicit and enforced by data dependency, not just
   documentation convention: `cluster` first, `app-infra` second, `addons` last (D2).
   Destroying only `cluster` (e.g., to stop paying for EKS/node groups while keeping RDS
@@ -166,10 +165,49 @@ state** via direct `module.eks.*` reference, and so are not yet outputs at all:
   Terraform configuration under any of the three directories D4 describes, and its
   name/location still collides with the pattern [ADR 0042](0042-k8s-helm-directory-consolidation.md)
   forbids. It needs its own disposition (delete, or fold into `cluster/` if it was meant
-  as that state's placeholder) independent of this decision.
-- CLAUDE.md's Terraform/infra concern-to-entrypoint map should note this ADR alongside
-  ADR 0038/0043 so a future reader knows a three-state redesign is decided but not yet
-  implemented — tracked as part of the follow-up implementation work, not done in this
-  ADR-only change.
-- No schema, entity, or API surface change. No code outside `docs/ADR/` touched by this
-  ADR itself.
+  as that state's placeholder) independent of this decision; the implementation below
+  deliberately left it untouched.
+- CLAUDE.md's Terraform/infra concern-to-entrypoint map now cites this ADR alongside
+  ADR 0038/0043 as implemented, not merely decided — see Addendum below.
+- No schema, entity, or API surface change. No code outside `docs/ADR/`,
+  `k8s/infra/terraform/`, `docs/CLAUDE.md`/`.ko.md`'s Terraform entrypoint line, and
+  `docs/ADR/README.md`/`.ko.md`'s index table was touched by this ADR's implementation.
+
+### Addendum (2026-08-20) — three-state split implemented, still not applied
+
+The design above is now the actual layout of `k8s/infra/terraform/`. Follow-up
+implementation work (three prior tasks: `cluster/`, then `app-infra/`, then this one)
+produced:
+
+- `cluster/` (`module.vpc` + `module.eks`) and `app-infra/` (RDS, S3 + IRSA, Secrets
+  Manager, Route53/ACM) as described by D1, `app-infra/` reading `cluster/`'s outputs via
+  `terraform_remote_state` (D2).
+- `addons/` (`module.eks_blueprints_addons` only), the sole state reading **both**
+  `cluster/` and `app-infra/` via `terraform_remote_state` (D2) — its `kubernetes`/`helm`
+  providers, and the `external_secrets_secrets_manager_arns` input, are wired exactly as
+  D1's coupling-point-4 analysis described.
+- `cluster/outputs.tf` exposes the D5 list (`node_security_group_id`, `oidc_provider_arn`,
+  `oidc_provider`, `cluster_certificate_authority_data`) plus two gaps found while
+  implementing `app-infra/` (`vpc_id`, `private_subnets` — coupling point 1) and one found
+  while implementing `addons/` (`cluster_version` — the `module.eks_blueprints_addons`
+  input the original single root module read directly off `module.eks.cluster_version`,
+  which D5's output list did not anticipate). Same pattern each time: a value only ever
+  consumed via direct in-state module reference becomes unreachable once the state
+  boundary sits between producer and consumer, so it has to become an output.
+- The retired root `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` are deleted, not
+  kept as dead files alongside the three subdirectories.
+- `k8s/infra/terraform/README.md`(+`.ko.md`) rewritten for the three-step
+  `cluster` → `app-infra` → `addons` apply/destroy sequence, including the destroy-order
+  reversal (`addons` → `app-infra` → `cluster`) D2's remote-state read direction implies
+  but D1–D5 never spelled out.
+- `docs/ADR/README.md`(+`.ko.md`)'s index row and CLAUDE.md's(+`.ko.md`) Terraform/infra
+  concern-to-entrypoint line updated to describe this ADR as implemented.
+
+`terraform init -backend=false`, `terraform fmt -check`, and `terraform validate` all
+pass in all three directories. **`terraform apply` was not run in any of them** — no real
+AWS resources exist from this work, matching ADR 0043's own not-yet-applied status; this
+ADR does not change that.
+
+`k8s/infra/cluster.yaml` was left exactly as found (per explicit instruction for this
+task) — its disposition is still the separate, undecided follow-up the Consequences above
+describe.
