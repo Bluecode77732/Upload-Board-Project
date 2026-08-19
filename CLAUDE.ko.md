@@ -25,7 +25,7 @@
    - 스토리지 어댑터 변경  → `backend/storage/file-storage.interface.ts`(`FileStorage` 포트 + `FILE_STORAGE` 토큰), `local-disk.storage.ts` / `s3.storage.ts`(두 구현체), `storage.module.ts`(`STORAGE_DRIVER` 기반 팩토리, ADR 0029)를 읽는다
    - 컨테이너/배포 변경    → `Dockerfile`(non-root `USER`, `HEALTHCHECK`, `CMD`에서 마이그레이션 제거 — ADR 0030/0032)과 `docker-compose.yml`(원샷 `migrate` 서비스)을 `backend/health/`(`GET /health/live`/`GET /health/ready` — ADR 0031)와 함께 읽는다
    - Helm/K8s 배포 변경    → `k8s/helm/`(`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/기본 비활성 Ingress)과 그 `README.md`(Secret 생성 절차, `existingSecret` 전용 소비 방식)를 읽는다. `k8s/`엔 이 차트 밖의 매니페스트가 없다 — 예전 `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/`에 있던 독립 raw 매니페스트는 삭제됐다(ADR 0042); 차트 옆에 정적 매니페스트를 다시 추가하지 않는다(ADR 0037/0041/0042)
-   - Terraform/인프라 변경 → `k8s/infra/terraform/`(`main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` — EKS/RDS/S3/Secrets Manager+ESO/Route53+ACM)과 그 `README.md`(배포 순서, `SecretStore`/`ExternalSecret`을 한 번만 수동으로 `kubectl apply`하는 단계, `default` ServiceAccount에 IRSA를 건 데서 오는 범위 한계)를 읽는다. 설계 기록: ADR 0038(업스트림 스캐폴딩, 재작성 유예) → ADR 0043(프로젝트 적응 — 2026-08-18 구현됨, `terraform validate`/`fmt -check` 통과, **아직 실제 AWS에 `apply`하지 않음** — Addendum 참고). 여기 있는 AWS 리소스가 실제로 존재한다고 가정하지 않는다
+   - Terraform/인프라 변경 → `k8s/infra/terraform/`(`main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` — EKS/RDS/S3/Secrets Manager+ESO/Route53+ACM)과 그 `README.md`(배포 순서, `SecretStore`/`ExternalSecret`을 한 번만 수동으로 `kubectl apply`하는 단계, `default` ServiceAccount에 IRSA를 건 데서 오는 범위 한계)를 읽는다. 설계 기록: ADR 0038(업스트림 스캐폴딩, 재작성 유예) → ADR 0043(프로젝트 적응 — 2026-08-18 구현됨, `terraform validate`/`fmt -check` 통과, **아직 실제 AWS에 `apply`하지 않음** — Addendum 참고) → ADR 0044(3-state 분리 — `cluster`/`addons`/`app-infra`, 2026-08-19 결정, **design-only, 아직 미구현**: 그 분리가 실제로 반영되기 전까지는 이 경로의 단일 `main.tf`가 여전히 현재 상태). 여기 있는 AWS 리소스가 실제로 존재한다고 가정하지 않는다
    - 삭제 경로 변경        → `backend/user/user.service.ts`(`remove` — 확인된 연쇄 삭제), `backend/file/file.service.ts`(`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts`(`deletePost`, `deletePostsOfCreator`), `LocalDiskStorage.unlink`/`S3Storage.unlink`(`FileStorage` 포트를 통한 커밋 후 unlink, ADR 0020/0023/0029)를 읽는다
    - 게시글/게시판 변경    → `backend/post/post.service.ts`(`fileId`에 대한 claim 해석, `canManage`, ADR 0021 읽기 레이어 재사용)를 `FileService.assertAttachableBy` / `toResponse` — PostModule이 FileModule에 묻는 두 가지 질문 — 와 함께 읽는다(ADR 0023)
    - 댓글/스레드 변경      → `backend/comment/comment.service.ts`(고정된 `createdAt ASC` 정렬, `canManage`, `deleteCommentsOfCreator`)와 `PostService.assertPostExists` — CommentModule이 PostModule에 묻는 유일한 질문 — 를 읽는다. 라우트는 **두** 컨트롤러에 나뉘어 있다(`/post/:postId/comment`용 `post-comment.controller.ts`, `/comment/:id`용 `comment.controller.ts`); 게시글 삭제는 서비스가 아니라 FK를 통해 댓글을 제거한다(ADR 0023 D3)
@@ -1521,10 +1521,17 @@ Auto Mode는 기본적으로 "웬만하면 안 멈추고 진행"하는 성향이
   거쳐 같은 날 `resume`를 추가) — 세션이 시작되거나 재개될 때마다(`clear`/`compact`/
   `fork`는 제외) 세션ID·UTC 시각·그 순간 체크아웃되어 있던 git 브랜치
   (`git rev-parse --abbrev-ref HEAD`, 셸을 거치지 않는 `execFileSync`로 조회)를
-  [docs/SESSION-LOG.md](docs/SESSION-LOG.md)에 한 행씩 append한다. 다른 세 훅과 달리
-  `ask` 프롬프트를 강제하지 않는, 읽기 전용 감사 기록일 뿐이다
+  [docs/SESSION-LOG.md](docs/SESSION-LOG.md)에 한 행씩 append한다. 이 시점엔 아직
+  프롬프트가 없으므로 제목 칸은 비워둔다
+- **`log-session-title.js`** (`UserPromptSubmit`, 같은 날 추가 — session_id 하나만으로는
+  `~/.claude/projects/.../<session_id>.jsonl`이라는, 그 자체로 제목도 없는 트랜스크립트
+  파일을 가리킬 뿐 사람이 읽을 수 있는 정보가 전혀 없다는 걸 확인한 뒤 추가) — 모든
+  프롬프트마다 실행되지만 `turn_number === 1`일 때만 동작해서,
+  [docs/SESSION-LOG.md](docs/SESSION-LOG.md)에서 해당 세션의 가장 최근 빈 제목 행을 찾아
+  첫 메시지를 약 80자로 잘라 평탄화한 값으로 채운다
+- 두 훅 모두 다른 세 훅과 달리 `ask` 프롬프트를 강제하지 않는, 읽기 전용 감사 기록일 뿐이다
 
-넷 다 fail open이다(`2>/dev/null || true`) — 스크립트가 죽어도 실제 도구 호출을 막지
+다섯 다 fail open이다(`2>/dev/null || true`) — 스크립트가 죽어도 실제 도구 호출을 막지
 않는다, 이 파일 자체의 규칙이 여전히 1차 안전장치이고 훅은 심층 방어(defense-in-depth)
 일 뿐 유일한 강제 수단이 아니기 때문이다. `migration:run`/`migration:revert`/
 `migration:show`는 `check-migration-generate.js`와 의도적으로 매치되지 않는다 — 사전

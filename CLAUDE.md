@@ -25,7 +25,7 @@ Before making any change:
    - Storage adapter change→ read `backend/storage/file-storage.interface.ts` (the `FileStorage` port + `FILE_STORAGE` token), `local-disk.storage.ts` / `s3.storage.ts` (the two implementations), and `storage.module.ts` (the `STORAGE_DRIVER`-keyed factory, ADR 0029)
    - Container/deploy change→ read `Dockerfile` (non-root `USER`, `HEALTHCHECK`, migration removed from `CMD` — ADR 0030/0032) and `docker-compose.yml` (the one-shot `migrate` service) together with `backend/health/` (`GET /health/live`/`GET /health/ready` — ADR 0031)
    - Helm/K8s deploy change→ read `k8s/helm/` (`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/disabled-by-default Ingress) and its `README.md` (Secret creation runbook, `existingSecret`-only consumption). `k8s/` holds no manifests outside this chart — the standalone raw manifests once at `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/` were deleted (ADR 0042); do not re-add static manifests alongside the chart (ADR 0037/0041/0042)
-   - Terraform/infra change  → read `k8s/infra/terraform/` (`main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` — EKS/RDS/S3/Secrets Manager+ESO/Route53+ACM) and its `README.md` (deploy order, the `SecretStore`/`ExternalSecret` one-time manual `kubectl apply` step, the `default`-ServiceAccount IRSA scoping caveat). Design record: ADR 0038 (upstream scaffold, deferred rewrite) → ADR 0043 (project adaptation — implemented 2026-08-18, `terraform validate`/`fmt -check` pass, **not yet `apply`d against real AWS** — see its Addendum). Do not assume any AWS resource here actually exists
+   - Terraform/infra change  → read `k8s/infra/terraform/` (`main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` — EKS/RDS/S3/Secrets Manager+ESO/Route53+ACM) and its `README.md` (deploy order, the `SecretStore`/`ExternalSecret` one-time manual `kubectl apply` step, the `default`-ServiceAccount IRSA scoping caveat). Design record: ADR 0038 (upstream scaffold, deferred rewrite) → ADR 0043 (project adaptation — implemented 2026-08-18, `terraform validate`/`fmt -check` pass, **not yet `apply`d against real AWS** — see its Addendum) → ADR 0044 (three-state split — `cluster`/`addons`/`app-infra`, decided 2026-08-19, **design-only, not yet implemented**: today's single `main.tf` at this path is still current until that split lands). Do not assume any AWS resource here actually exists
    - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `LocalDiskStorage.unlink`/`S3Storage.unlink` (post-commit unlink through the `FileStorage` port, ADR 0020/0023/0029)
    - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
    - Comment/thread change → read `backend/comment/comment.service.ts` (fixed `createdAt ASC` order, `canManage`, `deleteCommentsOfCreator`) and `PostService.assertPostExists` — the one thing CommentModule asks PostModule for. Routes live in **two** controllers (`post-comment.controller.ts` for `/post/:postId/comment`, `comment.controller.ts` for `/comment/:id`); post deletion removes comments via the FK, not the service (ADR 0023 D3)
@@ -1445,10 +1445,19 @@ unreliable for the highest-severity ones:
   resume (not `clear`/`compact`/`fork`), appends one row to
   [docs/SESSION-LOG.md](docs/SESSION-LOG.md) with the session id, UTC timestamp, and the
   git branch checked out at that moment (`git rev-parse --abbrev-ref HEAD`, read via
-  `execFileSync` — no shell). Read-only audit trail, not a gate: unlike the other three
-  hooks it never forces an `ask` prompt
+  `execFileSync` — no shell), leaving the row's title cell empty since no prompt exists
+  yet at this point
+- **`log-session-title.js`** (`UserPromptSubmit`, added 2026-08-19 same day, after
+  confirming that a session_id alone — a bare pointer to an untitled
+  `~/.claude/projects/.../<session_id>.jsonl` transcript — carries no human-readable
+  information for later sorting) — fires on every prompt but only acts on
+  `turn_number === 1`, filling that session's most recent empty-title row in
+  [docs/SESSION-LOG.md](docs/SESSION-LOG.md) with a flattened, ~80-character excerpt of
+  the first message
+- Read-only audit trail, not a gate: unlike the other three hooks, neither of these two
+  ever forces an `ask` prompt
 
-All four fail open (`2>/dev/null || true`) — a script crash does not block the underlying
+All five fail open (`2>/dev/null || true`) — a script crash does not block the underlying
 tool call, since this file's own rules remain the primary safeguard and the hooks are
 defense-in-depth, not the sole enforcement. `migration:run`/`migration:revert`/`migration:show`
 deliberately do not match `check-migration-generate.js` — only `generate` carries the
