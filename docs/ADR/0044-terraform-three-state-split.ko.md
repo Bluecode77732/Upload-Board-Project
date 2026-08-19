@@ -183,7 +183,12 @@ Terraform/infra 진입점, ADR 0038/0043, 이 저장소 README의 상호 링크)
   값이 state 경계가 생산자와 소비자 사이에 놓이는 순간 도달 불가능해지므로, output이
   되어야 한다.
 - 폐기된 루트 `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`는 3개 하위 디렉토리
-  옆에 죽은 파일로 남겨두지 않고 삭제했다.
+  옆에 죽은 파일로 남겨두지 않고 삭제했다. 후속 점검(개발자가 이 구현을 최소성 관점에서
+  감사해 달라고 요청해 진행)에서 `k8s/infra/terraform/.terraform.lock.hcl`이 그 삭제에서
+  빠진 채 고아로 남아있던 것을 발견했다 — 그 디렉토리에 이 파일을 정당화할 `.tf` 설정이
+  더 이상 없었고, 마지막 수정도 ADR 0043보다 이전이었으며, 내용도 이제 3개 하위 디렉토리
+  lock 파일로 대체된 옛 aws+kubernetes+helm+random 묶음 provider 세트였다. 로컬(미추적)
+  루트 `.terraform/` 캐시와 함께 제거했다 — 커밋 `3e39b50`.
 - `k8s/infra/terraform/README.md`(+`.ko.md`)를 `cluster` → `app-infra` → `addons`
   3단계 apply/destroy 순서에 맞게 다시 썼다 — D2의 remote-state 읽기 방향이 함의하지만
   D1~D5 어디서도 명시하지 않았던 destroy 역순(`addons` → `app-infra` → `cluster`)도

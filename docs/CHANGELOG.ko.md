@@ -31,7 +31,12 @@
   point 4). 퇴역한 루트 `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`는 세
   서브디렉터리와 나란히 남기지 않고 삭제했다; `k8s/infra/terraform/README.md`(+`.ko.md`)는
   3단계 apply/destroy 순서에 맞게 다시 썼다. 세 디렉터리 모두 `terraform validate`/
-  `fmt -check` 통과 — 실제 AWS에 대한 `apply`는 실행하지 않았다.
+  `fmt -check` 통과 — 실제 AWS에 대한 `apply`는 실행하지 않았다. 후속 점검에서
+  `k8s/infra/terraform/.terraform.lock.hcl`(분리 이전 루트의 provider lock 파일)이 그
+  삭제에서 빠진 채 고아로 남아있던 것을 발견했다 — 그 디렉터리에 이 파일을 정당화할
+  `.tf` 설정이 더 이상 없었고, 파일 자체의 마지막 수정도 ADR 0043보다 이전이었으며,
+  내용도 이제 3개 하위 디렉터리 lock 파일로 대체된 옛 aws+kubernetes+helm+random 묶음
+  provider 세트였다. 로컬(미추적) 루트 `.terraform/` 캐시와 함께 제거했다.
 
 - **Terraform: 업스트림 EKS/VPC 스캐폴드를 이 프로젝트의 실제 인프라로 적응
   (2026-08-18, [ADR 0043](ADR/0043-terraform-project-adaptation.ko.md))** —

@@ -31,7 +31,12 @@ development line (package.json version).
   coupling point 4). The retired root `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` were
   deleted, not kept alongside the three subdirectories; `k8s/infra/terraform/README.md`
   (+`.ko.md`) was rewritten for the three-step apply/destroy sequence. `terraform validate`/
-  `fmt -check` pass in all three directories — no `apply` was run against real AWS.
+  `fmt -check` pass in all three directories — no `apply` was run against real AWS. A follow-up
+  pass found `k8s/infra/terraform/.terraform.lock.hcl` (the pre-split root's provider lock) had
+  survived that deletion as an orphan — no `.tf` config left in that directory to justify it,
+  its own last edit predating ADR 0043, and its content the old bundled aws+kubernetes+helm+random
+  provider set now superseded by the three per-directory lock files. Removed, along with the
+  local (untracked) root `.terraform/` cache.
 
 - **Terraform: the upstream EKS/VPC scaffold adapted into this project's actual infrastructure
   (2026-08-18, [ADR 0043](ADR/0043-terraform-project-adaptation.md))** — `k8s/infra/terraform/main.tf`

@@ -195,7 +195,13 @@ produced:
   consumed via direct in-state module reference becomes unreachable once the state
   boundary sits between producer and consumer, so it has to become an output.
 - The retired root `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` are deleted, not
-  kept as dead files alongside the three subdirectories.
+  kept as dead files alongside the three subdirectories. A follow-up pass (prompted by a
+  developer request to audit this implementation for minimality) found
+  `k8s/infra/terraform/.terraform.lock.hcl` had survived that deletion as an orphan — no
+  `.tf` config left in the directory to justify it, last edited before ADR 0043, and its
+  content the old bundled aws+kubernetes+helm+random provider set now superseded by the
+  three per-directory lock files. Removed, along with the local (untracked) root
+  `.terraform/` cache — commit `3e39b50`.
 - `k8s/infra/terraform/README.md`(+`.ko.md`) rewritten for the three-step
   `cluster` → `app-infra` → `addons` apply/destroy sequence, including the destroy-order
   reversal (`addons` → `app-infra` → `cluster`) D2's remote-state read direction implies
