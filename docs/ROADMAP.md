@@ -457,6 +457,15 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
 
 ## 7. Unscheduled / open decisions
 
+- Terraform remote state backend (recorded 2026-08-19,
+  [ADR 0044](ADR/0044-terraform-three-state-split.md) D3) — **not started
+  because** the three-state split's `terraform_remote_state` reads use
+  `backend = "local"` deliberately, scoped to a single developer's own
+  `apply`/`destroy` cycles; introducing an S3+DynamoDB-lock (or Terraform
+  Cloud) remote backend now would be a second, unrequested scope expansion on
+  a config that has not yet been `apply`d against real AWS at all (ADR 0043
+  D1). Revisit once a second developer or a CI pipeline needs to `apply`
+  this configuration.
 - Distroless runtime base (recorded 2026-08-08, [ADR 0030](ADR/0030-container-non-root-and-arch-stance.md))
   — **not started because** whether an exact Node 24 distroless tag
   (`gcr.io/distroless/nodejs24-debian12` or similar) even exists was never verified

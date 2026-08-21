@@ -425,6 +425,14 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
 
 ## 7. 미일정 / 미결 사항
 
+- Terraform 원격 state backend (2026-08-19 기록,
+  [ADR 0044](ADR/0044-terraform-three-state-split.ko.md) D3) — **미착수
+  이유**: 3-state 분할의 `terraform_remote_state`는 의도적으로 `backend =
+  "local"`을 쓰며, 개발자 1인의 `apply`/`destroy` 사이클에만 범위를 한정한
+  선택이다. 아직 실제 AWS에 한 번도 `apply`하지 않은 설정(ADR 0043 D1)에
+  S3+DynamoDB 락(또는 Terraform Cloud) 원격 backend를 지금 도입하는 건
+  요청받지 않은 추가 범위 확장이다. 두 번째 개발자나 CI 파이프라인이 이
+  설정을 apply해야 할 때 재검토한다.
 - Distroless 런타임 베이스 (2026-08-08 기록, [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md))
   — **미착수 이유**: Node 24용 distroless 태그(`gcr.io/distroless/nodejs24-debian12`
   등)가 실제로 존재하는지 실물 레지스트리로 검증하지 않았고, distroless는 이

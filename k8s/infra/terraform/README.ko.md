@@ -50,6 +50,13 @@ k8s/infra/terraform/
 안에서 각각 실행하세요; `terraform init`도 세 곳에서 각각 따로 실행해야
 합니다.
 
+**향후 계획**: 두 번째 개발자나 CI 파이프라인이 이 설정을 apply해야 하는
+시점이 오면, 각 state의 `backend "local"`을 원격 backend(S3 + DynamoDB
+락, 또는 Terraform Cloud)로 옮깁니다 — 지금은 의도적으로 하지 않은
+상태이며(ADR 0044 D3, 기각된 대안), [ROADMAP.md
+7절](../../../docs/ROADMAP.ko.md#7-미일정--미결-사항)에 미예정 작업으로
+기록돼 있습니다.
+
 ## 아무거나 `apply`하기 전에 준비할 것
 
 1. **DNS를 걸 수 있는 도메인.** `app-infra/`는 `var.domain_name`으로

@@ -50,6 +50,12 @@ convenience, not a shared/CI backend (ADR 0044 D3). Run every command below
 from inside the directory it's shown under; `terraform init` must be run
 separately in each of the three.
 
+**Future**: once a second developer or a CI pipeline needs to `apply` this
+configuration, each state's `backend "local"` migrates to a remote backend
+(S3 + DynamoDB lock, or Terraform Cloud) — deliberately not done now (ADR
+0044 D3, Alternatives rejected), tracked as unscheduled work in
+[ROADMAP.md §7](../../../docs/ROADMAP.md#7-unscheduled--open-decisions).
+
 ## Before you `apply` anything
 
 1. **A domain you can point DNS at.** `app-infra/` creates a Route53 hosted
