@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuthStore } from '../store/auth.store';
+import { clearSessionUser } from '../auth/session-guard';
 import { actionColor, type AuditLog } from '../lib/audit';
 
 // This backend has no presence/room concept (that was the Chat Project's domain) — the
@@ -36,9 +37,15 @@ function DashboardPage() {
             .finally(() => setStatsLoading(false));
     }, []);
 
+    // 목적: 이 탭의 관리자 세션을 서버·스토어·sessionStorage 세 곳 모두에서 끝낸다.
+    // 이유: clearTokens만 부르면 sessionStorage의 세션 소유자 id가 로그아웃 후에도 남아,
+    //       다음 계정으로 로그인한 세션이 첫 refresh에서 강제 로그아웃됐다 (session-guard.ts).
+    // 방법: /auth/signout으로 서버 앵커를 지우고(실패해도 진행), clearTokens + clearSessionUser로
+    //       로컬 흔적을 모두 비운 뒤 로그인 화면으로 이동한다.
     const signOut = async () => {
         try { await api.post('/auth/signout'); } catch { /* best effort */ }
         clearTokens();
+        clearSessionUser();
         navigate('/');
     };
 

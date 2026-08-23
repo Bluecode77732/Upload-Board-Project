@@ -4,6 +4,7 @@ import { jwtDecode } from 'jwt-decode';
 import api from '../api/axios';
 import { useAuthStore, type UserRole } from '../store/auth.store';
 import { ROLE_RANK } from '../auth/role';
+import { recordSessionUser } from '../auth/session-guard';
 import { useState } from 'react';
 
 interface LoginForm {
@@ -17,6 +18,11 @@ function LoginPage() {
     const navigate = useNavigate();
     const [error, setError] = useState('');
 
+    // 목적: Basic 자격증명으로 사인인하고, 이 탭의 세션 소유 계정을 확정한다.
+    // 이유: setTokens만 부르면 sessionStorage의 소유자 id가 이전 계정으로 남아, 다음 refresh가
+    //       계정 불일치로 오판되어 정상 세션이 강제 로그아웃됐다 (session-guard.ts assertSessionUser).
+    // 방법: 액세스 토큰의 role을 검사해 admin 미만이면 중단하고, 통과 시 setTokens 직후
+    //       recordSessionUser(sub)로 소유자를 새로 기록한 뒤 /dashboard로 이동한다.
     const onSubmit = async (data: LoginForm) => {
         setError('');
         try {
@@ -30,6 +36,7 @@ function LoginPage() {
                 return;
             }
             setTokens(res.data.accessToken, sub, role);
+            recordSessionUser(sub);
             navigate('/dashboard');
         } catch {
             setError('Invalid credentials.');
