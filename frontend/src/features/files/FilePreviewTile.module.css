@@ -1,0 +1,130 @@
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  text-align: left;
+}
+
+.tile:hover {
+  border-color: var(--brand);
+}
+
+/* Fixed ratio so a tile reserves its space before any bytes arrive — the grid never
+   reflows as previews resolve one by one. */
+.frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: #000;
+}
+
+.placeholder {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 8px;
+  text-align: center;
+}
+
+.icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.loadButton {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.loadButton:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.loadButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  min-width: 0;
+}
+
+.title {
+  color: var(--brand);
+  text-decoration: none;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title:hover {
+  color: var(--brand-hover);
+  text-decoration: underline;
+}
+
+.title:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.creatorButton {
+  align-self: flex-start;
+  max-width: calc(100% - 24px);
+  margin: 0 12px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creatorButton:hover {
+  color: var(--brand);
+}
+
+.creatorButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}

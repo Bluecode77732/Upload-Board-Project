@@ -1,5 +1,8 @@
+/* Widened from 720px so FileBoard's three preview columns get a usable frame size — at 720px
+   each 16:9 frame was only ~227px wide. 1126px matches #root's own width (index.css), so the
+   page uses the full column it already occupies rather than introducing a new outer width. */
 .page {
-  max-width: 720px;
+  max-width: 1126px;
   margin: 5vh auto;
   padding: 24px;
 }

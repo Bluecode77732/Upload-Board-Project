@@ -56,6 +56,20 @@ lerna-debug.log*
 /docs/SESSION-LOG.md
 /docs/SESSION-LOG.ko.md
 
+# Playwright MCP scratch output — page/console dumps the browser MCP server writes during
+# live UI verification (CLAUDE.md > Development Tooling > MCP Servers). Per-session and
+# per-machine, like the session log above; no slash prefix so it also covers
+# frontend/.playwright-mcp/ and admin/.playwright-mcp/
+.playwright-mcp/
+
+# Ad-hoc verification screenshots dropped at the repo root by that same browser tooling.
+# Scoped to the root only: the repo tracks no image assets today, and any that are ever
+# added belong beside the code that uses them, never here
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+
 # Runtime data
 pids
 *.pid

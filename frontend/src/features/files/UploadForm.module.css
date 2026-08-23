@@ -1,7 +1,10 @@
+/* The page around this form widened to 1126px for the preview grid (DashboardPage.module.css);
+   a form stretched that far reads as a sprawl, so it keeps its original width and centers. */
 .form {
   display: grid;
   gap: 14px;
-  margin: 16px 0;
+  max-width: 720px;
+  margin: 16px auto;
   padding: 20px;
   background: var(--surface-raised);
   border: 1px solid var(--border);

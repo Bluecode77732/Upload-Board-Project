@@ -22,6 +22,13 @@
   font-size: 0.9rem;
 }
 
+/* Title search is the primary way to find one file among many now that the board paints
+   previews rather than a scannable text list — give it the row's spare width. */
+.searchField {
+  flex: 1 1 240px;
+  min-width: 180px;
+}
+
 .input,
 .select {
   padding: 8px 10px;
@@ -61,82 +68,69 @@
   color: var(--danger);
 }
 
-.list {
+/* Three fixed columns — one page (TAKE = 9) is exactly one 3x3 screen, and each further page
+   extends the same three columns downward into 3xN. minmax(0, 1fr) keeps a long title from
+   widening its column past its share. */
+.grid {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
 }
 
-.row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+/* Below this width three 16:9 frames are too narrow to preview anything — fall back to one
+   column rather than shipping a grid that is unreadable on a phone. */
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
-.rowInfo {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  min-width: 0;
+/* Zero-height probe under the grid: the observer watches this, not the last tile, so the
+   trigger point does not move as tiles resize. */
+.sentinel {
+  height: 1px;
 }
 
-.rowInfo a {
-  color: var(--brand);
-  text-decoration: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rowInfo a:hover {
-  color: var(--brand-hover);
-  text-decoration: underline;
-}
-
-.creatorButton {
-  flex: none;
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.creatorButton:hover {
-  color: var(--brand);
-}
-
-.pagination {
+.footer {
   display: flex;
   gap: 12px;
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
   margin-top: 16px;
   color: var(--text-muted);
   font-size: 0.9rem;
 }
 
-.pageButton {
+.loadMoreButton {
   padding: 6px 14px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface-raised);
   color: var(--text);
   cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
 }
 
-.pageButton:hover:not(:disabled) {
+.loadMoreButton:hover:not(:disabled) {
   border-color: var(--brand);
   color: var(--brand);
 }
 
-.pageButton:disabled {
+.loadMoreButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.loadMoreButton:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.autoPausedNote {
+  font-size: 0.8rem;
 }

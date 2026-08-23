@@ -63,11 +63,11 @@ test('search, sort, and pagination reflect files uploaded through the board', as
   await alphaRow.getByTitle('Filter the list to this creator').click()
   await expect(page.getByLabel('Creator ID')).toHaveValue(/^\d+$/)
 
-  // Two matching rows, well under the page size (20) — pagination reflects a single page.
+  // Two matching tiles, well under the page size (9) — everything is already loaded, so the
+  // infinite-scroll grid offers no further page and the "Load more" fallback is absent.
   await expect(page.locator('ul li')).toHaveCount(2)
   await expect(page.getByText(/of 2$/)).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Previous' })).toBeDisabled()
-  await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Load more' })).toHaveCount(0)
 })
 
 test('a file not matching the search term is not shown', async ({ page }) => {
