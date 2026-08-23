@@ -13,6 +13,50 @@
 ## [Unreleased]
 
 ### 변경
+- **`frontend/`: 파일 보드를 3열 프리뷰 그리드 + 무한 스크롤로 개편(2026-08-24, 커밋
+  `e567277`)** — `/files`는 파일당 텍스트 한 줄만 보여줬기 때문에, 상세 페이지를 열기
+  전에는 어떤 파일인지 알 수 없었다. 이제 16:9 프리뷰 타일이 3x3 그리드로 깔리고,
+  스크롤하면 3xN으로 이어서 펼쳐진다. 이미 있던 제목 검색([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)의
+  `search` 파라미터)은 필터 행의 남는 폭을 모두 쓰도록 넓혔다. **작성자가 밝힌 이유**:
+  요즘 기기 성능이면 파일을 실제로 받아오는 것 자체는 무리가 없고, 스크롤로 훑는 편이
+  텍스트 목록보다 정보를 빠르게 읽는다 — 다만 프리뷰가 계속 쌓여 성능 저하로 이어져서는
+  안 되므로, 과감히 받아오되 한 세션이 쌓을 수 있는 양에는 상한을 두는 쪽이 사용자
+  편의에 맞다. 아래의 모든 안전장치가 구현하는 것이 바로 이 균형이며, 단순히 전부
+  무조건 로드하지 않은 이유도 여기에 있다.
+  `FilePreviewTile.tsx`/`.module.css`(신규)가 타일 하나와 그 지연 로드 수명주기를
+  전담한다: 이미지는 타일이 뷰포트에 들어올 때 로드하고, 영상은 "Load preview"를 눌러야
+  로드하며, 오디오는 아예 바이트를 받지 않는다(보여줄 프레임이 없으므로 🎵 아이콘 타일을
+  유지). 영상의 클릭 게이트는 장식이 아니다 — 썸네일 엔드포인트가 없고 `<img>`/`<video
+  src>`는 Bearer 헤더를 실을 수 없어, `private` 파일의 프리뷰는 곧 업로드 상한인 100MB
+  까지의 객체 전체를 내려받는 일이기 때문이다([ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md)).
+  그래서 private 타일은 `FileDetailPage.tsx`가 이미 하던 것과 똑같이 인증된 blob 경로로
+  읽고 언마운트 시 objectURL을 revoke하며(ADR 0025/0026), public/unlisted 타일은 콘텐츠
+  URL에서 바로 스트리밍한다. `FileBoard.tsx`의 페이지 크기는 20 → 9로 줄었고(한 페이지가
+  정확히 3x3 한 화면), Previous/Next 페이저는 그리드 아래 sentinel을 감시하는
+  `IntersectionObserver`로 대체됐다. 자동 로드는 180개(3열 x 60행)에서 멈추고 그
+  이후로는 "Load more" 버튼만이 유일한 진행 수단이므로, 무심코 스크롤하는 것만으로
+  테이블 전체가 메모리에 올라오지 않는다. 요청마다 부여하는 id 가드는 필터 변경 도중
+  도착한 이전 응답이 새 질의 결과 뒤에 잘못 이어 붙는 것을 막는다.
+  `DashboardPage.module.css`의 페이지 폭은 720px → 1126px(`index.css`의 `#root` 폭과
+  동일)로 넓혔는데, 720px에서는 세 프레임이 각각 227px밖에 되지 않았기 때문이다. 업로드
+  폼은 원래 폭을 유지한 채 가운데 정렬해 옆으로 퍼지지 않게 했다. `max-width: 640px`
+  단일 열 폴백은 새 그리드가 휴대폰에서 최소한 쓸 수 있게 하는 선까지만 넣은 것으로,
+  전면 반응형 작업은 여전히 미해결이다([ROADMAP.ko.md](ROADMAP.ko.md) > 7 참조).
+  `frontend/e2e/board.spec.ts`의 페이저 단언은 "Load more" 부재 단언으로 바뀌었다.
+  그리드는 `<ul>`/`<li>` 시맨틱과 타일당 `<a>` 하나를 의도적으로 유지했기 때문에,
+  `board`/`upload`/`detail.spec.ts`의 기존 `li` / `li a` /
+  `getByTitle('Filter the list to this creator')` 선택자는 그대로 동작한다. 백엔드·DB·
+  Swagger·에러 계약 변경은 없다 — `take=9`는 `GetFilesDto`가 이미 허용하는 `take` 1–100
+  범위 안이므로 [`frontend/docs/API-CONTRACT.ko.md`](../frontend/docs/API-CONTRACT.ko.md)도
+  영향을 받지 않는다. `pnpm build`/`pnpm lint` 통과, Playwright e2e 22개 전부 통과.
+  실제 브라우저(Playwright MCP)로 직접 확인한 것: 스크롤에 따라 타일 9 → 18 → 24개로
+  늘고 끝에서는 추가 요청이 없는 것, private 이미지가 `blob:` objectURL에서 원본 640×360
+  으로 렌더되는 것, private 영상이 클릭 후 `readyState 4`(988×480, 10.6초)에 도달하는 것,
+  제목 검색이 2건으로 좁혀졌다 되돌아오는 것, 420px에서 단일 열로 떨어지며 가로 오버플로가
+  없는 것. 이 라이브 검증 **덕분에** 발견해 같은 작업에서 고친 결함이 둘 있다: 위의 720px
+  페이지 폭 상한, 그리고 `<img>`에 `onError`가 없어 바이트가 유실된 파일이 타일의
+  `⚠ Preview unavailable` 대신 브라우저 기본 깨진 이미지 상태로 노출되던 문제(영상 분기
+  에는 이미 `onError`가 있었다).
 - **Terraform 3-state 분리: `k8s/infra/terraform/`를 단일 루트 모듈에서 `cluster/`/
   `app-infra/`/`addons/`로 재구성(결정 2026-08-19, 세 작업에 걸쳐 구현 2026-08-20,
   [ADR 0044](ADR/0044-terraform-three-state-split.ko.md))** — 기존 단일 `main.tf`는

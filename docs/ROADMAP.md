@@ -457,6 +457,40 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
 
 ## 7. Unscheduled / open decisions
 
+- ~~File board as a preview grid (`/files`)~~ — **landed 2026-08-24** (commit `e567277`,
+  [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Changed`). The board listed one text row per
+  file, so nothing identified a file short of opening its detail page. It is now a
+  3-column 16:9 preview grid that extends into 3xN on scroll, with the existing ADR 0021
+  title search given the filter row's spare width. The stated reasoning: today's device
+  performance makes fetching the files themselves unproblematic and scrolling reads faster
+  than a text list, but accumulated previews must not become a performance loss — so the
+  grid fetches eagerly *and* bounds what one session can pile up (images load on viewport
+  entry, video only on an explicit click, audio never, auto-loading stops at 180 tiles).
+  No ADR: `frontend/` keeps its decisions in CHANGELOG and `frontend/docs/`, not
+  `docs/ADR/`. Two follow-ups this work exposed are the next two rows.
+- Server-side thumbnail endpoint (recorded 2026-08-24) — **not started because** it is a
+  backend change (a new derived artifact per file, plus where to store and when to
+  generate it) that the grid above does not strictly need. But it is the root cause of
+  that grid's sharpest compromise: with no thumbnail, a `private` file's preview means
+  downloading the entire object — up to the 100MB upload ceiling
+  ([ADR 0027](ADR/0027-media-type-expansion-implementation.md)) — because `<img>`/`<video
+  src>` cannot carry a Bearer header and only the authenticated blob path can read those
+  bytes (ADR 0025/0026). The click gate on video tiles exists solely to bound that cost.
+  A thumbnail endpoint would remove the gate and let every tile preview instantly.
+  Revisit alongside the Stage 4 S3 cutover, since where thumbnails live is a storage
+  decision (ADR 0029's `FileStorage` port would need a new operation).
+- Dev-database rows whose stored bytes are gone (recorded 2026-08-24) — **not started
+  because** it is local test-data hygiene, not a product defect. Measured 2026-08-24 while
+  verifying the grid above: of the **25** public files then visible in the shared dev DB,
+  **23 returned `404 FILE_NOT_FOUND`** from `GET /file/:id/content` — every image and audio
+  row, and 20 of 22 videos — metadata rows left behind by e2e runs whose files no longer
+  exist on disk. The two exceptions had been created minutes earlier by that same day's
+  e2e run, which is also why this count drifts upward on every run and should be re-measured
+  rather than trusted. They now render as `⚠ Preview unavailable` tiles, which is the correct
+  behavior but makes the board look broken during manual QA. Decide whether to prune them,
+  or to let the e2e suite clean up after itself (it deliberately never truncates the dev
+  DB — see `test/e2e-utils.ts`). Note this is the *dev* database only; nothing here
+  indicates a production data path.
 - Terraform remote state backend (recorded 2026-08-19,
   [ADR 0044](ADR/0044-terraform-three-state-split.md) D3) — **not started
   because** the three-state split's `terraform_remote_state` reads use

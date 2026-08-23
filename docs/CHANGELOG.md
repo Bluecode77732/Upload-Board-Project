@@ -13,6 +13,52 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **`frontend/`: the file board became a 3-column preview grid with infinite scroll
+  (2026-08-24, commit `e567277`)** — `/files` listed one text row per file, so a file was
+  unidentifiable without opening its detail page. The board now paints a 3x3 grid of 16:9
+  preview tiles that extends into 3xN as you scroll, and the title search that already
+  existed ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)'s `search` param) was widened to
+  take the filter row's spare width. **Rationale as stated by the author**: device
+  performance today makes fetching the files themselves unproblematic, and scrolling reads
+  information faster than a text list — but previews must not accumulate into a performance
+  loss, so user convenience is served by fetching aggressively *and* capping what a single
+  session can pile up. That trade-off is what every guardrail below implements, and it is
+  the reason each exists rather than a simpler unconditional load.
+  `FilePreviewTile.tsx`/`.module.css` (new) owns one tile and its own lazy-load lifecycle:
+  an image loads when the tile enters the viewport, a video waits for an explicit "Load
+  preview" click, and audio never fetches bytes at all (there is no frame to show, so it
+  keeps a 🎵 icon tile). The click gate on video is not cosmetic — a `private` file's
+  preview means downloading the whole object, up to the 100MB upload ceiling
+  ([ADR 0027](ADR/0027-media-type-expansion-implementation.md)), because no thumbnail
+  endpoint exists and `<img>`/`<video src>` cannot carry a Bearer header; private tiles
+  therefore read through the authenticated blob path and revoke the objectURL on unmount,
+  exactly as `FileDetailPage.tsx` already did (ADR 0025/0026), while public/unlisted tiles
+  stream straight from their content URL. `FileBoard.tsx`'s page size drops 20 → 9 (one page
+  is exactly one 3x3 screen) and its Previous/Next pager is replaced by an
+  `IntersectionObserver` on a sentinel below the grid; auto-loading stops at 180 rows
+  (3 columns x 60), past which a "Load more" button is the only way forward, so an idle
+  scroll cannot walk the whole table into memory. A per-request id guard keeps a filter
+  change mid-flight from appending a stale page onto the new query's results.
+  `DashboardPage.module.css`'s page width goes 720px → 1126px (matching `#root`'s own width
+  in `index.css`) because at 720px each of the three frames was only ~227px wide; the upload
+  form keeps its former width and centers, so it does not sprawl. A `max-width: 640px`
+  single-column fallback was added as the minimum needed to keep the new grid usable on a
+  phone — full responsive work remains open (see [ROADMAP.md](ROADMAP.md) > 7).
+  `frontend/e2e/board.spec.ts`'s pager assertions became a "Load more" absence assertion;
+  the grid deliberately keeps `<ul>`/`<li>` semantics and exactly one `<a>` per tile so the
+  existing `li` / `li a` / `getByTitle('Filter the list to this creator')` selectors in
+  `board`/`upload`/`detail.spec.ts` keep working. No backend, DB, Swagger, or error-contract
+  change — `take=9` sits inside the `take` 1–100 range `GetFilesDto` already accepts, so
+  [`frontend/docs/API-CONTRACT.md`](../frontend/docs/API-CONTRACT.md) is unaffected.
+  `pnpm build`/`pnpm lint` clean and all 22 Playwright e2e specs pass. Verified live in a
+  real browser (Playwright MCP): 9 → 18 → 24 tiles on scroll with no further requests at the
+  end, a private image rendering from a `blob:` objectURL at its true 640×360, a private
+  video reaching `readyState 4` (988×480, 10.6s) after its click, title search narrowing to
+  2 and back, and the single-column fallback at 420px with no horizontal overflow. Two
+  defects were found *by* that live pass and fixed in it: the 720px page cap above, and a
+  missing `onError` on `<img>` that let a file with missing bytes paint the browser's own
+  broken-image state instead of the tile's `⚠ Preview unavailable` (the video branch already
+  had one).
 - **Terraform three-state split: `k8s/infra/terraform/` reorganized from one root module into
   `cluster/`/`app-infra/`/`addons/` (decided 2026-08-19, implemented 2026-08-20 across three
   tasks, [ADR 0044](ADR/0044-terraform-three-state-split.md))** — the prior single `main.tf`

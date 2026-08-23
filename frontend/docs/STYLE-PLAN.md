@@ -11,6 +11,13 @@ for that work — implementation happens in separate, dispatched sessions (see
 items surfaced during the initial walkthrough stay deliberately out of scope
 and open — see "Related but out of scope" and "Open questions" below.
 
+> **Later change (2026-08-24)**: item 4's file board no longer looks like what
+> that row describes — its text list and Previous/Next pager were replaced by a
+> 3-column preview grid with infinite scroll. This document stays the record of
+> what the 2026-08-14 overhaul decided and delivered; the row below carries a
+> pointer so a reader does not mistake it for the current implementation. Full
+> entry: [CHANGELOG.md](../../docs/CHANGELOG.md) `[Unreleased] > Changed`.
+
 ## Decisions (confirmed this session)
 
 | Axis | Decision | Why |
@@ -95,7 +102,7 @@ already asked for the toggle specifically.
 | 1 | ~~Token foundation~~ | **Done 2026-08-14** (see CHANGELOG.md). Replaced `index.css`'s token block with the palette above; added `ThemeProvider` + `data-theme` CSS; no visual change to page layouts other than NavBar (verified live). |
 | 2 | ~~`NavBar`~~ | **Done 2026-08-14**, bundled with item 1 (see CHANGELOG.md). Converted to CSS Module; added the theme toggle control. |
 | 3 | ~~`LoginPage`~~ | **Done 2026-08-14** (see CHANGELOG.md). Converted to CSS Module; restyled the card, inputs, mode-switch link. |
-| 4 | ~~`FileBoard` + `DashboardPage` + `UploadForm`~~ | **Done 2026-08-14**, bundled with item 3 (see CHANGELOG.md). Converted to CSS Modules; restyled upload form, filter bar, file list rows, pagination. |
+| 4 | ~~`FileBoard` + `DashboardPage` + `UploadForm`~~ | **Done 2026-08-14**, bundled with item 3 (see CHANGELOG.md). Converted to CSS Modules; restyled upload form, filter bar, file list rows, pagination. **Superseded in part 2026-08-24**: the "file list rows" and "pagination" delivered here are gone — a 3-column 16:9 preview grid (`FilePreviewTile`) with infinite scroll replaced them, and the page width went 720px → 1126px to give the frames room. The reasoning was that today's device performance makes fetching the files themselves unproblematic and scrolling reads faster than a text list, while a 180-tile auto-load cap and a click gate on video keep accumulated previews from turning into a performance loss. The CSS Modules conversion this row landed is unchanged and still in force. |
 | 5 | ~~`FileDetailPage` + `VisibilityBadge`~~ | **Done 2026-08-14** (see CHANGELOG.md). Converted to CSS Modules; restyled header/player/share-link/Manage panel; fixed the title-wrap overlap bug at its root cause (see below). |
 | 6 | ~~`PostBoard` + `PostForm` + `FilePicker`~~ | **Done 2026-08-14** (see CHANGELOG.md). Converted to CSS Modules; restyled new-post form, file-attach picker, post list rows, pagination — same filters/list/pagination shapes as item 4's `FileBoard`, plus a page-wrapper class since `PostBoard` (unlike `DashboardPage`) hosts the NavBar/heading/form/list in one file. |
 | 7 | ~~`PostDetailPage` + `CommentThread` + `CommentForm`~~ | **Done 2026-08-14** (see CHANGELOG.md). Converted to CSS Modules; restyled post header, edit/delete controls, comment thread (list, inline edit/delete) and the comment form — last of the 5 pages. Korean hardcoded UI text left untouched (separate i18n decision, see below). Also removed `PostDetailPage.tsx`'s now-redundant inline `lineHeight: 1.25` `<h1>` override, flagged by item 5 as ready to delete once this item converted the file. |
