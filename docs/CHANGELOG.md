@@ -13,6 +13,41 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **`frontend/`: every screen now adapts to the viewport width, and the post board's one hard
+  layout break is fixed (2026-08-24, commit `d746257`)** — CSS only; no component, JS, or API
+  change. **What the measurement changed**: the task began from the assumption that a
+  `*.module.css` file with no `@media` block must break on a phone, and that assumption was
+  wrong. Measured at a 390px viewport before touching anything, **only the post board actually
+  overflowed** — by 265px — while `/files`, both detail pages, and `/login` were already clean,
+  because `#root` is `max-width: 100%` and every page is `max-width`-based. So this is a
+  one-real-break fix plus a width-tier pass, not the rewrite it was scoped as.
+  The break: `PostBoard.module.css`'s `.creatorButton` carried `flex: none` with no truncation,
+  so a long creator email pinned a row's min-content at 591px and **that minimum propagated up
+  to the page itself**, dragging the NavBar, heading, and form out with it. Two candidate fixes
+  were tried live in the browser and both failed — neither `width: 100%` nor `min-width: 0`
+  reduces the intrinsic width of `white-space: nowrap` text — and the working fix needed **both**
+  the title link and the email to wrap: with only one wrapping, the page still sat 77px over.
+  Mobile therefore wraps (`overflow-wrap: anywhere`) rather than truncating. That is a
+  readability judgment, not just a way out of the overflow: a phone has the vertical room, so
+  showing a title and an email in full beats eliding them. The desktop row keeps its single-line
+  layout and its ellipsis — truncation stays the wide-screen affordance.
+  Breakpoints **reuse the two values already in the codebase** rather than introducing a third:
+  `index.css` already switches its type scale at 1024px, and 640px is where the preview grid
+  stops making sense at all. `FileBoard.module.css`'s grid steps 3 columns → 2 → 1 across them,
+  and frames stay large at every step — 346×196 on desktop, 368×208 through the tablet range
+  (larger than desktop, since two columns split the same width), 589×332 on a phone. All five
+  screens drop their gutter from 24px to 16px and their top margin from `5vh` to `2vh`
+  (`DashboardPage`/`FileDetailPage`/`PostDetailPage`/`PostBoard`/`LoginPage`, plus
+  `UploadForm`'s inner padding), `NavBar.module.css` tightens its gaps, both boards stack their
+  filter fields full-width, and post rows stack title-over-creator.
+  Two defects introduced during the work were caught by the live pass and fixed in it: the
+  creator-ID input escaped its filter panel by 9px (a percentage width on a `content-box` input
+  adds padding and border on top of it, so `width: auto` is correct there), and a wrapped post
+  title inherited `#root`'s `text-align: center` while its email stayed left.
+  Verified across 5 screens × 5 widths with zero horizontal overflow, the desktop row layout
+  confirmed unchanged at 1280px, `pnpm build`/`pnpm lint` clean, and all 22 Playwright e2e specs
+  passing. Touch-target sizing was deliberately left out of scope — see
+  [ROADMAP.md](ROADMAP.md) > 7.
 - **`frontend/`: the file board became a 3-column preview grid with infinite scroll
   (2026-08-24, commit `e567277`)** — `/files` listed one text row per file, so a file was
   unidentifiable without opening its detail page. The board now paints a 3x3 grid of 16:9
@@ -43,7 +78,7 @@ development line (package.json version).
   in `index.css`) because at 720px each of the three frames was only ~227px wide; the upload
   form keeps its former width and centers, so it does not sprawl. A `max-width: 640px`
   single-column fallback was added as the minimum needed to keep the new grid usable on a
-  phone — full responsive work remains open (see [ROADMAP.md](ROADMAP.md) > 7).
+  phone; the responsive pass that superseded it landed 2026-08-24 (entry above).
   `frontend/e2e/board.spec.ts`'s pager assertions became a "Load more" absence assertion;
   the grid deliberately keeps `<ul>`/`<li>` semantics and exactly one `<a>` per tile so the
   existing `li` / `li a` / `getByTitle('Filter the list to this creator')` selectors in

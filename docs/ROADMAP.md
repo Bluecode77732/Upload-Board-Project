@@ -457,6 +457,30 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
 
 ## 7. Unscheduled / open decisions
 
+- ~~Responsive layout across every screen~~ — **landed 2026-08-24** (commit `d746257`,
+  [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Changed`). Worth recording *because the
+  measurement contradicted the plan*: the work was scoped on the assumption that every
+  `*.module.css` without an `@media` block breaks on a phone, and at a 390px viewport only
+  the post board actually overflowed (by 265px) — `#root` is already `max-width: 100%` and
+  every page is `max-width`-based, so the rest collapsed on its own. The single real break
+  was a creator email under `flex: none` whose min-content pinned the whole page at 591px.
+  Fixed by wrapping rather than truncating on mobile — a readability call, since a phone has
+  the vertical room to show a title and an email in full — while the desktop row keeps its
+  one-line ellipsis. Breakpoints reuse the 1024px and 640px values already in the codebase;
+  no third value was added. Frames stay large at every step (346×196 / 368×208 / 589×332).
+  Verified across 5 screens × 5 widths at zero overflow, 22/22 e2e passing. Touch-target
+  sizing was explicitly excluded — next row.
+- Touch-target sizing on mobile (recorded 2026-08-24) — **not started because** it was
+  deliberately scoped out of the responsive pass above: raising every button and link to a
+  44px minimum overlaps the accessibility work this app already needs, and doing half of it
+  inside a width-tier pass would leave the other half looking done. Measured 2026-08-24: the
+  frontend carries six `aria-*` attributes, but five are decorative `aria-hidden` on emoji
+  icons — `NavBar`'s theme-toggle `aria-label` is the only one conveying anything. Of 18
+  `:focus-visible` rules, all but four sit on inputs, selects, and textareas; the four button
+  rules are all in the new file grid (`FilePreviewTile`, `FileBoard`), so every other button
+  in the app — `PostBoard`'s clear/creator/pager, `PostDetailPage`'s delete/primary,
+  `CommentThread`'s delete/load-more, `FileDetailPage`'s copy/rotate/delete — still has no
+  visible keyboard focus. Pick this up together with that accessibility work, not on its own.
 - ~~File board as a preview grid (`/files`)~~ — **landed 2026-08-24** (commit `e567277`,
   [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Changed`). The board listed one text row per
   file, so nothing identified a file short of opening its detail page. It is now a
