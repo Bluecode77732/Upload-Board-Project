@@ -1449,14 +1449,17 @@ unreliable for the highest-severity ones:
 - **`log-session-title.js`** (`UserPromptSubmit`, added 2026-08-19 same day, after
   confirming that a session_id alone — a bare pointer to an untitled
   `~/.claude/projects/.../<session_id>.jsonl` transcript — carries no human-readable
-  information for later sorting) — fires on every prompt and fills that session's most
-  recent **empty-title** row in `docs/SESSION-LOG.md` with a flattened, ~80-character
-  excerpt of the prompt, writing at most once per row since a filled row no longer
-  matches. Originally gated on `turn_number === 1`; live log data the same day showed a
-  resumed session's row never gets a turn 1 (the turn count continues across resume
-  instead of resetting), so the gate was replaced with the empty-title match itself,
-  which fills correctly on both a fresh session's first prompt and a resumed session's
-  first post-resume prompt. `docs/SESSION-LOG.md` (+ `.ko.md`) is itself gitignored,
+  information for later sorting) — fires on every prompt and fills that session's
+  **newest** row in `docs/SESSION-LOG.md` with a flattened, ~80-character excerpt of the
+  prompt, but only while that row's title is still empty; every later prompt is a silent
+  no-op. Two bugs here were fixed on 2026-08-20 by dumping a live payload instead of
+  guessing its shape, and both are worth knowing before touching this hook: the payload
+  carries **no `turn_number` field at all** (the original `turn_number === 1` gate
+  therefore always exited — the earlier note here blaming resumed sessions' turn counting
+  was wrong), and the prompt text arrives as **`prompt`**, not `user_prompt`. It anchors
+  to the session's newest row rather than its newest *empty* row because the latter let a
+  later prompt reach back and backfill a much older row, stamping that prompt with a
+  timestamp it never had. `docs/SESSION-LOG.md` (+ `.ko.md`) is itself gitignored,
   not committed — it churns per developer machine and per parallel session, so it stays
   local-only rather than shared repo state; do not remove it from `.gitignore` as
   drive-by cleanup
