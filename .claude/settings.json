@@ -1,39 +1,6 @@
 {
   "enabledMcpjsonServers": ["playwright", "context7"],
   "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node .claude/hooks/log-session-start.js 2>/dev/null || true",
-            "statusMessage": "Logging session start..."
-          }
-        ]
-      },
-      {
-        "matcher": "resume",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node .claude/hooks/log-session-start.js 2>/dev/null || true",
-            "statusMessage": "Logging session resume..."
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node .claude/hooks/log-session-title.js 2>/dev/null || true",
-            "statusMessage": "Recording session title..."
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",

@@ -1516,35 +1516,36 @@ Auto Mode는 기본적으로 "웬만하면 안 멈추고 진행"하는 성향이
   승인 프롬프트를 강제로 띄운다
 - **`check-migration-generate.js`** (`PreToolUse`/`Bash`) — `migration:generate` 실행
   전에 `ask` 승인 프롬프트를 강제로 띄운다(Scope Discipline의 사전 평문 설명 요건)
-- **`log-session-start.js`** (`SessionStart`, `matcher: "startup"`과 `matcher: "resume"`
-  두 항목으로 등록 — 2026-08-18 추가, 재개 세션도 감사 기록에 포함해야 한다는 확인을
-  거쳐 같은 날 `resume`를 추가) — 세션이 시작되거나 재개될 때마다(`clear`/`compact`/
-  `fork`는 제외) 세션ID·UTC 시각·그 순간 체크아웃되어 있던 git 브랜치
-  (`git rev-parse --abbrev-ref HEAD`, 셸을 거치지 않는 `execFileSync`로 조회)를
-  `docs/SESSION-LOG.md`에 한 행씩 append한다. 이 시점엔 아직 프롬프트가 없으므로
-  제목 칸은 비워둔다
-- **`log-session-title.js`** (`UserPromptSubmit`, 같은 날 추가 — session_id 하나만으로는
-  `~/.claude/projects/.../<session_id>.jsonl`이라는, 그 자체로 제목도 없는 트랜스크립트
-  파일을 가리킬 뿐 사람이 읽을 수 있는 정보가 전혀 없다는 걸 확인한 뒤 추가) — 모든
-  프롬프트마다 실행되어, 해당 세션의 **가장 최근 행**을 찾아 그 행의 제목이 아직 비어
-  있을 때만 프롬프트를 약 80자로 잘라 평탄화한 값으로 채운다. 이후 프롬프트는 조용히
-  아무것도 하지 않는다. 이 훅에는 2026-08-20에 고친 버그가 두 개 있었고, 둘 다 실제
-  페이로드를 덤프해서(추측이 아니라) 밝혀냈으므로 이 훅을 건드리기 전에 알아둘 것:
-  페이로드에는 **`turn_number` 필드가 아예 없어서** 원래의 `turn_number === 1` 게이트는
-  항상 즉시 종료됐고(여기 적혀 있던 "재개 세션의 턴 카운트" 설명은 틀린 진단이었다),
-  프롬프트 본문은 `user_prompt`가 아니라 **`prompt`**로 들어온다. "가장 최근 *빈* 행"이
-  아니라 "가장 최근 행"에 앵커링하는 이유는, 전자로 하면 나중에 보낸 프롬프트가 훨씬
-  과거의 행까지 거슬러 올라가 채우면서 그 프롬프트에 실제와 다른 시각이 찍히기 때문이다.
-  `docs/SESSION-LOG.md`(+`.ko.md`)는 그 자체가 gitignore 대상이라 커밋되지 않는다 —
-  개발자 머신마다, 병렬 세션마다 계속 바뀌는 데이터라 공유 저장소 상태가 아니라
-  로컬 전용으로 둔다. 드라이브바이 정리로 `.gitignore`에서 빼지 말 것
-- 두 훅 모두 다른 세 훅과 달리 `ask` 프롬프트를 강제하지 않는, 읽기 전용 감사 기록일 뿐이다
 
-다섯 다 fail open이다(`2>/dev/null || true`) — 스크립트가 죽어도 실제 도구 호출을 막지
+세션 로깅 훅 두 개(`log-session-start.js`/`log-session-title.js`)가 2026-08-19부터
+2026-08-23까지 여기 있었으나, 더 고치지 않고 **삭제**했다 — 그 훅들이 쓰던 세션 인덱스는
+이제 `.claude/scripts/rebuild-session-log.js`가 생성한다(아래 Scripts 참고). 다시 만들지
+말 것: 그 훅들이 실시간으로 수집하던 정보는 이미 전부, 그리고 더 정확하게, 저 스크립트가
+읽는 트랜스크립트에 기록되어 있다.
+
+셋 다 fail open이다(`2>/dev/null || true`) — 스크립트가 죽어도 실제 도구 호출을 막지
 않는다, 이 파일 자체의 규칙이 여전히 1차 안전장치이고 훅은 심층 방어(defense-in-depth)
 일 뿐 유일한 강제 수단이 아니기 때문이다. `migration:run`/`migration:revert`/
 `migration:show`는 `check-migration-generate.js`와 의도적으로 매치되지 않는다 — 사전
 설명 전제조건이 걸리는 건 `generate`뿐이다.
+
+### Scripts
+
+`.claude/scripts/`에는 필요할 때 손으로 실행하는 유지보수 스크립트가 들어 있다 — 순수
+Node이고, `settings.json`에 연결되지 않는다(그건 `.claude/hooks/`의 역할이다):
+- **`rebuild-session-log.js`** (2026-08-23 추가) — `~/.claude/projects/<변형된-cwd>/
+  <session_id>.jsonl`에 있는 Claude Code 자체 트랜스크립트에서 `docs/SESSION-LOG.md`
+  (+`.ko.md`)를 재생성한다. 세션당 한 행이고 **최초 생성 시각** 순으로 정렬하며, 세션ID·
+  브랜치·제목·첫 메시지를 담는다. 저장소 루트에서
+  `node .claude/scripts/rebuild-session-log.js`를 실행하면 갱신된다.
+  삭제된 훅들이 표본으로만 얻던 것을 이 스크립트는 원본에서 읽는다: 첫 `human` 항목에서
+  진짜 생성 시각·브랜치·첫 메시지를 얻고, `custom-title`/`ai-title` 항목에서 session_id
+  만으로는 결코 알 수 없던 세션 제목을 얻는다(직접 지정한 제목이 자동 생성 제목보다
+  우선). 실시간 이벤트가 아니라 트랜스크립트가 출처이므로, 로깅 훅이 생기기 전의 세션까지
+  전부 담긴다 — 복원된 가장 오래된 행은 2026-07-22로, 그 훅들이 생기기 약 한 달 전이다.
+  `docs/SESSION-LOG.md`(+`.ko.md`)는 gitignore 대상이라 커밋하지 않는다: 언제든 다시
+  만들 수 있는 로컬 산출물이고, 개발자 머신마다·병렬 세션마다 계속 바뀌기 때문이다.
+  `.gitignore`에서 빼지 말고, 표를 손으로 고치지도 말 것 — 대신 이 스크립트를 고친다.
 
 ### Skills
 
