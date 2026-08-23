@@ -106,8 +106,15 @@
   text-decoration: underline;
 }
 
+/* `flex: none` here was the one hard responsive break in the app: a long creator email
+   refused to shrink, so a row's min-content held the whole page at ~591px and every screen
+   under that overflowed horizontally. It may shrink now, and truncates instead. */
 .creatorButton {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   background: none;
   border: none;
   color: var(--text-muted);
@@ -145,4 +152,60 @@
 .pageButton:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* Narrow screens: reclaim the page gutter, let each filter take a full line rather than
+   wrapping into slivers, and stack a row's title above its creator so the truncation above
+   is a fallback rather than the normal reading experience. */
+@media (max-width: 640px) {
+  .page {
+    margin: 2vh auto;
+    padding: 16px;
+  }
+
+  .filters {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .field {
+    width: 100%;
+  }
+
+  /* `width: auto`, not `100%`: these inputs are content-box, so a percentage width adds the
+     padding and border on top and pushes the control past its panel. The .field grid already
+     stretches an auto-width child to the full row. */
+  .creatorInput {
+    width: auto;
+  }
+
+  .row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  /* Both of these must wrap, not truncate: a single-line title or email keeps its whole
+     string as the row's minimum width, and that minimum propagates all the way up to the
+     page — measured, with only one of the two wrapping the page still sat 77px past a
+     375px viewport. Truncation is the desktop affordance; a phone has the vertical room. */
+  .rowInfo a,
+  .creatorButton {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  /* Once a title wraps, its second line inherits #root's `text-align: center` (index.css)
+     and sits centred above a left-aligned email. Pin both to the left. */
+  .rowInfo {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .creatorButton {
+    max-width: 100%;
+    text-align: left;
+  }
 }

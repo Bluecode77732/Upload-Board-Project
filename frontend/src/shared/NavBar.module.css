@@ -66,3 +66,16 @@
   border-color: var(--danger);
   color: var(--danger);
 }
+
+/* The bar's four controls fit a phone width, but only once the gaps stop reserving
+   desktop-sized space between them. */
+@media (max-width: 640px) {
+  .header {
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .nav {
+    gap: 12px;
+  }
+}

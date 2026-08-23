@@ -172,3 +172,10 @@
   opacity: 0.6;
   cursor: default;
 }
+
+@media (max-width: 640px) {
+  .page {
+    margin: 2vh auto;
+    padding: 16px;
+  }
+}

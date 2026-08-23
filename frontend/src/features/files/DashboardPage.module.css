@@ -6,3 +6,11 @@
   margin: 5vh auto;
   padding: 24px;
 }
+
+/* Narrow screens: the 24px gutter costs more than it gives once the grid is one column wide. */
+@media (max-width: 640px) {
+  .page {
+    margin: 2vh auto;
+    padding: 16px;
+  }
+}

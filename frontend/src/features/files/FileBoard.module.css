@@ -80,11 +80,39 @@
   gap: 16px;
 }
 
-/* Below this width three 16:9 frames are too narrow to preview anything — fall back to one
-   column rather than shipping a grid that is unreadable on a phone. */
+/* Column count steps down at the two breakpoints this app already uses (index.css switches
+   its type scale at 1024px, and 640px is where the grid stops making sense at all), rather
+   than introducing a third value. Frames stay large enough to read at every step: 3 columns
+   above 1024px, 2 through the tablet range, 1 on a phone. */
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
   .grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .filters {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .field {
+    width: 100%;
+  }
+
+  /* `width: auto`, not `100%`: these inputs are content-box, so a percentage width adds the
+     padding and border on top and pushes the control past its panel. The .field grid already
+     stretches an auto-width child to the full row. */
+  .creatorInput {
+    width: auto;
+  }
+
+  .searchField {
+    flex-basis: 100%;
   }
 }
 

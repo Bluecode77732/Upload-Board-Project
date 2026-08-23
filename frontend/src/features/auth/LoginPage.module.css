@@ -88,3 +88,15 @@
   color: var(--brand-hover);
   text-decoration: underline;
 }
+
+/* The card already caps at 360px; on a phone the outer gutter and inner padding are what
+   squeeze the fields, so both shrink rather than the card. */
+@media (max-width: 640px) {
+  .page {
+    padding: 16px;
+  }
+
+  .card {
+    padding: 24px;
+  }
+}
