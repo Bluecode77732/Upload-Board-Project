@@ -85,6 +85,31 @@ development line (package.json version).
   Helm rows were updated to cite the new path.
 
 ### Fixed
+- **`admin/`: switching accounts in one tab force-logged-out the new, valid session on its
+  first hard navigation (2026-08-23)** — `admin/src/auth/session-guard.ts` exported
+  `recordSessionUser`/`clearSessionUser`, but neither had a single call site outside that
+  file, so `sessionStorage`'s `admin:sessionUserId` was never written on login and never
+  cleared on sign-out (`login-page.tsx` called only `setTokens`; the `dashboard`/`users`/
+  `logs` sign-out handlers called only `clearTokens`). A stale id from the previous account
+  therefore survived into the next one, and `assertSessionUser` read account B's first silent
+  refresh as a sibling tab having taken the session over — `rejectSession()` then bounced a
+  perfectly valid session back to the login screen. Fixed by calling the two existing exports
+  at their intended sites: `recordSessionUser(sub)` after `setTokens` in `login-page.tsx`, and
+  `clearSessionUser()` alongside `clearTokens()` in all three sign-out handlers.
+  `session-guard.ts` itself is unchanged — the multi-tab conflict detection was always
+  correct, only the record's lifecycle was missing. Two alternatives were weighed and
+  rejected: a shared `signOut()` helper (deduplicates the three handlers, but is an
+  unrequested refactor under Scope Discipline) and calling from inside `auth.store.ts`'s
+  `setTokens`/`clearTokens` (impossible to forget, but `session-guard.ts` already imports the
+  store, so avoiding the cycle needs a third module extracted). Covered by
+  `admin/src/auth/session-guard.spec.tsx` (new — drives the real login form and sign-out
+  button, plus `session-guard`'s real `doRefresh` path) and `admin/e2e/session.spec.ts` (new —
+  a full same-tab A→B switch against a live backend). Both were verified to fail against the
+  unfixed pages, the e2e reproducing the reported symptom exactly; `pnpm test` 19/19,
+  `pnpm e2e` 11/11. Writing the e2e surfaced a non-obvious precondition: the defect is only
+  reachable once the tab already has a recorded owner, so account A must hard-navigate before
+  the switch — the first draft passed even unfixed without it.
+
 - **Helm chart: two real bugs found by an actual `helm install --wait` against a throwaway
   local `kind` cluster (2026-08-17, commit `0326199`, addendum to
   [ADR 0041](ADR/0041-helm-chart-project-adaptation.md))** — the prior `helm lint --strict`/

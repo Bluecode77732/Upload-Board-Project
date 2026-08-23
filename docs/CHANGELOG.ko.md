@@ -86,6 +86,29 @@
   새 경로를 인용하도록 갱신했다.
 
 ### 수정
+- **`admin/`: 한 탭에서 계정을 전환하면 새로 로그인한 정상 세션이 첫 하드 내비게이션에서
+  강제 로그아웃됐다(2026-08-23)** — `admin/src/auth/session-guard.ts`가
+  `recordSessionUser`/`clearSessionUser`를 export하고 있었지만 그 파일 밖에 호출부가 하나도
+  없었다. 그래서 `sessionStorage`의 `admin:sessionUserId`가 로그인 때 기록되지도, 로그아웃 때
+  지워지지도 않았다(`login-page.tsx`는 `setTokens`만, `dashboard`/`users`/`logs`의 로그아웃
+  핸들러는 `clearTokens`만 호출). 결국 이전 계정의 id가 다음 계정 세션까지 그대로 남아,
+  `assertSessionUser`가 B 계정의 첫 silent refresh를 "다른 탭이 세션을 가져갔다"로 오판했고
+  `rejectSession()`이 멀쩡한 세션을 로그인 화면으로 되돌렸다. 이미 있던 두 export를 원래
+  의도된 자리에서 호출하도록 고쳤다 — `login-page.tsx`의 `setTokens` 직후
+  `recordSessionUser(sub)`, 세 로그아웃 핸들러의 `clearTokens()` 옆에 `clearSessionUser()`.
+  `session-guard.ts` 자체는 무수정이다 — 다중 탭 충돌 감지 로직은 원래 옳았고, 빠져 있던 건
+  기록의 생명주기뿐이었다. 검토 후 기각한 대안 둘: 공용 `signOut()` 헬퍼 신설(세 핸들러의
+  중복은 없어지지만 Scope Discipline 기준 요청되지 않은 리팩터), `auth.store.ts`의
+  `setTokens`/`clearTokens` 내부에서 호출(잊을 수 없는 구조지만 `session-guard.ts`가 이미
+  스토어를 import하고 있어 순환을 피하려면 세 번째 모듈을 따로 떼어내야 한다).
+  테스트는 `admin/src/auth/session-guard.spec.tsx`(신규 — 실제 로그인 폼과 로그아웃 버튼,
+  그리고 `session-guard`의 실제 `doRefresh` 경로를 구동)와 `admin/e2e/session.spec.ts`(신규 —
+  실제 백엔드를 상대로 한 탭 안에서의 A→B 전환 전체)로 덮었다. 둘 다 수정 전 코드에서 실패하는
+  것을 확인했고, e2e는 보고된 증상을 그대로 재현했다. `pnpm test` 19/19, `pnpm e2e` 11/11.
+  e2e를 작성하면서 비자명한 전제 하나가 드러났다: 이 결함은 탭에 소유자가 이미 기록된 뒤에만
+  재현되므로 전환 전에 A 계정이 하드 내비게이션을 해야 한다 — 그게 없던 첫 초안은 수정 전에도
+  통과했다.
+
 - **Helm 차트: 임시 로컬 `kind` 클러스터에 대한 실제 `helm install --wait`로 발견한 진짜 버그
   2개(2026-08-17, 커밋 `0326199`, [ADR 0041](ADR/0041-helm-chart-project-adaptation.ko.md)
   추가 기록)** — 앞서 진행한 `helm lint --strict`/`helm template` 검증으로는 둘 다 못 잡았다,
