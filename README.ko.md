@@ -239,7 +239,7 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 작성자 본인이나 admin의 몫이며, 그 외 누구의 것도 아니다.
 
 **감사 로그**
-- `GET /audit-log` — ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE / COMMENT_DELETE 기록 조회 (admin만; 페이지네이션, `?action` 필터). `?userId`는 해당 유저가 actor이거나 target인 기록만 반환합니다(둘 다 주어지면 두 필터가 AND로 묶입니다)
+- `GET /audit-log` — ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE / COMMENT_DELETE 기록 조회 (admin만; 페이지네이션, `?action` 필터). `?userId`는 해당 유저가 actor이거나, **유저를 대상으로 하는** action의 target인 기록만 반환합니다 — `targetId`는 다형이므로 대상이 파일·게시글·댓글인 기록은 actor 쪽으로만 매칭됩니다([ADR 0045](docs/ADR/0045-audit-log-target-type.ko.md)). 둘 다 주어지면 두 필터가 AND로 묶입니다
 
 **헬스 체크** (운영용 — 애플리케이션 소비자가 아니라 로드밸런서/오케스트레이터
 프로브를 위한 것이며, 설계상 인증 없음, [ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.ko.md))

@@ -92,3 +92,15 @@ and deferred behind Stage F so the API surface froze first.
 > request, and the two invariants defined here — the last-superadmin refusal
 > (`AUTH_LAST_SUPERADMIN`) and session termination on any role change — stay invisible to
 > whoever exercises them. ADR 0022 records both as required UI behavior.
+
+> **Note added 2026-08-24 — amended by [ADR 0045](0045-audit-log-target-type.md)** — the
+> "Audit log" bullet above lists `audit_log_entity`'s columns without recording that
+> `targetId` is **polymorphic**: `ROLE_CHANGE`/`USER_DELETE` pass a user id, while
+> `FILE_DELETE`, `POST_DELETE`, and `COMMENT_DELETE` pass a file/post/comment id. That
+> omission let the `userId` filter added to `GET /audit-log` on 2026-08-12 read every
+> `targetId` as a user id, so unrelated records surfaced as a user's activity (62 of 114
+> rows in the development database). ADR 0045 adds a `targetType` discriminator column
+> (`user`/`file`/`post`/`comment`, nullable, backfilled from `action`) and narrows the
+> filter accordingly. The column list here should be read as `actorId`, `targetId`,
+> `targetType`, `action`, `detail`, `createdAt`; nothing else in this ADR — roles, guards,
+> endpoints, the seed, the FK-free and post-commit-write properties — is changed.

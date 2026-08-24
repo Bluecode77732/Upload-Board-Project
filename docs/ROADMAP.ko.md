@@ -746,7 +746,12 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   얻었다(별도 ADR 불필요). 같은 변경이 제거됐던 패널을 정확한
   `GET /audit-log?userId={id}&take=5` 호출로 복원했고, `logs-page.tsx`도 "View all" 링크를
   위해 자신의 URL에서 `?userId=`를 읽도록 연결했다(`admin/README.md` > "이번 적응에서 내린
-  두 가지 결정" 및 "열린 사항")
+  두 가지 결정" 및 "열린 사항").
+  **2026-08-24 정정**([ADR 0045](ADR/0045-audit-log-target-type.ko.md)): "actor 또는 target과
+  일치"는 지나치게 넓은 서술이었다 — `targetId`는 다형이라 판별자 없이 매칭하면 id가 유저
+  id와 충돌하는 파일·게시글·댓글 기록까지 반환됐다(개발 DB 114행 중 62행). 이제 이 필터의
+  의미는 "행위자이거나, 유저를 대상으로 하는 action의 대상"이며, 새 `targetType` 컬럼이
+  이를 강제한다
 - ~~게시글 상세/댓글 UI가 한국어로 하드코딩됨~~(2026-08-13, 게시글/댓글 보드를
   브라우저로 직접 조작하는 QA 도중 발견 — 전체 기록은 CHANGELOG > 알려진 문제/수정) —
   **2026-08-15 해소**: `PostDetailPage.tsx`, `CommentThread.tsx`, `CommentForm.tsx`,

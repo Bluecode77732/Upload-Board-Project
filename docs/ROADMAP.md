@@ -809,7 +809,12 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   actor or target), mirroring the existing `action` filter shape as planned, no new ADR. The
   same change restored the dropped panel as an exact `GET /audit-log?userId={id}&take=5`
   fetch and wired `logs-page.tsx` to read `?userId=` from its own URL for the "View all" link
-  (`admin/README.md` > "Two decisions made for this adaptation" and "Open items")
+  (`admin/README.md` > "Two decisions made for this adaptation" and "Open items").
+  **Corrected 2026-08-24** ([ADR 0045](ADR/0045-audit-log-target-type.md)): "matches actor or
+  target" was too broad — `targetId` is polymorphic, so matching it without a discriminator
+  returned file/post/comment records whose id collided with a user id (62 of 114 rows in the
+  development database). The filter now means "actor, or the target of a user-targeting
+  action", enforced by the new `targetType` column
 - ~~Post detail/comment UI hardcoded in Korean~~ (found 2026-08-13, during a manual QA
   walkthrough of the post/comment board — full record in CHANGELOG > Known issue /
   Fixed) — **resolved 2026-08-15**: every Korean user-facing string in

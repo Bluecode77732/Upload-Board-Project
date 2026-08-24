@@ -53,6 +53,7 @@ each ADR records the *why* behind those rules.
 | [0042](0042-k8s-helm-directory-consolidation.md) | Consolidate `k8s/` and `helm/` — one Kubernetes directory, not two | Accepted | 2026-08-17 |
 | [0043](0043-terraform-project-adaptation.md) | Terraform project adaptation — real AWS resources, verified via live apply, amends 0038 | Accepted — implemented, unapplied (see Addendum) | 2026-08-18 |
 | [0044](0044-terraform-three-state-split.md) | Terraform three-state split — cluster/addons/app-infra lifecycle separation, amends 0043 | Accepted — implemented, unapplied (see Addendum) | 2026-08-19 |
+| [0045](0045-audit-log-target-type.md) | Audit log `targetType` — a discriminator for the polymorphic `targetId`, amends 0013 | Accepted — implemented | 2026-08-24 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

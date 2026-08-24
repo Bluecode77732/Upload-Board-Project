@@ -84,3 +84,14 @@
 > 요청으로**만** 운영 가능하며, 여기서 정의한 두 불변식 — 마지막 superadmin 강등 거부
 > (`AUTH_LAST_SUPERADMIN`)와 모든 역할 변경 시의 세션 종료 — 은 그것을 실행하는 사람에게
 > 보이지 않는 상태로 남는다. ADR 0022는 둘 다 UI가 반드시 드러내야 할 동작으로 기록해 뒀다.
+
+> **2026-08-24 추가 메모 — [ADR 0045](0045-audit-log-target-type.ko.md)가 개정** — 위
+> "감사 로그" 항목은 `audit_log_entity`의 컬럼을 나열하면서 `targetId`가 **다형**이라는
+> 사실은 기록하지 않았다. `ROLE_CHANGE`/`USER_DELETE`는 유저 id를 넘기지만
+> `FILE_DELETE`·`POST_DELETE`·`COMMENT_DELETE`는 파일·게시글·댓글 id를 넘긴다. 이 누락
+> 때문에 2026-08-12에 `GET /audit-log`에 추가된 `userId` 필터가 모든 `targetId`를 유저
+> id로 읽었고, 무관한 기록이 특정 유저의 활동으로 조회됐다(개발 DB 114행 중 62행). ADR
+> 0045는 판별자 컬럼 `targetType`(`user`/`file`/`post`/`comment`, nullable, `action`에서
+> 백필)을 추가하고 필터를 그에 맞게 좁힌다. 여기의 컬럼 목록은 `actorId`, `targetId`,
+> `targetType`, `action`, `detail`, `createdAt`으로 읽어야 한다. 이 ADR의 나머지 — 역할,
+> 가드, 엔드포인트, 시드, FK 없음과 커밋 후 기록 성질 — 는 바뀌지 않는다.

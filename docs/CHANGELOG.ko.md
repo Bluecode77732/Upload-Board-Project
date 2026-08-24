@@ -164,6 +164,54 @@
   새 경로를 인용하도록 갱신했다.
 
 ### 수정
+- **`GET /audit-log?userId=`가 다형 `targetId`를 유저 id로 읽어, 무관한 기록이 그 유저의
+  활동으로 조회되던 문제(2026-08-24, [ADR 0045](ADR/0045-audit-log-target-type.ko.md),
+  [ADR 0013](ADR/0013-rbac-and-audit-log.ko.md) 개정)** — 백엔드와 문서만 수정했고 `admin/`과
+  `frontend/`는 건드리지 않았다.
+  **결함.** `audit_log_entity.targetId`는 action마다 다른 종류의 id를 담는다. 다섯 개
+  `auditLogService.log()` 호출 지점을 모두 확인한 결과, `ROLE_CHANGE`/`USER_DELETE`
+  (`user.service.ts`)는 유저 id를 넘기지만 `FILE_DELETE`(`file.service.ts`),
+  `POST_DELETE`(`post.service.ts`), `COMMENT_DELETE`(`comment.service.ts`)는 파일·게시글·댓글
+  id를 넘긴다. 그런데 `AuditLogService.findAll`은 `actorId = :id OR targetId = :id`를 만들어
+  모든 `targetId`를 유저 id로 읽었다. `userId` 필터는 다섯 action이 이미 전부 존재하던
+  2026-08-12에 추가됐으므로, 도입된 날부터 틀려 있었다. 개발 DB 실측 결과 **114행 중 62행**이
+  `targetId`가 실존 유저 id와 충돌하는 파일·게시글·댓글 기록이었다. 보고된 사례 —
+  `/logs?userId=269`가 무관한 계정에 "파일 269 삭제" 기록을 반환하던 건 — 은 행 `id=73`이다.
+  **수정.** 판별자 컬럼 `targetType`(`user`/`file`/`post`/`comment`,
+  `backend/audit-log/audit-target-type.enum.ts`, `FileMediaType`/`FileVisibility`처럼 varchar
+  기반)을 신설했다. `targetId`를 따라 nullable이며 불변식은
+  `targetType IS NULL ⟺ targetId IS NULL`이다. `AuditLogService.log()`가 이 값을 명시적으로
+  받고 다섯 호출 지점이 각자의 상수를 넘기며, `findAll`의 유저 브랜치는
+  `{ targetId: userId, targetType: 'user' }`가 됐다. 쓰는 쪽을 거치게 한 요점은 **런타임 읽기
+  경로에 `action` → 대상 종류 매핑이 전혀 남지 않는다**는 것이다. 백엔드에서 그 매핑은
+  마이그레이션 백필 한 곳에만 존재한다. 같은 변경에서 `log()`의 `action` 파라미터를 `string`
+  에서 `AUDIT_ACTIONS` 유니온으로 좁혔다. `targetType`과 `action`이 둘 다 문자열이고 인접해
+  있어, 그러지 않으면 순서를 바꿔 넣어도 조용히 컴파일되기 때문이다.
+  같은 변경에서 이 필터를 설명하는 사용자 노출 문구 세 곳도 함께 고쳤다 — DTO의
+  `@ApiPropertyOptional`, 컨트롤러의 `@ApiResponse`, 그리고 `README.md`의 엔드포인트 목록으로,
+  셋 다 여전히 "actor이거나 target"이라고 적혀 있었다.
+  **마이그레이션.** `1787578451680-AddAuditLogTargetType.ts` — nullable `ADD COLUMN` 후
+  `UPDATE ... CASE "action" ... WHERE "targetId" IS NOT NULL` 하나. 판별 대상 컬럼 자체가
+  nullable이라 [ADR 0040](ADR/0040-persisted-media-type-for-playback.ko.md)의 `mediaType`과
+  달리 `SET NOT NULL` 단계는 없다. 쓰는 것은 새 컬럼뿐이고 `actorId`/`targetId`/`action`/
+  `detail`은 건드리지 않으므로 테이블은 append-only로 남는다. 생성된 diff의 스퓨리어스 FK·인덱스
+  이름 변경 열두 문장은 제거했다. `test/e2e-utils.ts`의 명시적 `MIGRATIONS` 목록에도 새 항목을
+  추가했다(빠뜨렸다면 감사 기록을 쓰는 모든 e2e가 깨졌을 것이다).
+  **검증.** `pnpm lint`/`lint:ci` 무오류, 단위 테스트 220건 통과(감사 로그 spec은 6건에서
+  10건으로 늘었고, 회귀 그룹은 쿼리 *모양*만 단언하는 대신 mock 저장소가 생성된 `where`를
+  fixture에 실제로 적용하도록 했다). `migration:run` 이후: 114행 전부 백필, 남은 `NULL` 0건,
+  action별 분포 정확 일치. 구 조건의 target 쪽 매칭 108건이 46건으로 줄어 오탐 62건이 모두
+  사라졌고 actor 쪽 112건은 그대로다. 실제 요청으로도 확인했다 — `GET /audit-log?userId=269`는
+  `[[],0]`을 반환하고(이전에는 1건), 진짜 `ROLE_CHANGE` 대상이면서 동시에 `FILE_DELETE` id와
+  충돌하던 유저 `userId=239`는 3건에서 2건으로 정확히 줄었다.
+  **기각한 대안**은 ADR 0045에 기록했다. 스키마 무변경 action 기반 쿼리 보정("action이 대상
+  종류를 결정한다"를 영구적인 하중 가정으로 만들고, 같은 마이그레이션을 더 커진 테이블로
+  미루기 때문에 기각), 대상 종류별 컬럼 분리, `subjectUserId` 컬럼(표현력은 크지만 기존 행을
+  백필할 수 없고 필터 반환 범위를 넓힘), `targetId`를 항상 유저 id로 정규화(기존 행을 다시
+  써야 하므로 append-only 제약에 걸려 기각).
+  **여기서 하지 않은 것.** 이제 API 응답의 모든 기록에 `targetType`이 실리므로
+  `admin/src/lib/audit.ts`의 클라이언트 측 `TARGET_NOUN` 매핑이 불필요해졌다. 이를 서버 필드로
+  교체하는 것은 선택적 정리이며, 이번 변경에서 의도적으로 제외했다.
 - **`admin/`: 감사 로그가 모든 대상을 "User N"으로 표기했고, 좁은 화면에서는 테이블이 자기
   조작 컨트롤을 가렸다(2026-08-24)** — 둘 다 콘솔을 실제 브라우저로 훑다가 발견했고, 수정은
   `admin/` 안에서만 이뤄졌다. 백엔드·계약·스키마 변경은 없다.

@@ -244,8 +244,10 @@ deleting are the comment author's or an admin's, and nobody else's.
 **Audit log**
 - `GET /audit-log` — review ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE /
   COMMENT_DELETE records (admin only; paginated, `?action` filter). `?userId` returns
-  only records where that user was the actor or the target (the two filters AND
-  together when both are given)
+  only records where that user was the actor, or was the target of a **user-targeting**
+  action — `targetId` is polymorphic, so a record whose target is a file, post, or
+  comment matches only via the actor side ([ADR 0045](docs/ADR/0045-audit-log-target-type.md)).
+  The two filters AND together when both are given
 
 **Health** (operational — for load-balancer/orchestrator probes, not application
 consumers; unauthenticated by design, [ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.md))

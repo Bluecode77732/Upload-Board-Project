@@ -166,6 +166,59 @@ development line (package.json version).
   Helm rows were updated to cite the new path.
 
 ### Fixed
+- **`GET /audit-log?userId=` read a polymorphic `targetId` as a user id, so unrelated
+  records surfaced as a user's activity (2026-08-24, [ADR 0045](ADR/0045-audit-log-target-type.md),
+  amends [ADR 0013](ADR/0013-rbac-and-audit-log.md))** — backend and docs only; `admin/` and
+  `frontend/` are untouched.
+  **The defect.** `audit_log_entity.targetId` holds a different kind of id per action —
+  verified against all five `auditLogService.log()` call sites: `ROLE_CHANGE`/`USER_DELETE`
+  (`user.service.ts`) pass a user id, while `FILE_DELETE` (`file.service.ts`), `POST_DELETE`
+  (`post.service.ts`), and `COMMENT_DELETE` (`comment.service.ts`) pass a file/post/comment id.
+  `AuditLogService.findAll` built `actorId = :id OR targetId = :id`, reading every `targetId`
+  as a user id. The `userId` filter landed 2026-08-12 when all five actions already existed, so
+  it has been wrong since the day it shipped. Measured against the development database:
+  **62 of 114 rows** are file/post/comment records whose `targetId` collides with an existing
+  user id. The reported case — `/logs?userId=269` returning a "file 269 deleted" record for an
+  unrelated account — is row `id=73`.
+  **The fix.** A new `targetType` discriminator column (`user`/`file`/`post`/`comment`,
+  `backend/audit-log/audit-target-type.enum.ts`, varchar-backed like `FileMediaType`/
+  `FileVisibility`), nullable to mirror `targetId` — the invariant is
+  `targetType IS NULL ⟺ targetId IS NULL`. `AuditLogService.log()` now takes it explicitly and
+  all five call sites pass their own constant; `findAll`'s user branch became
+  `{ targetId: userId, targetType: 'user' }`. The point of routing it through the writer is
+  that **the runtime read path carries no `action` → target-kind mapping at all** — in the
+  backend that mapping exists exactly once, in the migration's backfill. `log()`'s `action`
+  parameter was narrowed from `string` to the `AUDIT_ACTIONS` union in the same change, because
+  `targetType` and `action` are both strings and adjacent, so a swapped pair would otherwise
+  compile silently.
+  The filter's three user-facing descriptions were corrected in the same change — the DTO's
+  `@ApiPropertyOptional`, the controller's `@ApiResponse`, and `README.md`'s endpoint list —
+  all of which still read "the actor or the target".
+  **Migration.** `1787578451680-AddAuditLogTargetType.ts` — nullable `ADD COLUMN`, then one
+  `UPDATE ... CASE "action" ... WHERE "targetId" IS NOT NULL`. No `SET NOT NULL` step (unlike
+  [ADR 0040](ADR/0040-persisted-media-type-for-playback.md)'s `mediaType`) because the column it
+  discriminates is itself nullable. Only the new column is written — `actorId`/`targetId`/
+  `action`/`detail` are never touched, so the table stays append-only. The generated diff's
+  twelve spurious FK/index rename statements were stripped. `test/e2e-utils.ts`'s explicit
+  `MIGRATIONS` list gained the new entry (omitting it would have failed every e2e test that
+  writes an audit row).
+  **Verified.** `pnpm lint`/`lint:ci` clean, 220 unit tests pass (the audit-log spec grew from
+  6 to 10, including a regression group whose mock repository actually applies the produced
+  `where` to fixtures rather than only asserting its shape). After `migration:run`: 114/114 rows
+  backfilled, 0 `NULL` remaining, per-action distribution exact; the old predicate's 108
+  target-side matches drop to 46, removing all 62 false positives, with the 112 actor-side
+  matches unchanged. Through a real request: `GET /audit-log?userId=269` returns `[[],0]` (was
+  1 row), while `userId=239` — a user with both a real `ROLE_CHANGE` target row and a
+  colliding `FILE_DELETE` id — correctly goes from 3 rows to 2.
+  **Rejected alternatives** are recorded in ADR 0045: an action-based query correction with no
+  schema change (rejected because it makes "action determines target kind" a permanent
+  load-bearing assumption, and defers the same migration to a larger table), per-kind target
+  columns, a `subjectUserId` column (more expressive but unbackfillable for existing rows, and
+  it widens what the filter returns), and normalizing `targetId` to always hold a user id
+  (rejected on the append-only constraint — it would require rewriting existing rows).
+  **Not done here.** The API response now carries `targetType` on every record, which makes
+  `admin/src/lib/audit.ts`'s client-side `TARGET_NOUN` map redundant; replacing it with the
+  server field is optional cleanup, deliberately left out of this change.
 - **`admin/`: the audit log labelled every target "User N", and its tables hid their own
   controls on a narrow screen (2026-08-24)** — both found by a live browser pass over the
   console, both fixed in `admin/` only; no backend, contract, or schema change.
