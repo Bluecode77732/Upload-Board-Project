@@ -4,8 +4,10 @@
 // Rationale: rewritten from the imported Chat Project page, which targeted a userId/from/to
 // filter set, a client-side sort toggle, and a CSV export this API did not have — see
 // admin/README.md's backlog table. GET /audit-log's order is server-fixed at createdAt DESC
-// (no sort parameter exists). `AuditLogQueryDto` gained `userId` (matches actor or target)
-// 2026-08-12; this page now reads it from the URL. There is still no `/audit-log/export`
+// (no sort parameter exists). `AuditLogQueryDto` gained `userId` 2026-08-12; this page now
+// reads it from the URL. It matches the actor, or the target of a user-targeting action
+// (`targetType = 'user'`) — narrowed from "any matching targetId" by backend ADR 0045, since
+// a file/post/comment id could collide with a user id. There is still no `/audit-log/export`
 // endpoint, so CSV export is synthesized client-side by paging through the existing filtered
 // query and capping at EXPORT_CAP records.
 
@@ -25,18 +27,23 @@ const EXPORT_PAGE_SIZE = 100;
 // Hard ceiling on rows included in a CSV download, independent of the real total — an
 // admin who needs more narrows the filter instead of exporting an unbounded file.
 const EXPORT_CAP = 1000;
-const CSV_COLUMNS = ['id', 'createdAt', 'action', 'actorId', 'targetId', 'detail'] as const;
+// `targetType` sits beside `targetId` (backend ADR 0045) so an exported file says what kind
+// of id the target column holds — without it, a bare "269" in a FILE_DELETE row reads as a
+// user id, the same ambiguity the on-screen Target column was fixed for.
+const CSV_COLUMNS = ['id', 'createdAt', 'action', 'actorId', 'targetType', 'targetId', 'detail'] as const;
 
 function csvEscape(value: string): string {
     return `"${value.replace(/"/g, '""')}"`;
 }
 
 // Serializes fetched audit-log rows into CSV text with a fixed column order
-// (id, createdAt, action, actorId, targetId, detail), since there is no server-side export.
+// (id, createdAt, action, actorId, targetType, targetId, detail), since there is no
+// server-side export. `targetType` joined the schema when the backend began sending it
+// (ADR 0045); a null one is written as an empty field, exactly like a null `targetId`.
 function toCsv(rows: AuditLog[]): string {
     const header = CSV_COLUMNS.join(',');
     const lines = rows.map((row) =>
-        [row.id, row.createdAt, row.action, row.actorId, row.targetId ?? '', row.detail ?? '']
+        [row.id, row.createdAt, row.action, row.actorId, row.targetType ?? '', row.targetId ?? '', row.detail ?? '']
             .map((value) => csvEscape(String(value)))
             .join(','),
     );
@@ -249,7 +256,7 @@ function LogsPage() {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3">User {log.actorId}</td>
-                                            <td className="px-4 py-3">{targetLabel(log.action, log.targetId)}</td>
+                                            <td className="px-4 py-3">{targetLabel(log.targetType, log.targetId)}</td>
                                             <td className="px-4 py-3 text-gray-500">{log.detail ?? '—'}</td>
                                         </tr>
                                     ))}

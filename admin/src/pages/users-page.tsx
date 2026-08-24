@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore, type UserRole } from '../store/auth.store';
 import { clearSessionUser } from '../auth/session-guard';
 import { ROLE_RANK, ROLE_LABEL } from '../auth/role';
-import { actionColor, type AuditLog } from '../lib/audit';
+import { actionColor, targetLabel, type AuditLog } from '../lib/audit';
 
 interface User {
     id: number;
@@ -122,9 +122,12 @@ function UsersPage() {
         return () => { cancelled = true; };
     }, [page, refreshKey, search, sortBy, order]);
 
-    // Fetches the 5 most recent audit-log records naming this user (actor or target) for
-    // the detail panel's "Recent activity" section. No-op while the panel is closed —
-    // stale data is harmless since the panel that would show it is unmounted.
+    // Fetches the 5 most recent audit-log records naming this user for the detail panel's
+    // "Recent activity" section — the actor, or the target of a user-targeting action
+    // (`targetType = 'user'`). Records whose target is a file/post/comment match through the
+    // actor side only; they used to surface here on an id collision (backend ADR 0045).
+    // No-op while the panel is closed — stale data is harmless since the panel that would
+    // show it is unmounted.
     // setRecentActivityLoading(true) is intentionally NOT in this effect body
     // (react-hooks/set-state-in-effect) — selectRow() sets it before selecting the user
     // that re-triggers this, the same pattern refresh()/changePage() use above.
@@ -445,6 +448,13 @@ function UsersPage() {
                                                     {new Date(log.createdAt).toLocaleString()}
                                                 </span>
                                             </div>
+                                            {/* The target was omitted while a row's target kind could only be
+                                                guessed from its action; the server now names it (ADR 0045), so
+                                                the panel can show which file/post/comment an entry was about
+                                                instead of leaving `detail` as the only clue. */}
+                                            <p className="text-gray-500 text-xs mt-1">
+                                                Target: {targetLabel(log.targetType, log.targetId)}
+                                            </p>
                                             {log.detail && (
                                                 <p className="text-gray-500 text-xs mt-1">{log.detail}</p>
                                             )}

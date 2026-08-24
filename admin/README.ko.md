@@ -66,7 +66,10 @@ REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" �
   targetId)`을 추가해(`actionColor` 옆) 액션을 그에 맞는 명사로 매핑하고, 모르는 액션은
   추측하지 않고 `#id`로 표기한다. `dashboard-page.tsx`는 `actorId`만 그리고 actor는 항상
   사용자이므로 그대로 뒀다. **이번 수정은 표시 계층에 한정된다.** 백엔드가 대상의 타입을
-  명시적으로 실어야 하는지는 별개의 열린 문제이며, 여기서 결론 내리지 않는다.
+  명시적으로 실어야 하는지는 별개의 열린 문제로 남겨 뒀는데, **2026-08-24
+  [ADR 0045](../docs/ADR/0045-audit-log-target-type.ko.md)가 `targetType` 판별자 칼럼을
+  추가하며 결론이 났다.** 이제 `targetLabel`은 action을 매핑하지 않고 그 필드를 읽으며,
+  클라이언트 쪽 action → 명사 매핑은 삭제했다. 위의 표시 수정 자체는 그대로다.
 - **모든 테이블이 좁은 화면에서 자기 조작 컨트롤을 가렸다.** 세 래퍼가 전부
   `overflow-hidden`이었고 `src/` 어디에도 `overflow-x-auto`가 없었다(콘솔 전체의 반응형
   유틸리티가 2개뿐이다). 375px 뷰포트에서 users 테이블은 272px가 잘리며 Created·Role·
@@ -119,9 +122,9 @@ Chat Project 이식의 흔적 중 남아있던, 아래 기능 적응과는 무�
 | 도메인 페이지 | `rooms-page.tsx`, `getOnlineUser`, `getUserNicknames` | 채팅방·접속 상태·닉네임이 없다 — 이 도메인은 **업로드된 영상 파일**이다 | `rooms-page.tsx`와 `graphql-operations.ts` 삭제; `App.tsx`에서 `/rooms` 라우트 제거; 삭제된 Apollo 계층에서만 쓰던 `rxjs`를 `package.json`에서 제거 |
 | 사용자 조작 | `POST /user/:id/ban` \| `/unban` \| `/force-logout` | **하나도 없다** — ROADMAP의 기본값은 여전히 "모더레이션 액션 없음" | `users-page.tsx`에서 세 가지 모두 삭제, 백엔드 쪽 대체 구현은 만들지 않았다(그것은 적응이 아니라 새 범위가 된다) |
 | 사용자 목록 조회 | `GET /user?page&take&sort&sortBy&search&status` | `take`/`skip`만, 고정 `createdAt DESC` 순서, 검색·정렬·상태 없음([ROADMAP 실행순서 #2](../docs/ROADMAP.ko.md)) | `users-page.tsx`는 `take`/`skip`으로 페이지네이션한다; 검색창·정렬 토글 헤더·상태 필터는 제거했다(지금 보내면 400 `VALIDATION_FAILED` — `forbidNonWhitelisted`). ~~제거~~ **2026-08-12 재도입**: `GetUsersDto`에 `search`(이메일 `ILIKE`)와 `sortBy`/`order`(`id`/`email`/`createdAt`, `role`은 제외)가 추가됐다; 검색창과 클릭 가능한 ID/Email/Created 헤더가 다시 생겼고, 서버에 존재하지 않는 `status` 필터는 여전히 없다 |
-| 감사 로그 | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip`만; 고정 `createdAt DESC`; **`/export` 없음**, **`userId` 필터 없음**(이식 당시 기준) | `logs-page.tsx`는 처음엔 액션 필터 + 페이지네이션만 남겼다; CSV 내보내기 버튼, 날짜 범위 필터, 사용자 필터는 제거했다. `userId` ~~없음~~ **2026-08-12 추가**: `AuditLogQueryDto`가 이제 `userId`를 받고(actor 또는 target과 매칭), 같은 커밋에서 `logs-page.tsx`도 자신의 URL(`?userId=`)에서 이를 읽는다 — `users-page.tsx`의 "View all" 링크(`/logs?userId=…`)는 죽은 필터가 아니라 실제로 동작하는 필터다. CSV 내보내기는 ~~제거~~ **2026-08-12 클라이언트 쪽으로 재도입**: `/audit-log/export`는 여전히 없으므로, `exportCsv()`가 DTO의 `take` 상한(페이지당 100)만큼 `GET /audit-log`를 순회해 최대 1000건까지 모은 뒤 다운로드한다 |
+| 감사 로그 | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip`만; 고정 `createdAt DESC`; **`/export` 없음**, **`userId` 필터 없음**(이식 당시 기준) | `logs-page.tsx`는 처음엔 액션 필터 + 페이지네이션만 남겼다; CSV 내보내기 버튼, 날짜 범위 필터, 사용자 필터는 제거했다. `userId` ~~없음~~ **2026-08-12 추가**: `AuditLogQueryDto`가 이제 `userId`를 받고, 같은 커밋에서 `logs-page.tsx`도 자신의 URL(`?userId=`)에서 이를 읽는다 — `users-page.tsx`의 "View all" 링크(`/logs?userId=…`)는 죽은 필터가 아니라 실제로 동작하는 필터다. `userId`가 매칭하는 것은 actor, 그리고 사용자를 대상으로 하는 action(`targetType = 'user'`)의 target이다 — 2026-08-24 [ADR 0045](../docs/ADR/0045-audit-log-target-type.ko.md)가 `targetType` 판별자를 추가하며 이렇게 좁혔다. 그 전에는 다형적인 `targetId`를 전부 사용자 id로 읽었기 때문에, 파일·게시글·댓글의 id가 어떤 사용자 id와 우연히 같으면 그 사용자의 활동인 것처럼 끼어들었다. 이제 파일·게시글·댓글을 대상으로 하는 기록은 actor 쪽으로만 매칭된다. CSV 내보내기는 ~~제거~~ **2026-08-12 클라이언트 쪽으로 재도입**: `/audit-log/export`는 여전히 없으므로, `exportCsv()`가 DTO의 `take` 상한(페이지당 100)만큼 `GET /audit-log`를 순회해 최대 1000건까지 모은 뒤 다운로드한다 |
 | 페이징 모델 | `page` + `take` | `take` + `skip`(오프셋) ([ADR 0021](../docs/ADR/0021-list-query-search-filter-sort.ko.md)) | 두 목록 페이지 모두 `skip = (page - 1) * take`를 계산하고, `{ data, total, page, take }`가 아니라 `[data, total]` 튜플 응답을 읽는다 |
-| 사용자별 감사 조각 | 사용자 페이지 상세 패널이 `GET /audit-log?userId=…`를 호출 | `userId` 필터가 존재하지 않는다 | **근사하지 않고 제거했다** — 아래 "열린 사항" 참고. ~~제거~~ **2026-08-12 복원**: `AuditLogQueryDto`에 `userId`가 생기면서, 상세 패널이 `GET /audit-log?userId={id}&take=5`(actor 또는 target)를 호출해 "Recent activity" 절을 보여준다 |
+| 사용자별 감사 조각 | 사용자 페이지 상세 패널이 `GET /audit-log?userId=…`를 호출 | `userId` 필터가 존재하지 않는다 | **근사하지 않고 제거했다** — 아래 "열린 사항" 참고. ~~제거~~ **2026-08-12 복원**: `AuditLogQueryDto`에 `userId`가 생기면서, 상세 패널이 `GET /audit-log?userId={id}&take=5`를 호출해 "Recent activity" 절을 보여준다 — 매칭 대상은 actor, 그리고 사용자를 대상으로 하는 action(`targetType = 'user'`, [ADR 0045](../docs/ADR/0045-audit-log-target-type.ko.md))의 target이므로, 이 사용자의 id와 값이 같은 파일·게시글·댓글 기록은 더 이상 여기 나타나지 않는다 |
 | 사용자 삭제 | 확인 없는 `DELETE /user/:id` | 계정이 파일을 가진 경우 `?deleteFiles=true` 필수, 없으면 409 `USER_HAS_FILES` ([ADR 0020](../docs/ADR/0020-account-deletion-cascade.ko.md)) | `deleteUser()`가 `USER_HAS_FILES`를 잡아 응답 `message`의 파일 개수를 보여주고, 재확인 후 `?deleteFiles=true`로 재시도한다 |
 | 에러 처리 | 그때그때의 상태 코드·메시지 검사 | 동결된 `{ code, message }` 계약 — `code`로 분기 ([ADR 0011](../docs/ADR/0011-error-code-contract.ko.md)) | `users-page.tsx`는 모든 분기(`AUTH_LAST_SUPERADMIN`, `USER_HAS_FILES`, `USER_FILES_IN_USE`, `FORBIDDEN`)에서 `axios.isAxiosError`로 `err.response.data.code`를 읽는다 |
 | 배포 설정 | CSP가 Chat Project의 Railway 호스트로 고정된 `vercel.json` | **배포 대상이 없다**; AWS는 Stage 4 로드맵 항목 | 이전처럼 손대지 않았다 — 이번 작업 범위 밖 |
@@ -139,7 +142,12 @@ Chat Project 이식의 흔적 중 남아있던, 아래 기능 적응과는 무�
    `AuditLogQueryDto.userId`를 얻으면서(2026-08-12, 이 결정이 기록해 둔
    [ROADMAP.md](../docs/ROADMAP.ko.md) > 미예정 항목의 후속 작업이 닫혔다) 패널의 "Recent
    activity" 절이 클라이언트 쪽 필터링 없이 정확한 `GET /audit-log?userId={id}&take=5`
-   호출로 돌아왔다.
+   호출로 돌아왔다. 이 필터의 의미는 2026-08-24
+   [ADR 0045](../docs/ADR/0045-audit-log-target-type.ko.md)로 바로잡혔다. 그전까지는 모든
+   `targetId`를 사용자 id로 읽었는데 `targetId`는 다형적이라, 이 사용자의 id와 값이 같을
+   뿐인 파일·게시글·댓글 기록이 패널에 섞여 나왔다. 지금은 "actor이거나, 사용자를 대상으로
+   하는 action(`targetType = 'user'`)의 target"을 뜻한다 — 패널이 보여주는 행 수는 줄었고,
+   빠진 행들은 애초에 틀린 것이었다.
 2. **역할 변경 UI: 이식된 이진 토글이 아니라 3단계 `<select>`.** 이식된 승격/강등 토글은
    행을 두 상태 사이로만 옮길 수 있고 `superadmin`을 전혀 표현하지 못한다 —
    [ADR 0022](../docs/ADR/0022-admin-console-import-from-chat-project.ko.md)가 이 콘솔이
@@ -175,7 +183,11 @@ pnpm e2e:seed    # superadmin 시딩. e2e/.env 필요(git 무시 대상)
 ## 열린 사항 (이번 작업으로 해결되지 않음)
 
 - ~~`GET /audit-log`에 `userId` 필터가 없다~~ — **2026-08-12 해소**: `AuditLogQueryDto`가
-  이제 `userId`를 받는다; 위 "두 가지 결정" 참고.
+  이제 `userId`를 받는다; 위 "두 가지 결정" 참고. **2026-08-24 정정**
+  ([ADR 0045](../docs/ADR/0045-audit-log-target-type.ko.md)): 이 필터는 `targetId`가 그 id와
+  같은 행을 모두 매칭했지만 `targetId`는 다형적이다 — 이제 actor이거나, 사용자를 대상으로
+  하는 action(`targetType = 'user'`)의 target인 행만 매칭한다. 파일·게시글·댓글을 대상으로
+  하는 기록은 actor 쪽으로만 잡힌다.
 - ~~`logs-page.tsx`는 아직 자신의 URL에서 `userId` 쿼리 파라미터를 읽지 않는다~~ —
   **2026-08-12, 같은 커밋에서 해소**: `useSearchParams`로 `?userId=`를 읽어 `GET /audit-log`
   쿼리에 적용한다; `users-page.tsx`의 "View all" 링크(`/logs?userId={id}`)는 실제로 동작하는

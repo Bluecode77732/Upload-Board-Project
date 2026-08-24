@@ -68,7 +68,10 @@ in `admin/` only, with no backend, contract, or schema change.
   which maps the action to its noun and prints a bare `#id` for an action it does not know,
   rather than guessing. `dashboard-page.tsx` renders only `actorId` — always a user — and was
   left as it was. **This corrects the display only.** Whether the backend should carry the
-  target's type explicitly is a separate open question; nothing here settles it.
+  target's type explicitly was left a separate open question — **settled 2026-08-24** by
+  [ADR 0045](../docs/ADR/0045-audit-log-target-type.md), which added a `targetType`
+  discriminator column. `targetLabel` now reads that field instead of mapping the action, and
+  the client-side action -> noun map was deleted; the display fix above stands unchanged.
 - **Every table hid its own controls on a narrow screen.** All three wrappers were
   `overflow-hidden`, and `overflow-x-auto` appeared nowhere in `src/` (the whole console has
   two responsive utilities). At a 375px viewport the users table clipped 272px — taking the
@@ -121,9 +124,9 @@ findings; one backend change landed in between — see the `FORBIDDEN` row).
 | Domain pages | `rooms-page.tsx`, `getOnlineUser`, `getUserNicknames` | No rooms, presence, or nicknames — this domain is **uploaded video files** | `rooms-page.tsx` and `graphql-operations.ts` deleted; the `/rooms` route removed from `App.tsx`; `rxjs` (only used by the deleted Apollo layer) dropped from `package.json` |
 | User actions | `POST /user/:id/ban` \| `/unban` \| `/force-logout` | **None exist** — ROADMAP's default stays "no moderation actions" | All three deleted from `users-page.tsx`, with no backend-side replacement built (that would be new scope, not adaptation) |
 | User list query | `GET /user?page&take&sort&sortBy&search&status` | `take`/`skip` only, fixed `createdAt DESC` order, no search/sort/status ([ROADMAP execution order #2](../docs/ROADMAP.md)) | `users-page.tsx` paginates on `take`/`skip`; the search box, sort-toggle headers, and status filter were removed (they would 400 `VALIDATION_FAILED` today — `forbidNonWhitelisted`). ~~Removed~~ **re-added 2026-08-12**: `GetUsersDto` gained `search` (email `ILIKE`) and `sortBy`/`order` (`id`/`email`/`createdAt`, no `role`); the search box and clickable ID/Email/Created headers came back, still no `status` filter (none exists server-side) |
-| Audit log | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip` only; fixed `createdAt DESC`; **no `/export`**, **no `userId` filter** (at import time) | `logs-page.tsx` originally kept only the action filter + pagination; the CSV export button, date-range filters, and user filter were removed. `userId` ~~missing~~ **added 2026-08-12**: `AuditLogQueryDto` now accepts `userId` (matches actor or target), and `logs-page.tsx` reads it from its own URL (`?userId=`) the same commit — `users-page.tsx`'s "View all" link (`/logs?userId=…`) is a live filter, not a dead one. CSV export ~~removed~~ **re-added 2026-08-12**, client-side: `/audit-log/export` still does not exist, so `exportCsv()` pages through `GET /audit-log` at the DTO's `take` ceiling (100/page) up to a 1000-row cap and downloads the result |
+| Audit log | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip` only; fixed `createdAt DESC`; **no `/export`**, **no `userId` filter** (at import time) | `logs-page.tsx` originally kept only the action filter + pagination; the CSV export button, date-range filters, and user filter were removed. `userId` ~~missing~~ **added 2026-08-12**: `AuditLogQueryDto` now accepts `userId`, and `logs-page.tsx` reads it from its own URL (`?userId=`) the same commit — `users-page.tsx`'s "View all" link (`/logs?userId=…`) is a live filter, not a dead one. `userId` matches the actor, **or** the target of a user-targeting action (`targetType = 'user'`) — narrowed 2026-08-24 by [ADR 0045](../docs/ADR/0045-audit-log-target-type.md), which added the `targetType` discriminator; before that it read every polymorphic `targetId` as a user id, so a file/post/comment whose id collided with a user id surfaced as that user's activity. A record targeting a file, post, or comment now matches through the actor side only. CSV export ~~removed~~ **re-added 2026-08-12**, client-side: `/audit-log/export` still does not exist, so `exportCsv()` pages through `GET /audit-log` at the DTO's `take` ceiling (100/page) up to a 1000-row cap and downloads the result |
 | Paging model | `page` + `take` | `take` + `skip` (offset) ([ADR 0021](../docs/ADR/0021-list-query-search-filter-sort.md)) | Both list pages compute `skip = (page - 1) * take` and read the `[data, total]` tuple response, not `{ data, total, page, take }` |
-| Per-user audit slice | Users page's detail panel fetched `GET /audit-log?userId=…` | No `userId` filter exists | **Dropped**, not approximated — see "Open items" below. ~~Dropped~~ **restored 2026-08-12**: now that `AuditLogQueryDto` has `userId`, the detail panel fetches `GET /audit-log?userId={id}&take=5` (actor or target) for a "Recent activity" section |
+| Per-user audit slice | Users page's detail panel fetched `GET /audit-log?userId=…` | No `userId` filter exists | **Dropped**, not approximated — see "Open items" below. ~~Dropped~~ **restored 2026-08-12**: now that `AuditLogQueryDto` has `userId`, the detail panel fetches `GET /audit-log?userId={id}&take=5` for a "Recent activity" section — the actor, or the target of a user-targeting action (`targetType = 'user'`, [ADR 0045](../docs/ADR/0045-audit-log-target-type.md)), so a file/post/comment id colliding with this user's id no longer appears here |
 | User deletion | `DELETE /user/:id`, no confirmation | `?deleteFiles=true` required when the account owns files, else 409 `USER_HAS_FILES` ([ADR 0020](../docs/ADR/0020-account-deletion-cascade.md)) | `deleteUser()` catches `USER_HAS_FILES`, shows the file count from the response `message`, and re-confirms before retrying with `?deleteFiles=true` |
 | Error handling | Ad-hoc status/message checks | Frozen `{ code, message }` contract — branch on `code` ([ADR 0011](../docs/ADR/0011-error-code-contract.md)) | `users-page.tsx` reads `err.response.data.code` via `axios.isAxiosError` for every branch (`AUTH_LAST_SUPERADMIN`, `USER_HAS_FILES`, `USER_FILES_IN_USE`, `FORBIDDEN`) |
 | Deploy config | `vercel.json` with a CSP pinned to the Chat Project's Railway host | **No deploy target**; AWS is a Stage 4 roadmap item | Left untouched, as before — out of scope for this pass |
@@ -142,6 +145,11 @@ deploy target for this console.
    gained `AuditLogQueryDto.userId` (2026-08-12, closing the [ROADMAP.md](../docs/ROADMAP.md) >
    Unscheduled follow-up this decision recorded), the panel's "Recent activity" section came
    back as an exact `GET /audit-log?userId={id}&take=5` fetch — no client-side filtering.
+   The filter's meaning was corrected on 2026-08-24 by [ADR 0045](../docs/ADR/0045-audit-log-target-type.md):
+   it had read every `targetId` as a user id, and `targetId` is polymorphic, so the panel
+   showed unrelated file/post/comment records whose id happened to equal this user's. It now
+   means "actor, or target of a user-targeting action (`targetType = 'user'`)" — the panel
+   returns fewer rows, and the ones it dropped were wrong.
 2. **Role-change UI: a 3-option `<select>`, not the imported binary toggle.** The imported
    promote/demote toggle can only move a row between two states and cannot express
    `superadmin` at all — the exact gap [ADR 0022](../docs/ADR/0022-admin-console-import-from-chat-project.md)
@@ -177,7 +185,11 @@ folder's code can work around, and it is unset by default (`backend/.env.example
 ## Open items (not solved by this pass)
 
 - ~~`GET /audit-log` has no `userId` filter~~ — **resolved 2026-08-12**: `AuditLogQueryDto`
-  now accepts `userId`; see "Two decisions" above.
+  now accepts `userId`; see "Two decisions" above. **Corrected 2026-08-24**
+  ([ADR 0045](../docs/ADR/0045-audit-log-target-type.md)): the filter matched any row whose
+  `targetId` equaled the id, but `targetId` is polymorphic — it now matches the actor, or the
+  target of a user-targeting action (`targetType = 'user'`). Records targeting a file, post,
+  or comment match through the actor side only.
 - ~~`logs-page.tsx` does not yet read a `userId` query param from its own URL~~ — **resolved
   2026-08-12, same commit**: it reads `?userId=` via `useSearchParams` and applies it to the
   `GET /audit-log` query; `users-page.tsx`'s "View all" link (`/logs?userId={id}`) is a live

@@ -103,7 +103,10 @@ test('Export CSV downloads the currently filtered audit log as a CSV file', asyn
     if (!path) throw new Error('Download produced no local file path.');
     const csv = readFileSync(path, 'utf-8');
     const lines = csv.split('\n');
-    expect(lines[0]).toBe('id,createdAt,action,actorId,targetId,detail');
+    // `targetType` joined the export when the backend began sending the discriminator for the
+    // polymorphic `targetId` (backend ADR 0045) — a bare id column could not say whether it
+    // named a user, a file, a post, or a comment.
+    expect(lines[0]).toBe('id,createdAt,action,actorId,targetType,targetId,detail');
     // At least the two ROLE_CHANGE rows from the promote/demote above, naming target as the
     // targetId column (quoted, since csvEscape wraps every field).
     const targetRows = lines.filter((line) => line.includes('ROLE_CHANGE') && line.includes(`"${target.id}"`));

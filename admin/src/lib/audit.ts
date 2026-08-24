@@ -9,33 +9,36 @@ export interface AuditLog {
     id: number;
     actorId: number;
     targetId: number | null;
+    // The discriminator for the polymorphic `targetId` (backend ADR 0045). Present on every
+    // record — GET /audit-log returns entities directly — and nullable only because
+    // `targetId` is: the backend's invariant is `targetType IS NULL` ⟺ `targetId IS NULL`.
+    targetType: string | null;
     action: string;
     detail: string | null;
     createdAt: string;
 }
 
-// What `targetId` actually points at, per action — it is polymorphic, not a user id.
-// Verified against every auditLogService.log() call site in the backend:
-//   ROLE_CHANGE    user.service.ts updateRole  -> user id
-//   USER_DELETE    user.service.ts remove      -> user id
-//   FILE_DELETE    file.service.ts deleteFile  -> file id
-//   POST_DELETE    post.service.ts deletePost  -> post id
-//   COMMENT_DELETE comment.service.ts          -> comment id
-const TARGET_NOUN: Record<string, string> = {
-    ROLE_CHANGE: 'User',
-    USER_DELETE: 'User',
-    FILE_DELETE: 'File',
-    POST_DELETE: 'Post',
-    COMMENT_DELETE: 'Comment',
+// The noun to print per target kind. Keyed on the server's `targetType`, not on `action`:
+// the previous TARGET_NOUN map keyed on action and had to re-derive the target's kind
+// client-side, which duplicated knowledge the backend now stores in the row itself
+// (ADR 0045 D2 — the read path deliberately carries no action -> target-kind mapping).
+// A sixth action added server-side is therefore labeled correctly with no change here.
+const TARGET_LABEL: Record<string, string> = {
+    user: 'User',
+    file: 'File',
+    post: 'Post',
+    comment: 'Comment',
 };
 
 // Renders an audit row's target for display. Every row used to read "User {targetId}",
 // which was wrong for the three actions whose target is a file/post/comment — an operator
 // reading "FILE_DELETE ... User 313" would be looking at file 313 and blaming user 313.
-// An unrecognized action falls back to a bare "#id" rather than guessing a noun.
-export function targetLabel(action: string, targetId: number | null): string {
+// Now reads the server's `targetType` instead of inferring it from `action`. A missing or
+// unrecognized type falls back to a bare "#id" rather than guessing a noun — the only way
+// to reach that branch is a row written by pre-ADR-0045 backend code after the migration.
+export function targetLabel(targetType: string | null, targetId: number | null): string {
     if (targetId === null) return '—';
-    const noun = TARGET_NOUN[action];
+    const noun = targetType === null ? undefined : TARGET_LABEL[targetType];
     return noun ? `${noun} ${targetId}` : `#${targetId}`;
 }
 
