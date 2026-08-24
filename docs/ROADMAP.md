@@ -492,6 +492,39 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   entry, video only on an explicit click, audio never, auto-loading stops at 180 tiles).
   No ADR: `frontend/` keeps its decisions in CHANGELOG and `frontend/docs/`, not
   `docs/ADR/`. Two follow-ups this work exposed are the next two rows.
+- **Unify the product name on `Sharenpo`** (decided 2026-08-25, scope confirmed with the
+  developer) — this is not a naming exercise; the name already exists and the repository is
+  split three ways. `.github/workflows/ci.yml`'s workflow is literally **`Sharenpo CI/CD`**
+  and the published image is **`bluecode1775/sharenpo`** (cited by ADR 0035/0037/0041/0042),
+  while `README.md`'s H1, the root `package.json`, and `k8s/helm/Chart.yaml` all say
+  *Upload Board Project* — and `frontend/` has no name at all: its `package.json` and its
+  browser tab both read `frontend`, which is what a user sees first. **Confirmed scope: all
+  of it, Helm included.** The work: user-facing names (`frontend/index.html` `<title>` and
+  a login wordmark, `admin/index.html`'s `Upload Board Admin`, and `admin/public/favicon.svg`
+  whose mark is the initials `UB`), documentation (`README.md` H1 and product references),
+  and the mechanical identifiers (root and `frontend` `package.json` `name`,
+  `k8s/helm/Chart.yaml`, plus **26 `upload-board-project.*` template references** across
+  `_helpers.tpl` (8), `deployment.yml` (5), `migration-job.yml` (4), `ingress.yaml` (3),
+  `service.yaml` (3), and `configmap.yaml` (2)). Two things this is **not**: it is not
+  breaking — no Helm release has ever been installed against a real cluster (Stage 4 is
+  unstarted, Terraform unapplied), so there is no live release name to migrate; and it does
+  **not** rewrite ADR prose — an ADR records what was true when it was written, so the chart
+  name appearing there stays as history. The one genuinely new decision inside this task is
+  what a Helm release rename implies for the chart's own `README.md` and any `helm install`
+  instructions, which need re-verifying rather than find-and-replacing.
+- **Explore and implement a display typeface** (recorded 2026-08-25) — **deliberately left
+  open**, no constraint pre-committed: web font, self-hosted, or staying on system fonts are
+  all still candidates, and the exploration decides between them. The gap it addresses is
+  concrete: `index.css` defines `--heading` and `--sans` as **byte-identical**
+  (`system-ui, 'Segoe UI', Roboto, sans-serif`), so the heading token exists but expresses
+  nothing, and `frontend/docs/STYLE-PLAN.md`'s confirmed "brand-forward" direction is carried
+  today by a single accent color. Two constraints the exploring session inherits rather than
+  decides: `frontend/CLAUDE.md` requires proposing any dependency (a hosted font counts)
+  before adding it, and the palette is settled — this is a typography question, not a
+  re-opening of the brand color. Related but separate, and cheap enough to fold in: the app
+  has **no motion at all** (`transition`/`animation`/`@keyframes` appear zero times across
+  every stylesheet) and `--shadow` is used in exactly one place, so hover and focus states
+  jump and every surface reads flat.
 - A small-screen layout for `admin/` (recorded 2026-08-24) — **not started because** the
   console has no deploy target and is operated on a desktop, so the exposure today is nil.
   What landed instead was the minimum that restores access: the three table wrappers became

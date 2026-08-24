@@ -157,6 +157,25 @@ because whoever touches these files for restyling will see them:
    existing purple brand seed. Item 1 is clear to dispatch.
 2. Confirm whether the two remaining "related but out of scope" items above
    should be picked up later as their own tasks, or intentionally left alone.
+3. **Typography was never actually decided** (recorded 2026-08-25) — the plan
+   above settled the palette and called the direction "brand-forward", but
+   `index.css` defines `--heading` and `--sans` as **byte-identical**
+   (`system-ui, 'Segoe UI', Roboto, sans-serif`). The heading token exists and
+   expresses nothing, so the whole brand-forward direction currently rests on
+   one accent color. A follow-up task will **explore first, then implement**,
+   with no option pre-committed: a hosted web font, a self-hosted face, or
+   staying on system fonts are all live candidates. Two constraints it
+   inherits rather than decides — `frontend/CLAUDE.md` requires proposing any
+   dependency (a hosted font counts) before adding it, and the palette above
+   is settled, so this is a typography question and not a re-opening of the
+   brand color. Tracked in [ROADMAP.md](../../docs/ROADMAP.md) > 7.
+4. **No motion, and depth used once** (recorded 2026-08-25, alongside item 3) —
+   `transition`, `animation`, and `@keyframes` appear **zero times** across
+   every stylesheet in `src/`, so every hover and focus state jumps; and
+   `--shadow` is applied in exactly one place (`LoginPage.module.css`'s card),
+   leaving every other surface flat. Both are cheap to add once as tokens and
+   are grouped with item 3 rather than dispatched separately, since a typeface
+   change is the natural moment to settle the rest of the expressive layer.
 
 ## Ready-to-paste prompts
 

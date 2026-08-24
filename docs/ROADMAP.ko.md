@@ -458,6 +458,35 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   오디오는 아예 받지 않으며 자동 로드는 180개에서 멈춘다). ADR은 없다: `frontend/`는
   결정을 `docs/ADR/`가 아니라 CHANGELOG와 `frontend/docs/`에 남기는 관례다. 이 작업이
   드러낸 후속 과제 2건이 바로 다음 두 행이다.
+- **제품명을 `Sharenpo`로 통일** (2026-08-25 결정, 범위는 개발자와 확인) — 이름을 새로 짓는
+  일이 아니다. 이름은 이미 있고, 저장소가 세 갈래로 갈라져 있는 상태다.
+  `.github/workflows/ci.yml`의 워크플로 이름이 그대로 **`Sharenpo CI/CD`**이고 배포 이미지도
+  **`bluecode1775/sharenpo`**(ADR 0035·0037·0041·0042가 인용)인 반면, `README.md`의 H1과 루트
+  `package.json`, `k8s/helm/Chart.yaml`은 *Upload Board Project*라고 말한다. 그리고
+  `frontend/`에는 이름이 아예 없다 — `package.json`도 브라우저 탭도 `frontend`인데, 이것이
+  사용자가 가장 먼저 보는 이름이다. **확정 범위: Helm을 포함한 전면 통일.** 대상은 화면에
+  보이는 이름(`frontend/index.html`의 `<title>`과 로그인 워드마크, `admin/index.html`의
+  `Upload Board Admin`, 그리고 마크가 이니셜 `UB`인 `admin/public/favicon.svg`), 문서
+  (`README.md` H1과 제품명 언급), 그리고 기계적 식별자(루트와 `frontend`의 `package.json`
+  `name`, `k8s/helm/Chart.yaml`, 여기에 `_helpers.tpl`(8)·`deployment.yml`(5)·
+  `migration-job.yml`(4)·`ingress.yaml`(3)·`service.yaml`(3)·`configmap.yaml`(2)에 걸친
+  **`upload-board-project.*` 템플릿 참조 26곳**)이다. 이 작업이 **아닌** 것 두 가지: 파괴적
+  변경이 아니다 — 실제 클러스터에 Helm 릴리스를 설치한 적이 한 번도 없으므로(Stage 4 미착수,
+  Terraform 미적용) 이관할 라이브 릴리스명이 없다. 그리고 ADR 본문을 고쳐 쓰지 않는다 — ADR은
+  작성 시점의 사실을 기록하므로, 거기 등장하는 차트 이름은 역사로 남긴다. 이 작업 안에서
+  진짜로 새로 판단해야 할 것은 Helm 릴리스명 변경이 차트 자신의 `README.md`와 `helm install`
+  안내에 무엇을 의미하는가 하나이며, 이건 일괄 치환이 아니라 재검증 대상이다.
+- **디스플레이 서체 탐구 후 구현** (2026-08-25 기록) — **의도적으로 열어 둔다.** 제약을 미리
+  박지 않았다: 웹폰트, 셀프호스팅, 시스템 폰트 유지가 모두 후보이며 그 선택 자체가 탐구의
+  결과물이다. 메우려는 공백은 구체적이다: `index.css`가 `--heading`과 `--sans`를 **바이트
+  단위로 동일하게**(`system-ui, 'Segoe UI', Roboto, sans-serif`) 정의하고 있어 헤딩 토큰이
+  존재하되 아무것도 표현하지 않으며, `frontend/docs/STYLE-PLAN.ko.md`가 확정한 "브랜드 전면"
+  방향을 지금은 강조색 하나가 떠받치고 있다. 탐구 세션이 결정하는 게 아니라 물려받는 제약이
+  둘 있다: `frontend/CLAUDE.md`는 의존성 추가 전 제안을 요구하며(호스팅 폰트도 여기 해당),
+  팔레트는 이미 확정이다 — 이건 타이포그래피 문제이지 브랜드 색을 다시 여는 일이 아니다.
+  별개지만 함께 묶기 충분히 저렴한 사항: 이 앱에는 **모션이 전무하고**
+  (`transition`·`animation`·`@keyframes`가 전 스타일시트에 0회 등장) `--shadow`는 정확히 한
+  곳에서만 쓰여, hover·focus가 즉시 점프하고 모든 표면이 평면으로 읽힌다.
 - `admin/`의 작은 화면 전용 레이아웃 (2026-08-24 기록) — **미착수 이유**: 이 콘솔은 배포
   대상이 없고 데스크톱에서 운영되므로 현재 노출이 사실상 없다. 대신 접근을 되살리는 최소
   조치만 반영했다 — 세 테이블 래퍼를 `overflow-x-auto`로 바꿨다. 375px에서 users 테이블이
