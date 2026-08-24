@@ -14,7 +14,7 @@ import api from '../api/axios';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/auth.store';
 import { clearSessionUser } from '../auth/session-guard';
-import { actionColor, type AuditLog } from '../lib/audit';
+import { actionColor, targetLabel, type AuditLog } from '../lib/audit';
 
 // Mirrors backend/audit-log/dto/audit-log-query.dto.ts's AUDIT_ACTIONS exactly.
 const ACTIONS = ['ROLE_CHANGE', 'USER_DELETE', 'FILE_DELETE', 'POST_DELETE', 'COMMENT_DELETE'];
@@ -225,7 +225,7 @@ function LogsPage() {
                     <p className="text-gray-500">Loading...</p>
                 ) : (
                     <>
-                        <div data-testid="logs-table" className="bg-white rounded-xl shadow overflow-hidden">
+                        <div data-testid="logs-table" className="bg-white rounded-xl shadow overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead className="bg-gray-100 text-left">
                                     <tr>
@@ -249,7 +249,7 @@ function LogsPage() {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3">User {log.actorId}</td>
-                                            <td className="px-4 py-3">{log.targetId !== null ? `User ${log.targetId}` : '—'}</td>
+                                            <td className="px-4 py-3">{targetLabel(log.action, log.targetId)}</td>
                                             <td className="px-4 py-3 text-gray-500">{log.detail ?? '—'}</td>
                                         </tr>
                                     ))}

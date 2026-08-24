@@ -76,7 +76,7 @@ function DashboardPage() {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl shadow overflow-hidden">
+                <div className="bg-white rounded-xl shadow overflow-x-auto">
                     <div className="px-4 py-3 bg-gray-100 text-sm font-semibold">Recent Audit Logs</div>
                     <table className="w-full text-sm">
                         <thead className="bg-gray-50 text-left text-gray-500">
