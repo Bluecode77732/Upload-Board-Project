@@ -31,6 +31,7 @@ import { ConfigService } from '@nestjs/config';
 import { ErrorCode } from 'backend/common/error-code';
 import { ROLE_RANK, UserRole } from 'backend/auth/role/role';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
+import { AuditTargetType } from 'backend/audit-log/audit-target-type.enum';
 import { escapeLikePattern } from 'backend/common/escape-like-pattern';
 import {
   FILE_STORAGE,
@@ -716,7 +717,12 @@ export class FileService {
     await this.removeStoredFiles([file.filePath]);
 
     // Audit after the delete succeeds (side effect isolated from the delete).
-    await this.auditLogService.log(requester.id, id, 'FILE_DELETE');
+    await this.auditLogService.log(
+      requester.id,
+      id,
+      AuditTargetType.file,
+      'FILE_DELETE',
+    );
 
     return `File ${id} deleted.`;
   }

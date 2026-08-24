@@ -15,6 +15,7 @@ import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { UserRole } from 'backend/auth/role/role';
 import { ErrorCode } from 'backend/common/error-code';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
+import { AuditTargetType } from 'backend/audit-log/audit-target-type.enum';
 import { FileService } from 'backend/file/file.service';
 import { PostService } from 'backend/post/post.service';
 import { CommentService } from 'backend/comment/comment.service';
@@ -345,6 +346,7 @@ describe('UserService', () => {
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
+        AuditTargetType.user,
         'ROLE_CHANGE',
         'user→admin',
       );
@@ -388,6 +390,7 @@ describe('UserService', () => {
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
+        AuditTargetType.user,
         'ROLE_CHANGE',
         'superadmin→admin',
       );
@@ -420,6 +423,7 @@ describe('UserService', () => {
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
+        AuditTargetType.user,
         'USER_DELETE',
         'files=0 posts=0',
       );
@@ -457,6 +461,7 @@ describe('UserService', () => {
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
+        AuditTargetType.user,
         'USER_DELETE',
         'files=2 posts=4',
       );
@@ -489,6 +494,7 @@ describe('UserService', () => {
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
+        AuditTargetType.user,
         'USER_DELETE',
         'files=2 posts=0',
       );
@@ -509,6 +515,7 @@ describe('UserService', () => {
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
+        AuditTargetType.user,
         'USER_DELETE',
         'files=2 posts=0',
       );

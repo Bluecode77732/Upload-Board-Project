@@ -32,8 +32,10 @@ export class AuditLogController {
     status: 200,
     description:
       'Paginated audit records, newest first. action filters by the action type; ' +
-      'userId returns only records where that user was the actor or the target ' +
-      '(the two filters AND together when both are given).',
+      'userId returns only records where that user was the actor, or was the ' +
+      "target of a user-targeting action (targetType='user') — a record whose " +
+      'target is a file, post, or comment matches only via the actor side ' +
+      '(ADR 0045). The two filters AND together when both are given.',
   })
   @ApiResponse({ status: 403, description: 'Admin role required.' })
   findAll(@Query() query: AuditLogQueryDto) {

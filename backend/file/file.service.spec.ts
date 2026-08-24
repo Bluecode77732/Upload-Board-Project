@@ -24,6 +24,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { UserRole } from 'backend/auth/role/role';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
+import { AuditTargetType } from 'backend/audit-log/audit-target-type.enum';
 import {
   FILE_STORAGE,
   FileStorage,
@@ -960,6 +961,7 @@ describe('FileService', () => {
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         owner.id,
         1,
+        AuditTargetType.file,
         'FILE_DELETE',
       );
       expect(result).toBe('File 1 deleted.');
@@ -1000,6 +1002,7 @@ describe('FileService', () => {
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         admin.id,
         1,
+        AuditTargetType.file,
         'FILE_DELETE',
       );
       expect(result).toBe('File 1 deleted.');

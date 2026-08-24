@@ -16,6 +16,7 @@ import { PostEntity } from './entity/post.entity';
 import { GetPostsDto } from './dto/get-posts.dto';
 import { FileService } from 'backend/file/file.service';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
+import { AuditTargetType } from 'backend/audit-log/audit-target-type.enum';
 import { FileEntity } from 'backend/file/entity/file.entity';
 import { UserEntity } from 'backend/user/entity/user.entity';
 import { UserRole } from 'backend/auth/role/role';
@@ -403,7 +404,12 @@ describe('PostService', () => {
       await postService.deletePost(5, author);
 
       expect(postRepository.delete).toHaveBeenCalledWith(5);
-      expect(mockAuditLogService.log).toHaveBeenCalledWith(1, 5, 'POST_DELETE');
+      expect(mockAuditLogService.log).toHaveBeenCalledWith(
+        1,
+        5,
+        AuditTargetType.post,
+        'POST_DELETE',
+      );
     });
 
     it('forbids a stranger from deleting the post', async () => {

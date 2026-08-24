@@ -11,6 +11,7 @@ import { CommentEntity } from './entity/comment.entity';
 import { GetCommentsDto } from './dto/get-comments.dto';
 import { PostService } from 'backend/post/post.service';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
+import { AuditTargetType } from 'backend/audit-log/audit-target-type.enum';
 import { PostEntity } from 'backend/post/entity/post.entity';
 import { UserEntity } from 'backend/user/entity/user.entity';
 import { UserRole } from 'backend/auth/role/role';
@@ -273,6 +274,7 @@ describe('CommentService', () => {
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         3,
+        AuditTargetType.comment,
         'COMMENT_DELETE',
       );
       expect(result).toBe('Comment 3 deleted.');

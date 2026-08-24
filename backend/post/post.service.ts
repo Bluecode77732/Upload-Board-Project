@@ -23,6 +23,7 @@ import { GetPostsDto, PostSortField } from './dto/get-posts.dto';
 import { PostResponseDto } from './dto/post-response.dto';
 import { FileService } from 'backend/file/file.service';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
+import { AuditTargetType } from 'backend/audit-log/audit-target-type.enum';
 import { ErrorCode } from 'backend/common/error-code';
 import { escapeLikePattern } from 'backend/common/escape-like-pattern';
 import { ROLE_RANK, UserRole } from 'backend/auth/role/role';
@@ -344,7 +345,12 @@ export class PostService {
 
     await this.postRepository.delete(id);
 
-    await this.auditLogService.log(requester.id, id, 'POST_DELETE');
+    await this.auditLogService.log(
+      requester.id,
+      id,
+      AuditTargetType.post,
+      'POST_DELETE',
+    );
 
     return `Post ${id} deleted.`;
   }

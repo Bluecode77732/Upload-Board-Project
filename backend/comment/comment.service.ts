@@ -17,6 +17,7 @@ import { GetCommentsDto } from './dto/get-comments.dto';
 import { CommentResponseDto } from './dto/comment-response.dto';
 import { PostService } from 'backend/post/post.service';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
+import { AuditTargetType } from 'backend/audit-log/audit-target-type.enum';
 import { ErrorCode } from 'backend/common/error-code';
 import { ROLE_RANK, UserRole } from 'backend/auth/role/role';
 
@@ -197,7 +198,12 @@ export class CommentService {
 
     await this.commentRepository.delete(id);
 
-    await this.auditLogService.log(requester.id, id, 'COMMENT_DELETE');
+    await this.auditLogService.log(
+      requester.id,
+      id,
+      AuditTargetType.comment,
+      'COMMENT_DELETE',
+    );
 
     return `Comment ${id} deleted.`;
   }

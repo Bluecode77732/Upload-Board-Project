@@ -14,6 +14,7 @@ import { AddPostEntity1785428640007 } from '../backend/migrations/1785428640007-
 import { AddCommentEntity1785476002527 } from '../backend/migrations/1785476002527-AddCommentEntity';
 import { AddFileVisibility1785571437643 } from '../backend/migrations/1785571437643-AddFileVisibility';
 import { AddFileMediaType1786818802632 } from '../backend/migrations/1786818802632-AddFileMediaType';
+import { AddAuditLogTargetType1787578451680 } from '../backend/migrations/1787578451680-AddAuditLogTargetType';
 
 // A dedicated database, never the dev one — dropped and recreated every run so the
 // suite owns its data. New migrations must be appended here or boot fails loudly.
@@ -28,6 +29,7 @@ const MIGRATIONS = [
   AddCommentEntity1785476002527,
   AddFileVisibility1785571437643,
   AddFileMediaType1786818802632,
+  AddAuditLogTargetType1787578451680,
 ];
 
 // Every table the app writes; truncated between tests for per-test isolation.

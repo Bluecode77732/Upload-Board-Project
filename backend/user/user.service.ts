@@ -17,6 +17,7 @@ import { ConfigService } from '@nestjs/config';
 import { ErrorCode } from 'backend/common/error-code';
 import { ROLE_RANK, UserRole } from 'backend/auth/role/role';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
+import { AuditTargetType } from 'backend/audit-log/audit-target-type.enum';
 import { FileService } from 'backend/file/file.service';
 import { PostService } from 'backend/post/post.service';
 import { CommentService } from 'backend/comment/comment.service';
@@ -206,6 +207,7 @@ export class UserService {
     await this.auditLogService.log(
       actorId,
       targetId,
+      AuditTargetType.user,
       'ROLE_CHANGE',
       `${previousRole}→${role}`,
     );
@@ -310,6 +312,7 @@ export class UserService {
     await this.auditLogService.log(
       actorId,
       id,
+      AuditTargetType.user,
       'USER_DELETE',
       `files=${storedPaths.length} posts=${deletedPosts}`,
     );
