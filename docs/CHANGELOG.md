@@ -13,6 +13,43 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **`admin/`: the audit log now reads the server's `targetType` instead of re-deriving it from
+  `action` (2026-08-25, commit `d38d9dc`)** — `admin/` only; no backend, contract, or schema
+  change. This is the cleanup the [ADR 0045](ADR/0045-audit-log-target-type.md) entry below
+  explicitly left out ("optional cleanup, deliberately left out of this change").
+  **The duplication.** Both halves landed the day before, on 2026-08-24: the console's display
+  defect was fixed client-side with a `targetLabel(action, targetId)` map (entry below), and
+  ADR 0045 then gave every audit record a `targetType` discriminator server-side. Both were
+  right, and together they put the same "which action targets which kind of thing" knowledge in
+  two places. The result was not wrong for today's five actions — it was wrong *later*: a sixth
+  action added server-side would be labelled correctly by the server and unknown by the console,
+  silently, with nothing failing to signal the drift.
+  **What changed.** `src/lib/audit.ts`'s `AuditLog` gains `targetType: string | null`;
+  `TARGET_NOUN` (keyed on `action`) is **deleted** and replaced by `TARGET_LABEL` (keyed on the
+  server's type), and `targetLabel()` takes the type rather than the action. This mirrors
+  ADR 0045 D2 on the client: the read path now carries no action → target-kind mapping at all.
+  `users-page.tsx`'s "Recent activity" panel, which had shown only a badge and a timestamp
+  because a row's target kind could only be guessed, now names its target (`Target: File 169`).
+  **Chosen over two alternatives**, from a comparison table put to the developer: keeping the
+  client map (rejected — it is the duplication being removed) and server-first with a client
+  fallback for a null `targetType` (rejected — it keeps the same map alive as a fallback, and
+  the row it protects against cannot currently exist). Verified before choosing: `log()` takes
+  `targetType` as a required parameter so none of the five call sites can omit it, `targetLabel`
+  has exactly one caller, and the development database holds **114 rows, 0 NULL `targetType`,
+  0 invariant violations**. The cost accepted is that a row carrying a `targetId` but no
+  `targetType` would read `#269` instead of `File 269` — producible only by pre-ADR-0045 code
+  writing after the migration, which no longer exists here.
+  **User-visible schema change**: CSV export gains a `targetType` column
+  (`id,createdAt,action,actorId,targetType,targetId,detail`), so an exported file is no longer
+  ambiguous about what kind of id it carries. `e2e/logs.spec.ts`'s header assertion was updated
+  to match — the **only** e2e change, since the two `User {id}` assertions name `ROLE_CHANGE`
+  targets (`targetType = 'user'`) and were unaffected. `admin/README.md` (+ko) was corrected in
+  the same change: the four places describing `userId` as "matches actor or target" now state
+  the narrowed meaning, and the 2026-08-24 defect entry records that the backend question it
+  left open is settled.
+  Verified: `pnpm lint` 0 errors, `tsc -b`, `pnpm test` 19/19, `pnpm e2e` 11/11, plus a live
+  browser pass — `FILE_DELETE` rows read `File 313`/`File 269`, `/logs?userId=269` returns 0
+  rows (it returned the unrelated file-269 record before ADR 0045), and "View all" still filters.
 - **`frontend/`: every screen now adapts to the viewport width, and the post board's one hard
   layout break is fixed (2026-08-24, commit `d746257`)** — CSS only; no component, JS, or API
   change. **What the measurement changed**: the task began from the assumption that a
