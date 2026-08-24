@@ -492,6 +492,22 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   entry, video only on an explicit click, audio never, auto-loading stops at 180 tiles).
   No ADR: `frontend/` keeps its decisions in CHANGELOG and `frontend/docs/`, not
   `docs/ADR/`. Two follow-ups this work exposed are the next two rows.
+- A small-screen layout for `admin/` (recorded 2026-08-24) — **not started because** the
+  console has no deploy target and is operated on a desktop, so the exposure today is nil.
+  What landed instead was the minimum that restores access: the three table wrappers became
+  `overflow-x-auto`, because at 375px the users table was clipping the role `<select>` and
+  the Delete button out of reach entirely (272px hidden, with no scrollbar and no page-level
+  overflow to signal it). They are still wide tables on a phone. A layout designed for that
+  width — cards instead of rows, or column priority — is the open work, and it is larger than
+  it looks: the whole console carries two responsive utilities in total.
+- `admin/` diverging from `frontend/`'s design system (recorded 2026-08-24) — **not started
+  because** this is the state [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)
+  deliberately chose: the Chat Project console was imported with its colors and layout
+  untouched, and only its API/domain layer was adapted. The divergence is therefore a
+  standing decision, not a defect: no dark-mode support at all (`dark:` appears zero times,
+  while `frontend/` ships an explicit light/dark toggle), a blue accent against
+  `frontend/`'s brand purple, and login fields labelled by placeholder only. Reversing any
+  of it is a design decision first and a code change second.
 - Server-side thumbnail endpoint (recorded 2026-08-24) — **not started because** it is a
   backend change (a new derived artifact per file, plus where to store and when to
   generate it) that the grid above does not strictly need. But it is the root cause of

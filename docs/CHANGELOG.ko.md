@@ -164,6 +164,33 @@
   새 경로를 인용하도록 갱신했다.
 
 ### 수정
+- **`admin/`: 감사 로그가 모든 대상을 "User N"으로 표기했고, 좁은 화면에서는 테이블이 자기
+  조작 컨트롤을 가렸다(2026-08-24)** — 둘 다 콘솔을 실제 브라우저로 훑다가 발견했고, 수정은
+  `admin/` 안에서만 이뤄졌다. 백엔드·계약·스키마 변경은 없다.
+  **(1) 대상 신원 오표기.** `logs-page.tsx`는 모든 행을 `User {targetId}`로 그렸지만
+  `targetId`는 **액션마다 가리키는 대상이 다르다** — `auditLogService.log()` 호출부 5곳을
+  전수 확인한 결과, `ROLE_CHANGE`/`USER_DELETE`는 사용자 id를 넘기는 반면 `FILE_DELETE`
+  (`file.service.ts`), `POST_DELETE`(`post.service.ts`), `COMMENT_DELETE`
+  (`comment.service.ts`)는 각각 **파일·게시글·댓글** id를 넘긴다. 그래서 "FILE_DELETE …
+  Target: User 313"이라고 적힌 행은 사실 파일 313번에 관한 것이었고, 이를 따라간 운영자는
+  무관한 사용자에게 도달하게 된다 — 존재 이유가 책임 소재인 화면에 틀린 정보가 실린 셈이다.
+  `admin/src/lib/audit.ts`에 `targetLabel(action, targetId)`을 추가해(기존 `actionColor`
+  옆) 액션→명사를 매핑하고, 모르는 액션은 명사를 추측하지 않고 `#id`로 표기하도록 했다.
+  `dashboard-page.tsx`는 확인 후 그대로 뒀다 — `actorId`만 그리는데 actor는 항상 사용자다.
+  이는 표시 계층 교정이며, **백엔드**가 대상의 타입을 명시적으로 실어야 하는지는 아직 열린
+  별개 문제다(`SESSION-LOG.md`에 "감사 로그 targetId 의미 정리" 세션이 기록돼 있으나 저장소에
+  산출물은 없다). 이번 수정은 그 결정을 앞지르지 않는다.
+  **(2) 약 600px 아래에서 컨트롤 접근 불가.** 세 테이블 모두 `overflow-hidden` 래퍼 안에
+  있었고 `admin/src` 어디에도 `overflow-x-auto`가 없었다(반응형 유틸리티도 콘솔 전체에 2개뿐).
+  375px 뷰포트에서 실측: Users는 272px가 잘려 Created·Role·Actions 열이 통째로 사라졌고 —
+  즉 역할 `<select>`와 Delete 버튼, 이 콘솔의 두 가지 운영 동작이 사라진 것이다 — Logs는
+  233px가 잘려 Detail 열이 통째로 가려졌다. 정작 페이지 자체는 오버플로 0을 보고해 아무 신호도
+  없었고, 스크롤바도 사용자가 밀어볼 방법도 없었다. 세 래퍼를 `overflow-x-auto`로 바꿔 접근을
+  복구했고 카드의 라운드 클리핑도 유지된다. 이는 **최소 조치**다 — 휴대폰에서도 테이블은 여전히
+  테이블이며, 작은 화면 전용 레이아웃은 과제로 남아 있다(ROADMAP > 7). 375px(역할 select와
+  Delete 모두 도달 가능, 대상이 `File 313`/`Post 102`로 표기되며 렌더된 행 전체에서 액션↔명사
+  불일치 0건)와 1280px(스크롤바 불필요, 열 구성 변화 없음)에서 라이브로 확인했고,
+  `pnpm build` 통과, `pnpm lint` 0 errors, `pnpm test` 19/19, `pnpm e2e` 11/11.
 - **`admin/`: 한 탭에서 계정을 전환하면 새로 로그인한 정상 세션이 첫 하드 내비게이션에서
   강제 로그아웃됐다(2026-08-23)** — `admin/src/auth/session-guard.ts`가
   `recordSessionUser`/`clearSessionUser`를 export하고 있었지만 그 파일 밖에 호출부가 하나도

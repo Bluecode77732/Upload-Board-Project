@@ -52,6 +52,34 @@ REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" �
 루트의 `pnpm lint`, `pnpm test`, `pnpm test:e2e`는 이 폴더에 닿을 수 없으므로, 여기 있는 어떤
 것도 백엔드 파이프라인을 깨뜨릴 수 없다.
 
+## 라이브 UI/UX 점검에서 찾은 결함 (2026-08-24)
+
+둘 다 실제 브라우저로 콘솔을 직접 조작하다 발견했고, 여기서 함께 고쳤다. 수정은 `admin/`
+안에서만 이뤄졌으며 백엔드·계약·스키마 변경은 없다.
+
+- **감사 로그가 대상의 종류를 잘못 표기했다.** `logs-page.tsx`가 모든 행에
+  `User {targetId}`를 찍었지만 `targetId`는 액션마다 가리키는 대상이 다르다.
+  `auditLogService.log()` 호출부 5곳을 전수 확인한 결과 `ROLE_CHANGE`/`USER_DELETE`는
+  사용자 id를, `FILE_DELETE`/`POST_DELETE`/`COMMENT_DELETE`는 각각 파일·게시글·댓글 id를
+  넘긴다. "FILE_DELETE … Target: User 313"이라 적힌 행은 사실 파일 313번에 관한 것이라,
+  그대로 따라가면 무관한 사용자에게 닿았다. `src/lib/audit.ts`에 `targetLabel(action,
+  targetId)`을 추가해(`actionColor` 옆) 액션을 그에 맞는 명사로 매핑하고, 모르는 액션은
+  추측하지 않고 `#id`로 표기한다. `dashboard-page.tsx`는 `actorId`만 그리고 actor는 항상
+  사용자이므로 그대로 뒀다. **이번 수정은 표시 계층에 한정된다.** 백엔드가 대상의 타입을
+  명시적으로 실어야 하는지는 별개의 열린 문제이며, 여기서 결론 내리지 않는다.
+- **모든 테이블이 좁은 화면에서 자기 조작 컨트롤을 가렸다.** 세 래퍼가 전부
+  `overflow-hidden`이었고 `src/` 어디에도 `overflow-x-auto`가 없었다(콘솔 전체의 반응형
+  유틸리티가 2개뿐이다). 375px 뷰포트에서 users 테이블은 272px가 잘리며 Created·Role·
+  Actions 열을 함께 가져갔다 — 즉 역할 `<select>`와 Delete 버튼, 운영자가 이 화면에 오는
+  이유인 두 가지에 손이 닿지 않았다 — logs 테이블은 233px가 잘려 Detail이 사라졌다. 정작
+  페이지는 오버플로가 없다고 보고해 그런 열이 있다는 힌트조차 없었고, 끌어볼 스크롤바도
+  없었다. 세 래퍼를 `overflow-x-auto`로 바꿨다. 이는 접근을 되살릴 뿐 그 이상은 아니다.
+  휴대폰에서도 여전히 넓은 테이블이며, 그 폭에 맞춰 설계된 레이아웃은 과제로 남아 있다
+  ([ROADMAP.ko.md](../docs/ROADMAP.ko.md) > 7).
+
+375px와 1280px에서 라이브로 확인했고 `pnpm build`, `pnpm lint`(0 errors),
+`pnpm test`(19/19), `pnpm e2e`(11/11) 모두 통과한다.
+
 ## 출처 정리 (2026-08-13)
 
 Chat Project 이식의 흔적 중 남아있던, 아래 기능 적응과는 무관한 두 가지 — 겉모습/죽은

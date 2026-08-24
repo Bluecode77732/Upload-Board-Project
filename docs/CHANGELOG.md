@@ -166,6 +166,36 @@ development line (package.json version).
   Helm rows were updated to cite the new path.
 
 ### Fixed
+- **`admin/`: the audit log labelled every target "User N", and its tables hid their own
+  controls on a narrow screen (2026-08-24)** — both found by a live browser pass over the
+  console, both fixed in `admin/` only; no backend, contract, or schema change.
+  **(1) Wrong target identity.** `logs-page.tsx` rendered `User {targetId}` for every row,
+  but `targetId` is **polymorphic** — verified against all five `auditLogService.log()` call
+  sites: `ROLE_CHANGE`/`USER_DELETE` pass a user id, while `FILE_DELETE`
+  (`file.service.ts`), `POST_DELETE` (`post.service.ts`), and `COMMENT_DELETE`
+  (`comment.service.ts`) pass a **file/post/comment** id. So a row reading
+  "FILE_DELETE … Target: User 313" was really about file 313, and an operator following it
+  would land on an unrelated user — wrong information in the one surface whose purpose is
+  accountability. A new `targetLabel(action, targetId)` in `admin/src/lib/audit.ts` (beside
+  the existing `actionColor`) maps action → noun and falls back to a bare `#id` for an
+  unrecognized action rather than guessing. `dashboard-page.tsx` was checked and left alone:
+  it renders only `actorId`, which is always a user. This is a display-layer correction —
+  whether the *backend* should carry the target's type explicitly is a separate, still-open
+  question (a session titled "감사 로그 targetId 의미 정리" is recorded in `SESSION-LOG.md`
+  with no artifact in the repo yet), and nothing here forecloses it.
+  **(2) Unreachable controls under ~600px.** All three tables sat in a wrapper classed
+  `overflow-hidden` with no `overflow-x-auto` anywhere in `admin/src` (and only two
+  responsive utilities in the whole console). Measured at a 375px viewport: Users clipped
+  272px — hiding the Created, Role, and Actions columns, i.e. the role `<select>` and the
+  Delete button, the console's two operator actions — and Logs clipped 233px, hiding the
+  Detail column outright. The page itself reported zero overflow, so nothing signalled the
+  loss; there was no scrollbar and no user-reachable way to pan. Changed to `overflow-x-auto`
+  on the three wrappers, which restores access and keeps the cards' rounded clipping.
+  This is the **minimum** fix: the tables are still tables on a phone, and a real
+  small-screen layout stays open (ROADMAP > 7). Verified live at 375px (role select and
+  Delete both reachable, targets reading `File 313`/`Post 102` with zero action↔noun
+  mismatches across the rendered rows) and at 1280px (no scrollbar, no column change);
+  `pnpm build` clean, `pnpm lint` 0 errors, `pnpm test` 19/19, `pnpm e2e` 11/11.
 - **`admin/`: switching accounts in one tab force-logged-out the new, valid session on its
   first hard navigation (2026-08-23)** — `admin/src/auth/session-guard.ts` exported
   `recordSessionUser`/`clearSessionUser`, but neither had a single call site outside that

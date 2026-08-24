@@ -54,6 +54,35 @@ rather than a rewrite from scratch.
 Root `pnpm lint`, `pnpm test`, and `pnpm test:e2e` cannot reach this folder, so nothing in here
 can break the backend pipeline.
 
+## Defects found by a live UI/UX pass (2026-08-24)
+
+Both were found by driving the running console in a real browser, and both are fixed here —
+in `admin/` only, with no backend, contract, or schema change.
+
+- **The audit log named the wrong kind of target.** `logs-page.tsx` printed
+  `User {targetId}` on every row, but `targetId` is polymorphic: checked against all five
+  `auditLogService.log()` call sites, `ROLE_CHANGE`/`USER_DELETE` pass a user id while
+  `FILE_DELETE`/`POST_DELETE`/`COMMENT_DELETE` pass a file/post/comment id. A row reading
+  "FILE_DELETE … Target: User 313" was about file 313, so following it led to an unrelated
+  user. `src/lib/audit.ts` gained `targetLabel(action, targetId)` (next to `actionColor`),
+  which maps the action to its noun and prints a bare `#id` for an action it does not know,
+  rather than guessing. `dashboard-page.tsx` renders only `actorId` — always a user — and was
+  left as it was. **This corrects the display only.** Whether the backend should carry the
+  target's type explicitly is a separate open question; nothing here settles it.
+- **Every table hid its own controls on a narrow screen.** All three wrappers were
+  `overflow-hidden`, and `overflow-x-auto` appeared nowhere in `src/` (the whole console has
+  two responsive utilities). At a 375px viewport the users table clipped 272px — taking the
+  Created, Role, and Actions columns with it, so the role `<select>` and the Delete button,
+  the two things an operator comes here to do, could not be reached — and the logs table
+  clipped 233px, hiding Detail. The page reported no overflow, so nothing hinted the columns
+  existed, and there was no scrollbar to drag. The three wrappers are now `overflow-x-auto`.
+  This restores access and nothing more: on a phone these are still wide tables, and a
+  layout actually designed for that width remains open
+  ([ROADMAP.md](../docs/ROADMAP.md) > 7).
+
+Verified live at 375px and 1280px; `pnpm build`, `pnpm lint` (0 errors), `pnpm test` (19/19),
+and `pnpm e2e` (11/11) all pass.
+
 ## Provenance cleanup (2026-08-13)
 
 Two cosmetic/dead-config remnants of the Chat Project import, independent of the functional
