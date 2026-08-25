@@ -5,19 +5,29 @@
 Provisions the AWS infrastructure this repo's Helm chart (`k8s/helm/`) deploys
 onto: an EKS cluster, RDS PostgreSQL, an S3 bucket, the ESO/IRSA secrets
 pipeline, and an ALB-fronted, ACM-certificated ingress path. See
-[ADR 0043](../../docs/ADR/0043-terraform-project-adaptation.md) for why each
+[ADR 0043](../../../docs/ADR/0043-terraform-project-adaptation.md) for why each
 resource exists and the alternatives that were rejected;
-[ADR 0038](../../docs/ADR/0038-terraform-iac-scaffold.md) for this
+[ADR 0038](../../../docs/ADR/0038-terraform-iac-scaffold.md) for this
 directory's scaffold history;
-[ADR 0044](../../docs/ADR/0044-terraform-three-state-split.md) for why the
+[ADR 0044](../../../docs/ADR/0044-terraform-three-state-split.md) for why the
 configuration below is split into three independently-appliable states
 instead of one root module.
 
-**Status**: `terraform validate` and `terraform fmt -check` pass in all three
-state directories. **Not yet applied against real AWS** — no `terraform
-apply` has been run for this config. Applying it creates real, billed AWS
-resources (EKS control plane, RDS instance, NAT Gateway, ALB) that keep
-costing money until destroyed (ADR 0043 D1).
+**Status**: **applied against real AWS — these resources exist and are being
+billed.** As of 2026-08-25, `cluster/` and `app-infra/` hold local state at
+serial 235 and 23, roughly 108 resource instances between them: a live EKS
+cluster, an RDS PostgreSQL instance, an S3 bucket, a Route53 zone, and an ACM
+certificate. `terraform validate` and `terraform fmt -check` pass in all three
+state directories.
+
+Run `terraform plan` and read it before any `apply`, and never `destroy`
+casually — the RDS instance carries `skip_final_snapshot = true` and
+`deletion_protection = false`, so anything that replaces or destroys it takes
+the data with it and leaves no final snapshot. ADR 0043's and ADR 0044's
+addenda still say this config had never been applied; they are left as written
+because an ADR records what was true when written — see
+[ROADMAP.md §7](../../../docs/ROADMAP.md#7-unscheduled--open-decisions) for the
+correction and the deferred identifier rename (ADR 0043 D1).
 
 ## Three states, one apply order
 

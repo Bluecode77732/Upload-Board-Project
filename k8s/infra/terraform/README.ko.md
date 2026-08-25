@@ -6,19 +6,28 @@
 클러스터, RDS PostgreSQL, S3 버킷, ESO/IRSA 시크릿 파이프라인, 그리고
 ALB + ACM 인증서 기반의 ingress 경로까지 포함합니다. 각 리소스가 왜 여기
 있는지, 어떤 대안이 기각됐는지는
-[ADR 0043](../../docs/ADR/0043-terraform-project-adaptation.ko.md)을,
+[ADR 0043](../../../docs/ADR/0043-terraform-project-adaptation.ko.md)을,
 이 디렉터리의 스캐폴딩 이력은
-[ADR 0038](../../docs/ADR/0038-terraform-iac-scaffold.ko.md)을,
+[ADR 0038](../../../docs/ADR/0038-terraform-iac-scaffold.ko.md)을,
 아래 구성이 왜 단일 root 모듈이 아니라 3개의 독립적으로 apply 가능한
 state로 나뉘어 있는지는
-[ADR 0044](../../docs/ADR/0044-terraform-three-state-split.ko.md)를
+[ADR 0044](../../../docs/ADR/0044-terraform-three-state-split.ko.md)를
 참고하세요.
 
-**상태**: 세 state 디렉터리 모두 `terraform validate`, `terraform fmt
--check` 통과. **실제 AWS에는 아직 apply하지 않았습니다** — 이 설정으로
-`terraform apply`를 실행한 적이 없습니다. apply하면 실제로 비용이 청구되는
-AWS 리소스(EKS 컨트롤 플레인, RDS 인스턴스, NAT 게이트웨이, ALB)가 만들어지고,
-destroy하기 전까지 계속 과금됩니다(ADR 0043 D1).
+**상태**: **실제 AWS에 apply되어 있습니다 — 리소스가 실재하며 과금 중입니다.**
+2026-08-25 기준 `cluster/`와 `app-infra/`의 로컬 state가 각각 serial 235·23이고,
+둘을 합쳐 리소스 인스턴스가 약 108개입니다: 살아 있는 EKS 클러스터, RDS
+PostgreSQL 인스턴스, S3 버킷, Route53 존, ACM 인증서. 세 state 디렉터리 모두
+`terraform validate`, `terraform fmt -check`는 통과합니다.
+
+`apply` 전에는 반드시 `terraform plan`을 돌려 읽고, `destroy`는 함부로 하지
+마세요 — RDS 인스턴스가 `skip_final_snapshot = true`, `deletion_protection =
+false` 상태라 이를 교체하거나 파괴하는 작업은 데이터를 함께 지우고 최종 스냅샷도
+남기지 않습니다. ADR 0043과 0044의 Addendum은 여전히 apply한 적 없다고 적고
+있는데, ADR은 작성 시점의 사실을 기록하므로 그대로 두었습니다 — 정정과 보류된
+식별자 개명 건은
+[ROADMAP.ko.md 7절](../../../docs/ROADMAP.ko.md#7-미일정--미결-사항)을 보세요
+(ADR 0043 D1).
 
 ## 3개의 state, 하나의 apply 순서
 

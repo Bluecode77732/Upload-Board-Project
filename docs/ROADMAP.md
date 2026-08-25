@@ -533,8 +533,10 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   inside the existing instance, `pg_dump`/restore, then re-point Terraform), never a
   Terraform-driven replacement. Note that `Blueprint = upload-board-project` tags come from the
   upstream `terraform-aws-eks-blueprints` module, so a complete rename was never achievable
-  here anyway. Also needs fixing when touched: ADR 0043/0044's "never applied" addenda and the
-  matching sentence in `CLAUDE.md`.
+  here anyway. The "never applied" claim was corrected in `CLAUDE.md`(+ko) and
+  `k8s/infra/terraform/README.md`(+ko) on 2026-08-25; **ADR 0043's and 0044's addenda still
+  carry it and are deliberately left as written** — an ADR records what was true when written,
+  so this row is the correction of record.
 - **Explore and implement a display typeface** (recorded 2026-08-25) — **deliberately left
   open**, no constraint pre-committed: web font, self-hosted, or staying on system fonts are
   all still candidates, and the exploration decides between them. The gap it addresses is
@@ -627,7 +629,7 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   (Production DevOps stack introduction, above).
 - ADR 0026 content-endpoint follow-ups (recorded 2026-08-01, from a post-implementation
   review of `GET /file/:id/content`,
-  [file-content.controller.ts](backend/file/file-content.controller.ts)), severity-ordered:
+  [file-content.controller.ts](../backend/file/file-content.controller.ts)), severity-ordered:
   1. **[medium] Missing stream error handling** — `createReadStream(...).pipe(res)` (200 and
      206 paths) attaches no `'error'` listener, so a read failure after headers are sent (a
      `DELETE /file/:id` racing an in-progress stream, or a disk fault) becomes an unhandled

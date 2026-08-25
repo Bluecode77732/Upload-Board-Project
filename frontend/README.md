@@ -2,8 +2,10 @@
 
 React + Vite (TypeScript) SPA for Sharenpo. Lives as the
 `frontend/` subfolder of the project repository (alongside the backend at the
-repo root) and consumes the backend REST API over HTTP; admin lives here as an
-`/admin` route section (backend ADR 0010).
+repo root) and consumes the backend REST API over HTTP. There is **no** `/admin`
+route in this app — ADR 0010 originally reserved one, but the stub was deleted
+2026-08-06 and the operator surface lives in the sibling `admin/` console
+instead (backend ROADMAP.md > Stage 5).
 
 ## Stack
 

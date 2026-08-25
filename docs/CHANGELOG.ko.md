@@ -13,6 +13,30 @@
 ## [Unreleased]
 
 ### 변경
+- **Sharenpo 개명 작업 중 발견한 문서 결함 3건, 기록만 남기지 않고 바로 수정(2026-08-25)** —
+  세 건 모두 그 작업 이전부터 있던 것이고, 이번 개명이 만든 것은 하나도 없다.
+  **`CLAUDE.md`(+ko)와 `k8s/infra/terraform/README.md`(+ko)가 Terraform을 실제 AWS에 적용한
+  적 없다고 말하고 있었다.** 적용돼 있다: `cluster/`와 `app-infra/`의 로컬 state가 각각
+  serial 235·23이고 둘을 합쳐 리소스 인스턴스가 약 108개 — 살아 있는 EKS 클러스터, RDS
+  인스턴스, S3 버킷, Route53 존, ACM 인증서다. 특히 `CLAUDE.md`의 해당 항목은 "여기 있는 AWS
+  리소스가 실제로 존재한다고 가정하지 않는다"로 끝나 실제 위험을 정반대로 안내하고 있었고,
+  차트 옆 README는 그 말을 **상태** 항목에 그대로 반복하고 있었다. 두 문서 모두 이제 리소스가
+  실재하며 과금 중임을 밝히고, `apply` 전에 `terraform plan`을 돌려 읽으라고 지시한다 — RDS가
+  `skip_final_snapshot = true`, `deletion_protection = false`라 교체하는 순간 데이터가 스냅샷
+  없이 사라지기 때문이다. ADR 0043·0044의 Addendum에는 옛 서술이 **일부러** 남아 있다. ADR은
+  작성 시점의 사실을 기록하므로, 정정의 기준은 [ROADMAP.ko.md](ROADMAP.ko.md) 7절이다.
+  **`frontend/README.md`(+ko)가 관리자 화면이 그 앱 안에 `/admin` 라우트로 있다고 적고
+  있었다.** 소스로 확인한 결과 거짓이다: `App.tsx`에 `/admin` 라우트가 없고
+  `src/features/admin/`도 없다 — 스텁은 2026-08-06에 삭제됐고 운영자 화면은 형제 디렉터리인
+  `admin/` 콘솔이다. `frontend/CLAUDE.md`는 이미 그렇게 적고 있었는데 README만 갱신되지 않은
+  상태였다.
+  **깨진 상대 링크 18개**를 `docs/CHANGELOG.md`(+ko), `docs/ROADMAP.md`(+ko),
+  `k8s/infra/terraform/README.md`(+ko)에서 고쳤다. 전부 경로 깊이 문제였다 —
+  `frontend/docs/STYLE-PLAN.md`(10곳)와 `backend/file/file-content.controller.ts`(2곳)는
+  `docs/` 안에서 저장소 루트 기준으로 쓰여 있었고, Terraform README의 ADR 링크 3개(언어 2개
+  합쳐 6곳)는 3단계 깊이 디렉터리에서 `../../`를 쓰고 있었다. 손댄 모든 문서에 링크 검사기를
+  돌려 확인했다 — 수정 전 18개, 수정 후 0개. 개명 탓으로 오인하지 않도록 `HEAD` 기준으로도
+  18개임을 먼저 확인했다.
 - **제품명을 `Sharenpo`로 통일(2026-08-25)** — 저장소가 세 가지 이름을 동시에 말하고 있었다.
   `.github/workflows/ci.yml`의 워크플로는 이미 `Sharenpo CI/CD`였고 배포 이미지도 이미
   `bluecode1775/sharenpo`였는데, `README.md`의 H1과 두 `package.json`, Helm 차트는
@@ -595,7 +619,7 @@
 
 - **`frontend/`: `PostDetailPage`, `CommentThread`, `CommentForm`을 CSS Modules로
   전환·재디자인 — 확정된 스타일 전면 개편의 5개 라우트 페이지 중 마지막**
-  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) 항목 7). 각
+  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md) 항목 7). 각
   컴포넌트마다 동일 위치에 `*.module.css`를 배치했다(`PostDetailPage.module.css`,
   `CommentThread.module.css`, `CommentForm.module.css`) — 마크업 구조·상태·API 호출은
   그대로 두고 `style={{}}` → `className={styles.x}`만 바꿨다. `PostDetailPage`의
@@ -617,7 +641,7 @@
   관여하지 않는다.
 - **`frontend/`: `PostBoard`, `PostForm`, `FilePicker`를 CSS Modules로 전환·재디자인.**
   확정된 스타일 전면 개편의 4단계
-  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) 항목 6). 각 컴포넌트마다
+  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md) 항목 6). 각 컴포넌트마다
   동일 위치에 `*.module.css`를 배치했다(`PostBoard.module.css`, `PostForm.module.css`,
   `FilePicker.module.css`) — 마크업 구조·상태·API 호출은 그대로 두고 `style={{}}` →
   `className={styles.x}`만 바꿨다. `PostBoard.module.css`는 (`DashboardPage.module.css`를
@@ -633,7 +657,7 @@
   가능한 라디오 목록, 행 레이아웃, 페이지네이션 어디에서도 시각적 회귀가 없었다.
 - **`frontend/`: `FileDetailPage`와 `VisibilityBadge`를 CSS Modules로 전환·재디자인하고,
   오래된 제목 겹침 버그를 근본 원인 수준에서 수정.** 확정된 스타일 전면 개편의 3단계
-  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) 항목 5). 두 컴포넌트 모두
+  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md) 항목 5). 두 컴포넌트 모두
   동일 위치에 `*.module.css`를 배치했다(`FileDetailPage.module.css`,
   `VisibilityBadge.module.css`) — 플레이어를 테두리·둥근 모서리 패널로 감쌌고, 공유 링크
   박스와 Manage 패널을 토큰 체계로 재디자인했으며, 앱 전역 `#root { text-align: center }`
@@ -659,7 +683,7 @@
   전부(private/public/unlisted — 공유 링크 박스와 public/unlisted의 실제 영상 재생 포함).
 - **`frontend/`: `LoginPage`와 파일 게시판(`DashboardPage` + `FileBoard` + `UploadForm`)을
   CSS Modules로 전환하고 재디자인.** 확정된 스타일 전면 개편의 2단계
-  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) 항목 3-4), 아래 토큰 기반
+  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md) 항목 3-4), 아래 토큰 기반
   작업 위에 올라간 첫 페이지들이다. 각 컴포넌트마다 동일 위치에 `*.module.css`를
   배치했다(`LoginPage.module.css`, `DashboardPage.module.css`, `FileBoard.module.css`,
   `UploadForm.module.css`) — 마크업 구조·상태·API 호출은 그대로이고 `style={{}}` →
@@ -675,7 +699,7 @@
   확인했다.
 - **`frontend/`: 토큰 기반 테마 기반 작업 — `ThemeProvider` + 명시적 라이트/다크 토글,
   `NavBar`를 CSS Modules로 전환.** 확정된 스타일 전면 개편의 1단계
-  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md), 2026-08-14 결정) — 이후
+  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md), 2026-08-14 결정) — 이후
   페이지별 재디자인 프롬프트가 전부 이 토큰 세트에 의존한다. `index.css`의 기존
   `--accent`/`--bg`/`--text-h` 블록을 병기가 아니라 **교체**했다 — 같은 날 STYLE-PLAN.md가
   확정한 팔레트로: `--brand`/`--brand-hover`/`--brand-contrast`,

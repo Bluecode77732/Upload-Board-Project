@@ -494,8 +494,10 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   이어야 한다 — 기존 인스턴스 안에 새 이름의 데이터베이스와 롤을 만들고 `pg_dump`/복원한 뒤
   Terraform이 그쪽을 가리키게 하는 방식이며, Terraform이 주도하는 교체는 안 된다. 참고로
   `Blueprint = upload-board-project` 태그는 upstream `terraform-aws-eks-blueprints` 모듈이
-  붙이는 값이라 완전한 통일은 애초에 불가능하다. 착수할 때 같이 고쳐야 할 것: ADR 0043·0044의
-  "적용된 적 없음" 추가 기록과 `CLAUDE.md`의 해당 문장.
+  붙이는 값이라 완전한 통일은 애초에 불가능하다. "적용된 적 없음"이라는 서술은 2026-08-25에
+  `CLAUDE.md`(+ko)와 `k8s/infra/terraform/README.md`(+ko)에서 정정했다. **ADR 0043·0044의
+  Addendum에는 아직 그대로 남아 있으며, 이는 의도적이다** — ADR은 작성 시점의 사실을 기록하므로
+  고치지 않고, 정정의 기준은 이 행이다.
 - **디스플레이 서체 탐구 후 구현** (2026-08-25 기록) — **의도적으로 열어 둔다.** 제약을 미리
   박지 않았다: 웹폰트, 셀프호스팅, 시스템 폰트 유지가 모두 후보이며 그 선택 자체가 탐구의
   결과물이다. 메우려는 공백은 구체적이다: `index.css`가 `--heading`과 `--sans`를 **바이트
@@ -579,7 +581,7 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   앱 안에서는 하지 않음)은 확정됐다 — 위 Helm/K8s 작업과 함께 착수하도록
   스케줄링한다.
 - ADR 0026 콘텐츠 엔드포인트 후속 (2026-08-01 기록, `GET /file/:id/content`
-  [file-content.controller.ts](backend/file/file-content.controller.ts) 구현 후 검토), 심각도 순:
+  [file-content.controller.ts](../backend/file/file-content.controller.ts) 구현 후 검토), 심각도 순:
   1. **[중간] 스트림 에러 미처리** — 200·206 경로의 `createReadStream(...).pipe(res)`에
      `'error'` 리스너가 없어, 헤더가 나간 뒤 읽기 실패(스트리밍 중 `DELETE /file/:id` 경합,
      디스크 오류)가 미처리 `'error'` 이벤트로 프로세스를 크래시시킨다(Never Do Group 1). 수정:

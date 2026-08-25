@@ -13,6 +13,30 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Three documentation defects found during the Sharenpo rename pass, fixed rather than
+  filed (2026-08-25)** — all three predate that work; none were introduced by it.
+  **`CLAUDE.md`(+ko) and `k8s/infra/terraform/README.md`(+ko) said the Terraform config had
+  never been applied against real AWS.** It has: `cluster/` and `app-infra/` hold local state
+  at serial 235 and 23, roughly 108 resource instances between them — a live EKS cluster, an
+  RDS instance, an S3 bucket, a Route53 zone, and an ACM certificate. `CLAUDE.md`'s entry ended
+  with "Do not assume any AWS resource here actually exists", which inverted the real risk, and
+  the chart-adjacent README repeated it under a **Status** heading. Both now state that the
+  resources exist and are billed, and both instruct running `terraform plan` before any `apply`
+  — the RDS instance carries `skip_final_snapshot = true` with `deletion_protection = false`,
+  so anything that replaces it takes the data and leaves no snapshot. ADR 0043's and 0044's
+  addenda still carry the old claim **on purpose**: an ADR records what was true when written,
+  so [ROADMAP.md](ROADMAP.md) §7 is the correction of record.
+  **`frontend/README.md`(+ko) claimed admin lives in that app as an `/admin` route section.**
+  Verified false against the source: there is no `/admin` route in `App.tsx` and no
+  `src/features/admin/` — the stub was deleted 2026-08-06 and the operator surface is the
+  sibling `admin/` console. `frontend/CLAUDE.md` already said so; the README had simply never
+  been updated to match.
+  **18 broken relative links** across `docs/CHANGELOG.md`(+ko), `docs/ROADMAP.md`(+ko), and
+  `k8s/infra/terraform/README.md`(+ko), all wrong-depth: `frontend/docs/STYLE-PLAN.md` (10) and
+  `backend/file/file-content.controller.ts` (2) were written repo-relative from inside `docs/`,
+  and the Terraform README's three ADR links (×2 languages) used `../../` from a directory
+  three levels deep. Verified by a link checker over every touched document — 18 broken before,
+  0 after, with the count confirmed against `HEAD` first so none could be blamed on the rename.
 - **Product name unified on `Sharenpo` (2026-08-25)** — the repository had been saying three
   different things. `.github/workflows/ci.yml`'s workflow was already `Sharenpo CI/CD` and the
   published image already `bluecode1775/sharenpo`, while `README.md`'s H1, both `package.json`s,
@@ -611,7 +635,7 @@ development line (package.json version).
 
 - **`frontend/`: `PostDetailPage`, `CommentThread`, and `CommentForm` converted to CSS
   Modules and restyled — the last of the 5 route pages in the confirmed style overhaul**
-  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) item 7). Each component
+  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md) item 7). Each component
   gained a colocated `*.module.css` (`PostDetailPage.module.css`,
   `CommentThread.module.css`, `CommentForm.module.css`); markup structure, state, and API
   calls are unchanged — only `style={{}}` → `className={styles.x}`. `PostDetailPage`'s
@@ -632,7 +656,7 @@ development line (package.json version).
   is untouched by this change — no file this item edited is involved.
 - **`frontend/`: `PostBoard`, `PostForm`, and `FilePicker` converted to CSS Modules and
   restyled.** Stage 4 of the confirmed style overhaul
-  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) item 6). Each component
+  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md) item 6). Each component
   gained a colocated `*.module.css` (`PostBoard.module.css`, `PostForm.module.css`,
   `FilePicker.module.css`); markup structure, state, and API calls are unchanged — only
   `style={{}}` → `className={styles.x}`. `PostBoard.module.css` carries both a `.page`
@@ -650,7 +674,7 @@ development line (package.json version).
   pagination.
 - **`frontend/`: `FileDetailPage` and `VisibilityBadge` converted to CSS Modules and
   restyled, and the long-standing title-overlap bug fixed at its root cause.** Stage 3 of
-  the confirmed style overhaul ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md)
+  the confirmed style overhaul ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md)
   item 5). Both components gained a colocated `*.module.css`
   (`FileDetailPage.module.css`, `VisibilityBadge.module.css`); the player is now wrapped
   in a bordered/rounded panel, the share-link box and Manage panel were restyled onto the
@@ -678,7 +702,7 @@ development line (package.json version).
   including the share-link box and video playback for public/unlisted).
 - **`frontend/`: `LoginPage` and the file board (`DashboardPage` + `FileBoard` +
   `UploadForm`) converted to CSS Modules and restyled.** Stage 2 of the confirmed style
-  overhaul ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md) items 3-4), the
+  overhaul ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md) items 3-4), the
   first pages built on the token foundation below. Each component gained a colocated
   `*.module.css` (`LoginPage.module.css`, `DashboardPage.module.css`, `FileBoard.module.css`,
   `UploadForm.module.css`); markup structure, state, and API calls are unchanged — only
@@ -695,7 +719,7 @@ development line (package.json version).
   light and dark mode.
 - **`frontend/`: token-based theming foundation — `ThemeProvider` + explicit light/dark
   toggle, `NavBar` converted to CSS Modules.** Stage 1 of the confirmed style overhaul
-  ([`frontend/docs/STYLE-PLAN.md`](frontend/docs/STYLE-PLAN.md), decided 2026-08-14) — every
+  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md), decided 2026-08-14) — every
   later page-restyle prompt depends on this token set. `index.css`'s prior
   `--accent`/`--bg`/`--text-h` block is **replaced**, not extended, with the palette
   STYLE-PLAN.md confirmed the same day: `--brand`/`--brand-hover`/`--brand-contrast`,

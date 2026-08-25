@@ -2,8 +2,9 @@
 
 Sharenpo를 위한 React + Vite(TypeScript) SPA. 프로젝트 저장소의
 `frontend/` 하위 폴더로 존재하며(리포지토리 루트의 백엔드와 나란히), 백엔드
-REST API를 HTTP로 소비한다. 관리자 화면도 이 안에 `/admin` 라우트 섹션으로
-들어 있다(백엔드 ADR 0010).
+REST API를 HTTP로 소비한다. 이 앱에는 `/admin` 라우트가 **없다** — ADR 0010이
+처음에 자리를 잡아 뒀지만 그 스텁은 2026-08-06에 삭제됐고, 운영자 화면은 형제
+디렉터리인 `admin/` 콘솔이 맡는다(백엔드 ROADMAP.md > Stage 5).
 
 ## 스택
 
