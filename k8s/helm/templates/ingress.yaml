@@ -8,9 +8,9 @@ ingress 블록 주석 참고.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "upload-board-project.fullname" . }}
+  name: {{ include "sharenpo.fullname" . }}
   labels:
-    {{- include "upload-board-project.labels" . | nindent 4 }}
+    {{- include "sharenpo.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -34,7 +34,7 @@ spec:
             backend:
               # 이 차트가 만드는 Service를 그대로 가리킨다 — 별도 백엔드 없음.
               service:
-                name: {{ include "upload-board-project.fullname" $ }}
+                name: {{ include "sharenpo.fullname" $ }}
                 port:
                   number: {{ $.Values.service.port }}
           {{- end }}

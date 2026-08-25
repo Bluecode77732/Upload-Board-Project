@@ -16,6 +16,24 @@
   box-shadow: var(--shadow);
 }
 
+/* Brand lockup above the form heading — reuses the app favicon as the mark so the
+   browser tab and the login screen carry the same one. */
+.lockup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 0 0 8px;
+}
+
+.lockup span {
+  font-family: var(--heading);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--brand);
+}
+
 .heading {
   margin: 0 0 20px;
   text-align: center;

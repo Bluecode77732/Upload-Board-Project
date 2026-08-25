@@ -1,4 +1,4 @@
-# upload-board-project의 기본값 파일.
+# sharenpo의 기본값 파일.
 # ADR 0041(docs/ADR/0041-helm-chart-project-adaptation.md)에 맞춰 프로젝트 전용으로
 # 적응시켰다 — 아래 각 기본값이 왜 이 값인지는 그 ADR 참고.
 

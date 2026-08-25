@@ -1,14 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "upload-board-project.fullname" . }}
+  name: {{ include "sharenpo.fullname" . }}
   labels:
-    {{- include "upload-board-project.labels" . | nindent 4 }}
+    {{- include "sharenpo.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "upload-board-project.selectorLabels" . | nindent 6 }}
+      {{- include "sharenpo.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -16,7 +16,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "upload-board-project.selectorLabels" . | nindent 8 }}
+        {{- include "sharenpo.selectorLabels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -46,7 +46,7 @@ spec:
           {{- /* 비밀 아닌 값은 ConfigMap, 비밀값은 existingSecret에서 온다 — 이 차트는 Secret을 직접 만들지 않는다(ADR 0033/0041). */}}
           envFrom:
             - configMapRef:
-                name: {{ include "upload-board-project.fullname" . }}
+                name: {{ include "sharenpo.fullname" . }}
             - secretRef:
                 name: {{ required "secrets.existingSecret is required — create the Secret first, see k8s/helm/README.md" .Values.secrets.existingSecret }}
           {{- /* liveness: DB 상태와 무관 — 프로세스 자체만 확인(ADR 0031). */}}

@@ -34,7 +34,7 @@ services:
   # (ADR 0032) — the local model for the eventual Kubernetes Job.
   migrate:
     build: .
-    image: upload-board-project-api:local
+    image: sharenpo-api:local
     depends_on:
       db:
         condition: service_healthy
@@ -47,7 +47,7 @@ services:
 
   api:
     build: .
-    image: upload-board-project-api:local
+    image: sharenpo-api:local
     depends_on:
       db:
         condition: service_healthy

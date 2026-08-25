@@ -23,7 +23,7 @@ jest.mock('@aws-sdk/s3-request-presigner', () => ({
 const mockConfigService = {
   getOrThrow: jest.fn((key: string) => {
     if (key === 'AWS_REGION') return 'ap-northeast-2';
-    if (key === 'S3_BUCKET') return 'upload-board-test-bucket';
+    if (key === 'S3_BUCKET') return 'sharenpo-test-bucket';
     if (key === 'CONTENT_SIGNED_URL_TTL_SECONDS') return 300;
     throw new Error(`unexpected key ${key}`);
   }),
@@ -47,7 +47,7 @@ describe('S3Storage', () => {
       expect(send).toHaveBeenCalledWith(
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
+            Bucket: 'sharenpo-test-bucket',
             Key: 'temp/temp_a.mp4',
             Body: Buffer.from('data'),
           },
@@ -79,8 +79,8 @@ describe('S3Storage', () => {
         1,
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
-            CopySource: 'upload-board-test-bucket/temp%2Ftemp_a.mp4',
+            Bucket: 'sharenpo-test-bucket',
+            CopySource: 'sharenpo-test-bucket/temp%2Ftemp_a.mp4',
             Key: 'granted/granted_a.mp4',
           },
         }),
@@ -89,7 +89,7 @@ describe('S3Storage', () => {
         2,
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
+            Bucket: 'sharenpo-test-bucket',
             Key: 'temp/temp_a.mp4',
           },
         }),
@@ -107,7 +107,7 @@ describe('S3Storage', () => {
       expect(send).toHaveBeenCalledWith(
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
+            Bucket: 'sharenpo-test-bucket',
             Key: 'granted/granted_a.mp4',
           },
         }),
@@ -136,7 +136,7 @@ describe('S3Storage', () => {
       expect(send).toHaveBeenCalledWith(
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
+            Bucket: 'sharenpo-test-bucket',
             Key: 'granted/granted_a.mp4',
           },
         }),
@@ -155,7 +155,7 @@ describe('S3Storage', () => {
       expect(send).toHaveBeenCalledWith(
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
+            Bucket: 'sharenpo-test-bucket',
             Key: 'granted/granted_a.mp4',
             Range: 'bytes=0-9',
           },
@@ -186,7 +186,7 @@ describe('S3Storage', () => {
       expect(send).toHaveBeenCalledWith(
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
+            Bucket: 'sharenpo-test-bucket',
             Delete: {
               Objects: [
                 { Key: 'granted/granted_a.mp4' },
@@ -249,7 +249,7 @@ describe('S3Storage', () => {
         1,
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
+            Bucket: 'sharenpo-test-bucket',
             Prefix: 'temp/',
             ContinuationToken: undefined,
           },
@@ -282,7 +282,7 @@ describe('S3Storage', () => {
         expect.anything(),
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
+            Bucket: 'sharenpo-test-bucket',
             Key: 'granted/granted_a.mp4',
             ResponseContentType: 'video/mp4',
           },

@@ -56,6 +56,10 @@ export function LoginPage() {
   return (
     <main className={styles.page}>
       <div className={styles.card}>
+        <div className={styles.lockup}>
+          <img src="/favicon.svg" alt="" width={21} height={20} />
+          <span>Sharenpo</span>
+        </div>
         <h1 className={styles.heading}>{mode === 'signin' ? 'Sign in' : 'Register'}</h1>
         <form onSubmit={onSubmit} className={styles.form}>
           <label className={styles.field}>

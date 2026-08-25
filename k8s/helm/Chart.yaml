@@ -1,6 +1,6 @@
 apiVersion: v2
-name: upload-board-project
-description: NestJS REST API backend for the Upload Board Project — authenticated file upload and board management (ADR 0041)
+name: sharenpo
+description: NestJS REST API backend for Sharenpo — authenticated file upload and board management (ADR 0041)
 type: application
 
 # 차트 버전 — 템플릿/values를 바꿀 때마다 올린다(SemVer).

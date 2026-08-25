@@ -22,7 +22,7 @@ import {
 // the temp_ → granted_ physical promotion, and the deletion policy — confirmed account
 // cascade, its 409 refusal, and stored-file removal (ADR 0020). Requires the local
 // Postgres on 5435 (docker compose up -d db); the suite owns a throwaway DB (see e2e-utils).
-describe('Upload Board API (e2e)', () => {
+describe('Sharenpo API (e2e)', () => {
   let app: INestApplication;
   let server: App;
   // Physical files a test created; unlinked after each test so disk stays clean.

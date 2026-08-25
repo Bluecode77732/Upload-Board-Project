@@ -1,6 +1,6 @@
-{{ include "upload-board-project.fullname" . }} has been deployed.
+{{ include "sharenpo.fullname" . }} has been deployed.
 
-Service: {{ include "upload-board-project.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+Service: {{ include "sharenpo.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
 
 {{- if not .Values.secrets.existingSecret }}
 

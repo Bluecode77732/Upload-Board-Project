@@ -39,9 +39,9 @@ async function bootstrap() {
   );
 
   const config = new DocumentBuilder()
-    .setTitle('File Upload Board')
+    .setTitle('Sharenpo')
     .setDescription(
-      "To test File Upload Board, pop up the lock and register a user with any of email and password you want in Authentication API, and then type in the same credentials in the register API. Then repeat the same process you just did in each endpoints when you find Basic Authorization. If you want to receive Bearer Token, you can go to 'POST /auth/signin' or 'POST /auth/signin/local' in Authentication API and fill in the Bearer Autorization blank.",
+      "To test Sharenpo, pop up the lock and register a user with any of email and password you want in Authentication API, and then type in the same credentials in the register API. Then repeat the same process you just did in each endpoints when you find Basic Authorization. If you want to receive Bearer Token, you can go to 'POST /auth/signin' or 'POST /auth/signin/local' in Authentication API and fill in the Bearer Autorization blank.",
     )
     .setVersion('1.0')
     .addBearerAuth()

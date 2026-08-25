@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "upload-board-project.fullname" . }}
+  name: {{ include "sharenpo.fullname" . }}
   labels:
-    {{- include "upload-board-project.labels" . | nindent 4 }}
+    {{- include "sharenpo.labels" . | nindent 4 }}
   annotations:
     # hook이 아니면 이 ConfigMap은 일반 리소스라 모든 pre-install hook이 끝난 뒤에야
     # 생성된다 — 그런데 migration-job.yml의 pre-install hook은 이 ConfigMap이

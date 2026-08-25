@@ -20,7 +20,7 @@ import { AddAuditLogTargetType1787578451680 } from '../backend/migrations/178757
 // suite owns its data. New migrations must be appended here or boot fails loudly.
 // The name is set by test/e2e-env.ts before AppModule is imported (so ConfigModule
 // captures it); reading it back here keeps a single source of truth.
-const TEST_DB_NAME = process.env.DB_DATABASE ?? 'upload_board_e2e';
+const TEST_DB_NAME = process.env.DB_DATABASE ?? 'sharenpo_e2e';
 const MIGRATIONS = [
   InitialSchema1784678400000,
   AddUserRefreshTokenHash1784851200000,
