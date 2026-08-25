@@ -133,7 +133,7 @@ state 파일 안에만 존재합니다(ADR 0043 D7/D8).
 
    ```sh
    cd ../../helm
-   helm install upload-board . \
+   helm install sharenpo . \
      --set secrets.existingSecret=$(terraform -chdir=../infra/terraform/app-infra output -raw app_secret_k8s_name) \
      --set env.DB_HOST=$(terraform -chdir=../infra/terraform/app-infra output -raw db_host) \
      --set env.DB_DATABASE=$(terraform -chdir=../infra/terraform/app-infra output -raw db_name) \
@@ -172,7 +172,7 @@ Controller가 `Ingress` 객체를 조정할 수 있는 상태가 되고 `app-inf
 인증서를 가진 뒤, 다음으로 켤 수 있습니다:
 
 ```sh
-helm upgrade upload-board . \
+helm upgrade sharenpo . \
   --reuse-values \
   --set ingress.enabled=true \
   --set ingress.className=alb \
@@ -214,7 +214,7 @@ ALB ingress를 한 번이라도 켰다면, 원래 Istio 예제와 같은 이유�
 `addons/`(또는 ALB가 그보다 오래 남아 있었다면 `cluster/`) 안에서
 `terraform destroy`가 VPC `DependencyViolation` 오류로 타임아웃할 수
 있습니다 — ALB의 보안 그룹이 명령보다 더 오래 살아남을 수 있기 때문입니다.
-Helm 릴리스를 먼저 제거하고(`helm uninstall upload-board`), AWS 콘솔에서
+Helm 릴리스를 먼저 제거하고(`helm uninstall sharenpo`), AWS 콘솔에서
 ALB와 그 보안 그룹이 실제로 사라졌는지 확인한 뒤 위 순서대로 destroy하세요.
 
 `app-infra/`(RDS 데이터, Route53 영역, Secrets Manager)는 남긴 채

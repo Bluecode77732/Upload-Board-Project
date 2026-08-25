@@ -91,8 +91,8 @@ and `pnpm e2e` (11/11) all pass.
 Two cosmetic/dead-config remnants of the Chat Project import, independent of the functional
 adaptation below — colors and layout are otherwise untouched:
 
-- `index.html`'s `<title>` was the generic `"Admin Panel"` — now `"Upload Board Admin"`, with a
-  matching `admin/public/favicon.svg` (a plain "UB" initials mark) linked from `<head>`.
+- `index.html`'s `<title>` was the generic `"Admin Panel"` — now `"Sharenpo Admin"`, with a
+  matching `admin/public/favicon.svg` (a plain "S" initials mark) linked from `<head>`.
 - `vercel.json`'s CSP `connect-src` still pointed at the Chat Project's live Railway deployment
   (`https://chat-project-production-3b22.up.railway.app`) — unreachable dead config, but wrong if
   ever read as a template. Replaced with `http://localhost:3000` (this backend's local dev

@@ -13,6 +13,58 @@
 ## [Unreleased]
 
 ### 변경
+- **제품명을 `Sharenpo`로 통일(2026-08-25)** — 저장소가 세 가지 이름을 동시에 말하고 있었다.
+  `.github/workflows/ci.yml`의 워크플로는 이미 `Sharenpo CI/CD`였고 배포 이미지도 이미
+  `bluecode1775/sharenpo`였는데, `README.md`의 H1과 두 `package.json`, Helm 차트는
+  *Upload Board Project*라고 했다. 그리고 `frontend/`에는 이름이 아예 없어서 `package.json`도
+  브라우저 탭도 `frontend`였는데, 정작 사용자가 가장 먼저 보는 것이 그 탭이다.
+  [ROADMAP.ko.md](ROADMAP.ko.md) §7에서 결정했고(커밋 `eae0e27`), 범위는 Helm을 포함한 전면
+  통일로 확정했다.
+  **Helm.** `Chart.yaml`의 `name:`을 `sharenpo`로 바꾸고, `upload-board-project.*` 헬퍼 참조
+  **27곳**을 모두 치환했다 — `_helpers.tpl`(8), `deployment.yml`(5), `migration-job.yml`(4),
+  `ingress.yaml`(3), `service.yaml`(3), `configmap.yaml`(2), 여기에 **ROADMAP의 파일별 집계에서
+  빠져 있던 `NOTES.txt`(2)와 `values.yaml` 헤더 주석(1)**까지. `helm lint`와 `helm template`로
+  확인했다: `app.kubernetes.io/name: sharenpo`, `helm.sh/chart: sharenpo-0.2.0`.
+  **차트 README의 설치 안내는 일괄 치환이 아니라 다시 따져서 고쳤다.** `_helpers.tpl`의
+  `fullname` 헬퍼는 차트 이름이 아니라 `.Release.Name`이다. 즉 차트 이름만 바꿨다면
+  `helm install upload-board .`는 `sharenpo` 차트에서 `upload-board-*` 오브젝트를 만들어냈을
+  것이다. 그래서 안내문의 릴리스명은 별개의 판단으로 바꿨고, 오브젝트 이름은 릴리스명을 따르며
+  `Chart.yaml`을 따르는 것은 `app.kubernetes.io/name` 라벨과 `helm.sh/chart`뿐이라는 설명을
+  한 문단 추가했다. 두 런북이 어긋나지 않도록 `k8s/infra/terraform/README.md`의
+  `helm install`·`upgrade`·`uninstall` 세 명령도 같이 맞췄다.
+  **화면에 보이는 이름.** `frontend/index.html`의 `<title>`을 `frontend` → `Sharenpo`,
+  `admin/index.html`을 `Upload Board Admin` → `Sharenpo Admin`, `admin/public/favicon.svg`의
+  `UB` 이니셜 마크를 `S`로 바꿨다. 제품명이 전혀 없던 `LoginPage.tsx`에는 브랜드 락업을
+  추가했다 — 기존 `frontend/public/favicon.svg` 마크를 21px로 재사용하고 그 옆에 `var(--brand)`
+  색 `Sharenpo` 워드마크를 뒀으며, 렌더한 세 가지 안 중 개발자가 고른 형태다.
+  `frontend/public/favicon.svg` 자체는 글자가 없는 추상 마크라 손댈 필요가 없었다.
+  **기계적 식별자.** 루트 `package.json`을 `sharenpo`로, `frontend`를 `sharenpo-frontend`로,
+  `admin`의 `admin`을 `sharenpo-admin`으로(원래 범위 밖에서 발견한, `frontend`와 똑같이 이름이
+  없던 문제) 바꿨다. `docker-compose.yml`의 `upload-board-project-api:local` 이미지 태그 2곳은
+  `sharenpo-api:local`로, `backend/main.ts`의 Swagger `setTitle`과 설명문, e2e 데이터베이스
+  `upload_board_e2e` → `sharenpo_e2e`(하네스가 실행마다 drop·create하므로 자체 완결적)와 그
+  이름을 기록한 `CLAUDE.md`(+ko), 그리고 `s3.storage.spec.ts`의 모크 버킷명도 함께 정리했다.
+  **일부러 바꾸지 않은 것.** ADR 본문과 기존 CHANGELOG 항목은 작성 시점의 사실을 기록한
+  것이므로 그대로 뒀다. `bluecode1775/sharenpo`는 이미 정답이다. `docker-compose.yml`과 두
+  README에 있는 레거시 `upload-board-pg` 참조는 개발 머신에 실제로 존재하는 수동 생성 컨테이너를
+  가리키므로, 이름을 바꾸면 안내문이 거짓이 된다.
+  **Terraform은 보류했고, 그 과정에서 낡은 서술을 발견했다.** `CLAUDE.md`와 ADR 0043·0044의
+  추가 기록은 Terraform이 실제 AWS에 적용된 적이 없다고 말한다. 더는 사실이 아니다. `cluster/`와
+  `app-infra/`의 상태 파일이 각각 serial 235·23이고 둘을 합쳐 리소스 인스턴스 108개를 담고
+  있으며, 살아 있는 EKS 클러스터·RDS 인스턴스·S3 버킷이 그 안에 있다. 변수 기본값을 바꾼 뒤
+  `terraform plan`을 돌린 결과 `app-infra`는 **10 add / 2 change / 8 destroy**였다 —
+  `aws_db_instance.db must be replaced`인데, `db_name`과 `username`이 둘 다 ForceNew인 데다
+  인스턴스가 `skip_final_snapshot = true`, `deletion_protection = false` 상태라 교체가 곧 최종
+  스냅샷 없는 데이터 소멸을 뜻한다. `cluster`는 **34 add / 20 change / 34 destroy**로
+  `aws_eks_cluster.this[0] must be replaced`가 포함됐다. 아무것도 apply하지 않았고 변수 기본값은
+  되돌렸다. 그 README에서 남긴 것은 릴리스명 변경뿐인데, 릴리스명은 AWS 리소스 이름이 아니기
+  때문이다. S3 버킷은 애초에 위험하지 않았다 — `s3_bucket_name`은 기본값이 없어 apply 때 주입되는
+  값이라 plan에서도 in-place 갱신으로 찍혔다. 도메인 계층은 이미 새 이름이었다(Route53 존과 ACM
+  인증서가 `sharenpo.com`, IAM 사용자가 `sharenpo-user`). 따라서 이 보류에 걸리는 사용자 대면
+  표면은 없다. 후속 항은 [ROADMAP.ko.md](ROADMAP.ko.md) §7에 남겼다.
+  **검증**: `pnpm lint` 0 에러, 단위 테스트 220/220, 세 패키지 `pnpm build` 모두 통과,
+  `helm lint`/`helm template`, `docker compose config`, 그리고 실제 프로덕션 빌드로 렌더한
+  로그인 화면 확인.
 - **`admin/`: 감사 로그가 대상 종류를 `action`에서 역추론하지 않고 서버의 `targetType`을 읽도록
   변경(2026-08-25, 커밋 `d38d9dc`)** — `admin/`만 변경했고 백엔드·계약·스키마 변경은 없다.
   아래 [ADR 0045](ADR/0045-audit-log-target-type.ko.md) 항목이 "선택적 정리이므로 이번 변경에서

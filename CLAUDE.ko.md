@@ -1410,7 +1410,7 @@ const mockFileRepository = {
   Postgres에 접속한다(docker compose의 `db` 또는 5435의 수동 인스턴스;
   CI는 Postgres 서비스를 쓴다). 격리: 실제 마이그레이션으로 만들어지고
   테스트 사이에 truncate되며 teardown 시 drop되는 일회용
-  `upload_board_e2e` 데이터베이스 — 개발 DB는 절대 건드리지 않는다
+  `sharenpo_e2e` 데이터베이스 — 개발 DB는 절대 건드리지 않는다
   (`test/e2e-utils.ts`). `DB_DATABASE` 오버라이드는 jest `setupFiles`로
   연결된 `test/e2e-env.ts`에 있는데, `ConfigModule.forRoot`가 **AppModule
   import 시점**에 환경을 스냅샷하기 때문이다 — `beforeAll`에서 설정하면

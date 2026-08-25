@@ -132,7 +132,7 @@ Manager and that state's Terraform state file (ADR 0043 D7/D8).
 
    ```sh
    cd ../../helm
-   helm install upload-board . \
+   helm install sharenpo . \
      --set secrets.existingSecret=$(terraform -chdir=../infra/terraform/app-infra output -raw app_secret_k8s_name) \
      --set env.DB_HOST=$(terraform -chdir=../infra/terraform/app-infra output -raw db_host) \
      --set env.DB_DATABASE=$(terraform -chdir=../infra/terraform/app-infra output -raw db_name) \
@@ -171,7 +171,7 @@ Controller must be running to reconcile the `Ingress` object) and
 `app-infra/` has the certificate, enable it with:
 
 ```sh
-helm upgrade upload-board . \
+helm upgrade sharenpo . \
   --reuse-values \
   --set ingress.enabled=true \
   --set ingress.className=alb \
@@ -215,7 +215,7 @@ deletions. If the ALB ingress was ever enabled, `terraform destroy` inside
 `addons/` (or, if the ALB outlived it, `cluster/`) can time out with a VPC
 `DependencyViolation` error the same way the original Istio example did —
 the ALB's security groups can outlive the command. Uninstall the Helm
-release first (`helm uninstall upload-board`), confirm the ALB and its
+release first (`helm uninstall sharenpo`), confirm the ALB and its
 security groups are gone in the AWS console, then destroy in the order
 above.
 

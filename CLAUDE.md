@@ -1345,7 +1345,7 @@ const mockFileRepository = {
 
 - **E2E (`test/*.e2e-spec.ts`, `pnpm test:e2e`)** — unlike unit tests, these hit a real
   Postgres (docker compose `db` or a manual one on 5435; CI uses a Postgres service). Isolation:
-  a throwaway `upload_board_e2e` database, built by the real migrations and truncated between
+  a throwaway `sharenpo_e2e` database, built by the real migrations and truncated between
   tests, dropped on teardown — the dev DB is never touched (`test/e2e-utils.ts`). The
   `DB_DATABASE` override lives in `test/e2e-env.ts`, wired as jest `setupFiles`, because
   `ConfigModule.forRoot` snapshots env at **AppModule import time** — setting it in `beforeAll`

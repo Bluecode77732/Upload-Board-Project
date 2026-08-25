@@ -2,7 +2,7 @@
 
 > 한국어 버전: [ROADMAP.ko.md](ROADMAP.ko.md)
 
-The full project plan for the Upload Board Project, established through an
+The full project plan for Sharenpo, established through an
 11-axis decision review on 2026-07-23 (essence → methodology → design criteria →
 architecture → modules → domain → mechanisms → data handling → platform →
 infrastructure → deployment). Amended the same day by the frontend-split
@@ -492,26 +492,49 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   entry, video only on an explicit click, audio never, auto-loading stops at 180 tiles).
   No ADR: `frontend/` keeps its decisions in CHANGELOG and `frontend/docs/`, not
   `docs/ADR/`. Two follow-ups this work exposed are the next two rows.
-- **Unify the product name on `Sharenpo`** (decided 2026-08-25, scope confirmed with the
-  developer) — this is not a naming exercise; the name already exists and the repository is
-  split three ways. `.github/workflows/ci.yml`'s workflow is literally **`Sharenpo CI/CD`**
-  and the published image is **`bluecode1775/sharenpo`** (cited by ADR 0035/0037/0041/0042),
-  while `README.md`'s H1, the root `package.json`, and `k8s/helm/Chart.yaml` all say
-  *Upload Board Project* — and `frontend/` has no name at all: its `package.json` and its
-  browser tab both read `frontend`, which is what a user sees first. **Confirmed scope: all
-  of it, Helm included.** The work: user-facing names (`frontend/index.html` `<title>` and
-  a login wordmark, `admin/index.html`'s `Upload Board Admin`, and `admin/public/favicon.svg`
-  whose mark is the initials `UB`), documentation (`README.md` H1 and product references),
-  and the mechanical identifiers (root and `frontend` `package.json` `name`,
-  `k8s/helm/Chart.yaml`, plus **26 `upload-board-project.*` template references** across
-  `_helpers.tpl` (8), `deployment.yml` (5), `migration-job.yml` (4), `ingress.yaml` (3),
-  `service.yaml` (3), and `configmap.yaml` (2)). Two things this is **not**: it is not
-  breaking — no Helm release has ever been installed against a real cluster (Stage 4 is
-  unstarted, Terraform unapplied), so there is no live release name to migrate; and it does
-  **not** rewrite ADR prose — an ADR records what was true when it was written, so the chart
-  name appearing there stays as history. The one genuinely new decision inside this task is
-  what a Helm release rename implies for the chart's own `README.md` and any `helm install`
-  instructions, which need re-verifying rather than find-and-replacing.
+- ~~**Unify the product name on `Sharenpo`**~~ — **landed 2026-08-25**
+  ([CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Changed`). Decided 2026-08-25 with scope
+  confirmed as all of it, Helm included. What landed: the Helm chart (`Chart.yaml` `name:`
+  plus **27** `upload-board-project.*` helper references — the file-by-file count recorded
+  here originally said 26 and had missed `NOTES.txt` (2) and `values.yaml`'s header comment
+  (1)), user-facing names (`frontend/index.html` `<title>`, `admin/index.html`,
+  `admin/public/favicon.svg`'s `UB` → `S`, and a new login wordmark lockup reusing the
+  existing favicon mark), documentation (`README.md`(+ko) H1, `frontend/README`(+ko),
+  `frontend/docs/API-CONTRACT`(+ko)), and the mechanical identifiers (three `package.json`
+  names — `admin`'s was nameless too, outside the original scope — `docker-compose.yml`'s
+  image tags, `backend/main.ts`'s Swagger title, the e2e database name, and a mock bucket).
+  The one genuinely new decision resolved as expected: `_helpers.tpl`'s `fullname` is
+  `.Release.Name`, **not** the chart name, so the chart rename alone would not have changed
+  what `helm install upload-board .` produces — the release name in both runbooks was changed
+  as its own decision and the distinction written down. Left alone on purpose: ADR prose,
+  existing CHANGELOG entries, `bluecode1775/sharenpo`, and the legacy `upload-board-pg`
+  container references (naming a real hand-created container — renaming would make the
+  instruction false). **One premise turned out to be false**: this row said "Terraform
+  unapplied", and it is applied — see the next row.
+- **Rename the Terraform/AWS infrastructure identifiers to `sharenpo`** (recorded 2026-08-25,
+  deferred deliberately) — **not started, and not urgent.** Discovered while doing the row
+  above: `CLAUDE.md` and ADR 0043/0044's addenda both still claim Terraform has never been
+  applied against real AWS, but `cluster/` and `app-infra/` hold state at serial 235 and 23
+  with 108 resource instances between them — a live EKS cluster, an RDS instance, an S3
+  bucket, a Route53 zone, and an ACM certificate. A `terraform plan` run with the defaults
+  renamed measured the cost: `app-infra` **10 add / 2 change / 8 destroy** with
+  `aws_db_instance.db must be replaced` (`db_name` and `username` are both ForceNew, and the
+  instance carries `skip_final_snapshot = true` with `deletion_protection = false` — the
+  replacement destroys the data with no final snapshot), and `cluster` **34 add / 20 change /
+  34 destroy** including `aws_eks_cluster.this[0] must be replaced`. Nothing was applied and
+  the defaults were reverted. **Why deferred rather than scheduled**: AWS resource names are
+  not product branding — every user-visible surface is already `Sharenpo`, and the domain
+  layer specifically was already `sharenpo.com` (Route53 + ACM) with an IAM user
+  `sharenpo-user`, so nothing a user touches depends on this. The cost also does not grow by
+  waiting: renaming costs a cluster rebuild plus a database migration whenever it is done, and
+  it becomes **free** if the infrastructure is ever rebuilt for another reason (a region move,
+  a fresh environment, a remote-state migration) — which is the moment to do it. **When it is
+  done**, the database half must be a logical migration (create the renamed database and role
+  inside the existing instance, `pg_dump`/restore, then re-point Terraform), never a
+  Terraform-driven replacement. Note that `Blueprint = upload-board-project` tags come from the
+  upstream `terraform-aws-eks-blueprints` module, so a complete rename was never achievable
+  here anyway. Also needs fixing when touched: ADR 0043/0044's "never applied" addenda and the
+  matching sentence in `CLAUDE.md`.
 - **Explore and implement a display typeface** (recorded 2026-08-25) — **deliberately left
   open**, no constraint pre-committed: web font, self-hosted, or staying on system fonts are
   all still candidates, and the exploration decides between them. The gap it addresses is

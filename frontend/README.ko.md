@@ -1,6 +1,6 @@
-# Upload Board — 프론트엔드
+# Sharenpo — 프론트엔드
 
-Upload Board 프로젝트를 위한 React + Vite(TypeScript) SPA. 프로젝트 저장소의
+Sharenpo를 위한 React + Vite(TypeScript) SPA. 프로젝트 저장소의
 `frontend/` 하위 폴더로 존재하며(리포지토리 루트의 백엔드와 나란히), 백엔드
 REST API를 HTTP로 소비한다. 관리자 화면도 이 안에 `/admin` 라우트 섹션으로
 들어 있다(백엔드 ADR 0010).

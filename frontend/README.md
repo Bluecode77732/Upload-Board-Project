@@ -1,6 +1,6 @@
-# Upload Board — Frontend
+# Sharenpo — Frontend
 
-React + Vite (TypeScript) SPA for the Upload Board project. Lives as the
+React + Vite (TypeScript) SPA for Sharenpo. Lives as the
 `frontend/` subfolder of the project repository (alongside the backend at the
 repo root) and consumes the backend REST API over HTTP; admin lives here as an
 `/admin` route section (backend ADR 0010).

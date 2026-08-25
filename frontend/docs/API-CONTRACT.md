@@ -1,6 +1,6 @@
 # Backend API Consumption Contract
 
-The frontend consumes the Upload Board backend (at the repository root, above
+The frontend consumes the Sharenpo backend (at the repository root, above
 this `frontend/` folder) over HTTP. This document is the frozen slice of that
 contract the app depends on. When the backend changes it, update this file
 **and** the mirrored types in `src/api/` in the same change.

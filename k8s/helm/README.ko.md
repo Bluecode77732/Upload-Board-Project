@@ -1,4 +1,4 @@
-# upload-board-project (Helm 차트)
+# sharenpo (Helm 차트)
 
 > English: [README.md](README.md)
 
@@ -28,7 +28,7 @@ Stage 4). `kind` 실행은 차트 자체의 배관이 동작한다는 것만 증
 만들어야 합니다:
 
 ```bash
-kubectl create secret generic upload-board-secrets \
+kubectl create secret generic sharenpo-secrets \
   --from-literal=DB_USERNAME=<db-username> \
   --from-literal=DB_PASSWORD=<db-password> \
   --from-literal=ACCESS_TOKEN_SECRET=<random-string> \
@@ -41,8 +41,8 @@ kubectl create secret generic upload-board-secrets \
 그다음 차트가 그 이름을 참조하도록 지정합니다:
 
 ```bash
-helm install upload-board . \
-  --set secrets.existingSecret=upload-board-secrets \
+helm install sharenpo . \
+  --set secrets.existingSecret=sharenpo-secrets \
   --set env.DB_HOST=<postgres-host> \
   --set env.DB_DATABASE=<postgres-db> \
   --set env.BASE_URL=https://<your-host>
@@ -51,6 +51,11 @@ helm install upload-board . \
 `secrets.existingSecret`은 `required`로 지정돼 있어, 설정하지 않으면 pod가
 env var 누락으로 crash-loop에 빠지는 대신 설치 자체가 명확한 에러로 즉시
 실패합니다.
+
+오브젝트 이름은 차트 이름이 아니라 **릴리스 이름**(위 예시의 `sharenpo`)에서
+옵니다 — `_helpers.tpl`의 `fullname` 헬퍼가 `.Release.Name`이기 때문입니다.
+다른 릴리스 이름으로 설치하면 모든 오브젝트 이름이 그에 맞춰 바뀌며,
+`Chart.yaml`을 따르는 건 `app.kubernetes.io/name` 라벨과 `helm.sh/chart`뿐입니다.
 
 ## 각 템플릿이 하는 일
 

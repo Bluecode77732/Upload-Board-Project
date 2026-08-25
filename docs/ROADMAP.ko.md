@@ -2,7 +2,7 @@
 
 > English version: [ROADMAP.md](ROADMAP.md)
 
-Upload Board Project의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → 설계
+Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → 설계
 기준 → 아키텍처 → 모듈 → 도메인 → 메커니즘 → 자료 처리 → 플랫폼 → 인프라 →
 배포 환경) 순서의 결정 검토를 거쳐 수립했다. 같은 날 프론트엔드 분리
 결정([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md))으로
@@ -458,24 +458,44 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   오디오는 아예 받지 않으며 자동 로드는 180개에서 멈춘다). ADR은 없다: `frontend/`는
   결정을 `docs/ADR/`가 아니라 CHANGELOG와 `frontend/docs/`에 남기는 관례다. 이 작업이
   드러낸 후속 과제 2건이 바로 다음 두 행이다.
-- **제품명을 `Sharenpo`로 통일** (2026-08-25 결정, 범위는 개발자와 확인) — 이름을 새로 짓는
-  일이 아니다. 이름은 이미 있고, 저장소가 세 갈래로 갈라져 있는 상태다.
-  `.github/workflows/ci.yml`의 워크플로 이름이 그대로 **`Sharenpo CI/CD`**이고 배포 이미지도
-  **`bluecode1775/sharenpo`**(ADR 0035·0037·0041·0042가 인용)인 반면, `README.md`의 H1과 루트
-  `package.json`, `k8s/helm/Chart.yaml`은 *Upload Board Project*라고 말한다. 그리고
-  `frontend/`에는 이름이 아예 없다 — `package.json`도 브라우저 탭도 `frontend`인데, 이것이
-  사용자가 가장 먼저 보는 이름이다. **확정 범위: Helm을 포함한 전면 통일.** 대상은 화면에
-  보이는 이름(`frontend/index.html`의 `<title>`과 로그인 워드마크, `admin/index.html`의
-  `Upload Board Admin`, 그리고 마크가 이니셜 `UB`인 `admin/public/favicon.svg`), 문서
-  (`README.md` H1과 제품명 언급), 그리고 기계적 식별자(루트와 `frontend`의 `package.json`
-  `name`, `k8s/helm/Chart.yaml`, 여기에 `_helpers.tpl`(8)·`deployment.yml`(5)·
-  `migration-job.yml`(4)·`ingress.yaml`(3)·`service.yaml`(3)·`configmap.yaml`(2)에 걸친
-  **`upload-board-project.*` 템플릿 참조 26곳**)이다. 이 작업이 **아닌** 것 두 가지: 파괴적
-  변경이 아니다 — 실제 클러스터에 Helm 릴리스를 설치한 적이 한 번도 없으므로(Stage 4 미착수,
-  Terraform 미적용) 이관할 라이브 릴리스명이 없다. 그리고 ADR 본문을 고쳐 쓰지 않는다 — ADR은
-  작성 시점의 사실을 기록하므로, 거기 등장하는 차트 이름은 역사로 남긴다. 이 작업 안에서
-  진짜로 새로 판단해야 할 것은 Helm 릴리스명 변경이 차트 자신의 `README.md`와 `helm install`
-  안내에 무엇을 의미하는가 하나이며, 이건 일괄 치환이 아니라 재검증 대상이다.
+- ~~**제품명을 `Sharenpo`로 통일**~~ — **2026-08-25 반영**
+  ([CHANGELOG.ko.md](CHANGELOG.ko.md) `[Unreleased] > 변경`). 2026-08-25에 결정했고 범위는
+  Helm을 포함한 전면 통일로 확정했다. 반영된 것: Helm 차트(`Chart.yaml`의 `name:`과
+  `upload-board-project.*` 헬퍼 참조 **27곳** — 원래 이 행에 26곳으로 적혀 있던 파일별 집계는
+  `NOTES.txt`(2)와 `values.yaml` 헤더 주석(1)을 빠뜨리고 있었다), 화면에 보이는 이름
+  (`frontend/index.html`의 `<title>`, `admin/index.html`, `admin/public/favicon.svg`의 `UB` →
+  `S`, 그리고 기존 favicon 마크를 재사용한 새 로그인 워드마크 락업), 문서(`README.md`(+ko)
+  H1, `frontend/README`(+ko), `frontend/docs/API-CONTRACT`(+ko)), 기계적 식별자
+  (`package.json` 3개 — `admin`도 `frontend`처럼 이름이 없었고 이건 원래 범위 밖이었다 —
+  `docker-compose.yml` 이미지 태그, `backend/main.ts`의 Swagger 제목, e2e 데이터베이스 이름,
+  모크 버킷명). 진짜로 새로 판단해야 했던 한 가지는 예상대로였다: `_helpers.tpl`의 `fullname`은
+  차트 이름이 아니라 `.Release.Name`이라, 차트 이름만 바꿔서는 `helm install upload-board .`의
+  결과가 달라지지 않는다 — 그래서 두 런북의 릴리스명을 별개의 판단으로 바꾸고 그 구분을 문서에
+  적어 뒀다. 일부러 손대지 않은 것: ADR 본문, 기존 CHANGELOG 항목, `bluecode1775/sharenpo`,
+  그리고 레거시 `upload-board-pg` 컨테이너 참조(실제로 존재하는 수동 생성 컨테이너를 가리키므로
+  이름을 바꾸면 안내문이 거짓이 된다). **전제 하나가 틀린 것으로 드러났다** — 이 행은
+  "Terraform 미적용"이라고 적고 있었지만 실제로는 적용되어 있다. 다음 행 참고.
+- **Terraform/AWS 인프라 식별자를 `sharenpo`로 개명** (2026-08-25 기록, 의도적 보류) —
+  **미착수이며, 급하지 않다.** 위 행을 작업하다 발견했다: `CLAUDE.md`와 ADR 0043·0044의 추가
+  기록은 아직도 Terraform이 실제 AWS에 적용된 적 없다고 말하지만, `cluster/`와 `app-infra/`의
+  상태 파일이 각각 serial 235·23이고 둘을 합쳐 리소스 인스턴스 108개를 담고 있다 — 살아 있는
+  EKS 클러스터, RDS 인스턴스, S3 버킷, Route53 존, ACM 인증서. 기본값을 바꾼 뒤 돌린
+  `terraform plan`이 비용을 측정해 줬다: `app-infra`는 **10 add / 2 change / 8 destroy**이고
+  `aws_db_instance.db must be replaced`인데, `db_name`과 `username`이 둘 다 ForceNew이고
+  인스턴스가 `skip_final_snapshot = true`, `deletion_protection = false`라 교체가 곧 최종
+  스냅샷 없는 데이터 소멸을 뜻한다. `cluster`는 **34 add / 20 change / 34 destroy**이며
+  `aws_eks_cluster.this[0] must be replaced`가 포함된다. 아무것도 apply하지 않았고 기본값은
+  되돌렸다. **일정에 넣지 않고 보류한 이유**: AWS 리소스 이름은 브랜딩이 아니다. 사용자에게
+  보이는 표면은 이미 전부 `Sharenpo`이고, 특히 도메인 계층은 이미 `sharenpo.com`(Route53 +
+  ACM)에 IAM 사용자도 `sharenpo-user`라, 사용자가 만지는 것 중 이 항목에 걸리는 게 없다.
+  미룬다고 비용이 커지지도 않는다 — 언제 하든 클러스터 재구축과 데이터베이스 마이그레이션이
+  들고, 다른 이유로 인프라를 새로 세우는 시점(리전 이동, 환경 재구축, remote state 전환)에는
+  **공짜**가 된다. 그때가 할 때다. **실제로 할 때**, 데이터베이스 쪽은 반드시 논리 마이그레이션
+  이어야 한다 — 기존 인스턴스 안에 새 이름의 데이터베이스와 롤을 만들고 `pg_dump`/복원한 뒤
+  Terraform이 그쪽을 가리키게 하는 방식이며, Terraform이 주도하는 교체는 안 된다. 참고로
+  `Blueprint = upload-board-project` 태그는 upstream `terraform-aws-eks-blueprints` 모듈이
+  붙이는 값이라 완전한 통일은 애초에 불가능하다. 착수할 때 같이 고쳐야 할 것: ADR 0043·0044의
+  "적용된 적 없음" 추가 기록과 `CLAUDE.md`의 해당 문장.
 - **디스플레이 서체 탐구 후 구현** (2026-08-25 기록) — **의도적으로 열어 둔다.** 제약을 미리
   박지 않았다: 웹폰트, 셀프호스팅, 시스템 폰트 유지가 모두 후보이며 그 선택 자체가 탐구의
   결과물이다. 메우려는 공백은 구체적이다: `index.css`가 `--heading`과 `--sans`를 **바이트

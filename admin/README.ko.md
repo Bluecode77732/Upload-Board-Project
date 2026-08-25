@@ -88,8 +88,8 @@ REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" �
 Chat Project 이식의 흔적 중 남아있던, 아래 기능 적응과는 무관한 두 가지 — 겉모습/죽은
 설정 문제를 정리했다. 색상과 레이아웃은 그대로 뒀다.
 
-- `index.html`의 `<title>`이 제네릭한 `"Admin Panel"`이었다 — `"Upload Board Admin"`으로
-  바꾸고, `<head>`에 연결한 `admin/public/favicon.svg`(단순한 "UB" 이니셜 마크)를 추가했다.
+- `index.html`의 `<title>`이 제네릭한 `"Admin Panel"`이었다 — `"Sharenpo Admin"`으로
+  바꾸고, `<head>`에 연결한 `admin/public/favicon.svg`(단순한 "S" 이니셜 마크)를 추가했다.
 - `vercel.json`의 CSP `connect-src`가 여전히 Chat Project의 실제 Railway 배포 주소
   (`https://chat-project-production-3b22.up.railway.app`)를 가리키고 있었다 — 닿을 수 없는
   죽은 설정이지만, 누군가 템플릿으로 참고하면 틀린 값이 된다. `http://localhost:3000`(이

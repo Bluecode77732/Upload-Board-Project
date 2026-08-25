@@ -1,4 +1,4 @@
-# upload-board-project (Helm chart)
+# sharenpo (Helm chart)
 
 > 한국어: [README.ko.md](README.ko.md)
 
@@ -26,7 +26,7 @@ as a `values.yaml` literal (ADR 0041, ADR 0033's target shape). Create one
 yourself first:
 
 ```bash
-kubectl create secret generic upload-board-secrets \
+kubectl create secret generic sharenpo-secrets \
   --from-literal=DB_USERNAME=<db-username> \
   --from-literal=DB_PASSWORD=<db-password> \
   --from-literal=ACCESS_TOKEN_SECRET=<random-string> \
@@ -38,8 +38,8 @@ To update a value later, rerun with `--dry-run=client -o yaml | kubectl apply -f
 Then point the chart at it:
 
 ```bash
-helm install upload-board . \
-  --set secrets.existingSecret=upload-board-secrets \
+helm install sharenpo . \
+  --set secrets.existingSecret=sharenpo-secrets \
   --set env.DB_HOST=<postgres-host> \
   --set env.DB_DATABASE=<postgres-db> \
   --set env.BASE_URL=https://<your-host>
@@ -47,6 +47,11 @@ helm install upload-board . \
 
 `secrets.existingSecret` is `required` — install fails fast with a clear error
 if it's unset, rather than the pod crash-looping on a missing env var.
+
+Object names come from the **release name** (`sharenpo` above), not from the
+chart name — `_helpers.tpl`'s `fullname` helper is `.Release.Name`. Installing
+under a different release name renames every object with it; only the
+`app.kubernetes.io/name` label and `helm.sh/chart` follow `Chart.yaml`.
 
 ## What each template does
 

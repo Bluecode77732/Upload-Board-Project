@@ -13,6 +13,62 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Product name unified on `Sharenpo` (2026-08-25)** — the repository had been saying three
+  different things. `.github/workflows/ci.yml`'s workflow was already `Sharenpo CI/CD` and the
+  published image already `bluecode1775/sharenpo`, while `README.md`'s H1, both `package.json`s,
+  and the Helm chart said *Upload Board Project* — and `frontend/` had no name at all, its
+  `package.json` and browser tab both reading `frontend`, which is what a user sees first.
+  Decided in [ROADMAP.md](ROADMAP.md) §7 (commit `eae0e27`), scope confirmed as all of it,
+  Helm included.
+  **Helm.** `Chart.yaml`'s `name:` → `sharenpo`, and all **27** `upload-board-project.*` helper
+  references across `_helpers.tpl` (8), `deployment.yml` (5), `migration-job.yml` (4),
+  `ingress.yaml` (3), `service.yaml` (3), and `configmap.yaml` (2) — plus **`NOTES.txt` (2) and
+  `values.yaml`'s header comment (1), which the ROADMAP's own file-by-file count had missed**.
+  Verified by `helm lint` and `helm template`: `app.kubernetes.io/name: sharenpo`,
+  `helm.sh/chart: sharenpo-0.2.0`.
+  **The chart README's install guidance was re-derived, not substituted.** `_helpers.tpl`'s
+  `fullname` helper is `.Release.Name`, not the chart name — so renaming the chart alone would
+  have left `helm install upload-board .` producing `upload-board-*` objects out of a `sharenpo`
+  chart. The release name in the runbook was therefore changed as its own decision, and a short
+  paragraph now records that object names follow the release name while only
+  `app.kubernetes.io/name` and `helm.sh/chart` follow `Chart.yaml`. The three
+  `helm install`/`upgrade`/`uninstall` commands in `k8s/infra/terraform/README.md` were changed
+  in step so the two runbooks agree.
+  **User-facing.** `frontend/index.html`'s `<title>` `frontend` → `Sharenpo`;
+  `admin/index.html`'s `Upload Board Admin` → `Sharenpo Admin`; `admin/public/favicon.svg`'s
+  `UB` initials mark → `S`. A brand lockup was added to `LoginPage.tsx`, which had shown no
+  product name at all — the existing `frontend/public/favicon.svg` mark reused at 21px beside a
+  `Sharenpo` wordmark in `var(--brand)`, picked by the developer from three rendered options.
+  `frontend/public/favicon.svg` itself needed no change: it is an abstract mark carrying no
+  lettering.
+  **Mechanical.** Root `package.json` → `sharenpo`; `frontend`'s → `sharenpo-frontend`;
+  `admin`'s `admin` → `sharenpo-admin` (the same nameless-package problem, found outside the
+  original scope); `docker-compose.yml`'s two `upload-board-project-api:local` image tags →
+  `sharenpo-api:local`; `backend/main.ts`'s Swagger `setTitle`/description; the e2e database
+  `upload_board_e2e` → `sharenpo_e2e` (harness-owned — dropped and created per run) with
+  `CLAUDE.md`(+ko) synced; and `s3.storage.spec.ts`'s mock bucket name.
+  **Deliberately not renamed.** ADR bodies and existing CHANGELOG entries, which record what was
+  true when written; `bluecode1775/sharenpo`, already correct; and the legacy `upload-board-pg`
+  references in `docker-compose.yml` and both READMEs — that names a real hand-created container
+  on the developer's machine, so renaming the reference would make the instruction false.
+  **Terraform deferred, and a stale claim found.** `CLAUDE.md` and ADR 0043/0044's addenda both
+  state that Terraform has never been applied against real AWS. That is no longer true:
+  `cluster/` and `app-infra/` hold state at serial 235 and 23, 108 resource instances between
+  them, including a live EKS cluster, an RDS instance, and an S3 bucket. A `terraform plan` run
+  after renaming the variable defaults reported **10 add / 2 change / 8 destroy** in `app-infra`
+  — `aws_db_instance.db must be replaced`, because `db_name` and `username` are both ForceNew
+  and the instance carries `skip_final_snapshot = true` with `deletion_protection = false`, so
+  the replacement would destroy the data with no final snapshot — and **34 add / 20 change /
+  34 destroy** in `cluster`, including `aws_eks_cluster.this[0] must be replaced`. Nothing was
+  applied and the variable defaults were reverted; only the Helm release name in that README
+  was kept, since it is not an AWS resource name. The S3 bucket was never at risk:
+  `s3_bucket_name` has no default and is supplied per apply, and the plan showed it updated
+  in place. The domain layer was already on the new name (`sharenpo.com` Route53 zone and ACM
+  certificate, IAM user `sharenpo-user`), so no user-visible surface depends on the deferral.
+  Follow-up recorded in [ROADMAP.md](ROADMAP.md) §7.
+  **Verified**: `pnpm lint` at 0 errors, 220/220 unit tests, `pnpm build` green in all three
+  packages, `helm lint`/`helm template`, `docker compose config`, and the login screen rendered
+  from the real production build.
 - **`admin/`: the audit log now reads the server's `targetType` instead of re-deriving it from
   `action` (2026-08-25, commit `d38d9dc`)** — `admin/` only; no backend, contract, or schema
   change. This is the cleanup the [ADR 0045](ADR/0045-audit-log-target-type.md) entry below
