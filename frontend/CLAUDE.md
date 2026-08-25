@@ -115,3 +115,10 @@ pnpm preview  # serve the production build
 ```
 
 The dev server needs the backend running on `:3000` for API calls to succeed.
+
+**Stopping a backgrounded `pnpm dev`/`pnpm preview` does not free its port on Windows.**
+`pnpm` runs vite as a child process and Windows has no POSIX process-group signalling, so
+killing the task leaves an orphaned `node` holding the socket — the next `--strictPort`
+run then fails with a misleading "port in use". Always check `netstat -ano | grep ":<port>"`
+after stopping one, and kill the listener by PID if it is still there. Full procedure:
+root [CLAUDE.md](../CLAUDE.md) > Commands > "Background servers: kill by port, not by task".

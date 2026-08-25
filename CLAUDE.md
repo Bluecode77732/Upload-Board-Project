@@ -1192,6 +1192,27 @@ pnpm migration:show   # List applied/pending migrations
 pnpm test -- file.service
 ```
 
+### Background servers: kill by port, not by task (Windows)
+
+Any long-running `pnpm` command started in the background (`pnpm run start:dev`,
+`pnpm preview`, `pnpm dev` in `frontend/`/`admin/`) runs the real server as a **child**
+of the `pnpm` wrapper. Windows has no POSIX process-group signalling, so stopping the
+task kills only the wrapper — the orphaned `node` keeps the port bound. Measured
+2026-08-25: a `vite preview --port 4791` survived its task being stopped and still held
+the socket, which would have failed the next `--strictPort` run with a misleading
+"port in use".
+
+After stopping a background server, **verify the port is actually free** and kill the
+listener by PID if it is not:
+
+```bash
+netstat -ano | grep ":4791"                      # empty output = actually stopped
+powershell -NoProfile -Command "Stop-Process -Id <pid> -Force"
+```
+
+Confirm what the PID is before killing it (`Get-CimInstance Win32_Process -Filter
+'ProcessId=<pid>'` prints the command line) — never kill a PID you have not identified.
+
 ## Architecture
 
 ### Modules (`backend/`)

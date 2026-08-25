@@ -1237,6 +1237,26 @@ pnpm migration:show   # List applied/pending migrations
 pnpm test -- file.service
 ```
 
+### 백그라운드 서버는 태스크가 아니라 포트로 확인해 종료한다 (Windows)
+
+백그라운드로 띄운 `pnpm` 명령(`pnpm run start:dev`, `pnpm preview`,
+`frontend/`/`admin/`의 `pnpm dev`)은 실제 서버를 `pnpm` 래퍼의 **자식 프로세스**로
+실행한다. Windows에는 POSIX 같은 프로세스 그룹 신호 전파가 없어서, 태스크를 중지하면
+래퍼만 죽고 고아가 된 `node`가 포트를 계속 붙잡는다. 2026-08-25 확인: 태스크를 중지한
+뒤에도 `vite preview --port 4791`이 살아남아 소켓을 쥐고 있었고, 그대로 뒀다면 다음
+`--strictPort` 실행이 "포트 사용 중"이라는 엉뚱한 이유로 실패했을 것이다.
+
+백그라운드 서버를 중지한 뒤에는 **포트가 실제로 비었는지 확인**하고, 아니라면 PID로
+리스너를 종료한다:
+
+```bash
+netstat -ano | grep ":4791"                      # 출력이 없어야 실제로 종료된 것
+powershell -NoProfile -Command "Stop-Process -Id <pid> -Force"
+```
+
+종료 전에 그 PID가 무엇인지 반드시 확인한다(`Get-CimInstance Win32_Process -Filter
+'ProcessId=<pid>'`가 커맨드라인을 출력한다) — 정체를 확인하지 않은 PID는 죽이지 않는다.
+
 ## 아키텍처
 
 ### 모듈 (`backend/`)
