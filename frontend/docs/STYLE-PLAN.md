@@ -176,6 +176,21 @@ because whoever touches these files for restyling will see them:
    leaving every other surface flat. Both are cheap to add once as tokens and
    are grouped with item 3 rather than dispatched separately, since a typeface
    change is the natural moment to settle the rest of the expressive layer.
+5. **The login mark is a starter template's logo** (recorded 2026-08-25, group
+   with item 3) — the Sharenpo rename (`0a14039`) built the login lockup out of
+   `<img src="/favicon.svg">` plus the wordmark, reusing what existed instead of
+   inventing a mark mid-rename. But `frontend/public/favicon.svg` came from the
+   2026-07-24 Vite scaffold commit (`6950034`), not from this project: a purple
+   bolt exported from a design tool, shipped alongside `public/icons.svg` whose
+   symbols are `bluesky`/`discord`/`github`/`x`/`documentation`/`social`. Two
+   measured consequences — the mark is `#863bff` against a `--brand` of
+   `#8a2be2`/`#c084fc`, so a **third** purple sits inside the lockup; and
+   `icons.svg` has **zero** references in `src/` or `index.html`. Open decision:
+   design a real mark, or drop the icon and let the wordmark stand alone. The
+   `icons.svg` deletion needs no decision either way. Grouped with item 3
+   because a wordmark's typeface and its mark are one design decision — split
+   them and the lockup gets designed twice. Tracked in
+   [ROADMAP.md](../../docs/ROADMAP.md) > 7.
 
 ## Ready-to-paste prompts
 

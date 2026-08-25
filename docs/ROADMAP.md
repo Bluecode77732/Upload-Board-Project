@@ -457,6 +457,25 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
 
 ## 7. Unscheduled / open decisions
 
+- **Replace or drop the login page's mark, and delete the unused icon sprite** (recorded
+  2026-08-25) — the Sharenpo unification (`0a14039`) gave the login card a lockup of
+  `<img src="/favicon.svg">` beside the wordmark, which was the right call for that task:
+  it reused what already existed rather than inventing a mark mid-rename. But **the file it
+  reuses was never this project's**. `frontend/public/favicon.svg` arrived on 2026-07-24 in
+  the Vite scaffold commit (`6950034`) as starter-template artwork — a purple bolt exported
+  from a design tool (9.5KB, masks, display-p3 color) — and the same commit brought
+  `frontend/public/icons.svg`, a sprite whose symbols are `bluesky`, `discord`, `github`,
+  `x`, `documentation`, and `social`. So the first thing a user sees on Sharenpo's login
+  screen is a template's logo. Two concrete problems, both measured: the mark is `#863bff`
+  while `--brand` is `#8a2be2` (light) / `#c084fc` (dark), so **a third purple** sits next
+  to the brand it is meant to represent; and `icons.svg` has **zero references** anywhere in
+  `frontend/src` or `index.html` — dead template residue, the same class of thing as the
+  Chat Project remnants cleaned out of `admin/`. The open decision is which way to go:
+  commission/design a real Sharenpo mark, or drop the icon and let the wordmark carry the
+  lockup alone (cheapest, and defensible — the wordmark is already there). Either way
+  `icons.svg` should go, and that half needs no decision. **Sequence this with the display
+  typeface item below**: a wordmark's typeface and its mark are one decision, not two, and
+  doing them separately means designing the lockup twice.
 - ~~Responsive layout across every screen~~ — **landed 2026-08-24** (commit `d746257`,
   [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Changed`). Worth recording *because the
   measurement contradicted the plan*: the work was scoped on the assumption that every
