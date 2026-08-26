@@ -41,7 +41,7 @@ module "eks" {
   version = "~> 20.11"
 
   cluster_name                   = local.name
-  cluster_version                = "1.30"
+  cluster_version                = "1.34"
   cluster_endpoint_public_access = true
 
   # Give the Terraform identity admin access to the cluster
@@ -63,7 +63,13 @@ module "eks" {
   # x64는 desired_size 0으로 유휴 비용 없이 수동 확장 대비용으로만 존재한다.
   eks_managed_node_groups = {
     graviton = {
-      instance_types = ["m6g.large"]
+      # 모듈 기본 ami_type이 x86_64라 arm64 인스턴스 계열엔 명시 필요
+      # (실제 apply에서 InvalidParameterException으로 확인됨).
+      ami_type = "AL2023_ARM_64_STANDARD"
+      # 임시: 이 AWS 계정이 아직 결제수단/신원 검증 전(Free Tier 전용 제약)이라
+      # m6g.large 실행이 막힘(InvalidParameterCombination). 계정 검증 완료 후
+      # m6g.large로 되돌릴 것 — t4g.micro는 실 서비스 용량으로 부적합한 임시값.
+      instance_types = ["t4g.micro"]
 
       min_size     = 1
       max_size     = 5
