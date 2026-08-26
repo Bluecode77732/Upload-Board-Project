@@ -29,6 +29,10 @@ import { join } from 'node:path';
         DB_USERNAME: Joi.string().required(),
         DB_PASSWORD: Joi.string().required(),
         DB_DATABASE: Joi.string().required(),
+        // TLS to the DB (ADR-less, portfolio infra gap): required when the target
+        // instance enforces encrypted connections (e.g. RDS PostgreSQL's default
+        // rds.force_ssl=1) — a plain connection is rejected before auth even runs.
+        DB_SSL: Joi.boolean().default(false),
         HASH_ROUNDS: Joi.number().required(),
         REFRESH_TOKEN_SECRET: Joi.string().required(),
         ACCESS_TOKEN_SECRET: Joi.string().required(),
@@ -62,6 +66,12 @@ import { join } from 'node:path';
       }),
       isGlobal: true,
     }),
+    // 목적: 앱 부팅 시 TypeORM DB 연결을 구성한다.
+    // 이유: RDS PostgreSQL 등 TLS를 강제하는 인스턴스에 평문으로 접속하면
+    //       인증 단계 전에 거부당한다(pg_hba.conf 에러) — DB_SSL로 스위치.
+    // 방법: DB_SSL=true면 { rejectUnauthorized: false }를 켠다 — RDS의
+    //       퍼블릭 CA 체인을 프로젝트가 아직 번들링하지 않아 완전한 인증서
+    //       검증은 못 하지만, 전송 구간 암호화 자체는 강제된다.
     TypeOrmModule.forRootAsync({
       useFactory: (configService: ConfigService) => ({
         type: configService.get<string>('DB_TYPE') as 'postgres',
@@ -70,6 +80,9 @@ import { join } from 'node:path';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
+        ssl: configService.get<boolean>('DB_SSL')
+          ? { rejectUnauthorized: false }
+          : false,
         // One list, shared with backend/data-source.ts — see backend/entities.ts.
         entities: ENTITIES,
         synchronize: false,
