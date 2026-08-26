@@ -425,6 +425,30 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
 
 ## 7. 미일정 / 미결 사항
 
+- **`cluster` → `app-infra` → `addons` → Helm 배포 순서 자동화** (2026-08-26 기록) — 이
+  스택(ADR 0043/0044)을 처음으로 실제 AWS에 end-to-end로 apply해보니, 지금 README가
+  개발자에게 머릿속으로 순서를 기억하며 손으로 하나하나 실행하게 하는 단계가 얼마나 많은지,
+  그리고 그 각각이 이번 실행에서 실제로 겪은 고유한 실패 양상을 갖고 있다는 게 드러났다:
+  EKS `cluster_version`이 이미 지원 종료(EOL)된 Kubernetes 마이너 버전으로 고정돼 있어 그
+  버전용 새 노드그룹 AMI 자체가 없었던 문제; `graviton` 노드그룹에 `ami_type`을 명시하지
+  않으면 모듈이 `instance_types`로부터 이를 추론해주지 않는 문제; AWS 계정의 Free Tier
+  인스턴스 타입 제한이 `m6g.large`/`m5.large` 실행 자체를 거부한 문제; ACM의
+  `domain_validation_options`에 대한 `for_each` 패턴이 2단계 apply(`-target` 후 전체)를
+  강제하는 문제; Route53 NS 위임 전파가 스크립트로 "완료" 신호를 잡을 수 없는 외부
+  대기라는 문제; 기존에 있던 S3 버킷이 새로 import하려는 리전과 다른 곳에 있던 문제;
+  `aws-load-balancer-controller`의 admission webhook과 `external-secrets`의 `Service`
+  생성 사이의 경합으로 Helm 릴리스가 `failed`로 남아 수동으로 `helm uninstall` 후
+  재시도해야 했던 문제; 그리고 `eks-managed-node-group`의 `lifecycle { ignore_changes =
+  [scaling_config[0].desired_size] }`가 생성 이후 `-var`를 통한 스케일 변경을 조용히
+  무시해서 별도로 `aws eks update-nodegroup-config`를 써야 했던 문제. 이 중 어느 하나도
+  단순히 고쳐야 할 버그 하나가 아니다 — 이것들을 합쳐보면, 매번 사람이 README 산문에서
+  같은 순서와 같은 장애 복구 절차를 다시 떠올리게 하는 대신, 이 순서(와 그 안의
+  순서 의존성·재시도·전파 대기 로직)를 스크립트나 CI 파이프라인으로 감싸야 한다는
+  근거가 된다. **미착수 이유**: 이번 세션의 우선순위는 실제 배포 하나를 먼저 끝까지
+  통과시키는 것이었다 — 아직 제대로 동작함이 검증되지 않은 순서를 자동화하면 잘못된
+  단계를 자동화할 위험이 있다. 이 배포가 안정적으로 확인된 뒤 재검토한다. 자체 ADR
+  필요(도구 선택 — 순수 셸 스크립트 vs GitHub Actions vs Makefile — 그리고 범위: 인프라만
+  다룰지, Helm 설치와 apply 이후 수동 단계까지 포함할지)
 - **로그인 화면의 마크를 교체하거나 걷어내고, 쓰이지 않는 아이콘 스프라이트를 삭제** (2026-08-25
   기록) — Sharenpo 통일 작업(`0a14039`)이 로그인 카드에 워드마크와 나란히
   `<img src="/favicon.svg">` 락업을 넣었다. 그 작업 기준으로는 옳은 판단이었다. 이름 변경

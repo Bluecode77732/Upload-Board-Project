@@ -457,6 +457,30 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
 
 ## 7. Unscheduled / open decisions
 
+- **Automate the `cluster` → `app-infra` → `addons` → Helm deploy sequence** (recorded
+  2026-08-26) — the first real end-to-end `apply` of this stack (ADR 0043/0044) surfaced how
+  many hand-run, order-dependent steps the current README asks a developer to carry in their
+  head, each with its own failure mode actually hit during that run: an EKS `cluster_version`
+  pinned to an already-EOL Kubernetes minor (no new node-group AMI existed for it); the
+  `graviton` node group needing an explicit `ami_type` the module does not infer from
+  `instance_types`; the AWS account's Free-Tier instance-type restriction rejecting
+  `m6g.large`/`m5.large` launches outright; the ACM `for_each`-over-`domain_validation_options`
+  pattern requiring a two-phase `apply` (`-target` then full); Route53 NS-delegation
+  propagation being an unbounded external wait with no scriptable "done" signal; a pre-existing
+  S3 bucket living in the wrong region for a fresh cross-region import; a Helm install race
+  between `aws-load-balancer-controller`'s admission webhook and `external-secrets`' own
+  `Service` creation, which left a `failed` Helm release that had to be `helm uninstall`'d by
+  hand before retrying; and `eks-managed-node-group`'s `lifecycle { ignore_changes =
+  [scaling_config[0].desired_size] }` silently making `-var` scaling changes no-ops after
+  creation, forcing `aws eks update-nodegroup-config` as a separate out-of-band scaling path.
+  None of these is a single bug to fix — together they are the case for wrapping this sequence
+  (and its order-of-operations, retry, and wait-for-propagation logic) in a script or CI
+  pipeline rather than a human re-deriving the same order and the same failure recoveries from
+  README prose every time. **Not started because** this session's priority was getting one
+  real deployment through end-to-end first — automating a sequence not yet proven to work would
+  risk automating the wrong steps. Revisit once this deployment is confirmed stable; needs its
+  own ADR (tool choice — plain shell script vs. GitHub Actions vs. Makefile — and how far it
+  reaches: infra-only, or through the Helm install and post-apply manual steps too)
 - **Replace or drop the login page's mark, and delete the unused icon sprite** (recorded
   2026-08-25) — the Sharenpo unification (`0a14039`) gave the login card a lockup of
   `<img src="/favicon.svg">` beside the wordmark, which was the right call for that task:
