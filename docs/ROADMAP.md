@@ -457,6 +457,32 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
 
 ## 7. Unscheduled / open decisions
 
+- **`image.tag: "latest"` default silently deploys stale code** (found 2026-08-28,
+  reproducing an earlier deploy step by hand) — `k8s/helm/values.yaml`'s default
+  `image.tag` is `"latest"`, but `.github/workflows/ci.yml`'s `docker-publish` job only
+  rebuilds that tag on push to `main`; this project's actual work happens on `dev`, which
+  has never been merged back. Reproduced live: re-running the original bare `helm install`
+  (no `-f values-prod.yaml`, no explicit `image.tag`) pulled `bluecode1775/sharenpo:latest`
+  — an image built before the `DB_SSL` fix (commit `cf0cbfe`) existed — even though the
+  Helm values correctly carried `DB_SSL: true`. The failure this produces is actively
+  misleading: `helm get values` shows the right config, but the migration Job still fails
+  with the pre-fix `no pg_hba.conf entry ... no encryption` error, because the *running
+  code* predates the option the value is supposed to control — nothing points a developer
+  at "the image is stale" as the cause. `k8s/helm/values-prod.yaml` (added 2026-08-27,
+  ADR-less follow-up of the first live deploy) already pins `image.tag: ssl-fix` and is
+  unaffected — this gap only bites a bare `helm install`/`upgrade` that skips it, exactly
+  the shape of command a developer reaches for when following `k8s/helm/README.md`'s
+  generic instructions or reproducing a past step by hand.
+  **Not started because** three different fixes are plausible and the tradeoff needs the
+  developer's input, not a unilateral pick: (a) drop `values.yaml`'s `image.tag` default
+  entirely so a bare `helm install` fails fast on a missing required value instead of
+  silently resolving to a stale tag; (b) change `docker-publish`'s trigger (or add a
+  second job) to also build on push to `dev`, so `:latest` actually tracks the branch this
+  project develops on; (c) merge `dev` into `main` on a regular cadence so `:latest`'s
+  existing `main`-only trigger stops being the mismatch. (a) is a Helm-chart-only change;
+  (b) touches CI (Scope Discipline flags new/changed CI behavior for confirmation); (c) is
+  a workflow/branching-policy decision, not a code change at all. Revisit with a
+  comparison table across these three before implementing any of them.
 - ~~**Automate the `cluster` → `app-infra` → `addons` → Helm deploy sequence**~~ — **landed
   2026-08-27** ([ADR 0046](ADR/0046-deploy-sequence-automation.md)). Tool: a plain bash
   script (`k8s/infra/terraform/deploy.sh`), matching the existing `build-and-push.sh`

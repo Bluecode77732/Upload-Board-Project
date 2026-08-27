@@ -425,6 +425,31 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
 
 ## 7. 미일정 / 미결 사항
 
+- **`image.tag: "latest"` 기본값이 조용히 옛날 코드를 배포함** (2026-08-28 발견, 예전
+  배포 단계를 손으로 재현하다가 확인) — `k8s/helm/values.yaml`의 `image.tag` 기본값은
+  `"latest"`인데, `.github/workflows/ci.yml`의 `docker-publish` 잡은 `main` push에만
+  반응해 그 태그를 다시 빌드한다. 이 프로젝트의 실제 작업은 전부 `dev`에서 이뤄지고
+  `main`으로 병합된 적이 없다. 실제로 재현됨: `-f values-prod.yaml` 없이, `image.tag`
+  명시도 없이 예전 최초 `helm install` 명령을 그대로 다시 실행했더니
+  `bluecode1775/sharenpo:latest`를 받아왔는데, 이건 `DB_SSL` 수정(커밋 `cf0cbfe`)이
+  있기 전에 빌드된 이미지였다 — Helm 값에는 `DB_SSL: true`가 정확히 들어가 있었는데도.
+  이때 발생하는 실패는 적극적으로 헷갈린다: `helm get values`는 설정이 맞다고 보여주는데
+  마이그레이션 Job은 여전히 수정 전의 `no pg_hba.conf entry ... no encryption` 에러로
+  실패한다 — 그 값을 제어해야 할 코드 자체가 실행 중인 이미지엔 없기 때문인데, "이미지가
+  낡았다"는 걸 가리키는 신호가 아무 데도 없다. `k8s/helm/values-prod.yaml`(2026-08-27
+  첫 실배포의 후속으로 추가, 별도 ADR 없음)은 이미 `image.tag: ssl-fix`를 고정해둬서
+  이 문제에 안 걸린다 — 이 문제는 그걸 건너뛴 맨 `helm install`/`upgrade`에서만
+  터진다. 정확히 `k8s/helm/README.md`의 일반 안내를 따르거나, 예전 단계를 손으로
+  재현할 때 쓰게 되는 명령 형태다.
+  **미착수 이유**: 그럴듯한 해법이 세 가지고, 그 트레이드오프는 개발자가 직접 골라야지
+  일방적으로 정할 사안이 아니다: (a) `values.yaml`의 `image.tag` 기본값을 아예 없애서,
+  맨 `helm install`이 낡은 태그로 조용히 풀리는 대신 필수값 누락으로 바로 실패하게 함;
+  (b) `docker-publish`의 트리거(또는 별도 잡)를 `dev` push에도 반응하게 바꿔서
+  `:latest`가 실제로 이 프로젝트가 개발하는 브랜치를 따라가게 함; (c) `dev`를 `main`에
+  주기적으로 병합해서 `:latest`의 기존 `main` 전용 트리거 자체가 더 이상 어긋나지 않게
+  함. (a)는 Helm 차트만 건드리는 변경이고, (b)는 CI를 건드리므로(Scope Discipline상
+  CI 동작 변경은 확인 필요), (c)는 코드 변경이 아니라 워크플로/브랜치 정책 결정이다.
+  이 셋을 비교 테이블로 놓고 재검토한 뒤 진행할 것.
 - ~~**`cluster` → `app-infra` → `addons` → Helm 배포 순서 자동화**~~ — **2026-08-27 완료**
   ([ADR 0046](ADR/0046-deploy-sequence-automation.ko.md)). 도구: 순수 bash 스크립트
   (`k8s/infra/terraform/deploy.sh`) — 기존 `build-and-push.sh` 선례와 같은 형태이며
