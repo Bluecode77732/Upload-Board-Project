@@ -12,6 +12,25 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Added
+- **First live deployment to AWS reached a stable state (2026-08-27)** — the Helm release
+  `upload-board` (`k8s/helm/`) is `STATUS: deployed` (revision 5) on the real EKS cluster.
+  `helm upgrade upload-board . --reuse-values --set env.DB_SSL=true` fixed the migration
+  Job's `no pg_hba.conf entry ... no encryption` failure against the live RDS instance
+  (`rds.force_ssl`), using the `DB_SSL` env var added for exactly this (commit `cf0cbfe`) —
+  the migration Job now completes and the app pod reaches `Running`/ready. The `default`
+  ServiceAccount was annotated with `app-infra`'s Terraform-provisioned IAM role ARN
+  (`eks.amazonaws.com/role-arn`) and the deployment restarted to pick it up, confirmed by the
+  injected `AWS_ROLE_ARN`/`AWS_WEB_IDENTITY_TOKEN_FILE` env vars and the projected
+  `aws-iam-token` volume in the running pod — wiring the S3 access the release's
+  `STORAGE_DRIVER=s3` value depends on. Reachable only inside the cluster for now
+  (`ingress.enabled: false` — external access is deferred until an outside tester actually
+  needs it, not enabled speculatively). Two follow-ups the developer confirmed the same day:
+  `cluster/main.tf`'s temporary `t4g.medium` graviton node type is now the **permanent**
+  choice (cost-efficiency over `m6g.large`'s pod-slot headroom), and `k8s/helm/values-prod.yaml`
+  now collects the repeated `--set` flags this deployment used. See `docs/ROADMAP.md` §9
+  (2026-08-27) for the full account.
+
 ### Changed
 - **Three documentation defects found during the Sharenpo rename pass, fixed rather than
   filed (2026-08-25)** — all three predate that work; none were introduced by it.

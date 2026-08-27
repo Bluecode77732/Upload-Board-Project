@@ -66,10 +66,12 @@ module "eks" {
       # 모듈 기본 ami_type이 x86_64라 arm64 인스턴스 계열엔 명시 필요
       # (실제 apply에서 InvalidParameterException으로 확인됨).
       ami_type = "AL2023_ARM_64_STANDARD"
-      # 임시: t4g.micro는 노드당 파드 슬롯이 4개뿐이라 시스템 데몬셋+애드온만으로
+      # t4g.micro는 노드당 파드 슬롯이 4개뿐이라 시스템 데몬셋+애드온만으로
       # 꽉 차 실제 앱 파드가 스케줄 안 됨(FailedScheduling). t4g.medium(슬롯 ~17개)로
-      # 완화 — 이것도 Free Tier 비대상이라 계정 결제수단/신원 검증이 먼저 필요하다.
-      # 검증 완료 후 원래 설계인 m6g.large로 되돌릴 것.
+      # 완화했다 — 애초엔 계정 결제수단/신원 검증(Free Tier 비대상) 전까지의 임시값
+      # 이었으나, 검증이 끝난 뒤(2026-08-27) 개발자가 비용 대비 파드 슬롯 여유의
+      # 가성비를 이유로 이 값을 확정했다. 설계 원안 m6g.large로의 복귀는 보류
+      # (docs/ROADMAP.md §9, 2026-08-27 항목).
       instance_types = ["t4g.medium"]
 
       min_size     = 1

@@ -16,10 +16,15 @@ Kubernetes용으로 패키징합니다. 이 차트가 별도 `helm/` 폴더가 �
 수정 이전 이미지)가 아니라 현재 소스로 새로 빌드한 이미지, 임시
 `postgres:16`, 그리고 `/health/live`/`/health/ready`/`/doc` 모두 Service를
 통해 `200`을 응답했습니다. 이 실행에서 실제 버그 2개를 발견해 고쳤습니다(hook
-순서, 빈 문자열 env var — 커밋 `0326199`). **여전히 미검증**: 실제 대상
-클러스터(AWS/EKS) — 아직 거기엔 아무것도 배포된 적이 없습니다(ROADMAP.md >
-Stage 4). `kind` 실행은 차트 자체의 배관이 동작한다는 것만 증명하지, 대상
-인프라가 존재한다는 뜻은 아닙니다.
+순서, 빈 문자열 env var — 커밋 `0326199`).
+**2026-08-17에 실제 배포 시작 → 2026-08-27에 안정화**: 릴리스 `upload-board`가
+이제 `k8s/infra/terraform/cluster/`가 만든 실제 AWS/EKS 클러스터에서 동작
+중입니다(revision 5, `STATUS: deployed`) — 전체 경위는
+[ROADMAP.md](../../docs/ROADMAP.md) §9(2026-08-27 항목) 참고, RDS 인스턴스의
+`rds.force_ssl`이 요구해서 필요했던 `DB_SSL` 수정도 포함됩니다. 아직은
+클러스터 내부에서만 접근 가능합니다(`ingress.enabled: false`) — `Ingress`
+활성화는 외부 테스터 접근이 실제로 필요해지는 시점으로 계획돼 있으며, 그
+전엔 켜지 않습니다.
 
 ## 설치 전: Secret 먼저 만들기
 
@@ -51,6 +56,17 @@ helm install sharenpo . \
 `secrets.existingSecret`은 `required`로 지정돼 있어, 설정하지 않으면 pod가
 env var 누락으로 crash-loop에 빠지는 대신 설치 자체가 명확한 에러로 즉시
 실패합니다.
+
+실제 AWS 배포용으로는 `values-prod.yaml`이 반복되는 `--set env.X=Y` 나열을
+정리해둔 파일입니다(2026-08-27, 첫 실제 배포로 어떤 값이 실제로 필요한지
+확인된 뒤 추가 — ROADMAP.md §9 참고):
+
+```bash
+helm upgrade upload-board . -f values-prod.yaml
+```
+
+비밀값은 여기 없습니다 — `secrets.existingSecret`은 위에서 만든 Secret의
+이름만 가리킬 뿐, Secret 자체는 이 파일과 무관합니다.
 
 오브젝트 이름은 차트 이름이 아니라 **릴리스 이름**(위 예시의 `sharenpo`)에서
 옵니다 — `_helpers.tpl`의 `fullname` 헬퍼가 `.Release.Name`이기 때문입니다.

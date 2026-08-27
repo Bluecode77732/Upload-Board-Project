@@ -1,0 +1,25 @@
+# 실제 AWS 배포용 오버레이 — values.yaml의 기본값 위에 이 파일을 얹어 쓴다:
+#   helm upgrade upload-board . -f values-prod.yaml
+# 반복되는 `helm upgrade ... --set env.DB_SSL=true --set env.STORAGE_DRIVER=s3 ...`
+# 나열을 정리한 것으로, 2026-08-27 첫 실제 배포(`helm get values upload-board -n
+# default`)에서 실제로 쓰인 값을 그대로 옮겼다(docs/ROADMAP.md §9, 2026-08-27
+# 항목). 비밀값은 여기 없다 — existingSecret 참조만 있을 뿐, values.yaml 상단
+# 주석이 설명하는 대로 Secret 리소스는 이 파일이 적용되기 전에 이미
+# `kubectl create secret`으로 따로 만들어져 있어야 한다.
+
+image:
+  tag: ssl-fix
+
+env:
+  AWS_REGION: ap-northeast-2
+  BASE_URL: https://sharenpo.cloud
+  DB_HOST: upload-board-project-db.chygueeqyek9.ap-northeast-2.rds.amazonaws.com
+  DB_DATABASE: upload_board
+  # app-infra의 RDS는 rds.force_ssl 파라미터로 TLS를 강제한다 — 이 값이 없으면
+  # 마이그레이션 Job이 "no pg_hba.conf entry ... no encryption"로 실패한다.
+  DB_SSL: true
+  STORAGE_DRIVER: s3
+  S3_BUCKET: upload-board-project-074416822640
+
+secrets:
+  existingSecret: upload-board-project-app-secrets

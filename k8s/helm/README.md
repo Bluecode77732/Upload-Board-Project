@@ -15,9 +15,13 @@ for its scaffold history.
 fix), a throwaway `postgres:16`, and `/health/live`/`/health/ready`/`/doc` all
 answered `200` through the Service. That run found and fixed two real bugs
 (hook ordering, empty-string env vars — commit `0326199`).
-**Still unverified**: a real target cluster (AWS/EKS) — nothing has been
-deployed there yet (ROADMAP.md > Stage 4). The `kind` run proves the chart's
-own plumbing works, not that the target infrastructure exists.
+**Deployed for real 2026-08-17 → stable 2026-08-27**: the release `upload-board`
+now runs on the real AWS/EKS cluster from `k8s/infra/terraform/cluster/`
+(revision 5, `STATUS: deployed`) — see [ROADMAP.md](../../docs/ROADMAP.md) §9
+(2026-08-27) for the full account, including the `DB_SSL` fix the RDS
+instance's `rds.force_ssl` required. It is reachable only inside the cluster
+for now (`ingress.enabled: false`); enabling `Ingress` for external access is
+planned for when outside-tester access is actually needed, not before.
 
 ## Before installing: create the Secret
 
@@ -47,6 +51,17 @@ helm install sharenpo . \
 
 `secrets.existingSecret` is `required` — install fails fast with a clear error
 if it's unset, rather than the pod crash-looping on a missing env var.
+
+For the real AWS deployment, `values-prod.yaml` collects the repeated
+`--set env.X=Y` flags (added 2026-08-27, after the first live deployment
+established which values those actually are — see ROADMAP.md §9):
+
+```bash
+helm upgrade upload-board . -f values-prod.yaml
+```
+
+It carries no secret values — `secrets.existingSecret` still just names the
+Secret created above; the Secret itself is unaffected by this file.
 
 Object names come from the **release name** (`sharenpo` above), not from the
 chart name — `_helpers.tpl`'s `fullname` helper is `.Release.Name`. Installing

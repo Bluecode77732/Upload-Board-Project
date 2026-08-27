@@ -12,6 +12,26 @@
 
 ## [Unreleased]
 
+### 추가
+- **AWS 첫 실제 배포가 안정 상태에 도달함 (2026-08-27)** — Helm 릴리스 `upload-board`
+  (`k8s/helm/`)가 실제 EKS 클러스터에서 `STATUS: deployed`(revision 5)에 도달했다.
+  `helm upgrade upload-board . --reuse-values --set env.DB_SSL=true`로 실제 RDS
+  인스턴스(`rds.force_ssl`)를 상대로 마이그레이션 Job이 겪던
+  `no pg_hba.conf entry ... no encryption` 실패를 해결했다 — 바로 이 문제를 위해
+  추가해둔 `DB_SSL` env var(커밋 `cf0cbfe`)를 사용했고, 이제 마이그레이션 Job이
+  완료되고 앱 파드가 `Running`/ready 상태에 도달한다. `default` ServiceAccount에
+  `app-infra`가 Terraform으로 프로비저닝한 IAM 역할 ARN을
+  `eks.amazonaws.com/role-arn`으로 주석 처리하고 Deployment를 재시작해 반영했다 —
+  실행 중인 파드에 주입된 `AWS_ROLE_ARN`/`AWS_WEB_IDENTITY_TOKEN_FILE` env var와
+  projected `aws-iam-token` 볼륨으로 확인했으며, 이는 릴리스의 `STORAGE_DRIVER=s3`
+  값이 의존하는 S3 접근을 연결한 것이다. 아직은 클러스터 내부에서만 접근
+  가능하다(`ingress.enabled: false` — 외부 접근은 실제로 외부 테스터가 필요해질
+  때까지 미루며, 미리 켜두지 않는다). 같은 날 개발자가 확정한 후속 조치 두
+  가지: `cluster/main.tf`의 임시 `t4g.medium` graviton 노드 타입이 이제
+  **영구** 선택값이 되었고(`m6g.large`의 파드 슬롯 여유보다 비용 효율을
+  우선), `k8s/helm/values-prod.yaml`이 이번 배포에 쓰인 반복되는 `--set`
+  플래그를 정리해 담았다. 전체 내용은 `docs/ROADMAP.md` §9(2026-08-27) 참고.
+
 ### 변경
 - **Sharenpo 개명 작업 중 발견한 문서 결함 3건, 기록만 남기지 않고 바로 수정(2026-08-25)** —
   세 건 모두 그 작업 이전부터 있던 것이고, 이번 개명이 만든 것은 하나도 없다.

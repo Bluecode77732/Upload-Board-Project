@@ -1033,8 +1033,11 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
   `helm install --wait` verified end-to-end against a throwaway local `kind`
   cluster (found and fixed 2 real bugs: hook ordering, empty-string env vars).
   `k8s/`'s five standalone static manifests (unwired, duplicating a strict subset
-  of the chart) were deleted rather than kept in sync. A real target cluster
-  (AWS/EKS) is still not deployed — Stage 4 work
+  of the chart) were deleted rather than kept in sync. **A real target cluster
+  now exists and runs it**: the app was deployed onto the live AWS/EKS cluster
+  and reached `STATUS: deployed` 2026-08-27 (ROADMAP.md §9) — Stage 4's
+  remaining work is the rest of the DevOps-stack rows (Prometheus, Grafana,
+  Istio) and the still-disabled `Ingress`, not the deploy act itself
 
 **Full roadmap plan (decided 2026-07-23)**: an 11-axis decision review fixed the
 overall plan in ROADMAP.md — staged dedicated tasks: Stage F frontend
@@ -1412,10 +1415,11 @@ CI: GitHub Actions (`.github/workflows/ci.yml`, ADR 0016) runs lint (`lint:ci` �
 service) on push/PR to `main`/`dev`. Local containerization: a multi-stage `Dockerfile`
 + `docker-compose.yml` (ADR 0015; hardened 2026-08-08 — non-root `USER`, a `HEALTHCHECK`
 against `GET /health/live`, and migrations moved out of `CMD` into `docker-compose.yml`'s
-one-shot `migrate` service, ADR 0030–0032). There is **no deploy target and no git
-hooks** — AWS container deployment is a Stage 4 roadmap item (ROADMAP.md), and no
-git-hook tooling is installed. Do not assume a deploy pipeline or hooks; adding either is
-explicit-request work under Scope Discipline.
+one-shot `migrate` service, ADR 0030–0032). There is **no automated deploy pipeline (CD)
+and no git hooks** — the app is deployed to AWS (ROADMAP.md §9, 2026-08-27), but by a
+human running `helm upgrade` from a local session, not by GitHub Actions; CI still only
+runs lint/test/build, and no git-hook tooling is installed. Do not assume a CI/CD deploy
+pipeline or hooks; adding either is explicit-request work under Scope Discipline.
 
 ## Development Tooling
 

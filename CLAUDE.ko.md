@@ -1070,8 +1070,11 @@ Conflict Protocol을 따른다.
   `Job`, 기본 비활성 `Ingress`를 갖춘다 — 임시 로컬 `kind` 클러스터에 대해
   `helm install --wait`로 종단 간 검증 완료(실제 버그 2개 발견해 수정: hook
   순서, 빈 문자열 env var). `k8s/`의 독립 정적 매니페스트 5개(어디에도 연결
-  안 됐고 차트의 엄격한 부분집합만 중복)는 동기화하는 대신 삭제했다. 실제 대상
-  클러스터(AWS/EKS) 배포는 여전히 안 됨 — Stage 4 작업
+  안 됐고 차트의 엄격한 부분집합만 중복)는 동기화하는 대신 삭제했다. **이제 실제
+  대상 클러스터가 존재하고 그 위에서 동작 중이다**: 실제 AWS/EKS 클러스터에
+  앱을 배포해 2026-08-27에 `STATUS: deployed`에 도달했다(ROADMAP.md §9) —
+  Stage 4에 남은 일은 배포 행위 자체가 아니라 나머지 DevOps 스택 항목
+  (Prometheus, Grafana, Istio)과 여전히 비활성인 `Ingress`뿐이다
 
 **전체 로드맵 계획(2026-07-23 결정)**: 11개 축에 걸친 결정 검토가 ROADMAP.md의
 전체 계획을 확정했다 — 단계별 전용 작업: Stage F 프론트엔드 준비(라우트
@@ -1485,10 +1488,12 @@ CI: GitHub Actions(`.github/workflows/ci.yml`, ADR 0016)가 lint
 로컬 컨테이너화: 멀티 스테이지 `Dockerfile` + `docker-compose.yml`(ADR
 0015; 2026-08-08 하드닝 — non-root `USER`, `GET /health/live`에 대한
 `HEALTHCHECK`, 그리고 마이그레이션을 `CMD`에서 `docker-compose.yml`의
-원샷 `migrate` 서비스로 옮김, ADR 0030–0032). **배포 대상도 git hook도
-없다** — AWS 컨테이너 배포는 Stage 4 로드맵 항목이며(ROADMAP.md), git
-hook 툴체인도 설치되어 있지 않다. 배포 파이프라인이나 hook이 있다고
-가정하지 않는다; 둘 중 하나를 추가하는 것은 명시적 요청이 필요한 작업이다.
+원샷 `migrate` 서비스로 옮김, ADR 0030–0032). **자동 배포 파이프라인(CD)도
+git hook도 없다** — 앱은 AWS에 배포돼 있지만(ROADMAP.md §9, 2026-08-27),
+GitHub Actions가 아니라 사람이 로컬 세션에서 `helm upgrade`를 직접 실행해서다;
+CI는 여전히 lint/test/build만 돌리고, git hook 툴체인도 설치되어 있지 않다.
+CI/CD 배포 파이프라인이나 hook이 있다고 가정하지 않는다; 둘 중 하나를
+추가하는 것은 명시적 요청이 필요한 작업이다.
 
 ## 개발 도구
 
