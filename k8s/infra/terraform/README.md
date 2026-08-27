@@ -91,6 +91,15 @@ configuration, each state's `backend "local"` migrates to a remote backend
 
 ## Deploy
 
+**Scripted entry point**: `k8s/infra/terraform/deploy.sh` wraps the three-state apply
+order below plus `helm upgrade --install` in one script — plan-then-confirm on every
+apply, no `-auto-approve` ([ADR 0046](../../../docs/ADR/0046-deploy-sequence-automation.md)).
+Run `bash deploy.sh all` (or `cluster`/`app-infra`/`addons`/`helm` individually; `--help`
+for env vars). It does **not** cover domain purchase/NS delegation, the ESO secret sync,
+the `default` ServiceAccount IRSA annotation, or enabling `Ingress` — those stay manual,
+covered further down this file. The manual sequence below is what the script automates,
+kept here as the reference for what each step actually does:
+
 ```sh
 # 1. cluster/
 cd cluster

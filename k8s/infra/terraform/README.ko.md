@@ -91,6 +91,16 @@ k8s/infra/terraform/
 
 ## 배포
 
+**스크립트 진입점**: `k8s/infra/terraform/deploy.sh`가 아래 3-state apply 순서와
+`helm upgrade --install`을 하나의 스크립트로 감쌉니다 — 모든 apply에 plan-then-confirm
+게이트가 걸려 있고 `-auto-approve`는 없습니다
+([ADR 0046](../../../docs/ADR/0046-deploy-sequence-automation.md)). `bash deploy.sh
+all`을 실행하거나(또는 `cluster`/`app-infra`/`addons`/`helm` 개별 실행; 환경변수는
+`--help` 참고). 도메인 구매/NS 위임, ESO 시크릿 동기화, default ServiceAccount IRSA
+어노테이션, `Ingress` 활성화는 다루지 **않습니다** — 이들은 이 문서 아래쪽에 나오는
+대로 여전히 수동입니다. 아래 수동 순서는 스크립트가 자동화하는 대상이자, 각 단계가
+실제로 무엇을 하는지 보는 참고 자료로 남겨둡니다:
+
 ```sh
 # 1. cluster/
 cd cluster

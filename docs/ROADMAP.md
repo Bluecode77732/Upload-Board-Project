@@ -457,8 +457,24 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
 
 ## 7. Unscheduled / open decisions
 
-- **Automate the `cluster` → `app-infra` → `addons` → Helm deploy sequence** (recorded
-  2026-08-26) — the first real end-to-end `apply` of this stack (ADR 0043/0044) surfaced how
+- ~~**Automate the `cluster` → `app-infra` → `addons` → Helm deploy sequence**~~ — **landed
+  2026-08-27** ([ADR 0046](ADR/0046-deploy-sequence-automation.md)). Tool: a plain bash
+  script (`k8s/infra/terraform/deploy.sh`), matching the existing `build-and-push.sh`
+  precedent and keeping "no automated deploy pipeline (CD)" true — a GitHub Actions
+  workflow was rejected for reversing that stance on its own. Scope: Terraform 3-state
+  sequencing + `helm upgrade --install` (reusing `values-prod.yaml`, no `--set`
+  enumeration); domain purchase/NS delegation, the ESO secret sync, the `default`
+  ServiceAccount IRSA annotation, and enabling `Ingress` stay manual, matching what
+  `k8s/infra/terraform/README.md` already documented as one-time/interactive. Covers:
+  fixed apply order via subcommands, region/cluster_name consistency checked against
+  `cluster/`'s live `terraform output`, the ACM two-phase `-target` apply, and a
+  plan-then-confirm gate on every apply (`terraform plan -out=<tmpfile>` → human `y`/N →
+  `terraform apply <tmpfile>` — no `-auto-approve` anywhere). Live-verified against the
+  real AWS account: `deploy.sh cluster` ran an actual plan ("No changes...") and
+  correctly aborted with nothing applied when given no confirmation; `terraform
+  fmt -check`/`validate` pass unchanged in all three state directories. The eight
+  originally-recorded failure modes below are kept for the historical record — the first
+  real end-to-end `apply` of this stack (ADR 0043/0044) surfaced how
   many hand-run, order-dependent steps the current README asks a developer to carry in their
   head, each with its own failure mode actually hit during that run: an EKS `cluster_version`
   pinned to an already-EOL Kubernetes minor (no new node-group AMI existed for it); the
@@ -476,11 +492,7 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   None of these is a single bug to fix — together they are the case for wrapping this sequence
   (and its order-of-operations, retry, and wait-for-propagation logic) in a script or CI
   pipeline rather than a human re-deriving the same order and the same failure recoveries from
-  README prose every time. **Not started because** this session's priority was getting one
-  real deployment through end-to-end first — automating a sequence not yet proven to work would
-  risk automating the wrong steps. Revisit once this deployment is confirmed stable; needs its
-  own ADR (tool choice — plain shell script vs. GitHub Actions vs. Makefile — and how far it
-  reaches: infra-only, or through the Helm install and post-apply manual steps too)
+  README prose every time — which is exactly what ADR 0046 above now does.
 - **Replace or drop the login page's mark, and delete the unused icon sprite** (recorded
   2026-08-25) — the Sharenpo unification (`0a14039`) gave the login card a lockup of
   `<img src="/favicon.svg">` beside the wordmark, which was the right call for that task:

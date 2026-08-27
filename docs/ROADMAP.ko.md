@@ -425,8 +425,23 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
 
 ## 7. 미일정 / 미결 사항
 
-- **`cluster` → `app-infra` → `addons` → Helm 배포 순서 자동화** (2026-08-26 기록) — 이
-  스택(ADR 0043/0044)을 처음으로 실제 AWS에 end-to-end로 apply해보니, 지금 README가
+- ~~**`cluster` → `app-infra` → `addons` → Helm 배포 순서 자동화**~~ — **2026-08-27 완료**
+  ([ADR 0046](ADR/0046-deploy-sequence-automation.ko.md)). 도구: 순수 bash 스크립트
+  (`k8s/infra/terraform/deploy.sh`) — 기존 `build-and-push.sh` 선례와 같은 형태이며
+  "자동 배포 파이프라인(CD) 없음"을 그대로 유지한다. GitHub Actions 워크플로는 그 자체가
+  이 상태를 뒤집는 결정이 될 것이라 기각했다. 범위: Terraform 3-state 순서화 +
+  `helm upgrade --install`(`values-prod.yaml` 재사용, `--set` 나열 없음) — 도메인
+  구매/NS 위임, ESO 시크릿 동기화, default ServiceAccount IRSA 어노테이션, `Ingress`
+  활성화는 `k8s/infra/terraform/README.md`가 이미 1회성/인터랙티브라고 문서화한 그대로
+  수동으로 남는다. 구현 내용: 서브커맨드로 강제되는 고정 apply 순서, `cluster/`의 실제
+  `terraform output`과 대조하는 region/cluster_name 일치 검증, ACM `-target` 2단계
+  apply, 그리고 모든 apply에 걸린 plan-then-confirm 게이트(`terraform plan
+  -out=<tmpfile>` → 사람의 y/N → `terraform apply <tmpfile>` — `-auto-approve` 없음).
+  실제 AWS 계정을 대상으로 실측 검증: `deploy.sh cluster`가 실제 plan을
+  실행했고("No changes..."), 확인 입력이 없을 때는 실제로 아무것도 적용하지 않고
+  중단했다; 세 state 디렉터리 모두에서 `terraform fmt -check`/`validate`가 변경 전과
+  동일하게 통과한다. 원래 기록됐던 8가지 실패 양상은 그 역사적 기록으로 아래에 남긴다 —
+  이 스택(ADR 0043/0044)을 처음으로 실제 AWS에 end-to-end로 apply해보니, 지금 README가
   개발자에게 머릿속으로 순서를 기억하며 손으로 하나하나 실행하게 하는 단계가 얼마나 많은지,
   그리고 그 각각이 이번 실행에서 실제로 겪은 고유한 실패 양상을 갖고 있다는 게 드러났다:
   EKS `cluster_version`이 이미 지원 종료(EOL)된 Kubernetes 마이너 버전으로 고정돼 있어 그
@@ -444,11 +459,7 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   단순히 고쳐야 할 버그 하나가 아니다 — 이것들을 합쳐보면, 매번 사람이 README 산문에서
   같은 순서와 같은 장애 복구 절차를 다시 떠올리게 하는 대신, 이 순서(와 그 안의
   순서 의존성·재시도·전파 대기 로직)를 스크립트나 CI 파이프라인으로 감싸야 한다는
-  근거가 된다. **미착수 이유**: 이번 세션의 우선순위는 실제 배포 하나를 먼저 끝까지
-  통과시키는 것이었다 — 아직 제대로 동작함이 검증되지 않은 순서를 자동화하면 잘못된
-  단계를 자동화할 위험이 있다. 이 배포가 안정적으로 확인된 뒤 재검토한다. 자체 ADR
-  필요(도구 선택 — 순수 셸 스크립트 vs GitHub Actions vs Makefile — 그리고 범위: 인프라만
-  다룰지, Helm 설치와 apply 이후 수동 단계까지 포함할지)
+  근거가 된다 — 그리고 그것이 바로 위 ADR 0046이 지금 한 일이다.
 - **로그인 화면의 마크를 교체하거나 걷어내고, 쓰이지 않는 아이콘 스프라이트를 삭제** (2026-08-25
   기록) — Sharenpo 통일 작업(`0a14039`)이 로그인 카드에 워드마크와 나란히
   `<img src="/favicon.svg">` 락업을 넣었다. 그 작업 기준으로는 옳은 판단이었다. 이름 변경

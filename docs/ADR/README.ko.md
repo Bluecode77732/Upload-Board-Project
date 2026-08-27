@@ -53,6 +53,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0043](0043-terraform-project-adaptation.ko.md) | Terraform 프로젝트 적응 — 이 프로젝트의 실제 AWS 리소스, 실제 apply로 검증, 0038 개정 | 승인됨 — 구현됨, 미적용 (Addendum 참고) | 2026-08-18 |
 | [0044](0044-terraform-three-state-split.ko.md) | Terraform 3-state 분리 — cluster/addons/app-infra lifecycle 분리, 0043 개정 | 승인됨 — 구현됨, 미적용 (Addendum 참고) | 2026-08-19 |
 | [0045](0045-audit-log-target-type.ko.md) | 감사 로그 `targetType` — 다형 `targetId`를 위한 판별자, 0013 개정 | 승인됨 — 구현됨 | 2026-08-24 |
+| [0046](0046-deploy-sequence-automation.ko.md) | 배포 순서 자동화 — 로컬 쉘 스크립트, Terraform + Helm까지만 | 승인됨 — 구현됨 | 2026-08-27 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고
