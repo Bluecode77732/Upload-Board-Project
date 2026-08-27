@@ -13,21 +13,28 @@ directory's scaffold history;
 configuration below is split into three independently-appliable states
 instead of one root module.
 
-**Status**: **applied against real AWS — these resources exist and are being
-billed.** As of 2026-08-25, `cluster/` and `app-infra/` hold local state at
-serial 235 and 23, roughly 108 resource instances between them: a live EKS
-cluster, an RDS PostgreSQL instance, an S3 bucket, a Route53 zone, and an ACM
-certificate. `terraform validate` and `terraform fmt -check` pass in all three
-state directories.
+**Status**: **not applied — a full teardown, not the original scaffold gap.**
+All three states, plus the app itself (Helm), were applied against real AWS
+2026-08-25–27 and confirmed working end-to-end (ADR 0039's Addendum records a
+TLS-verification fix made against that live RDS instance). Once the deploy
+was proven, everything was destroyed 2026-08-28 to stop the AWS bill — no EKS
+cluster, RDS instance, S3 bucket, Route53 zone, NAT gateway, or EC2 instance
+from this stack currently exists (verified via `aws eks/rds/ec2/elb` describe
+calls, all empty/not-found). `terraform validate` and `terraform fmt -check`
+still pass in all three state directories.
 
-Run `terraform plan` and read it before any `apply`, and never `destroy`
+This status is a snapshot, not a promise — a future `apply` can make it true
+again in minutes, and someone re-reading this file later should re-verify
+with `terraform plan` rather than trust this paragraph. When applying, run
+`terraform plan` and read it before any `apply`, and never `destroy`
 casually — the RDS instance carries `skip_final_snapshot = true` and
 `deletion_protection = false`, so anything that replaces or destroys it takes
-the data with it and leaves no final snapshot. ADR 0043's and ADR 0044's
-addenda still say this config had never been applied; they are left as written
-because an ADR records what was true when written — see
-[ROADMAP.md §7](../../../docs/ROADMAP.md#7-unscheduled--open-decisions) for the
-correction and the deferred identifier rename (ADR 0043 D1).
+the data with it and leaves no final snapshot (this is exactly why the prior
+teardown was a deliberate, confirmed decision, not a casual one). ADR 0043's
+and ADR 0044's addenda still say this config had never been applied; they are
+left as written because an ADR records what was true when written — see
+[ROADMAP.md §7](../../../docs/ROADMAP.md#7-unscheduled--open-decisions) for
+the fuller history and the deferred identifier rename (ADR 0043 D1).
 
 ## Three states, one apply order
 

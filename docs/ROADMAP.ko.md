@@ -390,7 +390,7 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
 | **Helm** | 릴리스 패키징 | ✅ AWS에서 라이브 | `k8s/helm/`에 위치(2026-08-17 형제 디렉터리였던 `helm/upload-board-project/`에서 이동 후 한 단계 더 평탄화, [0042](ADR/0042-k8s-helm-directory-consolidation.ko.md) — Kubernetes 관련 콘텐츠가 최상위에 하나만, 불필요한 중첩 없이 남도록). 2026-08-17 프로젝트 전용으로 적응([0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0037](ADR/0037-helm-chart-scaffold.ko.md)의 유예 해제): 실제 이미지/포트, `/health/live`+`/health/ready` probe, non-root `securityContext`, `ConfigMap`, `existingSecret` 전용 `Secret` 소비, `docker-compose.yml`의 `migrate` 서비스를 본뜬 migration `Job`, 기본 비활성 `Ingress`. `replicaCount` 기본값은 1(`STORAGE_DRIVER=local`에서 1보다 크면 replica 간 업로드 파일이 사라짐 — 다만 실제 릴리스는 이제 `s3`로 동작 중). 임시 로컬 `kind` 클러스터에 대해 `helm install --wait` 검증 완료(2026-08-17, [0041](ADR/0041-helm-chart-project-adaptation.ko.md)의 추가 기록) — 실제 버그 2개(hook 순서, 빈 문자열 env var) 발견해 수정. **2026-08-27 실제 대상 클러스터(AWS/EKS)에 설치 완료**(§9) — `values-prod.yaml`이 이번 설치의 `--set` 플래그를 정리해 담았다. | [0037](ADR/0037-helm-chart-scaffold.ko.md), [0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0042](ADR/0042-k8s-helm-directory-consolidation.ko.md) |
 | **Prometheus** | 메트릭 수집 | 🆕 | Nest `Logger` 관측성 스탠스 위에 메트릭 익스포트. | 자체 ADR(예정); [0017](ADR/0017-logging-conventions.ko.md) 위 |
 | **Grafana** | 대시보드 | 🆕 | Prometheus 데이터소스 기반 대시보드/알림. | 자체 ADR(예정) |
-| **Terraform** | 코드형 인프라 | ✅ 적용됨 | 프로젝트 전용 설계 확정([0043](ADR/0043-terraform-project-adaptation.ko.md), [0038](ADR/0038-terraform-iac-scaffold.ko.md)의 유예 해제) 및 2026-08-18 구현: 이 프로젝트 고유의 EKS(이기종 노드 그룹 2개), RDS PostgreSQL, S3 버킷 + 앱 IRSA 역할, Secrets Manager + External Secrets Operator, Route53/ACM 기반 ALB ingress 경로를 프로비저닝한다 — Istio 예제는 주석 처리가 아니라 완전히 사라졌다. 2026-08-20에 그 단일 루트 모듈을 독립적으로 apply 가능한 세 state로 재구성([0044](ADR/0044-terraform-three-state-split.ko.md)): `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM, `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — ALB Controller+ESO, 다른 둘을 모두 읽는 유일한 state) — 퇴역한 단일 `main.tf`는 더 이상 존재하지 않는다. 세 디렉터리 모두 `terraform validate`/`fmt -check` 통과. **실제 AWS 계정에 적용됨** — 여기서는 2026-08-27에 정정(§7에서 2026-08-25에 이미 정정됐고, `CLAUDE.md`도 마찬가지): `cluster/`+`app-infra/`는 약 108개 리소스 인스턴스를 담은 로컬 state를 갖고 있으며, 앱도 이제 그 클러스터 위에 배포돼 있다(§9, 2026-08-27). 여기 있는 모든 리소스는 실제이며 과금된다 — 어떤 `apply` 전에도 `terraform plan`을 먼저 읽고, `destroy`는 절대 가볍게 하지 않는다. | [0038](ADR/0038-terraform-iac-scaffold.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md), [0044](ADR/0044-terraform-three-state-split.ko.md) |
+| **Terraform** | 코드형 인프라 | ✅ 적용됨 | 프로젝트 전용 설계 확정([0043](ADR/0043-terraform-project-adaptation.ko.md), [0038](ADR/0038-terraform-iac-scaffold.ko.md)의 유예 해제) 및 2026-08-18 구현: 이 프로젝트 고유의 EKS(이기종 노드 그룹 2개), RDS PostgreSQL, S3 버킷 + 앱 IRSA 역할, Secrets Manager + External Secrets Operator, Route53/ACM 기반 ALB ingress 경로를 프로비저닝한다 — Istio 예제는 주석 처리가 아니라 완전히 사라졌다. 2026-08-20에 그 단일 루트 모듈을 독립적으로 apply 가능한 세 state로 재구성([0044](ADR/0044-terraform-three-state-split.ko.md)): `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM, `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — ALB Controller+ESO, 다른 둘을 모두 읽는 유일한 state) — 퇴역한 단일 `main.tf`는 더 이상 존재하지 않는다. 세 디렉터리 모두 `terraform validate`/`fmt -check` 통과. **2026-08-25~27에 실제 AWS 계정에 apply됨**(`cluster/`+`app-infra/`가 약 108개 리소스 인스턴스를 담은 로컬 state를 가졌고, 앱도 그 클러스터 위에 배포됨, §9) — **그 뒤 2026-08-28에 배포가 end-to-end로 검증된 후 과금을 멈추려고 전부 destroy됨.** 이 스택에서 나온 건 지금 아무것도 존재하지 않는다(`aws eks/rds/ec2/elb` describe 호출이 전부 빈 값/not-found로 확인됨). 현재: 🆕 미적용, `terraform validate`/`fmt -check`는 여전히 통과. 이 칸은 스냅샷일 뿐 실시간 상태가 아니므로 믿기 전에 `terraform plan`으로 재확인할 것. | [0038](ADR/0038-terraform-iac-scaffold.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md), [0044](ADR/0044-terraform-three-state-split.ko.md) |
 | **Istio** | 서비스 메시 | 🆕 | **Terraform 이후 예정** — Kubernetes 클러스터 위의 서비스 메시(트래픽 관리, 워크로드 간 mTLS, 메시 레벨 텔레메트리를 Prometheus/Grafana로). IaC로 프로비저닝된 클러스터가 생긴 뒤 도입; 향후 다중 서비스 확장을 내다본 것. | 자체 ADR(예정); Terraform 이후 |
 | **AWS** | 클라우드 / 배포 대상 | ✅ 라이브 | 위 행들이 향하는 컨테이너 배포 대상 — **이제 실제 배포 대상이다**: 계정 `074416822640`(`sharenpo-user`, 2026-08-27부로 Paid Plan), 리전 `ap-northeast-2`, 실제 EKS + RDS + S3 + Route53/ACM, 그리고 앱 자체가 배포되어 동작 중(§9, 2026-08-27). | 배포 ADR(예정) |
 
@@ -574,7 +574,12 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   붙이는 값이라 완전한 통일은 애초에 불가능하다. "적용된 적 없음"이라는 서술은 2026-08-25에
   `CLAUDE.md`(+ko)와 `k8s/infra/terraform/README.md`(+ko)에서 정정했다. **ADR 0043·0044의
   Addendum에는 아직 그대로 남아 있으며, 이는 의도적이다** — ADR은 작성 시점의 사실을 기록하므로
-  고치지 않고, 정정의 기준은 이 행이다.
+  고치지 않고, 정정의 기준은 이 행이다. **갱신(2026-08-28)**: 이 행이 측정했던 인프라는
+  2026-08-25~27에 apply됐다가 2026-08-28에 전부 destroy됐다(배포 검증 완료 후 과금 중단
+  목적 — `k8s/infra/terraform/README.md`(+ko)의 상태 참고). 지금 AWS엔 `upload-board-project`
+  라는 이름을 가진 게 아무것도 없어서, 이 행이 이미 언급했던 "재구축 시 공짜"인 순간이 바로
+  지금 열려 있다 — 다음에 처음부터 다시 apply할 때가, 이 행의 논리가 다시 그 창을 닫기 전에
+  식별자를 개명할 정확한 타이밍이다.
 - **디스플레이 서체 탐구 후 구현** (2026-08-25 기록) — **의도적으로 열어 둔다.** 제약을 미리
   박지 않았다: 웹폰트, 셀프호스팅, 시스템 폰트 유지가 모두 후보이며 그 선택 자체가 탐구의
   결과물이다. 메우려는 공백은 구체적이다: `index.css`가 `--heading`과 `--sans`를 **바이트
@@ -940,6 +945,12 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
 (README/엔드포인트 일치의 자동 검증 — CI 작업 아래의 후보).
 
 ## 9. 완료
+
+### 2026-08-28
+
+| 항목 | 비고 |
+|---|---|
+| end-to-end 검증 후 AWS 전체 destroy | 배포가 안정 상태로 확인됐고(아래 2026-08-27 행 참고), 같은 기간 실제 RDS를 상대로 TLS 검증 결함까지 발견·수정한 뒤(ADR 0039 Addendum — `rejectUnauthorized: false`를 `ssl: { ca: DB_SSL_CA }`로 교체, 재배포해 실제 인증서 검증 통과까지 확인), 개발자는 활성 테스터가 없는 상태로 스택을 계속 띄워두는 대신 AWS 과금을 멈추기로 했다. 순서: Helm 릴리스 먼저 제거, 그다음 `addons/` → `app-infra/` → `cluster/` 순으로 `terraform destroy` — `k8s/infra/terraform/README.md`가 명시한 역순 그대로다(ALB/Ingress를 한 번도 켠 적이 없어서 ADR이 기록한 `DependencyViolation` 타임아웃 위험도 해당 없었다). 이후 이 스택이 만든 모든 리소스 종류(EKS 클러스터, 노드그룹 EC2 인스턴스, RDS 인스턴스, S3 버킷, Route53 호스팅 존, NAT 게이트웨이, Elastic IP, EBS 볼륨, Secrets Manager, ACM 인증서, CloudWatch 로그그룹, 로드밸런서)를 `aws` describe 호출로 직접 확인했고 전부 빈 값/not-found였다. RDS 스냅샷은 안 남겼다(`skip_final_snapshot = true`가 원래 설계였고, 남길 데이터도 없었다). `CLAUDE.md`(+ko), `k8s/infra/terraform/README.md`(+ko), 이 문서의 Stage 4 상태 표를 같은 날 갱신해서 2026-08-25에 했던 "적용됨" 정정을 낡은 채로 두지 않고 다시 "미적용"으로 되돌렸다 — 각각 이게 특정 시점의 스냅샷이며 `terraform plan`으로 재확인해야 한다고 명시했다. 나중에 재배포할 때 새로 결정할 건 없다 — 같은 순서, 같은 `deploy.sh all`이 Terraform README의 Deploy 섹션(Destroy 섹션에서 상호참조)에 그대로 문서화돼 있다. |
 
 ### 2026-08-27
 

@@ -14,18 +14,26 @@ state로 나뉘어 있는지는
 [ADR 0044](../../../docs/ADR/0044-terraform-three-state-split.ko.md)를
 참고하세요.
 
-**상태**: **실제 AWS에 apply되어 있습니다 — 리소스가 실재하며 과금 중입니다.**
-2026-08-25 기준 `cluster/`와 `app-infra/`의 로컬 state가 각각 serial 235·23이고,
-둘을 합쳐 리소스 인스턴스가 약 108개입니다: 살아 있는 EKS 클러스터, RDS
-PostgreSQL 인스턴스, S3 버킷, Route53 존, ACM 인증서. 세 state 디렉터리 모두
-`terraform validate`, `terraform fmt -check`는 통과합니다.
+**상태**: **미적용 — 원래 스캐폴드가 안 만들어진 게 아니라, 완전히 destroy된
+것입니다.** 세 state 전부와 앱 자체(Helm)까지 2026-08-25~27에 실제 AWS에
+apply돼서 end-to-end로 정상 동작까지 확인됐습니다(그 실제 RDS를 상대로 발견·
+수정된 TLS 검증 결함은 ADR 0039의 Addendum에 기록돼 있음). 배포가 검증된 뒤
+2026-08-28에 AWS 과금을 멈추려고 전부 destroy했습니다 — 이 스택에서 나온 EKS
+클러스터, RDS 인스턴스, S3 버킷, Route53 존, NAT 게이트웨이, EC2 인스턴스
+어느 것도 지금 존재하지 않습니다(`aws eks/rds/ec2/elb` describe 호출이 전부
+빈 값/not-found로 확인됨). 세 state 디렉터리 모두 `terraform validate`,
+`terraform fmt -check`는 여전히 통과합니다.
 
-`apply` 전에는 반드시 `terraform plan`을 돌려 읽고, `destroy`는 함부로 하지
-마세요 — RDS 인스턴스가 `skip_final_snapshot = true`, `deletion_protection =
-false` 상태라 이를 교체하거나 파괴하는 작업은 데이터를 함께 지우고 최종 스냅샷도
-남기지 않습니다. ADR 0043과 0044의 Addendum은 여전히 apply한 적 없다고 적고
-있는데, ADR은 작성 시점의 사실을 기록하므로 그대로 두었습니다 — 정정과 보류된
-식별자 개명 건은
+이 상태 설명도 스냅샷일 뿐 확정된 사실이 아닙니다 — 나중에 다시 apply하면
+몇 분 안에 이 문단이 틀린 말이 됩니다. 이 문단을 나중에 다시 읽는 사람은
+그대로 믿지 말고 `terraform plan`으로 재확인하세요. apply할 땐 `apply` 전에
+반드시 `terraform plan`을 돌려 읽고, `destroy`는 함부로 하지 마세요 — RDS
+인스턴스가 `skip_final_snapshot = true`, `deletion_protection = false`
+상태라 이를 교체하거나 파괴하는 작업은 데이터를 함께 지우고 최종 스냅샷도
+남기지 않습니다(그래서 이번 destroy도 즉흥적으로가 아니라 확인을 거쳐
+결정한 것입니다). ADR 0043과 0044의 Addendum은 여전히 apply한 적 없다고 적고
+있는데, ADR은 작성 시점의 사실을 기록하므로 그대로 두었습니다 — 더 자세한
+경위와 보류된 식별자 개명 건은
 [ROADMAP.ko.md 7절](../../../docs/ROADMAP.ko.md#7-미일정--미결-사항)을 보세요
 (ADR 0043 D1).
 

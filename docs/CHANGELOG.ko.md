@@ -45,6 +45,19 @@
   연결이 이제 프로덕션 RDS 인스턴스를 상대로 설정 형태 확인 수준이 아니라 진짜
   인증서 검증까지 통과한다.
 
+### 삭제
+- **end-to-end 검증 후 AWS 전체 destroy (2026-08-28)** — 배포가 안정 상태로 확인됐고
+  위 TLS 수정도 라이브에서 검증됐으니, 개발자는 활성 테스터가 없는 상태로 스택을 계속
+  띄워두는 대신 AWS 과금을 멈추기로 했다. Helm 릴리스를 먼저 제거하고, 그 다음
+  `addons/` → `app-infra/` → `cluster/` 순으로 destroy했다(`k8s/infra/terraform/README.md`가
+  명시한 역순 그대로). 이 스택이 만든 모든 리소스 종류(EKS, EC2, RDS, S3, Route53, NAT
+  게이트웨이, EIP, EBS, Secrets Manager, ACM, CloudWatch 로그, 로드밸런서)를 `aws`
+  describe 호출로 직접 확인했고 아무것도 안 남았다 — RDS 스냅샷도 필요 없었다
+  (`skip_final_snapshot = true`가 원래 설계였고 남길 데이터도 없었다). `CLAUDE.md`,
+  `k8s/infra/terraform/README.md`, `docs/ROADMAP.md`의 Stage 4 표(전부 +ko)를 같은 날
+  다시 "미적용"으로 갱신했다. 재배포는 새로 결정할 게 없다 — 같은 순서, 같은
+  `deploy.sh all`.
+
 ### 변경
 - **Sharenpo 개명 작업 중 발견한 문서 결함 3건, 기록만 남기지 않고 바로 수정(2026-08-25)** —
   세 건 모두 그 작업 이전부터 있던 것이고, 이번 개명이 만든 것은 하나도 없다.

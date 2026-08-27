@@ -44,6 +44,19 @@ development line (package.json version).
   now passes real certificate verification against the production RDS instance, not just a
   config-shape check.
 
+### Removed
+- **Full AWS teardown after end-to-end proof (2026-08-28)** — with the deploy confirmed
+  stable and the TLS fix above verified live, the developer chose to stop the AWS bill
+  rather than leave the stack running with no active tester. Helm release uninstalled,
+  then `addons/` → `app-infra/` → `cluster/` destroyed in that order (`k8s/infra/terraform/README.md`'s
+  documented reverse-of-apply sequence). Verified empty via direct `aws` describe calls
+  across every resource type this stack created (EKS, EC2, RDS, S3, Route53, NAT gateway,
+  EIPs, EBS, Secrets Manager, ACM, CloudWatch logs, load balancers) — nothing remains, no
+  RDS snapshot needed (`skip_final_snapshot = true` was already the design, no data worth
+  keeping). `CLAUDE.md`, `k8s/infra/terraform/README.md`, and `docs/ROADMAP.md`'s Stage 4
+  table (all +ko) updated the same day to say "not applied" again. Redeploying needs no new
+  decisions — same order, same `deploy.sh all`.
+
 ### Changed
 - **Three documentation defects found during the Sharenpo rename pass, fixed rather than
   filed (2026-08-25)** — all three predate that work; none were introduced by it.
