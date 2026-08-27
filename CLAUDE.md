@@ -549,7 +549,8 @@ Principle Conflict Protocol.
 ### Collaboration & Quality
 - Consistent Naming, Coding Standards — covered by Code Style
 - Automated Testing — covered by Testing conventions; CI runs lint + unit + e2e on push/PR (see CI/CD)
-- Code Reviews, Version Control Discipline — out of scope for this file
+- Code Reviews, Version Control Discipline — out of scope for this file, except commit
+  message language (Korean) — see CI/CD > Commit Messages
 - Documentation as Code — Swagger decorators are the API documentation; the Change
   Summary requirement covers the rest. README endpoint lists must match real routes
 - Reproducible Builds — `pnpm-lock.yaml` is committed; the toolchain is pinned
@@ -1420,6 +1421,15 @@ and no git hooks** — the app is deployed to AWS (ROADMAP.md §9, 2026-08-27), 
 human running `helm upgrade` from a local session, not by GitHub Actions; CI still only
 runs lint/test/build, and no git-hook tooling is installed. Do not assume a CI/CD deploy
 pipeline or hooks; adding either is explicit-request work under Scope Discipline.
+
+## Commit Messages
+
+Write git commit messages in Korean (제목과 본문 모두) — decided 2026-08-27 at the
+developer's explicit request. This governs the commit message text itself; it does not
+change anything else — code, identifiers, comments, and the `.md`/`.ko.md` sibling
+convention above are unaffected, and the `Co-Authored-By:` trailer stays as-is (a fixed
+attribution line, not prose to translate). Applies from this decision forward; existing
+commit history is not rewritten.
 
 ## Development Tooling
 
