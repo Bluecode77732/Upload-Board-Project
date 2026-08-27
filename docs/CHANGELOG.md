@@ -31,6 +31,19 @@ development line (package.json version).
   now collects the repeated `--set` flags this deployment used. See `docs/ROADMAP.md` §9
   (2026-08-27) for the full account.
 
+### Security
+- **DB TLS was encrypting without verifying — fixed within a day of landing (2026-08-27/28,
+  [ADR 0039](ADR/0039-db-tls-verification-stance.md) Addendum)** — the `DB_SSL` fix above
+  (commit `cf0cbfe`) used `ssl: { rejectUnauthorized: false }`, which this same ADR had
+  already rejected months earlier for exactly this reason: it encrypts the connection but
+  accepts *any* certificate, a live MITM exposure. Replaced in both `app.module.ts` and
+  `data-source.ts` with `ssl: { ca: <DB_SSL_CA> }` — a new required-when-`DB_SSL`-is-true
+  Joi var carrying AWS's public `ap-northeast-2` RDS root CA bundle (not a secret,
+  `k8s/helm/values-prod.yaml` carries it in plaintext). Re-deployed
+  (`bluecode1775/sharenpo:db-ssl-ca`) and confirmed live: the migration Job's DB connection
+  now passes real certificate verification against the production RDS instance, not just a
+  config-shape check.
+
 ### Changed
 - **Three documentation defects found during the Sharenpo rename pass, fixed rather than
   filed (2026-08-25)** — all three predate that work; none were introduced by it.

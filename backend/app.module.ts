@@ -29,10 +29,17 @@ import { join } from 'node:path';
         DB_USERNAME: Joi.string().required(),
         DB_PASSWORD: Joi.string().required(),
         DB_DATABASE: Joi.string().required(),
-        // TLS to the DB (ADR-less, portfolio infra gap): required when the target
-        // instance enforces encrypted connections (e.g. RDS PostgreSQL's default
-        // rds.force_ssl=1) — a plain connection is rejected before auth even runs.
+        // TLS to the DB (ADR 0039): required when the target instance enforces
+        // encrypted connections (e.g. RDS PostgreSQL's default rds.force_ssl=1) — a
+        // plain connection is rejected before auth even runs. DB_SSL_CA carries the
+        // PEM contents of the CA that signed the DB's certificate (AWS publishes one
+        // per RDS region) — required whenever DB_SSL is on, per ADR 0039's Decision
+        // ("pass the actual CA certificate... never rejectUnauthorized: false").
         DB_SSL: Joi.boolean().default(false),
+        DB_SSL_CA: Joi.string().when('DB_SSL', {
+          is: true,
+          then: Joi.required(),
+        }),
         HASH_ROUNDS: Joi.number().required(),
         REFRESH_TOKEN_SECRET: Joi.string().required(),
         ACCESS_TOKEN_SECRET: Joi.string().required(),
@@ -69,9 +76,8 @@ import { join } from 'node:path';
     // 목적: 앱 부팅 시 TypeORM DB 연결을 구성한다.
     // 이유: RDS PostgreSQL 등 TLS를 강제하는 인스턴스에 평문으로 접속하면
     //       인증 단계 전에 거부당한다(pg_hba.conf 에러) — DB_SSL로 스위치.
-    // 방법: DB_SSL=true면 { rejectUnauthorized: false }를 켠다 — RDS의
-    //       퍼블릭 CA 체인을 프로젝트가 아직 번들링하지 않아 완전한 인증서
-    //       검증은 못 하지만, 전송 구간 암호화 자체는 강제된다.
+    // 방법: DB_SSL=true면 DB_SSL_CA(그 DB의 CA 인증서 PEM)로 실제 인증서 검증을
+    //       켠다(ADR 0039) — rejectUnauthorized: false로 검증 자체를 끄지 않는다.
     TypeOrmModule.forRootAsync({
       useFactory: (configService: ConfigService) => ({
         type: configService.get<string>('DB_TYPE') as 'postgres',
@@ -81,7 +87,7 @@ import { join } from 'node:path';
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
         ssl: configService.get<boolean>('DB_SSL')
-          ? { rejectUnauthorized: false }
+          ? { ca: configService.get<string>('DB_SSL_CA') }
           : false,
         // One list, shared with backend/data-source.ts — see backend/entities.ts.
         entities: ENTITIES,

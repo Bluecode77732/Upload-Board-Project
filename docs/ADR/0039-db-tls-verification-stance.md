@@ -105,3 +105,44 @@ environment switch alongside the existing one instead of reusing it.
   `DB_SSL_CA` (Joi schema + `.env.example`) and wire `ssl: { ca: ... }`
   gated on `ENV === 'prod'`, per the Decision above.
 - No schema, entity, or API surface change.
+
+### Addendum (2026-08-27/28) — the real target arrived, and the Decision was briefly violated before being corrected
+
+The first live AWS deployment (ADR 0043/0044, RDS with `rds.force_ssl` enforced) hit
+exactly the migration failure this ADR anticipated (`no pg_hba.conf entry ... no
+encryption`). Under that pressure, the fix that landed first (commit `cf0cbfe`) added
+`DB_SSL` (boolean) → `ssl: { rejectUnauthorized: false }` — reintroducing the precise
+pattern this ADR's Decision rejected, gated on a new variable instead of reusing `ENV`.
+It unblocked the deployment (`STATUS: deployed`, app pod `Running`) but left the RDS
+connection encrypted with no certificate validation — a live MITM exposure, the same
+category of risk this ADR removed in the first place.
+
+Found and corrected the same day: `rejectUnauthorized: false` replaced with
+`ssl: { ca: configService.get<string>('DB_SSL_CA') }` in both `app.module.ts` and
+`data-source.ts`; `DB_SSL_CA` added to the Joi schema, required whenever `DB_SSL` is
+`true` (`Joi.string().when('DB_SSL', { is: true, then: Joi.required() })`).
+`k8s/helm/values-prod.yaml` carries the actual value: AWS's public `ap-northeast-2`
+regional RDS root CA bundle (3 certificates — ECC384 and two RSA root CAs — from
+`https://truststore.pki.rds.amazonaws.com/ap-northeast-2/ap-northeast-2-bundle.pem`),
+inline as a YAML block scalar. Not secret — a CA certificate is public by design — so
+it does not go through `secrets.existingSecret`. Re-deployed
+(`bluecode1775/sharenpo:db-ssl-ca`, multi-arch, `helm upgrade` revision 4): the
+pre-upgrade migration Job succeeded against the live RDS instance with real certificate
+verification, not just a config-shape check — proof the regional bundle actually
+validates that instance's presented certificate.
+
+**Deliberate deviation kept from the original Decision, not reverted**: `DB_SSL` stays
+a separate boolean rather than folding into the existing `ENV === 'prod'` gate the
+Decision specified. Reasoning: whether a given DB target enforces TLS is a property of
+that connection target, not of the deployment stage — a `dev`-environment developer
+testing against a TLS-required RDS instance, or a `prod` deployment against a
+non-TLS target, are both real possibilities under `ENV`-only gating. The Decision's
+objection to a second gating variable was specifically about `NODE_ENV` being
+*unvalidated* and *inconsistent with the project's existing convention*; `DB_SSL` is
+Joi-validated and does not have that defect. `DB_SSL_CA` itself matches the Decision's
+env-var name exactly.
+
+**Prevention note for future sessions**: this addendum exists because the original fix
+was written without first checking `docs/ADR/` for prior decisions on the exact
+question being solved. Before adding TLS/certificate-handling code anywhere in this
+repo, grep `docs/ADR/` for `TLS`/`SSL`/`certificate` first.

@@ -32,6 +32,19 @@
   우선), `k8s/helm/values-prod.yaml`이 이번 배포에 쓰인 반복되는 `--set`
   플래그를 정리해 담았다. 전체 내용은 `docs/ROADMAP.md` §9(2026-08-27) 참고.
 
+### 보안
+- **DB TLS가 암호화만 하고 검증은 안 하고 있던 걸 하루 만에 고침 (2026-08-27/28,
+  [ADR 0039](ADR/0039-db-tls-verification-stance.ko.md) 추가 기록)** — 위 `DB_SSL`
+  수정(커밋 `cf0cbfe`)이 `ssl: { rejectUnauthorized: false }`를 썼는데, 바로 이
+  ADR이 몇 달 전에 정확히 같은 이유로 이미 반려했던 방식이다: 연결은 암호화하지만
+  *아무 인증서나* 받아들여서 실질적인 MITM 노출이 된다. `app.module.ts`와
+  `data-source.ts` 양쪽에서 `ssl: { ca: <DB_SSL_CA> }`로 교체했다 — `DB_SSL`이
+  `true`일 때 필수가 되는 새 Joi 변수로, AWS가 공개하는 `ap-northeast-2` RDS 루트
+  CA 번들을 담는다(비밀이 아니라서 `k8s/helm/values-prod.yaml`에 평문으로 있음).
+  재배포(`bluecode1775/sharenpo:db-ssl-ca`) 후 실제로 확인: 마이그레이션 Job의 DB
+  연결이 이제 프로덕션 RDS 인스턴스를 상대로 설정 형태 확인 수준이 아니라 진짜
+  인증서 검증까지 통과한다.
+
 ### 변경
 - **Sharenpo 개명 작업 중 발견한 문서 결함 3건, 기록만 남기지 않고 바로 수정(2026-08-25)** —
   세 건 모두 그 작업 이전부터 있던 것이고, 이번 개명이 만든 것은 하나도 없다.

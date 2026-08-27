@@ -23,10 +23,11 @@ const required = (name: string): string => {
 };
 
 // 목적: migration:* 스크립트가 쓰는 CLI DataSource를 구성한다.
-// 이유: app.module.ts의 DB_SSL과 같은 이유 — TLS를 강제하는 DB(RDS 등)에
-//       평문으로 붙으면 마이그레이션이 인증 단계 전에 거부당한다.
-// 방법: app.module.ts와 동일한 boolean 스위치를 process.env에서 직접 읽는다
-//       (이 파일은 ConfigService 밖이라 원래도 process.env 직접 접근이 허용된 예외).
+// 이유: app.module.ts의 DB_SSL/DB_SSL_CA와 같은 이유(ADR 0039) — TLS를 강제하는
+//       DB(RDS 등)에 평문으로 붙으면 마이그레이션이 인증 단계 전에 거부당한다.
+// 방법: app.module.ts와 동일하게 DB_SSL_CA(CA 인증서 PEM)로 실제 인증서 검증을
+//       켠다 — rejectUnauthorized: false로 검증을 끄지 않는다. 이 파일은
+//       ConfigService 밖이라 원래도 process.env 직접 접근이 허용된 예외.
 export default new DataSource({
   type: 'postgres',
   host: required('DB_HOST'),
@@ -34,7 +35,7 @@ export default new DataSource({
   username: required('DB_USERNAME'),
   password: required('DB_PASSWORD'),
   database: required('DB_DATABASE'),
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  ssl: process.env.DB_SSL === 'true' ? { ca: required('DB_SSL_CA') } : false,
   // Shared with app.module.ts: generate diffs against exactly what the app registers,
   // so an entity can never be live in the app but invisible to the migration CLI.
   entities: ENTITIES,
