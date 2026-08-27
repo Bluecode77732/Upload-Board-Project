@@ -98,7 +98,9 @@ Run `bash deploy.sh all` (or `cluster`/`app-infra`/`addons`/`helm` individually;
 for env vars). It does **not** cover domain purchase/NS delegation, the ESO secret sync,
 the `default` ServiceAccount IRSA annotation, or enabling `Ingress` — those stay manual,
 covered further down this file. The manual sequence below is what the script automates,
-kept here as the reference for what each step actually does:
+kept here as the reference for what each step actually does. This same order applies
+whether it's the very first deploy or a full redeploy after a complete `terraform
+destroy` (below) — nothing about the sequence changes.
 
 ```sh
 # 1. cluster/
@@ -243,3 +245,6 @@ zone, Secrets Manager) is the concrete capability this three-state split
 exists to provide (ADR 0044) — stop paying for EKS/node groups without
 losing the database or the DNS setup. `addons/` must still come down first
 in that case, since it depends on `cluster/`'s outputs.
+
+To redeploy after destroying all three states, see [Deploy](#deploy) above —
+the same order and `deploy.sh all` apply unchanged.
