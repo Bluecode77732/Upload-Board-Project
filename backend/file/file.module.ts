@@ -7,12 +7,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { FileEntity } from './entity/file.entity';
 import { AuditLogModule } from 'backend/audit-log/audit-log.module';
 import { StorageModule } from 'backend/storage/storage.module';
+import { MetricsModule } from 'backend/metrics/metrics.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([FileEntity, UserEntity]),
     AuditLogModule,
     StorageModule,
+    MetricsModule,
   ],
   controllers: [FileController, FileContentController],
   providers: [FileService],

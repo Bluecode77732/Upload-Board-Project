@@ -1,0 +1,24 @@
+{{- /*
+metrics.serviceMonitor.enabled이 false(기본값)면 아무것도 렌더링하지 않는다 — ingress.yaml과
+같은 이유: ServiceMonitor는 Prometheus Operator CRD라, kube-prometheus-stack(ADR 0047 D2)이
+설치되지 않은 클러스터(예: 로컬 kind)에 적용하면 실패한다.
+*/}}
+{{- if .Values.metrics.serviceMonitor.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "sharenpo.fullname" . }}
+  labels:
+    {{- include "sharenpo.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "sharenpo.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+{{- end }}

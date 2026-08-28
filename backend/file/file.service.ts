@@ -37,6 +37,7 @@ import {
   FILE_STORAGE,
   type FileStorage,
 } from 'backend/storage/file-storage.interface';
+import { MetricsService } from 'backend/metrics/metrics.service';
 
 // The acting user's identity + role (from the JWT), enough for creator-OR-admin checks.
 interface Requester {
@@ -86,6 +87,8 @@ export class FileService {
 
     @Inject(FILE_STORAGE)
     private readonly storage: FileStorage,
+
+    private readonly metricsService: MetricsService,
   ) {}
 
   // A file is manageable by its creator, or by an admin/superadmin (RBAC, ADR 0013).
@@ -272,7 +275,8 @@ export class FileService {
 
   // 목적: 이미 청구된 업로드의 재제출을 멱등 replay 또는 409로 판정한다.
   // 이유: 네트워크 재시도는 최초 성공과 같은 결과를 받아야 하고, 타인의 청구는 가로챌 수 없어야 한다.
-  // 방법: 행의 creator와 요청자 id를 비교 — 일치하면 기존 리소스를 replayed로 반환, 아니면 FILE_ALREADY_CLAIMED.
+  // 방법: 행의 creator와 요청자 id를 비교 — 일치하면 uploadClaimsTotal{outcome=replayed}를 올리고 기존
+  //       리소스를 replayed로 반환, 아니면 FILE_ALREADY_CLAIMED(ADR 0047 — replay 빈도 관측).
   private resolveClaim(claim: FileEntity, userId: number): FileClaimResult {
     // Deliberately identity-only: replay belongs to the original submitter, so an
     // admin re-posting someone else's filename is a conflict, not a retry.
@@ -283,6 +287,7 @@ export class FileService {
       });
     }
 
+    this.metricsService.uploadClaimsTotal.inc({ outcome: 'replayed' });
     return { replayed: true, file: this.toResponse(claim) };
   }
 
@@ -338,7 +343,7 @@ export class FileService {
   //       QueryRunner 트랜잭션 하나로 insert(확장자로 판정한 mediaType 포함) → FileStorage 포트 promote → commit;
   //       실패 시 rollback, release()는 finally. 물리 이동은 어댑터(LocalDiskStorage/S3Storage)에 위임한다
   //       (ADR 0029). 재조회는 updateFile과 동일하게 relations: ['creator']를 포함해 두 쓰기 경로의 응답
-  //       모양을 통일한다.
+  //       모양을 통일한다. 신규 승격 성공 시 uploadClaimsTotal{outcome=fresh}를 올린다(ADR 0047).
   async uploadFile(
     uploadFileDto: UploadFileDto,
     userId: number,
@@ -444,6 +449,7 @@ export class FileService {
         message: 'No file found.',
       });
     }
+    this.metricsService.uploadClaimsTotal.inc({ outcome: 'fresh' });
     return { replayed: false, file: this.toResponse(saved) };
   }
 

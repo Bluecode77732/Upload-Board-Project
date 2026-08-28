@@ -116,6 +116,23 @@ ingress:
     #   hosts:
     #     - chart-example.local
 
+# Prometheus 스크레이프 대상(ADR 0047). 기본은 비활성 — ServiceMonitor는
+# Prometheus Operator CRD라, kube-prometheus-stack(같은 ADR D2, addons/main.tf의
+# enable_kube_prometheus_stack)이 설치된 클러스터에만 존재한다. ingress와 같은
+# 이유로 기본 꺼둠(로컬 kind 클러스터 등에서 helm install --wait이 존재하지 않는
+# CRD 때문에 실패하지 않도록) — 실제로 켜려면 values-prod.yaml처럼 오버레이한다.
+metrics:
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    # kube-prometheus-stack 차트(버전 48.2.3, addons 모듈 기본값)는
+    # serviceMonitorSelectorNilUsesHelmValues: true라 자신의 Helm 릴리스 이름과
+    # 같은 release 라벨이 붙은 ServiceMonitor만 자동 선택한다 — 그 릴리스 이름은
+    # addons/main.tf가 kube_prometheus_stack 변수를 오버라이드하지 않는 한
+    # 모듈 기본값인 "kube-prometheus-stack"이다.
+    additionalLabels:
+      release: kube-prometheus-stack
+
 # Deployment에 추가할 volumes/volumeMounts (예: file/용 PVC — STORAGE_DRIVER=local +
 # replicaCount: 1 조합일 때만 의미가 있음, 위 replicaCount 주석 참고).
 volumes: []

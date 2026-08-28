@@ -5,9 +5,10 @@
 import { Module } from '@nestjs/common';
 import { TempCleanupService } from './temp-cleanup.service';
 import { StorageModule } from 'backend/storage/storage.module';
+import { MetricsModule } from 'backend/metrics/metrics.module';
 
 @Module({
-  imports: [StorageModule],
+  imports: [StorageModule, MetricsModule],
   providers: [TempCleanupService],
 })
 export class TempCleanupModule {}

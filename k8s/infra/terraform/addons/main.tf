@@ -95,5 +95,12 @@ module "eks_blueprints_addons" {
     data.terraform_remote_state.app_infra.outputs.app_secrets_manager_secret_arn
   ]
 
+  # ADR 0047 D2 — Prometheus/Grafana를 이 프로젝트 자신의 EKS 노드에 자체호스팅한다
+  # (kube-prometheus-stack: Prometheus Operator + Prometheus + Grafana +
+  # Alertmanager, 커뮤니티 Helm 차트를 이 모듈이 내부적으로 helm_release로 설치).
+  # ALB Controller/ESO와 같은 이유로 이 모듈에 얹는다 — 새 AWS 관리형 서비스(AMP/AMG)
+  # 도입은 기각했으므로 별도 리소스가 필요 없다.
+  enable_kube_prometheus_stack = true
+
   tags = local.tags
 }

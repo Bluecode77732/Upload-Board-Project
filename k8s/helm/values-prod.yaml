@@ -104,3 +104,9 @@ env:
 
 secrets:
   existingSecret: upload-board-project-app-secrets
+
+# ADR 0047 D2/D4 — 라이브 클러스터에는 addons 상태가 kube-prometheus-stack을 설치하므로
+# 여기서만 ServiceMonitor를 켠다(로컬 kind 클러스터에는 그 CRD가 없어 기본은 비활성).
+metrics:
+  serviceMonitor:
+    enabled: true

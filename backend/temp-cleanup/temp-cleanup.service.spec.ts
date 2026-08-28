@@ -7,6 +7,7 @@ import {
   FILE_STORAGE,
   FileStorage,
 } from 'backend/storage/file-storage.interface';
+import { MetricsService } from 'backend/metrics/metrics.service';
 
 jest.mock('cron');
 
@@ -40,6 +41,10 @@ describe('TempCleanupService', () => {
 
   const mockSchedulerRegistry = { addCronJob: jest.fn() };
 
+  const mockMetricsService = {
+    tempCleanupDeletedTotal: { inc: jest.fn() },
+  };
+
   const mockStorage: jest.Mocked<FileStorage> = {
     saveTemp: jest.fn(),
     existsTemp: jest.fn(),
@@ -63,6 +68,7 @@ describe('TempCleanupService', () => {
         { provide: ConfigService, useValue: mockConfigService },
         { provide: SchedulerRegistry, useValue: mockSchedulerRegistry },
         { provide: FILE_STORAGE, useValue: mockStorage },
+        { provide: MetricsService, useValue: mockMetricsService },
       ],
     }).compile();
 
@@ -80,6 +86,9 @@ describe('TempCleanupService', () => {
       await service.sweep();
 
       expect(mockStorage.unlink).toHaveBeenCalledWith(['temp_old.mp4']);
+      expect(
+        mockMetricsService.tempCleanupDeletedTotal.inc,
+      ).toHaveBeenCalledWith(1);
     });
 
     it('does not delete anything in dry-run mode', async () => {
@@ -113,6 +122,9 @@ describe('TempCleanupService', () => {
       });
 
       await expect(service.sweep()).resolves.toBeUndefined();
+      expect(
+        mockMetricsService.tempCleanupDeletedTotal.inc,
+      ).not.toHaveBeenCalled();
     });
   });
 

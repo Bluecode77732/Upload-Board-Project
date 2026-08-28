@@ -29,6 +29,7 @@ import {
   FILE_STORAGE,
   FileStorage,
 } from 'backend/storage/file-storage.interface';
+import { MetricsService } from 'backend/metrics/metrics.service';
 
 // mockFileEntity.creator.id === 1, so `owner` manages by ownership; `stranger`
 // (non-creator, plain user) is forbidden; `admin` manages by role (RBAC).
@@ -45,6 +46,10 @@ describe('FileService', () => {
 
   const mockAuditLogService = {
     log: jest.fn(),
+  };
+
+  const mockMetricsService = {
+    uploadClaimsTotal: { inc: jest.fn() },
   };
 
   const mockStorage: jest.Mocked<FileStorage> = {
@@ -132,6 +137,10 @@ describe('FileService', () => {
         {
           provide: FILE_STORAGE,
           useValue: mockStorage,
+        },
+        {
+          provide: MetricsService,
+          useValue: mockMetricsService,
         },
       ],
     }).compile();

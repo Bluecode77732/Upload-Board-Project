@@ -11,6 +11,7 @@ import {
   FILE_STORAGE,
   type FileStorage,
 } from 'backend/storage/file-storage.interface';
+import { MetricsService } from 'backend/metrics/metrics.service';
 
 // Unique name so the job is addressable via SchedulerRegistry (start/stop/delete).
 const CRON_JOB_NAME = 'orphan-temp-file-sweep';
@@ -25,6 +26,8 @@ export class TempCleanupService implements OnModuleInit {
 
     @Inject(FILE_STORAGE)
     private readonly storage: FileStorage,
+
+    private readonly metricsService: MetricsService,
   ) {}
 
   // Registered imperatively (not via @Cron) so the schedule string comes from
@@ -65,6 +68,7 @@ export class TempCleanupService implements OnModuleInit {
   //       조용히 아무것도 스윕하지 않게 된다(ADR 0029 D5) — 포트를 거치면 두 어댑터에서 동일하게 동작한다.
   // 방법: storage.listTemp()로 후보를 받아(각 어댑터가 이미 temp_ 접두만 반환) 순수 선택기로 만료분을 고르고,
   //       dry-run이 아니면 storage.unlink()에 위임한다 — 배치/가드는 어댑터 책임이므로 여기서 중복하지 않는다.
+  //       실제로 삭제된 개수만 temp_cleanup_deleted_total에 더한다(dry-run은 관측 대상 아님, ADR 0047).
   async sweep(): Promise<void> {
     const ttlHours = this.configService.getOrThrow<number>(
       'TEMP_SWEEP_TTL_HOURS',
@@ -91,6 +95,9 @@ export class TempCleanupService implements OnModuleInit {
       this.logger.warn(
         `Orphan temp-file sweep could not delete ${failure.key}: ${failure.reason}`,
       );
+    }
+    if (deleted > 0) {
+      this.metricsService.tempCleanupDeletedTotal.inc(deleted);
     }
     this.logger.log(`Orphan temp-file sweep deleted ${deleted} object(s).`);
   }
