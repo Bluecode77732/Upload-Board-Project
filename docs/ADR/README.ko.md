@@ -54,6 +54,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0044](0044-terraform-three-state-split.ko.md) | Terraform 3-state 분리 — cluster/addons/app-infra lifecycle 분리, 0043 개정 | 승인됨 — 구현됨 (실제 apply 여부는 이 ADR과 무관하게 계속 바뀜 — ROADMAP §9 참고) | 2026-08-19 |
 | [0045](0045-audit-log-target-type.ko.md) | 감사 로그 `targetType` — 다형 `targetId`를 위한 판별자, 0013 개정 | 승인됨 — 구현됨 | 2026-08-24 |
 | [0046](0046-deploy-sequence-automation.ko.md) | 배포 순서 자동화 — 로컬 쉘 스크립트, Terraform + Helm까지만 | 승인됨 — 구현됨 | 2026-08-27 |
+| [0047](0047-observability-prometheus-grafana.ko.md) | 관측 가능성 스택 — Prometheus와 Grafana, eks-blueprints-addons를 통한 자체호스팅, 0017 확장 | 승인됨 | 2026-08-28 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

@@ -55,6 +55,7 @@ each ADR records the *why* behind those rules.
 | [0044](0044-terraform-three-state-split.md) | Terraform three-state split — cluster/addons/app-infra lifecycle separation, amends 0043 | Accepted — implemented (apply status changes independently of this ADR; see ROADMAP §9) | 2026-08-19 |
 | [0045](0045-audit-log-target-type.md) | Audit log `targetType` — a discriminator for the polymorphic `targetId`, amends 0013 | Accepted — implemented | 2026-08-24 |
 | [0046](0046-deploy-sequence-automation.md) | Deploy-sequence automation — a local shell script, Terraform + Helm only | Accepted — implemented | 2026-08-27 |
+| [0047](0047-observability-prometheus-grafana.md) | Observability stack — Prometheus and Grafana, self-hosted via eks-blueprints-addons, extends 0017 | Accepted | 2026-08-28 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status
