@@ -485,6 +485,18 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   같은 순서와 같은 장애 복구 절차를 다시 떠올리게 하는 대신, 이 순서(와 그 안의
   순서 의존성·재시도·전파 대기 로직)를 스크립트나 CI 파이프라인으로 감싸야 한다는
   근거가 된다 — 그리고 그것이 바로 위 ADR 0046이 지금 한 일이다.
+- **Helm 차트에 전용 `ServiceAccount` 템플릿 추가 — `default` ServiceAccount 수동 IRSA
+  어노테이션을 대체** (2026-08-28 기록) — `k8s/infra/terraform/README.md`의 "Known gap" 절과
+  ADR 0043 Addendum 모두 `aws_iam_role.app`의 신뢰 정책이 `system:serviceaccount:default:default`를
+  대상으로 한다고 지적한다 — 차트(`k8s/helm/`)가 전용 `ServiceAccount`를 렌더링하지 않기
+  때문이다. `default`에 어노테이션을 달면 이 앱의 파드뿐 아니라 네임스페이스의 모든 파드에
+  S3 접근 권한이 부여된다. 차트 레벨 `serviceaccount.yaml`(이미 만들어져 있지만 비활성 상태로
+  배포되는 `ingress.yaml`과 같은 패턴, ADR 0041)을 만들어 `values.yaml`에서
+  `eks.amazonaws.com/role-arn`을 설정하면, `app-infra/`의 IRSA role 출력을 지금 이 배포가
+  여전히 필요로 하는 별도의 수동 `kubectl annotate serviceaccount default` 없이 같은 `helm
+  upgrade --set`/`values-prod.yaml` 단계에서 함께 배선할 수 있다. 아직 시작하지 않았다 —
+  이 ADR의 어떤 결정에도 의존하지 않는 Helm 차트 전용 작업이라, 이미 문서화된 gap을 확장하는
+  후속 과제일 뿐 별도 ADR이 필요한 결정은 아니기 때문이다.
 - **로그인 화면의 마크를 교체하거나 걷어내고, 쓰이지 않는 아이콘 스프라이트를 삭제** (2026-08-25
   기록) — Sharenpo 통일 작업(`0a14039`)이 로그인 카드에 워드마크와 나란히
   `<img src="/favicon.svg">` 락업을 넣었다. 그 작업 기준으로는 옳은 판단이었다. 이름 변경

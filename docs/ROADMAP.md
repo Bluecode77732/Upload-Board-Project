@@ -519,6 +519,18 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   (and its order-of-operations, retry, and wait-for-propagation logic) in a script or CI
   pipeline rather than a human re-deriving the same order and the same failure recoveries from
   README prose every time — which is exactly what ADR 0046 above now does.
+- **Dedicated `ServiceAccount` template in the Helm chart, to replace the manual `default`
+  ServiceAccount IRSA annotation** (recorded 2026-08-28) — `k8s/infra/terraform/README.md`'s
+  "Known gap" section and ADR 0043's Addendum both flag that `aws_iam_role.app`'s trust policy
+  targets `system:serviceaccount:default:default` because the chart (`k8s/helm/`) renders no
+  dedicated `ServiceAccount` — annotating `default` grants S3 access to every pod in the
+  namespace, not just this app's. A chart-level `serviceaccount.yaml` (mirroring how
+  `ingress.yaml` already exists but ships disabled, ADR 0041), with `eks.amazonaws.com/role-arn`
+  set via `values.yaml`, would let `app-infra/`'s IRSA role output be wired in the same `helm
+  upgrade --set`/`values-prod.yaml` step instead of the separate manual `kubectl annotate
+  serviceaccount default` this deploy still needs. Not started because it is Helm-chart-only
+  work with no dependency on any of this ADR's decisions — a follow-up chart task extending an
+  already-documented gap, not a decision that needs its own ADR.
 - **Replace or drop the login page's mark, and delete the unused icon sprite** (recorded
   2026-08-25) — the Sharenpo unification (`0a14039`) gave the login card a lockup of
   `<img src="/favicon.svg">` beside the wordmark, which was the right call for that task:
