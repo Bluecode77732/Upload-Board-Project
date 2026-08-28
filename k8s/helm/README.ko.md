@@ -17,14 +17,17 @@ Kubernetes용으로 패키징합니다. 이 차트가 별도 `helm/` 폴더가 �
 `postgres:16`, 그리고 `/health/live`/`/health/ready`/`/doc` 모두 Service를
 통해 `200`을 응답했습니다. 이 실행에서 실제 버그 2개를 발견해 고쳤습니다(hook
 순서, 빈 문자열 env var — 커밋 `0326199`).
-**2026-08-17에 실제 배포 시작 → 2026-08-27에 안정화**: 릴리스 `upload-board`가
-이제 `k8s/infra/terraform/cluster/`가 만든 실제 AWS/EKS 클러스터에서 동작
-중입니다(revision 5, `STATUS: deployed`) — 전체 경위는
+**2026-08-17에 실제 배포 시작 → 2026-08-27에 안정화 → 2026-08-28에 철거**: 릴리스
+`upload-board`가 `k8s/infra/terraform/cluster/`가 만든 실제 AWS/EKS 클러스터에서
+동작했습니다(revision 5, `STATUS: deployed`) — 전체 경위는
 [ROADMAP.md](../../docs/ROADMAP.md) §9(2026-08-27 항목) 참고, RDS 인스턴스의
-`rds.force_ssl`이 요구해서 필요했던 `DB_SSL` 수정도 포함됩니다. 아직은
-클러스터 내부에서만 접근 가능합니다(`ingress.enabled: false`) — `Ingress`
-활성화는 외부 테스터 접근이 실제로 필요해지는 시점으로 계획돼 있으며, 그
-전엔 켜지 않습니다.
+`rds.force_ssl`이 요구해서 필요했던 `DB_SSL`/`DB_SSL_CA` 수정도 포함됩니다(ADR
+0039). 클러스터 내부에서만 접근 가능한 채로 유지됐습니다(`ingress.enabled:
+false` — 끝까지 켠 적 없음). 배포가 end-to-end로 검증된 뒤, 과금을 멈추려고
+밑단 AWS 인프라를 전부 destroy했습니다(ROADMAP.md §9, 2026-08-28 항목) —
+**지금은 아무것도 안 돌고 있습니다**. 이 차트 자체 내용은 영향 없고,
+`bash k8s/infra/terraform/deploy.sh all`(ADR 0046)로 처음부터 다시 같은 배포를
+재현할 수 있습니다.
 
 ## 설치 전: Secret 먼저 만들기
 

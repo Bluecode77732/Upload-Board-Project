@@ -15,13 +15,17 @@ for its scaffold history.
 fix), a throwaway `postgres:16`, and `/health/live`/`/health/ready`/`/doc` all
 answered `200` through the Service. That run found and fixed two real bugs
 (hook ordering, empty-string env vars — commit `0326199`).
-**Deployed for real 2026-08-17 → stable 2026-08-27**: the release `upload-board`
-now runs on the real AWS/EKS cluster from `k8s/infra/terraform/cluster/`
-(revision 5, `STATUS: deployed`) — see [ROADMAP.md](../../docs/ROADMAP.md) §9
-(2026-08-27) for the full account, including the `DB_SSL` fix the RDS
-instance's `rds.force_ssl` required. It is reachable only inside the cluster
-for now (`ingress.enabled: false`); enabling `Ingress` for external access is
-planned for when outside-tester access is actually needed, not before.
+**Deployed for real 2026-08-17 → stable 2026-08-27, torn down 2026-08-28**: the
+release `upload-board` ran on the real AWS/EKS cluster from
+`k8s/infra/terraform/cluster/` (revision 5, `STATUS: deployed`) — see
+[ROADMAP.md](../../docs/ROADMAP.md) §9 (2026-08-27) for the full account,
+including the `DB_SSL`/`DB_SSL_CA` fixes the RDS instance's `rds.force_ssl`
+required (ADR 0039). It was reachable only inside the cluster the whole time
+(`ingress.enabled: false` — never enabled). Once the deploy was proven
+end-to-end, the underlying AWS infrastructure was fully destroyed to stop the
+bill (ROADMAP.md §9, 2026-08-28) — **nothing currently runs**; this chart's
+own contents are unaffected and `bash k8s/infra/terraform/deploy.sh all`
+(ADR 0046) reproduces the same deployment from scratch.
 
 ## Before installing: create the Secret
 
