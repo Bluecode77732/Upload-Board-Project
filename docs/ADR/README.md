@@ -51,8 +51,8 @@ each ADR records the *why* behind those rules.
 | [0040](0040-persisted-media-type-for-playback.md) | Persisted `mediaType` column for playback tag selection, extends 0025/0027 | Accepted | 2026-08-16 |
 | [0041](0041-helm-chart-project-adaptation.md) | Helm chart project adaptation — lifting ADR 0037's deferral | Accepted | 2026-08-17 |
 | [0042](0042-k8s-helm-directory-consolidation.md) | Consolidate `k8s/` and `helm/` — one Kubernetes directory, not two | Accepted | 2026-08-17 |
-| [0043](0043-terraform-project-adaptation.md) | Terraform project adaptation — real AWS resources, verified via live apply, amends 0038 | Accepted — implemented, unapplied (see Addendum) | 2026-08-18 |
-| [0044](0044-terraform-three-state-split.md) | Terraform three-state split — cluster/addons/app-infra lifecycle separation, amends 0043 | Accepted — implemented, unapplied (see Addendum) | 2026-08-19 |
+| [0043](0043-terraform-project-adaptation.md) | Terraform project adaptation — real AWS resources, verified via live apply, amends 0038 | Accepted — implemented (apply status changes independently of this ADR; see ROADMAP §9) | 2026-08-18 |
+| [0044](0044-terraform-three-state-split.md) | Terraform three-state split — cluster/addons/app-infra lifecycle separation, amends 0043 | Accepted — implemented (apply status changes independently of this ADR; see ROADMAP §9) | 2026-08-19 |
 | [0045](0045-audit-log-target-type.md) | Audit log `targetType` — a discriminator for the polymorphic `targetId`, amends 0013 | Accepted — implemented | 2026-08-24 |
 | [0046](0046-deploy-sequence-automation.md) | Deploy-sequence automation — a local shell script, Terraform + Helm only | Accepted — implemented | 2026-08-27 |
 

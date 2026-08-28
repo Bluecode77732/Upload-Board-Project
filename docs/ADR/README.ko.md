@@ -50,8 +50,8 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0040](0040-persisted-media-type-for-playback.ko.md) | 재생 태그 선택을 위한 영속 `mediaType` 컬럼, 0025/0027 확장 | 승인됨 | 2026-08-16 |
 | [0041](0041-helm-chart-project-adaptation.ko.md) | Helm 차트 프로젝트 적응 — ADR 0037의 유예 해제 | 승인됨 | 2026-08-17 |
 | [0042](0042-k8s-helm-directory-consolidation.ko.md) | `k8s/`와 `helm/` 통합 — 둘이 아니라 하나의 Kubernetes 디렉터리로 | 승인됨 | 2026-08-17 |
-| [0043](0043-terraform-project-adaptation.ko.md) | Terraform 프로젝트 적응 — 이 프로젝트의 실제 AWS 리소스, 실제 apply로 검증, 0038 개정 | 승인됨 — 구현됨, 미적용 (Addendum 참고) | 2026-08-18 |
-| [0044](0044-terraform-three-state-split.ko.md) | Terraform 3-state 분리 — cluster/addons/app-infra lifecycle 분리, 0043 개정 | 승인됨 — 구현됨, 미적용 (Addendum 참고) | 2026-08-19 |
+| [0043](0043-terraform-project-adaptation.ko.md) | Terraform 프로젝트 적응 — 이 프로젝트의 실제 AWS 리소스, 실제 apply로 검증, 0038 개정 | 승인됨 — 구현됨 (실제 apply 여부는 이 ADR과 무관하게 계속 바뀜 — ROADMAP §9 참고) | 2026-08-18 |
+| [0044](0044-terraform-three-state-split.ko.md) | Terraform 3-state 분리 — cluster/addons/app-infra lifecycle 분리, 0043 개정 | 승인됨 — 구현됨 (실제 apply 여부는 이 ADR과 무관하게 계속 바뀜 — ROADMAP §9 참고) | 2026-08-19 |
 | [0045](0045-audit-log-target-type.ko.md) | 감사 로그 `targetType` — 다형 `targetId`를 위한 판별자, 0013 개정 | 승인됨 — 구현됨 | 2026-08-24 |
 | [0046](0046-deploy-sequence-automation.ko.md) | 배포 순서 자동화 — 로컬 쉘 스크립트, Terraform + Helm까지만 | 승인됨 — 구현됨 | 2026-08-27 |
 
