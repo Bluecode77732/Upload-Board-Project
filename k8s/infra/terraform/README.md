@@ -87,7 +87,8 @@ configuration, each state's `backend "local"` migrates to a remote backend
    re-`apply` of `app-infra/`, not just the first time** — AWS assigns a
    brand-new set of 4 nameservers to every newly created hosted zone, even
    for the identical domain name. From inside `app-infra/`, re-run
-   `terraform output -raw route53_zone_name_servers` and update your
+   `terraform output route53_zone_name_servers` (no `-raw` — this output is
+   a list, and `-raw` only supports string-typed outputs) and update your
    registrar with the new values; the old ones from a prior apply no longer
    point anywhere. Skipping this makes the ACM certificate validation hang
    or fail with no obvious error pointing back to DNS.

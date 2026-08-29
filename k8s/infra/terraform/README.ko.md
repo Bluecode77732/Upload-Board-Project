@@ -87,7 +87,8 @@ k8s/infra/terraform/
    ⚠️ **이 위임은 최초 1회만이 아니라, `app-infra/`를 `terraform destroy` 후
    재apply할 때마다 매번 다시 해야 합니다** — 같은 도메인이어도 새로 만들어진
    hosted zone마다 AWS가 완전히 새로운 네임서버 4개를 발급합니다. `app-infra/`
-   디렉터리 안에서 `terraform output -raw route53_zone_name_servers`를 다시
+   디렉터리 안에서 `terraform output route53_zone_name_servers`를(`-raw`
+   없이 — 이 출력값은 리스트라 `-raw`는 문자열 타입 출력에만 쓸 수 있음) 다시
    실행해 새 값을 확인하고, 등록기관에 그 새 값으로 갱신하세요 — 예전 apply
    때 쓰던 값은 더 이상 어디도 가리키지 않습니다. 이걸 빠뜨리면 ACM 인증서
    검증이 DNS 문제라는 뚜렷한 에러 없이 그냥 멈추거나 실패합니다.
