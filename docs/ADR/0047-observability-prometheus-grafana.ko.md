@@ -1,6 +1,6 @@
 # ADR 0047: 관측 가능성 스택 — Prometheus와 Grafana
 
-- Status: Accepted
+- Status: Accepted — 구현됨, 라이브 검증 완료(Addendum 참고)
 - Date: 2026-08-28
 - Extends: [ADR 0017](0017-logging-conventions.ko.md)
 - English: [0047-observability-prometheus-grafana.md](0047-observability-prometheus-grafana.md)
@@ -164,7 +164,7 @@ Node ≥24 고정, [ADR 0014](0014-node-pnpm-version-pinning.ko.md)라 무관), 
 의존성을 `@prometheus-io/client`로 옮기는 경우. 둘 중 하나라도 일어나면 이
 Addendum을 쓴 시점의 "배포된 지 며칠 안 된" 상태를 벗어났다는 신호다.
 
-### Addendum (2026-08-29/30) — D4 라이브 검증이 이 ADR과 무관한 기존 격차에 막힘
+### Addendum (2026-08-29/30) — D4 라이브 검증: 막혔다가 완료됨
 
 재프로비저닝 자체는 끝까지 성공했다: `cluster`/`app-infra`/`addons` 전부 적용됨(NS
 위임을 바로잡은 뒤 ACM도 검증 완료), `kube-prometheus-stack`은 `deployed`로 모든
@@ -181,6 +181,17 @@ Addendum을 쓴 시점의 "배포된 지 며칠 안 된" 상태를 벗어났다�
 아니라는 것)으로 재발한 것이다. 그 격차의 근본 원인을 고치는 건 이 ADR의 범위 밖이고
 ROADMAP §7의 미결 사안(후보 세 가지, 여전히 개발자의 선택 대기)으로 그대로 남는다 —
 D4 자체를 막힌 데서 풀기 위해서는 1회성 수동 이미지 빌드+푸시 +
-`values-prod.yaml` 태그 갱신이면 충분했지, 그 격차를 고칠 필요는 없었다. D4는 아직
-완료로 표시하지 않는다 — 수정된 이미지를 대상으로 한 실제 스크레이프 성공 및
-Grafana 렌더링 확인이 아직 남아 있다.
+`values-prod.yaml` 태그 갱신이면 충분했지, 그 격차를 고칠 필요는 없었다.
+
+**D4는 이제 완료됐다.** `bluecode1775/sharenpo:2cd73b9`(이 ADR의 구현 커밋)를
+새로 빌드·푸시하고 `helm upgrade`를 다시 실행한 뒤 직접 확인했다:
+- `GET /metrics`(앱 pod) → `200`, exposition 본문 존재(기본 프로세스 지표 +
+  `http_request_duration_seconds`가 수동 트래픽 없이도 kubelet 자신의
+  liveness/readiness probe만으로 이미 채워져 있음).
+- Prometheus: `up{job="upload-board"}` → `1`(타겟 정상); `temp_cleanup_deleted_total`
+  → `0`(라벨 없는 카운터라 정리할 게 없어도 즉시 존재, 예상대로); 
+  `sum(http_request_duration_seconds_count)` → `54`(0이 아님 — 단순히 엔드포인트가
+  열려 있는 걸 넘어 실제 스크레이프가 쌓이고 있음을 확인).
+- Grafana: `GET /api/datasources`에 정상 동작하는 `Prometheus` 데이터소스(+
+  `Alertmanager`)가 나열됨 — `kube-prometheus-stack`의 자동 프로비저닝이 별도 수동
+  설정 없이도 대시보드 계층을 같은 Prometheus 인스턴스에 연결해뒀음을 확인.

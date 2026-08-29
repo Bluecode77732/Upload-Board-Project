@@ -1,6 +1,6 @@
 # ADR 0047: Observability stack — Prometheus and Grafana
 
-- Status: Accepted
+- Status: Accepted — implemented, live-verified (see Addendum)
 - Date: 2026-08-28
 - Extends: [ADR 0017](0017-logging-conventions.md)
 - 한국어: [0047-observability-prometheus-grafana.ko.md](0047-observability-prometheus-grafana.ko.md)
@@ -158,7 +158,7 @@ date, or (b) a NestJS Prometheus integration this project would actually conside
 `@prometheus-io/client`. Either signals the new package has moved past the days-old state it
 was in at this writing.
 
-### Addendum (2026-08-29/30) — D4 live verification blocked by a pre-existing, unrelated gap
+### Addendum (2026-08-29/30) — D4 live verification: blocked, then completed
 
 Re-provisioning succeeded end to end: `cluster`/`app-infra`/`addons` all applied (ACM validated
 once NS delegation was corrected), `kube-prometheus-stack` landed `deployed` with all pods
@@ -175,5 +175,17 @@ stale code") recurring in a variant that write-up hadn't covered — a *pinned* 
 too, not just the `latest` default. Fixing that gap's root cause is out of this ADR's scope and
 stays an open decision at ROADMAP §7 (three candidates, still awaiting the developer's pick);
 unblocking D4 itself only needed a one-off manual image build + push + `values-prod.yaml` tag
-bump, not a fix to that gap. D4 is not yet marked complete — the actual scrape-success /
-Grafana-render confirmation still needs to run against the corrected image.
+bump, not a fix to that gap.
+
+**D4 is now complete.** After rebuilding and pushing `bluecode1775/sharenpo:2cd73b9` (this ADR's
+implementation commit) and re-running `helm upgrade`, verified directly:
+- `GET /metrics` on the app pod → `200`, exposition body present (default process metrics +
+  `http_request_duration_seconds` already populated from kubelet's own liveness/readiness
+  probes, before any manual traffic).
+- Prometheus: `up{job="upload-board"}` → `1` (target healthy); `temp_cleanup_deleted_total` →
+  `0` (present immediately, as expected for an unlabeled counter with nothing yet to sweep);
+  `sum(http_request_duration_seconds_count)` → `54` (nonzero, confirming real scrapes are
+  landing, not just a reachable endpoint).
+- Grafana: `GET /api/datasources` lists a working `Prometheus` datasource (plus
+  `Alertmanager`), confirming `kube-prometheus-stack`'s auto-provisioning wired the dashboard
+  layer to the same Prometheus instance without any manual configuration.
