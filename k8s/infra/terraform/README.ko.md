@@ -126,6 +126,18 @@ terraform apply
 # 2. app-infra/ — terraform_remote_state로 cluster/의 state를 읽는다
 cd ../app-infra
 terraform init
+# 아래 apply는 Route53 zone을 새로 만들고, 같은 실행 안에서 ACM이 그 zone을
+# 상대로 DNS 검증을 마칠 때까지 대기한다 — 등록기관 네임서버가 이 새 zone을
+# 가리키기 전까지는 계속 멈춰 있는다. 이 apply를 시작하기 전(또는 시작하자마자)
+# 다른 터미널을 열어 새 네임서버 값을 먼저 조회해서, 이쪽이 대기하는 동안
+# 위임하세요:
+#   aws route53 list-hosted-zones-by-name --dns-name <본인-도메인> \
+#     --query 'HostedZones[0].Id' --output text
+#   aws route53 get-hosted-zone --id <위 결과 Id> \
+#     --query 'DelegationSet.NameServers' --output json
+# 이 값들은 이 zone이 (재)생성될 때마다 매번 새로 발급됩니다 —
+# `terraform destroy` 후 재apply하면 예전 네임서버 값은 더 이상 아무 데도
+# 안 가리키니 등록기관에서 다시 교체해야 합니다.
 terraform apply \
   -var="s3_bucket_name=<전역적으로-유일한-버킷-이름>" \
   -var="domain_name=<본인-도메인>"
