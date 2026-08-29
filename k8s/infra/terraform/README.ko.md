@@ -155,6 +155,47 @@ terraform apply
 `random_password`로 생성하며, AWS Secrets Manager와 그 state의 Terraform
 state 파일 안에만 존재합니다(ADR 0043 D7/D8).
 
+## apply 실패 후 잔재 정리
+
+아래는 이 스택을 처음 배포하면서 실제로 겪었던 실패 양상들입니다(ROADMAP.md
+§7) — 각각 그냥 재시도만으로는 안 지워지는 특정한 잔재를 남깁니다.
+
+- **`helm install`/`upgrade`가 실패하고 Helm 릴리스가 `failed` 상태로
+  남는 경우** (pre-install/pre-upgrade hook — 보통 마이그레이션 `Job` —
+  실패, 또는 AWS Load Balancer Controller의 admission webhook이 아직
+  준비 안 된 상태에서 다른 차트가 `Service`를 만들려다 겪는 경합 등).
+  같은 `install`/`upgrade`를 재시도하면 `cannot reuse a name that is
+  still in use`로 또 실패합니다 — Helm은 명시적으로 지우기 전까진 `failed`
+  릴리스를 그 이름으로 그대로 남겨둡니다. 근본 원인을 먼저 고친 뒤:
+  ```sh
+  helm uninstall <릴리스-이름> -n <네임스페이스>
+  ```
+  재시도 전에 실행하세요. 이건 Terraform이 관리하는 건 전혀 안 건드리고,
+  Kubernetes 쪽 Helm 릴리스 기록과 그게 만든 리소스만 지웁니다.
+- **`Error`/`Failed`로 남은 Job과 파드** (예: 진짜 수정이 반영되기 전
+  몇 번 실패했던 마이그레이션 Job)는 무해하지만 `kubectl get pods`를
+  지저분하게 만듭니다. Job을 지우면 그 파드들도 같이 사라집니다:
+  ```sh
+  kubectl delete job <job-이름> -n <네임스페이스>
+  ```
+- **EKS 노드그룹이 `CREATE_FAILED`로 멈춘 경우** (잘못된 `ami_type`,
+  계정이 실행 못 하는 인스턴스 타입 등)는 AWS 쪽을 수동으로 정리할 필요가
+  **없습니다** — 이 모듈의 `eks-managed-node-group` 서브모듈이
+  `lifecycle { create_before_destroy = true }`를 쓰기 때문에, 이전 apply의
+  정상 노드그룹은 그대로 살아남습니다. `cluster/main.tf`(예: 인스턴스
+  타입)를 고치고 `terraform apply`를 다시 실행하면 실패한 노드그룹만
+  교체됩니다.
+- **`Error: Error acquiring the state lock`** — `terraform apply`가
+  중간에 끊겼을 때(예: Ctrl-C) 로컬 backend가 정상적으로 lock을 못 풀고
+  파일로 남기는 경우입니다. 에러 메시지 자체에 lock ID가 찍혀 나오니
+  그대로 씁니다:
+  ```sh
+  terraform force-unlock <LOCK_ID>
+  ```
+  같은 state를 상대로 실제로 돌고 있는 `apply`/`plan`이 없다고 확신할
+  때만 실행하세요 — 진짜로 실행 중인 프로세스가 lock을 쥐고 있는데
+  강제로 풀면 state 파일이 깨질 수 있습니다.
+
 ## 세 state 모두 `apply`한 이후
 
 1. **kubectl을 새 클러스터로 연결** — `cluster/`에서: `terraform output

@@ -156,6 +156,48 @@ values the Helm chart's `secrets.existingSecret` needs (`DB_USERNAME`,
 by `app-infra/` (`random_password`) and only ever live in AWS Secrets
 Manager and that state's Terraform state file (ADR 0043 D7/D8).
 
+## Cleaning up after a failed apply
+
+These are the actual failure modes hit while first deploying this stack
+(ROADMAP.md §7); each leaves a specific kind of leftover that a plain retry
+does not always clear on its own.
+
+- **`helm install`/`upgrade` fails with a Helm release stuck in `failed`**
+  (a pre-install/pre-upgrade hook — usually the migration `Job` — failed, or
+  a webhook race like the AWS Load Balancer Controller's admission webhook
+  not yet being ready when another chart tries to create a `Service`).
+  Retrying the same `install`/`upgrade` fails again with `cannot reuse a
+  name that is still in use` — Helm keeps a `failed` release under its name
+  until it's explicitly removed. Fix the underlying cause first, then:
+  ```sh
+  helm uninstall <release-name> -n <namespace>
+  ```
+  before retrying. This does **not** touch anything Terraform manages — only
+  the Kubernetes-side Helm release record and the resources it created.
+- **Leftover `Error`/`Failed` Jobs and Pods** (e.g. a migration Job that
+  failed a few times before the real fix landed) are harmless but clutter
+  `kubectl get pods`. Deleting the Job also removes its Pods:
+  ```sh
+  kubectl delete job <job-name> -n <namespace>
+  ```
+- **An EKS node group stuck in `CREATE_FAILED`** (wrong `ami_type`, an
+  instance type your AWS account can't launch, etc.) does **not** need
+  manual AWS-side cleanup — the module's `eks-managed-node-group` submodule
+  uses `lifecycle { create_before_destroy = true }`, so a still-working node
+  group from a prior apply survives untouched. Fix `cluster/main.tf` (e.g.
+  the instance type) and re-run `terraform apply`; it replaces just the
+  failed node group.
+- **`Error: Error acquiring the state lock`** after an interrupted (e.g.
+  Ctrl-C'd) `terraform apply` — the local backend leaves a lock file behind
+  when the process doesn't get to release it cleanly. The error message
+  itself prints the lock ID; use it exactly:
+  ```sh
+  terraform force-unlock <LOCK_ID>
+  ```
+  Only do this once you're sure no other `apply`/`plan` is actually still
+  running against the same state — force-unlocking while a real process
+  still holds the lock can corrupt the state file.
+
 ## After all three `apply`
 
 1. **Point kubectl at the new cluster** — from `cluster/`: `terraform
