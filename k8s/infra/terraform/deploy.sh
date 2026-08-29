@@ -137,6 +137,25 @@ deploy_app_infra() {
     -var="domain_name=$DOMAIN_NAME" \
     -target=aws_acm_certificate.app
 
+  # 이 2단계에서 aws_route53_zone.app이 새로 만들어지고, 같은 apply 안에서
+  # aws_acm_certificate_validation.app이 DNS 검증 완료까지 대기한다. 즉 이
+  # 명령을 실행한 터미널이 "끝날 때까지" 네임서버 값을 얻을 방법이 없다 —
+  # terraform output은 apply가 끝나야(또는 최소한 그 리소스 apply가 끝나야)
+  # 값을 준다. 그래서 위임을 여기서 자동으로 안내할 수 없고, 대신 이 apply가
+  # 오래 걸리기 전에 사람이 다른 터미널에서 조치하도록 미리 경고한다.
+  echo ""
+  echo "⚠️  주의: 이 단계는 Route53 zone을 새로 만든 뒤 ACM 인증서가 DNS로"
+  echo "   검증될 때까지 이 터미널에서 계속 대기합니다. 새 zone의 네임서버로"
+  echo "   도메인 등록기관(registrar)의 네임서버를 갱신하기 전까지는 검증이"
+  echo "   끝나지 않습니다(destroy 후 재apply라면 예전 네임서버 값은 이제"
+  echo "   안 쓰이니 반드시 새 값으로 다시 위임하세요)."
+  echo "   이 창이 대기하는 동안, 다른 터미널을 열어 아래로 새 네임서버 값을"
+  echo "   먼저 확인하고 등록기관에 즉시 반영하세요:"
+  echo "     aws route53 list-hosted-zones-by-name --dns-name $DOMAIN_NAME \\"
+  echo "       --query 'HostedZones[0].Id' --output text"
+  echo "     aws route53 get-hosted-zone --id <위 명령 결과 ID> \\"
+  echo "       --query 'DelegationSet.NameServers' --output json"
+  echo ""
   echo "==> 2단계: app-infra 전체 apply"
   run_terraform_step app-infra \
     -var="region=$REGION" \

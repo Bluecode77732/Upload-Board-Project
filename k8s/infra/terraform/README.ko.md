@@ -84,6 +84,13 @@ k8s/infra/terraform/
    등록기관), 이 설정이 만드는 영역에 위임하세요(`route53_zone_name_servers`
    출력값을 등록기관의 네임서버로 지정). 그 출력값을 얻기 위해 먼저 한 번
    apply한 뒤 위임해도 됩니다.
+   ⚠️ **이 위임은 최초 1회만이 아니라, `app-infra/`를 `terraform destroy` 후
+   재apply할 때마다 매번 다시 해야 합니다** — 같은 도메인이어도 새로 만들어진
+   hosted zone마다 AWS가 완전히 새로운 네임서버 4개를 발급합니다. `app-infra/`
+   디렉터리 안에서 `terraform output -raw route53_zone_name_servers`를 다시
+   실행해 새 값을 확인하고, 등록기관에 그 새 값으로 갱신하세요 — 예전 apply
+   때 쓰던 값은 더 이상 어디도 가리키지 않습니다. 이걸 빠뜨리면 ACM 인증서
+   검증이 DNS 문제라는 뚜렷한 에러 없이 그냥 멈추거나 실패합니다.
 2. **전역적으로 유일한 S3 버킷 이름** — `app-infra/`의
    `var.s3_bucket_name`에 넣을 값으로, 버킷 이름은 계정을 넘어 AWS
    전체에서 충돌합니다.

@@ -83,6 +83,14 @@ configuration, each state's `backend "local"` migrates to a remote backend
    either delegate it to the zone this config creates (point your
    registrar's nameservers at the `route53_zone_name_servers` output) or run
    `apply` once first just to get that output, then delegate.
+   ⚠️ **This delegation must be redone after every `terraform destroy` +
+   re-`apply` of `app-infra/`, not just the first time** — AWS assigns a
+   brand-new set of 4 nameservers to every newly created hosted zone, even
+   for the identical domain name. From inside `app-infra/`, re-run
+   `terraform output -raw route53_zone_name_servers` and update your
+   registrar with the new values; the old ones from a prior apply no longer
+   point anywhere. Skipping this makes the ACM certificate validation hang
+   or fail with no obvious error pointing back to DNS.
 2. **A globally-unique S3 bucket name** for `app-infra/`'s
    `var.s3_bucket_name` — bucket names collide across all AWS accounts, not
    just yours.
