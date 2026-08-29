@@ -128,9 +128,10 @@ cd ../app-infra
 terraform init
 # 아래 apply는 Route53 zone을 새로 만들고, 같은 실행 안에서 ACM이 그 zone을
 # 상대로 DNS 검증을 마칠 때까지 대기한다 — 등록기관 네임서버가 이 새 zone을
-# 가리키기 전까지는 계속 멈춰 있는다. 이 apply를 시작하기 전(또는 시작하자마자)
-# 다른 터미널을 열어 새 네임서버 값을 먼저 조회해서, 이쪽이 대기하는 동안
-# 위임하세요:
+# 가리키기 전까지는 계속 멈춰 있는다. zone은 이 apply가 만들기 전엔 존재하지
+# 않아서 네임서버 값도 미리는 조회할 수 없다 — 이 apply를 먼저 시작하고,
+# ACM 검증 대기에 들어가면 그때 다른 터미널을 열어 새 네임서버 값을 조회해서,
+# 이쪽이 대기하는 동안 위임하세요:
 #   aws route53 list-hosted-zones-by-name --dns-name <본인-도메인> \
 #     --query 'HostedZones[0].Id' --output text
 #   aws route53 get-hosted-zone --id <위 결과 Id> \

@@ -128,9 +128,11 @@ cd ../app-infra
 terraform init
 # The apply below creates a new Route53 zone and waits, in the same run, for
 # ACM to DNS-validate against it — it will hang until your registrar's
-# nameservers point at this new zone. Before (or right after starting) this
-# apply, open a second terminal and fetch the new nameservers so you can
-# delegate while this one waits:
+# nameservers point at this new zone. The zone doesn't exist until this
+# apply creates it, so its nameservers can't be fetched beforehand — start
+# this apply first, then, once it reaches the ACM wait, open a second
+# terminal and fetch the new nameservers so you can delegate while this one
+# waits:
 #   aws route53 list-hosted-zones-by-name --dns-name <your-domain> \
 #     --query 'HostedZones[0].Id' --output text
 #   aws route53 get-hosted-zone --id <that Id> \
