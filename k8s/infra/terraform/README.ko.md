@@ -92,6 +92,21 @@ k8s/infra/terraform/
    실행해 새 값을 확인하고, 등록기관에 그 새 값으로 갱신하세요 — 예전 apply
    때 쓰던 값은 더 이상 어디도 가리키지 않습니다. 이걸 빠뜨리면 ACM 인증서
    검증이 DNS 문제라는 뚜렷한 에러 없이 그냥 멈추거나 실패합니다.
+   **Windows에서는 `app-infra` apply가 아직 실행 중일 때 이 `terraform
+   output`이 대개 실패합니다**, `Error: Failed to read state file ... The
+   process cannot access the file because another process has locked a
+   portion of the file`라는 에러와 함께 — Windows의 파일 잠금이
+   Linux/macOS보다 엄격해서, 실행 중인 `apply`가 그 동안 내내
+   `terraform.tfstate`를 독점 잠금하고 있기 때문입니다(애초에 이 apply가
+   아직 안 끝난 이유가 바로 이것입니다 — 자신의 ACM 검증 대기가 통과하려면
+   먼저 네임서버 위임이 끝나야 합니다). 대신 AWS에 직접 물어보세요 — 로컬
+   state 파일을 전혀 안 건드립니다:
+   ```sh
+   aws route53 list-hosted-zones-by-name --dns-name <본인-도메인> \
+     --query 'HostedZones[0].Id' --output text
+   aws route53 get-hosted-zone --id <위 결과 Id> \
+     --query 'DelegationSet.NameServers' --output json
+   ```
 2. **전역적으로 유일한 S3 버킷 이름** — `app-infra/`의
    `var.s3_bucket_name`에 넣을 값으로, 버킷 이름은 계정을 넘어 AWS
    전체에서 충돌합니다.

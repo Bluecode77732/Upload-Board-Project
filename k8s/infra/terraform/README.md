@@ -92,6 +92,21 @@ configuration, each state's `backend "local"` migrates to a remote backend
    registrar with the new values; the old ones from a prior apply no longer
    point anywhere. Skipping this makes the ACM certificate validation hang
    or fail with no obvious error pointing back to DNS.
+   **On Windows, that `terraform output` will typically fail while the
+   `app-infra` apply is still running**, with `Error: Failed to read state
+   file ... The process cannot access the file because another process has
+   locked a portion of the file` — Windows' file locking is stricter than
+   Linux/macOS, and the running `apply` holds an exclusive lock on
+   `terraform.tfstate` the whole time it's active (this is why the apply is
+   still running in the first place — it needs the nameservers delegated
+   before its own ACM-validation wait can succeed). Query AWS directly
+   instead; it doesn't touch the local state file at all:
+   ```sh
+   aws route53 list-hosted-zones-by-name --dns-name <your-domain> \
+     --query 'HostedZones[0].Id' --output text
+   aws route53 get-hosted-zone --id <that Id> \
+     --query 'DelegationSet.NameServers' --output json
+   ```
 2. **A globally-unique S3 bucket name** for `app-infra/`'s
    `var.s3_bucket_name` — bucket names collide across all AWS accounts, not
    just yours.
