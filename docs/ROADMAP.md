@@ -483,6 +483,18 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   (b) touches CI (Scope Discipline flags new/changed CI behavior for confirmation); (c) is
   a workflow/branching-policy decision, not a code change at all. Revisit with a
   comparison table across these three before implementing any of them.
+  **Recurred 2026-08-29/30** during [ADR 0047](ADR/0047-observability-prometheus-grafana.md)
+  D4's live verification, in a variant the original write-up didn't cover: even
+  `values-prod.yaml`'s *pinned* tag (`ssl-fix` at the time, `db-ssl-ca` by this point) went
+  stale — `MetricsModule` landed on `dev` (`f17cc9e`) but was never built into any pushed
+  image, so the live pod kept serving 404 on `/metrics` after a full redeploy. This shows
+  the root cause is broader than "the `latest` default resolves to a stale image on a bare
+  install": *no* tag, pinned or default, updates itself when `dev` moves, because
+  `docker-publish` never builds from `dev` at all. Unblocking the ADR 0047 verification
+  itself only needed a one-off manual `build-and-push.sh`-style build+push +
+  `values-prod.yaml` tag bump — deliberately not a fix for this row, which stays open with
+  its three candidates unchanged; the recurrence is recorded here as evidence for whichever
+  option the developer picks next, not a reason to pick one now.
 - ~~**Automate the `cluster` → `app-infra` → `addons` → Helm deploy sequence**~~ — **landed
   2026-08-27** ([ADR 0046](ADR/0046-deploy-sequence-automation.md)). Tool: a plain bash
   script (`k8s/infra/terraform/deploy.sh`), matching the existing `build-and-push.sh`

@@ -157,3 +157,23 @@ date, or (b) a NestJS Prometheus integration this project would actually conside
 `@willsoto/nestjs-prometheus` precedent, or an equivalent) migrates its own dependency to
 `@prometheus-io/client`. Either signals the new package has moved past the days-old state it
 was in at this writing.
+
+### Addendum (2026-08-29/30) — D4 live verification blocked by a pre-existing, unrelated gap
+
+Re-provisioning succeeded end to end: `cluster`/`app-infra`/`addons` all applied (ACM validated
+once NS delegation was corrected), `kube-prometheus-stack` landed `deployed` with all pods
+`Running`, and the app's Helm release (chart `sharenpo-0.3.0`, carrying this ADR's
+`ServiceMonitor` template) also reached `deployed`. Prometheus picked up the target, but its
+health was `down` with `lastError: "server returned HTTP status 404 Not Found"` — confirmed
+directly (`GET /metrics` → `Cannot GET /metrics`).
+
+Root cause was not in this ADR's own work: the running pod's image (`bluecode1775/sharenpo:
+db-ssl-ca`, pinned in `values-prod.yaml`) was built before `MetricsModule` existed. This is the
+known, previously-recorded gap at
+[ROADMAP.md §7](../ROADMAP.md#7-unscheduled--open-decisions) ("`image.tag` … silently deploys
+stale code") recurring in a variant that write-up hadn't covered — a *pinned* tag going stale
+too, not just the `latest` default. Fixing that gap's root cause is out of this ADR's scope and
+stays an open decision at ROADMAP §7 (three candidates, still awaiting the developer's pick);
+unblocking D4 itself only needed a one-off manual image build + push + `values-prod.yaml` tag
+bump, not a fix to that gap. D4 is not yet marked complete — the actual scrape-success /
+Grafana-render confirmation still needs to run against the corrected image.

@@ -163,3 +163,24 @@ Node ≥24 고정, [ADR 0014](0014-node-pnpm-version-pinning.ko.md)라 무관), 
 `@willsoto/nestjs-prometheus` 선례, 혹은 그에 준하는 패키지)가 자신의
 의존성을 `@prometheus-io/client`로 옮기는 경우. 둘 중 하나라도 일어나면 이
 Addendum을 쓴 시점의 "배포된 지 며칠 안 된" 상태를 벗어났다는 신호다.
+
+### Addendum (2026-08-29/30) — D4 라이브 검증이 이 ADR과 무관한 기존 격차에 막힘
+
+재프로비저닝 자체는 끝까지 성공했다: `cluster`/`app-infra`/`addons` 전부 적용됨(NS
+위임을 바로잡은 뒤 ACM도 검증 완료), `kube-prometheus-stack`은 `deployed`로 모든
+파드가 `Running`, 앱 쪽 Helm 릴리스(이 ADR의 `ServiceMonitor` 템플릿을 담은 chart
+`sharenpo-0.3.0`)도 `deployed`에 도달했다. Prometheus는 타겟을 잡았지만 상태가
+`down`이었고 `lastError: "server returned HTTP status 404 Not Found"` — 직접 확인해도
+`GET /metrics` → `Cannot GET /metrics`로 재현됐다.
+
+근본 원인은 이 ADR 자신의 작업이 아니었다: 실행 중인 pod의 이미지
+(`values-prod.yaml`에 고정된 `bluecode1775/sharenpo:db-ssl-ca`)가 `MetricsModule`이
+생기기 전에 빌드된 것이었다. 이건 [ROADMAP.md §7](../ROADMAP.ko.md#7-미일정--미결-사항)에
+이미 기록돼 있던 알려진 격차("`image.tag`… 조용히 옛날 코드를 배포함")가, 그 글이
+다루지 않았던 변형(*고정* 태그조차 낡을 수 있다는 것, `latest` 기본값만의 문제가
+아니라는 것)으로 재발한 것이다. 그 격차의 근본 원인을 고치는 건 이 ADR의 범위 밖이고
+ROADMAP §7의 미결 사안(후보 세 가지, 여전히 개발자의 선택 대기)으로 그대로 남는다 —
+D4 자체를 막힌 데서 풀기 위해서는 1회성 수동 이미지 빌드+푸시 +
+`values-prod.yaml` 태그 갱신이면 충분했지, 그 격차를 고칠 필요는 없었다. D4는 아직
+완료로 표시하지 않는다 — 수정된 이미지를 대상으로 한 실제 스크레이프 성공 및
+Grafana 렌더링 확인이 아직 남아 있다.

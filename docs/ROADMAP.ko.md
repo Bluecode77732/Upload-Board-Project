@@ -450,6 +450,19 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   함. (a)는 Helm 차트만 건드리는 변경이고, (b)는 CI를 건드리므로(Scope Discipline상
   CI 동작 변경은 확인 필요), (c)는 코드 변경이 아니라 워크플로/브랜치 정책 결정이다.
   이 셋을 비교 테이블로 놓고 재검토한 뒤 진행할 것.
+  **2026-08-29/30에 재발** — [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md)
+  D4의 라이브 검증 중, 처음 기록할 때는 다루지 않았던 변형으로 다시 터졌다:
+  `values-prod.yaml`의 *고정* 태그(당시 `ssl-fix`, 이 시점엔 `db-ssl-ca`)조차 낡은
+  상태였다 — `MetricsModule`이 `dev`(`f17cc9e`)에 랜딩됐지만 어떤 푸시된 이미지에도
+  빌드된 적이 없어서, 완전히 재배포한 뒤에도 살아있는 pod가 `/metrics`에 계속 404를
+  냈다. 이는 근본 원인이 "맨 install에서 `latest` 기본값이 낡은 이미지로 풀린다"보다
+  더 넓다는 것을 보여준다 — `dev`가 움직여도 고정 태그든 기본 태그든 그 무엇도 스스로
+  갱신되지 않는다, `docker-publish`가 애초에 `dev`에서는 전혀 빌드하지 않기 때문이다.
+  ADR 0047 자체의 검증을 막힌 데서 풀기 위해서는 `build-and-push.sh` 방식의 1회성
+  수동 빌드+푸시 + `values-prod.yaml` 태그 갱신이면 충분했다 — 이 항목 자체를 고치는
+  건 의도적으로 하지 않았고, 세 후보안은 그대로 열려 있다. 이 재발 기록은 다음에
+  개발자가 어느 안을 고르든 그 근거 자료로 남겨두는 것이지, 지금 하나를 정하라는
+  뜻이 아니다.
 - ~~**`cluster` → `app-infra` → `addons` → Helm 배포 순서 자동화**~~ — **2026-08-27 완료**
   ([ADR 0046](ADR/0046-deploy-sequence-automation.ko.md)). 도구: 순수 bash 스크립트
   (`k8s/infra/terraform/deploy.sh`) — 기존 `build-and-push.sh` 선례와 같은 형태이며
