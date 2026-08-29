@@ -13,6 +13,33 @@
 ## [Unreleased]
 
 ### 추가
+- **2026-08-28 철거 이후 재배포로 다시 안정 상태에 도달함 (2026-08-29/30)** — 3-state
+  Terraform(`cluster` → `app-infra` → `addons`) apply와 Helm 앱 설치를 처음부터
+  다시 실행해, 2026-08-28 항목이 예고한 "같은 순서, 같은 `deploy.sh all`"이
+  실제로 그대로 통한다는 걸 확인했다. 그 과정에서 `terraform plan`으로는 보이지
+  않는 apply 잔재 두 가지를 겪었다 — 둘 다 클러스터 쪽 상태라 Terraform이
+  추적하지 못한다. (1) 새로 추가된 `kube-prometheus-stack` 애드온
+  ([ADR 0047](ADR/0047-observability-prometheus-grafana.md))의 Helm 릴리스가
+  `pending-install`에 고착됨 — 실제 파드는 이미 `Running` 상태였지만, install
+  도중 끊기는 바람에 Helm 자체의 릴리스 레코드도, Terraform state도 이 리소스가
+  생성됐다는 걸 전혀 모르는 상태였다. `helm uninstall kube-prometheus-stack -n
+  kube-prometheus-stack` 실행 후 `addons/`에서 깨끗하게 `terraform apply`를
+  다시 돌려 `deployed`(revision 1)로 재생성했다. (2) 앱 Helm 릴리스
+  (`upload-board`)가 pre-install 마이그레이션 Job에서 실패함
+  (`CreateContainerConfigError: secret "upload-board-project-app-secrets" not
+  found`, revision 1) — 원인은 ESO `SecretStore`/`ExternalSecret` 일회성 수동
+  적용과 `default` ServiceAccount의 IRSA 어노테이션
+  (`k8s/infra/terraform/README.md`의 "After all three apply" 단계)이 철거 이후
+  다시 수행되지 않았기 때문이었다. 둘 다 Terraform 재적용으로는 재현되지 않는
+  클러스터 쪽 수동 단계다. `app-infra/`에서 `terraform output -raw
+  external_secrets_manifest | kubectl apply -f -`로 고쳤고
+  (`externalsecret/upload-board-project-app-secrets`가 `SecretSynced`/`True`인
+  것까지 확인), 이어서 `kubectl annotate serviceaccount default
+  eks.amazonaws.com/role-arn=$(terraform output -raw app_iam_role_arn)`를
+  실행했다 — 릴리스를 재시도하니 revision 2로 `deployed`에 도달했다. 실제로
+  확인한 결과: 마이그레이션 Job `Complete 1/1`, 앱 파드 `1/1 Running`, `GET
+  /health/live`와 `GET /health/ready`(후자는 실제 DB 왕복 포함) 모두 `200
+  {"status":"ok"}` 응답.
 - **AWS 첫 실제 배포가 안정 상태에 도달함 (2026-08-27)** — Helm 릴리스 `upload-board`
   (`k8s/helm/`)가 실제 EKS 클러스터에서 `STATUS: deployed`(revision 5)에 도달했다.
   `helm upgrade upload-board . --reuse-values --set env.DB_SSL=true`로 실제 RDS

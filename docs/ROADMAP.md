@@ -1033,6 +1033,12 @@ candidate under the CI task).
 
 ## 9. Completed
 
+### 2026-08-29
+
+| Item | Notes |
+|---|---|
+| Redeploy after the 2026-08-28 teardown reached a stable state again | Re-ran the three-state Terraform apply (`cluster` → `app-infra` → `addons`) plus the Helm app install, confirming the 2026-08-28 entry's "same order, same `deploy.sh all`" prediction held. Two interrupted-apply artifacts surfaced, both invisible to `terraform plan` because they are cluster-side state Terraform doesn't track: (1) the newly-added `kube-prometheus-stack` addon ([ADR 0047](ADR/0047-observability-prometheus-grafana.md)) had its Helm release stuck at `pending-install` — the underlying pods were already `Running`, but a mid-install interruption left Helm's own release record unmarked and Terraform's state with no record of the resource at all; fixed with `helm uninstall kube-prometheus-stack -n kube-prometheus-stack` then a clean `terraform apply` in `addons/`, which recreated it as `deployed` (revision 1). (2) The app's Helm release (`upload-board`) failed its pre-install migration Job (`CreateContainerConfigError: secret "upload-board-project-app-secrets" not found`, revision 1) because the ESO `SecretStore`/`ExternalSecret` one-time manual apply and the `default` ServiceAccount's IRSA annotation (`k8s/infra/terraform/README.md`'s "After all three apply" steps) hadn't been redone since the teardown — both are cluster-side manual steps a Terraform re-apply does not replay. Fixed from `app-infra/`: `terraform output -raw external_secrets_manifest \| kubectl apply -f -` (confirmed `externalsecret/upload-board-project-app-secrets` `SecretSynced`/`True`), then `kubectl annotate serviceaccount default eks.amazonaws.com/role-arn=$(terraform output -raw app_iam_role_arn)`; retrying the release reached revision 2, `deployed`. Verified live: migration Job `Complete 1/1`, app pod `1/1 Running`, and both `GET /health/live` and `GET /health/ready` (the latter a real DB round-trip) returned `200 {"status":"ok"}`. |
+
 ### 2026-08-28
 
 | Item | Notes |
