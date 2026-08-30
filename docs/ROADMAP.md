@@ -457,6 +457,51 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
 
 ## 7. Unscheduled / open decisions
 
+- ~~**`image.tag: "latest"` default silently deploys stale code**~~ — **option (b)
+  landed 2026-08-30**: `.github/workflows/ci.yml`'s `docker-publish` job now also
+  triggers on push to `dev` (previously `main`-only), so the branch this project
+  actually develops on gets an image built on every push, not only on the rare
+  merge to `main`. Tagging is branch-aware, not uniform: `main` keeps `:latest` +
+  `:<sha>` on the existing `linux/amd64,linux/arm64` multi-arch build; `dev` gets
+  `:<sha>` only (never `:latest`) on an `linux/amd64`-only build — dev publishes far
+  more often and has no `:latest` reader depending on it, so halving its QEMU cost
+  was judged worth the (already-negligible, see below) loss of an early arm64
+  build-failure signal. A `concurrency` block (`cancel-in-progress: true`) was added
+  at the same time so a rapid string of `dev` pushes doesn't run every superseded
+  workflow to completion. Before this, a smoke-test step was added ahead of the
+  actual push: the freshly built amd64 image is loaded locally (`--load`, GHA-cached
+  so the later push build doesn't repay the full compile cost), run against a
+  throwaway `postgres:16` service over `--network host`, and polled against the
+  Dockerfile's own `HEALTHCHECK` (`GET /health/live`) before anything is pushed —
+  this is genuinely new coverage, since neither `main` nor `dev` builds were ever
+  runtime-verified before (only "the build completed" was ever checked; arm64 still
+  isn't runtime-verified today, QEMU-emulated container execution being
+  impractical — so dropping dev's arm64 build loses only an early *build*-failure
+  signal, not any runtime signal, since none existed for arm64 either way).
+  **Live-verified 2026-08-30**: two pre-existing, unrelated defects surfaced and were
+  fixed along the way, since `dev` had genuinely never run this path before —
+  `test/app.e2e-spec.ts`'s `seedFile` helper predated [ADR
+  0040](ADR/0040-persisted-media-type-for-playback.md)'s `NOT NULL mediaType` column
+  and was inserting without it (18 tests failing); and `docker/login-action@v3` (a
+  `node20`-runtime action) started failing immediately with "malformed HTTP
+  Authorization header" once GitHub Actions began forcing `node20` actions onto a
+  `node24` runtime — confirmed unrelated to the Docker Hub credentials themselves
+  (identical failure persisted across two credential rotations) and to Node version
+  specifically (identical failure persisted after bumping to `v4`, a native `node24`
+  build) — the actual cause was a stray character in the `DOCKER_USERNAME`/
+  `DOCKER_PASSWORD` secret values themselves, from a web-UI paste; the `v3`→`v4` bump
+  was kept regardless as the correct fix for the Node-runtime mismatch it was
+  originally diagnosing (inputs verified byte-identical between the two versions).
+  Confirmed end-to-end on a real `dev` push after both fixes: all 6 verification jobs
+  passed, `docker-publish` logged in, ran the smoke test to a `healthy` container,
+  and pushed — `bluecode1775/sharenpo:<sha>` appeared on Docker Hub as a
+  **single-architecture (`amd64`) image**, and no `:latest` tag was touched (it does
+  not currently exist on Docker Hub at all — every prior image was pushed manually,
+  consistent with `docker-publish` never having reached a successful push before this).
+  Options (a) (drop `values.yaml`'s `image.tag` default) and (c) (merge `dev` into
+  `main` on a cadence) were not pursued — (b) alone closes the "an image never gets
+  built from `dev`" gap this row exists for; the original write-up's mention of them is
+  kept for context, not as still-open follow-ups.
 - **`image.tag: "latest"` default silently deploys stale code** (found 2026-08-28,
   reproducing an earlier deploy step by hand) — `k8s/helm/values.yaml`'s default
   `image.tag` is `"latest"`, but `.github/workflows/ci.yml`'s `docker-publish` job only

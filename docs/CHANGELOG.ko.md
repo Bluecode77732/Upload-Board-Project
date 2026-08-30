@@ -13,6 +13,23 @@
 ## [Unreleased]
 
 ### 추가
+- **`docker-publish`가 이제 `dev` push에도 반응하고, 브랜치별 태깅/플랫폼 범위와
+  push 전 스모크 테스트를 갖춤 (2026-08-30, [ROADMAP §7](ROADMAP.ko.md#7-미일정--미결-사항))**
+  — 반복되던 스테일 이미지 사고(2026-08-28, 2026-08-29/30)의 근본 원인이었던
+  "`dev`에서는 이미지가 전혀 빌드되지 않는다"는 격차를 닫는다. `main`은 기존
+  `linux/amd64,linux/arm64` 멀티아치 빌드에 `:latest` + `:<sha>`를 그대로
+  유지하고, `dev`는 `:<sha>`만, `linux/amd64` 단일 아키텍처로 받는다(dev는
+  훨씬 자주 발행되고 `:latest` 소비자가 없으며, 두 브랜치 모두 arm64 런타임
+  검증이 존재한 적이 없어 — dev의 QEMU 비용을 절반으로 줄여도 잃는 건 조기
+  *빌드* 실패 신호뿐이다). `concurrency: cancel-in-progress` 블록을 추가해
+  연속 push 시 낡은 워크플로 실행이 끝까지 도는 낭비를 막는다. 실제 push 전에
+  새 스모크 테스트 스텝이 빌드된 amd64 이미지를 로컬로 올리고(GHA 캐시)
+  일회용 `postgres:16` 서비스와 함께 기동시켜 Dockerfile 자체의
+  `HEALTHCHECK`(`GET /health/live`)를 확인한다 — 이전엔 어떤 `docker-publish`
+  실행도 이미지가 실제로 뜨는지 검증한 적이 없었으므로 이건 진짜 새로운
+  검증이다. 실제 `dev` push로 엔드투엔드 라이브 검증 완료:
+  `bluecode1775/sharenpo:<sha>`가 단일 아키텍처 이미지로 Docker Hub에
+  올라갔고 `:latest`는 손대지 않았다.
 - **Prometheus/Grafana 관측 가능성 스택 (2026-08-29)** —
   ([ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md)) Stage 4 DevOps
   스택의 마지막 남은 두 행을 닫는다. 기존 `eks_blueprints_addons` 모듈의
@@ -370,6 +387,20 @@
   새 경로를 인용하도록 갱신했다.
 
 ### 수정
+- **위 `dev`-push CI 변경 도중 드러난 무관한 기존 결함 2건, 같은 날 함께 수정
+  (2026-08-30)** — `dev`가 이 경로들을 CI에서 실제로 실행한 적이 정말 없었다.
+  `test/app.e2e-spec.ts`의 `seedFile` 헬퍼가 [ADR 0040](ADR/0040-persisted-media-type-for-playback.ko.md)의
+  `NOT NULL mediaType` 컬럼 추가 이전 코드 그대로라 그 값 없이 `FileEntity`를
+  insert하고 있었고, 테스트 18개가 실패했다 — 헬퍼의 `filePath`가 이미 `.mp4`를
+  쓰므로 `mediaType: FileMediaType.video`를 추가해 고쳤다. 별개로,
+  GitHub Actions가 `node20` 대상 액션을 `node24` 런타임으로 강제 실행시키기
+  시작하면서 `docker/login-action@v3`(`node20` 런타임 액션)가 "malformed HTTP
+  Authorization header"로 즉시 실패하기 시작했다 — Docker Hub 시크릿을 두 번
+  교체해도 동일한 실패가 반복돼 자격증명 문제는 아니라고 판단한 뒤 `@v4`(네이티브
+  `node24`, `v3`와 입력값 바이트 단위 동일)로 올렸다. 실제 근본 원인은 웹 UI로
+  붙여넣는 과정에서 시크릿 값에 섞여 들어간 이물 문자였지만, `v3`→`v4` 버전 업
+  자체는 애초에 진단하려던 Node 런타임 불일치의 올바른 수정이므로 그대로
+  유지했다.
 - **`GET /audit-log?userId=`가 다형 `targetId`를 유저 id로 읽어, 무관한 기록이 그 유저의
   활동으로 조회되던 문제(2026-08-24, [ADR 0045](ADR/0045-audit-log-target-type.ko.md),
   [ADR 0013](ADR/0013-rbac-and-audit-log.ko.md) 개정)** — 백엔드와 문서만 수정했고 `admin/`과

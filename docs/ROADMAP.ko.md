@@ -425,6 +425,52 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
 
 ## 7. 미일정 / 미결 사항
 
+- ~~**`image.tag: "latest"` 기본값이 조용히 옛날 코드를 배포함**~~ — **(b)안으로
+  2026-08-30 해결**: `.github/workflows/ci.yml`의 `docker-publish` 잡이 이제
+  `dev` push에도 반응한다(기존엔 `main` 전용) — 실제로 개발이 이뤄지는 브랜치가
+  드문 `main` 병합 때만이 아니라 매 push마다 이미지를 빌드받게 됐다. 태깅은
+  브랜치별로 다르게 처리한다: `main`은 기존 `linux/amd64,linux/arm64` 멀티아치
+  빌드에 `:latest` + `:<sha>`를 그대로 유지하고, `dev`는 `linux/amd64` 단일
+  아키텍처 빌드에 `:<sha>`만 받는다(`:latest`는 절대 안 건드림) — dev는 훨씬
+  자주 발행되고 `:latest`에 의존하는 소비자가 없으므로, QEMU 비용을 절반으로
+  줄이는 대가로 잃는 게 (아래에서 보듯 이미 미미한) arm64 빌드 실패 조기 발견
+  신호뿐이라고 판단했다. 연속 push 시 낡은 실행이 끝까지 도는 낭비를 막기 위해
+  워크플로 레벨 `concurrency`(`cancel-in-progress: true`)도 같이 추가했다.
+  실제 push보다 앞서 스모크 테스트 스텝도 새로 추가했다: 방금 빌드한 amd64
+  이미지를 로컬로 올려(`--load`, GHA 캐시로 이후 push 빌드가 컴파일 비용을
+  다시 치르지 않게 함) 일회용 `postgres:16` 서비스와 함께 `--network host`로
+  기동시키고, 아무것도 push하기 전에 Dockerfile 자체의 `HEALTHCHECK`
+  (`GET /health/live`)가 healthy가 될 때까지 확인한다 — 이건 정말 새로 생긴
+  검증이다, `main`이든 `dev`든 지금까지 런타임 검증이 존재한 적이 없었기
+  때문("빌드가 끝났다"만 확인됐음). arm64는 여전히 런타임 검증이 안 된다
+  (QEMU 에뮬레이션 위에서 컨테이너를 실제로 실행하는 건 비현실적) — 그래서
+  dev의 arm64 빌드를 뺀다고 잃는 건 애초에 존재한 적 없는 런타임 신호가
+  아니라 *빌드* 실패 조기 발견 신호뿐이다.
+  **2026-08-30 라이브 검증 완료**: `dev`가 이 경로를 실제로 실행한 적이
+  없었던 탓에, 무관한 기존 결함 두 개가 검증 도중 드러나 함께 고쳐졌다 —
+  `test/app.e2e-spec.ts`의 `seedFile` 헬퍼가 [ADR
+  0040](ADR/0040-persisted-media-type-for-playback.ko.md)의 `NOT NULL
+  mediaType` 컬럼 추가 이전 코드 그대로라 그 값 없이 insert하고 있었고(테스트
+  18개 실패); GitHub Actions가 `node20` 대상 액션을 `node24` 런타임으로
+  강제 실행시키기 시작하면서 `docker/login-action@v3`(`node20` 런타임 액션)가
+  "malformed HTTP Authorization header"로 즉시 실패하기 시작했다 — Docker Hub
+  자격증명 자체 문제가 아니었고(자격증명을 두 번 교체해도 동일한 실패가
+  반복됨) Node 버전 자체도 원인이 아니었다(네이티브 `node24` 빌드인 `v4`로
+  올려도 동일한 실패가 반복됨) — 실제 원인은 웹 UI로 붙여넣는 과정에서
+  `DOCKER_USERNAME`/`DOCKER_PASSWORD` 시크릿 값 자체에 섞여 들어간 이물
+  문자였다. `v3`→`v4` 버전 업 자체는 애초에 진단하려던 Node 런타임 불일치의
+  올바른 수정이므로 그대로 유지했다(두 버전 간 입력값이 바이트 단위로
+  동일함을 확인). 두 수정 이후 실제 `dev` push로 엔드투엔드 확인: 6개 검증
+  잡 전부 통과, `docker-publish`가 로그인 성공 → 스모크 테스트 컨테이너
+  healthy 확인 → push까지 완료 — `bluecode1775/sharenpo:<sha>`가 Docker
+  Hub에 **단일 아키텍처(`amd64`) 이미지**로 올라갔고, `:latest` 태그는
+  전혀 건드리지 않았다(애초에 Docker Hub에 `:latest` 태그가 존재하지
+  않는다 — 지금까지 모든 이미지가 수동 push였다는 뜻이고, `docker-publish`가
+  이번이 처음으로 성공적인 push에 도달했다는 것과 일치한다).
+  (a)안(`values.yaml`의 `image.tag` 기본값 제거)과 (c)안(`dev`를 주기적으로
+  `main`에 병합)은 진행하지 않았다 — 이 항목이 존재하는 이유인 "`dev`에서는
+  이미지가 전혀 빌드되지 않는다"는 격차는 (b)만으로 닫힌다; 원래 글의 두
+  안에 대한 언급은 아직 열려 있는 후속 과제가 아니라 맥락 기록으로 남겨둔다.
 - **`image.tag: "latest"` 기본값이 조용히 옛날 코드를 배포함** (2026-08-28 발견, 예전
   배포 단계를 손으로 재현하다가 확인) — `k8s/helm/values.yaml`의 `image.tag` 기본값은
   `"latest"`인데, `.github/workflows/ci.yml`의 `docker-publish` 잡은 `main` push에만

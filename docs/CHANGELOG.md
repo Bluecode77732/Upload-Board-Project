@@ -13,6 +13,20 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- **`docker-publish` now also triggers on `dev` push, with branch-aware tagging/platform
+  scope and a pre-push smoke test (2026-08-30, [ROADMAP §7](ROADMAP.md#7-unscheduled--open-decisions))**
+  — closes the "an image never gets built from `dev`" gap behind the recurring stale-image
+  incidents (2026-08-28, 2026-08-29/30). `main` keeps `:latest` + `:<sha>` on the existing
+  `linux/amd64,linux/arm64` multi-arch build; `dev` gets `:<sha>` only, `linux/amd64`-only
+  (dev publishes far more often, has no `:latest` reader, and neither branch has ever had
+  runtime arm64 verification — so halving dev's QEMU cost costs only an early *build*-failure
+  signal). A `concurrency: cancel-in-progress` block stops a rapid push string from running
+  every superseded workflow to completion. Before the real push, a new smoke-test step loads
+  the built amd64 image locally (GHA-cached), runs it against a throwaway `postgres:16`
+  service, and polls the Dockerfile's own `HEALTHCHECK` (`GET /health/live`) — genuinely new
+  coverage, since no prior `docker-publish` run ever verified the image actually boots.
+  Live-verified end-to-end on a real `dev` push: `bluecode1775/sharenpo:<sha>` appeared on
+  Docker Hub as a single-arch image with `:latest` untouched.
 - **Prometheus/Grafana observability stack (2026-08-29)** —
   ([ADR 0047](ADR/0047-observability-prometheus-grafana.md)) closes the last two
   unimplemented rows of Stage 4's DevOps stack. Self-hosted via
@@ -372,6 +386,18 @@ development line (package.json version).
   Helm rows were updated to cite the new path.
 
 ### Fixed
+- **Two pre-existing defects surfaced by the `dev`-push CI change above, both fixed the same
+  day it landed (2026-08-30)** — `dev` had genuinely never run these paths in CI before.
+  `test/app.e2e-spec.ts`'s `seedFile` helper predated [ADR 0040](ADR/0040-persisted-media-type-for-playback.md)'s
+  `NOT NULL mediaType` column and inserted `FileEntity` rows without it, failing 18 tests;
+  fixed by adding `mediaType: FileMediaType.video` (the helper's `filePath` already uses
+  `.mp4`). Separately, `docker/login-action@v3` (a `node20`-runtime action) started failing
+  immediately with "malformed HTTP Authorization header" once GitHub Actions began forcing
+  `node20` actions onto a `node24` runtime — ruled out as a credential issue (identical
+  failure across two Docker Hub secret rotations) before being bumped to `@v4` (native
+  `node24`, byte-identical inputs to `v3`); the actual root cause turned out to be a stray
+  character in the secret values from a web-UI paste, but the `v3`→`v4` bump was kept anyway
+  as the correct fix for the Node-runtime mismatch it was diagnosing.
 - **`GET /audit-log?userId=` read a polymorphic `targetId` as a user id, so unrelated
   records surfaced as a user's activity (2026-08-24, [ADR 0045](ADR/0045-audit-log-target-type.md),
   amends [ADR 0013](ADR/0013-rbac-and-audit-log.md))** — backend and docs only; `admin/` and
