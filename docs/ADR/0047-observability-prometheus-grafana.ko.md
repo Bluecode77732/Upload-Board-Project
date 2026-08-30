@@ -195,3 +195,21 @@ D4 자체를 막힌 데서 풀기 위해서는 1회성 수동 이미지 빌드+�
 - Grafana: `GET /api/datasources`에 정상 동작하는 `Prometheus` 데이터소스(+
   `Alertmanager`)가 나열됨 — `kube-prometheus-stack`의 자동 프로비저닝이 별도 수동
   설정 없이도 대시보드 계층을 같은 Prometheus 인스턴스에 연결해뒀음을 확인.
+
+**후속 Grafana 점검 (2026-08-29, Playwright)**: 개발자가 Dashboards 페이지가 비어
+보인다고 보고했다. 직접 로그인해서(`admin`/`prom-operator`, 차트 기본 계정) API와
+렌더링된 UI를 둘 다 확인했다. `GET /api/folders` → `[]`(커스텀 폴더 없음 — 모든
+대시보드가 루트 "General" 폴더에 있음), `GET /api/search?type=dash-db` → 17개
+대시보드 전부 존재, 전부 `kube-prometheus-stack`이 프로비저닝한 기본값
+(Alertmanager/Overview, CoreDNS, etcd, Grafana Overview, `Kubernetes / …` 계열
+전체). "비어 보인" 원인은 "View by folders" 모드가 "General"을 기본적으로 접힌
+행으로 렌더링하기 때문이었다 — 클릭해서 펼치니 17개가 전부 나타남(스크린샷으로
+확인). 결함이 아니라 별도 조치 없음. 이는 위 D4 자체의 `up`/쿼리 확인을 넘어,
+대시보드 프로비저닝 사이드카와 Prometheus 데이터소스 연결이 실제로 동작하고
+있다는 독립적인 확인이기도 하다. 이 점검에서 드러난 진짜 빈틈 하나(오탐과는
+별개로): 17개 기본 대시보드 어디에도 이 프로젝트 고유의 커스텀 시계열
+(`upload_claims_total`, `temp_cleanup_deleted_total`,
+`http_request_duration_seconds`)을 그래프로 그려주는 게 없다 — 지금은 Grafana의
+Explore 탭에서 즉석 PromQL 쿼리로만 볼 수 있다. 이를 위한 대시보드 패널 구축은
+애초에 이 ADR의 범위가 아니었다(Consequences에 이미 "커스텀 대시보드는 아직
+없다"고 명시돼 있었다).

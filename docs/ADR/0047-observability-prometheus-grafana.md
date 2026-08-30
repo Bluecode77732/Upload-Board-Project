@@ -189,3 +189,19 @@ implementation commit) and re-running `helm upgrade`, verified directly:
 - Grafana: `GET /api/datasources` lists a working `Prometheus` datasource (plus
   `Alertmanager`), confirming `kube-prometheus-stack`'s auto-provisioning wired the dashboard
   layer to the same Prometheus instance without any manual configuration.
+
+**Follow-up Grafana check (2026-08-29, Playwright)**: the developer reported the Dashboards page
+looked empty. Logged in directly (`admin`/`prom-operator`, the chart's default credential) and
+inspected both the API and the rendered UI. `GET /api/folders` → `[]` (no custom folders — every
+dashboard lives in the root "General" folder) and `GET /api/search?type=dash-db` → 17 dashboards
+present, all `kube-prometheus-stack`-provisioned defaults (Alertmanager/Overview, CoreDNS, etcd,
+Grafana Overview, and the `Kubernetes / …` mixin set). The "empty" appearance was the "View by
+folders" mode rendering "General" as a collapsed row by default — clicking it open (confirmed by
+screenshot) revealed all 17. Not a defect; no action taken. This also stands as independent
+confirmation that the dashboard-provisioning sidecar and the Prometheus datasource wiring are
+both actually working, beyond D4's own `up`/query checks above. One real gap surfaced by this
+check, distinct from the false alarm: none of the 17 default dashboards graph this project's own
+custom series (`upload_claims_total`, `temp_cleanup_deleted_total`,
+`http_request_duration_seconds`) — those are visible today only via Grafana's Explore tab with an
+ad-hoc PromQL query, since building a dashboard panel for them was never in this ADR's scope
+(Consequences already flagged "no custom dashboards provisioned yet").
