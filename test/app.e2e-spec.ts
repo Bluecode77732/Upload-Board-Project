@@ -6,6 +6,7 @@ import { existsSync } from 'fs';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { FileEntity } from '../backend/file/entity/file.entity';
+import { FileMediaType } from '../backend/file/entity/file-media-type.enum';
 import { UserEntity } from '../backend/user/entity/user.entity';
 import { CommentEntity } from '../backend/comment/entity/comment.entity';
 import { UserRole } from '../backend/auth/role/role';
@@ -60,6 +61,7 @@ describe('Sharenpo API (e2e)', () => {
       .insert({
         title,
         filePath: `file/upload/granted_${title}.mp4`,
+        mediaType: FileMediaType.video,
         creator: { id: creatorId },
       });
     return result.identifiers[0].id as number;
