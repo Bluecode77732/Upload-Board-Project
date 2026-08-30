@@ -13,6 +13,28 @@
 ## [Unreleased]
 
 ### 추가
+- **Prometheus/Grafana 관측 가능성 스택 (2026-08-29)** —
+  ([ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md)) Stage 4 DevOps
+  스택의 마지막 남은 두 행을 닫는다. 기존 `eks_blueprints_addons` 모듈의
+  `k8s/infra/terraform/addons/main.tf`에 `enable_kube_prometheus_stack` 플래그를
+  더해 자체호스팅(Helm 릴리스 하나로 Prometheus Operator, Prometheus, Grafana,
+  Alertmanager 전부) — 실무 채택률과 운영 부담을 비교한 뒤 Amazon Managed
+  Prometheus/Grafana 대신 이쪽을 골랐다. 앱 쪽: 새 `prom-client` 기반
+  `MetricsModule`이 `GET /metrics`를 노출(비인증, `HealthController`와 동일한
+  방식, ADR 0031)하며 기본 프로세스 지표, 전역 `MetricsInterceptor`가 기록하는
+  `http_request_duration_seconds` 히스토그램, 도메인 카운터 2개
+  (`FileService`의 `upload_claims_total` — replay vs 신규 승격,
+  `TempCleanupService` sweep의 `temp_cleanup_deleted_total`)를 담는다. 새
+  `k8s/helm/templates/servicemonitor.yaml`(values로 게이트, `Ingress`처럼 기본
+  비활성)이 Prometheus의 스크레이프를 연결하며, Helm 차트는 `0.3.0`으로
+  올렸다. 실제 클러스터를 상대로 라이브 검증 완료: Prometheus 타겟 `up=1`,
+  커스텀 카운터와 히스토그램 모두 쿼리 결과에 존재, Grafana의 `Prometheus`
+  데이터소스가 자동 프로비저닝되고 기본 대시보드 세트가 정상 렌더링됨. 조사
+  도중 `prom-client`의 npm 등록 정보가 Prometheus 공식 조직이 새로 편입한
+  `@prometheus-io/client`로 대체됨(deprecated)이 드러났으나, 주간 다운로드
+  수(920만 vs 7천)와 NestJS 생태계의 마이그레이션 사례가 아직 0건임을 확인한
+  뒤 `prom-client`를 유지 — 명시적 재검토 트리거와 함께 ADR 0047 Addendum으로
+  기록했다.
 - **2026-08-28 철거 이후 재배포로 다시 안정 상태에 도달함 (2026-08-29/30)** — 3-state
   Terraform(`cluster` → `app-infra` → `addons`) apply와 Helm 앱 설치를 처음부터
   다시 실행해, 2026-08-28 항목이 예고한 "같은 순서, 같은 `deploy.sh all`"이

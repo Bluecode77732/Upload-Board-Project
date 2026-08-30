@@ -13,6 +13,27 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- **Prometheus/Grafana observability stack (2026-08-29)** —
+  ([ADR 0047](ADR/0047-observability-prometheus-grafana.md)) closes the last two
+  unimplemented rows of Stage 4's DevOps stack. Self-hosted via
+  `k8s/infra/terraform/addons/main.tf`'s `enable_kube_prometheus_stack` flag on the
+  existing `eks_blueprints_addons` module (one Helm release: Prometheus Operator,
+  Prometheus, Grafana, Alertmanager), chosen over Amazon Managed Prometheus/Grafana
+  after comparing real-world adoption and operational overhead. App-side: a new
+  `prom-client`-based `MetricsModule` exports `GET /metrics` (unauthenticated, mirrors
+  `HealthController`, ADR 0031) with default process metrics, a global
+  `MetricsInterceptor`-recorded `http_request_duration_seconds` histogram, and two
+  domain counters — `upload_claims_total` (`FileService`, replay vs. fresh promotion)
+  and `temp_cleanup_deleted_total` (`TempCleanupService`'s sweep). A new
+  `k8s/helm/templates/servicemonitor.yaml` (values-gated, off by default like
+  `Ingress`) wires Prometheus to scrape it; the Helm chart bumped to `0.3.0`.
+  Live-verified against the real cluster: Prometheus target `up=1`, both custom
+  counters and the histogram present in query results, Grafana's `Prometheus`
+  datasource auto-provisioned with its default dashboard set rendering correctly.
+  Mid-investigation, `prom-client`'s npm listing surfaced as deprecated in favor of
+  the newly-Prometheus-adopted `@prometheus-io/client`; kept `prom-client` after
+  comparing weekly downloads (9.2M vs. 7K) and finding zero NestJS-ecosystem
+  migration yet — recorded as an ADR 0047 addendum with an explicit revisit trigger.
 - **Redeploy after the 2026-08-28 teardown reached a stable state again (2026-08-29/30)** —
   re-ran the three-state Terraform apply (`cluster` → `app-infra` → `addons`) plus the Helm
   app install, confirming the 2026-08-28 entry's "same order, same `deploy.sh all`" prediction.

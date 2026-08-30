@@ -1036,9 +1036,21 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
   `k8s/`'s five standalone static manifests (unwired, duplicating a strict subset
   of the chart) were deleted rather than kept in sync. **A real target cluster
   now exists and runs it**: the app was deployed onto the live AWS/EKS cluster
-  and reached `STATUS: deployed` 2026-08-27 (ROADMAP.md §9) — Stage 4's
-  remaining work is the rest of the DevOps-stack rows (Prometheus, Grafana,
-  Istio) and the still-disabled `Ingress`, not the deploy act itself
+  and reached `STATUS: deployed` 2026-08-27 (ROADMAP.md §9)
+- ~~Prometheus/Grafana observability stack~~ — **landed 2026-08-29/30**
+  ([ADR 0047](docs/ADR/0047-observability-prometheus-grafana.md)): self-hosted via
+  `k8s/infra/terraform/addons/main.tf`'s `enable_kube_prometheus_stack` flag
+  (kube-prometheus-stack — Prometheus Operator, Prometheus, Grafana, Alertmanager,
+  one Helm release); app-side, a new `prom-client`-based `MetricsModule` exports
+  `GET /metrics` (unauthenticated, mirrors `HealthController`) and a global
+  `MetricsInterceptor` records per-request duration, with domain counters
+  (`upload_claims_total` in `FileService`, `temp_cleanup_deleted_total` in
+  `TempCleanupService`). A new `k8s/helm/templates/servicemonitor.yaml`
+  (values-gated, off by default — mirrors `Ingress`) wires Prometheus to scrape it.
+  Live-verified against the real cluster: Prometheus target `up=1`, custom counters
+  present in query results, Grafana's `Prometheus` datasource auto-provisioned and
+  its default dashboards rendering. Stage 4's remaining DevOps-stack work is now
+  just Istio and the still-disabled `Ingress`, not the deploy act itself
 
 **Full roadmap plan (decided 2026-07-23)**: an 11-axis decision review fixed the
 overall plan in ROADMAP.md — staged dedicated tasks: Stage F frontend

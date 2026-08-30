@@ -246,6 +246,12 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 - `GET /health/live` — 프로세스가 살아 있는지만 확인; 의존성 체크 없음
 - `GET /health/ready` — 추가로 DB 연결을 확인; 연결 불가 시 503
 
+**메트릭** (운영용 — 애플리케이션 소비자가 아니라 Prometheus 스크레이프를
+위한 것이며, 설계상 인증 없음, [ADR 0047](docs/ADR/0047-observability-prometheus-grafana.ko.md))
+- `GET /metrics` — Prometheus exposition 포맷: 기본 프로세스 지표, 요청당
+  지연(`http_request_duration_seconds`), 앱 카운터(`upload_claims_total`,
+  `temp_cleanup_deleted_total`)
+
 ### 일반적인 흐름
 
 ```

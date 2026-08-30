@@ -254,6 +254,12 @@ consumers; unauthenticated by design, [ADR 0031](docs/ADR/0031-health-and-readin
 - `GET /health/live` — the process is running; no dependency checks
 - `GET /health/ready` — additionally checks DB connectivity; 503 if unreachable
 
+**Metrics** (operational — for Prometheus scraping, not application consumers;
+unauthenticated by design, [ADR 0047](docs/ADR/0047-observability-prometheus-grafana.md))
+- `GET /metrics` — Prometheus exposition format: default process metrics, per-request
+  duration (`http_request_duration_seconds`), and app counters (`upload_claims_total`,
+  `temp_cleanup_deleted_total`)
+
 ### Typical flow
 
 ```

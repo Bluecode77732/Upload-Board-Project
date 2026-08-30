@@ -1073,9 +1073,23 @@ Conflict Protocol을 따른다.
   순서, 빈 문자열 env var). `k8s/`의 독립 정적 매니페스트 5개(어디에도 연결
   안 됐고 차트의 엄격한 부분집합만 중복)는 동기화하는 대신 삭제했다. **이제 실제
   대상 클러스터가 존재하고 그 위에서 동작 중이다**: 실제 AWS/EKS 클러스터에
-  앱을 배포해 2026-08-27에 `STATUS: deployed`에 도달했다(ROADMAP.md §9) —
-  Stage 4에 남은 일은 배포 행위 자체가 아니라 나머지 DevOps 스택 항목
-  (Prometheus, Grafana, Istio)과 여전히 비활성인 `Ingress`뿐이다
+  앱을 배포해 2026-08-27에 `STATUS: deployed`에 도달했다(ROADMAP.md §9)
+- ~~Prometheus/Grafana 관측 가능성 스택~~ — **2026-08-29/30 도입**
+  ([ADR 0047](docs/ADR/0047-observability-prometheus-grafana.ko.md)):
+  `k8s/infra/terraform/addons/main.tf`의 `enable_kube_prometheus_stack`
+  플래그를 통한 자체호스팅(kube-prometheus-stack — Prometheus Operator,
+  Prometheus, Grafana, Alertmanager, Helm 릴리스 하나). 앱 쪽에는 새
+  `prom-client` 기반 `MetricsModule`이 `GET /metrics`를 노출하고
+  (비인증, `HealthController`와 동일한 방식) 전역 `MetricsInterceptor`가
+  요청당 지연을 기록하며, 도메인 카운터(`FileService`의
+  `upload_claims_total`, `TempCleanupService`의 `temp_cleanup_deleted_total`)도
+  더한다. 새 `k8s/helm/templates/servicemonitor.yaml`(values로 게이트, 기본
+  비활성 — `Ingress`와 동일한 방식)이 Prometheus가 이를 스크레이프하도록
+  연결한다. 실제 클러스터를 상대로 라이브 검증 완료: Prometheus 타겟
+  `up=1`, 커스텀 카운터가 쿼리 결과에 존재, Grafana의 `Prometheus`
+  데이터소스가 자동 프로비저닝되고 기본 대시보드가 정상 렌더링됨. Stage
+  4에 남은 DevOps 스택 작업은 이제 배포 행위 자체가 아니라 Istio와
+  여전히 비활성인 `Ingress`뿐이다
 
 **전체 로드맵 계획(2026-07-23 결정)**: 11개 축에 걸친 결정 검토가 ROADMAP.md의
 전체 계획을 확정했다 — 단계별 전용 작업: Stage F 프론트엔드 준비(라우트
