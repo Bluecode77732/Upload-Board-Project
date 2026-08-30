@@ -31,6 +31,17 @@ from zero.
 External Secrets Operator. That same module also exposes an `enable_kube_prometheus_stack` flag,
 not yet turned on.
 
+Beyond that gap, the specific choice of *these two tools* — rather than any other metrics/
+dashboard pairing — rests on concrete practical factors, not the gap alone:
+- **Prometheus**: low adoption cost (self-hostable, no license fee), a shallow learning curve
+  and straightforward implementation, a light runtime footprint, a market share far ahead of
+  alternatives (confirmed directly — see the D1 Addendum's download-count comparison), and
+  standing as the de facto industry-standard metrics tool.
+- **Grafana**: its position as the general-purpose standard for visualization was the primary
+  driver, reinforced by the same market-share lead over alternatives, an equally shallow
+  learning curve and light implementation cost, and the cost savings that follow from adopting
+  the tool most teams already know rather than training on a niche one.
+
 ## Decision
 
 ### D1 — App-level metrics library: `prom-client`, directly
