@@ -1499,16 +1499,29 @@ Swagger는 *곧* API 문서다(ADR 0009), 그러므로 이 데코레이터들은
 
 CI: GitHub Actions(`.github/workflows/ci.yml`, ADR 0016)가 lint
 (`lint:ci` — `--fix` 없는 에러 0개 게이트) + 유닛 테스트와, 별도의 e2e
-작업(`postgres:16` 서비스 대상)을 `main`/`dev`로의 push/PR마다 실행한다.
-로컬 컨테이너화: 멀티 스테이지 `Dockerfile` + `docker-compose.yml`(ADR
-0015; 2026-08-08 하드닝 — non-root `USER`, `GET /health/live`에 대한
-`HEALTHCHECK`, 그리고 마이그레이션을 `CMD`에서 `docker-compose.yml`의
-원샷 `migrate` 서비스로 옮김, ADR 0030–0032). **자동 배포 파이프라인(CD)도
-git hook도 없다** — 앱은 AWS에 배포돼 있지만(ROADMAP.md §9, 2026-08-27),
-GitHub Actions가 아니라 사람이 로컬 세션에서 `helm upgrade`를 직접 실행해서다;
-CI는 여전히 lint/test/build만 돌리고, git hook 툴체인도 설치되어 있지 않다.
-CI/CD 배포 파이프라인이나 hook이 있다고 가정하지 않는다; 둘 중 하나를
-추가하는 것은 명시적 요청이 필요한 작업이다.
+작업(`postgres:16` 서비스 대상), 그리고 frontend/admin lint·e2e 작업을 실행한다.
+트리거 범위는 비대칭이다(ADR 0048 D1): `push`는 `main`과 `dev` 둘 다 다루지만
+`pull_request`는 `main`만 다룬다 — 이 프로젝트 워크플로에서 `dev`는 보통 PR이
+아니라 직접 push를 받기 때문이다. 마지막 `docker-publish` 잡(다른 모든 잡을
+`needs`)이 Docker 이미지를 빌드·푸시하며, 브랜치별로 태그/플랫폼을 다르게
+가져간다(ADR 0048 D2): `main`은 `linux/amd64,linux/arm64` 멀티아치 빌드에
+`:latest` + `:<sha>`, `dev`는 `linux/amd64` 단일 아키텍처 빌드에 `:<sha>`만.
+실제 push 전에 스모크 테스트 스텝(ADR 0048 D4)이 빌드된 amd64 이미지를
+일회용 `postgres:16` 서비스와 함께 기동시켜 Dockerfile 자체의
+`HEALTHCHECK`(`GET /health/live`)가 healthy가 될 때까지 확인한다 — 검증되지
+않은 이미지는 push되지 않는다. 워크플로 전역 `concurrency:
+cancel-in-progress` 블록(ADR 0048 D3)이 CI가 끝나기 전 같은 브랜치에 다시
+push되면 낡은 실행을 취소한다. 로컬 컨테이너화: 멀티 스테이지 `Dockerfile` +
+`docker-compose.yml`(ADR 0015; 2026-08-08 하드닝 — non-root `USER`,
+`GET /health/live`에 대한 `HEALTHCHECK`, 그리고 마이그레이션을 `CMD`에서
+`docker-compose.yml`의 원샷 `migrate` 서비스로 옮김, ADR 0030–0032).
+**자동 배포 파이프라인(CD)도 git hook도 없다** — 앱은 AWS에 배포돼
+있지만(ROADMAP.md §9, 2026-08-27), GitHub Actions가 아니라 사람이 로컬
+세션에서 `helm upgrade`를 직접 실행해서다; CI는 여전히
+lint/test/build/**publish**만 돌리고(ADR 0048로 landed된 이미지 publish는
+deploy와 다르다 — `helm upgrade`를 트리거하는 건 아무것도 없다), git hook
+툴체인도 설치되어 있지 않다. CI/CD 배포 파이프라인이나 hook이 있다고
+가정하지 않는다; 둘 중 하나를 추가하는 것은 명시적 요청이 필요한 작업이다.
 
 ## 커밋 메시지
 

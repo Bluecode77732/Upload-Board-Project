@@ -56,6 +56,7 @@ each ADR records the *why* behind those rules.
 | [0045](0045-audit-log-target-type.md) | Audit log `targetType` — a discriminator for the polymorphic `targetId`, amends 0013 | Accepted — implemented | 2026-08-24 |
 | [0046](0046-deploy-sequence-automation.md) | Deploy-sequence automation — a local shell script, Terraform + Helm only | Accepted — implemented | 2026-08-27 |
 | [0047](0047-observability-prometheus-grafana.md) | Observability stack — Prometheus and Grafana, self-hosted via eks-blueprints-addons, extends 0017 | Accepted | 2026-08-28 |
+| [0048](0048-ci-trigger-restoration-and-docker-publish-design.md) | CI trigger restoration and `docker-publish` branch-aware design, amends 0016 | Accepted — implemented | 2026-08-30 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

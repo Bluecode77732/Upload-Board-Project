@@ -1425,14 +1425,28 @@ cosmetic — a missing or wrong one is a documentation bug caught in Result Revi
 
 CI: GitHub Actions (`.github/workflows/ci.yml`, ADR 0016) runs lint (`lint:ci` — the
 0-error gate, no `--fix`) + unit tests and a separate e2e job (against a `postgres:16`
-service) on push/PR to `main`/`dev`. Local containerization: a multi-stage `Dockerfile`
-+ `docker-compose.yml` (ADR 0015; hardened 2026-08-08 — non-root `USER`, a `HEALTHCHECK`
-against `GET /health/live`, and migrations moved out of `CMD` into `docker-compose.yml`'s
-one-shot `migrate` service, ADR 0030–0032). There is **no automated deploy pipeline (CD)
-and no git hooks** — the app is deployed to AWS (ROADMAP.md §9, 2026-08-27), but by a
-human running `helm upgrade` from a local session, not by GitHub Actions; CI still only
-runs lint/test/build, and no git-hook tooling is installed. Do not assume a CI/CD deploy
-pipeline or hooks; adding either is explicit-request work under Scope Discipline.
+service), plus frontend/admin lint and e2e jobs. Trigger scope is asymmetric
+(ADR 0048 D1): `push` covers `main` and `dev`, `pull_request` covers `main` only —
+`dev` normally receives direct pushes rather than PRs in this project's workflow.
+A final `docker-publish` job (`needs` all other jobs) builds and pushes a Docker
+image with a branch-aware tag/platform split (ADR 0048 D2): `main` gets
+`:latest` + `:<sha>` on a `linux/amd64,linux/arm64` multi-arch build; `dev` gets
+`:<sha>` only on a `linux/amd64`-only build. Before every push, a smoke-test step
+(ADR 0048 D4) boots the built amd64 image against a throwaway `postgres:16`
+service and polls the Dockerfile's own `HEALTHCHECK` (`GET /health/live`) until
+healthy — the image is never pushed unproven. A workflow-wide `concurrency:
+cancel-in-progress` block (ADR 0048 D3) cancels a superseded run when a branch
+gets pushed to again before its CI finishes. Local containerization: a
+multi-stage `Dockerfile` + `docker-compose.yml` (ADR 0015; hardened 2026-08-08 —
+non-root `USER`, a `HEALTHCHECK` against `GET /health/live`, and migrations moved
+out of `CMD` into `docker-compose.yml`'s one-shot `migrate` service, ADR
+0030–0032). There is **no automated deploy pipeline (CD) and no git hooks** —
+the app is deployed to AWS (ROADMAP.md §9, 2026-08-27), but by a human running
+`helm upgrade` from a local session, not by GitHub Actions; CI still only runs
+lint/test/build/**publish** (image publish, landed via ADR 0048, is not the same
+as deploy — nothing triggers `helm upgrade`), and no git-hook tooling is
+installed. Do not assume a CI/CD deploy pipeline or hooks; adding either is
+explicit-request work under Scope Discipline.
 
 ## Commit Messages
 
