@@ -119,9 +119,9 @@ diagnosing, independent of that separate credential-formatting issue.)
   smoke-test build now uses GitHub Actions cache (`type=gha`) so the later push
   build reuses its layers — the first caching this job has had.
 
-### Addendum (2026-08-31) — four design gaps found and closed the next day
+### Addendum (2026-08-31) — five design gaps found and closed the next day
 
-A review the following day surfaced four gaps in this ADR's own design, all
+A review the following day surfaced five gaps in this ADR's own design, all
 introduced by this ADR itself (not pre-existing beyond what's noted) and all
 closed in the same pass:
 
@@ -185,3 +185,18 @@ closed in the same pass:
   finishing inside a 60-second window. Re-derived from the Dockerfile's own
   constants: 18 iterations at `sleep 5` = 90s, comfortably covering two full
   check cycles (~t=0s, ~t=30s) plus margin.
+- **The smoke test never ran migrations, so it couldn't catch a broken migration.**
+  `GET /health/ready` (added above in this same addendum) pings the database with a bare
+  `SELECT 1` (`HealthService.checkDatabase`) — that succeeds against an empty, unmigrated
+  database just as well as a fully migrated one, since it queries no table. Neither the
+  original smoke test nor the `/health/ready` fix above ever exercised
+  `pnpm run migration:run` against the throwaway Postgres the smoke-test container connects
+  to, so a migration that fails outright (syntactically broken, or conflicting with the
+  baseline schema) would never have surfaced in CI — only at actual deploy time, via the
+  Helm chart's separate migration `Job` ([ADR 0032](0032-migration-as-separate-deploy-step.md)).
+  Added `actions/setup-node` + `pnpm install --frozen-lockfile` + `pnpm run migration:run`
+  (mirroring the existing `e2e`/`frontend-e2e`/`admin-e2e` jobs' own setup) as steps in
+  `docker-publish`, run against the same `postgres:16` service the smoke-test container
+  already uses, before the image is even built. This doesn't change what the smoke test's
+  own checks exercise — it closes a separate gap one level earlier, catching a broken
+  migration before either check ever runs.

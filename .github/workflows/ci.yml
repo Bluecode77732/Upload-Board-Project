@@ -312,6 +312,26 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+      # Migrations must actually run before the smoke test container starts:
+      # without this, the smoke test only ever proved the process boots, never
+      # that it can serve a real DB-backed request — the same throwaway
+      # postgres service below is what the smoke test container connects to.
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run migrations against the smoke-test database
+        env:
+          ENV: dev
+          DB_TYPE: postgres
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+          DB_DATABASE: postgres
+        run: pnpm run migration:run
       # QEMU lets the amd64 runner cross-build the arm64 half of the manifest.
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
