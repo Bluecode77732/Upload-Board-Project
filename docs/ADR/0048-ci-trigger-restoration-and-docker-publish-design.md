@@ -128,7 +128,7 @@ closed in the same pass:
 - **Unbounded Docker Hub tag growth.** `dev` now publishes a `:<sha>` tag on
   every push (D2), with nothing ever deleting old ones — Docker Hub's free
   tier has no built-in retention policy. Closed with a new scheduled workflow,
-  `.github/workflows/docker-tag-cleanup.yml`: weekly (and `workflow_dispatch`-
+  `.github/workflows/docker-tag-cleanup.yml`: daily (and `workflow_dispatch`-
   triggerable), it keeps the newest `KEEP=30` tags and deletes the rest — but
   **only** among tags matching a 40-hex-char git-SHA shape (`^[0-9a-f]{40}$`,
   exactly what `${{ github.sha }}` produces). This is safety by construction,
@@ -138,10 +138,19 @@ closed in the same pass:
   that pattern, so they can never be selected for deletion regardless of how
   `KEEP` is tuned. A `workflow_dispatch` run defaults to a dry run (lists what
   would be deleted, deletes nothing) unless the trigger explicitly opts out;
-  the scheduled cron run always deletes for real. **Not yet live-run** — the
-  next scheduled run, or a manual `workflow_dispatch` dry run, is the first
-  real exercise of this script; nothing about it could be safely verified
-  without actually calling Docker Hub's delete API.
+  the scheduled cron run always deletes for real. **`on.schedule` has no
+  `branches:` filter** — a hard GitHub Actions platform constraint, not a gap
+  in this workflow's own config: a cron trigger always runs the copy of the
+  file on the repo's default branch (`main`), never `dev`, regardless of what
+  the file says. Until a future `dev`→`main` merge lands this file on `main`,
+  the daily cron entry is inert; the only way to run it sooner is
+  `workflow_dispatch` with an explicit `--ref dev`. The cleanup logic itself
+  has no branch awareness either way — it walks Docker Hub's tag list globally,
+  so a run from either branch's copy cleans up sha tags regardless of which
+  branch produced them. **Not yet live-run** — the first scheduled run after
+  reaching `main`, or a manual `workflow_dispatch` dry run against `dev` in the
+  meantime, is the first real exercise of this script; nothing about it could
+  be safely verified without actually calling Docker Hub's delete API.
 - **`docker-publish`'s `needs` gated on unrelated deployables.** It listed all
   six jobs including `frontend-lint`/`frontend-e2e`/`admin-lint-and-unit`/
   `admin-e2e` — pre-existing before this ADR, but harmless while the job was

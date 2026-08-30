@@ -1,8 +1,17 @@
 # Purpose: keeps Docker Hub's bluecode1775/sharenpo repo from accumulating
 # unbounded commit-sha tags now that docker-publish (ADR 0048) runs on every
 # dev push, not just rare main merges.
-# Usage: runs weekly via cron; also runnable on demand via workflow_dispatch
+# Usage: runs daily via cron; also runnable on demand via workflow_dispatch
 # (which defaults to a dry run — see the `dry_run` input).
+# Branch note: `on.schedule` has no `branches:` filter — GitHub Actions always
+# runs a scheduled trigger from the file on the repo's default branch (`main`),
+# never from `dev`, no matter what this file says. Until this file reaches
+# `main` (a future dev->main merge), the cron entry below is inert; the only
+# way to run this workflow before then is `workflow_dispatch` with an explicit
+# `--ref dev` (or the "Use workflow from" branch picker in the Actions UI).
+# The cleanup logic itself is not branch-scoped either way — it walks Docker
+# Hub's full tag list with no awareness of which branch produced a given sha,
+# so a run from either branch's copy cleans up sha tags from both.
 # Rationale: Docker Hub's free tier has no built-in tag-retention policy.
 # Safety by construction, not by exclusion list: this only ever considers
 # tags matching a 40-hex-char git SHA (exactly the shape `${{ github.sha }}`
@@ -14,7 +23,7 @@ name: Docker Hub Tag Cleanup
 
 on:
   schedule:
-    - cron: '0 3 * * 0' # Sunday 03:00 UTC
+    - cron: '0 3 * * *' # daily, 03:00 UTC — see the Branch note above for which branch's copy actually runs
   workflow_dispatch:
     inputs:
       dry_run:

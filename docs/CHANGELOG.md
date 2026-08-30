@@ -13,12 +13,17 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
-- **`docker-tag-cleanup.yml` — weekly Docker Hub tag retention for `docker-publish`'s
+- **`docker-tag-cleanup.yml` — daily Docker Hub tag retention for `docker-publish`'s
   new `dev`-push volume (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md#addendum-2026-08-31--four-design-gaps-found-and-closed-the-next-day))**
   — keeps the newest 30 tags, deleting only tags shaped like a 40-hex-char git SHA
   (`^[0-9a-f]{40}$`) so `:latest` and any manually-created tag can never be selected by
-  construction. `workflow_dispatch` defaults to a dry run; the weekly cron run deletes for
-  real. Not yet live-run — untested against Docker Hub's actual delete API.
+  construction. `workflow_dispatch` defaults to a dry run; the scheduled cron run deletes
+  for real. `on.schedule` has no `branches:` filter (a GitHub Actions platform constraint,
+  not a config gap) — the cron entry stays inert until this file reaches `main` via a
+  future `dev`→`main` merge; `workflow_dispatch --ref dev` is the only way to run it
+  sooner. The cleanup logic itself has no branch awareness — it walks Docker Hub's tag
+  list globally, so either branch's copy cleans up sha tags from both. Not yet live-run —
+  untested against Docker Hub's actual delete API.
 - **`docker-publish` now also triggers on `dev` push, with branch-aware tagging/platform
   scope and a pre-push smoke test (2026-08-30, [ROADMAP §7](ROADMAP.md#7-unscheduled--open-decisions))**
   — closes the "an image never gets built from `dev`" gap behind the recurring stale-image

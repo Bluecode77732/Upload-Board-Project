@@ -13,12 +13,17 @@
 ## [Unreleased]
 
 ### 추가
-- **`docker-tag-cleanup.yml` — `docker-publish`의 새 `dev`-push 물량에 대한 주간
+- **`docker-tag-cleanup.yml` — `docker-publish`의 새 `dev`-push 물량에 대한 매일
   Docker Hub 태그 보존 정책 (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md#addendum-2026-08-31--다음-날-발견해결한-설계-갭-4가지))**
   — 최신 30개 태그를 남기고, 40자 16진수 git SHA 형태(`^[0-9a-f]{40}$`)에 매칭하는
   태그만 삭제 대상으로 삼는다 — 구조적으로 `:latest`나 수동 생성 태그는 선택될 수
-  없다. `workflow_dispatch`는 기본이 드라이런, 주간 cron 실행은 실제로 삭제한다.
-  아직 실제 실행은 안 함 — Docker Hub 삭제 API 대상으로 검증되지 않았다.
+  없다. `workflow_dispatch`는 기본이 드라이런, 예약된 cron 실행은 실제로 삭제한다.
+  `on.schedule`엔 `branches:` 필터가 없어서(워크플로 설정 문제가 아니라 GitHub
+  Actions 플랫폼 제약) 이 파일이 향후 `dev`→`main` 병합으로 `main`에 반영되기
+  전까진 cron 항목이 죽어 있고, 그전엔 `workflow_dispatch --ref dev`만이 실행
+  방법이다. 정리 로직 자체는 브랜치를 인지하지 않아 어느 브랜치의 파일로
+  실행하든 양쪽 sha 태그 모두 정리 대상이다. 아직 실제 실행은 안 함 — Docker
+  Hub 삭제 API 대상으로 검증되지 않았다.
 - **`docker-publish`가 이제 `dev` push에도 반응하고, 브랜치별 태깅/플랫폼 범위와
   push 전 스모크 테스트를 갖춤 (2026-08-30, [ROADMAP §7](ROADMAP.ko.md#7-미일정--미결-사항))**
   — 반복되던 스테일 이미지 사고(2026-08-28, 2026-08-29/30)의 근본 원인이었던
