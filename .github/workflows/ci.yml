@@ -277,7 +277,15 @@ jobs:
         run: pnpm run e2e
 
   docker-publish:
-    needs: [lint-and-unit, e2e, frontend-lint, admin-lint-and-unit, frontend-e2e, admin-e2e]
+    # Only the jobs that actually exercise what this image packages: the root
+    # Dockerfile builds backend/ only (frontend/ and admin/ are independent
+    # projects, not part of this build — CLAUDE.md). frontend-e2e/admin-e2e
+    # failures say nothing about whether the backend image is safe to publish,
+    # and gating on them (pre-existing before ADR 0048) mattered little when
+    # this job was main-only; now that dev triggers it on every push, an
+    # unrelated frontend flake would block a correct backend image far more
+    # often — narrowed here (ADR 0048 addendum, 2026-08-31).
+    needs: [lint-and-unit, e2e]
     # dev added alongside main (2026-08-30): dev is where all actual work
     # lands, and until now no push there ever built an image, so a deployed
     # tag could go stale silently (ROADMAP.md §7). main keeps :latest +
@@ -360,12 +368,18 @@ jobs:
             sharenpo:smoke-test
       # Polls the image's own HEALTHCHECK (Dockerfile) rather than curling
       # directly, so this reuses the same liveness definition Docker/k8s use.
+      # Window derived from the Dockerfile's actual HEALTHCHECK constants
+      # (interval=30s, start-period=10s, retries=3) rather than copied from
+      # the unrelated bare-process curl loops elsewhere in this file: Docker
+      # only re-evaluates health once per interval, so 18 x 5s = 90s comfortably
+      # covers two full check cycles (~t=0s, ~t=30s) plus margin — a container
+      # that hasn't gone healthy by then is genuinely stuck, not just slow.
       - name: Wait for smoke test container health
         run: |
-          for i in $(seq 1 30); do
+          for i in $(seq 1 18); do
             status="$(docker inspect -f '{{.State.Health.Status}}' smoke-test)"
             if [ "$status" = "healthy" ]; then
-              echo "Smoke test passed"
+              echo "Liveness check passed"
               exit 0
             fi
             if [ "$(docker inspect -f '{{.State.Status}}' smoke-test)" != "running" ]; then
@@ -373,12 +387,25 @@ jobs:
               docker logs smoke-test >&2
               exit 1
             fi
-            echo "Waiting for container health ($i/30): $status"
-            sleep 2
+            echo "Waiting for container health ($i/18): $status"
+            sleep 5
           done
           echo "Smoke test failed: container did not become healthy in time" >&2
           docker logs smoke-test >&2
           exit 1
+      # /health/live is deliberately DB-independent (ADR 0031) — the check
+      # above only proves the process is up, not that it can reach Postgres.
+      # /health/ready explicitly pings the DB (HealthService.checkDatabase);
+      # --network host means the container's port 3000 is the runner's own,
+      # so this curls it directly without exec'ing into the container.
+      - name: Verify database connectivity (GET /health/ready)
+        run: |
+          if ! curl -sf http://localhost:3000/health/ready > /dev/null; then
+            echo "Smoke test failed: /health/ready did not return 200" >&2
+            docker logs smoke-test >&2
+            exit 1
+          fi
+          echo "Smoke test passed (live + DB-ready)"
       - name: Stop smoke test container
         if: always()
         run: docker rm -f smoke-test || true

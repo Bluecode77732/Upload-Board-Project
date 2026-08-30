@@ -13,6 +13,12 @@
 ## [Unreleased]
 
 ### 추가
+- **`docker-tag-cleanup.yml` — `docker-publish`의 새 `dev`-push 물량에 대한 주간
+  Docker Hub 태그 보존 정책 (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md#addendum-2026-08-31--다음-날-발견해결한-설계-갭-4가지))**
+  — 최신 30개 태그를 남기고, 40자 16진수 git SHA 형태(`^[0-9a-f]{40}$`)에 매칭하는
+  태그만 삭제 대상으로 삼는다 — 구조적으로 `:latest`나 수동 생성 태그는 선택될 수
+  없다. `workflow_dispatch`는 기본이 드라이런, 주간 cron 실행은 실제로 삭제한다.
+  아직 실제 실행은 안 함 — Docker Hub 삭제 API 대상으로 검증되지 않았다.
 - **`docker-publish`가 이제 `dev` push에도 반응하고, 브랜치별 태깅/플랫폼 범위와
   push 전 스모크 테스트를 갖춤 (2026-08-30, [ROADMAP §7](ROADMAP.ko.md#7-미일정--미결-사항))**
   — 반복되던 스테일 이미지 사고(2026-08-28, 2026-08-29/30)의 근본 원인이었던
@@ -401,6 +407,21 @@
   붙여넣는 과정에서 시크릿 값에 섞여 들어간 이물 문자였지만, `v3`→`v4` 버전 업
   자체는 애초에 진단하려던 Node 런타임 불일치의 올바른 수정이므로 그대로
   유지했다.
+- **위 `docker-publish`/스모크 테스트 작업의 설계 갭 3가지, 다음 날 발견해서
+  해결 (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md#addendum-2026-08-31--다음-날-발견해결한-설계-갭-4가지))**
+  — `docker-publish`의 `needs`를 6개 잡 전부에서 `[lint-and-unit, e2e]`로
+  좁혔다: 루트 Dockerfile은 `backend/`만 빌드하므로 `frontend-lint`/
+  `frontend-e2e`/`admin-lint-and-unit`/`admin-e2e` 결과는 backend 이미지가
+  발행해도 안전한지에 대해 아무것도 말해주지 않는데, `dev` push마다 발행을
+  막을 수 있었다. push 전 스모크 테스트가 이제 liveness 확인 통과 후
+  `GET /health/ready`(명시적 DB 핑, `HealthService.checkDatabase`)도
+  curl한다 — 원래 스모크 테스트는 `GET /health/live`만 폴링했는데, 이건
+  ADR 0031이 의도적으로 DB와 무관하게 설계한 것이다. 그리고 스모크 테스트의
+  헬스체크 폴링 창을 Dockerfile 자체의 `HEALTHCHECK` 상수(`interval=30s`,
+  `start-period=10s`)에서 다시 유도했다 — `ci.yml`의 무관한 다른 부분에서
+  복사한 30회×2초 루프 대신 18회×5초(총 90초). (같은 검토에서 발견한 네
+  번째 갭 — Docker Hub 태그 무한 증식 — 은 수정이 아니라 새 기능이라 위
+  "추가" 항목 참고.)
 - **`GET /audit-log?userId=`가 다형 `targetId`를 유저 id로 읽어, 무관한 기록이 그 유저의
   활동으로 조회되던 문제(2026-08-24, [ADR 0045](ADR/0045-audit-log-target-type.ko.md),
   [ADR 0013](ADR/0013-rbac-and-audit-log.ko.md) 개정)** — 백엔드와 문서만 수정했고 `admin/`과

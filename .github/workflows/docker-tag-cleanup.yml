@@ -1,0 +1,91 @@
+# Purpose: keeps Docker Hub's bluecode1775/sharenpo repo from accumulating
+# unbounded commit-sha tags now that docker-publish (ADR 0048) runs on every
+# dev push, not just rare main merges.
+# Usage: runs weekly via cron; also runnable on demand via workflow_dispatch
+# (which defaults to a dry run — see the `dry_run` input).
+# Rationale: Docker Hub's free tier has no built-in tag-retention policy.
+# Safety by construction, not by exclusion list: this only ever considers
+# tags matching a 40-hex-char git SHA (exactly the shape `${{ github.sha }}`
+# produces) — :latest and any manually-created tag (e.g. values-prod.yaml's
+# pinned image.tag) can never match that pattern, so they can never be
+# selected for deletion no matter what KEEP is set to.
+
+name: Docker Hub Tag Cleanup
+
+on:
+  schedule:
+    - cron: '0 3 * * 0' # Sunday 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List tags that would be deleted without deleting them'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      NAMESPACE: bluecode1775
+      REPO: sharenpo
+      KEEP: 30
+      # workflow_dispatch inputs don't exist on a schedule-triggered run, so a
+      # cron firing always resolves to "false" (actually delete); a manual run
+      # defaults to "true" (preview only) unless the person running it opts out.
+      DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+    steps:
+      - name: Delete old commit-sha tags beyond the newest KEEP
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
+            -d "{\"username\": \"${DOCKER_USERNAME}\", \"password\": \"${DOCKER_PASSWORD}\"}" \
+            https://hub.docker.com/v2/users/login/ | jq -r '.token')
+
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "Docker Hub authentication failed" >&2
+            exit 1
+          fi
+
+          SHA_REGEX='^[0-9a-f]{40}$'
+          ALL_SHA_TAGS=()
+          URL="https://hub.docker.com/v2/repositories/${NAMESPACE}/${REPO}/tags/?page_size=100&ordering=-last_updated"
+
+          while [ -n "$URL" ] && [ "$URL" != "null" ]; do
+            RESPONSE=$(curl -s -H "Authorization: JWT ${TOKEN}" "$URL")
+            while IFS= read -r tag; do
+              if [[ "$tag" =~ $SHA_REGEX ]]; then
+                ALL_SHA_TAGS+=("$tag")
+              fi
+            done < <(echo "$RESPONSE" | jq -r '.results[].name')
+            URL=$(echo "$RESPONSE" | jq -r '.next')
+          done
+
+          echo "Found ${#ALL_SHA_TAGS[@]} sha-shaped tags (newest first)."
+
+          if [ "${#ALL_SHA_TAGS[@]}" -le "$KEEP" ]; then
+            echo "At or under the retention count ($KEEP) — nothing to delete."
+            exit 0
+          fi
+
+          TO_DELETE=("${ALL_SHA_TAGS[@]:$KEEP}")
+          echo "${#TO_DELETE[@]} tag(s) older than the newest ${KEEP} are eligible for deletion."
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run — would delete:"
+            printf '  %s\n' "${TO_DELETE[@]}"
+            exit 0
+          fi
+
+          for tag in "${TO_DELETE[@]}"; do
+            echo "Deleting ${tag}"
+            curl -s -o /dev/null -w "  -> HTTP %{http_code}\n" -X DELETE \
+              -H "Authorization: JWT ${TOKEN}" \
+              "https://hub.docker.com/v2/repositories/${NAMESPACE}/${REPO}/tags/${tag}/"
+          done

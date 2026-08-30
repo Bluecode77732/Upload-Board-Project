@@ -1,6 +1,6 @@
 # ADR 0048: CI 트리거 복원과 `docker-publish` 브랜치별 설계
 
-- 상태: 승인됨 — 구현됨
+- 상태: 승인됨 — 구현됨 (Addendum 참고)
 - 날짜: 2026-08-30
 - 개정 대상: [ADR 0016](0016-github-actions-ci.ko.md) (GitHub Actions 기반 지속적 통합)
 - English: [0048-ci-trigger-restoration-and-docker-publish-design.md](0048-ci-trigger-restoration-and-docker-publish-design.md)
@@ -114,3 +114,59 @@ header"로 즉시 실패하기 시작했다. 이는 Docker Hub 자격증명 문�
 - 이 ADR 이전엔 `docker-publish`에 의존성 캐싱이 없었다 — D4의 스모크 테스트
   빌드가 이제 GitHub Actions 캐시(`type=gha`)를 쓰므로 이후 push 빌드가 그
   레이어를 재사용한다. 이 잡에 생긴 첫 캐싱이다.
+
+### Addendum (2026-08-31) — 다음 날 발견·해결한 설계 갭 4가지
+
+다음 날 재검토에서 이 ADR 자체의 설계 갭 4가지가 드러났다(별도 언급 없는 한
+전부 이 ADR이 만든 것이지 기존부터 있던 게 아니다) — 같은 작업에서 전부
+해결했다:
+
+- **Docker Hub 태그 무한 증식.** `dev`가 이제 push마다 `:<sha>` 태그를
+  발행하는데(D2), 오래된 걸 지우는 장치가 전혀 없었다 — Docker Hub 무료
+  플랜엔 내장 보존 정책이 없다. 새 예약 워크플로
+  `.github/workflows/docker-tag-cleanup.yml`로 해결: 매주(그리고
+  `workflow_dispatch`로 수동 실행도 가능) 최신 `KEEP=30`개를 남기고 나머지를
+  지우되, **오직** 40자 16진수 git SHA 형태(`^[0-9a-f]{40}$`, `${{
+  github.sha }}`가 만드는 정확히 그 모양)에 매칭하는 태그만 대상으로 한다.
+  이건 제외 목록이 아니라 **구조적으로 안전한** 설계다 — `:latest`나 수동으로
+  만든 태그(예: `values-prod.yaml`에 고정된 `image.tag`, 또는 ADR 0048 이전
+  수동 push로 Docker Hub에 이미 올라가 있는 `db-ssl-ca`/`2cd73b9` 같은 태그)는
+  이 패턴에 애초에 매칭될 수 없으므로 `KEEP` 값을 어떻게 조정해도 삭제
+  대상으로 선택될 수 없다. `workflow_dispatch`로 수동 실행하면 명시적으로
+  끄지 않는 한 기본이 드라이런(삭제 대상만 나열, 실제 삭제 없음)이고,
+  예약된 cron 실행은 항상 실제로 삭제한다. **아직 실제로 실행해보진
+  않았다** — 다음 예약 실행이나 수동 드라이런이 이 스크립트의 첫 실제
+  검증이다. Docker Hub 삭제 API를 실제로 호출하지 않고는 안전하게 검증할
+  방법이 없었다.
+- **`docker-publish`의 `needs`가 무관한 배포물에 걸려 있었다.** 6개 잡 전부
+  (`frontend-lint`/`frontend-e2e`/`admin-lint-and-unit`/`admin-e2e` 포함)를
+  나열하고 있었다 — 이 ADR 이전부터 있던 것이지만 `main` 전용일 땐 별
+  문제가 아니었다. 이제 `dev`가 매 push마다 트리거하므로, frontend나 admin
+  쪽의 무관한 테스트 flake가 정상 backend 이미지의 발행을 훨씬 자주 막게
+  된다. 루트 `Dockerfile`은 `backend/`만 빌드한다(`frontend/`와 `admin/`은
+  자체 툴체인을 가진 독립 프로젝트로, 이 빌드에 포함되지 않는다 —
+  CLAUDE.md Project Overview) — 그러니 저 네 잡은 backend 이미지가 발행해도
+  안전한지에 대해 아무것도 말해주지 않는다. `needs`를
+  `[lint-and-unit, e2e]`로 좁혔다 — 실제로 패키징되는 대상을 검증하는
+  두 잡만 남겼다.
+- **스모크 테스트(D4)가 DB 연동을 명시적으로 검증한 적이 없었다.**
+  `GET /health/live`는 ADR 0031에 의해 의도적으로 DB와 무관하게 설계됐다 —
+  원래 스모크 테스트는 이 엔드포인트만 폴링했다. 아예 아무것도 검증 안 된
+  건 아니다: NestJS의 부트스트랩은 초기 `TypeOrmModule`의 Postgres 연결이
+  성공하지 않으면 HTTP 서버가 리스닝 상태에 도달하지 못해 `HEALTHCHECK`도
+  성공할 수 없으므로, 연결 수준의 실패(ROADMAP에 기록된 `DB_SSL` 사고와
+  같은 종류의 버그)는 항상 잡혔을 것이다 — 다만 이건 의도된 검증이 아니라
+  Nest 초기화 순서의 부수 효과일 뿐이었다. `GET /health/ready`는 정확히
+  DB를 핑하기 위해 존재하는데(`HealthService.checkDatabase`, ADR 0031) 이
+  스모크 테스트는 그걸 호출한 적이 없었다. liveness 확인 통과 후 이걸 직접
+  curl하는 스텝을 추가했다(스모크 테스트 컨테이너가 `--network host`로
+  뜨므로 포트 3000이 러너 자신의 포트라 바로 접근 가능).
+- **헬스체크 폴링 창이 Dockerfile에서 유도된 게 아니었다.** 원래 루프
+  (30회 반복, `sleep 2`)는 `ci.yml`의 무관한 다른 부분 — bare
+  `node dist/main` 프로세스를 간격 제어 없이 바로 curl하는
+  `frontend-e2e`/`admin-e2e`의 "wait for backend" 루프 — 에서 그대로
+  복사한 것이었다. Dockerfile의 `HEALTHCHECK`는 `interval=30s`(그리고
+  `start-period=10s`) 마다만 상태를 재평가하므로, 두 번의 체크 주기가
+  필요한 컨테이너가 60초 창 안에 끝난다는 원칙적 보장이 없었다.
+  Dockerfile 자체 상수에서 다시 유도: 18회 × `sleep 5` = 90초로, 두
+  번의 전체 체크 주기(~t=0초, ~t=30초)와 여유분을 넉넉히 포함하게 했다.

@@ -1,6 +1,6 @@
 # ADR 0048: CI Trigger Restoration and `docker-publish` Branch-Aware Design
 
-- Status: Accepted — implemented
+- Status: Accepted — implemented (see Addendum)
 - Date: 2026-08-30
 - Amends: [ADR 0016](0016-github-actions-ci.md) (Continuous Integration with GitHub Actions)
 - 한국어: [0048-ci-trigger-restoration-and-docker-publish-design.ko.md](0048-ci-trigger-restoration-and-docker-publish-design.ko.md)
@@ -118,3 +118,61 @@ diagnosing, independent of that separate credential-formatting issue.)
 - No dependency caching existed for `docker-publish` before this ADR; D4's
   smoke-test build now uses GitHub Actions cache (`type=gha`) so the later push
   build reuses its layers — the first caching this job has had.
+
+### Addendum (2026-08-31) — four design gaps found and closed the next day
+
+A review the following day surfaced four gaps in this ADR's own design, all
+introduced by this ADR itself (not pre-existing beyond what's noted) and all
+closed in the same pass:
+
+- **Unbounded Docker Hub tag growth.** `dev` now publishes a `:<sha>` tag on
+  every push (D2), with nothing ever deleting old ones — Docker Hub's free
+  tier has no built-in retention policy. Closed with a new scheduled workflow,
+  `.github/workflows/docker-tag-cleanup.yml`: weekly (and `workflow_dispatch`-
+  triggerable), it keeps the newest `KEEP=30` tags and deletes the rest — but
+  **only** among tags matching a 40-hex-char git-SHA shape (`^[0-9a-f]{40}$`,
+  exactly what `${{ github.sha }}` produces). This is safety by construction,
+  not by an exclusion list: `:latest` and any manually-created tag (e.g.
+  `values-prod.yaml`'s pinned `image.tag`, or the `db-ssl-ca`/`2cd73b9`-style
+  tags already on Docker Hub from pre-ADR-0048 manual pushes) can never match
+  that pattern, so they can never be selected for deletion regardless of how
+  `KEEP` is tuned. A `workflow_dispatch` run defaults to a dry run (lists what
+  would be deleted, deletes nothing) unless the trigger explicitly opts out;
+  the scheduled cron run always deletes for real. **Not yet live-run** — the
+  next scheduled run, or a manual `workflow_dispatch` dry run, is the first
+  real exercise of this script; nothing about it could be safely verified
+  without actually calling Docker Hub's delete API.
+- **`docker-publish`'s `needs` gated on unrelated deployables.** It listed all
+  six jobs including `frontend-lint`/`frontend-e2e`/`admin-lint-and-unit`/
+  `admin-e2e` — pre-existing before this ADR, but harmless while the job was
+  `main`-only. Now that `dev` triggers it on every push, an unrelated frontend
+  or admin test flake would block a correct backend image from publishing far
+  more often. The root Dockerfile builds `backend/` only (`frontend/` and
+  `admin/` are independent projects with their own tooling, not part of this
+  build — CLAUDE.md's Project Overview), so those four jobs say nothing about
+  whether the backend image is safe to publish. Narrowed `needs` to
+  `[lint-and-unit, e2e]` — the two jobs that actually exercise what gets
+  packaged.
+- **The smoke test (D4) never explicitly verified database connectivity.**
+  `GET /health/live` is deliberately DB-independent by design (ADR 0031) — the
+  original smoke test only polled that endpoint. It's not that nothing was
+  verified: NestJS's bootstrap won't reach a listening HTTP server (and so the
+  `HEALTHCHECK` could never succeed) unless the initial `TypeOrmModule`
+  connection to Postgres succeeded, so a connection-level failure (the class of
+  bug behind the ROADMAP-recorded `DB_SSL` incident) was always going to be
+  caught — but only as a side effect of Nest's initialization order, not as an
+  intentional check. `GET /health/ready` exists specifically to ping the
+  database (`HealthService.checkDatabase`, ADR 0031) and was never called by
+  this smoke test. Added a step that curls it directly (the smoke-test
+  container runs with `--network host`, so its port 3000 is the runner's own)
+  after the liveness check passes.
+- **The health-check polling window wasn't derived from the Dockerfile.** The
+  original loop (30 iterations, `sleep 2`) was copied from an unrelated
+  pattern elsewhere in `ci.yml` — the "wait for backend" loops in
+  `frontend-e2e`/`admin-e2e`, which curl a bare `node dist/main` process
+  directly with no interval-gating. The Dockerfile's `HEALTHCHECK` only
+  re-evaluates every `interval=30s` (after `start-period=10s`), so a container
+  needing two check cycles to go healthy has no principled guarantee of
+  finishing inside a 60-second window. Re-derived from the Dockerfile's own
+  constants: 18 iterations at `sleep 5` = 90s, comfortably covering two full
+  check cycles (~t=0s, ~t=30s) plus margin.

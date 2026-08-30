@@ -13,6 +13,12 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- **`docker-tag-cleanup.yml` — weekly Docker Hub tag retention for `docker-publish`'s
+  new `dev`-push volume (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md#addendum-2026-08-31--four-design-gaps-found-and-closed-the-next-day))**
+  — keeps the newest 30 tags, deleting only tags shaped like a 40-hex-char git SHA
+  (`^[0-9a-f]{40}$`) so `:latest` and any manually-created tag can never be selected by
+  construction. `workflow_dispatch` defaults to a dry run; the weekly cron run deletes for
+  real. Not yet live-run — untested against Docker Hub's actual delete API.
 - **`docker-publish` now also triggers on `dev` push, with branch-aware tagging/platform
   scope and a pre-push smoke test (2026-08-30, [ROADMAP §7](ROADMAP.md#7-unscheduled--open-decisions))**
   — closes the "an image never gets built from `dev`" gap behind the recurring stale-image
@@ -398,6 +404,20 @@ development line (package.json version).
   `node24`, byte-identical inputs to `v3`); the actual root cause turned out to be a stray
   character in the secret values from a web-UI paste, but the `v3`→`v4` bump was kept anyway
   as the correct fix for the Node-runtime mismatch it was diagnosing.
+- **Three design gaps in the `docker-publish`/smoke-test work above, found and closed the
+  next day (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md#addendum-2026-08-31--four-design-gaps-found-and-closed-the-next-day))**
+  — `docker-publish`'s `needs` narrowed from all 6 jobs to `[lint-and-unit, e2e]`: the root
+  Dockerfile builds `backend/` only, so `frontend-lint`/`frontend-e2e`/`admin-lint-and-unit`/
+  `admin-e2e` results said nothing about whether the backend image was safe to publish, yet
+  could block it on every `dev` push. The pre-push smoke test now also curls
+  `GET /health/ready` (explicit DB ping, `HealthService.checkDatabase`) after the liveness
+  check passes — the original smoke test only polled `GET /health/live`, which ADR 0031
+  deliberately keeps DB-independent. And the smoke test's health-check polling window was
+  re-derived from the Dockerfile's actual `HEALTHCHECK` constants (`interval=30s`,
+  `start-period=10s`) — 18 iterations at 5s (90s total) instead of a copy-pasted
+  30-iterations-at-2s loop borrowed from an unrelated bare-process curl pattern elsewhere in
+  the file. (The fourth gap found in the same pass — unbounded Docker Hub tag growth — is a
+  new capability, not a fix; see Added.)
 - **`GET /audit-log?userId=` read a polymorphic `targetId` as a user id, so unrelated
   records surfaced as a user's activity (2026-08-24, [ADR 0045](ADR/0045-audit-log-target-type.md),
   amends [ADR 0013](ADR/0013-rbac-and-audit-log.md))** — backend and docs only; `admin/` and
