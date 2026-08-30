@@ -9,9 +9,16 @@ name: Sharenpo CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
     branches: [main]
+
+# A rapid string of pushes to the same branch (dev especially, now that it
+# triggers the full pipeline) would otherwise run every workflow to
+# completion — cancel a superseded run instead of letting it finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -271,10 +278,30 @@ jobs:
 
   docker-publish:
     needs: [lint-and-unit, e2e, frontend-lint, admin-lint-and-unit, frontend-e2e, admin-e2e]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # dev added alongside main (2026-08-30): dev is where all actual work
+    # lands, and until now no push there ever built an image, so a deployed
+    # tag could go stale silently (ROADMAP.md §7). main keeps :latest +
+    # multi-arch; dev only ever gets a :sha tag — see the tag/platform step.
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    # Only for the smoke-test container below — the actual push target is
+    # Docker Hub, this DB is thrown away with the runner.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       # QEMU lets the amd64 runner cross-build the arm64 half of the manifest.
@@ -284,6 +311,70 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
+      # dev publishes far more often than main now, and gets no :latest
+      # reader depending on it — amd64-only keeps its QEMU cost from
+      # doubling on every push. The smoke test below only ever exercises
+      # amd64 either way, so this doesn't change what's verified before push.
+      - name: Compute image tags and platforms
+        id: image
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "tags=-t bluecode1775/sharenpo:latest -t bluecode1775/sharenpo:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "platforms=linux/amd64,linux/arm64" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=-t bluecode1775/sharenpo:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "platforms=linux/amd64" >> "$GITHUB_OUTPUT"
+          fi
+      # Builds are cached (type=gha) so this amd64-only smoke build and the
+      # push build below don't each pay the full compile cost.
+      - name: Build amd64 image for smoke test
+        run: >-
+          docker buildx build
+          --platform linux/amd64
+          -t sharenpo:smoke-test
+          -f ./Dockerfile
+          --target production
+          --load
+          --cache-to type=gha,mode=max
+          --cache-from type=gha
+          .
+      # --network host: the postgres service's port is published on the
+      # runner's own loopback, not reachable from an isolated bridge network.
+      - name: Run smoke test container
+        run: |
+          docker run -d --name smoke-test --network host \
+            -e ENV=dev -e DB_TYPE=postgres -e DB_HOST=127.0.0.1 -e DB_PORT=5432 \
+            -e DB_USERNAME=postgres -e DB_PASSWORD=postgres -e DB_DATABASE=postgres \
+            -e HASH_ROUNDS=10 \
+            -e ACCESS_TOKEN_SECRET=smoke-access-secret \
+            -e REFRESH_TOKEN_SECRET=smoke-refresh-secret \
+            -e ACCESS_TOKEN_SECRET_EXPIRES_IN=180 \
+            -e REFRESH_TOKEN_SECRET_EXPIRES_IN=43200 \
+            sharenpo:smoke-test
+      # Polls the image's own HEALTHCHECK (Dockerfile) rather than curling
+      # directly, so this reuses the same liveness definition Docker/k8s use.
+      - name: Wait for smoke test container health
+        run: |
+          for i in $(seq 1 30); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' smoke-test)"
+            if [ "$status" = "healthy" ]; then
+              echo "Smoke test passed"
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Status}}' smoke-test)" != "running" ]; then
+              echo "Smoke test failed: container exited" >&2
+              docker logs smoke-test >&2
+              exit 1
+            fi
+            echo "Waiting for container health ($i/30): $status"
+            sleep 2
+          done
+          echo "Smoke test failed: container did not become healthy in time" >&2
+          docker logs smoke-test >&2
+          exit 1
+      - name: Stop smoke test container
+        if: always()
+        run: docker rm -f smoke-test || true
       # Same build as build-and-push.sh (multi-arch, production target), with
       # --push added: a multi-platform buildx build with no --push/--output
       # just builds and discards each arch (buildx warns, nothing is loaded
@@ -292,10 +383,10 @@ jobs:
       - name: Build and push Docker image
         run: >-
           docker buildx build
-          --platform linux/amd64,linux/arm64
-          -t bluecode1775/sharenpo:latest
-          -t bluecode1775/sharenpo:${{ github.sha }}
+          --platform ${{ steps.image.outputs.platforms }}
+          ${{ steps.image.outputs.tags }}
           -f ./Dockerfile
           --target production
           --push
+          --cache-from type=gha
           .
