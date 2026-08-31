@@ -74,11 +74,17 @@ development line (package.json version).
   app/cluster. Raised as a question by the developer and resolved same-day: moved
   `AppTargetDown` (rule + its own `Evaluation` group) into the `CoreMetrics` folder via the
   provisioning API's `folderUID` field, then deleted the now-empty `AppTargetDown` folder.
-  Deliberately did not also merge into the `CoreMetrics` *group* — the two groups had
-  different evaluation intervals (`Evaluation` at 10s, `CoreMetrics` at 1m, confirmed via
-  `/api/ruler/grafana/api/v1/rules/`) before the move, and folding them together would have
-  silently slowed `AppTargetDown` to a 60s cadence. One folder, two groups, each keeping its
-  own interval.
+  Initially kept its own `Evaluation` *group* rather than merging into `CoreMetrics`'s — the
+  two groups had different evaluation intervals (`Evaluation` at 10s, `CoreMetrics` at 1m,
+  confirmed via `/api/ruler/grafana/api/v1/rules/`), and merging was assumed to force a shared
+  interval on every member. **Corrected same-day**: the developer asked for the full merge
+  after still seeing two entries during manual verification, which prompted measuring the
+  assumption instead of trusting it — moved `AppTargetDown` into the `CoreMetrics` group too
+  and sampled `lastEvaluation` timestamps across 35s. The assumption was false: `AppTargetDown`
+  kept its own ~10-20s cadence and the other five kept their 60s cadence, both under the one
+  group name — Grafana schedules a rule group at its fastest member's tick rate but lets each
+  rule skip ticks by its own `intervalSeconds`, so a shared group name does not force a shared
+  interval. One folder, one group, six rules, each still on its original interval.
 - **Corrupted `description` annotations on 5 `CoreMetrics` rules found and fixed (2026-08-31,
   [ADR 0047 Addendum](ADR/0047-observability-prometheus-grafana.md#addendum-2026-08-31--alerting-spot-checked-all-6-rules-now-verified))**
   — the developer reported the Describe text on several rules reading as neither Korean nor

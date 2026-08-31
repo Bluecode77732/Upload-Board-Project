@@ -74,10 +74,18 @@
   다룬다. 개발자가 이 분리가 필요한지 물었고 같은 날 정리됐다: 프로비저닝
   API의 `folderUID` 필드로 `AppTargetDown`(규칙 + 자체 `Evaluation` 그룹)을
   `CoreMetrics` 폴더로 옮기고, 비게 된 `AppTargetDown` 폴더는 삭제했다.
-  `CoreMetrics` *그룹*으로까지는 일부러 합치지 않았다 — 이동 전 두 그룹의
-  평가 주기가 서로 달랐고(`Evaluation` 10초, `CoreMetrics` 1분,
-  `/api/ruler/grafana/api/v1/rules/`로 확인) 합쳤다면 `AppTargetDown`의 주기가
-  조용히 60초로 느려졌을 것이다. 폴더 하나에 그룹 둘, 각자 자기 주기를 유지.
+  처음엔 `CoreMetrics` *그룹*으로까지는 합치지 않고 자체 `Evaluation` 그룹에
+  남겨뒀다 — 이동 전 두 그룹의 평가 주기가 서로 달랐고(`Evaluation` 10초,
+  `CoreMetrics` 1분, `/api/ruler/grafana/api/v1/rules/`로 확인), 그룹을 합치면
+  구성원 전체에 하나의 주기가 강제될 거라 가정했기 때문이다. **같은 날
+  정정**: 개발자가 수동 검증 중 여전히 둘로 보인다며 완전 통합을 요청했고,
+  이 가정을 그냥 믿는 대신 직접 측정했다 — `AppTargetDown`도 `CoreMetrics`
+  그룹으로 옮기고 35초 구간의 `lastEvaluation`을 샘플링. 가정은 틀렸다:
+  `AppTargetDown`은 여전히 자기 ~10~20초 주기를, 나머지 다섯은 여전히 60초
+  주기를 같은 그룹 이름 아래에서 각자 유지했다 — Grafana는 그룹을 가장 빠른
+  구성원의 틱 속도로 스케줄링하되 각 규칙은 자기 `intervalSeconds`만큼 틱을
+  건너뛰므로, 그룹 이름을 같게 하는 것만으로는 공유 주기가 강제되지 않는다.
+  폴더 하나, 그룹 하나, 규칙 여섯 개, 각자 원래 주기 그대로.
 - **`CoreMetrics` 규칙 5개의 `description` 어노테이션 손상 발견·수정
   (2026-08-31, [ADR 0047 Addendum](ADR/0047-observability-prometheus-grafana.ko.md#addendum-2026-08-31--alerting-표본-점검-6개-규칙-전부-검증-완료))**
   — 개발자가 몇몇 규칙의 Describe 텍스트가 한글도 영어도 아니라고 지적했다.

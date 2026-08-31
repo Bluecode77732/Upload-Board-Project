@@ -262,13 +262,24 @@ group). Raised as a question by the developer and resolved the same day: the spl
 provenance-based (manual rule vs. this ADR's provisioned set) rather than functional, and
 both folders cover the same app/cluster — so `AppTargetDown` (rule + its `Evaluation` group)
 was moved into the `CoreMetrics` folder via `/api/v1/provisioning/alert-rules`'s `folderUID`
-field, and the now-empty `AppTargetDown` folder was deleted. Deliberately **not** merged into
-the `CoreMetrics` *group*: the two groups had different evaluation intervals (`Evaluation` at
-10s, `CoreMetrics` at 1m) before the move, confirmed via `/api/ruler/grafana/api/v1/rules/`;
-folding `AppTargetDown` into the `CoreMetrics` group would have slowed its evaluation to 60s
-as a side effect nobody asked for. One folder, two groups, each keeping its own cadence — the
-one Grafana alerting list entry now open is "CoreMetrics" itself, with `Evaluation` and
-`CoreMetrics` as its two sub-groups.
+field, and the now-empty `AppTargetDown` folder was deleted.
+
+Initially kept in its own `Evaluation` *group* rather than merged into `CoreMetrics`'s: the
+two groups had different evaluation intervals (`Evaluation` at 10s, `CoreMetrics` at 1m)
+before the move, confirmed via `/api/ruler/grafana/api/v1/rules/`, and merging groups was
+assumed to force one shared interval on every member. **Revised the same day** — the
+developer asked for the full merge anyway (still seeing two entries during manual
+verification), which prompted actually measuring the assumption instead of trusting it:
+`AppTargetDown`'s `ruleGroup` was changed from `Evaluation` to `CoreMetrics` via the same
+`folderUID`-style `PUT`, and `lastEvaluation` timestamps were sampled across a 35s window
+afterward. Measured false — `AppTargetDown` kept evaluating on its own ~10-20s cadence
+(`13:42:10 → 13:42:30 → 13:43:40 → 13:44:00`) while the other five stayed on their original
+60s cadence (`13:43:00 → 13:44:00` and no earlier tick in between), all under the one
+`CoreMetrics` group name. Grafana schedules a rule group at its fastest member's tick rate but
+lets each rule skip ticks according to its own `intervalSeconds`, so grouping by name does not
+force a shared cadence the way `/api/v1/provisioning/folder/{folderUid}/rule-groups/{group}`'s
+single `interval` field would. One folder, one group, six rules, each still on its original
+interval — the corrected outcome, not the one originally documented here.
 
 **Corrupted `description` annotations found and fixed (2026-08-31)**: the developer reported
 the Describe text on several rules reading as neither Korean nor English. Confirmed at the
