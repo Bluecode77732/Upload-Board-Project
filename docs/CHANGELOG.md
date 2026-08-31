@@ -13,6 +13,25 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- **Performance and capacity criteria — response-time targets, ADR 0021's deferred indexes
+  adopted, disk via usage-rate monitoring (2026-08-31,
+  [ADR 0049](ADR/0049-performance-capacity-criteria.md))** — the last undecided Stage 4 row
+  before deployment. Set p50/p95 targets per endpoint tier (list/detail/content-serving/write);
+  measured `file_entity`/`post_entity` at a 10,000-row seed with `EXPLAIN (ANALYZE, BUFFERS)`
+  and `autocannon` (new MIT devDependency) before deciding anything. All three of ADR 0021's
+  deferred indexes (`createdAt`+`id` composite, `pg_trgm` GIN on title, `creatorId`) are
+  adopted for **both** tables — ADR 0021 only ever named `file_entity`, but `post_entity`
+  inherited the identical read layer and had never been measured — via a hand-authored
+  migration (`1788180660994-AddPerformanceIndexes`, not `migration:generate` output, since
+  `@Index` cannot express the `gin_trgm_ops` operator class). EXPLAIN showed up to 70x on this
+  table's own query shapes; every endpoint already met the new targets even without the
+  indexes, so this is a cheap, measured win rather than an urgent fix. Corrected ADR 0021's own
+  text along the way: the real query applies `ILIKE` to the raw `title` column, not
+  `lower(title)`, so a `lower(title)` expression index (as ADR 0021 described it) is never
+  selected by the planner — measured directly. File-storage disk ceiling: usage-rate
+  monitoring through the already-deployed `node-exporter` (ADR 0047), not an absolute cap — no
+  measurement argued for one. New `perf/` tooling (seed/explain/load-test scripts) is reusable
+  for re-measuring this baseline later; never wired into CI.
 - **`docker-tag-cleanup.yml` — daily Docker Hub tag retention for `docker-publish`'s
   new `dev`-push volume (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md#addendum-2026-08-31--four-design-gaps-found-and-closed-the-next-day))**
   — keeps the newest 30 tags, deleting only tags shaped like a 40-hex-char git SHA
@@ -48,6 +67,18 @@ development line (package.json version).
   that preserves the metric's real value of `0` still evaluates as `Normal`. Fixed
   with the `bool` modifier (`>= bool 0`), which makes Prometheus return `1` — non-zero,
   so Grafana fires — for all three rules, whose real current value was already `0`.
+- **`AppTargetDown` folder merged into `CoreMetrics` (2026-08-31,
+  [ADR 0047 Addendum](ADR/0047-observability-prometheus-grafana.md#addendum-2026-08-31--alerting-spot-checked-all-6-rules-now-verified))**
+  — the two started as separate Grafana folders for provenance reasons (a manually-created
+  rule vs. this ADR's provisioned set), not a functional one, and both cover the same
+  app/cluster. Raised as a question by the developer and resolved same-day: moved
+  `AppTargetDown` (rule + its own `Evaluation` group) into the `CoreMetrics` folder via the
+  provisioning API's `folderUID` field, then deleted the now-empty `AppTargetDown` folder.
+  Deliberately did not also merge into the `CoreMetrics` *group* — the two groups had
+  different evaluation intervals (`Evaluation` at 10s, `CoreMetrics` at 1m, confirmed via
+  `/api/ruler/grafana/api/v1/rules/`) before the move, and folding them together would have
+  silently slowed `AppTargetDown` to a 60s cadence. One folder, two groups, each keeping its
+  own interval.
 - **`docker-publish` now also triggers on `dev` push, with branch-aware tagging/platform
   scope and a pre-push smoke test (2026-08-30, [ROADMAP §7](ROADMAP.md#7-unscheduled--open-decisions))**
   — closes the "an image never gets built from `dev`" gap behind the recurring stale-image

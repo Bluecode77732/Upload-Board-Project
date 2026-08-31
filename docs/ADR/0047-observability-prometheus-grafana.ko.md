@@ -232,7 +232,8 @@ Alertmanager를 함께 가져오고(D2), Grafana 자체 unified alerting 엔진�
 파드에 번들돼 있지만 이번 전까지는 실제로 검증된 적이 없었다. 개발자가 만든
 기존 `AppTargetDown` 규칙에 더해, 이 ADR이 앞서 이름 붙인 핵심 대시보드 관심사
 5가지에 대응하는 규칙을 `/api/v1/provisioning/alert-rules`로 새 `CoreMetrics`
-폴더에 만들었다.
+폴더에 만들었다 — 둘은 처음엔 서로 다른 폴더에서 시작해 나중에 통합됐다(아래
+"폴더 통합" 참고).
 
 | 규칙 | 검증 방법 | 결과 |
 |---|---|---|
@@ -263,6 +264,20 @@ Prometheus 알림 시맨틱을 가정한 것. 실측 결과 이 가정은 틀렸
 원래 값 대신 `1`을 반환하므로, `1`은 0이 아니라서 Grafana가 발동한다. 세 규칙 다 앱을
 크래시시키거나 실제 장애를 유발하지 않았다 — 실제 값이 이미 `0`인 메트릭에 맞게 응용한,
 `PodMemoryHigh`의 강제 임계값 방식과 같은 비파괴적 원칙을 따른다.
+
+**폴더 통합 (2026-08-31)**: `AppTargetDown`과 `CoreMetrics`는 처음엔 별개의 Grafana
+폴더로 시작했다 — `AppTargetDown` 폴더엔 기존 규칙 하나가 기본 `Evaluation` 그룹에,
+`CoreMetrics` 폴더엔 위 다섯 규칙이 `CoreMetrics` 그룹에 있었다. 개발자가 이 분리가
+필요한지 물었고 같은 날 정리됐다: 이 분리는 기능적 이유가 아니라 출처 차이(수동
+생성 규칙 vs. 이 ADR이 프로비저닝한 세트)였고, 두 폴더 다 같은 앱/클러스터를
+다루므로 — `/api/v1/provisioning/alert-rules`의 `folderUID` 필드로 `AppTargetDown`
+(규칙 + 그 `Evaluation` 그룹)을 `CoreMetrics` 폴더로 옮기고, 비게 된 `AppTargetDown`
+폴더는 삭제했다. `CoreMetrics` *그룹*으로까지 합치진 **않았다** — 이동 전 두 그룹의
+평가 주기가 서로 달랐다(`Evaluation`은 10초, `CoreMetrics`는 1분,
+`/api/ruler/grafana/api/v1/rules/`로 확인). `AppTargetDown`을 `CoreMetrics` 그룹에
+합쳤다면 아무도 요청하지 않은 부작용으로 평가 주기가 60초로 느려졌을 것이다. 폴더
+하나에 그룹 둘, 각자 자기 주기를 유지 — 이제 Grafana 알림 목록에 남는 항목은
+"CoreMetrics" 하나뿐이고, 그 아래 `Evaluation`과 `CoreMetrics` 두 하위 그룹이 있다.
 
 **미결**: `CoreMetrics` 규칙을 유지·정리·실제 정책 편입할지는 여기서 정하지
 않는다.

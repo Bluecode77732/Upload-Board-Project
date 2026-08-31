@@ -13,6 +13,25 @@
 ## [Unreleased]
 
 ### 추가
+- **성능·용량 기준 — 응답시간 목표, ADR 0021이 유예한 인덱스 채택, 디스크는 사용률
+  모니터링으로 (2026-08-31, [ADR 0049](ADR/0049-performance-capacity-criteria.ko.md))**
+  — 배포 전 Stage 4의 마지막 미결 항목. 엔드포인트 유형(목록/단건/콘텐츠 서빙/쓰기)별
+  p50/p95 목표를 정하고, 아무것도 결정하기 전에 `file_entity`/`post_entity`를 1만 행
+  시드로 `EXPLAIN (ANALYZE, BUFFERS)`와 `autocannon`(새 MIT devDependency)으로 먼저
+  측정했다. ADR 0021이 유예해 둔 인덱스 3종(`createdAt`+`id` 복합, 제목 위 `pg_trgm`
+  GIN, `creatorId`)을 **두 테이블 모두**에 채택 — ADR 0021은 `file_entity`만 언급했지만
+  `post_entity`도 같은 읽기 계층을 물려받고도 한 번도 측정된 적이 없었다 — 수기로 작성한
+  마이그레이션(`1788180660994-AddPerformanceIndexes`)으로 적용했다. `migration:generate`
+  출력을 쓰지 않은 이유는 `@Index` 데코레이터가 `gin_trgm_ops` 연산자 클래스를 표현할 수
+  없기 때문이다. EXPLAIN 결과 이 테이블 실제 쿼리 모양에서 최대 70배 개선을 확인했으며,
+  이 인덱스들이 없어도 모든 엔드포인트가 이미 새 목표를 통과했으므로 이번 채택은 급한
+  땜질이 아니라 저렴하고 실측된 이득이다. 그 과정에서 ADR 0021 본문의 오류도 하나
+  바로잡았다: 실제 쿼리는 `lower(title)`이 아니라 원본 `title` 컬럼에 `ILIKE`를 걸기
+  때문에, ADR 0021이 적어둔 대로 `lower(title)` 표현식 인덱스를 만들면 플래너가 전혀
+  고르지 않는다는 것을 직접 측정으로 확인했다. 파일 저장소 디스크 상한은 절대치가
+  아니라 이미 배포된 `node-exporter`(ADR 0047)를 통한 사용률 모니터링으로 정했다 —
+  절대 상한을 요구하는 측정 근거가 없었다. 새 `perf/` 도구(seed/explain/load-test
+  스크립트)는 이 기준선을 나중에 재측정할 때 재사용 가능하며, CI에는 연결하지 않는다.
 - **`docker-tag-cleanup.yml` — `docker-publish`의 새 `dev`-push 물량에 대한 매일
   Docker Hub 태그 보존 정책 (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md#addendum-2026-08-31--다음-날-발견해결한-설계-갭-4가지))**
   — 최신 30개 태그를 남기고, 40자 16진수 git SHA 형태(`^[0-9a-f]{40}$`)에 매칭하는
@@ -48,6 +67,17 @@
   비교를 통과해도 메트릭의 실제 값(`0`)을 그대로 보존하면 여전히 `Normal`로
   남는다. `bool` 수식어(`>= bool 0`)로 고쳐 Prometheus가 `1`(0이 아님)을
   반환하게 만들어 세 규칙 모두 실제 값이 이미 `0`인 상태에서도 발동시켰다.
+- **`AppTargetDown` 폴더를 `CoreMetrics`로 통합
+  (2026-08-31, [ADR 0047 Addendum](ADR/0047-observability-prometheus-grafana.ko.md#addendum-2026-08-31--alerting-표본-점검-6개-규칙-전부-검증-완료))**
+  — 둘은 기능적 이유가 아니라 출처 차이(수동 생성 규칙 vs. 이 ADR이 프로비저닝한
+  세트)로 처음부터 별개의 Grafana 폴더로 시작했는데, 둘 다 같은 앱/클러스터를
+  다룬다. 개발자가 이 분리가 필요한지 물었고 같은 날 정리됐다: 프로비저닝
+  API의 `folderUID` 필드로 `AppTargetDown`(규칙 + 자체 `Evaluation` 그룹)을
+  `CoreMetrics` 폴더로 옮기고, 비게 된 `AppTargetDown` 폴더는 삭제했다.
+  `CoreMetrics` *그룹*으로까지는 일부러 합치지 않았다 — 이동 전 두 그룹의
+  평가 주기가 서로 달랐고(`Evaluation` 10초, `CoreMetrics` 1분,
+  `/api/ruler/grafana/api/v1/rules/`로 확인) 합쳤다면 `AppTargetDown`의 주기가
+  조용히 60초로 느려졌을 것이다. 폴더 하나에 그룹 둘, 각자 자기 주기를 유지.
 - **`docker-publish`가 이제 `dev` push에도 반응하고, 브랜치별 태깅/플랫폼 범위와
   push 전 스모크 테스트를 갖춤 (2026-08-30, [ROADMAP §7](ROADMAP.ko.md#7-미일정--미결-사항))**
   — 반복되던 스테일 이미지 사고(2026-08-28, 2026-08-29/30)의 근본 원인이었던

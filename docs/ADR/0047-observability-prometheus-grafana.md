@@ -223,7 +223,8 @@ This ADR's Decision never covered Alerting specifically. `kube-prometheus-stack`
 Alertmanager (D2), and Grafana's own unified alerting engine ships with the Grafana pod;
 neither was exercised until this pass. A `CoreMetrics` folder with 5 rules was created via
 `/api/v1/provisioning/alert-rules`, one per the core dashboard concern named earlier in this
-ADR, alongside the developer's own pre-existing `AppTargetDown` rule.
+ADR, alongside the developer's own pre-existing `AppTargetDown` rule — the two started in
+separate folders and were later consolidated (see Folder consolidation, below).
 
 | Rule | Verification | Result |
 |---|---|---|
@@ -253,6 +254,21 @@ Fixed by adding the `bool` modifier (`>= bool 0`), which makes Prometheus return
 comparison instead of the original value; `1` is non-zero, so Grafana fires. No app crash or real
 fault was induced for any of the three — same non-destructive spirit as `PodMemoryHigh`'s forced
 threshold, adapted for metrics whose real value is already `0`.
+
+**Folder consolidation (2026-08-31)**: `AppTargetDown` and `CoreMetrics` started as two
+separate Grafana folders (`AppTargetDown` holding just the one pre-existing rule in its
+default `Evaluation` group; `CoreMetrics` holding the five rules above in a `CoreMetrics`
+group). Raised as a question by the developer and resolved the same day: the split was
+provenance-based (manual rule vs. this ADR's provisioned set) rather than functional, and
+both folders cover the same app/cluster — so `AppTargetDown` (rule + its `Evaluation` group)
+was moved into the `CoreMetrics` folder via `/api/v1/provisioning/alert-rules`'s `folderUID`
+field, and the now-empty `AppTargetDown` folder was deleted. Deliberately **not** merged into
+the `CoreMetrics` *group*: the two groups had different evaluation intervals (`Evaluation` at
+10s, `CoreMetrics` at 1m) before the move, confirmed via `/api/ruler/grafana/api/v1/rules/`;
+folding `AppTargetDown` into the `CoreMetrics` group would have slowed its evaluation to 60s
+as a side effect nobody asked for. One folder, two groups, each keeping its own cadence — the
+one Grafana alerting list entry now open is "CoreMetrics" itself, with `Evaluation` and
+`CoreMetrics` as its two sub-groups.
 
 **Open**: whether to keep, prune, or promote any `CoreMetrics` rule into a real policy — not
 decided here.
