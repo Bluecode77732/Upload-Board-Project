@@ -56,6 +56,14 @@ Before making any change:
     file the claim is about if anything (a commit, an edit, another session) may have touched
     it since the evidence was gathered. `git status`/`git log` only say *that* something
     changed, never *what* the content now says — they are not a substitute for re-reading.
+11. Before implementing anything non-trivial, confirm what this project actually is and what
+    it builds by reading the real files — `README.md`, `package.json`, this file's Project
+    Overview section — rather than assuming it from memory of a prior session or from the task
+    description alone. Use that concrete picture of the app's nature and characteristics (its
+    domain, its scale, its existing patterns — Sharenpo: a NestJS REST API for authenticated
+    image/audio/video upload and management) to shape an efficient implementation approach:
+    reuse the pattern that already fits this specific app (Project-Specific Principles,
+    Architecture Decisions) rather than reaching for a generic default that ignores it.
 
 ## Scope Discipline (범위 준수)
 
