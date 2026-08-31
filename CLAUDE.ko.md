@@ -1116,7 +1116,11 @@ D4/D5 + ADR 0027 — ADR 0025의 설계 공백을 완성함], 그다음 즉각�
 GitHub Actions · Prometheus · Grafana · Terraform · Istio[Terraform 이후 예정] —
 실제 개발/배포/운영 환경과 향후 확장성을 위한 업계 표준 툴체인; Docker + CI는
 이미 Stage 1에서 도입되었고, S3는 스토리지 포트-어댑터의 구체적 형태다)**,
-성능 기준, 그리고 마지막으로 **배포 그 자체 — 의도적으로 실행 번호를 붙이지
+~~성능 기준~~ [**2026-08-31 도입**, [ADR 0049](docs/ADR/0049-performance-capacity-criteria.ko.md)
+— 엔드포인트 유형별 응답시간 목표(p50/p95) 확정, ADR 0021이 유예한 인덱스 3종을 1만 행
+시드로 측정한 뒤 `file_entity`/`post_entity` **양쪽 모두**에 채택, 파일 저장소 디스크 상한은
+절대치가 아니라 기존 관측 스택(ADR 0047)의 사용률 모니터링으로 처리], 그리고 마지막으로
+**배포 그 자체 — 의도적으로 실행 번호를 붙이지
 않는 종착점**(번호를 붙이면 Stage 4/Stage 5 순서 혼동만 재발할 뿐이므로;
 그저 마지막 작업일 뿐이다) → **Stage 5 운영 표면 — 관리자 콘솔(2026-07-30
 추가, ADR 0022**: 역할 전달 방식 결정, 가져온 `admin/` 콘솔 적응, `GET /user`
@@ -1402,14 +1406,22 @@ powershell -NoProfile -Command "Stop-Process -Id <pid> -Force"
   `creator: FileEntity[]`(OneToMany), 타임스탬프
 - `FileEntity` — title(고유), `filePath`, `mediaType`(`FileMediaType` enum:
   `image`/`audio`/`video`, `NOT NULL`, 확장자에서 도출, ADR 0040),
-  `creator: UserEntity`(ManyToOne, `nullable: false`, `cascade: true`), 타임스탬프
+  `creator: UserEntity`(ManyToOne, `nullable: false`, `cascade: true`), 타임스탬프.
+  `@Index('IDX_file_entity_createdAt_id', ['createdAt', 'id'])`와
+  `@Index('IDX_file_entity_creatorId', ['creator'])`는 ADR 0021의 목록 쿼리 모양을
+  위한 것(ADR 0049가 측정 후 채택). 세 번째 인덱스 `IDX_file_entity_title_trgm`
+  (title 위의 GIN + `pg_trgm`, `ILIKE '%term%'` 검색용)은 마이그레이션에만 존재한다
+  — `@Index`가 그 연산자 클래스를 표현할 수 없기 때문이다
 - `PostEntity` — title(`FileEntity.title`과 달리 의도적으로 **고유하지
   않음**), `body`(text), `creator: UserEntity`(ManyToOne, `nullable: false`),
   `file: FileEntity | null`(OneToOne + `@JoinColumn`, 고유 + nullable —
   `POST /post`의 idempotency 키), 타임스탬프. 관계는 **단방향**이다:
   `UserEntity`도 `FileEntity`도 역방향 컬렉션을 얻지 않는데, 존재하는
   유일한 역방향(`UserEntity.creator`)조차 어떤 쿼리에서도 읽히지 않기
-  때문이다(ADR 0023)
+  때문이다(ADR 0023). 위 `FileEntity`와 같은 ADR 0049 인덱스 3종
+  — `IDX_post_entity_createdAt_id`, `IDX_post_entity_creatorId`, 마이그레이션에만
+  있는 `IDX_post_entity_title_trgm` — 을 그대로 가진다. 같은 읽기 계층을
+  물려받았기 때문이다
 - `CommentEntity` — `body`(text; DTO에서 ≤1,000으로 제한되며 컬럼에서는
   아니다), `creator: UserEntity`(ManyToOne, `nullable: false`),
   `post: PostEntity`(ManyToOne, `nullable: false`, **`onDelete: 'CASCADE'`**

@@ -1080,7 +1080,12 @@ Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform · Is
 Terraform] — the industry-standard toolchain, for a real-world-like dev/deploy/ops environment
 and future scaling; Docker + CI already landed in Stage 1, S3 is the storage port-adapter's
 concrete form)** as the immediate
-pre-deploy task, performance criteria, and finally **deployment itself — the terminal act,
+pre-deploy task, ~~performance criteria~~ [**landed 2026-08-31**, [ADR
+0049](docs/ADR/0049-performance-capacity-criteria.md) — response-time targets (p50/p95) set
+per endpoint tier, all three of ADR 0021's deferred indexes adopted for **both**
+`file_entity`/`post_entity` after measuring at a 10,000-row seed, file-storage disk ceiling
+handled via the existing observability stack's usage-rate monitoring (ADR 0047) rather than an
+absolute cap], and finally **deployment itself — the terminal act,
 deliberately carrying no execution number** (a number only re-invited the Stage 4/Stage 5
 ordering confusion; it is simply the last work) → **Stage 5 operational surface — admin console (appended 2026-07-30,
 ADR 0022**: role-delivery decision, adapting the imported `admin/` console,
@@ -1345,13 +1350,19 @@ Confirm what the PID is before killing it (`Get-CimInstance Win32_Process -Filte
   `creator: FileEntity[]` (OneToMany), timestamps
 - `FileEntity` — title (unique), `filePath`, `mediaType` (`FileMediaType` enum:
   `image`/`audio`/`video`, `NOT NULL`, extension-derived, ADR 0040), `creator: UserEntity`
-  (ManyToOne, `nullable: false`, `cascade: true`), timestamps
+  (ManyToOne, `nullable: false`, `cascade: true`), timestamps. `@Index('IDX_file_entity_createdAt_id',
+  ['createdAt', 'id'])` and `@Index('IDX_file_entity_creatorId', ['creator'])` serve the ADR
+  0021 list-query shapes (measured and adopted by ADR 0049); a third index,
+  `IDX_file_entity_title_trgm` (GIN + `pg_trgm` on `title`, for the `ILIKE '%term%'` search),
+  exists only in the migration — `@Index` cannot express its operator class
 - `PostEntity` — title (**not** unique — deliberately unlike `FileEntity.title`), `body`
   (text), `creator: UserEntity` (ManyToOne, `nullable: false`), `file: FileEntity | null`
   (OneToOne + `@JoinColumn`, unique + nullable — the idempotency key for `POST /post`),
   timestamps. Relations are **unidirectional**: neither `UserEntity` nor `FileEntity` gains
   an inverse collection, because the one inverse that exists (`UserEntity.creator`) is read
-  by zero queries (ADR 0023)
+  by zero queries (ADR 0023). Carries the same three ADR 0049 indexes as `FileEntity` above —
+  `IDX_post_entity_createdAt_id`, `IDX_post_entity_creatorId`, and the migration-only
+  `IDX_post_entity_title_trgm` — since it inherits the identical read layer
 - `CommentEntity` — `body` (text; ≤1,000 bounded at the DTO, not the column),
   `creator: UserEntity` (ManyToOne, `nullable: false`), `post: PostEntity` (ManyToOne,
   `nullable: false`, **`onDelete: 'CASCADE'`** — the schema's only DB-level cascade, ADR 0023
