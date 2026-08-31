@@ -224,3 +224,60 @@ D4 자체를 막힌 데서 풀기 위해서는 1회성 수동 이미지 빌드+�
 Explore 탭에서 즉석 PromQL 쿼리로만 볼 수 있다. 이를 위한 대시보드 패널 구축은
 애초에 이 ADR의 범위가 아니었다(Consequences에 이미 "커스텀 대시보드는 아직
 없다"고 명시돼 있었다).
+
+### Addendum (2026-08-31) — Alerting 종단 간 검증 완료; 이메일 발송은 이 ADR과 무관한 기존 격차로 확인됨
+
+이 ADR의 Decision은 Alerting을 별도로 다룬 적이 없다 — `kube-prometheus-stack`이
+같은 Helm 릴리스(D2)의 일부로 Alertmanager를 함께 가져오고, 규칙을 평가하는
+Grafana 자체 unified alerting 엔진도 Grafana 파드에 번들돼 있지만, 둘 다 이번
+전까지는 실제로 검증된 적이 없었다.
+
+**컨택 포인트 상태.** 개발자가 직접 만든 첫 alert 규칙 `AppTargetDown`
+(`up{job="upload-board"} == 0`)은 이걸 라이브로 확인하기 전에 이미 한 번 발동한
+상태였다. 유일한 컨택 포인트 `grafana-default-email`이 `1 error`를 보였다 —
+*"SMTP not configured, check your grafana.ini config file's `[smtp]` section"*.
+`kube-prometheus-stack`의 기본 Grafana 설치는 SMTP 설정을 전혀 담지 않으므로,
+이메일 발송은 구조적으로 마지막 단계에서 실패한다 — 버그가 아니다. 규칙 평가,
+상태 전환, 컨택 포인트로의 라우팅까지는 전부 정상 완료됐고, 발신 자체만
+실패했다. 우선순위 낮은 격차로 받아들이기로 확인됨 — 개발자가 지금 당장 이메일
+발송이 필요한 게 아니라서 `grafana.grafana.ini.smtp` 값을 추가하지 않았다.
+
+**라이브 발동 증명, 두 차례.** 파이프라인이 실제로 `Firing`까지 도달하는지
+(위 D4 점검들은 `Normal`/`NoData`만 다뤘지 이건 검증한 적이 없었다) 확인하기
+위해, 이 ADR이 앞선 논의에서 이미 이름 붙인 5가지 핵심 대시보드 관심사(Pod,
+Namespace/Workloads, Cluster, Networking, Alertmanager Overview) 각각에 대응하는
+규칙 5개를 `/api/v1/provisioning/alert-rules`로 새 `CoreMetrics` 폴더에
+만들었다: `PodMemoryHigh`(`container_memory_working_set_bytes{...} > 500Mi`),
+`PodCrashLooping`(`increase(kube_pod_container_status_restarts_total{...}[15m])
+> 3`), `NodeNotReady`(`kube_node_status_condition{condition="Ready",status="true"}
+== 0`), `PodNetworkReceiveErrors`(`rate(container_network_receive_errors_total{...}
+[5m]) > 0`), `AlertmanagerNotificationsFailing`(`rate(alertmanager_notifications_
+failed_total{integration="email"}[5m]) > 0` — 실제 Cortex/Mimir 스타일
+Alertmanager 자신의 메트릭으로, `AppTargetDown`을 평가한 Grafana 자체 엔진과는
+별개 컴포넌트다; Grafana 자신은 `ServiceMonitor`가 없어 스크레이프 대상이
+아니므로 내부 알림 실패 카운터는 여기서 쿼리할 수 없다). 사용 전 모든 메트릭명과
+라벨 조합을 실제 Prometheus 라이브 데이터로 직접 확인했다 — 추측하지 않았다.
+`PodMemoryHigh`의 임계값을 파드 실사용량보다 낮게(10MB vs 실제 ~98MB) 잠깐
+낮춰서 진짜로 `Firing`으로 전환시켰다 — Prometheus 호환 API
+`/api/prometheus/grafana/api/v1/rules`와 Playwright 스크린샷으로 확인한 뒤,
+실제 임계값(500MB, `for: 10m`)으로 복원했다. 세션 중간에 `upload-board` Helm
+릴리스가 uninstall된 게 발견돼(이 ADR이나 이 세션이 한 일이 아님) 개발자가
+재설치한 뒤 한 번 더 반복했다 — 같은 결과로, 새로 재배포된 파드를 상대로도
+파이프라인이 여전히 동작함을 확인했다.
+
+**그 과정에서 진짜 버그 하나를 찾아 고쳤다.** `NodeNotReady`의 `noDataState`를
+처음엔 `Alerting`으로 설정했는데, "결과가 비면 그 자체가 의심스럽다"는 가정
+때문이었다. 틀린 가정이었다:
+`kube_node_status_condition{condition="Ready",status="true"}`는 해당 노드가
+실제로 Ready면 항상 값 `1`인 시계열을 노드당 하나씩 반환하므로, `== 0`으로
+필터링하면 **모든 노드가 정상일 때 정확히 빈 결과**가 나온다 — 이게 정상
+상황이다. `noDataState: Alerting`이었던 탓에, 이 규칙은 생성 후 이 문제가 잡히기
+까지 6분 내내 `Firing` 상태였다 — 그동안 클러스터 노드 2개는 계속 `Ready`를
+보고하고 있었는데도(직접 확인: 둘 다 `status="true"` 값 `1`). `noDataState: OK`로
+정정하고 다음 평가에서 `Normal`로 돌아옴을 확인했다 — 그동안 클러스터 노드 상태는
+변한 게 없었다.
+
+**처리 방향, 미결로 남김**: `CoreMetrics` 폴더와 그 5개 규칙은 라이브 검증
+목적으로 만든 것이지, 이 프로젝트의 alerting 표면에 영구적으로 추가해달라는
+요청이 있었던 게 아니다 — 유지할지, 정리할지, 실제 온콜 정책에 일부를 편입할지는
+이 Addendum이 결정하지 않는다.
