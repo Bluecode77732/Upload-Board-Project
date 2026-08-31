@@ -323,9 +323,63 @@ deletions. If the ALB ingress was ever enabled, `terraform destroy` inside
 `addons/` (or, if the ALB outlived it, `cluster/`) can time out with a VPC
 `DependencyViolation` error the same way the original Istio example did —
 the ALB's security groups can outlive the command. Uninstall the Helm
-release first (`helm uninstall sharenpo`), confirm the ALB and its
-security groups are gone in the AWS console, then destroy in the order
-above.
+release first, confirm the ALB and its security groups are gone in the AWS
+console, then destroy in the order above. Check the actual release name —
+it need not match the chart name `sharenpo` used in the examples on this
+page (the live deployment's release is currently named `upload-board`):
+
+```sh
+helm list -A
+helm uninstall <release-name> -n <namespace>
+```
+
+`app-infra/`'s `s3_bucket_name`/`domain_name` have no default (a globally
+unique bucket/domain name can't have a safe one), so its `destroy` needs the
+same `-var` flags its `apply` did. Don't hardcode them into a command you
+save — read the live values from the state itself right before destroying,
+since they can change between deploys (e.g. a bucket recreated under a new
+name):
+
+```sh
+cd app-infra
+terraform output -raw s3_bucket_name                        # -> bucket name
+terraform state show aws_route53_zone.app | grep '  name '  # -> domain name
+```
+
+### Step by step (reviews each plan)
+
+Matches `deploy.sh`'s own stance of never skipping the interactive plan
+review ([ADR 0046](../../../docs/ADR/0046-deploy-sequence-automation.md) D3):
+
+```sh
+cd addons
+terraform destroy
+
+cd ../app-infra
+terraform destroy \
+  -var="s3_bucket_name=<value from above>" \
+  -var="domain_name=<value from above>"
+
+cd ../cluster
+terraform destroy
+```
+
+### One command per state, no review (`-auto-approve`)
+
+Skips the plan review the step-by-step form above (and `deploy.sh`'s own
+apply automation) deliberately keeps. Real, billed AWS resources are
+deleted the instant each command runs, with no confirmation prompt and no
+snapshot (`app-infra/`'s RDS instance has `skip_final_snapshot = true`) —
+use this only once you've already reviewed what each state holds (e.g. from
+a prior `plan`) and just want to skip re-confirming interactively:
+
+```sh
+cd addons       && terraform destroy -auto-approve
+cd ../app-infra && terraform destroy -auto-approve \
+  -var="s3_bucket_name=<value from above>" \
+  -var="domain_name=<value from above>"
+cd ../cluster   && terraform destroy -auto-approve
+```
 
 Destroying only `cluster/` while keeping `app-infra/` (RDS data, Route53
 zone, Secrets Manager) is the concrete capability this three-state split

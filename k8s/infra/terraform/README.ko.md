@@ -319,8 +319,62 @@ ALB ingress를 한 번이라도 켰다면, 원래 Istio 예제와 같은 이유�
 `addons/`(또는 ALB가 그보다 오래 남아 있었다면 `cluster/`) 안에서
 `terraform destroy`가 VPC `DependencyViolation` 오류로 타임아웃할 수
 있습니다 — ALB의 보안 그룹이 명령보다 더 오래 살아남을 수 있기 때문입니다.
-Helm 릴리스를 먼저 제거하고(`helm uninstall sharenpo`), AWS 콘솔에서
-ALB와 그 보안 그룹이 실제로 사라졌는지 확인한 뒤 위 순서대로 destroy하세요.
+Helm 릴리스를 먼저 제거하고, AWS 콘솔에서 ALB와 그 보안 그룹이 실제로
+사라졌는지 확인한 뒤 위 순서대로 destroy하세요. 실제 릴리스 이름부터
+확인하세요 — 이 문서 예시가 쓰는 차트 이름 `sharenpo`와 같을 필요는
+없습니다(현재 라이브 배포의 릴리스 이름은 `upload-board`입니다):
+
+```sh
+helm list -A
+helm uninstall <릴리스-이름> -n <네임스페이스>
+```
+
+`app-infra/`의 `s3_bucket_name`/`domain_name`은 기본값이 없어서(전역적으로
+유일해야 하는 버킷/도메인 이름엔 안전한 기본값을 둘 수 없음) `destroy`도
+`apply` 때와 같은 `-var` 값이 필요합니다. 저장해두는 커맨드에 하드코딩하지
+말고, destroy 직전에 state에서 실제 값을 읽으세요 — 재배포 때마다 값이
+바뀔 수 있습니다(예: 버킷이 다른 이름으로 재생성되는 경우):
+
+```sh
+cd app-infra
+terraform output -raw s3_bucket_name                        # -> 버킷 이름
+terraform state show aws_route53_zone.app | grep '  name '  # -> 도메인 이름
+```
+
+### 단계별 진행 (매번 plan을 검토)
+
+`deploy.sh` 자신이 인터랙티브 plan 검토를 절대 건너뛰지 않는다는 원칙과
+같습니다([ADR 0046](../../../docs/ADR/0046-deploy-sequence-automation.md) D3):
+
+```sh
+cd addons
+terraform destroy
+
+cd ../app-infra
+terraform destroy \
+  -var="s3_bucket_name=<위에서 읽은 값>" \
+  -var="domain_name=<위에서 읽은 값>"
+
+cd ../cluster
+terraform destroy
+```
+
+### state별 한 줄, 검토 없음 (`-auto-approve`)
+
+위 단계별 방식(그리고 `deploy.sh`의 apply 자동화)이 일부러 유지하는 plan
+검토를 건너뜁니다. 각 명령이 실행되는 즉시 실제 과금되는 AWS 리소스가
+확인 프롬프트도, 스냅샷도 없이 삭제됩니다(`app-infra/`의 RDS 인스턴스는
+`skip_final_snapshot = true`). 이미 각 state가 뭘 담고 있는지 확인했고
+(예: 직전에 `plan`을 본 상태) 인터랙티브 재확인만 건너뛰고 싶을 때만
+쓰세요:
+
+```sh
+cd addons       && terraform destroy -auto-approve
+cd ../app-infra && terraform destroy -auto-approve \
+  -var="s3_bucket_name=<위에서 읽은 값>" \
+  -var="domain_name=<위에서 읽은 값>"
+cd ../cluster   && terraform destroy -auto-approve
+```
 
 `app-infra/`(RDS 데이터, Route53 영역, Secrets Manager)는 남긴 채
 `cluster/`만 지우는 것이 바로 이 3-state 분리가 존재하는 이유인 구체적
