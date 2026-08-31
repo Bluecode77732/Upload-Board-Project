@@ -6,11 +6,26 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
+// 목적: 파일 목록을 최신순으로 보여줄 때(GET /file) 매번 전체를 다시 정렬하지 않게 한다.
+// 이유: 예전엔 "나중에 데이터 많아지면 달아보자"고 미뤄뒀던 인덱스인데, 실제로 1만 개
+//       데이터를 넣고 재봤더니 최대 27배까지 빨라졌다(docs/ADR/0049-performance-capacity-criteria.md).
+@Index('IDX_file_entity_createdAt_id', ['createdAt', 'id'])
+// 목적: 작성자로 필터링할 때(?creatorId=)와 계정 삭제 시 이 사용자 파일을 찾을 때 빠르게 찾게 한다.
+// 이유: creatorId는 다른 테이블(user_entity)을 가리키는 컬럼인데, Postgres는 이런 컬럼을
+//       자동으로 인덱싱해주지 않는다 — 실제로 재보니 3.6배 빨라졌다.
+@Index('IDX_file_entity_creatorId', ['creator'])
+// 제목 검색(?search=)용 인덱스(IDX_file_entity_title_trgm)는 여기 @Index로 선언하지 않는다.
+// pg_trgm이라는 Postgres 확장 기능으로 만드는 특수한 인덱스라 TypeORM의 @Index 데코레이터로는
+// 표현할 방법이 없고(연산자 클래스 지정 불가), 실제 생성은 마이그레이션 파일에서 직접 SQL로
+// 한다. 이 때문에 앞으로 누군가 migration:generate를 돌리면 "이 인덱스를 지워라"는 엉뚱한
+// diff가 나올 수 있다 — 베이스라인 마이그레이션 헤더가 이미 적어둔 것과 같은 종류의 노이즈이니
+// 그때도 그냥 지우고 무시하면 된다.
 @Entity()
 export class FileEntity {
   @PrimaryGeneratedColumn()

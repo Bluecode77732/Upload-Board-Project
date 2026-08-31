@@ -57,6 +57,7 @@ each ADR records the *why* behind those rules.
 | [0046](0046-deploy-sequence-automation.md) | Deploy-sequence automation — a local shell script, Terraform + Helm only | Accepted — implemented | 2026-08-27 |
 | [0047](0047-observability-prometheus-grafana.md) | Observability stack — Prometheus and Grafana, self-hosted via eks-blueprints-addons, extends 0017 | Accepted | 2026-08-28 |
 | [0048](0048-ci-trigger-restoration-and-docker-publish-design.md) | CI trigger restoration and `docker-publish` branch-aware design, amends 0016 | Accepted — implemented | 2026-08-30 |
+| [0049](0049-performance-capacity-criteria.md) | Performance and capacity criteria — response-time targets, adopts ADR 0021's deferred indexes, disk via usage-rate monitoring | Accepted — implemented | 2026-08-31 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status
