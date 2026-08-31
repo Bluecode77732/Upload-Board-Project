@@ -79,6 +79,20 @@ development line (package.json version).
   `/api/ruler/grafana/api/v1/rules/`) before the move, and folding them together would have
   silently slowed `AppTargetDown` to a 60s cadence. One folder, two groups, each keeping its
   own interval.
+- **Corrupted `description` annotations on 5 `CoreMetrics` rules found and fixed (2026-08-31,
+  [ADR 0047 Addendum](ADR/0047-observability-prometheus-grafana.md#addendum-2026-08-31--alerting-spot-checked-all-6-rules-now-verified))**
+  — the developer reported the Describe text on several rules reading as neither Korean nor
+  English. A raw hex dump of the stored `description` field confirmed literal `ef bf bd`
+  bytes (UTF-8 for U+FFFD, the Unicode replacement character) baked into `PodMemoryHigh`,
+  `PodCrashLooping`, `NodeNotReady`, `PodNetworkReceiveErrors`, and
+  `AlertmanagerNotificationsFailing`'s annotations — `AppTargetDown`'s was unaffected. Since
+  U+FFFD is a lossy decode artifact, the original Korean text was already gone by the time
+  these rules were first provisioned (2026-08-30), most likely from a non-UTF-8 shell/codepage
+  on the original client; not byte-recoverable. Fixed by re-deriving each description from its
+  rule's title/PromQL expression and overwriting via the provisioning API's `PUT`, routed
+  through the `Write`/`Edit` file tools rather than bash string interpolation to avoid
+  repeating the same encoding bug. Verified both by a clean re-dump (no `ef bf bd`) and in
+  Grafana's UI, where the Korean text now renders correctly.
 - **`docker-publish` now also triggers on `dev` push, with branch-aware tagging/platform
   scope and a pre-push smoke test (2026-08-30, [ROADMAP §7](ROADMAP.md#7-unscheduled--open-decisions))**
   — closes the "an image never gets built from `dev`" gap behind the recurring stale-image

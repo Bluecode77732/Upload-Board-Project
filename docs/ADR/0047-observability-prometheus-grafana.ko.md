@@ -279,5 +279,26 @@ Prometheus 알림 시맨틱을 가정한 것. 실측 결과 이 가정은 틀렸
 하나에 그룹 둘, 각자 자기 주기를 유지 — 이제 Grafana 알림 목록에 남는 항목은
 "CoreMetrics" 하나뿐이고, 그 아래 `Evaluation`과 `CoreMetrics` 두 하위 그룹이 있다.
 
+**Describe 어노테이션 손상 발견·수정 (2026-08-31)**: 개발자가 몇몇 규칙의 Describe
+텍스트가 한글도 영어도 아니게 보인다고 지적했다. 바이트 단위로 확인한 결과 —
+`curl -o file`로 받은 뒤 `description` 필드를 원시 hex로 까보니, `CoreMetrics`
+그룹의 다섯 규칙(`PodMemoryHigh`, `PodCrashLooping`, `NodeNotReady`,
+`PodNetworkReceiveErrors`, `AlertmanagerNotificationsFailing`)의 저장된 어노테이션에
+`ef bf bd`(U+FFFD, 유니코드 대체 문자의 UTF-8 인코딩) 바이트열이 그대로 박혀
+있었다 — `AppTargetDown`의 description은 멀쩡히 정상이었다. 원인: U+FFFD는 잘못된
+바이트열을 디코딩할 때 나오는 손실성 대체 문자이므로, 이 다섯 규칙이 처음
+프로비저닝됐을 때(2026-08-30, 이 addendum의 검증 작업보다 이전) 이미 원본 한글
+바이트가 사라진 상태였다는 뜻이다 — 원래 `POST`를 보낸 클라이언트가 UTF-8이
+아닌 셸/코드페이지 환경이었을 가능성이 가장 높고, Grafana는 받은 그대로
+저장했을 뿐이다. 바이트 단위 복구는 불가능해서, 각 규칙의 제목과 PromQL
+표현식으로부터 의도를 다시 유추해 프로비저닝 API의 `PUT`으로 덮어썼다 — 이때
+같은 종류의 인코딩 버그를 반복하지 않도록 bash 문자열 보간 대신 `Write`/`Edit`
+파일 도구를 거쳐 요청 본문의 UTF-8 바이트를 보장했다. 두 방식으로 검증했다:
+다시 받은 필드를 원시 hex로 까봤을 때 `ef bf bd`가 전혀 없음을 확인했고,
+Grafana UI(`/alerting/list`, 규칙 행 펼침)에서도 한글이 정상 렌더링됨을
+확인했다. 새로 쓴 어노테이션 텍스트는 원래 문구(복구 불가능)가 아니라, 해당
+규칙의 PromQL이 이미 검사하고 있는 조건을 다시 서술한 새 한글 문장이며, 적용
+전 개발자에게 확인받았다.
+
 **미결**: `CoreMetrics` 규칙을 유지·정리·실제 정책 편입할지는 여기서 정하지
 않는다.

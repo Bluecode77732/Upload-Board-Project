@@ -78,6 +78,21 @@
   평가 주기가 서로 달랐고(`Evaluation` 10초, `CoreMetrics` 1분,
   `/api/ruler/grafana/api/v1/rules/`로 확인) 합쳤다면 `AppTargetDown`의 주기가
   조용히 60초로 느려졌을 것이다. 폴더 하나에 그룹 둘, 각자 자기 주기를 유지.
+- **`CoreMetrics` 규칙 5개의 `description` 어노테이션 손상 발견·수정
+  (2026-08-31, [ADR 0047 Addendum](ADR/0047-observability-prometheus-grafana.ko.md#addendum-2026-08-31--alerting-표본-점검-6개-규칙-전부-검증-완료))**
+  — 개발자가 몇몇 규칙의 Describe 텍스트가 한글도 영어도 아니라고 지적했다.
+  저장된 `description` 필드를 원시 hex로 까보니 `PodMemoryHigh`,
+  `PodCrashLooping`, `NodeNotReady`, `PodNetworkReceiveErrors`,
+  `AlertmanagerNotificationsFailing`의 어노테이션에 `ef bf bd`(U+FFFD, 유니코드
+  대체 문자의 UTF-8 인코딩) 바이트열이 그대로 박혀 있었다 —
+  `AppTargetDown`은 멀쩡했다. U+FFFD는 손실성 디코딩 산물이라, 이 다섯 규칙이
+  처음 프로비저닝됐을 때(2026-08-30) 이미 원본 한글 바이트가 사라진
+  상태였다는 뜻이고, 원인은 원래 클라이언트의 비-UTF-8 셸/코드페이지일
+  가능성이 가장 크다 — 바이트 단위 복구는 불가능. 각 규칙의 제목/PromQL
+  표현식으로부터 의도를 다시 유추해 프로비저닝 API의 `PUT`으로 덮어썼고,
+  같은 종류의 인코딩 버그를 반복하지 않도록 bash 문자열 보간 대신
+  `Write`/`Edit` 파일 도구를 거쳤다. 다시 받은 필드를 hex로 깐 결과(`ef bf
+  bd` 없음)와 Grafana UI 렌더링 둘 다로 검증했다.
 - **`docker-publish`가 이제 `dev` push에도 반응하고, 브랜치별 태깅/플랫폼 범위와
   push 전 스모크 테스트를 갖춤 (2026-08-30, [ROADMAP §7](ROADMAP.ko.md#7-미일정--미결-사항))**
   — 반복되던 스테일 이미지 사고(2026-08-28, 2026-08-29/30)의 근본 원인이었던

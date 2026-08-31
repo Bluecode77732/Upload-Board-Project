@@ -270,5 +270,26 @@ as a side effect nobody asked for. One folder, two groups, each keeping its own 
 one Grafana alerting list entry now open is "CoreMetrics" itself, with `Evaluation` and
 `CoreMetrics` as its two sub-groups.
 
+**Corrupted `description` annotations found and fixed (2026-08-31)**: the developer reported
+the Describe text on several rules reading as neither Korean nor English. Confirmed at the
+byte level — `curl -o file` followed by a raw hex dump of the `description` field showed
+literal `ef bf bd` sequences (the UTF-8 encoding of U+FFFD, the Unicode replacement character)
+baked into the five `CoreMetrics`-group rules' stored annotations (`PodMemoryHigh`,
+`PodCrashLooping`, `NodeNotReady`, `PodNetworkReceiveErrors`,
+`AlertmanagerNotificationsFailing`); `AppTargetDown`'s description was unaffected and read
+correctly. Root cause: U+FFFD is a lossy sentinel produced when invalid byte sequences are
+decoded, so the original Korean text was already gone by the time these five rules were first
+provisioned (2026-08-30, predating this addendum's verification work) — most likely a
+non-UTF-8 shell/codepage on the client that sent the original `POST` — and Grafana simply
+stored what it was given. Not recoverable byte-for-byte; fixed by re-deriving each
+description's intended meaning from its rule's title and PromQL expression and overwriting it
+via the provisioning API's `PUT`, routed through the `Write`/`Edit` file tools (not bash
+string interpolation, to avoid repeating the same class of encoding bug) so the request body's
+UTF-8 bytes were guaranteed correct. Verified both ways: a fresh raw hex dump of the rewritten
+field contains no `ef bf bd`, and Grafana's UI (`/alerting/list`, rule row expanded) renders
+the Korean text correctly. The rewritten annotation text is not the original wording (which is
+unrecoverable) — it is fresh Korean text describing the same condition the rule's PromQL
+already checks, confirmed with the developer before applying.
+
 **Open**: whether to keep, prune, or promote any `CoreMetrics` rule into a real policy — not
 decided here.
