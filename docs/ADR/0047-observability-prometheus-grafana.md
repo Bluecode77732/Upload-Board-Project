@@ -217,57 +217,32 @@ custom series (`upload_claims_total`, `temp_cleanup_deleted_total`,
 ad-hoc PromQL query, since building a dashboard panel for them was never in this ADR's scope
 (Consequences already flagged "no custom dashboards provisioned yet").
 
-### Addendum (2026-08-31) — Alerting verified end to end; email delivery confirmed broken by design gap, not by this ADR
+### Addendum (2026-08-31) — Alerting spot-checked; per-rule verification status below is not uniform
 
-This ADR's Decision never covered Alerting specifically — `kube-prometheus-stack` brings
-Alertmanager along as part of the same Helm release (D2), and the Grafana-native unified
-alerting engine that evaluates rules is bundled with the Grafana pod itself, but neither was
-exercised until this pass.
+This ADR's Decision never covered Alerting specifically. `kube-prometheus-stack` bundles
+Alertmanager (D2), and Grafana's own unified alerting engine ships with the Grafana pod;
+neither was exercised until this pass. A `CoreMetrics` folder with 5 rules was created via
+`/api/v1/provisioning/alert-rules`, one per the core dashboard concern named earlier in this
+ADR, alongside the developer's own pre-existing `AppTargetDown` rule.
 
-**Contact point health.** The developer's own first alert rule, `AppTargetDown`
-(`up{job="upload-board"} == 0`), had already fired once by the time this was checked live.
-Its only contact point, `grafana-default-email`, showed `1 error`: *"SMTP not configured,
-check your grafana.ini config file's `[smtp]` section"* — `kube-prometheus-stack`'s default
-Grafana install ships no SMTP configuration, so email delivery fails at the last step by
-construction, not from a bug. Rule evaluation, state transition, and routing to the contact
-point all completed correctly; only the outbound send failed. Confirmed as an accepted,
-low-priority gap — the developer does not currently need working email delivery, so no
-`grafana.grafana.ini.smtp` values were added.
+| Rule | Verification | Result |
+|---|---|---|
+| `AppTargetDown` | Fired naturally (real target-down event, pre-existing) | Confirmed: fired, routed to contact point |
+| `PodMemoryHigh` | Threshold forced below real usage, twice (incl. after a mid-session redeploy) | Confirmed firing, screenshotted, reverted |
+| `NodeNotReady` | Not deliberately tested — fired for 6m from a `noDataState` misconfiguration | Not a real test; bug found and fixed (below) |
+| `PodCrashLooping` | Rule created, evaluates | Not fired — untested |
+| `PodNetworkReceiveErrors` | Rule created, evaluates | Not fired — untested |
+| `AlertmanagerNotificationsFailing` | Rule created, evaluates | Not fired — untested |
 
-**Live-fire proof, twice.** To confirm the pipeline actually reaches `Firing` (not just
-`Normal`/`NoData`, which the D4 checks above never exercised), a new `CoreMetrics` folder
-was created via `/api/v1/provisioning/alert-rules` with five rules, one per the core
-dashboard concern named in this ADR's own prior discussion (Pod, Namespace/Workloads,
-Cluster, Networking, Alertmanager Overview): `PodMemoryHigh`
-(`container_memory_working_set_bytes{...} > 500Mi`), `PodCrashLooping`
-(`increase(kube_pod_container_status_restarts_total{...}[15m]) > 3`), `NodeNotReady`
-(`kube_node_status_condition{condition="Ready",status="true"} == 0`),
-`PodNetworkReceiveErrors` (`rate(container_network_receive_errors_total{...}[5m]) > 0`), and
-`AlertmanagerNotificationsFailing` (`rate(alertmanager_notifications_failed_total{integration
-="email"}[5m]) > 0` — the real Cortex/Mimir-style Alertmanager's own metric, a separate
-component from the Grafana-native engine that evaluated `AppTargetDown`; Grafana itself has
-no `ServiceMonitor` and is not scraped, so its internal notification-failure counters are not
-queryable here). Every metric name and label set was confirmed against live Prometheus data
-before use, not assumed. `PodMemoryHigh`'s threshold was temporarily lowered below the pod's
-real usage (10MB vs. ~98MB actual) to force a genuine transition to `Firing` — confirmed via
-the Prometheus-compatible `/api/prometheus/grafana/api/v1/rules` endpoint and a Playwright
-screenshot, then restored to its real threshold (500MB, `for: 10m`). Repeated a second time
-after the `upload-board` Helm release was found uninstalled mid-session (not this ADR's or
-this session's action) and reinstalled by the developer — same result, confirming the
-pipeline still works against a freshly redeployed pod.
+**Email delivery**: `AppTargetDown`'s only contact point, `grafana-default-email`, errors with
+*"SMTP not configured"* — `kube-prometheus-stack`'s default Grafana ships no SMTP config.
+Evaluation → firing → routing all work; only the outbound send fails, by construction.
+Accepted, since the developer doesn't currently need email delivery.
 
-**One real bug found and fixed in the process.** `NodeNotReady`'s `noDataState` was
-initially set to `Alerting`, on the assumption that an empty result was itself suspicious.
-It is not: `kube_node_status_condition{condition="Ready",status="true"}` always returns one
-series per node with value `1` when that node is genuinely ready, so filtering `== 0`
-correctly returns an *empty* result exactly when every node is healthy — the normal case.
-With `noDataState: Alerting`, this meant the rule sat in `Firing` for the six minutes between
-its creation and this being caught, despite both cluster nodes reporting `Ready` the entire
-time (confirmed directly: `status="true"` value `1` on both). Corrected to `noDataState: OK`
-and verified it returned to `Normal` on the next evaluation, cluster nodes unchanged
-throughout.
+**Bug found**: `NodeNotReady` had `noDataState: Alerting`, on the wrong assumption that an
+empty result is suspicious. `kube_node_status_condition{condition="Ready",status="true"}`
+returns one series per node at value `1` when ready, so `== 0` is correctly *empty* when all
+nodes are healthy. Fixed to `noDataState: OK`; confirmed back to `Normal`.
 
-**Disposition, left open**: the `CoreMetrics` folder and its five rules were created as a
-live-verification exercise, not a requested permanent addition to the project's alerting
-surface — whether to keep, prune, or fold any of them into a real on-call policy is not
-decided by this addendum.
+**Open**: whether to keep, prune, or promote any `CoreMetrics` rule into a real policy — not
+decided here.
