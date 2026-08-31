@@ -86,8 +86,8 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   결론, 중복 admin 화면을 `admin/` 쪽으로 정리하며
   `frontend/src/features/admin/AdminPage.tsx` 삭제까지 네 행 모두 완료) →
   **남은 작업은 Stage 4(프로덕션 전환), 이제 다음**. 마지막 두 작업은 **프로덕션 DevOps 스택
-  도입(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform ·
-  Istio [Terraform 이후 예정])**, 그다음 **배포 자체**다 — 배포는 "N번째 단계"가 아니라 전체
+  도입(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform)**,
+  그다음 **배포 자체**다 — 배포는 "N번째 단계"가 아니라 전체
   계획의 종착 행위이므로 **의도적으로 번호를 붙이지 않는다**(번호는 Stage 4/Stage 5 순서
   혼동을 다시 부를 뿐이다). 이로써 Stage 5의 부동 위치가 Stage 4 앞으로 확정되고, 독립적인
   페이지네이션 부채가 둘보다 앞으로 당겨진다.
@@ -272,7 +272,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
    2026-08-06 추가 기록 참조). 계획대로 Stage 4보다 먼저 진행됐다: 권한 계층을 Swagger로만
    운영할 수 있는 배포 시스템은 운영이 어렵기 때문. **이제 남은 작업은 Stage 4** — 프로덕션
    DevOps 스택 도입(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus ·
-   Grafana · Terraform · Istio[Terraform 이후]), 그다음 마지막으로 배포 자체이며, 배포는
+   Grafana · Terraform), 그다음 마지막으로 배포 자체이며, 배포는
    의도적으로 번호를 붙이지 않는다(아래 참조).
 4. **프로덕션 DevOps 스택 도입** — 배포 직전 작업. **이 스택을 도입하는 이유**: 업계에서
    널리 쓰이는 표준 DevOps 툴체인으로, 이를 기반으로 실무와 유사한 개발·배포·운영 환경을
@@ -281,8 +281,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
    **Kubernetes**(컨테이너 오케스트레이션), **Helm**(릴리스 패키징/템플릿),
    **GitHub Actions**(CI/CD — *이미 반영됨*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.ko.md)),
    **Prometheus**(메트릭 수집), **Grafana**(메트릭 대시보드), **Terraform**(코드형
-   인프라, IaC), 그리고 — **Terraform 이후 예정** — **Istio**(클러스터 위 서비스 메시:
-   트래픽 관리, mTLS, 메시 텔레메트리). S3(오브젝트 스토리지)는 이 작업에 남은 스토리지 몫이다 — `FileStorage`
+   인프라, IaC)까지다. S3(오브젝트 스토리지)는 이 작업에 남은 스토리지 몫이다 — `FileStorage`
    포트-어댑터 자체(4절)는 이미 2026-08-07에 랜딩했으므로([ADR 0029](ADR/0029-storage-port-adapter.ko.md)),
    여기 남은 일은 실제 버킷을 대상으로 `STORAGE_DRIVER=s3`를 켜는 것뿐이다. 아직
    반영되지 않은 각 구성요소는 자체 ADR을 갖는다.
@@ -359,8 +358,8 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 배포는 전체 계획의 종착 행위다 — 나머지가 모두 만들어지고 운영 가능해진 뒤 수행하므로
 **실행 번호를 붙이지 않는다**; 여기에 번호를 붙이면 이 계획이 이미 정리한 Stage 4/Stage 5
 순서 혼동을 다시 부를 뿐이다. 배포 **직전** 작업은 프로덕션 DevOps 스택 도입
-(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform ·
-Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 순서를 유지하며, 배포 행은
+(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform)이다.
+아래 행들은 각자의 내부 의존 순서를 유지하며, 배포 행은
 의도적으로 맨 마지막이다.
 
 | 작업 | 근거 / 의존성 |
@@ -391,7 +390,6 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
 | **Prometheus** | 메트릭 수집 | ✅ 랜딩, 라이브 검증 완료 | [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md): `eks_blueprints_addons`의 `enable_kube_prometheus_stack` 플래그(kube-prometheus-stack 차트)를 통한 자체호스팅, 새 `prom-client` 기반 `/metrics` 엔드포인트(`MetricsModule`)를 `ServiceMonitor`로 스크레이프. 2026-08-29/30 라이브 검증 완료(ADR 0047 D4 Addendum): `up{job="upload-board"}` → `1`, 커스텀 카운터(`upload_claims_total`, `temp_cleanup_deleted_total`)와 전역 `http_request_duration_seconds` 히스토그램 모두 쿼리 결과에 존재. | [0047](ADR/0047-observability-prometheus-grafana.ko.md), [0017](ADR/0017-logging-conventions.ko.md) 위 |
 | **Grafana** | 대시보드 | ✅ 랜딩, 라이브 검증 완료 | [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md): Prometheus와 같은 `kube-prometheus-stack` Helm 릴리스에 함께 묶임(D3 — 결정 단위 하나, Helm 릴리스 하나). 아직 커스텀 대시보드는 없다 — `kube-prometheus-stack` 기본 대시보드를 그대로 사용. 2026-08-29/30 라이브 검증 완료: `GET /api/datasources`가 정상 동작하는 `Prometheus` 데이터소스를 보여준다 — 차트가 별도 수동 설정 없이 자동 프로비저닝했다. | [0047](ADR/0047-observability-prometheus-grafana.ko.md) |
 | **Terraform** | 코드형 인프라 | ✅ 적용됨, 현재 라이브 | 프로젝트 전용 설계 확정([0043](ADR/0043-terraform-project-adaptation.ko.md), [0038](ADR/0038-terraform-iac-scaffold.ko.md)의 유예 해제) 및 2026-08-18 구현: 이 프로젝트 고유의 EKS(이기종 노드 그룹 2개), RDS PostgreSQL, S3 버킷 + 앱 IRSA 역할, Secrets Manager + External Secrets Operator, Route53/ACM 기반 ALB ingress 경로를 프로비저닝한다 — Istio 예제는 주석 처리가 아니라 완전히 사라졌다. 2026-08-20에 그 단일 루트 모듈을 독립적으로 apply 가능한 세 state로 재구성([0044](ADR/0044-terraform-three-state-split.ko.md)): `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM, `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) 기준 ALB Controller+ESO+kube-prometheus-stack, 다른 둘을 모두 읽는 유일한 state) — 퇴역한 단일 `main.tf`는 더 이상 존재하지 않는다. 세 디렉터리 모두 `terraform validate`/`fmt -check` 통과. 2026-08-25~27에 실제 AWS 계정에 apply됐고, 2026-08-28에 배포가 end-to-end로 검증된 후 과금을 멈추려고 전부 destroy됐다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 2026-08-29/30에 재적용** — 이 수정 시점 기준 세 디렉터리 모두에서 `terraform output`이 실제 값을 반환한다(`cluster`의 EKS 엔드포인트, `app-infra`의 ACM 인증서 ARN, `addons`의 `terraform state list`에 잡히는 `kube_prometheus_stack` Helm 릴리스). 믿기 전에 `terraform plan`/`terraform output`으로 재확인할 것 — 이 칸은 여전히 스냅샷일 뿐 실시간 상태가 아니고, 검증이 끝나면 개발자가 과금을 멈추려 다시 destroy할 수도 있다. | [0038](ADR/0038-terraform-iac-scaffold.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md), [0044](ADR/0044-terraform-three-state-split.ko.md), [0047](ADR/0047-observability-prometheus-grafana.ko.md) |
-| **Istio** | 서비스 메시 | 🆕 | **Terraform 이후 예정** — Kubernetes 클러스터 위의 서비스 메시(트래픽 관리, 워크로드 간 mTLS, 메시 레벨 텔레메트리를 Prometheus/Grafana로). IaC로 프로비저닝된 클러스터가 생긴 뒤 도입; 향후 다중 서비스 확장을 내다본 것. | 자체 ADR(예정); Terraform 이후 |
 | **AWS** | 클라우드 / 배포 대상 | ✅ 검증됨, 현재 가동 중 | 위 행들이 향하는 컨테이너 배포 대상 — 2026-08-25~27에 end-to-end로 검증됨: 계정 `074416822640`(`sharenpo-user`, 2026-08-27부로 Paid Plan), 리전 `ap-northeast-2`, 실제 EKS + RDS + S3 + Route53/ACM, 그리고 앱 자체가 배포되어 동작함(§9, 2026-08-27). 검증이 끝난 뒤 2026-08-28에 과금을 멈추려고 전부 destroy됐다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 `deploy.sh all`로 2026-08-29/30에 재적용** — 이 수정 시점 기준 다시 살아있다. 검증이 끝나면 개발자가 과금을 멈추려 다시 destroy할 것으로 예상. | 배포 ADR(예정), [0047](ADR/0047-observability-prometheus-grafana.ko.md) |
 
 ### Stage 5 — 운영 화면 (admin 콘솔) — 2026-07-30 추가
@@ -733,6 +731,25 @@ Istio[Terraform 이후 예정])이다. 아래 행들은 각자의 내부 의존 
   Let's Encrypt)가 필요한데 둘 다 아직 정해지지 않았다. 방침(ingress에서 종단,
   앱 안에서는 하지 않음)은 확정됐다 — 위 Helm/K8s 작업과 함께 착수하도록
   스케줄링한다.
+- Istio(Kubernetes 클러스터 위 서비스 메시) — **프로덕션 DevOps 스택 도입 행과 Stage 4
+  구성요소 상태 표에서 제외**(2026-08-31 이동, 이번 세션에서 진행한 규모 적합성 검토 뒤
+  개발자가 내린 결정 — ROADMAP 자체의 순서 계획과는 별개). **미착수 이유**: 이 프로젝트의
+  실제 현재 규모에서는 Istio가 풀어야 할 문제 자체가 아직 존재하지 않는다. Helm 차트는
+  워크로드를 정확히 하나만 배포한다(`k8s/helm/templates/deployment.yml` +
+  `service.yaml`, 백엔드 단일 모놀리스, `replicaCount: 1`) — 클러스터 안에 이것 말고 도는
+  것이 없어, 메시가 라우팅·분산·암호화할 East-West 트래픽 자체가 없다. 파드 간 mTLS는
+  이미 검토됐고 [ADR 0034](ADR/0034-https-termination-stance.ko.md)가 시기상조로
+  명시적으로 기각했다(Alternatives rejected — 파드별 사이드카 프록시는 "이 프로젝트에
+  아직 없는 문제[파드 간 암호화]를 푸는 것"). 메시 레벨 텔레메트리도
+  [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md)이 이미 랜딩·라이브 검증한
+  앱 레벨 메트릭(kube-prometheus-stack 기반 Prometheus/Grafana + `prom-client` 기반
+  `MetricsModule`)과 중복될 뿐이다. 애초에 Istio가 이 계획에 오른 배경은
+  [ADR 0038](ADR/0038-terraform-iac-scaffold.ko.md)이 밝히듯 원래 Terraform 스캐폴드가
+  AWS 공식 "EKS Cluster w/ Istio" 예제였기 때문이다 — 프로젝트 전용 적응
+  ([ADR 0043](ADR/0043-terraform-project-adaptation.ko.md)) 과정에서 Istio 관련 리소스는
+  이미 삭제됐지만, 이 ROADMAP의 계획 행만 그 정리에서 살아남아 있었다. 클러스터 안에
+  실제로 여러 서비스가 생겨 그들 사이의 트래픽 관리·mTLS·카나리 라우팅이 필요해지는
+  경우에만 재검토한다 — 오늘 이 프로젝트의 로드맵에는 그런 시나리오가 없다.
 - ADR 0026 콘텐츠 엔드포인트 후속 (2026-08-01 기록, `GET /file/:id/content`
   [file-content.controller.ts](../backend/file/file-content.controller.ts) 구현 후 검토), 심각도 순:
   1. **[중간] 스트림 에러 미처리** — 200·206 경로의 `createReadStream(...).pipe(res)`에

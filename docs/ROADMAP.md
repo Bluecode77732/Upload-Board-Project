@@ -93,7 +93,7 @@ item below lands as its own dedicated, designed change
   surface resolved in favor of `admin/` — `frontend/src/features/admin/AdminPage.tsx` deleted)
   → **the remaining work is Stage 4 (production transition), now next**. Its last two tasks
   are the **production DevOps stack introduction (AWS · Docker · Kubernetes · Helm · GitHub
-  Actions · Prometheus · Grafana · Terraform · Istio [planned after Terraform])** and then
+  Actions · Prometheus · Grafana · Terraform)** and then
   **deployment itself** — the latter deliberately **unnumbered**, since it is the terminal
   act of the whole plan rather than a "step N" (a number only re-invited the Stage 4/Stage 5
   ordering confusion). This resolves Stage 5's floating position (before Stage 4) and pulled
@@ -293,7 +293,7 @@ item carries its execution number in its own row.
    2026-08-06 note). Ran before Stage 4 as planned: a deployed system whose privilege
    hierarchy is operable only through Swagger is hard to run. **Stage 4 is now the remaining
    work** — the production DevOps stack introduction (AWS · Docker · Kubernetes · Helm ·
-   GitHub Actions · Prometheus · Grafana · Terraform · Istio [after Terraform] — the
+   GitHub Actions · Prometheus · Grafana · Terraform — the
    industry-standard toolchain, adopted for a real-world-like dev/deploy/ops environment and
    future scaling) then, finally,
    the deploy act itself, deliberately unnumbered (see below).
@@ -304,9 +304,8 @@ item carries its execution number in its own row.
    (containerization — already landed, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.md)),
    **Kubernetes** (container orchestration), **Helm** (release packaging/templating),
    **GitHub Actions** (CI/CD — already landed, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.md)),
-   **Prometheus** (metrics collection), **Grafana** (metrics dashboards), **Terraform**
-   (infrastructure as code), and — **planned after Terraform** — **Istio** (service mesh over
-   the cluster: traffic management, mTLS, mesh telemetry). S3 (object storage) is this task's remaining storage
+   **Prometheus** (metrics collection), **Grafana** (metrics dashboards), and **Terraform**
+   (infrastructure as code). S3 (object storage) is this task's remaining storage
    work: the `FileStorage` port-adapter itself (section 4) already landed 2026-08-07
    ([ADR 0029](ADR/0029-storage-port-adapter.md)), so what's left here is switching
    `STORAGE_DRIVER=s3` against a real bucket. Each not-yet-landed component takes its
@@ -390,7 +389,7 @@ Deployment is the terminal act of the whole plan — done once everything else i
 operable — so it carries **no execution number**; a number here only re-invites the Stage
 4/Stage 5 ordering confusion the plan already had to untangle. The task **immediately before**
 the deploy act is the production DevOps stack introduction (AWS · Docker · Kubernetes · Helm ·
-GitHub Actions · Prometheus · Grafana · Terraform · Istio [planned after Terraform]). The rows below keep their internal
+GitHub Actions · Prometheus · Grafana · Terraform). The rows below keep their internal
 dependency order, and the deploy act is deliberately the last row.
 
 | Task | Rationale / dependencies |
@@ -421,7 +420,6 @@ the status of each is scannable rather than buried in prose (as of 2026-08-18). 
 | **Prometheus** | Metrics collection | ✅ landed, live-verified | [ADR 0047](ADR/0047-observability-prometheus-grafana.md): self-hosted via `eks_blueprints_addons`'s `enable_kube_prometheus_stack` flag (kube-prometheus-stack chart), scraping the app through a `ServiceMonitor` targeting a new `prom-client`-based `/metrics` endpoint (`MetricsModule`). Live-verified 2026-08-29/30 (ADR 0047 D4 Addendum): `up{job="upload-board"}` → `1`, custom counters (`upload_claims_total`, `temp_cleanup_deleted_total`) and the global `http_request_duration_seconds` histogram all present in query results. | [0047](ADR/0047-observability-prometheus-grafana.md), on [0017](ADR/0017-logging-conventions.md) |
 | **Grafana** | Dashboards | ✅ landed, live-verified | [ADR 0047](ADR/0047-observability-prometheus-grafana.md): bundled with the same `kube-prometheus-stack` Helm release as Prometheus (D3 — one combined decision, one Helm release). No custom dashboards provisioned yet — the default `kube-prometheus-stack` dashboards ship as-is. Live-verified 2026-08-29/30: `GET /api/datasources` lists a working `Prometheus` datasource, auto-provisioned by the chart with no manual wiring. | [0047](ADR/0047-observability-prometheus-grafana.md) |
 | **Terraform** | Infrastructure as code | ✅ applied, currently live | Project-specific design finalized ([0043](ADR/0043-terraform-project-adaptation.md), lifting [0038](ADR/0038-terraform-iac-scaffold.md)'s deferral) and implemented 2026-08-18: this project's own EKS (two heterogeneous node groups), RDS PostgreSQL, an S3 bucket + app IRSA role, Secrets Manager + External Secrets Operator, and a Route53/ACM-backed ALB ingress path — the Istio example is gone, not commented out. Reorganized 2026-08-20 from that single root module into three independently-appliable states ([0044](ADR/0044-terraform-three-state-split.md)): `cluster/` (`module.vpc`+`module.eks`), `app-infra/` (RDS/S3+IRSA/Secrets Manager/Route53+ACM, reads `cluster/` via `terraform_remote_state`), `addons/` (`module.eks_blueprints_addons` — ALB Controller+ESO+kube-prometheus-stack as of [0047](ADR/0047-observability-prometheus-grafana.md), the only state reading both others) — the retired single `main.tf` no longer exists. `terraform validate`/`fmt -check` pass in all three directories. Applied 2026-08-25–27, then fully destroyed 2026-08-28 to stop the AWS bill once proven end-to-end (§9). **Re-applied 2026-08-29/30** for [ADR 0047](ADR/0047-observability-prometheus-grafana.md) D4's live verification — `terraform output` in all three directories returns real values as of this edit (`cluster`'s EKS endpoint, `app-infra`'s ACM cert ARN, `addons`'s `kube_prometheus_stack` Helm release in `terraform state list`). Re-verify with `terraform plan`/`terraform output` before trusting this cell — it is still a snapshot, not live state, and the developer may tear it down again after this verification pass to stop the bill. | [0038](ADR/0038-terraform-iac-scaffold.md), [0043](ADR/0043-terraform-project-adaptation.md), [0044](ADR/0044-terraform-three-state-split.md), [0047](ADR/0047-observability-prometheus-grafana.md) |
-| **Istio** | Service mesh | 🆕 | **Planned after Terraform** — a service mesh over the Kubernetes cluster (traffic management, mTLS between workloads, and mesh-level telemetry into Prometheus/Grafana). Introduced once the IaC-provisioned cluster exists; forward-looking for multi-service scaling. | own ADR (planned); after Terraform |
 | **AWS** | Cloud / deploy target | ✅ proven, currently running | The container deploy target the rows above build toward — proven end-to-end 2026-08-25–27: account `074416822640` (`sharenpo-user`, Paid Plan since 2026-08-27), region `ap-northeast-2`, live EKS + RDS + S3 + Route53/ACM, with the app itself deployed and running (§9, 2026-08-27). Fully torn down 2026-08-28 once proven, to stop the bill (§9). **Re-applied 2026-08-29/30** for [ADR 0047](ADR/0047-observability-prometheus-grafana.md) D4's live verification via `deploy.sh all` — live again as of this edit; expect another teardown once the developer is done verifying, to stop the bill again. | deployment ADR (planned), [0047](ADR/0047-observability-prometheus-grafana.md) |
 
 ### Stage 5 — Operational surface (admin console) — added 2026-07-30
@@ -782,6 +780,28 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   cert-manager + Let's Encrypt), neither decided yet. The stance (terminate at the
   ingress, never in-process) is settled; scheduled to land with the Helm/K8s task
   (Production DevOps stack introduction, above).
+- Istio (service mesh over the Kubernetes cluster) — **pulled from the Production DevOps
+  stack introduction row and the Stage 4 component-status table** (moved 2026-08-31,
+  developer decision after a scale-fit review run this session, independent of the
+  ROADMAP's own sequencing plan) — **not started because**, at this project's actual
+  current shape, none of the problems it solves exist yet. The Helm chart deploys exactly
+  one workload (`k8s/helm/templates/deployment.yml` + `service.yaml`, single backend
+  monolith, `replicaCount: 1`) with nothing else running in-cluster, so there is no
+  east-west traffic for a mesh to route, split, or encrypt. Pod-to-pod mTLS was already
+  weighed and explicitly rejected as premature by
+  [ADR 0034](ADR/0034-https-termination-stance.md) (Alternatives rejected — a per-pod
+  sidecar proxy "solving a problem \[pod-to-pod encryption\] this project doesn't have
+  yet"). Mesh-level telemetry would duplicate the app-level metrics
+  [ADR 0047](ADR/0047-observability-prometheus-grafana.md) already ships and
+  live-verified (Prometheus/Grafana via `kube-prometheus-stack` + the `prom-client`-based
+  `MetricsModule`). Istio's presence in this plan traces to
+  [ADR 0038](ADR/0038-terraform-iac-scaffold.md)'s finding that the original Terraform
+  scaffold was AWS's own "EKS Cluster w/ Istio" example — its Istio-specific resources
+  were already dropped during project adaptation
+  ([ADR 0043](ADR/0043-terraform-project-adaptation.md)) while this ROADMAP's plan row
+  survived that cut. Revisit only if the architecture actually grows multiple in-cluster
+  services that need traffic management, mTLS, or canary routing between them — a
+  scenario not on this project's roadmap today.
 - ADR 0026 content-endpoint follow-ups (recorded 2026-08-01, from a post-implementation
   review of `GET /file/:id/content`,
   [file-content.controller.ts](../backend/file/file-content.controller.ts)), severity-ordered:
