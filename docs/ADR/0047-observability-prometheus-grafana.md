@@ -217,7 +217,7 @@ custom series (`upload_claims_total`, `temp_cleanup_deleted_total`,
 ad-hoc PromQL query, since building a dashboard panel for them was never in this ADR's scope
 (Consequences already flagged "no custom dashboards provisioned yet").
 
-### Addendum (2026-08-31) — Alerting spot-checked; per-rule verification status below is not uniform
+### Addendum (2026-08-31) — Alerting spot-checked; all 6 rules now verified
 
 This ADR's Decision never covered Alerting specifically. `kube-prometheus-stack` bundles
 Alertmanager (D2), and Grafana's own unified alerting engine ships with the Grafana pod;
@@ -230,9 +230,9 @@ ADR, alongside the developer's own pre-existing `AppTargetDown` rule.
 | `AppTargetDown` | Fired naturally (real target-down event, pre-existing) | Confirmed: fired, routed to contact point |
 | `PodMemoryHigh` | Threshold forced below real usage, twice (incl. after a mid-session redeploy) | Confirmed firing, screenshotted, reverted |
 | `NodeNotReady` | Not deliberately tested — fired for 6m from a `noDataState` misconfiguration | Not a real test; bug found and fixed (below) |
-| `PodCrashLooping` | Rule created, evaluates | Not fired — untested |
-| `PodNetworkReceiveErrors` | Rule created, evaluates | Not fired — untested |
-| `AlertmanagerNotificationsFailing` | Rule created, evaluates | Not fired — untested |
+| `PodCrashLooping` | Expr flipped to a trivial-true bool comparison (`>= bool 0`) | Confirmed firing, screenshotted, reverted |
+| `PodNetworkReceiveErrors` | Same trivial-true bool comparison, `for: 5m` | Confirmed firing, screenshotted, reverted |
+| `AlertmanagerNotificationsFailing` | Same trivial-true bool comparison | Confirmed firing, screenshotted, reverted |
 
 **Email delivery**: `AppTargetDown`'s only contact point, `grafana-default-email`, errors with
 *"SMTP not configured"* — `kube-prometheus-stack`'s default Grafana ships no SMTP config.
@@ -243,6 +243,16 @@ Accepted, since the developer doesn't currently need email delivery.
 empty result is suspicious. `kube_node_status_condition{condition="Ready",status="true"}`
 returns one series per node at value `1` when ready, so `== 0` is correctly *empty* when all
 nodes are healthy. Fixed to `noDataState: OK`; confirmed back to `Normal`.
+
+**Method correction (2026-08-31)**: the initial plan for the three untested rules was to flip
+`>`/`> 0` to a bare `>= 0`, assuming Grafana treats a non-empty PromQL result as firing regardless
+of value (classic Prometheus alerting semantics). Measured false: Grafana's unified alerting reads
+the query's returned *value*, not just its presence — a passing comparison that preserves the
+metric's actual value of `0` (all three rules' real current value) still evaluates as `Normal`.
+Fixed by adding the `bool` modifier (`>= bool 0`), which makes Prometheus return `1` for a passing
+comparison instead of the original value; `1` is non-zero, so Grafana fires. No app crash or real
+fault was induced for any of the three — same non-destructive spirit as `PodMemoryHigh`'s forced
+threshold, adapted for metrics whose real value is already `0`.
 
 **Open**: whether to keep, prune, or promote any `CoreMetrics` rule into a real policy — not
 decided here.

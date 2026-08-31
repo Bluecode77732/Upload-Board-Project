@@ -225,7 +225,7 @@ Explore 탭에서 즉석 PromQL 쿼리로만 볼 수 있다. 이를 위한 대�
 애초에 이 ADR의 범위가 아니었다(Consequences에 이미 "커스텀 대시보드는 아직
 없다"고 명시돼 있었다).
 
-### Addendum (2026-08-31) — Alerting 표본 점검; 규칙별 검증 수준이 균일하지 않음
+### Addendum (2026-08-31) — Alerting 표본 점검; 6개 규칙 전부 검증 완료
 
 이 ADR의 Decision은 Alerting을 별도로 다룬 적이 없다. `kube-prometheus-stack`이
 Alertmanager를 함께 가져오고(D2), Grafana 자체 unified alerting 엔진도 Grafana
@@ -239,9 +239,9 @@ Alertmanager를 함께 가져오고(D2), Grafana 자체 unified alerting 엔진�
 | `AppTargetDown` | 실제 자연 발생(기존 타겟 다운 이벤트) | 확인됨: 발동 후 컨택 포인트로 라우팅 |
 | `PodMemoryHigh` | 임계값을 실사용량 아래로 강제(2회, 중간 재배포 포함) | Firing 확인·스크린샷·복원 |
 | `NodeNotReady` | 의도한 테스트 아님 — `noDataState` 오설정으로 6분간 발동 | 진짜 검증 아님, 버그 발견·수정(아래) |
-| `PodCrashLooping` | 규칙 생성, 평가만 확인 | 미발동 — 미검증 |
-| `PodNetworkReceiveErrors` | 규칙 생성, 평가만 확인 | 미발동 — 미검증 |
-| `AlertmanagerNotificationsFailing` | 규칙 생성, 평가만 확인 | 미발동 — 미검증 |
+| `PodCrashLooping` | expr을 트리비얼하게 참인 bool 비교(`>= bool 0`)로 전환 | Firing 확인·스크린샷·복원 |
+| `PodNetworkReceiveErrors` | 동일한 트리비얼 bool 비교, `for: 5m` | Firing 확인·스크린샷·복원 |
+| `AlertmanagerNotificationsFailing` | 동일한 트리비얼 bool 비교 | Firing 확인·스크린샷·복원 |
 
 **이메일 발송**: `AppTargetDown`의 유일한 컨택 포인트 `grafana-default-email`이
 *"SMTP not configured"* 에러 — `kube-prometheus-stack` 기본 Grafana 설치엔 SMTP
@@ -253,6 +253,16 @@ Alertmanager를 함께 가져오고(D2), Grafana 자체 unified alerting 엔진�
 "Ready",status="true"}`는 노드가 Ready면 값 `1`인 시계열을 반환하므로, `== 0`은
 모든 노드가 정상일 때 정확히 비게 된다. `noDataState: OK`로 수정, `Normal` 복귀
 확인.
+
+**방법 정정 (2026-08-31)**: 미검증 3개 규칙의 원래 계획은 `>`/`> 0`를 그냥 `>= 0`로
+바꾸는 것이었다 — PromQL 결과가 비어있지 않으면(값과 무관하게) 발동한다는, 고전적인
+Prometheus 알림 시맨틱을 가정한 것. 실측 결과 이 가정은 틀렸다: Grafana의 통합 알림
+엔진은 쿼리가 반환한 *값*을 보지, 결과의 존재 여부만 보지 않는다 — 비교를 통과해도
+원래 메트릭 값(세 규칙 모두 실제 현재 값이 `0`)을 그대로 보존하면 여전히 `Normal`로
+평가된다. `bool` 수식어(`>= bool 0`)를 추가해 해결 — 이러면 Prometheus가 비교 통과 시
+원래 값 대신 `1`을 반환하므로, `1`은 0이 아니라서 Grafana가 발동한다. 세 규칙 다 앱을
+크래시시키거나 실제 장애를 유발하지 않았다 — 실제 값이 이미 `0`인 메트릭에 맞게 응용한,
+`PodMemoryHigh`의 강제 임계값 방식과 같은 비파괴적 원칙을 따른다.
 
 **미결**: `CoreMetrics` 규칙을 유지·정리·실제 정책 편입할지는 여기서 정하지
 않는다.

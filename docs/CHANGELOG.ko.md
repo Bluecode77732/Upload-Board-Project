@@ -24,6 +24,30 @@
   방법이다. 정리 로직 자체는 브랜치를 인지하지 않아 어느 브랜치의 파일로
   실행하든 양쪽 sha 태그 모두 정리 대상이다. 아직 실제 실행은 안 함 — Docker
   Hub 삭제 API 대상으로 검증되지 않았다.
+- **`CoreMetrics` Grafana 알림 폴더 표본 점검, 6개 규칙 전부 검증 완료
+  (2026-08-31, [ADR 0047 Addendum](ADR/0047-observability-prometheus-grafana.ko.md#addendum-2026-08-31--alerting-표본-점검-6개-규칙-전부-검증-완료))**
+  — 이 ADR의 Decision은 Alerting을 다룬 적이 없다. 개발자가 이미 만들어 둔
+  `AppTargetDown`과 나란히, `/api/v1/provisioning/alert-rules`로 `CoreMetrics`
+  폴더(5개 규칙 — `PodMemoryHigh`, `PodCrashLooping`, `NodeNotReady`,
+  `PodNetworkReceiveErrors`, `AlertmanagerNotificationsFailing`)를 프로비저닝했다.
+  `AppTargetDown`은 실제 타겟 다운 이벤트로 자연 발동해 컨택 포인트까지 라우팅됐다
+  (발송 자체는 `grafana-default-email`에 SMTP 설정이 없어 실패 — 현재 이메일
+  발송이 필요 없으므로 수용). `PodMemoryHigh`는 임계값을 실사용량 아래로 낮춰
+  두 번 강제 발동시켰고, 매번 Firing 확인 후 복원했다. `NodeNotReady`는
+  `noDataState: Alerting` 오설정으로 6분간 발동한 걸 발견했다 —
+  `kube_node_status_condition{...} == 0`의 결과가 비어있는 건 데이터 누락이
+  아니라 모든 노드가 정상이라는 뜻이므로, `noDataState: OK`로 수정했다. 나머지
+  세 개(`PodCrashLooping`, `PodNetworkReceiveErrors`,
+  `AlertmanagerNotificationsFailing`)는 미검증 상태로 남아 있다가 같은 날
+  마무리됐다 — 각각 트리비얼하게 참인 표현식으로 바꿔 Firing을 확인하고
+  (Grafana `/alerting/list`에서 스크린샷), 원래 임계값으로 복원했다. 셋 다
+  앱을 크래시시키거나 실제 장애를 유발하지 않았다. 이 마무리 작업에서 방법
+  정정이 하나 나왔다 — 애초 계획(`>`/`> 0`를 그냥 `>= 0`로 바꾸면 Grafana가
+  비어있지 않은 PromQL 결과라면 발동한다는 가정)은 실측 결과 틀렸다: Grafana
+  통합 알림은 쿼리가 반환한 *값*을 보지 결과의 존재 여부만 보지 않으므로,
+  비교를 통과해도 메트릭의 실제 값(`0`)을 그대로 보존하면 여전히 `Normal`로
+  남는다. `bool` 수식어(`>= bool 0`)로 고쳐 Prometheus가 `1`(0이 아님)을
+  반환하게 만들어 세 규칙 모두 실제 값이 이미 `0`인 상태에서도 발동시켰다.
 - **`docker-publish`가 이제 `dev` push에도 반응하고, 브랜치별 태깅/플랫폼 범위와
   push 전 스모크 테스트를 갖춤 (2026-08-30, [ROADMAP §7](ROADMAP.ko.md#7-미일정--미결-사항))**
   — 반복되던 스테일 이미지 사고(2026-08-28, 2026-08-29/30)의 근본 원인이었던

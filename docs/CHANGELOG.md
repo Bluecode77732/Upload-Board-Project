@@ -24,6 +24,30 @@ development line (package.json version).
   sooner. The cleanup logic itself has no branch awareness — it walks Docker Hub's tag
   list globally, so either branch's copy cleans up sha tags from both. Not yet live-run —
   untested against Docker Hub's actual delete API.
+- **`CoreMetrics` Grafana alerting folder spot-checked, all 6 rules now verified
+  (2026-08-31, [ADR 0047 Addendum](ADR/0047-observability-prometheus-grafana.md#addendum-2026-08-31--alerting-spot-checked-all-6-rules-now-verified))**
+  — this ADR's Decision never covered Alerting; a `CoreMetrics` folder (5 rules —
+  `PodMemoryHigh`, `PodCrashLooping`, `NodeNotReady`, `PodNetworkReceiveErrors`,
+  `AlertmanagerNotificationsFailing`) was provisioned via
+  `/api/v1/provisioning/alert-rules` alongside the developer's pre-existing
+  `AppTargetDown`. `AppTargetDown` fired naturally (a real target-down event) and
+  routed to its contact point (delivery itself fails — `grafana-default-email` has no
+  SMTP configured, accepted since email isn't currently needed). `PodMemoryHigh` was
+  forced by lowering its threshold below real usage, twice, confirmed firing and
+  reverted both times. `NodeNotReady` was found firing for 6m from a `noDataState:
+  Alerting` misconfiguration (an empty result from `kube_node_status_condition{...} ==
+  0` means all nodes are healthy, not missing data) — fixed to `noDataState: OK`.
+  The remaining three (`PodCrashLooping`, `PodNetworkReceiveErrors`,
+  `AlertmanagerNotificationsFailing`) stayed untested until closed out the same day:
+  each was flipped to a trivial-true expression, confirmed firing (screenshotted via
+  Grafana's `/alerting/list`), then reverted to its original threshold, with no app
+  crash or real fault induced for any of the three. That closeout surfaced a method
+  correction — the initial plan (flip `>`/`> 0` to a bare `>= 0`, assuming Grafana
+  fires on any non-empty PromQL result) measured false: Grafana's unified alerting
+  reads the query's returned *value*, not just its presence, so a passing comparison
+  that preserves the metric's real value of `0` still evaluates as `Normal`. Fixed
+  with the `bool` modifier (`>= bool 0`), which makes Prometheus return `1` — non-zero,
+  so Grafana fires — for all three rules, whose real current value was already `0`.
 - **`docker-publish` now also triggers on `dev` push, with branch-aware tagging/platform
   scope and a pre-push smoke test (2026-08-30, [ROADMAP §7](ROADMAP.md#7-unscheduled--open-decisions))**
   — closes the "an image never gets built from `dev`" gap behind the recurring stale-image
