@@ -981,13 +981,13 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   corrected Jest `roots` from `["src"]` to `["backend"]`, documented the e2e suite, and
   replaced the false "Non-Existent Infrastructure" section with an accurate summary pointing
   at README.md/ROADMAP.md.
-- `CLAUDE.md`'s own Never Do Group 2 pagination example still cites `getFiles(take, skip)`
-  as the current signature — it takes a `GetFilesDto` since
-  [ADR 0021](ADR/0021-list-query-search-filter-sort.md). The *rule* (list endpoints must
-  paginate) is unaffected; only the example text lags. This was bundled into the
-  `ARCHITECTURE.md` item above as "same task" when both were first recorded (2026-07-30),
-  but stayed outside that item's 2026-09-01 fix — `CLAUDE.md` is outside the Documentation
-  Authoring Protocol's document set, so it wasn't touched by that pass.
+- ~~`CLAUDE.md`'s own Never Do Group 2 pagination example still cites `getFiles(take, skip)`~~
+  — **resolved 2026-09-02**: the example now reads `getFiles(query: GetFilesDto)`, matching
+  the real signature since [ADR 0021](ADR/0021-list-query-search-filter-sort.md). This was
+  bundled into the `ARCHITECTURE.md` item above as "same task" when both were first recorded
+  (2026-07-30), stayed outside that item's 2026-09-01 fix since `CLAUDE.md` is outside the
+  Documentation Authoring Protocol's document set, and was closed separately as its own
+  one-line fix rather than folded into a larger pass.
 - ~~Adapting the imported `admin/` console~~ — **scheduled 2026-07-30 as
   [Stage 5](#stage-5--operational-surface-admin-console--added-2026-07-30)**, no longer
   unscheduled. Recorded here for one turn because the entry started life in this section: the

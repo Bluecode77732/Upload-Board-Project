@@ -912,13 +912,13 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   실제 환경변수 목록을 반영했고, Jest `roots`를 `["src"]`에서 `["backend"]`로
   바로잡았고, e2e 스위트를 문서화했고, 사실이 아니게 된 "존재하지 않는 인프라" 절을
   README.md/ROADMAP.md로 연결되는 정확한 요약으로 교체했다.
-- `CLAUDE.md`의 Never Do Group 2 페이지네이션 예시는 여전히 현재 시그니처를
-  `getFiles(take, skip)`로 적고 있는데, [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)
-  이후로는 `GetFilesDto`를 받는다. *규칙*(목록 엔드포인트는 페이지네이션 필수) 자체는
-  그대로 유효하고 예시 문구만 낡았다. 이건 처음 기록될 때(2026-07-30) 위
-  `ARCHITECTURE.md` 항목에 "같은 과제"로 묶여 있었지만, 그 항목의 2026-09-01 수정
-  범위 밖에 남았다 — `CLAUDE.md`는 문서 작성 프로토콜이 다루는 문서 목록 밖이라
-  이번 작업에서 손대지 않았다.
+- ~~`CLAUDE.md`의 Never Do Group 2 페이지네이션 예시는 여전히 현재 시그니처를
+  `getFiles(take, skip)`로 적고 있었다~~ — **2026-09-02 해결**: 예시가 이제
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md) 이후 실제 시그니처인
+  `getFiles(query: GetFilesDto)`를 반영한다. 이건 처음 기록될 때(2026-07-30) 위
+  `ARCHITECTURE.md` 항목에 "같은 과제"로 묶여 있었지만, `CLAUDE.md`가 문서 작성
+  프로토콜이 다루는 문서 목록 밖이라 그 항목의 2026-09-01 수정 범위 밖에 남았고,
+  더 큰 작업에 묶이지 않고 한 줄짜리 별도 수정으로 마무리됐다.
 - ~~이식된 `admin/` 콘솔의 적응~~ — **2026-07-30에
   [Stage 5](#stage-5--운영-화면-admin-콘솔--2026-07-30-추가)로 스케줄됐으므로** 더 이상 미예정이
   아니다. 이 항목이 원래 이 절에서 시작했기에 한 번만 남겨 둔다: Chat Project의 콘솔을

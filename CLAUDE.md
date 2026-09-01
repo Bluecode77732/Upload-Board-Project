@@ -382,8 +382,8 @@ const secret = this.configService.getOrThrow<string>('ACCESS_TOKEN_SECRET')
 // ❌ Pagination missing on list endpoints → full table scan, OOM, slow response
 getFiles(): Promise<FileEntity[]>
 // ✅
-getFiles(take: number, skip: number): Promise<FileEntity[]>
-// (the current getFiles(take, skip) + GetFilesDto follows this — new list endpoints must too)
+getFiles(query: GetFilesDto): Promise<[FileEntity[], number]>
+// (the current getFiles(query: GetFilesDto) follows this — new list endpoints must too)
 ```
 
 ### GROUP 3 — Security
@@ -1148,11 +1148,6 @@ Architecture Decisions above remain operative.
   replaced the false "Non-Existent Infrastructure" section with an accurate summary pointing
   at README.md/ROADMAP.md. Verify against code going forward, not against memory of this
   entry.
-- `CLAUDE.md`'s own Never Do Group 2 pagination example still cites `getFiles(take, skip)` as
-  the current signature — it takes a `GetFilesDto` since ADR 0021. The *rule* (list endpoints
-  must paginate) is unaffected; only the example text lags, and it was bundled into the
-  `ARCHITECTURE.md` gap above as "same task" (2026-07-30) but was outside that gap's 2026-09-01
-  fix — still open
 - License mismatch: `package.json` says `UNLICENSED` while the pre-rewrite README
   claimed MIT — needs an explicit decision before the repo is published
 - CORS is opt-in via the optional `CORS_ORIGIN` env var (added 2026-07-22): unset =

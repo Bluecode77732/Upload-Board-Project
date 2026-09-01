@@ -380,8 +380,8 @@ const secret = this.configService.getOrThrow<string>('ACCESS_TOKEN_SECRET')
 // ❌ Pagination missing on list endpoints → full table scan, OOM, slow response
 getFiles(): Promise<FileEntity[]>
 // ✅
-getFiles(take: number, skip: number): Promise<FileEntity[]>
-// (the current getFiles(take, skip) + GetFilesDto follows this — new list endpoints must too)
+getFiles(query: GetFilesDto): Promise<[FileEntity[], number]>
+// (the current getFiles(query: GetFilesDto) follows this — new list endpoints must too)
 ```
 
 ### GROUP 3 — 보안
@@ -1188,11 +1188,6 @@ Architecture Decisions가 계속 유효하다.
   `roots`를 `["src"]`에서 `["backend"]`로 바로잡았고, e2e 스위트를 문서화했고, 사실이
   아니게 된 "존재하지 않는 인프라" 절을 README.md/ROADMAP.md로 연결되는 정확한 요약으로
   교체했다. 앞으로는 이 항목의 기억이 아니라 코드에 대조해 검증한다.
-- `CLAUDE.md` 자신의 Never Do Group 2 페이지네이션 예시는 여전히 현재 시그니처를
-  `getFiles(take, skip)`로 적고 있는데, ADR 0021 이후로는 `GetFilesDto`를 받는다.
-  *규칙*(목록 엔드포인트는 페이지네이션 필수) 자체는 그대로 유효하고 예시 문구만
-  낡았다. 위 `ARCHITECTURE.md` 항목에 "같은 과제"(2026-07-30)로 묶여 있었지만 그
-  2026-09-01 수정 범위 밖이었다 — 여전히 미해결
 - 라이선스 불일치: `package.json`은 `UNLICENSED`라고 적혀 있지만 재작성 이전
   README는 MIT라고 주장했다 — 저장소를 공개하기 전에 명시적 결정이 필요하다
 - CORS는 선택적 `CORS_ORIGIN` 환경 변수를 통해 opt-in이다(2026-07-22 추가):
