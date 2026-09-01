@@ -1484,6 +1484,18 @@ convention above are unaffected, and the `Co-Authored-By:` trailer stays as-is (
 attribution line, not prose to translate). Applies from this decision forward; existing
 commit history is not rewritten.
 
+## Writing Tone
+
+Code comments, `.md`/`.ko.md` documentation (entries, edits, cleanup), commit messages, and
+other written artifacts left in this repo are written the way a person on this team would
+actually write them — not in a stock "AI assistant" register. Concretely: say the thing once,
+plainly; skip throat-clearing ("This function is responsible for...", "It should be noted
+that..."), skip restating what the code/diff already shows, skip padding a short fact into a
+long paragraph. This governs *phrasing*, not *content* — every field this file makes
+mandatory still has to be there (the 목적/이유/방법 block on a new/changed function, Korean
+commit messages, the `.ko.md` sibling) — it just has to read like a person wrote it, in
+whichever language the other rule already requires.
+
 ## Development Tooling
 
 ### MCP Servers
