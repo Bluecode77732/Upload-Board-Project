@@ -25,7 +25,27 @@ item below lands as its own dedicated, designed change
 > actually lands (with its own ADR), the current Architecture Decisions remain
 > operative.
 
-## Current position (as of 2026-07-31)
+## Current position (as of 2026-08-31)
+
+> **Summary — the roadmap is complete.** Every stage below (F, 0–5, 4) has landed, including
+> Stage 4's DevOps stack: Helm ([ADR 0041](ADR/0041-helm-chart-project-adaptation.md)/[0042](ADR/0042-k8s-helm-directory-consolidation.md)),
+> Terraform ([ADR 0043](ADR/0043-terraform-project-adaptation.md)/[0044](ADR/0044-terraform-three-state-split.md)),
+> Prometheus/Grafana ([ADR 0047](ADR/0047-observability-prometheus-grafana.md)), and
+> performance/capacity criteria ([ADR 0049](ADR/0049-performance-capacity-criteria.md)) — the
+> table's last undecided row. **The deploy act itself was proven live** on real AWS/EKS
+> (2026-08-27, §9), then **fully torn down 2026-08-28** to stop the AWS bill, then
+> **re-applied 2026-08-29/30** to live-verify ADR 0047's observability stack, per §9's
+> entries — infrastructure state is a point-in-time snapshot each time, not a standing fact;
+> re-verify with `terraform plan` before assuming either state. One item was scoped out
+> rather than left undone: **Istio (service mesh) was pulled from the DevOps stack and
+> deferred** on 2026-08-31 (§7) — this project runs a single backend workload with no
+> east-west traffic for a mesh to manage, so introducing one now would solve a problem this
+> project does not have; revisit only if the architecture grows multiple in-cluster services.
+> What remains is not a build task: it is an **operating decision** (keep the AWS stack applied
+> and paying, or torn down until next needed) and routine doc upkeep — not a new
+> feature or a scheduled ADR. The narrative below is kept as the historical record of how each
+> stage landed; see §9 (Completed) for the day-by-day deploy/teardown/redeploy log and §7 for
+> the Istio deferral's full reasoning.
 
 - The 2026-07-22 hardening run is fully landed: security quick-wins, the
   zero-error lint baseline, the documentation rewrite, and TypeORM migration
