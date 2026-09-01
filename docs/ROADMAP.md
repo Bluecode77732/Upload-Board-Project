@@ -972,19 +972,22 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   task, since `fetch` has no upload-progress event). `frontend/docs/API-CONTRACT.md` documents
   the content-endpoint `fileUrl`/`visibility`/`shareUrl` shape and the three-field upload
   contract.
-- Documentation rot in `ARCHITECTURE.md` (+ko) (recorded 2026-07-30) — the Stage 1
-  landings were never reflected there: "Non-Existent Infrastructure" still claims no CI
-  workflow, no Dockerfile, and no Nest `Logger` usage (all three exist —
-  [ADR 0015](ADR/0015-docker-and-compose.md)/[0016](ADR/0016-github-actions-ci.md)/[0017](ADR/0017-logging-conventions.md)),
-  Jest `roots` is written as `["src"]` (actually `["backend"]`), the Testing section
-  describes no e2e suite, and `PATCH /user/:id` / `PATCH /file/:id` still read "Self only"
-  / "Creator only" from before RBAC ([ADR 0013](ADR/0013-rbac-and-audit-log.md)). A
-  dedicated doc-audit task, not a drive-by: mixing it into a feature commit would blur what
-  that commit decided. **Same task, added 2026-07-30**: `CLAUDE.md`'s Never Do Group 2
-  pagination example still cites `getFiles(take, skip)` as the current signature — it takes
-  a `GetFilesDto` since [ADR 0021](ADR/0021-list-query-search-filter-sort.md). The *rule*
-  (list endpoints must paginate) is unaffected; only the example text lags, and `CLAUDE.md`
-  was outside that task's stated document scope.
+- ~~Documentation rot in `ARCHITECTURE.md` (+ko)~~ (recorded 2026-07-30) — **resolved
+  2026-09-01**: rewritten end to end against current code as its own dedicated doc-audit
+  task. Added the seven modules missing from the Module Map (Post, Comment, Storage,
+  AuditLog, TempCleanup, Health, Metrics), RBAC (roles, `RolesGuard`, the access-token
+  `role` claim), the `FileController`/`FileContentController` split with
+  visibility/`mediaType`/the storage port/the S3 presigned redirect, the real env var set,
+  corrected Jest `roots` from `["src"]` to `["backend"]`, documented the e2e suite, and
+  replaced the false "Non-Existent Infrastructure" section with an accurate summary pointing
+  at README.md/ROADMAP.md.
+- `CLAUDE.md`'s own Never Do Group 2 pagination example still cites `getFiles(take, skip)`
+  as the current signature — it takes a `GetFilesDto` since
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.md). The *rule* (list endpoints must
+  paginate) is unaffected; only the example text lags. This was bundled into the
+  `ARCHITECTURE.md` item above as "same task" when both were first recorded (2026-07-30),
+  but stayed outside that item's 2026-09-01 fix — `CLAUDE.md` is outside the Documentation
+  Authoring Protocol's document set, so it wasn't touched by that pass.
 - ~~Adapting the imported `admin/` console~~ — **scheduled 2026-07-30 as
   [Stage 5](#stage-5--operational-surface-admin-console--added-2026-07-30)**, no longer
   unscheduled. Recorded here for one turn because the entry started life in this section: the

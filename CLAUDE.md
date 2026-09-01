@@ -1139,12 +1139,20 @@ Architecture Decisions above remain operative.
   not remove it as drive-by cleanup: dropping it would turn ADR 0024's `23503` branch **and**
   `PostService.resolveAttachment`'s author check into unreachable guards, so that is an ADR
   that supersedes 0024, not a patch. Candidates are in ROADMAP > Unscheduled
-- `ARCHITECTURE.md` (+ko) lags the code: its "Non-Existent Infrastructure" section still
-  claims no CI workflow, no Dockerfile, and no Nest `Logger` usage (all three exist —
-  ADR 0015/0016/0017), Jest `roots` is written as `["src"]` (actually `["backend"]`), the
-  Testing section describes no e2e suite, and the `PATCH` rows still read "Self only" /
-  "Creator only" from before RBAC (ADR 0013). Verify against code, not against that file;
-  fixing it is a dedicated doc-audit task (tracked in ROADMAP > Unscheduled)
+- ~~`ARCHITECTURE.md` (+ko) lags the code~~ — **resolved 2026-09-01**: rewritten end to end
+  against current code. Added the seven modules missing from the Module Map (Post, Comment,
+  Storage, AuditLog, TempCleanup, Health, Metrics), RBAC (roles, `RolesGuard`, the
+  access-token `role` claim), the `FileController`/`FileContentController` split with
+  visibility/`mediaType`/the storage port/the S3 presigned redirect, the real env var set,
+  corrected Jest `roots` from `["src"]` to `["backend"]`, documented the e2e suite, and
+  replaced the false "Non-Existent Infrastructure" section with an accurate summary pointing
+  at README.md/ROADMAP.md. Verify against code going forward, not against memory of this
+  entry.
+- `CLAUDE.md`'s own Never Do Group 2 pagination example still cites `getFiles(take, skip)` as
+  the current signature — it takes a `GetFilesDto` since ADR 0021. The *rule* (list endpoints
+  must paginate) is unaffected; only the example text lags, and it was bundled into the
+  `ARCHITECTURE.md` gap above as "same task" (2026-07-30) but was outside that gap's 2026-09-01
+  fix — still open
 - License mismatch: `package.json` says `UNLICENSED` while the pre-rewrite README
   claimed MIT — needs an explicit decision before the repo is published
 - CORS is opt-in via the optional `CORS_ORIGIN` env var (added 2026-07-22): unset =

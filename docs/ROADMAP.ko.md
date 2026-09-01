@@ -904,18 +904,21 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   과제에서 함께 추가된 XHR 기반 업로드 진행률 표시 — `fetch`는 업로드 진행률 이벤트를
   제공하지 않기 때문). `frontend/docs/API-CONTRACT.md`는 콘텐츠 엔드포인트
   `fileUrl`/`visibility`/`shareUrl` 형태와 3필드 업로드 계약을 이미 문서화하고 있다.
-- `ARCHITECTURE.md`(+ko)의 문서 부패 (2026-07-30 기록) — Stage 1 착지 내용이 이 문서에
-  전혀 반영되지 않았다. "Non-Existent Infrastructure"는 여전히 CI 워크플로·Dockerfile·Nest
-  `Logger` 사용이 없다고 서술하지만 셋 다 존재하고
-  ([ADR 0015](ADR/0015-docker-and-compose.ko.md)/[0016](ADR/0016-github-actions-ci.ko.md)/[0017](ADR/0017-logging-conventions.ko.md)),
-  Jest `roots`는 `["src"]`로 적혀 있으며(실제는 `["backend"]`), Testing 섹션에 e2e 서술이
-  없고, `PATCH /user/:id`·`PATCH /file/:id`는 RBAC 이전의 "본인만"·"작성자만"로 남아 있다
-  ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)). 부수 작업이 아니라 전용 문서 감사 과제로
-  다룬다 — 기능 커밋에 섞으면 그 커밋이 무엇을 결정했는지가 흐려진다. **같은 과제에 2026-07-30
-  추가**: `CLAUDE.md`의 Never Do Group 2 페이지네이션 예시가 현재 시그니처를
+- ~~`ARCHITECTURE.md`(+ko)의 문서 부패~~ (2026-07-30 기록) — **2026-09-01 해결**: 코드를
+  기준으로 처음부터 다시 쓰는 전용 문서 감사 작업으로 마무리했다. 모듈 맵에서 빠져
+  있던 모듈 일곱 개(Post, Comment, Storage, AuditLog, TempCleanup, Health, Metrics)를
+  추가했고, RBAC(역할, `RolesGuard`, 액세스 토큰 `role` 클레임), `FileController`/
+  `FileContentController` 분리와 가시성·`mediaType`·Storage 포트·S3 서명 리다이렉트,
+  실제 환경변수 목록을 반영했고, Jest `roots`를 `["src"]`에서 `["backend"]`로
+  바로잡았고, e2e 스위트를 문서화했고, 사실이 아니게 된 "존재하지 않는 인프라" 절을
+  README.md/ROADMAP.md로 연결되는 정확한 요약으로 교체했다.
+- `CLAUDE.md`의 Never Do Group 2 페이지네이션 예시는 여전히 현재 시그니처를
   `getFiles(take, skip)`로 적고 있는데, [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)
-  이후로는 `GetFilesDto`를 받는다. *규칙*(목록 엔드포인트는 페이지네이션 필수)은 그대로
-  유효하고 예시 문구만 낡았으며, `CLAUDE.md`는 그 과제의 문서 범위 밖이었다.
+  이후로는 `GetFilesDto`를 받는다. *규칙*(목록 엔드포인트는 페이지네이션 필수) 자체는
+  그대로 유효하고 예시 문구만 낡았다. 이건 처음 기록될 때(2026-07-30) 위
+  `ARCHITECTURE.md` 항목에 "같은 과제"로 묶여 있었지만, 그 항목의 2026-09-01 수정
+  범위 밖에 남았다 — `CLAUDE.md`는 문서 작성 프로토콜이 다루는 문서 목록 밖이라
+  이번 작업에서 손대지 않았다.
 - ~~이식된 `admin/` 콘솔의 적응~~ — **2026-07-30에
   [Stage 5](#stage-5--운영-화면-admin-콘솔--2026-07-30-추가)로 스케줄됐으므로** 더 이상 미예정이
   아니다. 이 항목이 원래 이 절에서 시작했기에 한 번만 남겨 둔다: Chat Project의 콘솔을

@@ -12,6 +12,18 @@
 
 ## [Unreleased]
 
+### 수정
+- **`ARCHITECTURE.md`(+ko): 현재 코드를 기준으로 전면 재작성 (2026-09-01)** — CLAUDE.md와
+  ROADMAP.md가 2026-07-30부터 추적해 오던 문서 감사 과제를 해소했다. 모듈 맵에서 빠져
+  있던 모듈 일곱 개(Post, Comment, Storage, AuditLog, TempCleanup, Health, Metrics)를
+  추가했고, RBAC(역할, `RolesGuard`, 액세스 토큰 `role` 클레임), `FileController`/
+  `FileContentController` 분리와 가시성·`mediaType`·Storage 포트·S3 서명 리다이렉트,
+  실제 환경변수 목록을 반영했고, Jest `roots`를 `["src"]`에서 `["backend"]`로
+  바로잡았고, e2e 스위트를 문서화했고, 사실이 아니게 된 "존재하지 않는 인프라" 절을
+  README.md/ROADMAP.md로 연결되는 정확한 요약으로 교체했다. `CLAUDE.md` 자신의 Never Do
+  Group 2 `getFiles(take, skip)` 예시는 원래 갭에 "같은 과제"로 묶여 있었지만 이번엔
+  손대지 않았다 — 여전히 미해결이며 ROADMAP.md > Unscheduled에서 추적 중이다.
+
 ### 추가
 - **성능·용량 기준 — 응답시간 목표, ADR 0021이 유예한 인덱스 채택, 디스크는 사용률
   모니터링으로 (2026-08-31, [ADR 0049](ADR/0049-performance-capacity-criteria.ko.md))**

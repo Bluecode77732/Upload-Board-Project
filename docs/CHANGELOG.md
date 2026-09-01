@@ -12,6 +12,19 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Fixed
+- **`ARCHITECTURE.md` (+ko): full rewrite against current code (2026-09-01)** — resolved the
+  doc-audit gap CLAUDE.md and ROADMAP.md had tracked since 2026-07-30. Added the seven
+  modules missing from the Module Map (Post, Comment, Storage, AuditLog, TempCleanup, Health,
+  Metrics), RBAC (roles, `RolesGuard`, the access-token `role` claim), the
+  `FileController`/`FileContentController` split with visibility/`mediaType`/the storage
+  port/the S3 presigned redirect, the real env var set, corrected Jest `roots` from `["src"]`
+  to `["backend"]`, documented the e2e suite, and replaced the false "Non-Existent
+  Infrastructure" section with an accurate summary pointing at README.md/ROADMAP.md.
+  `CLAUDE.md`'s own Never Do Group 2 `getFiles(take, skip)` example, bundled into the
+  original gap as "same task," was **not** touched — still open, tracked in ROADMAP.md >
+  Unscheduled.
+
 ### Added
 - **Performance and capacity criteria — response-time targets, ADR 0021's deferred indexes
   adopted, disk via usage-rate monitoring (2026-08-31,

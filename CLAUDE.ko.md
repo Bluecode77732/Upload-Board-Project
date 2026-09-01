@@ -1180,13 +1180,19 @@ Architecture Decisions가 계속 유효하다.
   `PostService.resolveAttachment`의 작성자 검사 둘 다 도달 불가능한 가드가
   되어버리므로, 이는 패치가 아니라 0024를 대체하는 ADR이다. 후보들은
   ROADMAP > Unscheduled에 있다
-- `docs/ARCHITECTURE.md`(+ko)는 코드에 뒤처져 있다: "존재하지 않는 인프라"
-  절이 여전히 CI 워크플로도, Dockerfile도, Nest `Logger` 사용도 없다고
-  주장하고(셋 다 존재한다 — ADR 0015/0016/0017), Jest `roots`는
-  `["src"]`로 적혀 있으며(실제로는 `["backend"]`), Testing 절은 e2e 스위트가
-  없다고 기술하고, `PATCH` 행들은 RBAC(ADR 0013) 이전의 "본인만" / "작성자만"을
-  여전히 적고 있다. 그 파일이 아니라 코드에 대조해 검증한다; 고치는 것은
-  전용 문서 감사 작업이다(ROADMAP > Unscheduled에서 추적 중)
+- ~~`docs/ARCHITECTURE.md`(+ko)는 코드에 뒤처져 있다~~ — **2026-09-01 해결**: 코드를
+  기준으로 처음부터 다시 썼다. 모듈 맵에서 빠져 있던 모듈 일곱 개(Post, Comment,
+  Storage, AuditLog, TempCleanup, Health, Metrics)를 추가했고, RBAC(역할, `RolesGuard`,
+  액세스 토큰 `role` 클레임), `FileController`/`FileContentController` 분리와 가시성·
+  `mediaType`·Storage 포트·S3 서명 리다이렉트, 실제 환경변수 목록을 반영했고, Jest
+  `roots`를 `["src"]`에서 `["backend"]`로 바로잡았고, e2e 스위트를 문서화했고, 사실이
+  아니게 된 "존재하지 않는 인프라" 절을 README.md/ROADMAP.md로 연결되는 정확한 요약으로
+  교체했다. 앞으로는 이 항목의 기억이 아니라 코드에 대조해 검증한다.
+- `CLAUDE.md` 자신의 Never Do Group 2 페이지네이션 예시는 여전히 현재 시그니처를
+  `getFiles(take, skip)`로 적고 있는데, ADR 0021 이후로는 `GetFilesDto`를 받는다.
+  *규칙*(목록 엔드포인트는 페이지네이션 필수) 자체는 그대로 유효하고 예시 문구만
+  낡았다. 위 `ARCHITECTURE.md` 항목에 "같은 과제"(2026-07-30)로 묶여 있었지만 그
+  2026-09-01 수정 범위 밖이었다 — 여전히 미해결
 - 라이선스 불일치: `package.json`은 `UNLICENSED`라고 적혀 있지만 재작성 이전
   README는 MIT라고 주장했다 — 저장소를 공개하기 전에 명시적 결정이 필요하다
 - CORS는 선택적 `CORS_ORIGIN` 환경 변수를 통해 opt-in이다(2026-07-22 추가):
