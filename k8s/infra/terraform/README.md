@@ -128,7 +128,17 @@ apply, no `-auto-approve` ([ADR 0046](../../../docs/ADR/0046-deploy-sequence-aut
 Run `bash deploy.sh all` (or `cluster`/`app-infra`/`addons`/`helm` individually; `--help`
 for env vars). It does **not** cover domain purchase/NS delegation, the ESO secret sync,
 the `default` ServiceAccount IRSA annotation, or enabling `Ingress` — those stay manual,
-covered further down this file. The manual sequence below is what the script automates,
+covered further down this file.
+
+**Plan/apply split** (ADR 0046 addendum, 2026-09-02): for `cluster`/`app-infra`/`addons`,
+`bash deploy.sh plan <state>` computes and saves the plan to a fixed, gitignored path
+and exits — no apply. `bash deploy.sh apply <state>` re-shows that saved plan and still
+asks for an explicit `y` before applying it. Use this when the plan and the approval
+won't happen back-to-back (e.g. you want to review it later rather than sit at the
+terminal right after `plan` finishes) — the combined `cluster`/`app-infra`/`addons`/`all`
+commands above are unchanged and still the simpler choice for a single continuous run.
+Approval is required either way; the split only decouples *when* you approve from *when*
+the plan was computed, not whether you do. The manual sequence below is what the script automates,
 kept here as the reference for what each step actually does. This same order applies
 whether it's the very first deploy or a full redeploy after a complete `terraform
 destroy` (below) — nothing about the sequence changes.

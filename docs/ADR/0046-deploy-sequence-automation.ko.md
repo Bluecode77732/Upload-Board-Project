@@ -113,3 +113,44 @@ plan은 성공하면서 리소스 이름/태그만 조용히 어긋난다. 실�
   아니다.
 - `docs/ROADMAP.md` §7의 "cluster → app-infra → addons → Helm 배포 순서 자동화" 항목을
   완료 처리하고 이 문서를 가리키도록 갱신한다.
+
+### Addendum (2026-09-02) — cluster/app-infra/addons plan/apply 분리
+
+검증 목적으로 반복 apply할 때(실제 목적이 확인용이어도, 이 ADR이 애초에 다루는
+EKS/RDS와 물리적으로 동일한 실 AWS 리소스라 과금·비가역성은 그대로다) 매번 겪던
+낭비가 있었다: plan이 끝난 직후 개발자가 터미널 앞에 없거나, `read -p`로 대기하는
+중 세션이 끊기면 다음 실행에서 plan 계산부터 통째로 다시 해야 했다. 다른 두 후보도
+먼저 검토했다가 기각했다: apply에 `-auto-approve`(D3가 만든 승인 지점 자체를
+없앤다 — 그건 부가적인 절차가 아니라 실제 안전장치다)와 완전한 CD 파이프라인(같은
+문제를 더 넓은 범위로 확대). 둘 다, 함께 확인된 두 번째이자 더 비싼 중단
+원인 — apply 명령 자체의 실패(ACM 검증 타임아웃, 노드그룹 `CREATE_FAILED`, 세션
+끊김) — 은 건드리지 못한다. 이건 어떤 형태의 승인 자동화로도 해결되지 않고,
+`k8s/infra/terraform/README.md`의 "Cleaning up after a failed apply" 기존 절차로
+대응한다.
+
+`deploy.sh plan <cluster|app-infra|addons>`와 `deploy.sh apply
+<cluster|app-infra|addons>`를 새 서브커맨드로 추가했다. 기존 `cluster`/`app-infra`/
+`addons`/`all`은 그대로 남겨(한 번에 계산+승인+적용까지 끝내고 싶을 때 계속 사용
+가능). `plan`은 plan을 계산해 고정 경로(`<state>/.deploy-plan*.tfplan`, gitignore
+처리)에 저장만 하고 종료한다 — apply는 하지 않는다. `apply`는 저장된 plan을 다시
+보여주고(`terraform show`), 여전히 명시적 `y` 확인이 있어야만 적용한다 — D3의
+불변식은 그대로이고, "언제 승인하는가"만 "언제 plan을 계산했는가"에서 분리됐다.
+저장된 plan이 실제 원격 상태와 어긋나 오래됐다면, `terraform apply` 자체가 거부하지
+잘못된 내용을 적용하지 않는다.
+
+`app-infra`의 ACM 2단계 apply는 완전히 미리 계산해 둘 수 없다: 2단계 plan은 1단계에서
+만들어진 인증서가 실제로 존재해야만 계산 가능하다(D4). 그래서 `plan app-infra`는
+1단계만 저장하고, `apply app-infra`는 저장된 1단계를 적용한 뒤 2단계는 기존과
+동일하게(`deploy_app_infra()`와 같음) 그 자리에서 계산+승인+적용까지 이어서 한다 —
+2단계 중의 Route53 NS 위임 대기는 이 분리와 무관하게 여전히 개발자가 자리에 있어야
+한다.
+
+가짜(stub) `terraform` 바이너리로 검증했다(실제 AWS 호출 없음): `plan cluster` →
+`apply cluster`(승인)가 적용 후 저장 파일을 정리함; `apply cluster`(거부)는 저장
+파일을 그대로 남기고 exit 1; `plan app-infra` → `apply app-infra`가 두 단계 모두
+올바르게 실행되고 1단계 파일을 정리함. `bash -n deploy.sh`는 통과하며, `.tf` 파일은
+하나도 건드리지 않았다.
+
+D1~D4를 뒤집지 않는다: 도구는 여전히 로컬 쉘 스크립트, 범위는 여전히 Terraform+Helm,
+`-auto-approve`는 여전히 쓰지 않으며, region/cluster_name 검증과 ACM 2단계 로직은
+새 함수 안에서 그대로 재사용된다.

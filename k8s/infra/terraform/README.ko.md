@@ -133,6 +133,16 @@ all`을 실행하거나(또는 `cluster`/`app-infra`/`addons`/`helm` 개별 실�
 실제로 무엇을 하는지 보는 참고 자료로 남겨둡니다. 이 순서는 최초 배포든, 전체
 `terraform destroy`(아래) 이후의 완전 재배포든 똑같이 적용됩니다:
 
+**plan/apply 분리** (ADR 0046 addendum, 2026-09-02): `cluster`/`app-infra`/`addons`에
+한해 `bash deploy.sh plan <state>`는 plan을 계산해 고정된 gitignore 경로에 저장만
+하고 종료합니다 — apply는 하지 않습니다. `bash deploy.sh apply <state>`는 저장된
+plan을 다시 보여주고 여전히 명시적 `y` 확인을 받은 뒤에만 적용합니다. plan 계산과
+승인이 바로 이어지지 않을 때(예: `plan` 직후 터미널 앞에 계속 있는 대신 나중에 따로
+검토하고 싶을 때) 이 방식을 씁니다 — 위의 `cluster`/`app-infra`/`addons`/`all`
+명령은 그대로이며, 한 번에 끝내고 싶을 때는 여전히 더 간단한 선택지입니다. 어느
+쪽이든 승인은 필요합니다 — 분리는 "언제 승인하는가"만 "언제 plan을 계산했는가"에서
+떼어놓을 뿐, 승인 자체를 없애지 않습니다.
+
 ```sh
 # 1. cluster/
 cd cluster

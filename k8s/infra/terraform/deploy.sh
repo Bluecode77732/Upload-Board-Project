@@ -11,6 +11,15 @@
 # 이 스크립트는 일부러 "쉬운" 스타일로 짰다: bash 배열, trap 같은 고급 기능 대신
 # 반복되는 평범한 명령어를 쓴다. 코드가 조금 길어지더라도, 처음 읽는 사람이 위에서
 # 아래로 그대로 따라 읽을 수 있는 쪽을 택했다.
+#
+# plan/apply 분리(ADR 0046 addendum): 검증용으로 반복 apply할 때, plan이 끝난
+# 직후 사람이 자리를 비우면(또는 터미널 세션이 끊기면) plan 계산부터 다시 해야
+# 하는 낭비가 있었다. cluster/app-infra/addons에 한해 "plan만 계산해서 저장"과
+# "저장된 plan을 나중에 승인·적용"을 별도 명령(`plan`/`apply` 서브커맨드)으로
+# 추가했다 -- 기존 cluster/app-infra/addons/all 명령은 손대지 않고 그대로 남겨
+# 뒀다(승인 즉시 적용, 한 번에 끝내고 싶을 때 계속 쓸 수 있다). 승인(y 입력)
+# 자체는 두 방식 모두 여전히 필요하다 -- 없앤 게 아니라 언제 승인할지 시점만
+# 갈라놓았을 뿐이다(-auto-approve와의 차이).
 
 # -e : 명령어 하나라도 실패하면(종료 코드가 0이 아니면) 스크립트를 그 자리에서 멈춘다.
 # -u : 정의되지 않은 변수를 쓰면 에러로 처리한다 (오타로 빈 값이 쓰이는 걸 방지).
@@ -34,10 +43,20 @@ HELM_RELEASE="${HELM_RELEASE:-upload-board}"
 
 print_usage() {
   echo "사용법: $(basename "$0") [cluster|app-infra|addons|helm|all]"
+  echo "       $(basename "$0") plan [cluster|app-infra|addons]"
+  echo "       $(basename "$0") apply [cluster|app-infra|addons]"
   echo ""
   echo "README.md의 'cluster -> app-infra -> addons -> Helm' 순서를 그대로 따라간다."
   echo "모든 terraform apply는 먼저 plan을 보여주고, 사람이 직접 y를 입력해야만"
   echo "진행한다 (-auto-approve는 쓰지 않는다 -- 실제 과금되는 AWS 리소스라서)."
+  echo ""
+  echo "plan/apply를 따로 실행하고 싶다면(예: plan은 미리 계산해 두고, 승인은"
+  echo "나중에 자리로 돌아와서 하고 싶을 때) 'plan'과 'apply' 서브커맨드를 쓴다."
+  echo "예: $(basename "$0") plan cluster   (계산해서 저장만 함)"
+  echo "    $(basename "$0") apply cluster  (저장된 plan을 나중에 검토·승인·적용)"
+  echo "cluster/app-infra/addons/all은 기존처럼 plan 직후 바로 승인받아 한 번에"
+  echo "끝내고 싶을 때 그대로 쓸 수 있다 -- 어느 쪽도 승인(y 입력) 자체를"
+  echo "생략하지 않는다."
   echo ""
   echo "이 스크립트가 다루지 않는 것 (README.md 참고, 계속 손으로 처리):"
   echo "  - 도메인 구매 / DNS 위임"
@@ -105,11 +124,76 @@ check_cluster_name_matches() {
   fi
 }
 
+# 목적: terraform plan만 계산해서 고정 경로에 저장한다(apply는 하지 않는다).
+# 이유: plan 계산 직후 사람이 바로 이어서 승인하지 못하면(자리 비움, 터미널
+#   세션 끊김) 기존에는 plan 계산부터 통째로 다시 해야 했다 -- plan과 승인
+#   시점을 분리해서 이 낭비를 없앤다. 승인 자체는 없애지 않는다:
+#   apply_saved_plan()에서 여전히 사람이 y를 입력해야 한다.
+# 방법: terraform plan -out=<고정 파일>만 실행하고 끝낸다. apply는 절대 하지
+#   않는다 -- 이 함수 안에는 apply 호출이 없다.
+plan_and_save() {
+  local dir="$1"
+  local plan_file="$2"
+  shift 2
+
+  echo "==> $dir 디렉터리에서 terraform plan을 계산해 $dir/$plan_file 에 저장합니다"
+  (cd "$dir" && terraform plan -out="$plan_file" "$@")
+  echo "==> 저장 완료. 준비되면 나중에 apply 명령으로 이 plan을 검토하고 적용하세요."
+}
+
+# 목적: plan_and_save()가 저장해 둔 plan 파일을 사람에게 다시 보여주고, 승인을
+#   받은 뒤에만 그 plan을 그대로 적용한다.
+# 이유: plan을 계산한 시점과 승인하는 시점이 서로 떨어져 있을 수 있으므로(같은
+#   세션이 아닐 수도 있음), 적용 직전에 반드시 다시 한번 내용을 보여준다 --
+#   사람이 보지 못한 내용을 적용하는 경로를 만들지 않기 위해서다(run_terraform_step()
+#   과 동일한 불변식, ADR 0046 D3).
+# 방법: 저장된 plan 파일이 없으면 에러로 안내하고 중단한다. 있으면 terraform
+#   show로 다시 출력 -> read -p로 y 확인 -> 그 파일 그대로 apply -> 파일 삭제.
+#   저장된 plan이 오래돼 원격 상태와 어긋나면 terraform apply 자체가 거부하고
+#   에러를 낸다(조용히 잘못된 내용이 적용되지 않는다) -- 그 경우 plan부터 다시
+#   실행해야 한다.
+apply_saved_plan() {
+  local dir="$1"
+  local plan_file="$2"
+
+  if [ ! -f "$dir/$plan_file" ]; then
+    echo "에러: $dir/$plan_file 이(가) 없습니다. 먼저 '$(basename "$0") plan $dir'를 실행하세요." >&2
+    exit 1
+  fi
+
+  echo "==> $dir 에 저장된 plan을 다시 보여줍니다"
+  (cd "$dir" && terraform show "$plan_file")
+
+  read -r -p "위 plan을 $dir 에 적용할까요? [y/N] " answer || answer=""
+  if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
+    (cd "$dir" && terraform apply "$plan_file")
+    rm -f "$dir/$plan_file"
+  else
+    echo "$dir 단계에서 중단했습니다. 저장된 plan은 $dir/$plan_file 에 그대로 남아 있습니다." >&2
+    exit 1
+  fi
+}
+
 deploy_cluster() {
   (cd cluster && terraform init -input=false)
   run_terraform_step cluster \
     -var="region=$REGION" \
     -var="cluster_name=$CLUSTER_NAME"
+}
+
+# 목적: cluster의 plan만 계산해서 저장한다(적용은 apply_cluster()가 별도로 한다).
+# 이유/방법: plan_and_save()의 목적/이유/방법 참고 -- cluster는 2단계 apply 같은
+#   특수 사정이 없어 그대로 감싸기만 하면 된다.
+plan_cluster() {
+  (cd cluster && terraform init -input=false)
+  plan_and_save cluster .deploy-plan.tfplan \
+    -var="region=$REGION" \
+    -var="cluster_name=$CLUSTER_NAME"
+}
+
+# 목적: plan_cluster()가 저장해 둔 plan을 검토·승인 후 적용한다.
+apply_cluster() {
+  apply_saved_plan cluster .deploy-plan.tfplan
 }
 
 deploy_app_infra() {
@@ -164,12 +248,86 @@ deploy_app_infra() {
     -var="domain_name=$DOMAIN_NAME"
 }
 
+# 목적: app-infra 1단계(ACM 인증서)의 plan만 계산해서 저장한다.
+# 이유: 2단계(전체) plan은 인증서가 실제로 존재해야만 계산할 수 있어서(2단계의
+#   Route53 검증 레코드가 인증서의 domain_validation_options를 for_each로 도는데,
+#   이 값은 인증서가 만들어지기 전엔 알 수 없다) 미리 저장해 둘 수 없다. 그래서
+#   여기서는 1단계만 저장하고, 2단계는 apply_app_infra()가 1단계를 적용한 직후
+#   그 자리에서 바로 계산+승인+적용까지 이어서 한다(deploy_app_infra()의 2단계와
+#   동일한 동작).
+# 방법: plan_and_save()로 1단계만 -target=aws_acm_certificate.app로 저장한다.
+plan_app_infra() {
+  if [ -z "$S3_BUCKET_NAME" ]; then
+    echo "에러: S3_BUCKET_NAME 환경변수가 필요합니다 (전역적으로 유일한 버킷 이름)." >&2
+    exit 1
+  fi
+  if [ -z "$DOMAIN_NAME" ]; then
+    echo "에러: DOMAIN_NAME 환경변수가 필요합니다 (도메인은 미리 구매돼 있어야 함)." >&2
+    exit 1
+  fi
+  check_cluster_name_matches
+
+  (cd app-infra && terraform init -input=false)
+
+  echo "==> app-infra 1단계(ACM 인증서)만 plan을 계산해 저장합니다."
+  echo "    (2단계 전체 plan은 인증서가 실제로 만들어져야 계산할 수 있어서,"
+  echo "    apply 시점에 자동으로 이어서 계산됩니다.)"
+  plan_and_save app-infra .deploy-plan-acm.tfplan \
+    -var="region=$REGION" \
+    -var="cluster_name=$CLUSTER_NAME" \
+    -var="s3_bucket_name=$S3_BUCKET_NAME" \
+    -var="domain_name=$DOMAIN_NAME" \
+    -target=aws_acm_certificate.app
+}
+
+# 목적: plan_app_infra()가 저장해 둔 1단계 plan을 승인·적용하고, 곧바로 2단계
+#   (전체)를 계산+승인+적용까지 이어서 진행한다.
+# 이유/방법: plan_app_infra()의 주석 참고 -- 2단계는 구조적으로 미리 저장해 둘
+#   수 없는 값이라, deploy_app_infra()의 2단계와 동일하게 그 자리에서 처리한다.
+apply_app_infra() {
+  apply_saved_plan app-infra .deploy-plan-acm.tfplan
+
+  echo ""
+  echo "⚠️  주의: 이 다음 2단계는 Route53 zone을 새로 만든 뒤 ACM 인증서가 DNS로"
+  echo "   검증될 때까지 이 터미널에서 계속 대기합니다. 새 zone의 네임서버로"
+  echo "   도메인 등록기관(registrar)의 네임서버를 갱신하기 전까지는 검증이"
+  echo "   끝나지 않습니다. 이 창이 대기하는 동안, 다른 터미널을 열어 아래로"
+  echo "   새 네임서버 값을 먼저 확인하고 등록기관에 즉시 반영하세요:"
+  echo "     aws route53 list-hosted-zones-by-name --dns-name $DOMAIN_NAME \\"
+  echo "       --query 'HostedZones[0].Id' --output text"
+  echo "     aws route53 get-hosted-zone --id <위 명령 결과 ID> \\"
+  echo "       --query 'DelegationSet.NameServers' --output json"
+  echo ""
+  echo "==> app-infra 2단계(전체) apply"
+  run_terraform_step app-infra \
+    -var="region=$REGION" \
+    -var="cluster_name=$CLUSTER_NAME" \
+    -var="s3_bucket_name=$S3_BUCKET_NAME" \
+    -var="domain_name=$DOMAIN_NAME"
+}
+
 deploy_addons() {
   check_cluster_name_matches
   (cd addons && terraform init -input=false)
   run_terraform_step addons \
     -var="region=$REGION" \
     -var="cluster_name=$CLUSTER_NAME"
+}
+
+# 목적: addons의 plan만 계산해서 저장한다(적용은 apply_addons()가 별도로 한다).
+# 이유/방법: plan_and_save()의 목적/이유/방법 참고 -- addons는 2단계 apply 같은
+#   특수 사정이 없어 그대로 감싸기만 하면 된다.
+plan_addons() {
+  check_cluster_name_matches
+  (cd addons && terraform init -input=false)
+  plan_and_save addons .deploy-plan.tfplan \
+    -var="region=$REGION" \
+    -var="cluster_name=$CLUSTER_NAME"
+}
+
+# 목적: plan_addons()가 저장해 둔 plan을 검토·승인 후 적용한다.
+apply_addons() {
+  apply_saved_plan addons .deploy-plan.tfplan
 }
 
 deploy_helm() {
@@ -191,6 +349,8 @@ deploy_helm() {
 
 # 인자를 안 주면 "all"을 실행한다.
 command="${1:-all}"
+# plan/apply 서브커맨드일 때만 쓰는 두 번째 인자(대상 state 이름).
+target="${2:-}"
 
 case "$command" in
   cluster)
@@ -210,6 +370,28 @@ case "$command" in
     deploy_app_infra
     deploy_addons
     deploy_helm
+    ;;
+  plan)
+    case "$target" in
+      cluster) plan_cluster ;;
+      app-infra) plan_app_infra ;;
+      addons) plan_addons ;;
+      *)
+        echo "사용법: $(basename "$0") plan [cluster|app-infra|addons]" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+  apply)
+    case "$target" in
+      cluster) apply_cluster ;;
+      app-infra) apply_app_infra ;;
+      addons) apply_addons ;;
+      *)
+        echo "사용법: $(basename "$0") apply [cluster|app-infra|addons]" >&2
+        exit 1
+        ;;
+    esac
     ;;
   -h | --help)
     print_usage

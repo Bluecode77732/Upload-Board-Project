@@ -115,3 +115,44 @@ remember which resource to target.
   scope, not something this decision does implicitly.
 - `docs/ROADMAP.md` §7's "Automate the `cluster` → `app-infra` → `addons` → Helm deploy
   sequence" row is marked done, pointing here.
+
+### Addendum (2026-09-02) — `plan`/`apply` split for `cluster`/`app-infra`/`addons`
+
+Repeated verification-purpose applies against the live AWS target (still the same real
+EKS/RDS this ADR always meant — a "test purpose" label doesn't change the resource's
+billed/irreversible nature) hit a recurring cost: if the developer wasn't at the terminal
+the moment a `terraform plan` finished, or the session dropped while waiting at the
+`read -p` prompt, the whole plan had to be recomputed from scratch on the next run. Two
+other fixes were weighed and rejected first: `-auto-approve` on `apply` (removes D3's
+approval checkpoint itself — the actual safety mechanism, not overhead sitting on top of
+it) and a full CD pipeline (the same objection, at a wider blast radius). Neither addresses
+the second, more expensive interruption cause identified alongside the first — the apply
+command itself failing (ACM validation timeout, node-group `CREATE_FAILED`, a dropped
+session) — which no form of approval automation touches; that stays the existing runbook
+in `k8s/infra/terraform/README.md`'s "Cleaning up after a failed apply".
+
+Added `deploy.sh plan <cluster|app-infra|addons>` and `deploy.sh apply
+<cluster|app-infra|addons>` alongside the original `cluster`/`app-infra`/`addons`/`all`
+(unchanged, still available for a single continuous run). `plan` only computes and saves
+the plan to a fixed path (`<state>/.deploy-plan*.tfplan`, gitignored) and exits — no apply.
+`apply` re-displays the saved plan (`terraform show`) and still requires an explicit `y`
+before applying it — D3's invariant is unchanged; only *when* the human approves is
+decoupled from *when* the plan was computed. If the saved plan has gone stale against the
+live remote state, `terraform apply` itself refuses rather than applying something wrong.
+
+`app-infra`'s two-stage ACM apply can't be fully pre-planned: stage 2's plan is only
+computable once the certificate from stage 1 actually exists (D4). `plan app-infra`
+therefore saves only stage 1; `apply app-infra` applies the saved stage-1 plan, then
+computes+confirms+applies stage 2 in the same run as before (unchanged from
+`deploy_app_infra()`) — the Route53 NS-delegation wait during stage 2 still requires the
+developer present regardless of this split.
+
+Verified with a stubbed `terraform` binary (no real AWS calls): `plan cluster` →
+`apply cluster` (accept) applies and cleans up the saved file; `apply cluster` (decline)
+leaves the saved file in place and exits 1; `plan app-infra` → `apply app-infra` runs both
+stages correctly and cleans up the stage-1 file. `bash -n deploy.sh` passes; no `.tf` file
+was touched.
+
+Does not reverse D1–D4: the tool stays a local shell script, the scope stays
+Terraform+Helm, `-auto-approve` is still never used, and the region/cluster_name check and
+ACM two-phase logic are reused unchanged inside the new functions.

@@ -84,6 +84,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 **/.terraform/*
 *.tfstate
 *.tfstate.*
+# deploy.sh의 plan/apply 분리 서브커맨드가 저장하는 plan 파일(ADR 0046 addendum)
+.deploy-plan*.tfplan
 crash.log
 crash.*.log
 *.tfvars

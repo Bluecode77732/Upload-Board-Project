@@ -26,6 +26,23 @@ development line (package.json version).
   Unscheduled.
 
 ### Added
+- **`deploy.sh plan`/`apply` subcommands — decouple plan computation from approval for
+  `cluster`/`app-infra`/`addons` (2026-09-02,
+  [ADR 0046 Addendum](ADR/0046-deploy-sequence-automation.md#addendum-2026-09-02--planapply-split-for-clusterapp-infraaddons))**
+  — repeated verification-purpose applies against the live AWS target hit a recurring
+  cost: if the developer wasn't at the terminal the moment a `terraform plan` finished,
+  the whole plan had to be recomputed from scratch on the next run. `-auto-approve` and a
+  full CD pipeline were both considered and rejected first (either removes D3's human
+  approval checkpoint on billed/irreversible resources, not just the wait). `plan <state>`
+  now only computes and saves the plan to a fixed, gitignored path and exits; `apply
+  <state>` re-shows the saved plan and still requires an explicit `y` before applying it —
+  approval is unaffected, only decoupled in time from when the plan was computed. The
+  original `cluster`/`app-infra`/`addons`/`all` commands are unchanged and still available
+  for a single continuous run. `app-infra`'s two-stage ACM apply can't be fully
+  pre-planned (stage 2 needs stage 1's certificate to exist first), so `plan app-infra`
+  saves only stage 1; stage 2 is still computed+confirmed+applied live during `apply
+  app-infra`, same as before. Verified with a stubbed `terraform` binary (no real AWS
+  calls) covering accept, decline, and the two-stage path.
 - **Performance and capacity criteria — response-time targets, ADR 0021's deferred indexes
   adopted, disk via usage-rate monitoring (2026-08-31,
   [ADR 0049](ADR/0049-performance-capacity-criteria.md))** — the last undecided Stage 4 row

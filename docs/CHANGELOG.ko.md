@@ -25,6 +25,23 @@
   손대지 않았다 — 여전히 미해결이며 ROADMAP.md > Unscheduled에서 추적 중이다.
 
 ### 추가
+- **`deploy.sh plan`/`apply` 서브커맨드 — cluster/app-infra/addons의 plan 계산과
+  승인을 분리 (2026-09-02,
+  [ADR 0046 Addendum](ADR/0046-deploy-sequence-automation.ko.md#addendum-2026-09-02--clusterapp-infraaddons-planapply-분리))**
+  — 실 AWS 대상에 검증 목적으로 반복 apply할 때 매번 겪던 낭비가 있었다: plan이
+  끝난 직후 개발자가 터미널 앞에 없으면, 다음 실행에서 plan 계산부터 통째로 다시
+  해야 했다. `-auto-approve`와 완전한 CD 파이프라인을 먼저 검토했다가 기각했다(둘
+  다 D3가 만든 사람의 승인 지점 자체를 없애버려, 과금·비가역 리소스에 대한
+  대기시간이 아니라 안전장치 자체를 제거하는 셈). 이제 `plan <state>`는 plan을
+  계산해 고정된 gitignore 경로에 저장만 하고 종료하며, `apply <state>`는 저장된
+  plan을 다시 보여주고 여전히 명시적 `y` 확인이 있어야만 적용한다 — 승인 자체는
+  그대로이고, plan을 계산한 시점에서만 분리됐다. 기존 `cluster`/`app-infra`/
+  `addons`/`all` 명령은 그대로 남아 한 번에 끝내고 싶을 때 계속 쓸 수 있다.
+  `app-infra`의 ACM 2단계 apply는 구조적으로 완전히 미리 계산해 둘 수 없어(2단계가
+  1단계에서 만들어진 인증서의 존재를 전제로 함) `plan app-infra`는 1단계만
+  저장하고, 2단계는 기존과 동일하게 `apply app-infra` 실행 중 그 자리에서
+  계산+승인+적용한다. 가짜(stub) `terraform` 바이너리로 승인/거부/2단계 경로를
+  모두 검증했다(실제 AWS 호출 없음).
 - **성능·용량 기준 — 응답시간 목표, ADR 0021이 유예한 인덱스 채택, 디스크는 사용률
   모니터링으로 (2026-08-31, [ADR 0049](ADR/0049-performance-capacity-criteria.ko.md))**
   — 배포 전 Stage 4의 마지막 미결 항목. 엔드포인트 유형(목록/단건/콘텐츠 서빙/쓰기)별
