@@ -613,9 +613,17 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `app-infra/main.tf`'s `assume_role_policy` for `aws_iam_role.app` still condition-matches
   `system:serviceaccount:default:default` (ADR 0043 D8). Now that `k8s/helm/`'s
   `serviceaccount.yaml` exists, this Terraform trust policy needs the same update: match
-  `system:serviceaccount:<namespace>:<sharenpo.serviceAccountName>` instead (the release name
-  by default — `serviceAccount.name` in `values.yaml` if overridden). Until this lands, the
-  chart's `serviceAccount.create=true` path is unusable for real IRSA auth and the manual
+  `system:serviceaccount:default:sharenpo` instead. **ServiceAccount name decided
+  2026-09-03: `sharenpo`** — matches this chart's own `helm install sharenpo .` convention
+  (`k8s/helm/README.md`), not the currently-live `upload-board` release name, so
+  `serviceAccount.name` in `values.yaml` stays unset and the chart's default (release-name
+  fallback, `sharenpo.serviceAccountName`) resolves to it correctly only once the release
+  itself is installed as `sharenpo`. **This decision therefore also carries a release rename**:
+  Helm has no in-place rename, so picking it up on a live cluster means `helm uninstall
+  upload-board` followed by a fresh `helm install sharenpo .` (renaming every object —
+  Deployment/Service/ConfigMap/migration Job — not just the ServiceAccount), not a plain `helm
+  upgrade`. Until both this Terraform trust-policy update and that rename land, the chart's
+  `serviceAccount.create=true` path is unusable for real IRSA auth and the manual
   `kubectl annotate serviceaccount default ...` step in `k8s/infra/terraform/README.md`
   ("Known gap") stays the operative path. Not started because it is Terraform-only work
   depending on a decision already implicit in the chart change (the trust-policy shape simply

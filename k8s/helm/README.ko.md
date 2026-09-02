@@ -103,7 +103,12 @@ helm upgrade upload-board . -f values-prod.yaml
 `kubectl annotate serviceaccount default ...` 단계는 이 역할을 이 앱뿐 아니라
 **네임스페이스의 모든 pod**에 부여합니다. `serviceAccount.create: true`로
 켜면 이 차트가 자체 `ServiceAccount`를 만들어 Deployment에 `default` 대신
-그것을 붙입니다:
+그것을 붙입니다. 이름은 기본적으로 릴리스 이름을 따르며, 확정된 목표
+이름은 `sharenpo`입니다(ROADMAP.md §7 "ServiceAccount 이름은 2026-09-03에
+`sharenpo`로 확정" — 지금 라이브인 `upload-board` 릴리스가 아니라, 바로
+위에서 이 파일이 이미 쓰고 있는 `helm install sharenpo .` 관례와 맞춘 것).
+그 이름으로 설치돼 있으면 `serviceAccount.name`을 따로 오버라이드할
+필요가 없습니다:
 
 ```bash
 helm upgrade sharenpo . \
@@ -114,9 +119,9 @@ helm upgrade sharenpo . \
 
 이건 이 gap의 차트 쪽 절반만 닫습니다. `aws_iam_role.app`의 trust policy는
 Terraform(`app-infra/`) 쪽에 여전히 `default:default`로 하드코딩돼 있습니다 —
-그 trust policy를 새 ServiceAccount 이름(기본값은 릴리스 이름, 예: `sharenpo`
-— `values.yaml`의 `serviceAccount.name` 참고)에 맞춰 같이 갱신하지 않으면
-`serviceAccount.create`만 켜서는 IRSA가 인증되지 않습니다. trust policy
+그 trust policy를 `sharenpo`를 신뢰하도록 같이 갱신하지 않으면
+`serviceAccount.create`만 켜서는 IRSA가 인증되지 않습니다(그 Terraform 쪽
+갱신은 ROADMAP.md §7에 별도의 아직 미착수 항목으로 추적 중). trust policy
 갱신은 Terraform 쪽 작업이라 이번 차트 변경 범위 밖입니다 — 그게 landing되기
 전까지는 계속 수동 `default` annotate를 쓰거나, `serviceAccount.name`을
 `default`로 두고 `serviceAccount.create`는 켜지 않으면 됩니다(차트 기본

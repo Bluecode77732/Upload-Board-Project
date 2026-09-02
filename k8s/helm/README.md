@@ -100,7 +100,11 @@ currently trusts `system:serviceaccount:default:default` — the manual
 `k8s/infra/terraform/README.md`'s "Known gap" section grants that role to
 **every** pod in the namespace, not only this app's. `serviceAccount.create: true`
 makes this chart render its own `ServiceAccount` and put it (not `default`) on
-the Deployment:
+the Deployment. The name defaults to the release name; the decided target is
+`sharenpo` (ROADMAP.md §7, "ServiceAccount name decided 2026-09-03:
+`sharenpo`" — matching this file's own `helm install sharenpo .` convention
+above, not the currently-live `upload-board` release), so no
+`serviceAccount.name` override is needed once installed under that name:
 
 ```bash
 helm upgrade sharenpo . \
@@ -111,13 +115,13 @@ helm upgrade sharenpo . \
 
 This closes only the chart half of the gap. `aws_iam_role.app`'s trust policy
 is still hardcoded to `default:default` in Terraform (`app-infra/`) — enabling
-`serviceAccount.create` without also updating that trust policy to match the
-new ServiceAccount's name (`sharenpo` by default, i.e. the release name; see
-`serviceAccount.name` in `values.yaml`) leaves IRSA unable to authenticate.
-Updating the trust policy is Terraform work, out of scope for this chart change
-— until it lands, keep using the manual `default` annotation, or set
-`serviceAccount.name` to `default` and skip `serviceAccount.create` entirely
-(no-op, since that's what the chart already does by default). The migration
+`serviceAccount.create` without also updating that trust policy to trust
+`sharenpo` leaves IRSA unable to authenticate (ROADMAP.md §7 tracks that
+Terraform-side update as a separate, not-yet-started item). Updating the trust
+policy is Terraform work, out of scope for this chart change — until it lands,
+keep using the manual `default` annotation, or set `serviceAccount.name` to
+`default` and skip `serviceAccount.create` entirely (no-op, since that's what
+the chart already does by default). The migration
 Job deliberately keeps running as `default` even when `serviceAccount.create`
 is on — it only reads DB credentials from the Secret, never touches S3, so
 giving it the app's IRSA identity would widen its permissions for no reason.

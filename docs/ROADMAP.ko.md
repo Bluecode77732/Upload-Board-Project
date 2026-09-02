@@ -580,10 +580,20 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   (2026-09-02 기록, 바로 위 항목에서 이어짐) — `app-infra/main.tf`의 `aws_iam_role.app`
   `assume_role_policy`는 여전히 `system:serviceaccount:default:default`를 조건으로 매칭한다
   (ADR 0043 D8). 이제 `k8s/helm/`에 `serviceaccount.yaml`이 생겼으니, 이 Terraform 신뢰
-  정책도 같이 갱신해야 한다 — `system:serviceaccount:<네임스페이스>:<sharenpo.serviceAccountName>`을
-  매칭하도록(기본값은 릴리스 이름 — 오버라이드했다면 `values.yaml`의
-  `serviceAccount.name`). 이게 landing되기 전까지는 차트의 `serviceAccount.create=true`
-  경로는 실제 IRSA 인증에 못 쓰고, `k8s/infra/terraform/README.md`("Known gap")의 수동
+  정책도 같이 갱신해야 한다 — `system:serviceaccount:default:sharenpo`를 매칭하도록.
+  **ServiceAccount 이름은 2026-09-03에 `sharenpo`로 확정** — 지금 라이브인
+  `upload-board` 릴리스 이름이 아니라, 이 차트 자체가 이미 쓰고 있는
+  `helm install sharenpo .` 관례와 맞춘 것이다(`k8s/helm/README.md`). 그래서
+  `values.yaml`의 `serviceAccount.name`은 비워두면 되지만, 차트의 기본 동작
+  (릴리스 이름 폴백, `sharenpo.serviceAccountName`)이 그 이름으로 정확히
+  떨어지려면 릴리스 자체가 `sharenpo`로 설치돼 있어야 한다. **즉 이 결정은
+  릴리스 rename도 함께 딸려온다**: Helm은 제자리 rename을 지원하지 않으므로,
+  실제 클러스터에 반영하려면 단순 `helm upgrade`가 아니라 `helm uninstall
+  upload-board` 후 새로 `helm install sharenpo .`를 해야 한다(ServiceAccount뿐
+  아니라 Deployment/Service/ConfigMap/migration Job 등 모든 오브젝트 이름이
+  함께 바뀐다). 이 Terraform trust policy 갱신과 그 rename이 둘 다 landing되기
+  전까지는 차트의 `serviceAccount.create=true` 경로는 실제 IRSA 인증에 못 쓰고,
+  `k8s/infra/terraform/README.md`("Known gap")의 수동
   `kubectl annotate serviceaccount default ...` 단계가 계속 실질적인 방법이다. 아직
   시작하지 않았다 — 차트 변경이 이미 함축한 결정(신뢰 정책 모양이 차트가 실제로 만드는 것과
   맞아야 한다는 것)에 뒤따르는 Terraform 전용 작업이라, 위 차트 쪽 절반과 같은 이유로 별도
