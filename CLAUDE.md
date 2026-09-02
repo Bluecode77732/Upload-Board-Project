@@ -1153,6 +1153,17 @@ Architecture Decisions above remain operative.
 - CORS is opt-in via the optional `CORS_ORIGIN` env var (added 2026-07-22): unset =
   CORS disabled (same-origin/Swagger use); a browser frontend sets a comma-separated
   origin allowlist
+- ~~`JwtStrategy.validate`/`LocalStrategy.validate` each carried an `if (!user)` guard~~ —
+  **removed 2026-09-03**: both were already unreachable dead code — `UserService.findOne`
+  and `AuthService.validateUser` throw before ever returning falsy, so neither guard could
+  fire (`LocalStrategy`'s throw was also a plain-string `UnauthorizedException`, violating
+  the frozen ErrorBody contract, ADR 0011 — removed with it). Pure cleanup, no behavior
+  change. One residual left deliberately alone: `JwtStrategy.validate` still surfaces
+  `UserService.findOne`'s 404 `USER_NOT_FOUND` for a valid access token whose account was
+  deleted after issuance, instead of the originally-intended 401 `AUTH_UNAUTHORIZED`.
+  Converting that (wrapping `findOne` in a `try/catch`) was weighed and deferred — neither
+  strategy has a spec file (strategies are excluded from measured coverage), so a new
+  branch there would ship with no test safety net. Tracked here, not yet scheduled
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for

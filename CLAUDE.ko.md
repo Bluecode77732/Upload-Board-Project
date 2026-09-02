@@ -1193,6 +1193,17 @@ Architecture Decisions가 계속 유효하다.
 - CORS는 선택적 `CORS_ORIGIN` 환경 변수를 통해 opt-in이다(2026-07-22 추가):
   미설정 = CORS 비활성화(동일 출처/Swagger 용도); 브라우저 프론트엔드는
   쉼표로 구분된 출처 허용목록을 설정한다
+- ~~`JwtStrategy.validate`/`LocalStrategy.validate`가 각각 갖고 있던 `if (!user)` 가드~~ —
+  **2026-09-03 제거**: 둘 다 이미 도달 불가능한 죽은 코드였다 — `UserService.findOne`과
+  `AuthService.validateUser`는 falsy를 반환하기 전에 항상 예외를 던지므로 어느 가드도
+  실행될 수 없었다(`LocalStrategy` 쪽 예외는 평문 문자열 `UnauthorizedException`이라
+  고정 ErrorBody 계약(ADR 0011)도 위반하고 있었고 함께 제거됨). 순수 정리이며 동작 변화
+  없음. 의도적으로 남겨둔 잔여물 하나: `JwtStrategy.validate`는 발급 후 계정이 삭제된
+  유효 액세스 토큰에 대해 원래 의도됐던 401 `AUTH_UNAUTHORIZED` 대신 여전히
+  `UserService.findOne`의 404 `USER_NOT_FOUND`를 그대로 노출한다. 이를 바꾸는 안
+  (`findOne`을 `try/catch`로 감싸기)은 검토했으나 보류했다 — 두 전략 모두 전용 스펙
+  파일이 없어(전략은 측정 대상 커버리지에서 제외) 새 분기가 테스트 안전망 없이
+  들어가게 되기 때문이다. 여기 기록만 해 두고 아직 일정에 넣지 않는다
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

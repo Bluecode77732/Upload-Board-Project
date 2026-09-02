@@ -1,11 +1,10 @@
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Payload } from '../interface/payload-interface';
 import { UserEntity } from 'backend/user/entity/user.entity';
 import { UserService } from 'backend/user/user.service';
-import { ErrorCode } from 'backend/common/error-code';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt-auth-guard') {
@@ -24,18 +23,12 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt-auth-guard') {
   // 이유: Passport가 서명/만료만 확인하고, "이 sub가 실제로 존재하는 유저인가"는 매 요청 DB
   //       조회로 이 계층에서 재확인해야 한다 — payload는 발급 시점 스냅샷일 뿐이다.
   // 방법: UserService.findOne으로 최신 상태를 읽고, password는 구조 분해로 제외해 반환한다
-  //       (응답 직렬화와 별개로 request.user 자체에 원문 해시를 남기지 않기 위함).
+  //       (응답 직렬화와 별개로 request.user 자체에 원문 해시를 남기지 않기 위함). findOne은
+  //       못 찾으면 자체적으로 예외를 던지므로(never falsy 반환) 이 계층에서 null 체크를
+  //       다시 하지 않는다 — 2026-09-03, 도달 불가능했던 if(!user) 가드 제거(CLAUDE.md
+  //       Known gaps, 계정 삭제 시 상태 코드 잔여 이슈 참고).
   async validate(payload: Payload): Promise<Omit<UserEntity, 'password'>> {
-    const user = await this.userService.findOne(payload.sub);
-
-    if (!user) {
-      throw new UnauthorizedException({
-        code: ErrorCode.AUTH_UNAUTHORIZED,
-        message: 'User Not Found.',
-      });
-    }
-
-    const { password, ...rest } = user;
+    const { password, ...rest } = await this.userService.findOne(payload.sub);
 
     return rest;
   }
