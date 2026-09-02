@@ -1007,6 +1007,16 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   소급 추가하고, 각 `이유` 라인이 자기 지배 ADR을 가리키게 한다. 드라이브바이가 아니다:
   저장소 전역 주석 스윕이야말로 Scope Discipline이 기능 커밋에서 배제하는 종류의 변경이므로,
   단계별 작업이 끝난 뒤 자체 작업으로 착지한다.
+  **2026-09-03 착지**(위 계획대로 전 Stage 완료 후): 사전-의무화 함수 전체에 블록을
+  소급 추가했고, 원래 잡았던 범위보다 넓어졌다 — `auth.service.ts`뿐 아니라 서비스 계층
+  나머지(`user.service.ts`, `superadmin-seed.service.ts`, `temp-cleanup.service.ts`,
+  `metrics.service.ts`)와 storage 어댑터(`local-disk.storage.ts`)까지, 그리고 같은 밀도
+  공백이 그쪽에서도 드러나면서 서비스를 넘어 컨트롤러/가드/전략/필터/데코레이터까지 확장
+  (`auth.controller.ts`의 쿠키 처리 헬퍼들, `all-exceptions.filter.ts`, `roles.guard.ts`,
+  두 Passport 전략, param 데코레이터 3종). 커밋 4건: `6f52f66`, `ad995a5`, `f04b366`,
+  그리고 전략 블록을 작성하던 중 드러난 죽은 코드 발견 건을 다룬 `9e9434e`(`JwtStrategy`/
+  `LocalStrategy`가 각각 갖고 있던 `if (!user)` 가드가 이미 도달 불가능했음 — 제거하고
+  [CLAUDE.md](../CLAUDE.ko.md) > 알려진 격차에 기록). **완료.**
 - ~~`GET /user` 검색/정렬~~ (2026-08-05 기록, 실행 #2 `GET /user` 페이지네이션 작업의 후속으로
   [Stage 5](#stage-5--운영-화면-admin-콘솔--2026-07-30-추가)로 미룸) — 페이지네이션 작업은
   의도적으로 **take/skip만** 배포했다: ROADMAP 항목명이 페이지네이션만 지칭했고,

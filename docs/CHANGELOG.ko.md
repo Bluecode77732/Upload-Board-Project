@@ -13,6 +13,18 @@
 ## [Unreleased]
 
 ### 수정
+- **`JwtStrategy`/`LocalStrategy`: 각 `validate()`에서 도달 불가능한 `if (!user)` 가드 제거
+  (2026-09-03)** — 목적/이유/방법 블록을 소급 추가하던 중(아래 변경 항목 참고) 발견했고,
+  호출 대상을 다시 읽어 확인했다: `UserService.findOne`과 `AuthService.validateUser`
+  둘 다 falsy를 반환하기 전에 항상 예외를 던지므로, 어떤 입력으로도 두 가드는 실행될 수
+  없었다. `LocalStrategy` 쪽 예외는 평문 문자열 `UnauthorizedException`이라 고정
+  `{ code, message }` ErrorBody 계약(ADR 0011)도 위반하고 있었고, 함께 제거됐다. 발급 후
+  계정이 삭제된 유효 토큰에 대해 (`UserService.findOne`의 404 `USER_NOT_FOUND` 대신) 401
+  `AUTH_UNAUTHORIZED`를 노출하도록 `try/catch`로 고치는 안도 검토했으나 의도적으로
+  보류했다 — 두 전략 모두 전용 스펙 파일이 없어(전략은 CLAUDE.md > Testing 기준 측정
+  커버리지에서 제외) 새 분기가 테스트 안전망 없이 들어가게 되기 때문이다. 순수 정리이며
+  동작 변화 없음(224개 유닛 테스트 그대로 통과); CLAUDE.md > 알려진 격차 및 로드맵에
+  잔여 이슈로 기록.
 - **`deploy.sh`/`values-prod.yaml`의 릴리스 이름이 2026-08-25 "Sharenpo 이름 통일" 결정에서
   벗어나 `upload-board`로 드리프트해 있었음 (2026-09-03)** — 그 결정은 두 runbook
   (`k8s/helm/README.md`, `k8s/infra/terraform/README.md`)의 Helm 릴리스 이름을 명시적으로
@@ -263,6 +275,33 @@
   **영구** 선택값이 되었고(`m6g.large`의 파드 슬롯 여유보다 비용 효율을
   우선), `k8s/helm/values-prod.yaml`이 이번 배포에 쓰인 반복되는 `--set`
   플래그를 정리해 담았다. 전체 내용은 `docs/ROADMAP.md` §9(2026-08-27) 참고.
+
+### 변경
+- **사전-의무화 함수 전체에 목적/이유/방법 주석 블록 소급 추가, ROADMAP.md 후속 작업
+  마감 (2026-09-03, ROADMAP.md "사전-의무화 서비스의 코드 내 트레이드오프 문서화 공백")**
+  — 전 Stage 완료 후에만 진행하기로 예정돼 있었다(그 항목 자체의 근거: 동작 변경 없는
+  문서 전용 패스이고, 더 일찍 하면 이후 단계가 어차피 건드릴 함수를 헛되이 흔드는 꼴이
+  되므로). 그 조건은 2026-08-31(ADR 0049)에 충족됐다. `auth.service.ts`(`file.service.ts`
+  17/17, `post.service.ts` 12/12, `comment.service.ts` 8/8 대비 10개 함수 중 0개 커버)로
+  시작했으나, 저장소 전수 조사 결과 공백이 그 한 파일보다 넓다는 게 드러났다: 서비스
+  계층 나머지(`user.service.ts`의 `findOne`/`updateRole`, `superadmin-seed.service.ts`,
+  `temp-cleanup.service.ts`의 `onModuleInit`, `metrics.service.ts`의 `contentType` getter)와
+  storage 어댑터 하나(`local-disk.storage.ts`의 `resolveUnlinkPath`), 그리고 같은 밀도
+  공백이 거기서도 드러나면서 컨트롤러/가드/전략/필터/데코레이터까지: `auth.controller.ts`
+  (핸들러 5개 전부 + private 쿠키 처리 헬퍼 4개 — httpOnly/SameSite/회전 로직이 정확히
+  이 mandate가 겨냥하는 종류인데도 블록이 하나도 없었다), `all-exceptions.filter.ts`의
+  `catch`(이번에 손댄 것 중 가장 복잡한 단일 메서드, ADR 0011의 상태/코드 폴백 로직),
+  `roles.guard.ts`의 `canActivate`, 두 Passport 전략의 `validate`, param 데코레이터 3종
+  (`@AuthUser`, `@OptionalAuthUser`, `@UserId`), 그리고 남은 얇은 위임 핸들러들
+  (`file.controller.ts`의 `update`/`delete`, `user.controller.ts`의
+  `findOne`/`update`/`updateRole`, `audit-log.controller.ts`의 `findAll`). 모든 `이유`
+  라인은 함수에 따라 관련 ADR(0001/0002/0011/0012/0013/0018/0020/0025/0026/0028/0029/0036/
+  0045/0047)을 가리킨다. 커밋 4건: `6f52f66`, `ad995a5`, `f04b366`(블록 추가)와
+  `9e9434e`(전략 블록을 쓰던 중 드러난 죽은 코드 발견 — 위 수정 항목 참고). 문서 전용
+  변경이며 동작은 어디도 바뀌지 않음 — 각 커밋 이후 `pnpm lint` 0 errors, 224개 유닛
+  테스트 전부 통과 유지.
+- ROADMAP.md/ROADMAP.ko.md의 추적 항목을 **완료**로 표시하고, 위 커밋 4건과 죽은 코드
+  발견이 남긴 CLAUDE.md > 알려진 격차 항목을 가리키게 함.
 
 ### 보안
 - **DB TLS가 암호화만 하고 검증은 안 하고 있던 걸 하루 만에 고침 (2026-08-27/28,

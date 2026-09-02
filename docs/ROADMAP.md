@@ -1081,6 +1081,17 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   each `이유` line pointing at its governing ADR. Not a drive-by: a repo-wide comment sweep is
   exactly the kind of change Scope Discipline keeps out of feature commits, so it lands as its
   own task once the staged work is done.
+  **Landed 2026-09-03** (all Stages complete, per plan above): retro-added blocks across every
+  pre-mandate function, wider than originally scoped — not just `auth.service.ts` but the rest
+  of the service layer (`user.service.ts`, `superadmin-seed.service.ts`,
+  `temp-cleanup.service.ts`, `metrics.service.ts`) and the storage adapter
+  (`local-disk.storage.ts`), then extended past services into controllers/guards/strategies/
+  filter/decorators once the same density gap turned up there too (`auth.controller.ts`'s
+  cookie-handling helpers, `all-exceptions.filter.ts`, `roles.guard.ts`, both Passport
+  strategies, the three param decorators). Four commits: `6f52f66`, `ad995a5`, `f04b366`, and
+  `9e9434e` — the last for a dead-code finding surfaced while writing the strategy blocks
+  (`JwtStrategy`/`LocalStrategy` each carried an `if (!user)` guard that was already
+  unreachable; removed, documented in [CLAUDE.md](../CLAUDE.md) > Known gaps). **Done.**
 - ~~`GET /user` search/sort~~ (recorded 2026-08-05, as a follow-up from execution #2's
   `GET /user` pagination task, deferred to
   [Stage 5](#stage-5--operational-surface-admin-console--added-2026-07-30)) —

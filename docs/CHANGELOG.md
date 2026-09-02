@@ -13,6 +13,19 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Fixed
+- **`JwtStrategy`/`LocalStrategy`: removed an unreachable `if (!user)` guard from each
+  `validate()` (2026-09-03)** — found while retro-adding 목적/이유/방법 blocks (see Changed
+  below) and confirmed by re-reading the callees: `UserService.findOne` and
+  `AuthService.validateUser` both throw before ever returning falsy, so neither guard could
+  fire under any input. `LocalStrategy`'s throw was also a plain-string
+  `UnauthorizedException`, violating the frozen `{ code, message }` ErrorBody contract
+  (ADR 0011) — removed with it. A `try/catch`-based fix that would surface 401
+  `AUTH_UNAUTHORIZED` (instead of `UserService.findOne`'s 404 `USER_NOT_FOUND`) for a valid
+  token whose account was deleted after issuance was weighed and deliberately deferred —
+  neither strategy has a spec file (strategies are excluded from measured coverage per
+  CLAUDE.md > Testing), so a new branch there would ship with no test safety net. Pure
+  cleanup, no behavior change (all 224 unit tests still pass); tracked as a residual in
+  CLAUDE.md > Known Gaps & Roadmap.
 - **`deploy.sh`/`values-prod.yaml` release name drifted to `upload-board`, away from the
   2026-08-25 "Unify the product name on Sharenpo" decision (2026-09-03)** — that decision
   explicitly renamed the Helm release name in both runbooks (`k8s/helm/README.md`,
@@ -254,6 +267,35 @@ development line (package.json version).
   choice (cost-efficiency over `m6g.large`'s pod-slot headroom), and `k8s/helm/values-prod.yaml`
   now collects the repeated `--set` flags this deployment used. See `docs/ROADMAP.md` §9
   (2026-08-27) for the full account.
+
+### Changed
+- **Retro-added 목적/이유/방법 comment blocks across every pre-mandate function, closing the
+  ROADMAP.md follow-up (2026-09-03, ROADMAP.md's "In-code trade-off documentation gap")** —
+  scheduled to run only after all Stages complete (per that item's own reasoning: a
+  documentation-only pass, and running it earlier would churn functions later stages might
+  touch anyway); that condition was met 2026-08-31 (ADR 0049). Started with `auth.service.ts`
+  (0 of 10 functions covered vs. `file.service.ts`'s 17/17, `post.service.ts`'s 12/12,
+  `comment.service.ts`'s 8/8), then a full-repo audit found the same gap wider than that one
+  file: the rest of the service layer (`user.service.ts`'s `findOne`/`updateRole`,
+  `superadmin-seed.service.ts`, `temp-cleanup.service.ts`'s `onModuleInit`,
+  `metrics.service.ts`'s `contentType` getter) and one storage adapter
+  (`local-disk.storage.ts`'s `resolveUnlinkPath`), then — once the same density gap turned up
+  there too — controllers/guards/strategies/filter/decorators:
+  `auth.controller.ts` (all 5 handlers plus its 4 private cookie-handling helpers, none of
+  which had ever carried the block despite the httpOnly/SameSite/rotation logic being
+  exactly the kind the mandate targets), `all-exceptions.filter.ts`'s `catch` (the single
+  most complex method touched, ADR 0011's status/code-fallback logic), `roles.guard.ts`'s
+  `canActivate`, both Passport strategies' `validate`, the three param decorators
+  (`@AuthUser`, `@OptionalAuthUser`, `@UserId`), and the remaining thin-delegation controller
+  handlers (`file.controller.ts`'s `update`/`delete`, `user.controller.ts`'s
+  `findOne`/`update`/`updateRole`, `audit-log.controller.ts`'s `findAll`). Every `이유` line
+  points at its governing ADR (0001/0002/0011/0012/0013/0018/0020/0025/0026/0028/0029/0036/
+  0045/0047 depending on the function). Four commits: `6f52f66`, `ad995a5`, `f04b366`
+  (the blocks) and `9e9434e` (a dead-code finding surfaced while writing the strategy
+  blocks — see Fixed above). Documentation only — no behavior change anywhere; `pnpm lint`
+  stayed at 0 errors and all 224 unit tests passed after each commit.
+- ROADMAP.md/ROADMAP.ko.md's tracking item marked **Done**, with a pointer to the four
+  commits above and to the CLAUDE.md > Known Gaps entry the dead-code finding left behind.
 
 ### Security
 - **DB TLS was encrypting without verifying — fixed within a day of landing (2026-08-27/28,
