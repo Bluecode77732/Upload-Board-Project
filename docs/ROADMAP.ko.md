@@ -563,18 +563,31 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   같은 순서와 같은 장애 복구 절차를 다시 떠올리게 하는 대신, 이 순서(와 그 안의
   순서 의존성·재시도·전파 대기 로직)를 스크립트나 CI 파이프라인으로 감싸야 한다는
   근거가 된다 — 그리고 그것이 바로 위 ADR 0046이 지금 한 일이다.
-- **Helm 차트에 전용 `ServiceAccount` 템플릿 추가 — `default` ServiceAccount 수동 IRSA
-  어노테이션을 대체** (2026-08-28 기록) — `k8s/infra/terraform/README.md`의 "Known gap" 절과
-  ADR 0043 Addendum 모두 `aws_iam_role.app`의 신뢰 정책이 `system:serviceaccount:default:default`를
-  대상으로 한다고 지적한다 — 차트(`k8s/helm/`)가 전용 `ServiceAccount`를 렌더링하지 않기
-  때문이다. `default`에 어노테이션을 달면 이 앱의 파드뿐 아니라 네임스페이스의 모든 파드에
-  S3 접근 권한이 부여된다. 차트 레벨 `serviceaccount.yaml`(이미 만들어져 있지만 비활성 상태로
-  배포되는 `ingress.yaml`과 같은 패턴, ADR 0041)을 만들어 `values.yaml`에서
-  `eks.amazonaws.com/role-arn`을 설정하면, `app-infra/`의 IRSA role 출력을 지금 이 배포가
-  여전히 필요로 하는 별도의 수동 `kubectl annotate serviceaccount default` 없이 같은 `helm
-  upgrade --set`/`values-prod.yaml` 단계에서 함께 배선할 수 있다. 아직 시작하지 않았다 —
-  이 ADR의 어떤 결정에도 의존하지 않는 Helm 차트 전용 작업이라, 이미 문서화된 gap을 확장하는
-  후속 과제일 뿐 별도 ADR이 필요한 결정은 아니기 때문이다.
+- ~~**Helm 차트에 전용 `ServiceAccount` 템플릿 추가 — `default` ServiceAccount 수동 IRSA
+  어노테이션을 대체**~~ — **차트 쪽 절반은 2026-09-02에 landing** (2026-08-28 기록) —
+  `k8s/helm/templates/serviceaccount.yaml`(기본 비활성, `serviceAccount.create: false`,
+  `ingress.yaml`과 같은 패턴, ADR 0041)이 이제 존재한다. `deployment.yml`은 새 헬퍼
+  `sharenpo.serviceAccountName`을 통해 `serviceAccountName`을 여기 연결하며, 비활성일 땐
+  `"default"`로 떨어져 기존 릴리스에 영향이 없다. `migration-job.yml`은 플래그가 켜져 있어도
+  일부러 계속 `default`로 돈다 — DB 자격증명만 읽을 뿐 S3를 건드리지 않으므로, 앱의 IRSA
+  신원을 붙이면 이유 없이 권한만 넓어진다(전체 사용법은 `k8s/helm/README.ko.md`의 "IRSA용
+  전용 ServiceAccount" 참고). **아직 landing 안 됨**: `app-infra/`의 `aws_iam_role.app` 신뢰
+  정책은 여전히 `app-infra/main.tf`에 `system:serviceaccount:default:default`로 하드코딩돼
+  있다 — 오늘 `serviceAccount.create`를 켜면 이 역할이 아직 신뢰하지 않는 ServiceAccount를
+  만들 뿐이라, 그 정책을 갱신하기 전까진 IRSA 인증이 여전히 실패한다. 그 Terraform 쪽 절반이
+  바로 아래 다음 미정 항목이다.
+- **`aws_iam_role.app`의 IRSA 신뢰 정책을 Helm 차트의 전용 ServiceAccount에 맞춰 갱신**
+  (2026-09-02 기록, 바로 위 항목에서 이어짐) — `app-infra/main.tf`의 `aws_iam_role.app`
+  `assume_role_policy`는 여전히 `system:serviceaccount:default:default`를 조건으로 매칭한다
+  (ADR 0043 D8). 이제 `k8s/helm/`에 `serviceaccount.yaml`이 생겼으니, 이 Terraform 신뢰
+  정책도 같이 갱신해야 한다 — `system:serviceaccount:<네임스페이스>:<sharenpo.serviceAccountName>`을
+  매칭하도록(기본값은 릴리스 이름 — 오버라이드했다면 `values.yaml`의
+  `serviceAccount.name`). 이게 landing되기 전까지는 차트의 `serviceAccount.create=true`
+  경로는 실제 IRSA 인증에 못 쓰고, `k8s/infra/terraform/README.md`("Known gap")의 수동
+  `kubectl annotate serviceaccount default ...` 단계가 계속 실질적인 방법이다. 아직
+  시작하지 않았다 — 차트 변경이 이미 함축한 결정(신뢰 정책 모양이 차트가 실제로 만드는 것과
+  맞아야 한다는 것)에 뒤따르는 Terraform 전용 작업이라, 위 차트 쪽 절반과 같은 이유로 별도
+  ADR이 필요 없다.
 - **로그인 화면의 마크를 교체하거나 걷어내고, 쓰이지 않는 아이콘 스프라이트를 삭제** (2026-08-25
   기록) — Sharenpo 통일 작업(`0a14039`)이 로그인 카드에 워드마크와 나란히
   `<img src="/favicon.svg">` 락업을 넣었다. 그 작업 기준으로는 옳은 판단이었다. 이름 변경

@@ -32,3 +32,15 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
 app.kubernetes.io/name: {{ include "sharenpo.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
+
+{{/* Deployment의 spec.template.spec.serviceAccountName에 쓸 이름 — serviceAccount.create가
+false면 이름을 지정하지 않은 것과 같은 "default"를 그대로 돌려준다(네임스페이스의
+default ServiceAccount를 계속 씀). true면 templates/serviceaccount.yaml이 실제로 만드는
+이름과 반드시 같아야 하므로 이 헬퍼 하나로 양쪽을 묶는다. */}}
+{{- define "sharenpo.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- .Values.serviceAccount.name | default (include "sharenpo.fullname" .) -}}
+{{- else -}}
+{{- .Values.serviceAccount.name | default "default" -}}
+{{- end -}}
+{{- end -}}

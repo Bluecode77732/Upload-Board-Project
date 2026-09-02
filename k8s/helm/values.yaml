@@ -18,6 +18,21 @@ image:
 
 imagePullSecrets: []
 
+# 기본은 false — Deployment는 네임스페이스의 default ServiceAccount로 뜨고,
+# app-infra/의 IRSA 역할(aws_iam_role.app)도 여전히 default를 수동
+# annotate해서 붙여야 한다(k8s/infra/terraform/README.md "Known gap" 참고).
+# true로 켜면 이 차트가 전용 ServiceAccount를 만들어 Deployment에 붙이므로
+# S3 IRSA 권한이 이 앱 pod에만 좁혀진다 — 단, app-infra/의 IRSA trust policy가
+# 지금은 system:serviceaccount:default:default만 신뢰하므로, 실제로 인증까지
+# 되게 하려면 그 trust policy를 이 ServiceAccount 이름에 맞게 갱신하는 Terraform
+# 쪽 작업이 별도로 필요하다(이 차트 변경만으로는 IRSA가 동작하지 않음).
+serviceAccount:
+  create: false
+  # 비워두면 create=true일 때 sharenpo.fullname(릴리스 이름)을 쓴다.
+  name: ""
+  annotations: {}
+    # eks.amazonaws.com/role-arn: arn:aws:iam::<account>:role/<app-iam-role>
+
 # Dockerfile이 만들고 USER로 전환하는 non-root uid/gid다(ADR 0030).
 podSecurityContext:
   runAsNonRoot: true

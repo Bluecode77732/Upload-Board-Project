@@ -20,6 +20,9 @@ spec:
         {{- include "sharenpo.selectorLabels" . | nindent 8 }}
     spec:
       restartPolicy: Never
+      {{- /* serviceAccountName을 일부러 안 붙임 — 마이그레이션은 DB(Secret)만 쓰고
+      S3 IRSA가 필요 없으므로, 전용 ServiceAccount(serviceaccount.yaml)를 붙이면
+      오히려 이 작업(권한 범위 축소)의 취지에 반한다. default로 그대로 둔다. */}}
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}

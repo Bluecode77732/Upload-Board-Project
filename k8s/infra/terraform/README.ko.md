@@ -258,16 +258,18 @@ state 파일 안에만 존재합니다(ADR 0043 D7/D8).
      --set env.BASE_URL=https://<본인-도메인>
    ```
 
-## 알려진 한계: 앱의 S3 IRSA 역할이 전용 ServiceAccount가 아니라 `default`에 걸려 있음
+## 알려진 한계: 앱의 S3 IRSA 역할 신뢰 정책이 아직 `default`를 대상으로 함 — 차트의 전용 ServiceAccount가 아니라
 
 `app-infra/`의 `aws_iam_role.app`(`app_iam_role_arn`으로 출력)은
 `STORAGE_DRIVER=s3`를 켰을 때 앱 파드의 AWS SDK 클라이언트가 S3 자격증명을
 실제로 얻게 해주는 IRSA 역할입니다(ADR 0029, ADR 0043 D8). 그런데 이
 역할의 신뢰 정책은 `system:serviceaccount:default:default`를 대상으로
-합니다 — Helm 차트(`k8s/helm/`)가 아직 전용 `ServiceAccount`를 렌더링하지
-않고, 파드가 네임스페이스의 `default` ServiceAccount로 뜨기 때문입니다.
-`default`에 이 역할의 ARN을 주석으로 달면, 그 SA를 쓰는 네임스페이스 안
-**모든** 파드에 S3 권한이 열립니다 — 이 앱의 파드만이 아닙니다:
+합니다. Helm 차트(`k8s/helm/`)는 이제 자체 `ServiceAccount` 템플릿을
+갖고 있습니다(`serviceaccount.yaml`, `serviceAccount.create: true` —
+`k8s/helm/README.ko.md`의 "IRSA용 전용 ServiceAccount" 참고). 즉 이 gap의
+차트 쪽 절반은 닫혔습니다. 아래 수동 annotate는 여전히 지금 실제로
+동작하는 방법입니다 — 이 역할의 신뢰 정책은 그 차트 변경에 포함되지
+않았고, 여전히 `default:default`만 신뢰하기 때문입니다:
 
 ```sh
 cd app-infra
@@ -275,9 +277,13 @@ kubectl annotate serviceaccount default \
   eks.amazonaws.com/role-arn=$(terraform output -raw app_iam_role_arn)
 ```
 
-Helm 차트에 전용 `ServiceAccount` 템플릿을 추가하는 일(이미 만들어져 있지만
-비활성 상태인 `ingress.yaml`과 같은 모양 — ADR 0041)은 별도의 차트 작업이며,
-이 Terraform 설정 혼자서는 고칠 수 없습니다.
+`default` 대신 차트의 전용 ServiceAccount로 전환하려면 이 역할의
+`assume_role_policy`(`app-infra/main.tf`)를 `default:default`가 아니라
+차트가 실제로 만드는 ServiceAccount 이름(기본값은 릴리스 이름 — `values.yaml`의
+`serviceAccount.name` 참고)을 신뢰하도록 갱신해야 합니다. 이 Terraform
+변경은 아직 시작 전입니다 — `serviceAccount.create=true`를 실제 IRSA
+인증에 기대기 전에 먼저 처리하세요. 안 그러면 파드의 AWS SDK 클라이언트가
+첫 S3 호출에서 assume-role 실패를 겪습니다.
 
 ## ALB ingress 켜기
 

@@ -85,12 +85,44 @@ helm upgrade upload-board . -f values-prod.yaml
 | `configmap.yaml` | ConfigMap | `values.yaml`의 `env:` 블록 아래 모든 키 |
 | `migration-job.yml` | Job (Helm hook) | pre-install/pre-upgrade 시점에 `migration:run` 실행, `docker-compose.yml`의 `migrate` 서비스를 본뜸(ADR 0032) |
 | `ingress.yaml` | Ingress | 기본 비활성(`ingress.enabled: false`) — TLS는 여기서 종료, 앱 내부에서는 안 함(ADR 0034) |
+| `serviceaccount.yaml` | ServiceAccount | 기본 비활성(`serviceAccount.create: false` — Deployment는 네임스페이스의 `default` ServiceAccount로 그대로 뜸). S3 IRSA 권한을 네임스페이스의 모든 pod가 아니라 이 앱에만 좁히려면 켠다 — 아래 "IRSA용 전용 ServiceAccount" 참고 |
 
 `values.yaml`엔 실제로 템플릿이 읽는 키만 남아 있습니다 — 어떤 템플릿도 소비하지
-않던 `serviceAccount`/`autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride`
-스캐폴딩 잔재는 제거했습니다. 나중에 ServiceAccount·HPA·Gateway API
-`HTTPRoute`를 추가하려면 새 템플릿과 `values.yaml` 블록을 함께 다시 넣어야지,
-값만 되살려선 안 됩니다.
+않던 `autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride` 스캐폴딩
+잔재는 제거했습니다. `serviceAccount`도 원래 같은 목록에서 제거됐었지만,
+구체적인 필요가 생기면서(아래 참고) `ingress.yaml`과 같은 기본-비활성 패턴으로
+자기 템플릿을 다시 갖게 됐습니다. HPA나 Gateway API `HTTPRoute`를 나중에
+추가하려면 여전히 새 템플릿과 `values.yaml` 블록을 함께 다시 넣어야지, 값만
+되살려선 안 됩니다.
+
+## IRSA용 전용 ServiceAccount
+
+`app-infra/`의 `aws_iam_role.app` IRSA 역할(`STORAGE_DRIVER=s3`일 때 S3 접근)은
+현재 `system:serviceaccount:default:default`를 신뢰합니다 —
+`k8s/infra/terraform/README.md` "Known gap" 절의 수동
+`kubectl annotate serviceaccount default ...` 단계는 이 역할을 이 앱뿐 아니라
+**네임스페이스의 모든 pod**에 부여합니다. `serviceAccount.create: true`로
+켜면 이 차트가 자체 `ServiceAccount`를 만들어 Deployment에 `default` 대신
+그것을 붙입니다:
+
+```bash
+helm upgrade sharenpo . \
+  --reuse-values \
+  --set serviceAccount.create=true \
+  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(terraform -chdir=../infra/terraform/app-infra output -raw app_iam_role_arn)
+```
+
+이건 이 gap의 차트 쪽 절반만 닫습니다. `aws_iam_role.app`의 trust policy는
+Terraform(`app-infra/`) 쪽에 여전히 `default:default`로 하드코딩돼 있습니다 —
+그 trust policy를 새 ServiceAccount 이름(기본값은 릴리스 이름, 예: `sharenpo`
+— `values.yaml`의 `serviceAccount.name` 참고)에 맞춰 같이 갱신하지 않으면
+`serviceAccount.create`만 켜서는 IRSA가 인증되지 않습니다. trust policy
+갱신은 Terraform 쪽 작업이라 이번 차트 변경 범위 밖입니다 — 그게 landing되기
+전까지는 계속 수동 `default` annotate를 쓰거나, `serviceAccount.name`을
+`default`로 두고 `serviceAccount.create`는 켜지 않으면 됩니다(차트 기본
+동작과 동일한 no-op). migration Job은 `serviceAccount.create`가 켜져 있어도
+일부러 계속 `default`로 돕니다 — DB 자격증명만 Secret에서 읽을 뿐 S3를
+건드리지 않으므로, 앱의 IRSA 신원을 붙이면 이유 없이 권한만 넓어집니다.
 
 ## Env var
 

@@ -81,12 +81,46 @@ under a different release name renames every object with it; only the
 | `configmap.yaml` | ConfigMap | Every key under `values.yaml`'s `env:` block |
 | `migration-job.yml` | Job (Helm hook) | Runs `migration:run` pre-install/pre-upgrade, mirrors `docker-compose.yml`'s `migrate` service (ADR 0032) |
 | `ingress.yaml` | Ingress | Disabled by default (`ingress.enabled: false`) — TLS terminates here, never in-process (ADR 0034) |
+| `serviceaccount.yaml` | ServiceAccount | Disabled by default (`serviceAccount.create: false` — Deployment runs as the namespace's `default` ServiceAccount, unchanged). Enable it to scope the S3 IRSA role to this app instead of every pod in the namespace — see "Dedicated ServiceAccount for IRSA" below |
 
 `values.yaml` carries only keys a template actually reads — the unused
-`serviceAccount`/`autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride`
-scaffold leftovers (never consumed by any template) were removed. Adding a
-ServiceAccount, HPA, or Gateway API `HTTPRoute` in the future needs both a new
-template and its `values.yaml` block added back together, not just the values.
+`autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride` scaffold leftovers
+(never consumed by any template) were removed. `serviceAccount` was originally
+in that same removed list; it got its own template back (mirroring
+`ingress.yaml`'s disabled-by-default pattern) once a concrete need showed up —
+see below. Adding an HPA or Gateway API `HTTPRoute` in the future still needs
+both a new template and its `values.yaml` block added back together, not just
+the values.
+
+## Dedicated ServiceAccount for IRSA
+
+`app-infra/`'s `aws_iam_role.app` IRSA role (S3 access under `STORAGE_DRIVER=s3`)
+currently trusts `system:serviceaccount:default:default` — the manual
+`kubectl annotate serviceaccount default ...` step in
+`k8s/infra/terraform/README.md`'s "Known gap" section grants that role to
+**every** pod in the namespace, not only this app's. `serviceAccount.create: true`
+makes this chart render its own `ServiceAccount` and put it (not `default`) on
+the Deployment:
+
+```bash
+helm upgrade sharenpo . \
+  --reuse-values \
+  --set serviceAccount.create=true \
+  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(terraform -chdir=../infra/terraform/app-infra output -raw app_iam_role_arn)
+```
+
+This closes only the chart half of the gap. `aws_iam_role.app`'s trust policy
+is still hardcoded to `default:default` in Terraform (`app-infra/`) — enabling
+`serviceAccount.create` without also updating that trust policy to match the
+new ServiceAccount's name (`sharenpo` by default, i.e. the release name; see
+`serviceAccount.name` in `values.yaml`) leaves IRSA unable to authenticate.
+Updating the trust policy is Terraform work, out of scope for this chart change
+— until it lands, keep using the manual `default` annotation, or set
+`serviceAccount.name` to `default` and skip `serviceAccount.create` entirely
+(no-op, since that's what the chart already does by default). The migration
+Job deliberately keeps running as `default` even when `serviceAccount.create`
+is on — it only reads DB credentials from the Secret, never touches S3, so
+giving it the app's IRSA identity would widen its permissions for no reason.
 
 ## Env vars
 

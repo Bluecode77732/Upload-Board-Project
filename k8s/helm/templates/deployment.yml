@@ -25,6 +25,8 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- /* serviceAccount.create=false면 "default"를 그대로 지정 — 동작은 이전과 동일. */}}
+      serviceAccountName: {{ include "sharenpo.serviceAccountName" . }}
       {{- /* Pod 레벨 보안 컨텍스트 — Dockerfile의 non-root uid/gid와 맞춤(ADR 0030). */}}
       {{- with .Values.podSecurityContext }}
       securityContext:

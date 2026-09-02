@@ -594,18 +594,33 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   (and its order-of-operations, retry, and wait-for-propagation logic) in a script or CI
   pipeline rather than a human re-deriving the same order and the same failure recoveries from
   README prose every time — which is exactly what ADR 0046 above now does.
-- **Dedicated `ServiceAccount` template in the Helm chart, to replace the manual `default`
-  ServiceAccount IRSA annotation** (recorded 2026-08-28) — `k8s/infra/terraform/README.md`'s
-  "Known gap" section and ADR 0043's Addendum both flag that `aws_iam_role.app`'s trust policy
-  targets `system:serviceaccount:default:default` because the chart (`k8s/helm/`) renders no
-  dedicated `ServiceAccount` — annotating `default` grants S3 access to every pod in the
-  namespace, not just this app's. A chart-level `serviceaccount.yaml` (mirroring how
-  `ingress.yaml` already exists but ships disabled, ADR 0041), with `eks.amazonaws.com/role-arn`
-  set via `values.yaml`, would let `app-infra/`'s IRSA role output be wired in the same `helm
-  upgrade --set`/`values-prod.yaml` step instead of the separate manual `kubectl annotate
-  serviceaccount default` this deploy still needs. Not started because it is Helm-chart-only
-  work with no dependency on any of this ADR's decisions — a follow-up chart task extending an
-  already-documented gap, not a decision that needs its own ADR.
+- ~~**Dedicated `ServiceAccount` template in the Helm chart, to replace the manual `default`
+  ServiceAccount IRSA annotation**~~ — **chart half landed 2026-09-02** (recorded
+  2026-08-28) — `k8s/helm/templates/serviceaccount.yaml` (disabled by default,
+  `serviceAccount.create: false`, mirroring `ingress.yaml`'s pattern, ADR 0041) now exists;
+  `deployment.yml` wires `serviceAccountName` to it via a new `sharenpo.serviceAccountName`
+  helper, defaulting to `"default"` when disabled so existing releases are unaffected.
+  `migration-job.yml` deliberately keeps running as `default` even when the flag is on — it
+  only reads DB credentials, never touches S3, so giving it the app's IRSA identity would
+  widen its permissions for nothing (see `k8s/helm/README.md` > "Dedicated ServiceAccount for
+  IRSA" for the full usage). **Not** landed: `app-infra/`'s `aws_iam_role.app` trust policy
+  still hardcodes `system:serviceaccount:default:default` (`app-infra/main.tf`) — turning on
+  `serviceAccount.create` today creates a ServiceAccount the role does not yet trust, so IRSA
+  auth still fails until that policy is updated to match the ServiceAccount's actual name. That
+  Terraform-side half is the next unscheduled item, immediately below.
+- **Update `aws_iam_role.app`'s IRSA trust policy to match the Helm chart's dedicated
+  ServiceAccount** (recorded 2026-09-02, follows directly from the item above) —
+  `app-infra/main.tf`'s `assume_role_policy` for `aws_iam_role.app` still condition-matches
+  `system:serviceaccount:default:default` (ADR 0043 D8). Now that `k8s/helm/`'s
+  `serviceaccount.yaml` exists, this Terraform trust policy needs the same update: match
+  `system:serviceaccount:<namespace>:<sharenpo.serviceAccountName>` instead (the release name
+  by default — `serviceAccount.name` in `values.yaml` if overridden). Until this lands, the
+  chart's `serviceAccount.create=true` path is unusable for real IRSA auth and the manual
+  `kubectl annotate serviceaccount default ...` step in `k8s/infra/terraform/README.md`
+  ("Known gap") stays the operative path. Not started because it is Terraform-only work
+  depending on a decision already implicit in the chart change (the trust-policy shape simply
+  has to match whatever the chart creates) — no new ADR needed, same reasoning as the chart
+  half above.
 - **Replace or drop the login page's mark, and delete the unused icon sprite** (recorded
   2026-08-25) — the Sharenpo unification (`0a14039`) gave the login card a lockup of
   `<img src="/favicon.svg">` beside the wordmark, which was the right call for that task:

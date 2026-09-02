@@ -260,16 +260,18 @@ does not always clear on its own.
      --set env.BASE_URL=https://<your-domain>
    ```
 
-## Known gap: the app's S3 IRSA role is scoped to `default`, not a dedicated ServiceAccount
+## Known gap: the app's S3 IRSA role trust policy still targets `default`, not the chart's dedicated ServiceAccount
 
 `app-infra/`'s `aws_iam_role.app` (output as `app_iam_role_arn`) is the IRSA
 role that lets the app pod's AWS SDK client resolve S3 credentials once
 `STORAGE_DRIVER=s3` is set (ADR 0029, ADR 0043 D8). Its trust policy targets
-`system:serviceaccount:default:default` because the Helm chart
-(`k8s/helm/`) does not yet render a dedicated `ServiceAccount` — pods run
-under the namespace's `default` one. Annotating `default` with this role's
-ARN grants S3 access to **every** pod in the namespace that uses it, not only
-this app's pods:
+`system:serviceaccount:default:default`. The Helm chart (`k8s/helm/`) now
+ships its own `ServiceAccount` template (`serviceaccount.yaml`,
+`serviceAccount.create: true` — see `k8s/helm/README.md` > "Dedicated
+ServiceAccount for IRSA"), so the chart-side half of this gap is closed; the
+manual annotation below is still what actually works today, because this
+role's trust policy was not part of that chart change and still only trusts
+`default:default`:
 
 ```sh
 cd app-infra
@@ -277,9 +279,13 @@ kubectl annotate serviceaccount default \
   eks.amazonaws.com/role-arn=$(terraform output -raw app_iam_role_arn)
 ```
 
-A dedicated `ServiceAccount` template in the Helm chart (mirroring how
-`ingress.yaml` is already built but disabled — ADR 0041) is a follow-up
-chart task, not something this Terraform config can fix on its own.
+Switching to the chart's dedicated ServiceAccount instead of annotating
+`default` needs this role's `assume_role_policy` (`app-infra/main.tf`)
+updated to trust the ServiceAccount name the chart actually creates (the
+release name by default — see `serviceAccount.name` in `values.yaml`) rather
+than `default:default`. That Terraform change is still unstarted; do it
+before relying on `serviceAccount.create=true` for real IRSA auth, or the
+pod's AWS SDK client will get an assume-role failure at first S3 call.
 
 ## Enabling the ALB ingress
 
