@@ -15,6 +15,11 @@ export interface AuthUser {
   role: UserRole;
 }
 
+// 목적: JWT로 인증된 요청자의 { id, role }을 핸들러 파라미터로 뽑아준다.
+// 이유: ownership-or-admin 판정(RBAC, ADR 0013)은 id뿐 아니라 role도 필요하다 — @UserId만으로는
+//       부족한 호출부를 위한 확장.
+// 방법: request.user가 있으면 role은 없을 때 UserRole.user로 기본값 채워 반환, 없으면
+//       (가드를 안 거친 라우트 등) 401을 던진다.
 export const AuthUser = createParamDecorator(
   (data: unknown, context: ExecutionContext): AuthUser => {
     const request = context

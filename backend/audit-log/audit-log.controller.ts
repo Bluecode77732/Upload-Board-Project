@@ -38,6 +38,9 @@ export class AuditLogController {
       '(ADR 0045). The two filters AND together when both are given.',
   })
   @ApiResponse({ status: 403, description: 'Admin role required.' })
+  // 목적: 감사 로그 목록 조회 조건을 서비스로 넘긴다.
+  // 이유: action/userId 필터 조합과 페이지네이션 해석은 AuditLogService의 책임이다.
+  // 방법: 검증된 AuditLogQueryDto를 그대로 전달한다.
   findAll(@Query() query: AuditLogQueryDto) {
     return this.auditLogService.findAll(query);
   }

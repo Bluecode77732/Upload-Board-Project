@@ -17,6 +17,11 @@ export class LocalStrategy extends PassportStrategy(
     });
   }
 
+  // 목적: 폼 필드(email/password)로 넘어온 자격 증명을 검증해 request.user에 실릴 사용자를 만든다.
+  // 이유: POST /auth/signin/local은 Basic 토큰이 아니라 body 필드로 로그인받는 대안 경로다 —
+  //       판정 자체는 signIn과 동일한 AuthService.validateUser를 재사용해 갈라지지 않게 한다.
+  // 방법: AuthService.validateUser에 위임 — 실패 시 그 서비스가 이미 예외를 던지므로 여기선
+  //       성공한 UserEntity만 그대로 반환한다.
   async validate(email: string, password: string): Promise<UserEntity> {
     const user = await this.authService.validateUser(email, password);
 

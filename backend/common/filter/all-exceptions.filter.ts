@@ -32,6 +32,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   constructor(private readonly configService: ConfigService) {}
 
+  // 목적: 어디서 던져지든 모든 예외를 고정된 { statusCode, code, message, timestamp, path }
+  //       응답 형태로 통일한다.
+  // 이유: 이 프로젝트의 에러 계약(ADR 0011)이 프론트가 { code, message }로 분기하는 것을
+  //       전제하므로, 코드가 없는 프레임워크 예외(404, passport 401 등)도 예외 없이 code를
+  //       채워야 한다 — 하나라도 빠지면 그 라우트만 계약을 깨는 예외가 된다.
+  // 방법: HttpException이면 실제 status/본문을 읽고, 아니면 500 + 제네릭 메시지로 고정
+  //       (Never Do G3 — 내부 에러 detail을 밖으로 흘리지 않음). 본문에 유효한 ErrorCode가
+  //       실려 있으면 그대로 쓰고, 없으면 FALLBACK_CODES 매핑(또는 배열 message는
+  //       VALIDATION_FAILED)으로 보충한다. 5xx는 스택과 함께 error 레벨로, 4xx는 debug
+  //       레벨로 서버 로그에만 남긴다 — 스택은 dev 환경 응답에만 포함한다.
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();

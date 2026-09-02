@@ -61,11 +61,18 @@ export class UserController {
   }
 
   @Get(':id')
+  // 목적: id로 단일 유저를 조회한다.
+  // 이유: 없으면 404를 던지는 판정이 UserService.findOne에 이미 있다 — 컨트롤러가 중복하지 않는다.
+  // 방법: 그대로 위임.
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.userService.findOne(id);
   }
 
   @Patch(':id')
+  // 목적: 계정 정보 수정 요청을 권한 정보와 함께 서비스로 넘긴다.
+  // 이유: "본인이거나 대상보다 낮은 role의 admin 이상"이라는 랭크 비교 판정은 대상 행을 이미
+  //       읽는 UserService.update가 갖고 있어야 한다(RBAC 확장, Law of Demeter).
+  // 방법: @AuthUser로 얻은 actor의 id/role을 그대로 전달 — 컨트롤러는 판정하지 않는다.
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateUserDto: UpdateUserDto,
@@ -80,6 +87,10 @@ export class UserController {
   @Patch(':id/role')
   @UseGuards(RolesGuard)
   @Roles(UserRole.superadmin)
+  // 목적: role 변경 요청을 서비스로 넘긴다 — UserEntity.role을 바꾸는 유일한 경로.
+  // 이유: 마지막 superadmin 강등 방지 등 불변식은 UserService.updateRole의 트랜잭션 안에서만
+  //       안전하게 판정할 수 있다(동시 요청 레이스 포함).
+  // 방법: @Roles(superadmin) 가드로 이미 걸러진 actor.id와 대상 id/role을 그대로 전달한다.
   updateRole(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateRoleDto: UpdateRoleDto,

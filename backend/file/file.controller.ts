@@ -97,6 +97,10 @@ export class FileController {
   }
 
   @Patch(':id')
+  // 목적: 파일 메타데이터(제목/가시성/소유자 등) 수정 요청을 서비스로 넘긴다.
+  // 이유: 소유자/admin 판정과 visibility·shareToken 상태 전이는 모두 FileService의 책임이다
+  //       (Boundary Validation & Response Shaping).
+  // 방법: 검증된 UpdateFileDto와 요청자를 그대로 전달한다 — 컨트롤러는 아무것도 해석하지 않는다.
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateFileDto: UpdateFileDto,
@@ -106,6 +110,10 @@ export class FileController {
   }
 
   @Delete(':id')
+  // 목적: 파일 삭제 요청을 서비스로 넘긴다.
+  // 이유: FK_file_entity 위반(게시글이 참조 중) 판정과 물리 파일 unlink는 FileService의
+  //       책임이다(ADR 0023 D4).
+  // 방법: 요청자를 그대로 전달 — 소유자/admin 판정은 서비스가 한다.
   delete(@Param('id', ParseIntPipe) id: number, @AuthUser() actor: AuthUser) {
     return this.fileService.deleteFile(id, actor);
   }
