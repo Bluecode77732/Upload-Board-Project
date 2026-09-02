@@ -30,8 +30,14 @@ export class TempCleanupService implements OnModuleInit {
     private readonly metricsService: MetricsService,
   ) {}
 
-  // Registered imperatively (not via @Cron) so the schedule string comes from
-  // config and the job is skipped entirely when disabled (e.g. e2e/test boots).
+  // 목적: 모듈 초기화 시 고아 temp 파일 스윕 크론 잡을 등록하고 시작한다.
+  // 이유: @Cron 데코레이터는 스케줄 문자열을 컴파일 시점 리터럴로 고정시키는데, 이 값은
+  //       TEMP_SWEEP_CRON env var에서 와야 하고 e2e/test 부팅에서는 아예 등록을 건너뛸 수
+  //       있어야 한다 — 둘 다 명령형 SchedulerRegistry 등록으로만 표현 가능하다.
+  // 방법: TEMP_SWEEP_ENABLED가 false면 등록 없이 반환. 아니면 TEMP_SWEEP_CRON으로 CronJob을
+  //       만들어 SchedulerRegistry에 등록 후 시작 — onTick에서 sweep()의 예외를 .catch로
+  //       흡수해 unhandledRejection이 되지 않게 하고, waitForCompletion으로 이전 스윕이 아직
+  //       돌고 있으면 겹치지 않고 이번 틱을 건너뛴다.
   onModuleInit(): void {
     const enabled = this.configService.get<boolean>('TEMP_SWEEP_ENABLED', true);
     if (!enabled) {

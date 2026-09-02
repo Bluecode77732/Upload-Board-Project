@@ -43,8 +43,10 @@ export class MetricsService {
     collectDefaultMetrics({ register: this.registry });
   }
 
-  // Prometheus의 텍스트 exposition 포맷 버전이 레지스트리 구성에 따라 달라질 수 있어
-  // 컨트롤러가 값을 하드코딩하지 않고 여기서 그대로 읽어 쓰도록 노출한다.
+  // 목적: /metrics 응답에 쓸 Content-Type 값을 노출한다.
+  // 이유: Prometheus 텍스트 exposition 포맷 버전이 레지스트리 구성에 따라 달라질 수 있어
+  //       컨트롤러가 문자열을 하드코딩하면 포맷이 바뀔 때 조용히 어긋난다.
+  // 방법: registry.contentType을 그대로 위임 반환한다.
   get contentType(): string {
     return this.registry.contentType;
   }

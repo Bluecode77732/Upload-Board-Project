@@ -169,6 +169,11 @@ export class LocalDiskStorage implements FileStorage {
     return Promise.resolve(null);
   }
 
+  // 목적: unlink 대상 키가 granted/temp 중 어느 쪽인지 판별해 절대 경로로 바꾼다.
+  // 이유: unlink()가 임의의 문자열을 그대로 fs.unlink에 넘기면 file/upload·file/temp
+  //       바깥의 경로도 지울 수 있다 — 인식 가능한 두 접두사만 허용해야 한다.
+  // 방법: file/upload/ 접두는 그대로 cwd에 결합, temp_ 접두는 TEMP_DIR 아래로 결합.
+  //       둘 다 아니면 null을 반환해 호출자가 실패로 기록하게 한다.
   private resolveUnlinkPath(key: string): string | null {
     if (key.startsWith(UPLOAD_PREFIX)) return join(process.cwd(), key);
     if (key.startsWith('temp_')) return join(process.cwd(), TEMP_DIR, key);

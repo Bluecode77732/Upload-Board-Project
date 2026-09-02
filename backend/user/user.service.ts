@@ -85,6 +85,10 @@ export class UserService {
     return queryBuilder.take(take).skip(skip).getManyAndCount();
   }
 
+  // 목적: id로 유저 한 명을 조회하고 없으면 표준화된 404를 던진다.
+  // 이유: JwtStrategy.validate를 포함해 여러 호출부가 "존재하지 않으면 즉시 실패"를 기대하므로,
+  //       null 반환 대신 예외로 강제해 각 호출부가 매번 null 체크를 반복하지 않게 한다.
+  // 방법: 단순 조회 후 없으면 USER_NOT_FOUND 404, 있으면 엔티티를 그대로 반환한다.
   async findOne(id: number) {
     const user = await this.userRepository.findOne({ where: { id } });
 
@@ -158,9 +162,14 @@ export class UserService {
     return this.userRepository.findOne({ where: { id } });
   }
 
-  // Pure multi-DB-write with a read-modify-write invariant (last-superadmin guard) →
-  // dataSource.transaction (Transaction Boundary table); SERIALIZABLE + a row lock
-  // stop two concurrent demotions from both passing the count check.
+  // 목적: superadmin이 대상 계정의 role을 바꾸고 그 변경을 감사 로그에 남긴다.
+  // 이유: role 강등이 "마지막 superadmin을 강등"하는 경우 시스템에 아무도 승격시킬 사람이
+  //       남지 않는 잠금 상태가 된다 — 동시에 두 개의 강등 요청이 들어와도 이 불변식이 깨지지
+  //       않아야 한다(ADR 0013).
+  // 방법: 순수 다중 DB 쓰기 + read-modify-write 불변식(마지막 superadmin 가드)이므로
+  //       dataSource.transaction 사용(Transaction Boundary 표) — SERIALIZABLE 격리와 대상 행
+  //       row lock으로 두 동시 강등 요청이 둘 다 count 체크를 통과하는 것을 막는다. role 변경은
+  //       즉시 refreshTokenHash를 지워 세션을 끊고, 감사 로그는 커밋 이후에 남긴다(부수효과 분리).
   async updateRole(actorId: number, targetId: number, role: UserRole) {
     const previousRole = await this.dataSource.transaction(
       'SERIALIZABLE',
