@@ -1,5 +1,5 @@
 # 실제 AWS 배포용 오버레이 — values.yaml의 기본값 위에 이 파일을 얹어 쓴다:
-#   helm upgrade upload-board . -f values-prod.yaml
+#   helm upgrade sharenpo . -f values-prod.yaml
 # 반복되는 `helm upgrade ... --set env.DB_SSL=true --set env.STORAGE_DRIVER=s3 ...`
 # 나열을 정리한 것으로, 2026-08-27 첫 실제 배포(`helm get values upload-board -n
 # default`)에서 실제로 쓰인 값을 그대로 옮겼다(docs/ROADMAP.md §9, 2026-08-27
@@ -104,6 +104,22 @@ env:
 
 secrets:
   existingSecret: upload-board-project-app-secrets
+
+# app-infra/main.tf의 aws_iam_role.app IRSA trust policy가 2026-09-03부로
+# system:serviceaccount:default:sharenpo를 신뢰하도록 바뀌었다(docs/ROADMAP.md
+# §7). deploy.sh의 HELM_RELEASE 기본값도 같은 날 sharenpo로 맞춰졌으므로,
+# serviceAccount.create만 켜면 이름은 릴리스 이름(sharenpo)을 그대로 따라가
+# trust policy와 자동으로 일치한다 — serviceAccount.name을 따로 줄 필요 없음.
+# role-arn은 이 role의 name이 "${cluster_name}-app"(app-infra/main.tf)이라
+# CLUSTER_NAME 기본값(upload-board-project)에서 고정으로 정해지므로, DB_HOST/
+# S3_BUCKET처럼 이 파일에 그대로 박아뒀다 — CLUSTER_NAME이나 AWS 계정을
+# 바꾸면 이 값도 함께 갱신해야 한다. 이걸 안 켜면(또는 릴리스를 다른 이름으로
+# 설치하면) S3 IRSA 인증이 실패한다 — STORAGE_DRIVER: s3인 이 오버레이에서는
+# 곧바로 업로드가 막히는 회귀다.
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::074416822640:role/upload-board-project-app
 
 # ADR 0047 D2/D4 — 라이브 클러스터에는 addons 상태가 kube-prometheus-stack을 설치하므로
 # 여기서만 ServiceMonitor를 켠다(로컬 kind 클러스터에는 그 CRD가 없어 기본은 비활성).

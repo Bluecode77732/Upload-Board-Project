@@ -13,6 +13,29 @@
 ## [Unreleased]
 
 ### 수정
+- **`deploy.sh`/`values-prod.yaml`의 릴리스 이름이 2026-08-25 "Sharenpo 이름 통일" 결정에서
+  벗어나 `upload-board`로 드리프트해 있었음 (2026-09-03)** — 그 결정은 두 runbook
+  (`k8s/helm/README.md`, `k8s/infra/terraform/README.md`)의 Helm 릴리스 이름을 명시적으로
+  `sharenpo`로 바꿨다. AWS 리소스 식별자(변경하면 라이브 RDS/EKS를 강제로 replace하게 돼서
+  미룬 것)와 달리, Helm 릴리스 이름은 AWS를 건드리지 않고 안전하게 바꿀 수 있다는 게 그
+  이유였다. `k8s/infra/terraform/README.md`의 `helm install`/`upgrade` 예시는 이미
+  `sharenpo`였고 그대로 유지됐다. 그런데 이틀 뒤인 2026-08-27, 실제 첫 라이브 배포를 담기
+  위해 추가된 `deploy.sh`(ADR 0046)와 `values-prod.yaml`은 대신 `upload-board`를
+  기본값으로 삼았다 — 그 시점에 실제로 살아있던 값(단순 `upgrade`로는 안 바뀌고
+  `helm uninstall`+`helm install`이 필요해서 실제로 rename된 적 없는 릴리스)을 따른
+  것이지, 이미 결정된 목표 이름을 따른 게 아니었다. 이 드리프트는 이번 세션의 전용
+  ServiceAccount 작업(아래)이 `app-infra/main.tf`의 새 IRSA trust policy 대상과 일치하는
+  릴리스 이름을 필요로 하면서 드러났다. 결정된 이름으로 되돌려 고쳤다: `deploy.sh`의
+  `HELM_RELEASE` 기본값 → `sharenpo`(`--help` 문구도 맞춰 갱신),
+  `values-prod.yaml`과 `k8s/helm/README.md`의 실제 배포 예시 명령 →
+  `helm upgrade sharenpo . -f values-prod.yaml`. 지금은 라이브 인프라 자체가 없으므로(과금을
+  멈추려고 철거됨, `aws eks/rds` describe 호출이 빈 값을 반환함으로 확인), 다음
+  `bash deploy.sh all`이 정정된 이름으로 그냥 새로 설치된다 — 이 수정 자체만 놓고 보면
+  `helm uninstall upload-board` 같은 마이그레이션이 필요 없다. 다만 이 같은 변경의 다른
+  부분 때문에 그게 왜 여전히 필요한 경우가 있는지는 아래 전용 ServiceAccount 항목 참고.
+  `k8s/helm/values-prod.yaml`의 헤더 주석(이력이 아니라 runbook 예시)도 함께 갱신했다;
+  실제 2026-08-27 `upload-board` 배포를 서술하는 ROADMAP.md §9의 이력 행들은 일부러
+  그대로 두었다.
 - **`ARCHITECTURE.md`(+ko): 현재 코드를 기준으로 전면 재작성 (2026-09-01)** — CLAUDE.md와
   ROADMAP.md가 2026-07-30부터 추적해 오던 문서 감사 과제를 해소했다. 모듈 맵에서 빠져
   있던 모듈 일곱 개(Post, Comment, Storage, AuditLog, TempCleanup, Health, Metrics)를
@@ -25,6 +48,32 @@
   손대지 않았다 — 여전히 미해결이며 ROADMAP.md > Unscheduled에서 추적 중이다.
 
 ### 추가
+- **S3 IRSA용 전용 Helm `ServiceAccount` — `default` ServiceAccount 범위 갭 해소
+  (2026-09-03, [ROADMAP.md](ROADMAP.md) §7)** — `app-infra/`의 S3 IRSA 역할이
+  네임스페이스의 `default` ServiceAccount에 annotate돼 있어서(2026-08-28부터 알려진 갭 —
+  ADR 0043의 Addendum과 `k8s/infra/terraform/README.md`에 기록), 그걸 쓰는 네임스페이스의
+  모든 pod에 S3 접근 권한이 열려 있었다 — 이 앱의 pod만이 아니라. 새
+  `k8s/helm/templates/serviceaccount.yaml`(`ingress.yaml`의 기본-비활성 패턴을 그대로
+  본뜸) + `values.yaml`의 `serviceAccount.create`/`.name`/`.annotations` 블록 +
+  `_helpers.tpl`의 새 `sharenpo.serviceAccountName` 헬퍼(비활성이면 `"default"`로
+  폴백돼 기존 릴리스는 영향 없음)로, 차트가 이제 전용 ServiceAccount를 만들어 쓸 수
+  있다. `deployment.yml`은 `serviceAccountName`을 여기 연결한다; `migration-job.yml`은
+  플래그가 켜져 있어도 일부러 계속 `default`로 돈다 — DB 자격증명만 Secret에서 읽을 뿐
+  S3를 건드리지 않기 때문이다. `app-infra/main.tf`의 `local.app_service_account_name`도
+  같이 갱신했다(`"default"` → `"sharenpo"`, ADR 0043 D8) — IRSA 역할의 trust policy가
+  이제 이 차트가 만드는 ServiceAccount를 대상으로 하도록. `values-prod.yaml`은
+  `serviceAccount.create`를 켜고 이 역할의 ARN을 `annotations`에
+  하드코딩했다(`DB_HOST`/`S3_BUCKET`과 같은 방식), `deploy.sh`의 `HELM_RELEASE` 기본값도
+  거기 맞춰 `sharenpo`로 정정했다(이 정정이 왜 이 기능과 별개로도 필요했는지는 위 `수정`
+  항목 참고). 세 시나리오(비활성, 릴리스-이름-기본값으로 활성, 명시적 이름+annotation으로
+  활성)와 `values-prod.yaml`을 얹은 상태 모두 `helm lint`/`helm template`로 검증했다;
+  `app-infra/`에서 `terraform fmt -check`/`validate` 통과. **실제 AWS엔 아무것도
+  적용하지 않았다** — 지금 계정엔 EKS 클러스터도, RDS 인스턴스도, S3 버킷도 없다(과금을
+  멈추려고 철거됨), 그래서 이건 코드로만 랜딩됐고 `helm`/`terraform` 도구로만 검증됐지
+  실제 assume-role 호출로 검증된 게 아니다. Helm 쪽은 사실상 릴리스 rename(`upload-board`
+  → `sharenpo`)이지만, `helm uninstall` 과정이 전혀 필요 없다 — 정확히는 마이그레이션할
+  라이브 대상 자체가 없기 때문이다. 다음 전체 `deploy.sh all`이 정정된 이름으로 그냥 새로
+  설치된다.
 - **`deploy.sh plan`/`apply` 서브커맨드 — cluster/app-infra/addons의 plan 계산과
   승인을 분리 (2026-09-02,
   [ADR 0046 Addendum](ADR/0046-deploy-sequence-automation.ko.md#addendum-2026-09-02--clusterapp-infraaddons-planapply-분리))**

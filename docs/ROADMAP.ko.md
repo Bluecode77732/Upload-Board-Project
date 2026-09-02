@@ -534,9 +534,12 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   "자동 배포 파이프라인(CD) 없음"을 그대로 유지한다. GitHub Actions 워크플로는 그 자체가
   이 상태를 뒤집는 결정이 될 것이라 기각했다. 범위: Terraform 3-state 순서화 +
   `helm upgrade --install`(`values-prod.yaml` 재사용, `--set` 나열 없음) — 도메인
-  구매/NS 위임, ESO 시크릿 동기화, default ServiceAccount IRSA 어노테이션, `Ingress`
-  활성화는 `k8s/infra/terraform/README.md`가 이미 1회성/인터랙티브라고 문서화한 그대로
-  수동으로 남는다. 구현 내용: 서브커맨드로 강제되는 고정 apply 순서, `cluster/`의 실제
+  구매/NS 위임, ESO 시크릿 동기화, `Ingress` 활성화는 `k8s/infra/terraform/README.md`가
+  이미 1회성/인터랙티브라고 문서화한 그대로 수동으로 남는다. (이 2026-08-27 완료 시점엔
+  여기 수동 항목으로 같이 적혀 있던 `default` ServiceAccount IRSA 어노테이션은
+  2026-09-03에 `values-prod.yaml`의 `serviceAccount.create`로 흡수됐다 — 이 절 아래
+  전용 ServiceAccount 항목 참고 — 그래서 이제 `deploy.sh helm`/`deploy.sh all` 위에
+  따로 얹히는 수동 단계가 아니다.) 구현 내용: 서브커맨드로 강제되는 고정 apply 순서, `cluster/`의 실제
   `terraform output`과 대조하는 region/cluster_name 일치 검증, ACM `-target` 2단계
   apply, 그리고 모든 apply에 걸린 plan-then-confirm 게이트(`terraform plan
   -out=<tmpfile>` → 사람의 y/N → `terraform apply <tmpfile>` — `-auto-approve` 없음).
@@ -576,28 +579,47 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   있다 — 오늘 `serviceAccount.create`를 켜면 이 역할이 아직 신뢰하지 않는 ServiceAccount를
   만들 뿐이라, 그 정책을 갱신하기 전까진 IRSA 인증이 여전히 실패한다. 그 Terraform 쪽 절반이
   바로 아래 다음 미정 항목이다.
-- **`aws_iam_role.app`의 IRSA 신뢰 정책을 Helm 차트의 전용 ServiceAccount에 맞춰 갱신**
-  (2026-09-02 기록, 바로 위 항목에서 이어짐) — `app-infra/main.tf`의 `aws_iam_role.app`
-  `assume_role_policy`는 여전히 `system:serviceaccount:default:default`를 조건으로 매칭한다
-  (ADR 0043 D8). 이제 `k8s/helm/`에 `serviceaccount.yaml`이 생겼으니, 이 Terraform 신뢰
-  정책도 같이 갱신해야 한다 — `system:serviceaccount:default:sharenpo`를 매칭하도록.
-  **ServiceAccount 이름은 2026-09-03에 `sharenpo`로 확정** — 지금 라이브인
-  `upload-board` 릴리스 이름이 아니라, 이 차트 자체가 이미 쓰고 있는
-  `helm install sharenpo .` 관례와 맞춘 것이다(`k8s/helm/README.md`). 그래서
-  `values.yaml`의 `serviceAccount.name`은 비워두면 되지만, 차트의 기본 동작
-  (릴리스 이름 폴백, `sharenpo.serviceAccountName`)이 그 이름으로 정확히
-  떨어지려면 릴리스 자체가 `sharenpo`로 설치돼 있어야 한다. **즉 이 결정은
-  릴리스 rename도 함께 딸려온다**: Helm은 제자리 rename을 지원하지 않으므로,
-  실제 클러스터에 반영하려면 단순 `helm upgrade`가 아니라 `helm uninstall
-  upload-board` 후 새로 `helm install sharenpo .`를 해야 한다(ServiceAccount뿐
-  아니라 Deployment/Service/ConfigMap/migration Job 등 모든 오브젝트 이름이
-  함께 바뀐다). 이 Terraform trust policy 갱신과 그 rename이 둘 다 landing되기
-  전까지는 차트의 `serviceAccount.create=true` 경로는 실제 IRSA 인증에 못 쓰고,
-  `k8s/infra/terraform/README.md`("Known gap")의 수동
-  `kubectl annotate serviceaccount default ...` 단계가 계속 실질적인 방법이다. 아직
-  시작하지 않았다 — 차트 변경이 이미 함축한 결정(신뢰 정책 모양이 차트가 실제로 만드는 것과
-  맞아야 한다는 것)에 뒤따르는 Terraform 전용 작업이라, 위 차트 쪽 절반과 같은 이유로 별도
-  ADR이 필요 없다.
+- ~~**`aws_iam_role.app`의 IRSA 신뢰 정책을 Helm 차트의 전용 ServiceAccount에 맞춰 갱신**~~ —
+  **코드는 2026-09-03에 완성, 적용은 아직 안 함** (2026-09-02 기록, 바로 위 항목에서
+  이어짐). 네 조각이 이제 전부 `sharenpo`라는 이름으로 일관되게 맞아떨어진다:
+  `app-infra/main.tf`의 `local.app_service_account_name`(`"default"`에서 변경, ADR 0043
+  D8 — `aws_iam_role.app`의 `assume_role_policy`가 적용되면
+  `system:serviceaccount:default:sharenpo`를 조건 매칭), `k8s/helm/`의
+  `serviceaccount.yaml` 템플릿, `values-prod.yaml`의 `serviceAccount.create: true` +
+  이 역할 ARN을 `annotations`에 하드코딩(2026-09-03 추가, `DB_HOST`/`S3_BUCKET`과 같은
+  방식), 그리고 `deploy.sh`의 `HELM_RELEASE` 기본값(`"upload-board"`에서 `"sharenpo"`로
+  변경, `--help` 문구도 맞춰 갱신). 이 마지막 조각은 이번 세션이 배포 전에 발견한 실제
+  버그를 막는다: 이게 없었다면, 문서화된 `bash deploy.sh all` 재현 경로가 `sharenpo`를
+  신뢰하는 trust policy는 적용하면서 Helm 릴리스는 `serviceAccount.create` 미설정 상태로
+  여전히 `upload-board`로 설치했을 것이고 — 다음 전체 재배포에서 곧바로 IRSA가 조용히
+  깨지고, `STORAGE_DRIVER=s3` 업로드가 막히는 결과로 이어졌을 것이다. 지금은 인프라가
+  아예 안 살아 있어서 마이그레이션할 기존 릴리스가 없으므로, 이 변경은 앞서 결정한 릴리스
+  rename의 나머지 절반도 공짜로 완성한다 — *다음* `deploy.sh all`이 처음부터 그냥
+  `sharenpo`라는 이름으로 새로 설치되므로 `helm uninstall upload-board` 같은 과정이
+  필요 없다(그 과정은 클러스터가 *예전* 코드로 먼저 재배포된 경우에만 필요해진다).
+  `app-infra/`에서 `terraform fmt -check`/`validate` 통과; `values-prod.yaml`을 얹은
+  `helm lint`/`helm template`도 정상 렌더링. **아직 적용은 안 함**: `terraform plan`엔
+  `S3_BUCKET_NAME`/`DOMAIN_NAME`(개발자 로컬 값, 레포에 없음, `deploy.sh` 참고)이
+  필요하고, 그보다 더 근본적으로 지금은 **적용할 라이브 인프라 자체가 없다** —
+  2026-09-03에 `aws eks list-clusters`(빈 목록), `aws rds describe-db-instances`(빈
+  목록), `sharenpo`/`upload-board` 이름의 S3 버킷 부재로 확인했다. 로컬
+  `cluster/terraform.tfstate`는 이 상태에 비해 오래된 값이다. 적용은 일부러 단독으로
+  실행하지 않았다 — 이름 하나 바꾸자고 EKS/RDS 등을 처음부터 다시 세우는 건 실제
+  시간당 과금이 발생하는 별도 결정이라, 따로 요청받지 않은 이상 이번 세션에서 실행하지
+  않았다. 다음 전체 `deploy.sh all`에서 자연스럽게 일어난다. 그 적용이 있기 전까지는
+  `k8s/infra/terraform/README.md`("Known gap")의 예전 수동
+  `kubectl annotate serviceaccount default ...` 단계가 어차피 annotate할 대상도 없어서
+  의미가 없고 — 막상 그 적용이 일어나고 나면 그 수동 단계는 아예 영구히 안 통하게
+  된다(trust policy가 더는 `default`를 전혀 신뢰하지 않으므로). 새 ADR 필요 없음 — 신뢰
+  정책 모양은 차트와 `deploy.sh`가 실제로 만드는 것과 맞아야 할 뿐, 위 차트 쪽 절반과
+  같은 이유다. 참고로 이 `deploy.sh`/`values-prod.yaml` 수정은 새 naming 결정이 아니다 —
+  아래 "Sharenpo로 제품명 통일"(2026-08-25) 항목이 이미 내린 결정을 되돌린 것뿐이다:
+  그 항목이 두 runbook의 Helm 릴리스 이름을 명시적으로 `sharenpo`로 바꿨고(AWS 리소스
+  rename과 달리 안전해서), `k8s/infra/terraform/README.md`의 `helm install`/`upgrade`
+  예시는 처음부터 그 결정을 반영하고 있었다 — 그 결정이 내려질 당시 `deploy.sh`/
+  `values-prod.yaml`은 아직 존재하지도 않았고, 이틀 뒤 만들어지면서 그 결정을 따라가는
+  대신 실제 첫 라이브 배포를 따라 `upload-board`로 드리프트했을 뿐이다. 전체 경위는
+  [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > 수정` 참고.
 - **로그인 화면의 마크를 교체하거나 걷어내고, 쓰이지 않는 아이콘 스프라이트를 삭제** (2026-08-25
   기록) — Sharenpo 통일 작업(`0a14039`)이 로그인 카드에 워드마크와 나란히
   `<img src="/favicon.svg">` 락업을 넣었다. 그 작업 기준으로는 옳은 판단이었다. 이름 변경

@@ -127,8 +127,12 @@ order below plus `helm upgrade --install` in one script — plan-then-confirm on
 apply, no `-auto-approve` ([ADR 0046](../../../docs/ADR/0046-deploy-sequence-automation.md)).
 Run `bash deploy.sh all` (or `cluster`/`app-infra`/`addons`/`helm` individually; `--help`
 for env vars). It does **not** cover domain purchase/NS delegation, the ESO secret sync,
-the `default` ServiceAccount IRSA annotation, or enabling `Ingress` — those stay manual,
-covered further down this file.
+or enabling `Ingress` — those stay manual, covered further down this file. The app's S3
+IRSA role is wired automatically as of 2026-09-03 — `deploy.sh`'s `HELM_RELEASE` defaults
+to `sharenpo`, matching both `values-prod.yaml`'s `serviceAccount.create: true` and
+`app-infra/main.tf`'s trust policy, so no separate manual annotation step is needed on
+top of `deploy.sh helm`/`deploy.sh all` (see "Known gap" below for the one-time Terraform
+apply this still requires before it actually takes effect).
 
 **Plan/apply split** (ADR 0046 addendum, 2026-09-02): for `cluster`/`app-infra`/`addons`,
 `bash deploy.sh plan <state>` computes and saves the plan to a fixed, gitignored path
@@ -260,32 +264,39 @@ does not always clear on its own.
      --set env.BASE_URL=https://<your-domain>
    ```
 
-## Known gap: the app's S3 IRSA role trust policy still targets `default`, not the chart's dedicated ServiceAccount
+## Known gap: the app's S3 IRSA wiring is code-complete but never applied
 
 `app-infra/`'s `aws_iam_role.app` (output as `app_iam_role_arn`) is the IRSA
 role that lets the app pod's AWS SDK client resolve S3 credentials once
-`STORAGE_DRIVER=s3` is set (ADR 0029, ADR 0043 D8). Its trust policy targets
-`system:serviceaccount:default:default`. The Helm chart (`k8s/helm/`) now
-ships its own `ServiceAccount` template (`serviceaccount.yaml`,
-`serviceAccount.create: true` — see `k8s/helm/README.md` > "Dedicated
-ServiceAccount for IRSA"), so the chart-side half of this gap is closed; the
-manual annotation below is still what actually works today, because this
-role's trust policy was not part of that chart change and still only trusts
-`default:default`:
+`STORAGE_DRIVER=s3` is set (ADR 0029, ADR 0043 D8). As of 2026-09-03, every
+piece of this is consistent and points at the same name, `sharenpo`:
 
-```sh
-cd app-infra
-kubectl annotate serviceaccount default \
-  eks.amazonaws.com/role-arn=$(terraform output -raw app_iam_role_arn)
-```
+- `app-infra/main.tf`'s `local.app_service_account_name` — this role's
+  `assume_role_policy` condition-matches `system:serviceaccount:default:sharenpo`
+- `k8s/helm/`'s `serviceaccount.yaml` template + `values-prod.yaml`'s
+  `serviceAccount.create: true` (with the role's ARN hardcoded in its
+  `annotations`, the same way `DB_HOST`/`S3_BUCKET` are — see
+  `k8s/helm/README.md` > "Dedicated ServiceAccount for IRSA")
+- `deploy.sh`'s `HELM_RELEASE` default — so the ServiceAccount the chart
+  creates resolves to that same name with no `--set` needed
 
-Switching to the chart's dedicated ServiceAccount instead of annotating
-`default` needs this role's `assume_role_policy` (`app-infra/main.tf`)
-updated to trust the ServiceAccount name the chart actually creates (the
-release name by default — see `serviceAccount.name` in `values.yaml`) rather
-than `default:default`. That Terraform change is still unstarted; do it
-before relying on `serviceAccount.create=true` for real IRSA auth, or the
-pod's AWS SDK client will get an assume-role failure at first S3 call.
+**None of this has been applied yet.** `terraform fmt -check`/`validate` pass
+in `app-infra/` and `helm template`/`helm lint` render correctly with
+`values-prod.yaml`, but `terraform plan`/`apply` was not run against this
+change (see below), and there is currently no live cluster to install onto —
+`aws eks list-clusters`/`aws rds describe-db-instances` both returned empty
+2026-09-03, matching the "torn down to stop the bill" state this file already
+describes above. The next `terraform apply` in `app-infra/` (via `deploy.sh`
+or by hand) picks up the new trust policy automatically; no separate manual
+step remains. The old manual workaround —
+`kubectl annotate serviceaccount default eks.amazonaws.com/role-arn=...` —
+**no longer applies once this trust policy is applied**: the role stops
+trusting the `default` ServiceAccount entirely, so annotating it does nothing.
+If a live cluster is ever redeployed with an **older** version of this
+Terraform code (trust policy still targeting `default`) but this repo's
+current Helm chart/`values-prod.yaml` (which no longer annotates `default`,
+and instead creates+annotates a `sharenpo` ServiceAccount), IRSA breaks the
+other way — keep the Terraform and Helm sides deployed from the same commit.
 
 ## Enabling the ALB ingress
 

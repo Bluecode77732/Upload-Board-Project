@@ -127,9 +127,13 @@ k8s/infra/terraform/
 게이트가 걸려 있고 `-auto-approve`는 없습니다
 ([ADR 0046](../../../docs/ADR/0046-deploy-sequence-automation.md)). `bash deploy.sh
 all`을 실행하거나(또는 `cluster`/`app-infra`/`addons`/`helm` 개별 실행; 환경변수는
-`--help` 참고). 도메인 구매/NS 위임, ESO 시크릿 동기화, default ServiceAccount IRSA
-어노테이션, `Ingress` 활성화는 다루지 **않습니다** — 이들은 이 문서 아래쪽에 나오는
-대로 여전히 수동입니다. 아래 수동 순서는 스크립트가 자동화하는 대상이자, 각 단계가
+`--help` 참고). 도메인 구매/NS 위임, ESO 시크릿 동기화, `Ingress` 활성화는 다루지
+**않습니다** — 이들은 이 문서 아래쪽에 나오는 대로 여전히 수동입니다. 앱의 S3 IRSA
+역할은 2026-09-03부터 자동으로 배선됩니다 — `deploy.sh`의 `HELM_RELEASE` 기본값이
+`sharenpo`로 바뀌어 `values-prod.yaml`의 `serviceAccount.create: true`,
+`app-infra/main.tf`의 trust policy와 모두 맞아떨어지므로, `deploy.sh
+helm`/`deploy.sh all` 위에 따로 얹는 수동 어노테이션 단계가 필요 없습니다(이게 실제로
+동작하려면 아직 한 번 필요한 Terraform apply는 아래 "Known gap" 참고). 아래 수동 순서는 스크립트가 자동화하는 대상이자, 각 단계가
 실제로 무엇을 하는지 보는 참고 자료로 남겨둡니다. 이 순서는 최초 배포든, 전체
 `terraform destroy`(아래) 이후의 완전 재배포든 똑같이 적용됩니다:
 
@@ -258,32 +262,42 @@ state 파일 안에만 존재합니다(ADR 0043 D7/D8).
      --set env.BASE_URL=https://<본인-도메인>
    ```
 
-## 알려진 한계: 앱의 S3 IRSA 역할 신뢰 정책이 아직 `default`를 대상으로 함 — 차트의 전용 ServiceAccount가 아니라
+## 알려진 한계: 앱의 S3 IRSA 배선은 코드상 완성됐지만 아직 한 번도 적용되지 않음
 
 `app-infra/`의 `aws_iam_role.app`(`app_iam_role_arn`으로 출력)은
 `STORAGE_DRIVER=s3`를 켰을 때 앱 파드의 AWS SDK 클라이언트가 S3 자격증명을
-실제로 얻게 해주는 IRSA 역할입니다(ADR 0029, ADR 0043 D8). 그런데 이
-역할의 신뢰 정책은 `system:serviceaccount:default:default`를 대상으로
-합니다. Helm 차트(`k8s/helm/`)는 이제 자체 `ServiceAccount` 템플릿을
-갖고 있습니다(`serviceaccount.yaml`, `serviceAccount.create: true` —
-`k8s/helm/README.ko.md`의 "IRSA용 전용 ServiceAccount" 참고). 즉 이 gap의
-차트 쪽 절반은 닫혔습니다. 아래 수동 annotate는 여전히 지금 실제로
-동작하는 방법입니다 — 이 역할의 신뢰 정책은 그 차트 변경에 포함되지
-않았고, 여전히 `default:default`만 신뢰하기 때문입니다:
+실제로 얻게 해주는 IRSA 역할입니다(ADR 0029, ADR 0043 D8). 2026-09-03
+기준으로, 아래 조각들이 전부 같은 이름 `sharenpo`를 가리키도록 일관되게
+맞춰져 있습니다:
 
-```sh
-cd app-infra
-kubectl annotate serviceaccount default \
-  eks.amazonaws.com/role-arn=$(terraform output -raw app_iam_role_arn)
-```
+- `app-infra/main.tf`의 `local.app_service_account_name` — 이 역할의
+  `assume_role_policy` 조건이 `system:serviceaccount:default:sharenpo`를 매칭
+- `k8s/helm/`의 `serviceaccount.yaml` 템플릿 + `values-prod.yaml`의
+  `serviceAccount.create: true`(이 역할의 ARN은 `DB_HOST`/`S3_BUCKET`과
+  같은 방식으로 `annotations`에 하드코딩 — `k8s/helm/README.ko.md`의
+  "IRSA용 전용 ServiceAccount" 참고)
+- `deploy.sh`의 `HELM_RELEASE` 기본값 — 그래서 차트가 만드는
+  ServiceAccount가 `--set` 없이도 같은 이름으로 떨어짐
 
-`default` 대신 차트의 전용 ServiceAccount로 전환하려면 이 역할의
-`assume_role_policy`(`app-infra/main.tf`)를 `default:default`가 아니라
-차트가 실제로 만드는 ServiceAccount 이름(기본값은 릴리스 이름 — `values.yaml`의
-`serviceAccount.name` 참고)을 신뢰하도록 갱신해야 합니다. 이 Terraform
-변경은 아직 시작 전입니다 — `serviceAccount.create=true`를 실제 IRSA
-인증에 기대기 전에 먼저 처리하세요. 안 그러면 파드의 AWS SDK 클라이언트가
-첫 S3 호출에서 assume-role 실패를 겪습니다.
+**이 중 아무것도 아직 적용되지 않았습니다.** `app-infra/`에서
+`terraform fmt -check`/`validate`는 통과하고 `values-prod.yaml`을 얹은
+`helm template`/`helm lint`도 정상 렌더링되지만, 이 변경에 대해
+`terraform plan`/`apply`를 실제로 돌리지는 않았습니다(아래 참고). 지금
+설치할 라이브 클러스터 자체도 없습니다 — 2026-09-03에 확인한
+`aws eks list-clusters`/`aws rds describe-db-instances`가 둘 다 빈 목록을
+반환해, 이 문서 위쪽이 이미 설명하는 "과금을 멈추려고 destroy된" 상태와
+일치합니다. `app-infra/`에서 다음 `terraform apply`(`deploy.sh`를 통해서든
+직접이든)를 돌리면 새 trust policy가 자동으로 반영되며, 별도로 남는 수동
+단계는 없습니다. 예전 수동 우회법 —
+`kubectl annotate serviceaccount default eks.amazonaws.com/role-arn=...` —
+은 **이 trust policy가 적용되고 나면 더 이상 통하지 않습니다**: 그 역할이
+더는 `default` ServiceAccount를 아예 신뢰하지 않으므로, `default`에
+annotate해봐야 아무 효과가 없습니다. 만약 라이브 클러스터를 **더 오래된**
+버전의 이 Terraform 코드(여전히 `default`를 신뢰하는 trust policy)로
+재배포하면서 이 저장소의 최신 Helm 차트/`values-prod.yaml`(더 이상 `default`에
+annotate하지 않고 대신 `sharenpo` ServiceAccount를 만들고 annotate함)을
+같이 쓰면, 반대 방향으로 IRSA가 깨집니다 — Terraform 쪽과 Helm 쪽은 항상
+같은 커밋에서 함께 배포하세요.
 
 ## ALB ingress 켜기
 

@@ -13,6 +13,30 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Fixed
+- **`deploy.sh`/`values-prod.yaml` release name drifted to `upload-board`, away from the
+  2026-08-25 "Unify the product name on Sharenpo" decision (2026-09-03)** — that decision
+  explicitly renamed the Helm release name in both runbooks (`k8s/helm/README.md`,
+  `k8s/infra/terraform/README.md`) to `sharenpo`, on the reasoning that unlike AWS resource
+  identifiers (deferred — renaming those would force-replace the live RDS/EKS), a Helm
+  release name is safe to rename without touching AWS. `k8s/infra/terraform/README.md`'s
+  `helm install`/`upgrade` examples were already `sharenpo` and stayed that way. But
+  `deploy.sh` (ADR 0046) and `values-prod.yaml`, both added two days later on 2026-08-27 to
+  capture the actual first live deployment, defaulted to `upload-board` instead — matching
+  what was live at the time (a release never actually renamed, since that needs
+  `helm uninstall`+`helm install`, not a plain `upgrade`) rather than the already-decided
+  target name. This went unnoticed until this session's dedicated-ServiceAccount work (below)
+  needed a release name that matches `app-infra/main.tf`'s new IRSA trust policy target, which
+  surfaced the mismatch. Fixed by restoring the decided name: `deploy.sh`'s `HELM_RELEASE`
+  default → `sharenpo` (its `--help` text updated to match), `values-prod.yaml`'s and
+  `k8s/helm/README.md`'s real-deployment example commands → `helm upgrade sharenpo . -f
+  values-prod.yaml`. Since no live infrastructure currently exists (torn down to stop the
+  AWS bill, verified via `aws eks/rds` describe calls returning empty), the next
+  `bash deploy.sh all` simply installs fresh under the corrected name — no
+  `helm uninstall upload-board` migration needed for this fix specifically, though see the
+  dedicated-ServiceAccount item below for why one is still needed as a consequence of a
+  separate part of this same change. `k8s/helm/values-prod.yaml`'s header comment (a
+  runbook example, not history) was updated too; the ROADMAP.md §9 history rows describing
+  the actual 2026-08-27 `upload-board` deployment were deliberately left as written.
 - **`ARCHITECTURE.md` (+ko): full rewrite against current code (2026-09-01)** — resolved the
   doc-audit gap CLAUDE.md and ROADMAP.md had tracked since 2026-07-30. Added the seven
   modules missing from the Module Map (Post, Comment, Storage, AuditLog, TempCleanup, Health,
@@ -26,6 +50,32 @@ development line (package.json version).
   Unscheduled.
 
 ### Added
+- **Dedicated Helm `ServiceAccount` for S3 IRSA, closing the `default`-ServiceAccount
+  scoping gap (2026-09-03, [ROADMAP.md](ROADMAP.md) §7)** — `app-infra/`'s S3 IRSA role was
+  annotated onto the namespace's `default` ServiceAccount (documented as a known gap since
+  2026-08-28: ADR 0043's Addendum and `k8s/infra/terraform/README.md`), granting S3 access to
+  every pod in the namespace using it, not only this app's. `k8s/helm/templates/serviceaccount.yaml`
+  (new, mirrors `ingress.yaml`'s disabled-by-default pattern) + `values.yaml`'s
+  `serviceAccount.create`/`.name`/`.annotations` block + a new `sharenpo.serviceAccountName`
+  helper in `_helpers.tpl` (falls back to `"default"` when disabled, so existing releases are
+  unaffected) let the chart create and use its own ServiceAccount instead.
+  `deployment.yml` wires `serviceAccountName` to it; `migration-job.yml` deliberately keeps
+  running as `default` even when the flag is on, since it only reads DB credentials from the
+  Secret and never touches S3. `app-infra/main.tf`'s `local.app_service_account_name` was
+  updated in step (`"default"` → `"sharenpo"`, ADR 0043 D8) so the IRSA role's trust policy
+  targets the ServiceAccount this chart now creates; `values-prod.yaml` turns
+  `serviceAccount.create` on with the role's ARN hardcoded in `annotations` (same treatment as
+  `DB_HOST`/`S3_BUCKET`), and `deploy.sh`'s `HELM_RELEASE` default was corrected to `sharenpo`
+  to match (see the `Fixed` entry above for why that correction was needed independently of
+  this feature). `helm lint`/`helm template` verified under three scenarios (disabled, enabled
+  with the release-name default, enabled with an explicit name+annotation) and against
+  `values-prod.yaml`; `terraform fmt -check`/`validate` pass in `app-infra/`. **Nothing has
+  been applied against live AWS** — there is currently no EKS cluster, RDS instance, or S3
+  bucket in the account (torn down to stop the bill), so this lands as code, verified by
+  `helm`/`terraform` tooling only, not by an actual assume-role call. The Helm side is a
+  release rename in effect (`upload-board` → `sharenpo`) but needs no `helm uninstall` dance
+  to take effect, precisely because nothing is live to migrate away from — the next full
+  `deploy.sh all` simply installs fresh under the corrected name.
 - **`deploy.sh plan`/`apply` subcommands — decouple plan computation from approval for
   `cluster`/`app-infra`/`addons` (2026-09-02,
   [ADR 0046 Addendum](ADR/0046-deploy-sequence-automation.md#addendum-2026-09-02--planapply-split-for-clusterapp-infraaddons))**

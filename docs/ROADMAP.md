@@ -564,9 +564,13 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   precedent and keeping "no automated deploy pipeline (CD)" true — a GitHub Actions
   workflow was rejected for reversing that stance on its own. Scope: Terraform 3-state
   sequencing + `helm upgrade --install` (reusing `values-prod.yaml`, no `--set`
-  enumeration); domain purchase/NS delegation, the ESO secret sync, the `default`
-  ServiceAccount IRSA annotation, and enabling `Ingress` stay manual, matching what
-  `k8s/infra/terraform/README.md` already documented as one-time/interactive. Covers:
+  enumeration); domain purchase/NS delegation, the ESO secret sync, and enabling
+  `Ingress` stay manual, matching what `k8s/infra/terraform/README.md` already
+  documented as one-time/interactive. (The `default` ServiceAccount IRSA annotation
+  listed here as manual too, as of this 2026-08-27 landing, was folded into
+  `values-prod.yaml`'s `serviceAccount.create` on 2026-09-03 — see the dedicated
+  ServiceAccount item further down this section — so it is no longer a separate
+  manual step on top of `deploy.sh helm`/`deploy.sh all`.) Covers:
   fixed apply order via subcommands, region/cluster_name consistency checked against
   `cluster/`'s live `terraform output`, the ACM two-phase `-target` apply, and a
   plan-then-confirm gate on every apply (`terraform plan -out=<tmpfile>` → human `y`/N →
@@ -608,27 +612,49 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `serviceAccount.create` today creates a ServiceAccount the role does not yet trust, so IRSA
   auth still fails until that policy is updated to match the ServiceAccount's actual name. That
   Terraform-side half is the next unscheduled item, immediately below.
-- **Update `aws_iam_role.app`'s IRSA trust policy to match the Helm chart's dedicated
-  ServiceAccount** (recorded 2026-09-02, follows directly from the item above) —
-  `app-infra/main.tf`'s `assume_role_policy` for `aws_iam_role.app` still condition-matches
-  `system:serviceaccount:default:default` (ADR 0043 D8). Now that `k8s/helm/`'s
-  `serviceaccount.yaml` exists, this Terraform trust policy needs the same update: match
-  `system:serviceaccount:default:sharenpo` instead. **ServiceAccount name decided
-  2026-09-03: `sharenpo`** — matches this chart's own `helm install sharenpo .` convention
-  (`k8s/helm/README.md`), not the currently-live `upload-board` release name, so
-  `serviceAccount.name` in `values.yaml` stays unset and the chart's default (release-name
-  fallback, `sharenpo.serviceAccountName`) resolves to it correctly only once the release
-  itself is installed as `sharenpo`. **This decision therefore also carries a release rename**:
-  Helm has no in-place rename, so picking it up on a live cluster means `helm uninstall
-  upload-board` followed by a fresh `helm install sharenpo .` (renaming every object —
-  Deployment/Service/ConfigMap/migration Job — not just the ServiceAccount), not a plain `helm
-  upgrade`. Until both this Terraform trust-policy update and that rename land, the chart's
-  `serviceAccount.create=true` path is unusable for real IRSA auth and the manual
-  `kubectl annotate serviceaccount default ...` step in `k8s/infra/terraform/README.md`
-  ("Known gap") stays the operative path. Not started because it is Terraform-only work
-  depending on a decision already implicit in the chart change (the trust-policy shape simply
-  has to match whatever the chart creates) — no new ADR needed, same reasoning as the chart
-  half above.
+- ~~**Update `aws_iam_role.app`'s IRSA trust policy to match the Helm chart's dedicated
+  ServiceAccount**~~ — **code-complete 2026-09-03, not applied** (recorded 2026-09-02,
+  follows directly from the item above). Four pieces now consistently name-match
+  `sharenpo`: `app-infra/main.tf`'s `local.app_service_account_name` (changed from
+  `"default"`, ADR 0043 D8 — `aws_iam_role.app`'s `assume_role_policy` condition-matches
+  `system:serviceaccount:default:sharenpo` once applied), `k8s/helm/`'s
+  `serviceaccount.yaml` template, `values-prod.yaml`'s `serviceAccount.create: true` +
+  the role's ARN hardcoded in `annotations` (added 2026-09-03, same treatment as
+  `DB_HOST`/`S3_BUCKET`), and `deploy.sh`'s `HELM_RELEASE` default (changed from
+  `"upload-board"` to `"sharenpo"`, its `--help` text updated to match). This last piece
+  closes a real bug this session found before it shipped: without it, the documented
+  `bash deploy.sh all` reproduction path would have applied a trust policy trusting
+  `sharenpo` while still installing the Helm release as `upload-board` with
+  `serviceAccount.create` unset — a silent IRSA break on the very next full redeploy,
+  landing `STORAGE_DRIVER=s3` uploads broken. Because nothing is currently live to
+  migrate away from, this also completes the release-rename half of the earlier
+  decision for free: the *next* `deploy.sh all` simply installs fresh under the name
+  `sharenpo` from the start, no `helm uninstall upload-board` dance needed — that dance
+  only becomes necessary if a cluster is ever redeployed under the *old* code first.
+  `terraform fmt -check`/`validate` pass in `app-infra/`; `helm lint`/`helm template`
+  render correctly with `values-prod.yaml`. **Not applied**: `terraform plan` needs
+  `S3_BUCKET_NAME`/`DOMAIN_NAME` (developer-local, not in the repo, per `deploy.sh`), and
+  more importantly there is currently **no live infrastructure to apply this against** —
+  verified 2026-09-03 via `aws eks list-clusters` (empty), `aws rds describe-db-instances`
+  (empty), and no `sharenpo`/`upload-board`-named S3 bucket in the account; the local
+  `cluster/terraform.tfstate` is stale relative to that. Applying it was deliberately not
+  attempted standalone — spinning up EKS/RDS/etc. from scratch just to land a naming
+  change is a real, hourly-billed action this session did not take without it being
+  separately asked for; it happens naturally on the next full `deploy.sh all`. Until that
+  apply happens, the old manual `kubectl annotate serviceaccount default ...` step in
+  `k8s/infra/terraform/README.md` ("Known gap") is moot either way, with nothing live to
+  annotate — and once the apply does happen, that manual step stops working for good,
+  since the trust policy will no longer accept `default` at all. No new ADR needed — the
+  trust-policy shape simply has to match whatever the chart and `deploy.sh` create, same
+  reasoning as the chart half above. Note this `deploy.sh`/`values-prod.yaml` fix does not
+  introduce a new naming decision — it restores one already made in "Unify the product name
+  on Sharenpo" below (2026-08-25): that entry explicitly renamed the Helm release name in
+  both runbooks to `sharenpo` (safe, unlike an AWS resource rename), and
+  `k8s/infra/terraform/README.md`'s `helm install`/`upgrade` examples reflected that from the
+  start — `deploy.sh`/`values-prod.yaml` just hadn't existed yet when that decision was made,
+  and drifted to `upload-board` (matching the actual first live deploy two days later)
+  instead of picking it up. See [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Fixed` for the
+  full account.
 - **Replace or drop the login page's mark, and delete the unused icon sprite** (recorded
   2026-08-25) — the Sharenpo unification (`0a14039`) gave the login card a lockup of
   `<img src="/favicon.svg">` beside the wordmark, which was the right call for that task:

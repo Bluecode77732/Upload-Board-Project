@@ -39,7 +39,7 @@ REGION="${REGION:-ap-northeast-2}"
 CLUSTER_NAME="${CLUSTER_NAME:-upload-board-project}"
 S3_BUCKET_NAME="${S3_BUCKET_NAME:-}"
 DOMAIN_NAME="${DOMAIN_NAME:-}"
-HELM_RELEASE="${HELM_RELEASE:-upload-board}"
+HELM_RELEASE="${HELM_RELEASE:-sharenpo}"
 
 print_usage() {
   echo "사용법: $(basename "$0") [cluster|app-infra|addons|helm|all]"
@@ -61,7 +61,6 @@ print_usage() {
   echo "이 스크립트가 다루지 않는 것 (README.md 참고, 계속 손으로 처리):"
   echo "  - 도메인 구매 / DNS 위임"
   echo "  - ESO 시크릿 1회성 동기화"
-  echo "  - default ServiceAccount에 S3 IRSA 역할 어노테이션 달기"
   echo "  - Ingress 활성화"
   echo ""
   echo "환경변수:"
@@ -69,7 +68,9 @@ print_usage() {
   echo "  CLUSTER_NAME      기본값: upload-board-project"
   echo "  S3_BUCKET_NAME    app-infra/all 실행 시 필수 (전역적으로 유일한 버킷 이름)"
   echo "  DOMAIN_NAME       app-infra/all 실행 시 필수 (도메인은 미리 구매돼 있어야 함)"
-  echo "  HELM_RELEASE      기본값: upload-board"
+  echo "  HELM_RELEASE      기본값: sharenpo (app-infra의 IRSA trust policy가 신뢰하는"
+  echo "                    ServiceAccount 이름과 반드시 같아야 함 -- values-prod.yaml의"
+  echo "                    serviceAccount.create=true가 이 값을 그대로 SA 이름으로 씀)"
 }
 
 # 목적: terraform plan을 사람이 직접 읽고 확인한 뒤에만, 바로 그 plan을 적용한다.

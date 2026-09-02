@@ -58,10 +58,15 @@ if it's unset, rather than the pod crash-looping on a missing env var.
 
 For the real AWS deployment, `values-prod.yaml` collects the repeated
 `--set env.X=Y` flags (added 2026-08-27, after the first live deployment
-established which values those actually are — see ROADMAP.md §9):
+established which values those actually are — see ROADMAP.md §9). The
+release name is `sharenpo` (decided 2026-09-03, ROADMAP.md §7 — matching
+`deploy.sh`'s `HELM_RELEASE` default, `values-prod.yaml`'s
+`serviceAccount.create: true`, and `app-infra/main.tf`'s IRSA trust policy,
+all four pinned to the same name; the live release deployed under the
+earlier name was `upload-board`, see "Status" above):
 
 ```bash
-helm upgrade upload-board . -f values-prod.yaml
+helm upgrade sharenpo . -f values-prod.yaml
 ```
 
 It carries no secret values — `secrets.existingSecret` still just names the
@@ -94,17 +99,21 @@ the values.
 
 ## Dedicated ServiceAccount for IRSA
 
-`app-infra/`'s `aws_iam_role.app` IRSA role (S3 access under `STORAGE_DRIVER=s3`)
-currently trusts `system:serviceaccount:default:default` — the manual
-`kubectl annotate serviceaccount default ...` step in
-`k8s/infra/terraform/README.md`'s "Known gap" section grants that role to
-**every** pod in the namespace, not only this app's. `serviceAccount.create: true`
-makes this chart render its own `ServiceAccount` and put it (not `default`) on
-the Deployment. The name defaults to the release name; the decided target is
-`sharenpo` (ROADMAP.md §7, "ServiceAccount name decided 2026-09-03:
-`sharenpo`" — matching this file's own `helm install sharenpo .` convention
-above, not the currently-live `upload-board` release), so no
-`serviceAccount.name` override is needed once installed under that name:
+`app-infra/`'s `aws_iam_role.app` is the IRSA role that grants S3 access under
+`STORAGE_DRIVER=s3` (ADR 0029, ADR 0043 D8). `serviceAccount.create: true`
+makes this chart render its own `ServiceAccount` (`serviceaccount.yaml`) and
+put it — not the namespace's `default` one — on the Deployment; without it,
+every pod in the namespace using `default` would end up sharing whatever role
+is annotated onto it, not just this app's pods.
+
+`values-prod.yaml` already turns this on (`serviceAccount.create: true` +
+the role's ARN in `annotations`, added 2026-09-03) — the real-deployment
+command above needs nothing extra. The name resolves to the release name,
+`sharenpo` (ROADMAP.md §7), which is also what `app-infra/main.tf`'s
+`aws_iam_role.app` trust policy and `deploy.sh`'s `HELM_RELEASE` default both
+point at — all three have to name-match for IRSA to actually authenticate.
+
+Turning it on standalone, without `values-prod.yaml`, looks like:
 
 ```bash
 helm upgrade sharenpo . \
@@ -113,17 +122,12 @@ helm upgrade sharenpo . \
   --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(terraform -chdir=../infra/terraform/app-infra output -raw app_iam_role_arn)
 ```
 
-This closes only the chart half of the gap. `aws_iam_role.app`'s trust policy
-is still hardcoded to `default:default` in Terraform (`app-infra/`) — enabling
-`serviceAccount.create` without also updating that trust policy to trust
-`sharenpo` leaves IRSA unable to authenticate (ROADMAP.md §7 tracks that
-Terraform-side update as a separate, not-yet-started item). Updating the trust
-policy is Terraform work, out of scope for this chart change — until it lands,
-keep using the manual `default` annotation, or set `serviceAccount.name` to
-`default` and skip `serviceAccount.create` entirely (no-op, since that's what
-the chart already does by default). The migration
-Job deliberately keeps running as `default` even when `serviceAccount.create`
-is on — it only reads DB credentials from the Secret, never touches S3, so
+None of this has actually been applied against live AWS yet — see
+`k8s/infra/terraform/README.md`'s "Known gap" for the current status and why
+the old manual `kubectl annotate serviceaccount default ...` workaround no
+longer works once `app-infra/`'s trust policy is applied. The migration Job
+deliberately keeps running as `default` even when `serviceAccount.create` is
+on — it only reads DB credentials from the Secret, never touches S3, so
 giving it the app's IRSA identity would widen its permissions for no reason.
 
 ## Env vars

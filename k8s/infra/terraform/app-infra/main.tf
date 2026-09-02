@@ -20,13 +20,15 @@ locals {
   name   = var.cluster_name
   region = var.region
 
-  # ADR 0043 D8 — 이 차트(k8s/helm/)는 아직 전용 ServiceAccount를 만들지 않고
-  # 매니페스트가 없는 채로 각 네임스페이스의 default ServiceAccount를 그대로 쓴다.
-  # 그래서 앱 IRSA 역할의 신뢰 정책도 일단 "default" SA를 대상으로 건다 — 이는
-  # 같은 네임스페이스에서 default SA를 쓰는 모든 파드에 S3 권한이 열린다는 뜻이라,
-  # 전용 ServiceAccount 도입은 별도 Helm 차트 작업으로 남는다(README 참고).
+  # ADR 0043 D8, 갱신 2026-09-03 — 이 차트(k8s/helm/)가 이제 전용 ServiceAccount
+  # 템플릿(serviceaccount.yaml, serviceAccount.create)을 만들 수 있게 되면서
+  # (docs/ROADMAP.md §7), 앱 IRSA 역할의 신뢰 정책 대상도 네임스페이스의 default SA가
+  # 아니라 그 전용 SA로 옮겼다. 이름은 이 차트가 이미 쓰는 helm install sharenpo .
+  # 관례에 맞춰 "sharenpo"로 확정(ROADMAP.md §7) — 릴리스를 그 이름으로 설치했을 때만
+  # sharenpo.serviceAccountName 헬퍼가 이 값과 정확히 일치한다. 네임스페이스는 이 앱이
+  # 여전히 default 네임스페이스에 배포되므로 그대로 둔다.
   app_service_account_namespace = "default"
-  app_service_account_name      = "default"
+  app_service_account_name      = "sharenpo"
 
   # ADR 0043 D7 — Helm 차트의 secrets.existingSecret이 참조할 Secret 이름.
   app_secret_k8s_name = "${local.name}-app-secrets"

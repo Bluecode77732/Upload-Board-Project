@@ -62,10 +62,14 @@ env var 누락으로 crash-loop에 빠지는 대신 설치 자체가 명확한 �
 
 실제 AWS 배포용으로는 `values-prod.yaml`이 반복되는 `--set env.X=Y` 나열을
 정리해둔 파일입니다(2026-08-27, 첫 실제 배포로 어떤 값이 실제로 필요한지
-확인된 뒤 추가 — ROADMAP.md §9 참고):
+확인된 뒤 추가 — ROADMAP.md §9 참고). 릴리스 이름은 `sharenpo`입니다
+(2026-09-03 확정, ROADMAP.md §7 — `deploy.sh`의 `HELM_RELEASE` 기본값,
+`values-prod.yaml`의 `serviceAccount.create: true`, `app-infra/main.tf`의
+IRSA trust policy 넷 다 같은 이름으로 고정돼 있습니다; 이전 이름으로
+실제 배포됐던 라이브 릴리스는 `upload-board`였습니다 — 위 "상태" 참고):
 
 ```bash
-helm upgrade upload-board . -f values-prod.yaml
+helm upgrade sharenpo . -f values-prod.yaml
 ```
 
 비밀값은 여기 없습니다 — `secrets.existingSecret`은 위에서 만든 Secret의
@@ -97,18 +101,21 @@ helm upgrade upload-board . -f values-prod.yaml
 
 ## IRSA용 전용 ServiceAccount
 
-`app-infra/`의 `aws_iam_role.app` IRSA 역할(`STORAGE_DRIVER=s3`일 때 S3 접근)은
-현재 `system:serviceaccount:default:default`를 신뢰합니다 —
-`k8s/infra/terraform/README.md` "Known gap" 절의 수동
-`kubectl annotate serviceaccount default ...` 단계는 이 역할을 이 앱뿐 아니라
-**네임스페이스의 모든 pod**에 부여합니다. `serviceAccount.create: true`로
-켜면 이 차트가 자체 `ServiceAccount`를 만들어 Deployment에 `default` 대신
-그것을 붙입니다. 이름은 기본적으로 릴리스 이름을 따르며, 확정된 목표
-이름은 `sharenpo`입니다(ROADMAP.md §7 "ServiceAccount 이름은 2026-09-03에
-`sharenpo`로 확정" — 지금 라이브인 `upload-board` 릴리스가 아니라, 바로
-위에서 이 파일이 이미 쓰고 있는 `helm install sharenpo .` 관례와 맞춘 것).
-그 이름으로 설치돼 있으면 `serviceAccount.name`을 따로 오버라이드할
-필요가 없습니다:
+`app-infra/`의 `aws_iam_role.app`은 `STORAGE_DRIVER=s3`일 때 S3 접근을
+허용하는 IRSA 역할입니다(ADR 0029, ADR 0043 D8). `serviceAccount.create:
+true`로 켜면 이 차트가 자체 `ServiceAccount`(`serviceaccount.yaml`)를 만들어
+Deployment에 네임스페이스의 `default` 대신 그것을 붙입니다 — 이게 없으면
+`default`를 쓰는 네임스페이스의 모든 pod가 거기 annotate된 역할을 이 앱
+파드뿐 아니라 다 같이 나눠 쓰게 됩니다.
+
+`values-prod.yaml`은 이미 이걸 켜뒀습니다(`serviceAccount.create: true` +
+이 역할의 ARN을 `annotations`에 — 2026-09-03 추가), 그래서 위 실제 배포
+명령엔 더 얹을 게 없습니다. 이름은 릴리스 이름인 `sharenpo`로 떨어지는데
+(ROADMAP.md §7), 이건 `app-infra/main.tf`의 `aws_iam_role.app` trust
+policy와 `deploy.sh`의 `HELM_RELEASE` 기본값이 가리키는 이름과도 같습니다
+— 셋 다 이름이 맞아야 IRSA가 실제로 인증됩니다.
+
+`values-prod.yaml` 없이 단독으로 켜려면:
 
 ```bash
 helm upgrade sharenpo . \
@@ -117,17 +124,13 @@ helm upgrade sharenpo . \
   --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(terraform -chdir=../infra/terraform/app-infra output -raw app_iam_role_arn)
 ```
 
-이건 이 gap의 차트 쪽 절반만 닫습니다. `aws_iam_role.app`의 trust policy는
-Terraform(`app-infra/`) 쪽에 여전히 `default:default`로 하드코딩돼 있습니다 —
-그 trust policy를 `sharenpo`를 신뢰하도록 같이 갱신하지 않으면
-`serviceAccount.create`만 켜서는 IRSA가 인증되지 않습니다(그 Terraform 쪽
-갱신은 ROADMAP.md §7에 별도의 아직 미착수 항목으로 추적 중). trust policy
-갱신은 Terraform 쪽 작업이라 이번 차트 변경 범위 밖입니다 — 그게 landing되기
-전까지는 계속 수동 `default` annotate를 쓰거나, `serviceAccount.name`을
-`default`로 두고 `serviceAccount.create`는 켜지 않으면 됩니다(차트 기본
-동작과 동일한 no-op). migration Job은 `serviceAccount.create`가 켜져 있어도
-일부러 계속 `default`로 돕니다 — DB 자격증명만 Secret에서 읽을 뿐 S3를
-건드리지 않으므로, 앱의 IRSA 신원을 붙이면 이유 없이 권한만 넓어집니다.
+이 중 아무것도 아직 실제 AWS에 적용되지 않았습니다 — 현재 상태와, 예전
+수동 `kubectl annotate serviceaccount default ...` 우회법이 `app-infra/`의
+trust policy 적용 이후 왜 더 이상 안 통하는지는
+`k8s/infra/terraform/README.md`의 "Known gap" 참고. migration Job은
+`serviceAccount.create`가 켜져 있어도 일부러 계속 `default`로 돕니다 — DB
+자격증명만 Secret에서 읽을 뿐 S3를 건드리지 않으므로, 앱의 IRSA 신원을
+붙이면 이유 없이 권한만 넓어집니다.
 
 ## Env var
 
