@@ -558,6 +558,18 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   없기 때문이다(그 커밋 시점에 `docker-publish` 잡 자체는 있었지만 push까지
   완료된 적이 없음; `:latest`도 지금 당장 `404`). 이는 실패-시-시끄럽게 경로가
   이론상으로만이 아니라 `main`에서도 `dev`와 똑같이 실제로 작동함을 증명한다.
+  **같은 날 두 번째 보완**: 매번 명령 앞에 `DEPLOY_BRANCH=main`을 타이핑해야 하는 게
+  번거롭다고 개발자가 직접 지적함. `deploy_helm()`이 이제 브랜치를 첫 번째 위치
+  인자로도 받는다 — `plan`/`apply`가 이미 쓰는 대상 state 이름 자리를 그대로
+  재사용한 것으로, `deploy.sh helm main`(또는 `deploy.sh all main`)이 짧은 형태다.
+  `DEPLOY_BRANCH`는 매번 브랜치명을 타이핑하기보다 한 번 설정해두고 싶은 사람을
+  위해 그대로 남는다 — 어느 한쪽이 다른 쪽의 우회책이 아니라 둘 다 정식 방식이다.
+  실제 스크립트의 진짜 코드 경로로(재구현한 스니펫이 아니라) 라이브 검증함, 빈
+  stdin을 넘겨 마지막 `y`/N 승인 단계에서 클러스터를 건드리기 전에 안전하게
+  중단시킴: `deploy.sh helm main`은 `main`의 조회 단계를 정확히 거쳐 위와 같은
+  `404`를 그대로 재현하고, `deploy.sh helm`(인자 없음)은 `dev`로 정확히
+  폴백해 `200`을 확인한 뒤 실제 실행될 `helm upgrade` 명령까지 출력하고
+  중단한다.
 - ~~**`cluster` → `app-infra` → `addons` → Helm 배포 순서 자동화**~~ — **2026-08-27 완료**
   ([ADR 0046](ADR/0046-deploy-sequence-automation.ko.md)). 도구: 순수 bash 스크립트
   (`k8s/infra/terraform/deploy.sh`) — 기존 `build-and-push.sh` 선례와 같은 형태이며

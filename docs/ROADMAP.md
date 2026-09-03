@@ -583,6 +583,17 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   no image has ever been successfully published from `main` (its `docker-publish` job existed
   as of that commit but never completed a push; `:latest` itself is also `404` right now) —
   proving the fail-loud path works for `main` exactly as it does for `dev`, not just in theory.
+  **Second same-day addendum**: typing `DEPLOY_BRANCH=main` before every command was
+  friction the developer flagged directly. `deploy_helm()` now also takes the branch as its
+  first positional argument — reusing the exact slot `plan`/`apply` already use for a target
+  state name — so `deploy.sh helm main` (or `deploy.sh all main`) is the short form, and
+  `DEPLOY_BRANCH` remains for anyone who'd rather set it once and never type a branch name
+  per invocation. Both are first-class, not one a workaround for the other. Live-verified via
+  the real script's actual code path (not a reimplemented snippet), piping empty stdin so the
+  final `y`/N approval aborts safely before touching any cluster: `deploy.sh helm main`
+  correctly walks through `main`'s resolve step and hits the same `404` as above; `deploy.sh
+  helm` (no argument) correctly falls back to `dev`, resolves `200`, and prints the full
+  planned `helm upgrade` command before the abort.
 - ~~**Automate the `cluster` → `app-infra` → `addons` → Helm deploy sequence**~~ — **landed
   2026-08-27** ([ADR 0046](ADR/0046-deploy-sequence-automation.md)). Tool: a plain bash
   script (`k8s/infra/terraform/deploy.sh`), matching the existing `build-and-push.sh`

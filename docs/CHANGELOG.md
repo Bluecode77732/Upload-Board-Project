@@ -78,6 +78,13 @@ development line (package.json version).
   HEAD represents. Both paths live-verified: `DEPLOY_BRANCH=dev` resolves to `200`;
   `DEPLOY_BRANCH=main` correctly resolves to `404` (`origin/main` has never had a
   successfully-published image — last moved 2026-08-13, 123 commits behind `origin/dev`).
+  **Second same-day addendum**: `deploy_helm()` now also accepts the branch as its first
+  positional argument (`deploy.sh helm main`, `deploy.sh all main`), reusing the same slot
+  `plan`/`apply` already use for a target state name — shorter than typing `DEPLOY_BRANCH=`
+  every time. `DEPLOY_BRANCH` remains equally valid for a set-once preference. Verified via
+  the real script's code path (empty stdin, safe abort before touching any cluster):
+  `helm main` walks `main`'s resolve step and hits the same `404`; `helm` with no argument
+  falls back to `dev` and resolves `200`.
 
 ### Added
 - **Dedicated Helm `ServiceAccount` for S3 IRSA, closing the `default`-ServiceAccount

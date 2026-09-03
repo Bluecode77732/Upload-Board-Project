@@ -51,9 +51,13 @@ DEPLOY_BRANCH="${DEPLOY_BRANCH:-dev}"
 IMAGE_TAG="${IMAGE_TAG:-}"
 
 print_usage() {
-  echo "사용법: $(basename "$0") [cluster|app-infra|addons|helm|all]"
+  echo "사용법: $(basename "$0") [cluster|app-infra|addons|helm|all] [브랜치]"
   echo "       $(basename "$0") plan [cluster|app-infra|addons]"
   echo "       $(basename "$0") apply [cluster|app-infra|addons]"
+  echo ""
+  echo "helm/all 뒤의 [브랜치]는 그 브랜치의 최신 이미지를 배포하라는 뜻이다."
+  echo "예: $(basename "$0") helm main   (매번 DEPLOY_BRANCH=main을 앞에 붙이는 것보다 짧다)"
+  echo "    $(basename "$0") helm        (브랜치 생략 -- DEPLOY_BRANCH, 기본 dev)"
   echo ""
   echo "README.md의 'cluster -> app-infra -> addons -> Helm' 순서를 그대로 따라간다."
   echo "모든 terraform apply는 먼저 plan을 보여주고, 사람이 직접 y를 입력해야만"
@@ -80,8 +84,8 @@ print_usage() {
   echo "  HELM_RELEASE      기본값: sharenpo (app-infra의 IRSA trust policy가 신뢰하는"
   echo "                    ServiceAccount 이름과 반드시 같아야 함 -- values-prod.yaml의"
   echo "                    serviceAccount.create=true가 이 값을 그대로 SA 이름으로 씀)"
-  echo "  DEPLOY_BRANCH     기본값: dev (helm 단계에서 이 브랜치 최신 커밋의 이미지를"
-  echo "                    자동 조회해 씀). main의 최신을 배포하려면 DEPLOY_BRANCH=main"
+  echo "  DEPLOY_BRANCH     기본값: dev (helm/all에 [브랜치] 인자를 안 줬을 때 대신"
+  echo "                    쓰는 기본값). 매번 인자로 넘기기 번거로우면 이걸로 고정 가능"
   echo "  IMAGE_TAG         기본값: 비어 있음 (DEPLOY_BRANCH 조회 결과를 씀)."
   echo "                    명시하면 DEPLOY_BRANCH 조회 자체를 건너뛰고 그 태그를 강제로"
   echo "                    씀 (예: 예전 sha로 롤백)"
@@ -357,37 +361,42 @@ apply_addons() {
 #   DEPLOY_BRANCH=main으로 같은 로직을 그대로 태운다 -- 두 브랜치를 다른 코드
 #   경로로 다루지 않는다. 태그를 뭘 쓸지 "판단"하는 건 여전히 사람 몫이다(y/N
 #   승인) -- 이 함수는 "지금 뭐가 있는지 조회"만 기계가 대신한다.
-# 방법: IMAGE_TAG가 비어 있으면 origin/$DEPLOY_BRANCH를 fetch해 최신 sha를 얻고,
-#   Docker Hub의 공개 Hub API(인증 불필요, docker-tag-cleanup.yml이 이미 쓰는 것과
-#   같은 API)로 그 sha 태그가 실제로 존재하는지 HTTP 상태 코드만으로 확인한다(jq
-#   등 새 의존성 없이 curl -w만 사용 -- 이 스크립트의 "쉬운 스타일" 원칙 유지).
-#   없으면 조용히 낡은 태그로 진행하는 대신 즉시 에러로 중단한다(예: main을
-#   골랐는데 main에서 성공적으로 발행된 이미지가 아직 하나도 없는 경우, 이 에러가
-#   바로 그걸 알려준다). IMAGE_TAG를 명시하면 이 조회 전체를 건너뛰고 그 값을
-#   그대로 쓴다(예: 예전 sha로 롤백).
+# 방법: 첫 번째 인자로 브랜치를 받는다(예: deploy_helm main) -- plan/apply
+#   서브커맨드가 이미 쓰는 두 번째 위치 인자(target)와 같은 자리를 재사용한 것으로,
+#   매번 DEPLOY_BRANCH=main을 앞에 붙이는 것보다 짧다(`deploy.sh helm main`).
+#   인자를 안 주면 DEPLOY_BRANCH(기본 dev)로 떨어진다 -- 두 방식 모두 항상 지원한다.
+#   IMAGE_TAG가 비어 있으면 origin/<브랜치>를 fetch해 최신 sha를 얻고, Docker Hub의
+#   공개 Hub API(인증 불필요, docker-tag-cleanup.yml이 이미 쓰는 것과 같은 API)로
+#   그 sha 태그가 실제로 존재하는지 HTTP 상태 코드만으로 확인한다(jq 등 새 의존성
+#   없이 curl -w만 사용 -- 이 스크립트의 "쉬운 스타일" 원칙 유지). 없으면 조용히
+#   낡은 태그로 진행하는 대신 즉시 에러로 중단한다(예: main을 골랐는데 main에서
+#   성공적으로 발행된 이미지가 아직 하나도 없는 경우, 이 에러가 바로 그걸
+#   알려준다). IMAGE_TAG를 명시하면 이 조회 전체를 건너뛰고 그 값을 그대로
+#   쓴다(예: 예전 sha로 롤백).
 deploy_helm() {
   local helm_dir="$SCRIPT_DIR/../../helm"
+  local branch="${1:-$DEPLOY_BRANCH}"
   local resolved_tag="$IMAGE_TAG"
 
   if [ -z "$resolved_tag" ]; then
-    echo "==> IMAGE_TAG가 지정되지 않아, $DEPLOY_BRANCH의 최신 커밋 이미지를 자동으로 조회합니다."
-    git fetch origin "$DEPLOY_BRANCH" --quiet
-    resolved_tag="$(git rev-parse "origin/$DEPLOY_BRANCH")"
+    echo "==> IMAGE_TAG가 지정되지 않아, $branch의 최신 커밋 이미지를 자동으로 조회합니다."
+    git fetch origin "$branch" --quiet
+    resolved_tag="$(git rev-parse "origin/$branch")"
 
     local status_code
     status_code="$(curl -s -o /dev/null -w "%{http_code}" \
       "https://hub.docker.com/v2/repositories/bluecode1775/sharenpo/tags/${resolved_tag}/")"
 
     if [ "$status_code" != "200" ]; then
-      echo "에러: $DEPLOY_BRANCH의 최신 커밋($resolved_tag)에 대한 이미지가 Docker Hub에" >&2
+      echo "에러: $branch의 최신 커밋($resolved_tag)에 대한 이미지가 Docker Hub에" >&2
       echo "아직 없습니다 (HTTP $status_code). docker-publish 워크플로가 아직" >&2
-      echo "안 끝났거나, 그 커밋이 아직 origin/$DEPLOY_BRANCH에 push되지 않았을 수" >&2
+      echo "안 끝났거나, 그 커밋이 아직 origin/$branch에 push되지 않았을 수" >&2
       echo "있습니다. GitHub Actions 진행 상황을 확인하거나, 특정 태그를 강제로" >&2
       echo "쓰려면 IMAGE_TAG=<태그> 환경변수로 이 조회를 건너뛸 수 있습니다." >&2
       exit 1
     fi
 
-    echo "==> 확인됨: $DEPLOY_BRANCH 최신 커밋 $resolved_tag 이미지가 Docker Hub에 존재합니다."
+    echo "==> 확인됨: $branch 최신 커밋 $resolved_tag 이미지가 Docker Hub에 존재합니다."
   else
     echo "==> IMAGE_TAG=$resolved_tag 가 명시적으로 지정되어, 자동 조회를 건너뜁니다."
   fi
@@ -408,7 +417,8 @@ deploy_helm() {
 
 # 인자를 안 주면 "all"을 실행한다.
 command="${1:-all}"
-# plan/apply 서브커맨드일 때만 쓰는 두 번째 인자(대상 state 이름).
+# 두 번째 인자: plan/apply일 때는 대상 state 이름, helm/all일 때는 배포할
+# 브랜치(예: "deploy.sh helm main") -- 안 주면 helm/all은 DEPLOY_BRANCH로 떨어진다.
 target="${2:-}"
 
 case "$command" in
@@ -422,13 +432,13 @@ case "$command" in
     deploy_addons
     ;;
   helm)
-    deploy_helm
+    deploy_helm "$target"
     ;;
   all)
     deploy_cluster
     deploy_app_infra
     deploy_addons
-    deploy_helm
+    deploy_helm "$target"
     ;;
   plan)
     case "$target" in

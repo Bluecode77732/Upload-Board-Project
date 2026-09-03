@@ -75,7 +75,14 @@
   우회 수단으로 남았다. 두 경로 모두 라이브 검증함: `DEPLOY_BRANCH=dev`는 `200`으로
   확인되고, `DEPLOY_BRANCH=main`은 정확히 `404`로 확인된다(`origin/main`은
   2026-08-13 이후 한 번도 안 움직여 성공적으로 발행된 이미지가 없음 —
-  `origin/dev`보다 123커밋 뒤처짐).
+  `origin/dev`보다 123커밋 뒤처짐). **같은 날 두 번째 보완**: `deploy_helm()`이
+  이제 브랜치를 첫 번째 위치 인자로도 받는다(`deploy.sh helm main`,
+  `deploy.sh all main`) — `plan`/`apply`가 이미 쓰는 대상 state 이름 자리를
+  재사용한 것으로, 매번 `DEPLOY_BRANCH=`를 타이핑하는 것보다 짧다. 한 번
+  설정해두고 싶은 사람을 위해 `DEPLOY_BRANCH`도 동등하게 유효하다. 실제
+  스크립트의 코드 경로로 검증함(빈 stdin으로 클러스터를 건드리기 전에 안전
+  중단): `helm main`은 `main`의 조회 단계를 거쳐 같은 `404`를 재현하고, 인자
+  없는 `helm`은 `dev`로 폴백해 `200`을 확인한다.
 
 ### 추가
 - **S3 IRSA용 전용 Helm `ServiceAccount` — `default` ServiceAccount 범위 갭 해소
