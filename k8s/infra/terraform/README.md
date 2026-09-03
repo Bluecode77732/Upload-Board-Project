@@ -134,6 +134,32 @@ to `sharenpo`, matching both `values-prod.yaml`'s `serviceAccount.create: true` 
 top of `deploy.sh helm`/`deploy.sh all` (see "Known gap" below for the one-time Terraform
 apply this still requires before it actually takes effect).
 
+**Which branch's image gets deployed** (2026-09-04): `deploy.sh helm`/`deploy.sh all` no
+longer trust whatever tag happens to be pinned in `values-prod.yaml` — every run resolves
+the image fresh, from a branch, at deploy time. Default is `dev` (matching every real deploy
+this project has done so far); pass a branch as the second argument to deploy from `main`
+instead:
+
+```sh
+bash deploy.sh helm main   # deploy main's latest published image
+bash deploy.sh helm        # deploy dev's latest published image (default)
+```
+
+This is per-invocation, not sticky — merging to `main` doesn't change what the next bare
+`bash deploy.sh helm` deploys; you still type `main` every time you want it. To avoid
+retyping across several commands in one session, set it once instead:
+
+```sh
+export DEPLOY_BRANCH=main   # this shell session only
+bash deploy.sh helm         # now deploys main without the argument
+```
+
+Either form resolves the branch's current HEAD commit and checks Docker Hub for a matching
+image tag before proceeding — a missing image (nothing published from that branch yet, or
+CI still running) aborts with a clear error instead of silently deploying something stale.
+`IMAGE_TAG=<tag>` remains as a raw override for anything neither branch's HEAD represents
+(e.g. rolling back to an older sha).
+
 **Plan/apply split** (ADR 0046 addendum, 2026-09-02): for `cluster`/`app-infra`/`addons`,
 `bash deploy.sh plan <state>` computes and saves the plan to a fixed, gitignored path
 and exits — no apply. `bash deploy.sh apply <state>` re-shows that saved plan and still

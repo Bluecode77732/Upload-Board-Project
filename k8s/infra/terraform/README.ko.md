@@ -133,9 +133,35 @@ all`을 실행하거나(또는 `cluster`/`app-infra`/`addons`/`helm` 개별 실�
 `sharenpo`로 바뀌어 `values-prod.yaml`의 `serviceAccount.create: true`,
 `app-infra/main.tf`의 trust policy와 모두 맞아떨어지므로, `deploy.sh
 helm`/`deploy.sh all` 위에 따로 얹는 수동 어노테이션 단계가 필요 없습니다(이게 실제로
-동작하려면 아직 한 번 필요한 Terraform apply는 아래 "Known gap" 참고). 아래 수동 순서는 스크립트가 자동화하는 대상이자, 각 단계가
-실제로 무엇을 하는지 보는 참고 자료로 남겨둡니다. 이 순서는 최초 배포든, 전체
-`terraform destroy`(아래) 이후의 완전 재배포든 똑같이 적용됩니다:
+동작하려면 아직 한 번 필요한 Terraform apply는 아래 "Known gap" 참고).
+
+**어느 브랜치의 이미지가 배포되는가** (2026-09-04): `deploy.sh helm`/`deploy.sh all`은
+더 이상 `values-prod.yaml`에 고정된 태그를 그대로 믿지 않습니다 — 실행할 때마다 브랜치
+기준으로 이미지를 새로 조회합니다. 기본값은 `dev`(지금까지 이 프로젝트의 모든 실제
+배포와 일치)이고, `main`을 배포하려면 두 번째 인자로 브랜치를 넘깁니다:
+
+```sh
+bash deploy.sh helm main   # main의 최신 발행 이미지 배포
+bash deploy.sh helm        # dev의 최신 발행 이미지 배포 (기본값)
+```
+
+이건 실행할 때마다 적용되는 것이지, 한 번 정해지면 계속 유지되는 게 아닙니다 —
+`main`으로 merge했다고 해서 다음번 `bash deploy.sh helm`(인자 없음)이 자동으로 바뀌지
+않습니다, 매번 `main`을 직접 타이핑해야 합니다. 한 세션에서 여러 명령을 반복 실행할
+땐 아래처럼 한 번만 설정해두는 게 더 편합니다:
+
+```sh
+export DEPLOY_BRANCH=main   # 이 셸 세션 동안만
+bash deploy.sh helm         # 이제 인자 없이도 main을 배포
+```
+
+두 방식 모두 그 브랜치의 현재 HEAD 커밋을 확인하고 Docker Hub에 매칭되는 이미지
+태그가 있는지 진행 전에 확인합니다 — 이미지가 없으면(그 브랜치에서 아직 아무것도
+발행된 적 없거나 CI가 아직 도는 중) 조용히 낡은 걸로 진행하는 대신 명확한 에러로
+중단합니다. `IMAGE_TAG=<태그>`는 두 브랜치의 HEAD가 아닌 것(예: 예전 sha로 롤백)을
+쓸 때만의 raw override로 남아 있습니다. 아래 수동 순서는 스크립트가 자동화하는
+대상이자, 각 단계가 실제로 무엇을 하는지 보는 참고 자료로 남겨둡니다. 이 순서는
+최초 배포든, 전체 `terraform destroy`(아래) 이후의 완전 재배포든 똑같이 적용됩니다:
 
 **plan/apply 분리** (ADR 0046 addendum, 2026-09-02): `cluster`/`app-infra`/`addons`에
 한해 `bash deploy.sh plan <state>`는 plan을 계산해 고정된 gitignore 경로에 저장만
