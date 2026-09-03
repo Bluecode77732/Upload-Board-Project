@@ -520,7 +520,7 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `main` on a cadence) were not pursued — (b) alone closes the "an image never gets
   built from `dev`" gap this row exists for; the original write-up's mention of them is
   kept for context, not as still-open follow-ups.
-- **`image.tag: "latest"` default silently deploys stale code** (found 2026-08-28,
+- ~~**`image.tag: "latest"` default silently deploys stale code**~~ (found 2026-08-28,
   reproducing an earlier deploy step by hand) — `k8s/helm/values.yaml`'s default
   `image.tag` is `"latest"`, but `.github/workflows/ci.yml`'s `docker-publish` job only
   rebuilds that tag on push to `main`; this project's actual work happens on `dev`, which
@@ -536,16 +536,12 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   unaffected — this gap only bites a bare `helm install`/`upgrade` that skips it, exactly
   the shape of command a developer reaches for when following `k8s/helm/README.md`'s
   generic instructions or reproducing a past step by hand.
-  **Not started because** three different fixes are plausible and the tradeoff needs the
-  developer's input, not a unilateral pick: (a) drop `values.yaml`'s `image.tag` default
-  entirely so a bare `helm install` fails fast on a missing required value instead of
-  silently resolving to a stale tag; (b) change `docker-publish`'s trigger (or add a
-  second job) to also build on push to `dev`, so `:latest` actually tracks the branch this
-  project develops on; (c) merge `dev` into `main` on a regular cadence so `:latest`'s
-  existing `main`-only trigger stops being the mismatch. (a) is a Helm-chart-only change;
-  (b) touches CI (Scope Discipline flags new/changed CI behavior for confirmation); (c) is
-  a workflow/branching-policy decision, not a code change at all. Revisit with a
-  comparison table across these three before implementing any of them.
+  Three fixes were plausible and needed the developer's input rather than a unilateral pick:
+  (a) drop `values.yaml`'s `image.tag` default entirely so a bare `helm install` fails fast
+  on a missing required value instead of silently resolving to a stale tag; (b) change
+  `docker-publish`'s trigger (or add a second job) to also build on push to `dev`, so
+  `:latest` actually tracks the branch this project develops on; (c) merge `dev` into `main`
+  on a regular cadence so `:latest`'s existing `main`-only trigger stops being the mismatch.
   **Recurred 2026-08-29/30** during [ADR 0047](ADR/0047-observability-prometheus-grafana.md)
   D4's live verification, in a variant the original write-up didn't cover: even
   `values-prod.yaml`'s *pinned* tag (`ssl-fix` at the time, `db-ssl-ca` by this point) went
@@ -555,9 +551,26 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   install": *no* tag, pinned or default, updates itself when `dev` moves, because
   `docker-publish` never builds from `dev` at all. Unblocking the ADR 0047 verification
   itself only needed a one-off manual `build-and-push.sh`-style build+push +
-  `values-prod.yaml` tag bump — deliberately not a fix for this row, which stays open with
-  its three candidates unchanged; the recurrence is recorded here as evidence for whichever
-  option the developer picks next, not a reason to pick one now.
+  `values-prod.yaml` tag bump — deliberately not a fix for this row at the time.
+  **Resolved 2026-09-03** with a fourth option none of (a)/(b)/(c) covered: `deploy.sh`'s
+  `deploy_helm()` now resolves the tag itself at deploy time instead of trusting whatever is
+  pinned in `values-prod.yaml`. When `IMAGE_TAG` is unset (the default), it fetches
+  `origin/dev`, reads its HEAD sha, and checks Docker Hub's public Hub API
+  (`GET /v2/repositories/bluecode1775/sharenpo/tags/<sha>/`, unauthenticated — the same
+  endpoint shape `docker-tag-cleanup.yml` already uses) for a `200` before proceeding; a
+  `404` aborts with a clear message instead of silently deploying a stale tag. Live-verified
+  against the real repo: `origin/dev`'s HEAD (`38b370f...`, 28 commits behind local `dev`
+  since nothing in this session had been pushed yet) resolved to `200`, matching exactly the
+  one tag Docker Hub's own listing showed. `IMAGE_TAG=<tag>` remains as an escape hatch to
+  skip the lookup entirely (e.g. `IMAGE_TAG=latest` to deploy `main`'s image, or roll back to
+  an older sha). (a) and (c) were set aside rather than chosen: (a) would only make a bare
+  `helm install` fail loudly, not keep a real deploy fresh; (c) is a branching-policy change
+  the developer explicitly does not want, since merging `dev` into `main` late is a
+  deliberate choice, not an oversight. (b) stays landed separately, unchanged — this row's
+  fix is what closes the gap (b) left open. The design mirrors
+  [ADR 0046](ADR/0046-deploy-sequence-automation.md)'s own human/machine split: the machine
+  only *resolves* what currently exists, the human still approves every `helm upgrade` via
+  the existing `y`/N gate — no new automated-CD surface.
 - ~~**Automate the `cluster` → `app-infra` → `addons` → Helm deploy sequence**~~ — **landed
   2026-08-27** ([ADR 0046](ADR/0046-deploy-sequence-automation.md)). Tool: a plain bash
   script (`k8s/infra/terraform/deploy.sh`), matching the existing `build-and-push.sh`

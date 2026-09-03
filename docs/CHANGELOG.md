@@ -61,6 +61,17 @@ development line (package.json version).
   `CLAUDE.md`'s own Never Do Group 2 `getFiles(take, skip)` example, bundled into the
   original gap as "same task," was **not** touched — still open, tracked in ROADMAP.md >
   Unscheduled.
+- **`deploy.sh`: image tag no longer trusted blindly from `values-prod.yaml` — resolved at
+  deploy time instead (2026-09-03, [ROADMAP.md](ROADMAP.md) §7)** — closes the recurring
+  "pinned tag goes stale" gap (first hit 2026-08-28, recurred 2026-08-29/30 when
+  `MetricsModule` shipped on `dev` but the live pod kept serving a 404 on `/metrics` because
+  nothing had rebuilt the pinned image). `deploy_helm()` now fetches `origin/dev`, checks
+  Docker Hub's public Hub API for a `200` on that commit's sha tag, and passes it via
+  `--set image.tag=...` — a `404` aborts loudly instead of silently deploying stale code. An
+  `IMAGE_TAG` env var remains as a manual override (e.g. to deploy `main`'s `:latest`, or
+  roll back to an older sha). No new dependency (plain `curl`, matching the script's existing
+  "keep it simple" style) and no change to the existing `y`/N approval gate (ADR 0046) — the
+  script only resolves *what* currently exists, a human still decides whether to deploy it.
 
 ### Added
 - **Dedicated Helm `ServiceAccount` for S3 IRSA, closing the `default`-ServiceAccount

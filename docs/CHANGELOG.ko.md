@@ -58,6 +58,17 @@
   README.md/ROADMAP.md로 연결되는 정확한 요약으로 교체했다. `CLAUDE.md` 자신의 Never Do
   Group 2 `getFiles(take, skip)` 예시는 원래 갭에 "같은 과제"로 묶여 있었지만 이번엔
   손대지 않았다 — 여전히 미해결이며 ROADMAP.md > Unscheduled에서 추적 중이다.
+- **`deploy.sh`: 이미지 태그를 더 이상 `values-prod.yaml`에 고정된 값 그대로 믿지 않고
+  배포 시점에 직접 조회함 (2026-09-03, [ROADMAP.md](ROADMAP.md) §7)** — "고정 태그도
+  결국 낡는다"는 반복 재발 문제를 닫는다(2026-08-28 첫 발견, 2026-08-29/30 재발 —
+  `MetricsModule`이 `dev`에 랜딩됐는데 아무것도 고정 이미지를 다시 빌드해주지 않아서
+  라이브 pod가 `/metrics`에 계속 404를 냈던 사례). `deploy_helm()`이 이제 `origin/dev`를
+  fetch해서 그 커밋의 sha 태그가 Docker Hub 공개 Hub API에서 `200`으로 확인되는지
+  체크하고, `--set image.tag=...`로 넘긴다 — `404`면 조용히 낡은 코드로 진행하는 대신
+  시끄럽게 중단한다. `IMAGE_TAG` 환경변수는 수동 override로 남겨뒀다(예: `main`의
+  `:latest`를 배포하거나 예전 sha로 롤백할 때). 새 의존성 없음(순수 `curl`, 스크립트의
+  기존 "단순하게" 스타일 유지)이고 기존 `y`/N 승인 게이트(ADR 0046)도 그대로다 —
+  스크립트는 지금 뭐가 존재하는지만 조회할 뿐, 그걸 배포할지는 여전히 사람이 정한다.
 
 ### 추가
 - **S3 IRSA용 전용 Helm `ServiceAccount` — `default` ServiceAccount 범위 갭 해소
