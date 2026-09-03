@@ -1481,6 +1481,16 @@ as deploy — nothing triggers `helm upgrade`), and no git-hook tooling is
 installed. Do not assume a CI/CD deploy pipeline or hooks; adding either is
 explicit-request work under Scope Discipline.
 
+**QA stance (decided 2026-09-04)**: no manual QA gate between a passing CI run and a
+deployable image — deliberate, not an oversight. What replaces it: the smoke-test step above
+(a real boot + `/health/live` poll, not just "the build completed"), the Prometheus/Grafana
+observability stack (ADR 0047, live-verified) to catch what tests miss after deploy, and a
+fast, cheap rollback path (`deploy.sh`'s `IMAGE_TAG=<sha>` override — point back at any prior
+published image in one command). At this project's current scale (no live users, `deploy.sh`
+always human-approved via its `y`/N gate), the cost of a manual click-through pass on every
+deploy outweighs what it would catch beyond automated coverage. Revisit if the project ever
+carries real user traffic that a bad deploy could actually harm.
+
 ## Commit Messages
 
 Write git commit messages in Korean (제목과 본문 모두) — decided 2026-08-27 at the
