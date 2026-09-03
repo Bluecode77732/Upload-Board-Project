@@ -122,6 +122,37 @@ configuration, each state's `backend "local"` migrates to a remote backend
 
 ## Deploy
 
+**Quick reference — commands only, in order** (a fresh full deploy; skip to "Scripted entry
+point" below for what each one actually does):
+
+```sh
+cd k8s/infra/terraform
+
+# 1. cluster
+bash deploy.sh cluster
+
+# 2. app-infra (needs a purchased domain; this apply pauses mid-run for NS
+#    delegation — see "Before you apply anything" below before running it)
+S3_BUCKET_NAME=<globally-unique-bucket-name> DOMAIN_NAME=<your-domain> \
+  bash deploy.sh app-infra
+
+# 3. addons
+bash deploy.sh addons
+
+# 4. point kubectl at the new cluster
+eval "$(terraform -chdir=cluster output -raw configure_kubectl)"
+
+# 5. one-time: sync the app's DB/S3 secret into the cluster (not automated
+#    by deploy.sh — see "After all three apply" below for why)
+terraform -chdir=app-infra output -raw external_secrets_manifest | kubectl apply -f -
+
+# 6. helm (dev's latest image by default; add "main" to deploy main's instead)
+bash deploy.sh helm
+```
+
+Every `plan`/`apply` inside `deploy.sh` still stops and asks for an explicit `y` — this
+sequence skips no approval gate, it only orders the commands.
+
 **Scripted entry point**: `k8s/infra/terraform/deploy.sh` wraps the three-state apply
 order below plus `helm upgrade --install` in one script — plan-then-confirm on every
 apply, no `-auto-approve` ([ADR 0046](../../../docs/ADR/0046-deploy-sequence-automation.md)).

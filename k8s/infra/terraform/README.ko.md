@@ -122,6 +122,37 @@ k8s/infra/terraform/
 
 ## 배포
 
+**빠른 참고 — 커맨드만, 순서대로** (처음부터 전체 배포하는 경우; 각 단계가 실제로
+뭘 하는지는 아래 "스크립트 진입점"부터 읽으세요):
+
+```sh
+cd k8s/infra/terraform
+
+# 1. cluster
+bash deploy.sh cluster
+
+# 2. app-infra (도메인이 미리 구매돼 있어야 함; 이 apply는 실행 도중 NS 위임을
+#    기다리며 멈춤 — 실행 전에 아래 "apply 전에 확인할 것" 먼저 읽으세요)
+S3_BUCKET_NAME=<전역적으로-유일한-버킷-이름> DOMAIN_NAME=<도메인> \
+  bash deploy.sh app-infra
+
+# 3. addons
+bash deploy.sh addons
+
+# 4. kubectl이 새 클러스터를 보도록 설정
+eval "$(terraform -chdir=cluster output -raw configure_kubectl)"
+
+# 5. 1회성: 앱의 DB/S3 시크릿을 클러스터에 동기화 (deploy.sh가 자동화하지
+#    않음 — 이유는 아래 "세 apply 모두 끝난 뒤" 참고)
+terraform -chdir=app-infra output -raw external_secrets_manifest | kubectl apply -f -
+
+# 6. helm (기본값은 dev 최신 이미지; main을 배포하려면 뒤에 "main" 추가)
+bash deploy.sh helm
+```
+
+`deploy.sh` 안의 모든 `plan`/`apply`는 여전히 멈춰서 명시적으로 `y`를 물어봅니다 —
+이 순서는 어떤 승인 게이트도 건너뛰지 않습니다, 그저 커맨드 순서만 정리한 것입니다.
+
 **스크립트 진입점**: `k8s/infra/terraform/deploy.sh`가 아래 3-state apply 순서와
 `helm upgrade --install`을 하나의 스크립트로 감쌉니다 — 모든 apply에 plan-then-confirm
 게이트가 걸려 있고 `-auto-approve`는 없습니다
