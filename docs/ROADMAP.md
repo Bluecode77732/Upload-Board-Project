@@ -561,16 +561,28 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `404` aborts with a clear message instead of silently deploying a stale tag. Live-verified
   against the real repo: `origin/dev`'s HEAD (`38b370f...`, 28 commits behind local `dev`
   since nothing in this session had been pushed yet) resolved to `200`, matching exactly the
-  one tag Docker Hub's own listing showed. `IMAGE_TAG=<tag>` remains as an escape hatch to
-  skip the lookup entirely (e.g. `IMAGE_TAG=latest` to deploy `main`'s image, or roll back to
-  an older sha). (a) and (c) were set aside rather than chosen: (a) would only make a bare
-  `helm install` fail loudly, not keep a real deploy fresh; (c) is a branching-policy change
-  the developer explicitly does not want, since merging `dev` into `main` late is a
-  deliberate choice, not an oversight. (b) stays landed separately, unchanged — this row's
-  fix is what closes the gap (b) left open. The design mirrors
+  one tag Docker Hub's own listing showed. (a) and (c) were set aside rather than chosen: (a)
+  would only make a bare `helm install` fail loudly, not keep a real deploy fresh; (c) is a
+  branching-policy change the developer explicitly does not want, since merging `dev` into
+  `main` late is a deliberate choice, not an oversight. (b) stays landed separately, unchanged
+  — this row's fix is what closes the gap (b) left open. The design mirrors
   [ADR 0046](ADR/0046-deploy-sequence-automation.md)'s own human/machine split: the machine
   only *resolves* what currently exists, the human still approves every `helm upgrade` via
   the existing `y`/N gate — no new automated-CD surface.
+  **Addendum, same day**: the branch was hardcoded to `dev` at first, with `IMAGE_TAG` as the
+  only way to reach `main`'s image. The developer clarified the actual intent: `dev` is where
+  direct test deploys happen during development, but the same capability needs to work for
+  `main` too — not `dev` as the sole source with `main` as a raw-tag escape hatch. Generalized
+  to a `DEPLOY_BRANCH` env var (default `dev`, matching every real deploy this project has
+  ever done — `origin/main` last moved 2026-08-13, 123 commits behind `origin/dev`) that
+  drives the *same* resolve-and-verify logic for either branch, rather than special-casing
+  `main` through the raw-override path. `IMAGE_TAG` still exists, now purely as a bypass for
+  anything neither branch's HEAD represents (e.g. an arbitrary older sha). Live-verified both
+  paths against the real repo: `DEPLOY_BRANCH=dev` resolves `origin/dev`'s HEAD to `200`;
+  `DEPLOY_BRANCH=main` resolves `origin/main`'s HEAD (`72b1289`) to `404` — correctly, since
+  no image has ever been successfully published from `main` (its `docker-publish` job existed
+  as of that commit but never completed a push; `:latest` itself is also `404` right now) —
+  proving the fail-loud path works for `main` exactly as it does for `dev`, not just in theory.
 - ~~**Automate the `cluster` → `app-infra` → `addons` → Helm deploy sequence**~~ — **landed
   2026-08-27** ([ADR 0046](ADR/0046-deploy-sequence-automation.md)). Tool: a plain bash
   script (`k8s/infra/terraform/deploy.sh`), matching the existing `build-and-push.sh`

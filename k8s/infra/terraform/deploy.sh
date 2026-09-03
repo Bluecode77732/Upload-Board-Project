@@ -40,8 +40,14 @@ CLUSTER_NAME="${CLUSTER_NAME:-upload-board-project}"
 S3_BUCKET_NAME="${S3_BUCKET_NAME:-}"
 DOMAIN_NAME="${DOMAIN_NAME:-}"
 HELM_RELEASE="${HELM_RELEASE:-sharenpo}"
-# 비워두면 helm 단계에서 origin/dev 최신 커밋의 이미지를 자동으로 조회해 쓴다.
-# 특정 태그(예: main의 latest, 예전 sha로 롤백)를 강제로 쓰고 싶을 때만 지정한다.
+# helm 단계에서 이 브랜치의 최신 커밋 이미지를 자동으로 조회해 쓴다. 기본값은
+# dev -- 실제로 지금까지의 모든 라이브 배포가 dev 기준이었다(main은 정식
+# 릴리스를 모아두는 용도로 늦게 merge됨). main의 최신을 배포하고 싶을 때는
+# DEPLOY_BRANCH=main으로 실행한다 -- 같은 조회 로직을 그대로 탄다.
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-dev}"
+# 비워두면 helm 단계에서 DEPLOY_BRANCH 최신 커밋의 이미지를 자동으로 조회해 쓴다.
+# 특정 태그(예: 예전 sha로 롤백)를 강제로 쓰고 싶을 때만 지정한다 -- 지정하면
+# DEPLOY_BRANCH 조회 자체를 건너뛴다.
 IMAGE_TAG="${IMAGE_TAG:-}"
 
 print_usage() {
@@ -74,9 +80,11 @@ print_usage() {
   echo "  HELM_RELEASE      기본값: sharenpo (app-infra의 IRSA trust policy가 신뢰하는"
   echo "                    ServiceAccount 이름과 반드시 같아야 함 -- values-prod.yaml의"
   echo "                    serviceAccount.create=true가 이 값을 그대로 SA 이름으로 씀)"
-  echo "  IMAGE_TAG         기본값: 비어 있음 (helm 단계에서 origin/dev 최신 커밋의"
-  echo "                    이미지를 자동 조회해 씀). 명시하면 그 태그를 강제로 쓰고"
-  echo "                    자동 조회를 건너뜀 (예: IMAGE_TAG=latest 로 main 이미지 배포)"
+  echo "  DEPLOY_BRANCH     기본값: dev (helm 단계에서 이 브랜치 최신 커밋의 이미지를"
+  echo "                    자동 조회해 씀). main의 최신을 배포하려면 DEPLOY_BRANCH=main"
+  echo "  IMAGE_TAG         기본값: 비어 있음 (DEPLOY_BRANCH 조회 결과를 씀)."
+  echo "                    명시하면 DEPLOY_BRANCH 조회 자체를 건너뛰고 그 태그를 강제로"
+  echo "                    씀 (예: 예전 sha로 롤백)"
 }
 
 # 목적: terraform plan을 사람이 직접 읽고 확인한 뒤에만, 바로 그 plan을 적용한다.
@@ -339,41 +347,47 @@ apply_addons() {
 
 # 목적: dev 브랜치의 최신 커밋을 기준으로 실제 Docker Hub에 존재하는 이미지 태그를
 #   확인하고, 그 태그로 helm upgrade를 실행한다.
-# 이유: values-prod.yaml에 고정해 둔 태그는 dev가 새로 움직일 때마다 사람이 손으로
-#   갱신하지 않으면 낡는다 -- 실제로 2026-08-29/30에 MetricsModule이 반영 안 된
-#   이미지가 배포된 적 있다(ROADMAP.md 섹션 7). 배포 시점마다 dev 최신 커밋의
-#   이미지를 자동으로 조회해 "사람이 태그 갱신을 깜빡함"이라는 실패 지점 자체를
-#   없앤다. 태그를 뭘 쓸지 "판단"하는 건 여전히 사람 몫이다(y/N 승인) -- 이 함수는
-#   "지금 뭐가 있는지 조회"만 기계가 대신한다.
-# 방법: IMAGE_TAG가 비어 있으면 origin/dev를 fetch해 최신 sha를 얻고, Docker Hub의
-#   공개 Hub API(인증 불필요, docker-tag-cleanup.yml이 이미 쓰는 것과 같은 API)로
-#   그 sha 태그가 실제로 존재하는지 HTTP 상태 코드만으로 확인한다(jq 등 새 의존성
-#   없이 curl -w만 사용 -- 이 스크립트의 "쉬운 스타일" 원칙 유지). 없으면 조용히
-#   낡은 태그로 진행하는 대신 즉시 에러로 중단한다. IMAGE_TAG를 명시하면 이 조회
-#   전체를 건너뛰고 그 값을 그대로 쓴다(예: main의 :latest로 롤백).
+# 이유: values-prod.yaml에 고정해 둔 태그는 소스 브랜치가 새로 움직일 때마다 사람이
+#   손으로 갱신하지 않으면 낡는다 -- 실제로 2026-08-29/30에 MetricsModule이 반영 안
+#   된 이미지가 배포된 적 있다(ROADMAP.md 섹션 7). 배포 시점마다 DEPLOY_BRANCH 최신
+#   커밋의 이미지를 자동으로 조회해 "사람이 태그 갱신을 깜빡함"이라는 실패 지점
+#   자체를 없앤다. 기본값이 dev인 이유: 지금까지의 모든 실제 라이브 배포가 dev
+#   기준이었고(main은 정식 릴리스를 모아두는 용도로 늦게 merge됨), 개발 중 직접
+#   테스트 삼아 배포하는 상황도 dev에서 일어난다. main의 최신을 배포하고 싶을 때는
+#   DEPLOY_BRANCH=main으로 같은 로직을 그대로 태운다 -- 두 브랜치를 다른 코드
+#   경로로 다루지 않는다. 태그를 뭘 쓸지 "판단"하는 건 여전히 사람 몫이다(y/N
+#   승인) -- 이 함수는 "지금 뭐가 있는지 조회"만 기계가 대신한다.
+# 방법: IMAGE_TAG가 비어 있으면 origin/$DEPLOY_BRANCH를 fetch해 최신 sha를 얻고,
+#   Docker Hub의 공개 Hub API(인증 불필요, docker-tag-cleanup.yml이 이미 쓰는 것과
+#   같은 API)로 그 sha 태그가 실제로 존재하는지 HTTP 상태 코드만으로 확인한다(jq
+#   등 새 의존성 없이 curl -w만 사용 -- 이 스크립트의 "쉬운 스타일" 원칙 유지).
+#   없으면 조용히 낡은 태그로 진행하는 대신 즉시 에러로 중단한다(예: main을
+#   골랐는데 main에서 성공적으로 발행된 이미지가 아직 하나도 없는 경우, 이 에러가
+#   바로 그걸 알려준다). IMAGE_TAG를 명시하면 이 조회 전체를 건너뛰고 그 값을
+#   그대로 쓴다(예: 예전 sha로 롤백).
 deploy_helm() {
   local helm_dir="$SCRIPT_DIR/../../helm"
   local resolved_tag="$IMAGE_TAG"
 
   if [ -z "$resolved_tag" ]; then
-    echo "==> IMAGE_TAG가 지정되지 않아, dev의 최신 커밋 이미지를 자동으로 조회합니다."
-    git fetch origin dev --quiet
-    resolved_tag="$(git rev-parse origin/dev)"
+    echo "==> IMAGE_TAG가 지정되지 않아, $DEPLOY_BRANCH의 최신 커밋 이미지를 자동으로 조회합니다."
+    git fetch origin "$DEPLOY_BRANCH" --quiet
+    resolved_tag="$(git rev-parse "origin/$DEPLOY_BRANCH")"
 
     local status_code
     status_code="$(curl -s -o /dev/null -w "%{http_code}" \
       "https://hub.docker.com/v2/repositories/bluecode1775/sharenpo/tags/${resolved_tag}/")"
 
     if [ "$status_code" != "200" ]; then
-      echo "에러: dev의 최신 커밋($resolved_tag)에 대한 이미지가 Docker Hub에" >&2
+      echo "에러: $DEPLOY_BRANCH의 최신 커밋($resolved_tag)에 대한 이미지가 Docker Hub에" >&2
       echo "아직 없습니다 (HTTP $status_code). docker-publish 워크플로가 아직" >&2
-      echo "안 끝났거나, 그 커밋이 아직 origin/dev에 push되지 않았을 수 있습니다." >&2
-      echo "GitHub Actions 진행 상황을 확인하거나, 특정 태그를 강제로 쓰려면" >&2
-      echo "IMAGE_TAG=<태그> 환경변수로 이 조회를 건너뛸 수 있습니다." >&2
+      echo "안 끝났거나, 그 커밋이 아직 origin/$DEPLOY_BRANCH에 push되지 않았을 수" >&2
+      echo "있습니다. GitHub Actions 진행 상황을 확인하거나, 특정 태그를 강제로" >&2
+      echo "쓰려면 IMAGE_TAG=<태그> 환경변수로 이 조회를 건너뛸 수 있습니다." >&2
       exit 1
     fi
 
-    echo "==> 확인됨: dev 최신 커밋 $resolved_tag 이미지가 Docker Hub에 존재합니다."
+    echo "==> 확인됨: $DEPLOY_BRANCH 최신 커밋 $resolved_tag 이미지가 Docker Hub에 존재합니다."
   else
     echo "==> IMAGE_TAG=$resolved_tag 가 명시적으로 지정되어, 자동 조회를 건너뜁니다."
   fi
