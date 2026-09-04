@@ -21,6 +21,11 @@ export enum ErrorCode {
   UPLOAD_MULTIPLE_FIELDS = 'UPLOAD_MULTIPLE_FIELDS',
   // Refused: demoting the last remaining superadmin would lock the role system (ADR 0013).
   AUTH_LAST_SUPERADMIN = 'AUTH_LAST_SUPERADMIN',
+  // A transfer was proposed naming the file's own current creator as the target (ADR 0050).
+  FILE_TRANSFER_INVALID_TARGET = 'FILE_TRANSFER_INVALID_TARGET',
+  // accept/reject/cancel was called but the file has no pending transfer right now
+  // (ADR 0050 D1) — either none was ever proposed, or it already resolved.
+  FILE_NO_PENDING_TRANSFER = 'FILE_NO_PENDING_TRANSFER',
 
   // 401
   AUTH_TOKEN_INVALID = 'AUTH_TOKEN_INVALID',
@@ -31,6 +36,9 @@ export enum ErrorCode {
   // 403
   FORBIDDEN_NOT_OWNER = 'FORBIDDEN_NOT_OWNER',
   FORBIDDEN = 'FORBIDDEN',
+  // accept/reject was called by someone other than the file's pending transfer target —
+  // consent is that user's alone, even for an admin (ADR 0050 D4).
+  FORBIDDEN_NOT_TRANSFER_TARGET = 'FORBIDDEN_NOT_TRANSFER_TARGET',
 
   // 404
   USER_NOT_FOUND = 'USER_NOT_FOUND',
@@ -56,6 +64,9 @@ export enum ErrorCode {
   // The file is referenced by a post, so its row cannot be deleted. Raised from the
   // FK violation itself rather than a pre-check, which would race (ADR 0023 D4).
   FILE_IN_USE = 'FILE_IN_USE',
+  // A transfer was proposed while one is already pending — the proposer must cancel it
+  // before proposing a new target, never silently overwritten (ADR 0050 D3).
+  FILE_TRANSFER_PENDING = 'FILE_TRANSFER_PENDING',
 
   // 413
   PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',

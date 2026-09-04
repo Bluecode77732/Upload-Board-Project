@@ -1,6 +1,6 @@
 # ADR 0050: Consent-Based File Ownership Transfer
 
-- Status: Accepted
+- Status: Accepted — implemented (backend only; frontend/admin UI tracked separately)
 - Date: 2026-09-04
 - Amends: [ADR 0024](0024-account-cascade-fk-refusal.md) (resolves the open question its
   Consequences left tracked — the `23503` → 409 `USER_FILES_IN_USE` translation stays

@@ -75,11 +75,6 @@ describe('FileService', () => {
     updatedAt: new Date(),
   };
 
-  const mockUser: UserEntity = {
-    id: 1,
-    email: 'test@example.com',
-  } as any as UserEntity;
-
   beforeEach(async () => {
     const mockQueryRunner = {
       connect: jest.fn(),
@@ -571,27 +566,6 @@ describe('FileService', () => {
       );
     });
 
-    it("should update creator when 'userId' provided", async () => {
-      queryRunner.manager.findOne = jest.fn().mockResolvedValue(mockFileEntity);
-      jest.spyOn(userRepository, 'findOne').mockResolvedValue(mockUser);
-
-      const mockUpdateQueryBuilder = {
-        update: jest.fn().mockReturnThis(),
-        set: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        execute: jest.fn().mockResolvedValue({ affected: 1 }),
-      };
-
-      queryRunner.manager.createQueryBuilder = jest
-        .fn()
-        .mockReturnValue(mockUpdateQueryBuilder);
-      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
-
-      await fileService.updateFile(1, { userId: 1 }, owner);
-
-      expect(userRepository.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
-    });
-
     // ADR 0025 D1/D3: visibility toggling reuses this write path rather than a new
     // endpoint, so token issuance/rotation/clearing all live inside the same tx.
     describe('visibility toggling', () => {
@@ -701,6 +675,326 @@ describe('FileService', () => {
         ][];
         expect(setCall[0].shareExpiresAt).toBeUndefined();
       });
+    });
+  });
+
+  // ADR 0050: replaces the old immediate-reassignment `userId` field with a
+  // propose/accept/reject/cancel consent flow. mockFileEntity's creator is id 1 (owner);
+  // these tests use id 2 as the proposed target throughout.
+  describe('proposeTransfer', () => {
+    const setupUpdateQueryBuilder = () => {
+      const mockUpdateQueryBuilder = {
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      };
+      jest
+        .spyOn(fileRepository, 'createQueryBuilder')
+        .mockReturnValue(
+          mockUpdateQueryBuilder as unknown as SelectQueryBuilder<FileEntity>,
+        );
+      return mockUpdateQueryBuilder;
+    };
+
+    it('proposes a transfer and leaves ownership unchanged', async () => {
+      const target = { id: 2, email: 'target@test.com' } as UserEntity;
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce({ ...mockFileEntity, pendingTransferTo: null })
+        .mockResolvedValueOnce({
+          ...mockFileEntity,
+          pendingTransferTo: target,
+        });
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(target);
+      const mockUpdateQueryBuilder = setupUpdateQueryBuilder();
+
+      const result = await fileService.proposeTransfer(1, 2, owner);
+
+      expect(mockUpdateQueryBuilder.set).toHaveBeenCalledWith({
+        pendingTransferTo: target,
+      });
+      expect(result.pendingTransferTo).toEqual({
+        id: 2,
+        email: 'target@test.com',
+      });
+    });
+
+    it("allows an admin to propose on the creator's behalf", async () => {
+      const target = { id: 2, email: 'target@test.com' } as UserEntity;
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce({ ...mockFileEntity, pendingTransferTo: null })
+        .mockResolvedValueOnce({
+          ...mockFileEntity,
+          pendingTransferTo: target,
+        });
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(target);
+      setupUpdateQueryBuilder();
+
+      await expect(
+        fileService.proposeTransfer(1, 2, admin),
+      ).resolves.toBeDefined();
+    });
+
+    it('throws ForbiddenException for a non-owner, non-admin requester', async () => {
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValue({ ...mockFileEntity, pendingTransferTo: null });
+
+      await expect(fileService.proposeTransfer(1, 2, stranger)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('throws BadRequestException when the target is the current owner', async () => {
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValue({ ...mockFileEntity, pendingTransferTo: null });
+
+      await expect(fileService.proposeTransfer(1, 1, owner)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('throws ConflictException when a transfer is already pending, without overwriting it', async () => {
+      const existingTarget = {
+        id: 3,
+        email: 'existing@test.com',
+      } as UserEntity;
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue({
+        ...mockFileEntity,
+        pendingTransferTo: existingTarget,
+      });
+      const mockUpdateQueryBuilder = setupUpdateQueryBuilder();
+
+      await expect(fileService.proposeTransfer(1, 2, owner)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(mockUpdateQueryBuilder.set).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the target user does not exist', async () => {
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValue({ ...mockFileEntity, pendingTransferTo: null });
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(null);
+
+      await expect(fileService.proposeTransfer(1, 2, owner)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws NotFoundException when the file does not exist', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue(null);
+
+      await expect(fileService.proposeTransfer(1, 2, owner)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('acceptTransfer', () => {
+    const pendingTarget = { id: 2, email: 'target@test.com' } as UserEntity;
+
+    const setupUpdateQueryBuilder = () => {
+      const mockUpdateQueryBuilder = {
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      };
+      jest
+        .spyOn(fileRepository, 'createQueryBuilder')
+        .mockReturnValue(
+          mockUpdateQueryBuilder as unknown as SelectQueryBuilder<FileEntity>,
+        );
+      return mockUpdateQueryBuilder;
+    };
+
+    it('moves ownership to the target and audits FILE_TRANSFER', async () => {
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce({
+          ...mockFileEntity,
+          pendingTransferTo: pendingTarget,
+        })
+        .mockResolvedValueOnce({
+          ...mockFileEntity,
+          creator: pendingTarget,
+          pendingTransferTo: null,
+        });
+      const mockUpdateQueryBuilder = setupUpdateQueryBuilder();
+
+      const target = { id: 2, role: UserRole.user };
+      const result = await fileService.acceptTransfer(1, target);
+
+      expect(mockUpdateQueryBuilder.set).toHaveBeenCalledWith({
+        creator: pendingTarget,
+        pendingTransferTo: null,
+      });
+      expect(mockAuditLogService.log).toHaveBeenCalledWith(
+        2,
+        1,
+        AuditTargetType.file,
+        'FILE_TRANSFER',
+        'from=1 to=2',
+      );
+      expect(result.creator).toEqual({ id: 2, email: 'target@test.com' });
+    });
+
+    it('throws BadRequestException when nothing is pending', async () => {
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValue({ ...mockFileEntity, pendingTransferTo: null });
+
+      await expect(
+        fileService.acceptTransfer(1, { id: 2, role: UserRole.user }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws ForbiddenException for anyone other than the pending target, admin included', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue({
+        ...mockFileEntity,
+        pendingTransferTo: pendingTarget,
+      });
+
+      await expect(fileService.acceptTransfer(1, admin)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(mockAuditLogService.log).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('rejectTransfer', () => {
+    const pendingTarget = { id: 2, email: 'target@test.com' } as UserEntity;
+
+    const setupUpdateQueryBuilder = () => {
+      const mockUpdateQueryBuilder = {
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      };
+      jest
+        .spyOn(fileRepository, 'createQueryBuilder')
+        .mockReturnValue(
+          mockUpdateQueryBuilder as unknown as SelectQueryBuilder<FileEntity>,
+        );
+      return mockUpdateQueryBuilder;
+    };
+
+    it('clears the pending state and leaves ownership unchanged', async () => {
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce({
+          ...mockFileEntity,
+          pendingTransferTo: pendingTarget,
+        })
+        .mockResolvedValueOnce({ ...mockFileEntity, pendingTransferTo: null });
+      const mockUpdateQueryBuilder = setupUpdateQueryBuilder();
+
+      const result = await fileService.rejectTransfer(1, {
+        id: 2,
+        role: UserRole.user,
+      });
+
+      expect(mockUpdateQueryBuilder.set).toHaveBeenCalledWith({
+        pendingTransferTo: null,
+      });
+      expect(mockAuditLogService.log).not.toHaveBeenCalled();
+      expect(result.creator).toEqual({ id: 1, email: 'creator@test.com' });
+    });
+
+    it('throws BadRequestException when nothing is pending', async () => {
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValue({ ...mockFileEntity, pendingTransferTo: null });
+
+      await expect(
+        fileService.rejectTransfer(1, { id: 2, role: UserRole.user }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws ForbiddenException for anyone other than the pending target, admin included', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue({
+        ...mockFileEntity,
+        pendingTransferTo: pendingTarget,
+      });
+
+      await expect(fileService.rejectTransfer(1, admin)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+  });
+
+  describe('cancelTransfer', () => {
+    const pendingTarget = { id: 2, email: 'target@test.com' } as UserEntity;
+
+    const setupUpdateQueryBuilder = () => {
+      const mockUpdateQueryBuilder = {
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      };
+      jest
+        .spyOn(fileRepository, 'createQueryBuilder')
+        .mockReturnValue(
+          mockUpdateQueryBuilder as unknown as SelectQueryBuilder<FileEntity>,
+        );
+      return mockUpdateQueryBuilder;
+    };
+
+    it('allows the proposer (creator) to cancel a pending transfer', async () => {
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce({
+          ...mockFileEntity,
+          pendingTransferTo: pendingTarget,
+        })
+        .mockResolvedValueOnce({ ...mockFileEntity, pendingTransferTo: null });
+      const mockUpdateQueryBuilder = setupUpdateQueryBuilder();
+
+      await fileService.cancelTransfer(1, owner);
+
+      expect(mockUpdateQueryBuilder.set).toHaveBeenCalledWith({
+        pendingTransferTo: null,
+      });
+    });
+
+    it("allows an admin to cancel on the creator's behalf", async () => {
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce({
+          ...mockFileEntity,
+          pendingTransferTo: pendingTarget,
+        })
+        .mockResolvedValueOnce({ ...mockFileEntity, pendingTransferTo: null });
+      setupUpdateQueryBuilder();
+
+      await expect(fileService.cancelTransfer(1, admin)).resolves.toBeDefined();
+    });
+
+    it('throws ForbiddenException for a non-owner, non-admin requester', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue({
+        ...mockFileEntity,
+        pendingTransferTo: pendingTarget,
+      });
+
+      await expect(fileService.cancelTransfer(1, stranger)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('throws BadRequestException when nothing is pending', async () => {
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValue({ ...mockFileEntity, pendingTransferTo: null });
+
+      await expect(fileService.cancelTransfer(1, owner)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 

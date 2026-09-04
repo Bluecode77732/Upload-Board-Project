@@ -16,6 +16,12 @@ export class FileResponseDto {
     id: number;
     email: string;
   };
+  // Present only when the caller can manage the file, or is the pending target
+  // themselves — never shown to an unrelated viewer (ADR 0050).
+  pendingTransferTo?: {
+    id: number;
+    email: string;
+  };
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -7,6 +7,7 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -66,6 +67,15 @@ export class FileEntity {
   // Optional TTL on the current share token; null = no expiry (ADR 0025 D3).
   @Column({ type: 'timestamptz', nullable: true })
   shareExpiresAt!: Date | null;
+
+  // The one user this file is currently proposed to, or null when no transfer is pending
+  // (ADR 0050 D1/D2). Never set directly by an update — only the propose/accept/reject/
+  // cancel flow in FileService writes this column. ON DELETE SET NULL: if the pending
+  // target's own account is deleted before responding, only the pending state disappears —
+  // this file (A's) is untouched, since B never became its owner.
+  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'pendingTransferToUserId' })
+  pendingTransferTo!: UserEntity | null;
 
   @CreateDateColumn()
   createdAt?: Date;

@@ -13,6 +13,7 @@ export const AUDIT_ACTIONS = [
   'FILE_DELETE',
   'POST_DELETE',
   'COMMENT_DELETE',
+  'FILE_TRANSFER',
 ] as const;
 
 // AuditLogService.log()의 action 파라미터 타입. string이면 targetType 인자와 둘 다 문자열이라

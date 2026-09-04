@@ -1571,9 +1571,13 @@ describe('Sharenpo API (e2e)', () => {
     });
   });
 
-  // ADR 0024: PATCH /file/:id { userId } can move a file out from under a post, so the
-  // account cascade can meet a post it does not own. That was an opaque 500; it is now a
-  // typed 409. This is the only path that reproduces it end to end.
+  // ADR 0024: a consented file-ownership transfer (ADR 0050) can move a file out from
+  // under a post, so the account cascade can meet a post it does not own. That was an
+  // opaque 500; it is now a typed 409. This is the only path that reproduces it end to
+  // end. (Originally reproduced via the immediate, unconsented PATCH /file/:id { userId }
+  // field ADR 0050 removed — the propose/accept flow still breaks the same invariant once
+  // accepted, since consent gates who can trigger a reassignment, not what an accepted one
+  // does; see ADR 0050's Consequences.)
   describe('Account cascade FK refusal (ADR 0024)', () => {
     it("refuses the cascade when another user's post holds the account's file", async () => {
       const author = await createUser('adr24-author@e.com');
@@ -1592,10 +1596,15 @@ describe('Sharenpo API (e2e)', () => {
         .expect(201);
 
       // ...and is broken here, after creation — assertAttachableBy never runs again.
+      // Propose then accept (ADR 0050): ownership only moves once newOwner consents.
       await request(server)
-        .patch(`/file/${fileId}`)
+        .post(`/file/${fileId}/transfer`)
         .set(auth(author.accessToken))
         .send({ userId: newOwner.id })
+        .expect(200);
+      await request(server)
+        .post(`/file/${fileId}/transfer/accept`)
+        .set(auth(newOwner.accessToken))
         .expect(200);
 
       const refused = await request(server)

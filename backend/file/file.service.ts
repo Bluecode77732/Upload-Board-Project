@@ -120,10 +120,13 @@ export class FileService {
   // 목적: FileEntity를 공개 URL이 붙은 응답 DTO로 변환한다.
   // 이유: BASE_URL 합성은 한 곳에만 있어야 하는데, 게시글 응답도 첨부 파일 URL을 담아야 한다(ADR 0023).
   //       fileUrl은 이제 정적 경로가 아니라 접근 검사를 거치는 콘텐츠 엔드포인트를 가리킨다(ADR 0025 D2).
-  //       mediaType이 응답에 없으면 상세 페이지가 재생 태그를 고를 신호가 없다(ADR 0040 D4).
+  //       mediaType이 응답에 없으면 상세 페이지가 재생 태그를 고를 신호가 없다(ADR 0040 D4). 대기중인
+  //       이전 제안이 있으면 소유자(취소용)와 대상 본인(수락/거절용) 둘 다 그걸 알아야 한다(ADR 0050).
   // 방법: private에서 public으로만 올린다 — PostService가 자기 쪽에서 URL을 다시 조립하지 않고 이 메서드에
   //       위임한다. shareUrl은 요청자가 관리 권한을 가진 unlisted 파일에만, 그 외에는 절대 노출하지 않는다.
   //       mediaType은 판정 없이 엔티티 값을 그대로 복사한다 — 판정은 uploadFile 한 곳에서만 한다.
+  //       pendingTransferTo는 관리 권한이 있거나 요청자 본인이 그 대상일 때만 노출한다 — 무관한
+  //       제3자에게는 이 파일이 이전 대기중이라는 사실 자체를 숨긴다.
   toResponse(file: FileEntity, requester?: Requester): FileResponseDto {
     const baseUrl = this.configService.get<string>(
       'BASE_URL',
@@ -134,6 +137,11 @@ export class FileService {
       requester &&
       file.creator &&
       this.canManage(file.creator.id, requester)
+    );
+    const isPendingTarget = !!(
+      requester &&
+      file.pendingTransferTo &&
+      file.pendingTransferTo.id === requester.id
     );
 
     return {
@@ -155,6 +163,13 @@ export class FileService {
           email: file.creator.email,
         },
       }),
+      ...((isManager || isPendingTarget) &&
+        file.pendingTransferTo && {
+          pendingTransferTo: {
+            id: file.pendingTransferTo.id,
+            email: file.pendingTransferTo.email,
+          },
+        }),
     };
   }
 
@@ -213,6 +228,8 @@ export class FileService {
   //       상태가 된다(ADR 0025). 403이 아니라 404를 쓰는 이유는 콘텐츠 접근 거부(FORBIDDEN_NOT_OWNER)와
   //       달리 메타데이터 단계에서는 파일의 존재 자체도 확인해 줄 이유가 없기 때문이다.
   // 방법: 조회 후 public이거나 canManage인 경우에만 반환하고, 그 외에는 찾지 못한 것과 동일하게 404.
+  //       pendingTransferTo도 함께 join해 둔다 — toResponse가 이걸 보고 소유자/대상 본인에게만
+  //       노출 여부를 판정한다(ADR 0050).
   async getFileById(
     id: number,
     requester: Requester,
@@ -220,6 +237,7 @@ export class FileService {
     const file = await this.fileRepository
       .createQueryBuilder('file')
       .leftJoinAndSelect('file.creator', 'creator')
+      .leftJoinAndSelect('file.pendingTransferTo', 'pendingTransferTo')
       .where('file.id = :id', { id })
       .getOne();
 
@@ -453,9 +471,12 @@ export class FileService {
     return { replayed: false, file: this.toResponse(saved) };
   }
 
-  // 목적: 파일 메타데이터(제목/경로/소유자/가시성)를 갱신한다.
+  // 목적: 파일 메타데이터(제목/경로/가시성)를 갱신한다.
   // 이유: 가시성 토글(ADR 0025 D1)이 새 엔드포인트가 아니라 기존 소유자-가드 쓰기 경로를 재사용하도록
-  //       결정됐으므로, 공유 토큰 발급/회전/폐기도 같은 트랜잭션에 들어가야 한다. title 사전 체크(459-468행)는
+  //       결정됐으므로, 공유 토큰 발급/회전/폐기도 같은 트랜잭션에 들어가야 한다. 소유권 이전은
+  //       더 이상 여기 없다 — 동의 없는 즉시 강제 이전이었던 옛 userId 필드는 제거됐고, 대신
+  //       proposeTransfer/acceptTransfer/rejectTransfer/cancelTransfer가 그 자리를 대신한다(ADR 0050).
+  //       title 사전 체크(459-468행)는
   //       잠금 없는 읽기라 동시에 같은 title로 PATCH하는 요청 둘이 모두 통과할 수 있고, uploadFile과 달리
   //       catch에서 이를 걸러내지 않으면 UNIQUE 위반이 타입 없는 500으로 새어 나간다(AllExceptionsFilter는
   //       HttpException이 아닌 에러를 전부 INTERNAL_ERROR로 뭉갠다).
@@ -486,7 +507,8 @@ export class FileService {
         });
       }
 
-      // Creator or admin may modify (including reassigning ownership via UpdateFileDto.userId).
+      // Creator or admin may modify. Ownership itself no longer moves through this method —
+      // see proposeTransfer/acceptTransfer (ADR 0050).
       if (!this.canManage(file.creator.id, requester)) {
         throw new ForbiddenException({
           code: ErrorCode.FORBIDDEN_NOT_OWNER,
@@ -494,7 +516,7 @@ export class FileService {
         });
       }
 
-      const { title, userId, filePath } = updateFileDto;
+      const { title, filePath } = updateFileDto;
       const updateFields: Partial<FileEntity> = {};
 
       if (title) {
@@ -525,19 +547,6 @@ export class FileService {
             message: 'Attach the file again.',
           });
         }
-      }
-
-      if (userId) {
-        const creator = await this.userRepository.findOne({
-          where: { id: userId },
-        });
-        if (!creator) {
-          throw new NotFoundException({
-            code: ErrorCode.USER_NOT_FOUND,
-            message: 'No user found.',
-          });
-        }
-        updateFields.creator = creator;
       }
 
       const { visibility, rotateShareToken, shareExpiresAt } = updateFileDto;
@@ -597,6 +606,259 @@ export class FileService {
     const updated = await this.fileRepository.findOne({
       where: { id },
       relations: ['creator'],
+    });
+    if (!updated) {
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
+    }
+    return this.toResponse(updated, requester);
+  }
+
+  // 목적: creator/admin이 파일 소유권을 특정 대상에게 이전하자고 제안한다 — 소유권은 이 시점에
+  //       바뀌지 않는다.
+  // 이유: 옛 즉시-강제 이전(UpdateFileDto.userId)은 수신자 동의 없이 소유권을 바꿔서, 그 결과가
+  //       ADR 0024가 흡수해야 했던 invariant 붕괴의 유일한 원인이었다. 제안 단계를 분리해 동의
+  //       없는 이전 자체를 구조적으로 불가능하게 만든다(ADR 0050 D1).
+  // 방법: canManage로 권한 확인 → 자기 자신을 대상으로 지정하면 거부 → 대상 유저 존재 확인 →
+  //       이미 대기중이면 409(D3 — 자동 덮어쓰기 없음, 먼저 취소해야 함) → pendingTransferToUserId만
+  //       갱신, creator는 그대로.
+  async proposeTransfer(
+    id: number,
+    targetUserId: number,
+    requester: Requester,
+  ): Promise<FileResponseDto> {
+    const file = await this.fileRepository.findOne({
+      where: { id },
+      relations: ['creator', 'pendingTransferTo'],
+    });
+
+    if (!file) {
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
+    }
+
+    if (!this.canManage(file.creator.id, requester)) {
+      throw new ForbiddenException({
+        code: ErrorCode.FORBIDDEN_NOT_OWNER,
+        message: 'Only the file creator or an admin can propose a transfer.',
+      });
+    }
+
+    if (targetUserId === file.creator.id) {
+      throw new BadRequestException({
+        code: ErrorCode.FILE_TRANSFER_INVALID_TARGET,
+        message: 'Cannot propose a transfer to the current owner.',
+      });
+    }
+
+    if (file.pendingTransferTo) {
+      throw new ConflictException({
+        code: ErrorCode.FILE_TRANSFER_PENDING,
+        message: `A transfer to user ${file.pendingTransferTo.id} is already pending. Cancel it before proposing a new target.`,
+      });
+    }
+
+    const target = await this.userRepository.findOne({
+      where: { id: targetUserId },
+    });
+    if (!target) {
+      throw new NotFoundException({
+        code: ErrorCode.USER_NOT_FOUND,
+        message: 'No user found.',
+      });
+    }
+
+    await this.fileRepository
+      .createQueryBuilder()
+      .update(FileEntity)
+      .set({ pendingTransferTo: target })
+      .where('id = :id', { id })
+      .execute();
+
+    const updated = await this.fileRepository.findOne({
+      where: { id },
+      relations: ['creator', 'pendingTransferTo'],
+    });
+    if (!updated) {
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
+    }
+    return this.toResponse(updated, requester);
+  }
+
+  // 목적: 대기중인 이전 제안을 대상 유저 본인이 수락해 실제로 소유권을 넘긴다 — 이 시점에만
+  //       creator가 실제로 바뀐다.
+  // 이유: 동의 없는 강제 이전을 막는 것이 ADR 0050의 핵심이다 — admin을 포함해 오직 대상 본인만
+  //       수락할 수 있다(D4). 감사 로그도 제안이 아니라 이 실제 상태 변화 시점에만 남긴다(D6) —
+  //       이전 소유자의 계정이 나중에 삭제되면 이 로그가 원래 소유자를 알 수 있는 유일한 곳이다.
+  // 방법: 대기중인 제안이 없으면 400 → 요청자가 대상이 아니면 403(제3자는 파일이 대기중이라는
+  //       사실조차 알면 안 되므로 존재 확인보다 먼저 대상 일치부터 본다) → creator를 대상으로,
+  //       pendingTransferToUserId를 null로 같은 쓰기에서 갱신 → 커밋 후 FILE_TRANSFER 감사 로그.
+  async acceptTransfer(
+    id: number,
+    requester: Requester,
+  ): Promise<FileResponseDto> {
+    const file = await this.fileRepository.findOne({
+      where: { id },
+      relations: ['creator', 'pendingTransferTo'],
+    });
+
+    if (!file) {
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
+    }
+
+    if (!file.pendingTransferTo) {
+      throw new BadRequestException({
+        code: ErrorCode.FILE_NO_PENDING_TRANSFER,
+        message: 'This file has no pending transfer.',
+      });
+    }
+
+    if (file.pendingTransferTo.id !== requester.id) {
+      throw new ForbiddenException({
+        code: ErrorCode.FORBIDDEN_NOT_TRANSFER_TARGET,
+        message: 'Only the proposed recipient can accept this transfer.',
+      });
+    }
+
+    const newOwner = file.pendingTransferTo;
+    await this.fileRepository
+      .createQueryBuilder()
+      .update(FileEntity)
+      .set({ creator: newOwner, pendingTransferTo: null })
+      .where('id = :id', { id })
+      .execute();
+
+    await this.auditLogService.log(
+      requester.id,
+      id,
+      AuditTargetType.file,
+      'FILE_TRANSFER',
+      `from=${file.creator.id} to=${newOwner.id}`,
+    );
+
+    const updated = await this.fileRepository.findOne({
+      where: { id },
+      relations: ['creator', 'pendingTransferTo'],
+    });
+    if (!updated) {
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
+    }
+    return this.toResponse(updated, requester);
+  }
+
+  // 목적: 대기중인 이전 제안을 대상 유저 본인이 거절한다 — 소유권은 바뀌지 않는다.
+  // 이유: acceptTransfer와 대칭인 경로. 거절도 동의 절차의 일부이므로 오직 대상 본인만 할 수
+  //       있다(ADR 0050 D1).
+  // 방법: acceptTransfer와 같은 대기 상태·권한 검사 → pendingTransferToUserId만 null로 되돌림,
+  //       creator는 손대지 않음. 감사 로그 없음(D6 — 실제 소유권 변화가 없으므로).
+  async rejectTransfer(
+    id: number,
+    requester: Requester,
+  ): Promise<FileResponseDto> {
+    const file = await this.fileRepository.findOne({
+      where: { id },
+      relations: ['creator', 'pendingTransferTo'],
+    });
+
+    if (!file) {
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
+    }
+
+    if (!file.pendingTransferTo) {
+      throw new BadRequestException({
+        code: ErrorCode.FILE_NO_PENDING_TRANSFER,
+        message: 'This file has no pending transfer.',
+      });
+    }
+
+    if (file.pendingTransferTo.id !== requester.id) {
+      throw new ForbiddenException({
+        code: ErrorCode.FORBIDDEN_NOT_TRANSFER_TARGET,
+        message: 'Only the proposed recipient can reject this transfer.',
+      });
+    }
+
+    await this.fileRepository
+      .createQueryBuilder()
+      .update(FileEntity)
+      .set({ pendingTransferTo: null })
+      .where('id = :id', { id })
+      .execute();
+
+    const updated = await this.fileRepository.findOne({
+      where: { id },
+      relations: ['creator', 'pendingTransferTo'],
+    });
+    if (!updated) {
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
+    }
+    return this.toResponse(updated, requester);
+  }
+
+  // 목적: 제안자(creator/admin)가 아직 응답 없는 제안을 취소한다 — 소유권은 바뀌지 않는다.
+  // 이유: A가 대상을 잘못 지정했거나 마음이 바뀌었을 때, B의 거절을 기다리지 않고 스스로 거둘 수
+  //       있어야 한다(ADR 0050 D1) — D3의 "새로 제안하려면 먼저 취소" 규칙이 실제로 쓰이는 경로다.
+  // 방법: proposeTransfer와 같은 canManage 권한 검사(대상 일치가 아니라 소유자/admin 검사라는 점이
+  //       accept/reject와 다르다) → 대기중이 아니면 400 → pendingTransferToUserId만 null로.
+  async cancelTransfer(
+    id: number,
+    requester: Requester,
+  ): Promise<FileResponseDto> {
+    const file = await this.fileRepository.findOne({
+      where: { id },
+      relations: ['creator', 'pendingTransferTo'],
+    });
+
+    if (!file) {
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
+    }
+
+    if (!this.canManage(file.creator.id, requester)) {
+      throw new ForbiddenException({
+        code: ErrorCode.FORBIDDEN_NOT_OWNER,
+        message: 'Only the file creator or an admin can cancel a transfer.',
+      });
+    }
+
+    if (!file.pendingTransferTo) {
+      throw new BadRequestException({
+        code: ErrorCode.FILE_NO_PENDING_TRANSFER,
+        message: 'This file has no pending transfer.',
+      });
+    }
+
+    await this.fileRepository
+      .createQueryBuilder()
+      .update(FileEntity)
+      .set({ pendingTransferTo: null })
+      .where('id = :id', { id })
+      .execute();
+
+    const updated = await this.fileRepository.findOne({
+      where: { id },
+      relations: ['creator', 'pendingTransferTo'],
     });
     if (!updated) {
       throw new NotFoundException({

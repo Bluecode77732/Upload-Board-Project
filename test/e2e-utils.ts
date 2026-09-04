@@ -16,6 +16,7 @@ import { AddFileVisibility1785571437643 } from '../backend/migrations/1785571437
 import { AddFileMediaType1786818802632 } from '../backend/migrations/1786818802632-AddFileMediaType';
 import { AddAuditLogTargetType1787578451680 } from '../backend/migrations/1787578451680-AddAuditLogTargetType';
 import { AddPerformanceIndexes1788180660994 } from '../backend/migrations/1788180660994-AddPerformanceIndexes';
+import { AddFileTransferPending1788517947527 } from '../backend/migrations/1788517947527-AddFileTransferPending';
 
 // A dedicated database, never the dev one — dropped and recreated every run so the
 // suite owns its data. New migrations must be appended here or boot fails loudly.
@@ -32,6 +33,7 @@ const MIGRATIONS = [
   AddFileMediaType1786818802632,
   AddAuditLogTargetType1787578451680,
   AddPerformanceIndexes1788180660994,
+  AddFileTransferPending1788517947527,
 ];
 
 // Every table the app writes; truncated between tests for per-test isolation.

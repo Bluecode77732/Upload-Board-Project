@@ -4,7 +4,6 @@ import {
   IsBoolean,
   IsEnum,
   IsISO8601,
-  IsNumber,
   IsOptional,
   IsString,
 } from 'class-validator';
@@ -25,14 +24,6 @@ export class UpdateFileDto extends PartialType(
     example: 'granted_67ff0c79-a1f0-4d4f-865c-681af920378d_1764581241716.mp4',
   })
   filePath?: string;
-
-  @IsOptional()
-  @IsNumber()
-  @ApiPropertyOptional({
-    description: 'Reassign file to a different user',
-    example: 2,
-  })
-  userId?: number;
 
   @IsOptional()
   @IsEnum(FileVisibility)

@@ -1,6 +1,6 @@
 # ADR 0050: 동의 기반 파일 소유권 이전
 
-- Status: Accepted
+- Status: Accepted — implemented (백엔드만; 프론트엔드/admin UI는 별도 추적)
 - Date: 2026-09-04
 - Amends: [ADR 0024](0024-account-cascade-fk-refusal.md) (그 Consequences가 열어둔 질문을
   해소함 — `23503` → 409 `USER_FILES_IN_USE` 번역은 그대로 필요하고 변경 없음. 왜 supersede가
