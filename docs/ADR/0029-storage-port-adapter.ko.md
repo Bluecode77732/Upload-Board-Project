@@ -5,7 +5,7 @@
 - 개정 대상: [ADR 0005](0005-local-disk-storage.md) (로컬 디스크 저장)
 - English: [0029-storage-port-adapter.md](0029-storage-port-adapter.md)
 
-##배경
+## 배경
 
 ADR 0005는 "배포 대상이 없다"는 전제를 명시하고 로컬 디스크 저장을 채택했고, 그 위험까지
 스스로 기록해 두었다: "수평 확장이나 다중 인스턴스 배포는 조용히 깨진다(인스턴스마다 서로

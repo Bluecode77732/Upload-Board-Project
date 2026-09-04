@@ -1,11 +1,11 @@
 # ADR 0025: 파일 가시성, 접근 제어 서빙, 미디어 타입 확장
 
-- Status: Accepted — 구현 완료 ([ADR 0026](0026-file-visibility-implementation.ko.md)가
+- 상태: 승인됨 — 구현 완료 ([ADR 0026](0026-file-visibility-implementation.ko.md)가
   D1/D2/D3/D6을, [ADR 0027](0027-media-type-expansion-implementation.ko.md)이 D4/D5를 구현)
-- Date: 2026-07-31 (설계 게이트); 구현은 2026-08-01에 착지
+- 날짜: 2026-07-31 (설계 게이트); 구현은 2026-08-01에 착지
 - English: [0025-file-visibility-and-media-expansion.md](0025-file-visibility-and-media-expansion.md)
 
-## Context
+## 맥락
 
 2026-07-31에 이 프로젝트의 네 가지 창립 목표를 다시 정리하면서, 의도와 실제
 코드 사이의 공백 두 개가 드러났다:
@@ -38,7 +38,7 @@ Stage F 이후 바뀐 제약이 하나 더 있다: API 표면은 **소비자 0�
 게이트다 — *무엇을·왜*를 정하고, 줄 단위 *어떻게*는 정하지 않는다. 구현은 검토된
 마이그레이션과 함께 별도 후속 과제로 진행한다.
 
-## Decision
+## 결정
 
 ### D1 — 3-상태 가시성, 기본은 비공개
 
@@ -132,7 +132,7 @@ Clarification Protocol에 따른다(새 서빙 메커니즘은 착수 전 질의
   코드는 그것을 던지는 코드와 함께 추가하며, 미리 만들지 않는다
   ([ADR 0011](0011-error-code-contract.ko.md)).
 
-## Alternatives rejected
+## 기각한 대안
 
 - **비공개/unlisted용 서명 만료 URL (서빙 옵션 B)** — 공유 URL이 자체 서명 만료를
   싣고 `ServeStaticModule`은 서명 검증 미들웨어 뒤에 남는다. 기각: 서명 링크는 만료
@@ -152,7 +152,7 @@ Clarification Protocol에 따른다(새 서빙 메커니즘은 착수 전 질의
   표현하지 못한다; 두 값 플래그는 링크 공유를 "완전 공개"로 강제해 "링크 가진 사람만"
   성질을 잃는다.
 
-## Consequences
+## 결과
 
 - **스키마 변경(구현 시 검토된 마이그레이션)**: `FileEntity`에 `visibility`(enum, 기본
   `private`), `shareToken`(nullable), `shareExpiresAt`(nullable) 추가. CLAUDE.md에 따라

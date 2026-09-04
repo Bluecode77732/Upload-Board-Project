@@ -2,7 +2,7 @@
 
 - Status: Accepted — implemented (백엔드만; 프론트엔드/admin UI는 별도 추적)
 - Date: 2026-09-04
-- Amends: [ADR 0024](0024-account-cascade-fk-refusal.md) (그 Consequences가 열어둔 질문을
+- Amends: [ADR 0024](0024-account-cascade-fk-refusal.ko.md) (그 Consequences가 열어둔 질문을
   해소함 — `23503` → 409 `USER_FILES_IN_USE` 번역은 그대로 필요하고 변경 없음. 왜 supersede가
   아니라 amend인지는 아래 Consequences 참고)
 - English: [0050-consent-based-file-ownership-transfer.md](0050-consent-based-file-ownership-transfer.md)
@@ -29,7 +29,7 @@
   확인할 뿐 그 외엔 아무것도 확인하지 않는다.
 
 개발자가 이 필드의 실질적 의도를 처음으로 밝혔다: 계정을 삭제하거나 탈퇴하려는 사용자가,
-소유한 파일을 계정 삭제 캐스케이드([ADR 0020](0020-account-cascade-fk-refusal.ko.md))로
+소유한 파일을 계정 삭제 캐스케이드([ADR 0020](0020-account-deletion-cascade.ko.md))로
 잃는 대신, 다른 계정에게 넘길 수 있게 하려는 것 — 파일을 지키려고 계정을 억지로 살려둘
 필요가 없도록.
 
@@ -70,7 +70,7 @@ null-check로 끝난다. 직접적인 결과는 정책적 선택이 아니라 �
 
 `deleteFiles=true`로 계정을 삭제할 때, 그 계정의 파일 중 하나가 아직 응답 없는 대기중인
 이전을 갖고 있어도, 삭제는 지금과 똑같이 진행된다 — 그 파일(과 대기 상태)은 캐스케이드가
-이미 지우는 나머지 전부와 함께 삭제된다([ADR 0020](0020-account-cascade-fk-refusal.ko.md)).
+이미 지우는 나머지 전부와 함께 삭제된다([ADR 0020](0020-account-deletion-cascade.ko.md)).
 캐스케이드에는 새 분기도, 새 대기 상태도, 부분 완료 모드도 생기지 않는다. 대기중인 이전이
 살아남길 원하는 사용자는 계정을 삭제하기 전에 그걸 수락받거나(또는 `deleteFiles`를 아예
 안 줘서 지금처럼 `USER_HAS_FILES` 409를 받거나) 해야 한다 — 이건 D1이 애초에 가능하게 하려는
