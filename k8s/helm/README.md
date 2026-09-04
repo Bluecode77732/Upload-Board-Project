@@ -63,10 +63,25 @@ release name is `sharenpo` (decided 2026-09-03, ROADMAP.md §7 — matching
 `deploy.sh`'s `HELM_RELEASE` default, `values-prod.yaml`'s
 `serviceAccount.create: true`, and `app-infra/main.tf`'s IRSA trust policy,
 all four pinned to the same name; the live release deployed under the
-earlier name was `upload-board`, see "Status" above):
+earlier name was `upload-board`, see "Status" above). **Use `deploy.sh`, not
+a bare `helm upgrade`**:
 
 ```bash
-helm upgrade sharenpo . -f values-prod.yaml
+bash k8s/infra/terraform/deploy.sh helm
+```
+
+`values-prod.yaml` no longer pins a trustworthy `image.tag` on its own (2026-09-04,
+[ROADMAP.md](../../docs/ROADMAP.md) §7) — `deploy.sh helm` resolves the branch's
+current published image itself (`dev` by default, `deploy.sh helm main` for `main`)
+and passes it as `--set image.tag=...` on top of this file. Running
+`helm upgrade sharenpo . -f values-prod.yaml` directly skips that resolution and
+silently deploys whatever tag happens to still be written in `values-prod.yaml`,
+which is exactly the staleness bug that row exists to prevent — only reach for the
+bare command below if you're deliberately pinning a specific image and supply
+`--set image.tag=<tag>` yourself:
+
+```bash
+helm upgrade sharenpo . -f values-prod.yaml --set image.tag=<tag>
 ```
 
 It carries no secret values — `secrets.existingSecret` still just names the

@@ -66,10 +66,24 @@ env var 누락으로 crash-loop에 빠지는 대신 설치 자체가 명확한 �
 (2026-09-03 확정, ROADMAP.md §7 — `deploy.sh`의 `HELM_RELEASE` 기본값,
 `values-prod.yaml`의 `serviceAccount.create: true`, `app-infra/main.tf`의
 IRSA trust policy 넷 다 같은 이름으로 고정돼 있습니다; 이전 이름으로
-실제 배포됐던 라이브 릴리스는 `upload-board`였습니다 — 위 "상태" 참고):
+실제 배포됐던 라이브 릴리스는 `upload-board`였습니다 — 위 "상태" 참고).
+**맨 `helm upgrade`가 아니라 `deploy.sh`를 쓰세요**:
 
 ```bash
-helm upgrade sharenpo . -f values-prod.yaml
+bash k8s/infra/terraform/deploy.sh helm
+```
+
+`values-prod.yaml`은 더 이상 그 자체로 신뢰할 수 있는 `image.tag`를 고정해두지
+않습니다(2026-09-04, [ROADMAP.md](../../docs/ROADMAP.md) §7) — `deploy.sh helm`이
+해당 브랜치의 현재 발행된 이미지를 직접 조회해서(기본값 `dev`, `main`을 배포하려면
+`deploy.sh helm main`) 이 파일 위에 `--set image.tag=...`로 얹어줍니다.
+`helm upgrade sharenpo . -f values-prod.yaml`을 직접 실행하면 이 조회를 건너뛰고
+`values-prod.yaml`에 그때 적혀 있던 태그를 조용히 그대로 배포하는데, 이게 바로 그
+항목이 막으려는 낡은 태그 문제입니다 — 특정 이미지를 의도적으로 고정하고 싶을
+때만 아래처럼 `--set image.tag=<태그>`를 직접 넘기며 맨 명령을 쓰세요:
+
+```bash
+helm upgrade sharenpo . -f values-prod.yaml --set image.tag=<태그>
 ```
 
 비밀값은 여기 없습니다 — `secrets.existingSecret`은 위에서 만든 Secret의
