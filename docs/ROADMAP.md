@@ -987,23 +987,22 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   now a **creation-time rule**, so an account whose file sits in a stranger's post cannot be
   deleted until that post is (409, and any admin can clear it). **The feature underneath it
   is still undecided** — see the next entry.
-- **Whether `PATCH /file/:id { userId }` should exist at all** (recorded 2026-07-31,
-  [ADR 0024](ADR/0024-account-cascade-fk-refusal.md)) — the field on `UpdateFileDto`
-  reassigns `file_entity.creatorId`, transferring a file to another account outright: the
-  previous owner loses every write right, and the recipient never consents.
-  [ADR 0007](ADR/0007-ownership-checks-without-rbac.md) is the only ADR that mentions it, and
-  only to say the *guard* is creator-only — **no decision anywhere argues why a user needs to
-  hand a file to someone else.** It arrived as a field on the original CRUD DTO and every
-  later decision has treated it as given, which is exactly how it came to be the sole cause of
-  the invariant break ADR 0024 had to absorb. Three candidate outcomes, each a decision rather
-  than a patch: keep it with a stated rationale; keep it but add recipient consent (a
-  pending-transfer row — a schema change); or drop the field, after which the global pipe's
-  `forbidNonWhitelisted` turns any client still sending `userId` into a 400
-  `VALIDATION_FAILED` rather than a silent no-op. **Dropping it is not free**: with no
-  reassignment the same-creator rule becomes a true invariant again, which would make ADR
-  0024's `23503` branch *and* `PostService.resolveAttachment`'s author-identity check
-  unreachable guards — both would have to be removed in the same change, so that option
-  supersedes ADR 0024 rather than sitting beside it. Needs its own ADR.
+- ~~**Whether `PATCH /file/:id { userId }` should exist at all**~~ (recorded 2026-07-31,
+  [ADR 0024](ADR/0024-account-cascade-fk-refusal.md)) — **resolved 2026-09-04**
+  ([ADR 0050](ADR/0050-consent-based-file-ownership-transfer.md), amends ADR 0024): kept, but
+  the unconsented immediate reassignment is replaced with a propose/accept/reject/cancel flow
+  — only the target user can accept, admin included. Investigation surfaced two facts not
+  previously recorded: the field predates any stated purpose (present since this project's
+  first commit) and zero live clients ever sent it (grep across `frontend/`/`admin/`). The
+  developer supplied the actual purpose during this ADR's drafting: let a user hand off owned
+  files before deleting/leaving their account, instead of losing them to the deletion cascade.
+  ADR 0024's `23503` → `USER_FILES_IN_USE` translation and `PostService.resolveAttachment`'s
+  author check both stay reachable and necessary — consent gates *who* can trigger a
+  reassignment, not whether an accepted one still produces the same downstream invariant
+  break, which is why ADR 0050 amends ADR 0024 rather than superseding it (only the rejected
+  "drop the field entirely" alternative would have superseded it). Backend implementation
+  only; frontend/admin UI (propose/accept/reject actions, status badges) tracked separately
+  under those directories' own scope.
 - Deferred list-query indexes (recorded 2026-07-30,
   [ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — the search/filter/sort task
   deliberately shipped **no index**: at this table's size all three candidates are

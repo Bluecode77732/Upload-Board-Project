@@ -1130,15 +1130,17 @@ Architecture Decisions above remain operative.
   consequence of the same break, so do not "simplify" it away as an unreachable guard.
   Accepted residual: an account whose file is attached to *another user's* post cannot be
   deleted until that post is removed (409, actionable — any admin can delete the blocking post)
-- **`PATCH /file/:id { userId }` has never been justified by any decision** (recorded
-  2026-07-31, ADR 0024 > Consequences). The field transfers a file to another account
-  outright — the previous owner loses every write right, the recipient never consents, and
-  `canManage` lets an admin transfer a third party's file. ADR 0007 mentions it only to say
-  the guard is creator-only; nothing argues why the capability exists. It is the sole cause of
-  the invariant break above. Do not build on it as though it were a settled feature, and do
-  not remove it as drive-by cleanup: dropping it would turn ADR 0024's `23503` branch **and**
-  `PostService.resolveAttachment`'s author check into unreachable guards, so that is an ADR
-  that supersedes 0024, not a patch. Candidates are in ROADMAP > Unscheduled
+- ~~`PATCH /file/:id { userId }` has never been justified by any decision~~ — **resolved
+  2026-09-04** ([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.md), amends
+  ADR 0024): the field's actual purpose (hand off owned files before deleting/leaving an
+  account) is now stated and implemented as a consent-gated propose/accept/reject/cancel
+  flow — the old unconsented immediate reassignment is removed. ADR 0024's `23503` →
+  `USER_FILES_IN_USE` translation and `PostService.resolveAttachment`'s author check both
+  **stay reachable and necessary** — consent changes who can trigger a reassignment, not
+  that a reassignment still produces the same downstream invariant break once accepted; see
+  ADR 0050's Consequences for why this amends ADR 0024 rather than superseding it. Backend
+  only — frontend/admin UI (propose/accept/reject actions, status badges) is a separate
+  follow-up under those directories' own scope
 - ~~`ARCHITECTURE.md` (+ko) lags the code~~ — **resolved 2026-09-01**: rewritten end to end
   against current code. Added the seven modules missing from the Module Map (Post, Comment,
   Storage, AuditLog, TempCleanup, Health, Metrics), RBAC (roles, `RolesGuard`, the
