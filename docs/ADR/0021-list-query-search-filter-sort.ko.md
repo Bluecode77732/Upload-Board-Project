@@ -1,6 +1,6 @@
 # ADR 0021: 목록 조회 — 화이트리스트 정렬, ILIKE 제목 검색, 작성자 필터
 
-- 상태: Accepted
+- 상태: 승인됨
 - 결정일: 2026-07-30
 - English: [0021-list-query-search-filter-sort.md](0021-list-query-search-filter-sort.md)
 

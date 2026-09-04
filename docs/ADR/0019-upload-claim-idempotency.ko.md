@@ -1,10 +1,10 @@
 # ADR 0019: 업로드 중복 제출 정책 — attach 파일명을 1회용 청구 토큰으로
 
-- 상태: Accepted
+- 상태: 승인됨
 - 날짜: 2026-07-27
 - English: [0019-upload-claim-idempotency.md](0019-upload-claim-idempotency.md)
 
-## 배경
+## 맥락
 
 CLAUDE.md는 모든 write 엔드포인트가 중복 제출 거동을 명시하도록 요구하며(Engineering
 Principles > Maintainability > Idempotence), Stage 3에서 write 엔드포인트가 늘어나므로 그

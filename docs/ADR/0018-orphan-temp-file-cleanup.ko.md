@@ -1,10 +1,10 @@
 # ADR 0018: 미청구(orphan) temp 파일 스케줄 정리
 
-- 상태: Accepted
+- 상태: 승인됨
 - 날짜: 2026-07-26
 - English: [0018-orphan-temp-file-cleanup.md](0018-orphan-temp-file-cleanup.md)
 
-## 배경
+## 맥락
 
 두 단계 업로드 계약([ADR 0003](0003-two-phase-upload-contract.ko.md))에서
 `POST /upload/attach`는 `file/temp/temp_{uuid}_{ts}.{ext}`를 쓰고, 승격(`POST /file`)은

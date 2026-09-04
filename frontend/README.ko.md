@@ -95,7 +95,7 @@ src/
 - 로그인: `POST /auth/signin`에 Basic 헤더로 요청한다 (`client.ts`에서 조립).
 
 전체 소비 계약은 [docs/API-CONTRACT.ko.md](docs/API-CONTRACT.ko.md)를,
-개발 컨벤션은 [CLAUDE.md](CLAUDE.md)를 참고한다.
+개발 컨벤션은 [CLAUDE.md](CLAUDE.ko.md)를 참고한다.
 
 ## 명령어
 

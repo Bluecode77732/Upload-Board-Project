@@ -1,6 +1,6 @@
 # ADR 0024: 계정 연쇄 삭제 — FK 위반 500 대신 타입 있는 거절
 
-- 상태: Accepted
+- 상태: 승인됨
 - 날짜: 2026-07-31
 - English: [0024-account-cascade-fk-refusal.md](0024-account-cascade-fk-refusal.md)
 

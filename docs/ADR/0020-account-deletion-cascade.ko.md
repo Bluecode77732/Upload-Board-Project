@@ -1,6 +1,6 @@
 # ADR 0020: 삭제 정책 — soft delete 대신 확인 기반 계정 연쇄 삭제
 
-- 상태: Accepted
+- 상태: 승인됨
 - 결정일: 2026-07-30
 - English: [0020-account-deletion-cascade.md](0020-account-deletion-cascade.md)
 

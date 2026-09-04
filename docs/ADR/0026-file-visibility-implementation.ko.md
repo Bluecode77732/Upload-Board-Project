@@ -1,6 +1,6 @@
 # ADR 0026: 파일 가시성 구현 — 서빙 방식, 메타데이터 필터링, 콘텐츠/메타데이터 노출 정책 분리
 
-- 상태: Accepted
+- 상태: 승인됨
 - 날짜: 2026-08-01
 - English: [0026-file-visibility-implementation.md](0026-file-visibility-implementation.md)
 

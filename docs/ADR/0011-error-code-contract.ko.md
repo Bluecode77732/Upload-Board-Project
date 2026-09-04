@@ -4,7 +4,7 @@
 - 날짜: 2026-07-23
 - English: [0011-error-code-contract.md](0011-error-code-contract.md)
 
-## 배경
+## 맥락
 
 API 표면은 동결되었고([ADR 0010](0010-frontend-split-and-api-surface-freeze.ko.md))
 브라우저 프론트엔드 도입이 임박했다. 지금까지 에러 응답은 Nest 기본값 그대로 —

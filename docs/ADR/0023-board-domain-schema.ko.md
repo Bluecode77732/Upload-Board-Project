@@ -1,10 +1,10 @@
 # ADR 0023: Board 도메인 스키마 — post와 comment
 
-- 상태: Accepted
+- 상태: 승인됨
 - 결정일: 2026-07-30
 - English: [0023-board-domain-schema.md](0023-board-domain-schema.md)
 
-## 배경
+## 맥락
 
 ROADMAP §5(도메인 계획)와 Stage 3의 "Board domain" 항목 — 프로젝트 이름에 들어 있는 *board*가
 아직 구현되지 않았다. 지금의 API는 영상 파일만 관리한다.

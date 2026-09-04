@@ -1,6 +1,6 @@
 # ADR 0027: 미디어 타입 확장 구현 — 타입별 업로드 필드
 
-- 상태: Accepted
+- 상태: 승인됨
 - 날짜: 2026-08-01
 - English: [0027-media-type-expansion-implementation.md](0027-media-type-expansion-implementation.md)
 
