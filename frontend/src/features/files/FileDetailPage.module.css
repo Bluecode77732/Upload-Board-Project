@@ -19,7 +19,9 @@
 .header {
   display: flex;
   gap: 10px;
-  align-items: center;
+  /* flex-start, not center: a long title wraps to multiple lines, and centering would float
+     the badges in the vertical middle of the whole wrapped block instead of by the first line. */
+  align-items: flex-start;
   margin: 16px 0;
 }
 
