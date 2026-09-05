@@ -130,6 +130,35 @@ column of its own.
   REST conventions rather than fixed here — this ADR settles the state machine and its rules,
   not route naming.
 
+## Addendum (2026-09-05) — D6's "own file list" discovery claim confirmed false, and confirmed *not* to fix
+
+Frontend UI work found that D6's claim — the target learns of a pending proposal "by looking
+at their own file list" — does not hold. `FileService.getFiles` (`GET /file`, backing the "My
+Files" screen) filters non-admin requesters to `visibility = public OR creator.id =
+requester.id`; it carries no `OR pendingTransferTo.id = requester.id` clause, so a file
+proposed to a user who does not already own or manage it never appears in that list. The only
+way the target discovers a proposal today is a direct link/id given by the proposer outside
+the app (chat, email, etc.) — exactly the discovery path used to verify this ADR's
+accept/reject flow live, since there was no other way to reach it.
+
+Two ways to close this gap were considered: add the `pendingTransferTo` exception to
+`getFiles` (surfacing proposed files in the target's own list, mirroring the `getFileById`
+fix below), or leave it as is. **Decision: leave it as is, deliberately** — `proposeTransfer`
+has no rate limit and no cap on how many *different* proposers may target the same account
+(D2's "one pending target per file" constrains only a single file, not a single recipient), so
+surfacing every incoming proposal as its own list entry means an account that many unrelated
+users propose to would accumulate a pile of un-dismissable entries demanding a response each
+— a burden this ADR was not asked to design a mitigation for (rate limiting, grouping,
+dismiss-without-deciding). Fixing the list gap now, before that mitigation exists, would trade
+one problem (silent, undiscoverable proposals) for another (a growing wall of proposals with
+no way to clear them). This narrows the earlier-considered "add the exception" alternative
+from a bug fix to a decision explicitly deferred pending that mitigation design.
+
+**Consequence**: D6's "by looking at their own file list" is corrected by this addendum to
+"by a link the proposer shares out of band — the target's own file list does not surface a
+pending proposal." No code changed for this addendum; only `getFileById` (the direct-link
+path) gained the exception, documented separately above.
+
 ## Addendum (2026-09-05) — cancel narrowed to creator-only
 
 Frontend UI work on this ADR (propose/accept/reject/cancel screens) prompted a review of
