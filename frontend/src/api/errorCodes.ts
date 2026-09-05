@@ -22,6 +22,10 @@ export const ErrorCode = {
   UPLOAD_MULTIPLE_FIELDS: 'UPLOAD_MULTIPLE_FIELDS',
   // Demoting the last remaining superadmin is refused (ADR 0013).
   AUTH_LAST_SUPERADMIN: 'AUTH_LAST_SUPERADMIN',
+  // A file transfer was proposed naming the file's own current creator (ADR 0050).
+  FILE_TRANSFER_INVALID_TARGET: 'FILE_TRANSFER_INVALID_TARGET',
+  // accept/reject/cancel called but nothing is pending on this file (ADR 0050).
+  FILE_NO_PENDING_TRANSFER: 'FILE_NO_PENDING_TRANSFER',
 
   // 401
   AUTH_TOKEN_INVALID: 'AUTH_TOKEN_INVALID',
@@ -31,6 +35,9 @@ export const ErrorCode = {
   // 403
   FORBIDDEN_NOT_OWNER: 'FORBIDDEN_NOT_OWNER',
   FORBIDDEN: 'FORBIDDEN',
+  // accept/reject called by someone other than the file's pending transfer target — not
+  // even an admin may respond on the target's behalf (ADR 0050 D4).
+  FORBIDDEN_NOT_TRANSFER_TARGET: 'FORBIDDEN_NOT_TRANSFER_TARGET',
 
   // 404
   USER_NOT_FOUND: 'USER_NOT_FOUND',
@@ -50,6 +57,9 @@ export const ErrorCode = {
   POST_FILE_TAKEN: 'POST_FILE_TAKEN',
   // The file is referenced by a post, so its row cannot be deleted (ADR 0023 D4).
   FILE_IN_USE: 'FILE_IN_USE',
+  // A transfer was proposed while one is already pending — cancel it first, never
+  // silently overwritten (ADR 0050 D3).
+  FILE_TRANSFER_PENDING: 'FILE_TRANSFER_PENDING',
 
   // 413
   PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',

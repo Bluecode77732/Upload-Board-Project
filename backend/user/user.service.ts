@@ -102,6 +102,24 @@ export class UserService {
     return user;
   }
 
+  // 목적: 이메일로 유저 한 명을 정확히 일치 조회하고 없으면 표준화된 404를 던진다.
+  // 이유: 파일 이전 제안(ADR 0050)이 숫자 userId만 받는데, 일반 유저는 상대방 id를 알 방법이
+  //       없다 — GET /user(목록)는 admin 전용이라 이메일→id 단건 조회가 별도로 필요하다.
+  // 방법: findOne과 같은 존재-확인 패턴이되, email 컬럼의 정확 일치로 조회한다(부분 일치 ILIKE가
+  //       아님 — 여러 후보가 나오면 어느 걸 골라야 할지 모호해진다).
+  async findByEmail(email: string): Promise<UserEntity> {
+    const user = await this.userRepository.findOne({ where: { email } });
+
+    if (!user) {
+      throw new NotFoundException({
+        code: ErrorCode.USER_NOT_FOUND,
+        message: 'User not found.',
+      });
+    }
+
+    return user;
+  }
+
   // 목적: 계정 정보(email/password)를 갱신하되, 본인이거나 대상보다 role이 낮은 admin 이상만 허용한다.
   // 이유: 기존에는 actor.role이 admin 이상인지만 컨트롤러에서 확인하고 대상의 role은 보지 않아, admin이
   //       동급 admin이나 상위 superadmin 계정까지 수정할 수 있는 권한 역전 결함이 있었다. 그 결함을 고치며

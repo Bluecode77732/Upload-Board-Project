@@ -963,17 +963,15 @@ describe('FileService', () => {
       });
     });
 
-    it("allows an admin to cancel on the creator's behalf", async () => {
-      jest
-        .spyOn(fileRepository, 'findOne')
-        .mockResolvedValueOnce({
-          ...mockFileEntity,
-          pendingTransferTo: pendingTarget,
-        })
-        .mockResolvedValueOnce({ ...mockFileEntity, pendingTransferTo: null });
-      setupUpdateQueryBuilder();
+    it('throws ForbiddenException for an admin who is not the proposer (cancel is creator-only, unlike propose)', async () => {
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValue({
+        ...mockFileEntity,
+        pendingTransferTo: pendingTarget,
+      });
 
-      await expect(fileService.cancelTransfer(1, admin)).resolves.toBeDefined();
+      await expect(fileService.cancelTransfer(1, admin)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('throws ForbiddenException for a non-owner, non-admin requester', async () => {
@@ -1199,6 +1197,46 @@ describe('FileService', () => {
       const privateFile = {
         ...mockFileEntity,
         visibility: FileVisibility.private,
+      };
+      jest.spyOn(fileRepository, 'createQueryBuilder').mockReturnValue({
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(privateFile),
+      } as unknown as SelectQueryBuilder<FileEntity>);
+
+      await expect(fileService.getFileById(1, stranger)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('returns a private file to its pending transfer target (ADR 0050)', async () => {
+      const privateFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.private,
+        pendingTransferTo: { id: 2, email: 'stranger@test.com' } as UserEntity,
+      };
+      jest.spyOn(fileRepository, 'createQueryBuilder').mockReturnValue({
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(privateFile),
+      } as unknown as SelectQueryBuilder<FileEntity>);
+
+      await expect(fileService.getFileById(1, stranger)).resolves.toMatchObject(
+        {
+          id: 1,
+          pendingTransferTo: { id: 2, email: 'stranger@test.com' },
+        },
+      );
+    });
+
+    it('still hides a private file from a stranger who is not the pending target', async () => {
+      const privateFile = {
+        ...mockFileEntity,
+        visibility: FileVisibility.private,
+        pendingTransferTo: {
+          id: 99,
+          email: 'someone-else@test.com',
+        } as UserEntity,
       };
       jest.spyOn(fileRepository, 'createQueryBuilder').mockReturnValue({
         leftJoinAndSelect: jest.fn().mockReturnThis(),

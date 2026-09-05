@@ -6,7 +6,7 @@
 **같은 변경**에서 함께 갱신한다.
 
 여기서 참조하는 백엔드 결정 사항은 저장소 루트의 `ADR/`(0001, 0010,
-0011, 0012, 0021, 0023, 0024)에 있다 — 이 문서는 클라이언트가 지켜야 할 부분만 다시 정리한다.
+0011, 0012, 0021, 0023, 0024, 0050)에 있다 — 이 문서는 클라이언트가 지켜야 할 부분만 다시 정리한다.
 
 ## Base URL과 전송
 
@@ -102,8 +102,13 @@
 | `POST` | `/file` | temp 업로드를 정식 파일로 승격 (새 행은 기본값 `visibility: private`) |
 | `PATCH` | `/file/:id` | creator/admin; 여기서 visibility 토글 + 공유 토큰 회전 |
 | `DELETE` | `/file/:id` | creator/admin; 게시글이 참조 중이면 409 `FILE_IN_USE` |
+| `POST` | `/file/:id/transfer` | `{ userId }`; creator/admin이 이전을 제안한다 — 대상이 수락하기 전까지 소유권은 옮겨가지 않는다 (ADR 0050) |
+| `POST` | `/file/:id/transfer/accept` | 대상 본인만; 소유권 이전 |
+| `POST` | `/file/:id/transfer/reject` | 대상 본인만; 거절, 소유권 불변 |
+| `DELETE` | `/file/:id/transfer` | creator **전용**(propose와 달리 admin은 남의 제안을 취소 못 함, 2026-09-05 addendum); 아직 응답 없는 제안을 취소 |
 | `POST` | `/upload/attach` | multipart — `image`/`audio`/`video` 중 정확히 하나, 100MB (ADR 0027) |
-| `GET` | `/user`, `/user/:id` | |
+| `GET` | `/user`, `/user/:id` | `/user`(목록)는 **admin 전용**; `/user/:id`는 인증된 유저 누구나 |
+| `GET` | `/user/lookup?email=` | 인증된 유저 누구나; 이메일 정확 일치, 없으면 `404 USER_NOT_FOUND` — `POST /file/:id/transfer`가 필요로 하는 숫자 id를 이메일로부터 구한다 (ADR 0050) |
 | `PATCH`/`DELETE` | `/user/:id` | self/admin |
 | `GET` | `/post?take=&skip=&search=&sortBy=&order=&creatorId=` | `[rows, total]` 튜플; `/file`과 같은 쿼리 형태(ADR 0021 read layer 재사용), `sortBy`는 `createdAt`\|`title`\|`id` 중 하나 |
 | `GET` | `/post/:id` | 게시글 + creator + 첨부된 `file`(`FileResponseDto`, 텍스트만 있는 글이면 없음); 없으면 404 `POST_NOT_FOUND` |
@@ -137,6 +142,30 @@
 `fileUrl`의 확장자나 `POST /upload/attach`에서 어느 필드를 썼는지로
 추론하지 않는다.
 
+### 동의 기반 파일 소유권 이전 (ADR 0050)
+
+제안/취소는 누가 호출할 수 있는지가 **대칭이 아니다**: admin은 누구의 파일이든 이전을
+제안할 수 있지만(이 API의 일반적인 creator-or-admin 쓰기 패턴과 동일), 오직 그 파일의
+**creator**만 제안을 취소할 수 있다 — admin은 자신이 당사자가 아닌 두 유저 간 협상에
+모더레이션 이해관계가 없으므로, 같은 권한 검사를 무검토로 상속하는 대신 이 분기를 좁혔다
+(2026-09-05 addendum). admin이 원치 않는 대기중인 이전을 막아야 한다면 여전히
+`DELETE /file/:id`로 가능하다(파일 자체를, 대기 상태와 함께 삭제) — 다만 그 협상만
+겨냥한 비파괴적 취소는 더 이상 안 된다.
+
+`FileResponseDto`는 옵셔널 `pendingTransferTo: { id, email }`을 갖는다 — 이전이
+대기중이고, 요청자가 관리 권한자(creator/admin)이거나 그 대기의 대상 본인일 때만
+내려온다. 무관한 제3자에게는 백엔드가 이미 숨기므로 프론트가 추가로 감출 필요는
+없다. `GET /file`(목록)은 이 필드를 join하지 않고, `GET /file/:id`만 준다.
+제안/수락/거절/취소 네 액션 모두 `PATCH /file/:id`와 마찬가지로 갱신된
+`FileResponseDto`를 반환한다. 새 에러 코드: `FILE_TRANSFER_INVALID_TARGET`(400, 파일의
+현재 creator 본인을 대상으로 제안), `FILE_NO_PENDING_TRANSFER`(400, 대기중인 게 없는데
+수락/거절/취소), `FORBIDDEN_NOT_TRANSFER_TARGET`(403, 대상 본인이 아닌 사람이
+수락/거절), `FILE_TRANSFER_PENDING`(409, 이미 대기중인데 새로 제안 — 자동 덮어쓰기
+없이 먼저 취소해야 한다).
+
+기존 `PATCH /file/:id { userId }`(동의 없는 즉시 강제 이전) 필드는 제거됐다 — 이제
+그 필드를 보내면 `400 VALIDATION_FAILED`다(글로벌 파이프의 `forbidNonWhitelisted`).
+
 댓글 응답의 `postId`는 순수한 id 값일 뿐, 게시글 전체를 담아 보내지
 않는다 — 그렇지 않으면 댓글 20개짜리 스레드가 같은 게시글 본문과 파일을
 행마다 반복해서 실어 보내게 된다. 댓글 라우트는 두 prefix로 나뉜다:
@@ -157,3 +186,9 @@ JSON 성공 페이로드가 애초에 없다. `src/api/client.ts`의 `request()`
 삭제가 실제로는 백엔드에서 행이 이미 지워졌는데도 네트워크 오류처럼 보였다.
 `api.delete()`의 반환값에서 파싱된 본문을 기대하는 호출부를 새로 추가하지
 말 것.
+
+**예외**: `DELETE /file/:id/transfer`(ADR 0050의 취소 액션)는 이 규칙을 따르지
+**않는다** — 갱신된 `FileResponseDto`를 진짜 JSON으로 반환한다. 제안 취소는 파일
+행의 리소스 삭제가 아니라 상태 갱신이기 때문이다. `FileDetailPage`의
+`handleCancelTransfer`는 `api.delete<FileResponse>(...)`로 호출해 파싱된 본문을
+그대로 읽는다.

@@ -35,6 +35,19 @@
   font-size: 0.9rem;
 }
 
+.pendingBadge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
 .error {
   color: var(--danger);
   font-size: 0.9rem;

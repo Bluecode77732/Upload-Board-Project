@@ -226,10 +226,13 @@ export class FileService {
   // 목적: 단일 파일 메타데이터를 조회하되, 볼 권한이 없으면 존재 자체를 숨긴다.
   // 이유: private/unlisted 파일의 제목·작성자를 소유자·admin 외에게 보여주면 '비공개' 토글이 이름뿐인
   //       상태가 된다(ADR 0025). 403이 아니라 404를 쓰는 이유는 콘텐츠 접근 거부(FORBIDDEN_NOT_OWNER)와
-  //       달리 메타데이터 단계에서는 파일의 존재 자체도 확인해 줄 이유가 없기 때문이다.
-  // 방법: 조회 후 public이거나 canManage인 경우에만 반환하고, 그 외에는 찾지 못한 것과 동일하게 404.
-  //       pendingTransferTo도 함께 join해 둔다 — toResponse가 이걸 보고 소유자/대상 본인에게만
-  //       노출 여부를 판정한다(ADR 0050).
+  //       달리 메타데이터 단계에서는 파일의 존재 자체도 확인해 줄 이유가 없기 때문이다. 대기중인 이전
+  //       제안의 대상 본인도 통과시켜야 한다 — 새 파일의 기본 visibility가 private인 이상(ADR 0025 D1)
+  //       이 예외가 없으면 수락/거절하려는 대상이 그 파일을 볼 수조차 없다(ADR 0050 라이브 검증에서
+  //       발견된 결함 — accept/reject가 도달 불가능했다).
+  // 방법: 조회 후 public이거나 canManage이거나 요청자가 pendingTransferTo 본인인 경우에만 반환하고,
+  //       그 외에는 찾지 못한 것과 동일하게 404. pendingTransferTo도 함께 join해 둔다 — toResponse가
+  //       이걸 보고 소유자/대상 본인에게만 노출 여부를 판정한다(ADR 0050).
   async getFileById(
     id: number,
     requester: Requester,
@@ -241,10 +244,15 @@ export class FileService {
       .where('file.id = :id', { id })
       .getOne();
 
+    const isPendingTarget = !!(
+      file?.pendingTransferTo && file.pendingTransferTo.id === requester.id
+    );
+
     if (
       !file ||
       (file.visibility !== FileVisibility.public &&
-        !this.canManage(file.creator.id, requester))
+        !this.canManage(file.creator.id, requester) &&
+        !isPendingTarget)
     ) {
       throw new NotFoundException({
         code: ErrorCode.FILE_NOT_FOUND,
@@ -814,11 +822,16 @@ export class FileService {
     return this.toResponse(updated, requester);
   }
 
-  // 목적: 제안자(creator/admin)가 아직 응답 없는 제안을 취소한다 — 소유권은 바뀌지 않는다.
+  // 목적: 제안자 본인이 아직 응답 없는 제안을 취소한다 — 소유권은 바뀌지 않는다.
   // 이유: A가 대상을 잘못 지정했거나 마음이 바뀌었을 때, B의 거절을 기다리지 않고 스스로 거둘 수
   //       있어야 한다(ADR 0050 D1) — D3의 "새로 제안하려면 먼저 취소" 규칙이 실제로 쓰이는 경로다.
-  // 방법: proposeTransfer와 같은 canManage 권한 검사(대상 일치가 아니라 소유자/admin 검사라는 점이
-  //       accept/reject와 다르다) → 대기중이 아니면 400 → pendingTransferToUserId만 null로.
+  //       admin은 제외한다 — canManage()는 "내 리소스를 내가 관리"를 전제한 모더레이션 게이트인데,
+  //       제안은 A·B 두 당사자 간의 합의 절차라 제3자(admin)가 개입할 근거가 없다. 이전엔 propose와
+  //       같은 canManage 검사를 그대로 재사용해 admin이 남의 제안을 임의로 취소할 수 있었는데, 이건
+  //       설계된 적 없는 상속이었다(옛 `PATCH /file/:id { userId }`가 근거 없이 존재했던 것과 같은
+  //       종류의 결함). admin이 정말 막아야 하면 그 파일을 `DELETE /file/:id`로 지우면 된다 —
+  //       propose(D4)는 admin도 여전히 가능, cancel만 creator 전용으로 좁힌다.
+  // 방법: creator 본인 여부만 확인(admin 우회 없음) → 대기중이 아니면 400 → pendingTransferToUserId만 null로.
   async cancelTransfer(
     id: number,
     requester: Requester,
@@ -835,10 +848,10 @@ export class FileService {
       });
     }
 
-    if (!this.canManage(file.creator.id, requester)) {
+    if (file.creator.id !== requester.id) {
       throw new ForbiddenException({
         code: ErrorCode.FORBIDDEN_NOT_OWNER,
-        message: 'Only the file creator or an admin can cancel a transfer.',
+        message: 'Only the file creator can cancel a transfer.',
       });
     }
 

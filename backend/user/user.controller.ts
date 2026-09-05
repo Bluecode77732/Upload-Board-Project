@@ -16,6 +16,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { DeleteUserQueryDto } from './dto/delete-user-query.dto';
 import { GetUsersDto } from './dto/get-users.dto';
+import { LookupUserDto } from './dto/lookup-user.dto';
 import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'backend/auth/guard/jwt-auth.guard';
 import { RolesGuard } from 'backend/auth/guard/roles.guard';
@@ -58,6 +59,24 @@ export class UserController {
   // 방법: @Query()로 바인딩된 GetUsersDto를 그대로 전달한다.
   findAll(@Query() query: GetUsersDto) {
     return this.userService.findAll(query);
+  }
+
+  @Get('lookup')
+  @ApiResponse({
+    status: 200,
+    description:
+      'The user with this exact email (ADR 0050 — resolves a file-transfer proposal target). ' +
+      'Any authenticated user may call this — same per-user disclosure level as GET /user/:id, ' +
+      'just keyed by email instead of id.',
+  })
+  @ApiResponse({ status: 404, description: 'USER_NOT_FOUND.' })
+  // 목적: 이메일로 유저를 조회해 숫자 id를 돌려준다.
+  // 이유: 파일 이전 제안 폼은 상대방 이메일만 알고 id는 모르는 게 보통이다 — POST
+  //       /file/:id/transfer가 숫자 userId만 받으므로 그 변환이 필요하다(ADR 0050).
+  // 방법: 검증된 DTO의 email을 그대로 서비스에 위임한다. `:id` 라우트보다 먼저 선언해야
+  //       'lookup'이 숫자 id 파라미터로 오인되지 않는다(Express는 선언 순서로 매칭한다).
+  findByEmail(@Query() query: LookupUserDto) {
+    return this.userService.findByEmail(query.email);
   }
 
   @Get(':id')

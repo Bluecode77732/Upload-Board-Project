@@ -223,11 +223,11 @@ export class FileController {
   @ApiResponse({
     status: 403,
     description:
-      'FORBIDDEN_NOT_OWNER — only the creator or an admin may cancel.',
+      "FORBIDDEN_NOT_OWNER — only the file creator may cancel (admin cannot cancel another user's proposal — a narrower rule than propose's creator-or-admin, see file.service.ts cancelTransfer).",
   })
   // 목적: 아직 응답 없는 이전 제안 취소 요청을 서비스로 넘긴다.
   // 이유: 제안자가 대상 응답을 기다리지 않고 스스로 제안을 거둘 수 있어야 한다(ADR 0050 D3).
-  // 방법: 요청자를 그대로 전달 — creator/admin 판정은 서비스의 몫이다.
+  // 방법: 요청자를 그대로 전달 — creator 본인 여부 판정은 서비스의 몫이다(admin 예외 없음).
   cancelTransfer(
     @Param('id', ParseIntPipe) id: number,
     @AuthUser() actor: AuthUser,

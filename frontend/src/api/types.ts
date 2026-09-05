@@ -28,6 +28,10 @@ export type FileMediaType = 'image' | 'audio' | 'video'
 // joins the relation (list + detail). `fileUrl` is the access-controlled content
 // endpoint (`/file/:id/content`, ADR 0025/0026), NOT a static path — reading it obeys
 // `visibility`. `shareUrl` appears only for a manager of an unlisted file (ADR 0025 D3).
+// `pendingTransferTo` (ADR 0050) is present only when a transfer is pending AND the
+// requester is either a manager (creator/admin) or the pending target themself — the
+// backend already hides it from unrelated third parties, so the frontend never needs to.
+// GET /file (list) does not join it — only GET /file/:id carries it.
 export interface FileResponse {
   id: number
   title: string
@@ -36,6 +40,10 @@ export interface FileResponse {
   mediaType: FileMediaType
   shareUrl?: string
   creator?: {
+    id: number
+    email: string
+  }
+  pendingTransferTo?: {
     id: number
     email: string
   }
@@ -138,4 +146,10 @@ export interface CreateCommentRequest {
 // PATCH /comment/:id body — mirrors backend UpdateCommentDto. Only `body` is editable.
 export interface UpdateCommentRequest {
   body: string
+}
+
+// POST /file/:id/transfer body — mirrors backend ProposeFileTransferDto (ADR 0050). The
+// target is a numeric id; the UI resolves an email to one first via GET /user/lookup.
+export interface ProposeFileTransferRequest {
+  userId: number
 }

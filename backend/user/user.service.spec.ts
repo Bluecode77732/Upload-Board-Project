@@ -242,6 +242,28 @@ describe('UserService', () => {
     });
   });
 
+  describe('findByEmail', () => {
+    it('should return the user with an exact email match', async () => {
+      const user = { id: 2, email: 'b@c.com' };
+      jest.spyOn(mockUserRepository, 'findOne').mockResolvedValue(user);
+
+      const result = await userService.findByEmail('b@c.com');
+
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+        where: { email: 'b@c.com' },
+      });
+      expect(result).toEqual(user);
+    });
+
+    it('should throw NotFoundException when no user has that email', async () => {
+      jest.spyOn(mockUserRepository, 'findOne').mockResolvedValue(null);
+
+      await expect(userService.findByEmail('nobody@c.com')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('update', () => {
     it('should update a user.', async () => {
       const updateUserDto: UpdateUserDto = {

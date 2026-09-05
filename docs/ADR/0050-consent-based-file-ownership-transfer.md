@@ -130,6 +130,43 @@ column of its own.
   REST conventions rather than fixed here — this ADR settles the state machine and its rules,
   not route naming.
 
+## Addendum (2026-09-05) — cancel narrowed to creator-only
+
+Frontend UI work on this ADR (propose/accept/reject/cancel screens) prompted a review of
+`cancelTransfer`'s permission check, which reused `canManage()` (creator-or-admin, ADR 0013)
+unmodified from D4's propose branch. That reuse was never itself a decision — D4 explicitly
+justified admin's *propose* access (matching the existing creator-or-admin write pattern),
+but said nothing about cancel; the admin branch on cancel arrived purely because the same
+helper was called, not because a need for it was stated. This is the same failure mode as the
+pre-ADR-0050 `UpdateFileDto.userId` field this ADR already replaced: a capability that exists
+because it was structurally convenient, not because anyone decided a third party should have
+it.
+
+The distinction that matters: `canManage()` is a single-resource moderation gate ("does this
+requester manage *this file*"), suited to PATCH/DELETE on a file the requester's own account
+touches. Propose/accept/reject/cancel are a two-party negotiation between the file's creator
+and a named target — an admin has no analogous moderation interest in *that specific
+negotiation* the way it has an interest in a file's content or metadata. Letting admin
+unilaterally cancel *any* two users' pending transfer, with no stated use case, is a stronger
+capability than this project reasons its way into elsewhere.
+
+**Decision**: `cancelTransfer` is narrowed to creator-only — `file.creator.id !==
+requester.id` replaces `!canManage(...)`. `proposeTransfer` is unaffected: D4's admin-may-
+propose reasoning stands, since accept/reject remaining the target's sole decision (D4) is
+what keeps propose safe regardless of who proposes. An admin who needs to stop an unwanted
+pending transfer still can — via `DELETE /file/:id`, which removes the file (and its pending
+transfer) outright — just not via a targeted, non-destructive cancel on someone else's
+negotiation.
+
+**Consequences**: `403 FORBIDDEN_NOT_OWNER` is unchanged as the code, but its meaning on this
+route narrows to "you are not this file's creator" (no admin escape hatch). One existing test
+(`file.service.spec.ts` `cancelTransfer`) that asserted an admin could cancel on the creator's
+behalf now asserts the opposite (`ForbiddenException`). Swagger's 403 description and the
+frontend's error message for this route were both updated to stop saying "or an admin."
+
+**Not done**: no equivalent review of `proposeTransfer`'s admin branch — D4 already reasoned
+about it explicitly, so it is not the same "unexamined inheritance" this addendum addresses.
+
 ## Alternatives rejected
 
 - **Keep the field, document rationale only** — rejected: does not fix the actual problem this
