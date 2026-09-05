@@ -29,6 +29,12 @@
   margin: 0;
   min-width: 0;
   overflow-wrap: break-word;
+  /* Clamp to 3 lines instead of letting an extreme-length title push the whole header
+     tall — the full text is still reachable via the native title-attribute tooltip. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .meta {

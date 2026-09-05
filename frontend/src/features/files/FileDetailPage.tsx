@@ -348,7 +348,9 @@ export function FileDetailPage() {
             {canManage ? `Transfer pending → ${file.pendingTransferTo.email}` : 'Transfer proposed to you'}
           </span>
         )}
-        <h1 className={styles.title}>{file.title}</h1>
+        <h1 className={styles.title} title={file.title}>
+          {file.title}
+        </h1>
       </header>
       {file.creator && <p className={styles.meta}>Uploaded by {file.creator.email}</p>}
 
