@@ -280,6 +280,113 @@ describe('FileService', () => {
       );
     });
 
+    it('defaults to private when visibility is omitted (no regression)', async () => {
+      const builder = insertQueryBuilder(
+        jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
+      );
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(builder);
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(mockFileEntity);
+
+      await fileService.uploadFile(uploadFileDto, 1);
+
+      const valuesMock = builder.values as unknown as jest.Mock<
+        unknown,
+        [Record<string, unknown>]
+      >;
+      const insertedValues = valuesMock.mock.calls[0][0];
+      expect(insertedValues).not.toHaveProperty('visibility');
+      expect(insertedValues).not.toHaveProperty('shareToken');
+    });
+
+    it('applies an explicit public visibility at creation', async () => {
+      const publicDto = { ...uploadFileDto, visibility: FileVisibility.public };
+      const builder = insertQueryBuilder(
+        jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
+      );
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(builder);
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(mockFileEntity);
+
+      await fileService.uploadFile(publicDto, 1);
+
+      expect(builder.values).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: FileVisibility.public }),
+      );
+    });
+
+    it('generates a share token when visibility is unlisted at creation', async () => {
+      const unlistedDto = {
+        ...uploadFileDto,
+        visibility: FileVisibility.unlisted,
+      };
+      const builder = insertQueryBuilder(
+        jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
+      );
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(builder);
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(mockFileEntity);
+
+      await fileService.uploadFile(unlistedDto, 1);
+
+      const valuesMock = builder.values as unknown as jest.Mock<
+        unknown,
+        [Record<string, unknown>]
+      >;
+      const insertedValues = valuesMock.mock.calls[0][0];
+      expect(insertedValues.visibility).toBe(FileVisibility.unlisted);
+      expect(typeof insertedValues.shareToken).toBe('string');
+      expect((insertedValues.shareToken as string).length).toBeGreaterThan(0);
+    });
+
+    it('includes shareUrl in the fresh-creation response for an unlisted upload', async () => {
+      // Live-verification finding: toResponse() only includes shareUrl when a
+      // requester is passed and canManage() returns true for it — the creator of a
+      // freshly-promoted file is always its own manager, so the response must carry
+      // that requester rather than omitting it.
+      const unlistedDto = {
+        ...uploadFileDto,
+        visibility: FileVisibility.unlisted,
+      };
+      const unlistedSavedRow: FileEntity = {
+        ...mockFileEntity,
+        visibility: FileVisibility.unlisted,
+        shareToken: 'test-share-token',
+      };
+      const builder = insertQueryBuilder(
+        jest.fn().mockResolvedValue({ identifiers: [{ id: 1 }] }),
+      );
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(builder);
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(unlistedSavedRow);
+
+      const result = await fileService.uploadFile(unlistedDto, 1);
+
+      expect(result.file.shareUrl).toBe(
+        'http://localhost:3000/file/1/content?share=test-share-token',
+      );
+    });
+
     it('should replay the existing file when the same user resubmits a claimed filename', async () => {
       jest.spyOn(fileRepository, 'findOne').mockResolvedValueOnce(claimedFile);
 

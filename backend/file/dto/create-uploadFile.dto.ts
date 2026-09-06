@@ -1,5 +1,12 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, Matches } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+} from 'class-validator';
+import { FileVisibility } from '../entity/file-visibility.enum';
 
 // The exact shape upload.module.ts issues: temp_{uuid}_{ms-timestamp}.{ext}. Pinning it
 // here makes the filename a one-shot claim token (ADR 0019) and keeps client-chosen path
@@ -31,4 +38,13 @@ export class UploadFileDto {
     example: 'temp_67ff0c79-a1f0-4d4f-865c-681af920378d_1764581241716.mp4',
   })
   filePath!: string;
+
+  @IsOptional()
+  @IsEnum(FileVisibility)
+  @ApiPropertyOptional({
+    description:
+      "Initial visibility for the promoted file. Omit to default to 'private'. Setting 'unlisted' generates a share token at creation (ADR 0025 D1).",
+    enum: FileVisibility,
+  })
+  visibility?: FileVisibility;
 }

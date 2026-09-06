@@ -301,8 +301,13 @@ export class FileService {
 
   // 목적: 이미 청구된 업로드의 재제출을 멱등 replay 또는 409로 판정한다.
   // 이유: 네트워크 재시도는 최초 성공과 같은 결과를 받아야 하고, 타인의 청구는 가로챌 수 없어야 한다.
+  //       toResponse에 requester를 넘기지 않으면 isManager가 항상 false가 돼, replay 대상이 unlisted로
+  //       생성된 파일이어도 shareUrl이 빠진다 — replay는 항상 그 요청자 본인의 파일이므로(아래에서 이미
+  //       확인) 그 요청자를 requester로 넘기지 못할 이유가 없다.
   // 방법: 행의 creator와 요청자 id를 비교 — 일치하면 uploadClaimsTotal{outcome=replayed}를 올리고 기존
-  //       리소스를 replayed로 반환, 아니면 FILE_ALREADY_CLAIMED(ADR 0047 — replay 빈도 관측).
+  //       리소스를 { id: userId, role: user } 컨텍스트로 toResponse해 replayed로 반환, 아니면
+  //       FILE_ALREADY_CLAIMED(ADR 0047 — replay 빈도 관측). role은 무엇을 넣어도 무관하다 —
+  //       canManage은 creator.id === requester.id에서 이미 참으로 판정된다.
   private resolveClaim(claim: FileEntity, userId: number): FileClaimResult {
     // Deliberately identity-only: replay belongs to the original submitter, so an
     // admin re-posting someone else's filename is a conflict, not a retry.
@@ -314,7 +319,10 @@ export class FileService {
     }
 
     this.metricsService.uploadClaimsTotal.inc({ outcome: 'replayed' });
-    return { replayed: true, file: this.toResponse(claim) };
+    return {
+      replayed: true,
+      file: this.toResponse(claim, { id: userId, role: UserRole.user }),
+    };
   }
 
   // 목적: 잡힌 에러가 지정한 Postgres SQLSTATE 코드인지 판별한다.
@@ -365,11 +373,19 @@ export class FileService {
   // 이유: DB 저장과 물리 승격이 따로 실패하면 행이 없는 파일을 가리키고, 재시도는 모호한 400이나 500을 받는다.
   //       post-commit 재조회에 relations: ['creator']가 빠지면 신규 생성(201) 응답만 creator가 없어
   //       updateFile의 응답 모양과 달라진다. mediaType이 비면 상세 페이지가 재생 태그를 고를 수 없다(ADR 0040).
+  //       visibility를 업로드 확정과 동시에 받을 수 있어야 별도 PATCH 왕복 없이 공개범위를 정할 수 있다
+  //       (2026-09-06 결정 — rotateShareToken/shareExpiresAt은 이번 스코프에서 의도적으로 제외).
   // 방법: 서버 발급 파일명을 1회용 청구 토큰으로 삼아 선청구 여부를 먼저 판정(replay/409)하고, 미청구일 때만
   //       QueryRunner 트랜잭션 하나로 insert(확장자로 판정한 mediaType 포함) → FileStorage 포트 promote → commit;
   //       실패 시 rollback, release()는 finally. 물리 이동은 어댑터(LocalDiskStorage/S3Storage)에 위임한다
-  //       (ADR 0029). 재조회는 updateFile과 동일하게 relations: ['creator']를 포함해 두 쓰기 경로의 응답
-  //       모양을 통일한다. 신규 승격 성공 시 uploadClaimsTotal{outcome=fresh}를 올린다(ADR 0047).
+  //       (ADR 0029). visibility는 값이 주어졌을 때만 insert values에 포함해 생략 시 DB 컬럼 기본값
+  //       (private)이 그대로 적용되도록 하고, 'unlisted'로 들어오면 updateFile과 동일하게
+  //       generateShareToken()으로 shareToken을 함께 insert한다. 재조회는 updateFile과 동일하게
+  //       relations: ['creator']를 포함해 두 쓰기 경로의 응답 모양을 통일한다. toResponse에는
+  //       { id: userId, role: user } requester를 넘겨 isManager를 참으로 만든다 — 그래야 방금 만든
+  //       unlisted 파일의 shareUrl이 이 응답에 바로 실린다(라이브 검증 중 발견한 갭 — 없으면 생성 직후
+  //       GET /file/:id를 한 번 더 불러야 했다). 신규 승격 성공 시 uploadClaimsTotal{outcome=fresh}를
+  //       올린다(ADR 0047).
   async uploadFile(
     uploadFileDto: UploadFileDto,
     userId: number,
@@ -419,6 +435,16 @@ export class FileService {
           creator: { id: userId },
           filePath: storedPath,
           mediaType: this.mediaTypeFromExtension(storedPath),
+          // Omitted entirely when not provided, so the DB column default (private)
+          // applies exactly as before this field existed (no regression).
+          ...(uploadFileDto.visibility !== undefined
+            ? { visibility: uploadFileDto.visibility }
+            : {}),
+          // Mirrors updateFile's enteringUnlisted branch: a fresh unlisted file needs a
+          // token issued in the same transaction as the row, not a follow-up PATCH.
+          ...(uploadFileDto.visibility === FileVisibility.unlisted
+            ? { shareToken: this.generateShareToken() }
+            : {}),
         })
         .execute();
 
@@ -476,7 +502,10 @@ export class FileService {
       });
     }
     this.metricsService.uploadClaimsTotal.inc({ outcome: 'fresh' });
-    return { replayed: false, file: this.toResponse(saved) };
+    return {
+      replayed: false,
+      file: this.toResponse(saved, { id: userId, role: UserRole.user }),
+    };
   }
 
   // 목적: 파일 메타데이터(제목/경로/가시성)를 갱신한다.
