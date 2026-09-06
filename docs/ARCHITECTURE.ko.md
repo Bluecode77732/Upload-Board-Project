@@ -50,7 +50,6 @@ Responsibility 참조). "물리 파일"과 "파일 메타데이터"에 걸친 �
 |---|---|---|
 | `POST /auth/register` | Basic 토큰 | `Basic base64(email:password)`를 파싱하고, 중복 이메일을 거부하고, `HASH_ROUNDS`로 bcrypt 해싱해 저장합니다 |
 | `POST /auth/signin` | Basic 토큰 | 자격 증명을 검증하고 `{ accessToken }`을 돌려주면서 httpOnly 리프레시 쿠키를 심습니다 |
-| `POST /auth/signin/local` | Body 자격 증명 | Passport의 `local-auth-guard` 전략으로 같은 일을 합니다 |
 | `POST /auth/token/refresh` | httpOnly 리프레시 쿠키 | 토큰 쌍을 회전(재사용 감지)합니다 — 새 쿠키와 새 액세스 토큰 |
 | `POST /auth/signout` | Bearer 액세스 토큰 | 저장된 리프레시 토큰 해시와 쿠키를 지웁니다 |
 
@@ -73,9 +72,8 @@ Responsibility 참조). "물리 파일"과 "파일 메타데이터"에 걸친 �
   이상의 제약이 없습니다. `@AuthUser()` 데코레이터는 검증된 JWT에서 바로 `{ id, role }`을
   꺼내 줍니다 — 절대 요청 본문에서 오지 않습니다.
 - 전략: `JwtStrategy`(`"jwt-auth-guard"`, `UserService.findOne`으로 사용자를 로드하고
-  `password`를 제거), `LocalStrategy`(`"local-auth-guard"`). `JwtModule.register({})`가
-  비어 있는 건 의도된 것입니다 — 시크릿 두 개가 동시에 쓰이므로 호출마다 시크릿을
-  따로 넘깁니다.
+  `password`를 제거). `JwtModule.register({})`가 비어 있는 건 의도된 것입니다 —
+  시크릿 두 개가 동시에 쓰이므로 호출마다 시크릿을 따로 넘깁니다.
 
 ### UserModule (`backend/user/`)
 

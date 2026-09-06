@@ -3,7 +3,7 @@
 // Rationale: no shared package exists yet, so the consumed slice of the backend contract is
 //   declared here by hand; keep in sync with the backend DTOs/ResponseDtos until codegen exists.
 
-// POST /auth/signin, /auth/token/refresh, /auth/signin/local → body
+// POST /auth/signin, /auth/token/refresh → body
 export interface AccessTokenResponse {
   accessToken: string
 }

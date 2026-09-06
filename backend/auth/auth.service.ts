@@ -89,9 +89,8 @@ export class AuthService {
   }
 
   // 목적: email/password 자격 증명이 실제 계정과 맞는지 확인하고 그 사용자 엔티티를 돌려준다.
-  // 이유: `LocalStrategy`(`POST /auth/signin/local`)와 `signIn`(Basic 토큰 로그인) 둘 다
-  //       "누가 이 비밀번호를 아는가"를 같은 방식으로 판정해야 한다 — 판정 로직이 갈라지면
-  //       한쪽 경로만 더 느슨하거나 엄격해지는 취약점이 생긴다.
+  // 이유: `signIn`(Basic 토큰 로그인)이 "누가 이 비밀번호를 아는가"를 판정하는 유일한 경로다 —
+  //       판정 로직을 여기 한 곳에 모아 signIn과 갈라지지 않게 한다.
   // 방법: 이메일로 조회 후 존재/불일치 두 실패 케이스를 동일한 AUTH_INVALID_CREDENTIALS
   //       메시지로 합쳐 던진다 — 계정 존재 여부를 외부에 흘리지 않기 위함.
   async validateUser(email: string, password: string) {

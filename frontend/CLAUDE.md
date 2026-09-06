@@ -46,8 +46,8 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   All calls send `credentials: 'include'` (centralized in `client.ts`).
 - The **canonical signin path is `POST /auth/signin` (Basic header)**. The
   `btoa` header assembly lives in `client.ts` only — components never build auth
-  headers. (`POST /auth/signin/local` exists on the backend but is a removal
-  candidate; do not build against it.)
+  headers. (`POST /auth/signin/local`, the Passport-local alternative, was removed
+  from the backend 2026-09-07 — it never had a live caller here.)
 - On refresh failure (including `AUTH_REFRESH_REUSED`), the session is over:
   clear the token and route to `/login`.
 

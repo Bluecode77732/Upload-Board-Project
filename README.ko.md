@@ -127,7 +127,6 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.ko.md))
 - `POST /auth/register` — Basic 토큰으로 등록 (`base64(email:password)`)
 - `POST /auth/signin` — `{ accessToken }` + 리프레시 쿠키 발급 (Basic 토큰)
-- `POST /auth/signin/local` — body 자격 증명으로 동일 발급 (Passport local 전략)
 - `POST /auth/token/refresh` — 리프레시 쿠키를 회전시키고 새 액세스 토큰 반환;
   회수된 토큰을 재사용하면 세션이 무효화됩니다(`AUTH_REFRESH_REUSED`)
 - `POST /auth/signout` — 서버 측 세션 앵커 무효화 + 쿠키 삭제 (Bearer 액세스 토큰)
@@ -293,7 +292,7 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
 - **TypeORM + PostgreSQL** — `synchronize: false`; 파일시스템 부수효과가 DB 쓰기와
   함께 커밋되어야 하는 곳에는 수동 QueryRunner 트랜잭션
   ([ADR 0004](docs/ADR/0004-transaction-pattern-selection.ko.md))
-- **Passport** — `JwtAuthGuard` / `LocalAuthGuard` 뒤의 `jwt`·`local` 전략
+- **Passport** — `JwtAuthGuard` 뒤의 `jwt` 전략
 - **Multer** — 서버가 생성한 파일명(`temp_{uuid}_{timestamp}`)으로 디스크에 저장
 - **Jest** — 소스 파일 옆에 `*.spec.ts`로 배치한 단위 테스트; 리포지토리/QueryRunner 모킹, DB 접근 없음
 - **Swagger** — `/doc`, `persistAuthorization`으로 Bearer 세션 유지

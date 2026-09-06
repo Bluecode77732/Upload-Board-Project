@@ -12,6 +12,21 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Removed
+- **`POST /auth/signin/local` (Passport local strategy) (2026-09-07)** — retired the
+  removal candidate ROADMAP.md flagged since 2026-07-24, once `POST /auth/signin` (Basic)
+  was decided as the canonical signin path. Deleted `LocalStrategy`, `LocalAuthGuard`, the
+  controller handler, their `AuthModule`/`auth.controller.ts` registrations, and the
+  now-unused `passport-local`/`@types/passport-local` dependencies (`pnpm install` re-run
+  to sync the lockfile). `AuthService.validateUser` — the credential check the two paths
+  shared — stays; `signIn` is its sole caller now. Confirmed zero live callers before
+  deleting: `frontend/` only ever built against `/auth/signin` and explicitly flagged the
+  local path as off-limits (`frontend/CLAUDE.md`), `admin/` had no reference. Doc sweep in
+  the same change: `CLAUDE.md`(+ko), `README.md`(+ko), `docs/ARCHITECTURE.md`(+ko),
+  `frontend/CLAUDE.md`(+ko), `frontend/src/api/types.ts`, `docs/ROADMAP.md`(+ko). 263 unit +
+  76 e2e green after removal (`STORAGE_DRIVER=local`); no dedicated test existed for the
+  deleted endpoint itself — neither Passport strategy ever carried a spec file.
+
 ### Fixed
 - **`JwtStrategy`/`LocalStrategy`: removed an unreachable `if (!user)` guard from each
   `validate()` (2026-09-03)** — found while retro-adding 목적/이유/방법 blocks (see Changed

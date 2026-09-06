@@ -51,7 +51,6 @@ two modules' work by design, not a shortcut through one.
 |---|---|---|
 | `POST /auth/register` | Basic token | Parses `Basic base64(email:password)`, rejects a duplicate email, bcrypt-hashes with `HASH_ROUNDS`, saves the user |
 | `POST /auth/signin` | Basic token | Validates credentials, returns `{ accessToken }`, sets the httpOnly refresh cookie |
-| `POST /auth/signin/local` | Body credentials | Same, via Passport's `local-auth-guard` strategy |
 | `POST /auth/token/refresh` | httpOnly refresh cookie | Rotates the pair (reuse detection) — new cookie, new access token |
 | `POST /auth/signout` | Bearer access token | Clears the stored refresh-token hash and the cookie |
 
@@ -74,9 +73,8 @@ two modules' work by design, not a shortcut through one.
   `@AuthUser()` decorator hands a handler `{ id, role }` straight from the validated JWT —
   never from the request body.
 - Strategies: `JwtStrategy` (`"jwt-auth-guard"`, loads the user via `UserService.findOne`,
-  strips `password`), `LocalStrategy` (`"local-auth-guard"`). `JwtModule.register({})` is
-  deliberately empty — the secret is supplied per call, since two different secrets are in
-  play.
+  strips `password`). `JwtModule.register({})` is deliberately empty — the secret is
+  supplied per call, since two different secrets are in play.
 
 ### UserModule (`backend/user/`)
 

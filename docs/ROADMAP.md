@@ -835,18 +835,18 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   A thumbnail endpoint would remove the gate and let every tile preview instantly.
   Revisit alongside the Stage 4 S3 cutover, since where thumbnails live is a storage
   decision (ADR 0029's `FileStorage` port would need a new operation).
-- Dev-database rows whose stored bytes are gone (recorded 2026-08-24) — **not started
-  because** it is local test-data hygiene, not a product defect. Measured 2026-08-24 while
-  verifying the grid above: of the **25** public files then visible in the shared dev DB,
-  **23 returned `404 FILE_NOT_FOUND`** from `GET /file/:id/content` — every image and audio
-  row, and 20 of 22 videos — metadata rows left behind by e2e runs whose files no longer
-  exist on disk. The two exceptions had been created minutes earlier by that same day's
-  e2e run, which is also why this count drifts upward on every run and should be re-measured
-  rather than trusted. They now render as `⚠ Preview unavailable` tiles, which is the correct
-  behavior but makes the board look broken during manual QA. Decide whether to prune them,
-  or to let the e2e suite clean up after itself (it deliberately never truncates the dev
-  DB — see `test/e2e-utils.ts`). Note this is the *dev* database only; nothing here
-  indicates a production data path.
+- ~~Dev-database rows whose stored bytes are gone~~ (recorded 2026-08-24) — **moot as of
+  2026-09-07, nothing to decide.** Measured 2026-08-24: of the **25** public files then
+  visible in the shared dev DB, **23 returned `404 FILE_NOT_FOUND`** — metadata rows left
+  behind by e2e runs whose files no longer existed on disk. Re-checked live 2026-09-07 while
+  investigating this same row: the persistent dev DB volume (`uploadboardproject_db-data`)
+  now holds **zero** rows in `file_entity`/`user_entity`/`post_entity`, and `file/upload`/
+  `file/temp` are both empty on disk. The volume's creation timestamp (2026-09-05) matches
+  [ADR 0051](ADR/0051-orphaned-granted-file-reclaim.md)'s Addendum incident date (the live
+  sweep test that deleted 44 real files) — whatever data this row measured no longer exists
+  in the reachable dev DB, so there is nothing left to prune and no decision left to make.
+  Note this was always the *dev* database only; nothing here indicated a production data
+  path.
 - Terraform remote state backend (recorded 2026-08-19,
   [ADR 0044](ADR/0044-terraform-three-state-split.md) D3) — **not started
   because** the three-state split's `terraform_remote_state` reads use
@@ -947,12 +947,20 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   runner-up). Lives as the in-repo `frontend/` subfolder (ADR 0010, structure
   amended 2026-07-24); created and E2E-verified 2026-07-24; hosting is a
   later deployment decision.
-- Canonical signin path — **decided 2026-07-24: `POST /auth/signin` (Basic)**,
+- ~~Canonical signin path~~ — **decided 2026-07-24: `POST /auth/signin` (Basic)**,
   chosen for lowest risk / lightest maintenance (reuses `parseBasicToken` that
   `register` needs anyway; RFC 7617 protocol standard; backed by ADR 0001).
-  `POST /auth/signin/local` (+ `LocalStrategy` + `LocalAuthGuard`) is therefore
-  a **removal candidate** — retiring it is its own dedicated task under Scope
-  Discipline, not a drive-by; it stays until then.
+  `POST /auth/signin/local` was accordingly a **removal candidate**, and the
+  removal itself is **done as of 2026-09-07**: `LocalStrategy`, `LocalAuthGuard`,
+  the controller handler, and the now-unused `passport-local`/
+  `@types/passport-local` dependencies are all deleted. `AuthService.validateUser`
+  (the credential check the two paths shared) stays — `signIn` is its sole caller
+  now. Confirmed zero live callers before deleting: `frontend/` only ever built
+  against `/auth/signin` and explicitly flagged the local path as off-limits
+  (`frontend/CLAUDE.md`), `admin/` had no reference at all. 263 unit + 76 e2e
+  green after removal; no dedicated test existed for the deleted endpoint itself
+  (neither Passport strategy ever carried a spec file, a pre-existing gap this
+  removal doesn't need to backfill).
 - Frontend adoption of the upload claim contract (recorded 2026-07-27,
   [ADR 0019](ADR/0019-upload-claim-idempotency.md)) — **owned by a frontend-scoped
   task, not by backend work**. `POST /file` now answers 200 (idempotent replay) as

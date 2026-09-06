@@ -12,6 +12,23 @@
 
 ## [Unreleased]
 
+### 제거
+- **`POST /auth/signin/local`(Passport local 전략) (2026-09-07)** — ROADMAP.md가
+  2026-07-24부터 제거 후보로 기록해온 것을 정리했다. `POST /auth/signin`(Basic)이
+  정식 로그인 경로로 결정된 이후 남아 있던 대안 경로다. `LocalStrategy`,
+  `LocalAuthGuard`, 컨트롤러 핸들러, `AuthModule`/`auth.controller.ts`의 등록부,
+  이제 쓸모없어진 `passport-local`/`@types/passport-local` 의존성까지 전부
+  지웠다(`pnpm install` 재실행으로 lockfile 동기화). 두 경로가 공유하던 자격 증명
+  검증 `AuthService.validateUser`는 그대로 남고 이제 `signIn`이 유일한 호출자다.
+  삭제 전 실사용 호출자 0건을 확인했다: `frontend/`는 애초에 `/auth/signin`만
+  호출했고 local 경로는 명시적으로 사용 금지로 표시돼 있었으며
+  (`frontend/CLAUDE.md`), `admin/`은 참조 자체가 없었다. 같은 변경에 문서 정리도
+  포함: `CLAUDE.md`(+ko), `README.md`(+ko), `docs/ARCHITECTURE.md`(+ko),
+  `frontend/CLAUDE.md`(+ko), `frontend/src/api/types.ts`, `docs/ROADMAP.md`(+ko).
+  제거 후 unit 263개 + e2e 76개 전부 통과(`STORAGE_DRIVER=local`) — 삭제된
+  엔드포인트 자체를 위한 전용 테스트는 원래 없었다(두 Passport 전략 모두
+  spec 파일을 가진 적이 없었다).
+
 ### 수정
 - **`JwtStrategy`/`LocalStrategy`: 각 `validate()`에서 도달 불가능한 `if (!user)` 가드 제거
   (2026-09-03)** — 목적/이유/방법 블록을 소급 추가하던 중(아래 변경 항목 참고) 발견했고,

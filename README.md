@@ -126,7 +126,6 @@ All endpoints except `/auth/*` require a Bearer access token.
 `credentials: 'include'` ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md))
 - `POST /auth/register` — register with a Basic token (`base64(email:password)`)
 - `POST /auth/signin` — get `{ accessToken }` + refresh cookie (Basic token)
-- `POST /auth/signin/local` — same, via body credentials (Passport local strategy)
 - `POST /auth/token/refresh` — rotates the refresh cookie, returns a new access
   token; replaying a rotated-out token invalidates the session (`AUTH_REFRESH_REUSED`)
 - `POST /auth/signout` — invalidates the server-side session anchor and clears
@@ -300,7 +299,7 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full request and data flow.
 - **TypeORM + PostgreSQL** — `synchronize: false`; manual QueryRunner transactions
   where a filesystem side effect must commit with the DB write
   ([ADR 0004](docs/ADR/0004-transaction-pattern-selection.md))
-- **Passport** — `jwt` and `local` strategies behind `JwtAuthGuard` / `LocalAuthGuard`
+- **Passport** — `jwt` strategy behind `JwtAuthGuard`
 - **Multer** — disk storage with server-generated filenames (`temp_{uuid}_{timestamp}`)
 - **Jest** — unit tests colocated as `*.spec.ts`; repository/QueryRunner mocks, no DB access
 - **Swagger** — `/doc`, with `persistAuthorization` for a persistent Bearer session

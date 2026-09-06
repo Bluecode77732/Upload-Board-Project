@@ -44,8 +44,8 @@
   있다).
 - **정식 로그인 경로는 `POST /auth/signin`(Basic 헤더)이다.** `btoa` 헤더
   조립은 `client.ts`에만 있다 — 컴포넌트가 직접 인증 헤더를 만들지 않는다.
-  (`POST /auth/signin/local`이 백엔드에 있지만 제거 후보다; 이걸 대상으로
-  코드를 만들지 않는다.)
+  (Passport-local 대안이었던 `POST /auth/signin/local`은 2026-09-07 백엔드에서
+  제거됐다 — 여기서 호출한 적이 애초에 없었다.)
 - 리프레시 실패 시(`AUTH_REFRESH_REUSED` 포함) 세션은 끝난 것이다: 토큰을
   지우고 `/login`으로 라우팅한다.
 

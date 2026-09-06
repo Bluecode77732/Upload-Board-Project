@@ -3,14 +3,12 @@ import {
   Controller,
   Post,
   Headers,
-  Request,
   Req,
   Res,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LocalAuthGuard } from './guard/local-auth.guard';
 import { JwtAuthGuard } from './guard/jwt-auth.guard';
 import {
   ApiBasicAuth,
@@ -112,35 +110,6 @@ export class AuthController {
       await this.authService.rotateRefreshToken(
         this.extractRefreshCookie(request),
       );
-
-    this.setRefreshCookie(response, refreshToken);
-
-    return { accessToken };
-  }
-
-  @UseGuards(LocalAuthGuard)
-  @Post('signin/local')
-  @ApiOperation({ description: 'Sign in using Passport local strategy.' })
-  @ApiResponse({
-    status: 201,
-    description:
-      'Sign in succeeded. The refresh token is set as an httpOnly cookie; only the access token is returned in the body.',
-    type: bearerTokenType,
-  })
-  @ApiResponse({ status: 401, description: 'Invalid credentials.' })
-  @ApiBody({ type: CreateUserDto, required: true })
-  // 목적: Passport local 전략으로 이미 검증된 사용자에게 토큰 쌍을 발급한다.
-  // 이유: LocalAuthGuard가 자격 증명 검증을 먼저 끝내고 request.user를 채워주므로, 이 핸들러는
-  //       발급만 하면 된다 — signIn과 자격 증명 검증 방식만 다를 뿐 발급 이후 흐름은 동일하다.
-  // 방법: guard가 채운 req.user(id/role)를 issueTokenPair에 그대로 넘기고, 나머지는 signIn과
-  //       동일하게 쿠키/본문을 나눈다.
-  async userLocalLoginPassport(
-    @Request() req: { user: Pick<UserEntity, 'id' | 'role'> },
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const { refreshToken, accessToken } = await this.authService.issueTokenPair(
-      req.user,
-    );
 
     this.setRefreshCookie(response, refreshToken);
 

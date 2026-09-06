@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Before making any change:
 1. Inspect the codebase thoroughly — read the relevant files, grep for symbols, trace the actual call chain.
    Concern-to-entrypoint map (check these first):
-   - Auth flow change      → read `backend/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `backend/auth/strategy/`; grep `JwtAuthGuard`, `LocalAuthGuard`
+   - Auth flow change      → read `backend/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `backend/auth/strategy/`; grep `JwtAuthGuard`
    - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract, one-shot claim resolution in `uploadFile` — ADR 0019). Content reads go through the separate `backend/file/file-content.controller.ts` (`GET /file/:id/content`, `OptionalJwtAuthGuard`) → `FileService.resolveContentAccess` — the visibility gate (ADR 0025/0026)
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer `memoryStorage`) and `upload.controller.ts` (100MB size limit) together with `backend/upload/upload.service.ts` (`stageTemp` — `temp_{uuid}_{timestamp}` naming, calls the `FileStorage` port, ADR 0029 D4)
    - Storage adapter change→ read `backend/storage/file-storage.interface.ts` (the `FileStorage` port + `FILE_STORAGE` token), `local-disk.storage.ts` / `s3.storage.ts` (the two implementations), and `storage.module.ts` (the `STORAGE_DRIVER`-keyed factory, ADR 0029)
@@ -728,9 +728,9 @@ one of these is violated, follow Principle Conflict Protocol.
 
 - Breakdown: this project favors composition (DI) over building new class
   hierarchies. The only class-extension inheritance in the codebase sits at two
-  framework-mandated points — Passport auth (`JwtStrategy`/`LocalStrategy extends
-  PassportStrategy`; `JwtAuthGuard`/`LocalAuthGuard`/`OptionalJwtAuthGuard extends
-  AuthGuard`) and DTO composition (`UpdateCommentDto`/`UpdateFileDto`/`UpdatePostDto`/
+  framework-mandated points — Passport auth (`JwtStrategy extends PassportStrategy`;
+  `JwtAuthGuard`/`OptionalJwtAuthGuard extends AuthGuard`) and DTO composition
+  (`UpdateCommentDto`/`UpdateFileDto`/`UpdatePostDto`/
   `UpdateUserDto extends PartialType(CreateXDto)`).
 - Rationale: both are framework idioms — Passport's strategy/guard contract and
   `@nestjs/mapped-types`' `PartialType` helper — not project-invented hierarchies;
@@ -818,8 +818,9 @@ Do not suggest alternatives to these decisions without explicit request.
   plus an access-token-only `role` claim (ADR 0028) so a client can read its own role
   without an extra request — `RolesGuard`/`AuthUser` never read this claim themselves
 - Guards: `JwtAuthGuard` (Passport strategy name `"jwt-auth-guard"`) protects all
-  non-auth controllers at class level; `LocalAuthGuard` (`"local-auth-guard"`) exists
-  for `POST /auth/signin/local` only
+  non-auth controllers at class level; `POST /auth/signin/local` (Passport local
+  strategy) was removed 2026-09-07 — `POST /auth/signin` (Basic) is the sole
+  signin path, and it never had a live caller (frontend/admin both confirmed clean)
 - Refresh (ADR 0012): the refresh token travels only as an httpOnly cookie
   (`refreshToken`: `SameSite=Strict`, `Path=/auth/token`, `Secure` in prod);
   `POST /auth/token/refresh` reads the cookie, rotates the pair (SHA-256 anchor
@@ -1333,13 +1334,14 @@ substitute for this once the exercise actually calls the delete path.
 **AuthModule** (`backend/auth/`)
 - REST: `POST /auth/register`, `POST /auth/signin` (both Basic token),
   `POST /auth/token/refresh` (httpOnly refresh cookie — rotation),
-  `POST /auth/signin/local` (Passport local strategy, body credentials),
-  `POST /auth/signout` (Bearer access token — clears anchor + cookie)
+  `POST /auth/signout` (Bearer access token — clears anchor + cookie).
+  `POST /auth/signin/local` (Passport local strategy, body credentials) was
+  removed 2026-09-07 — it never had a live caller; `validateUser` (the
+  credential check it shared with `signIn`) stays, `signIn` is its only caller now
 - `AuthService`: `parseBasicToken`, `verifyToken`, `validateUser`, `issueToken`,
   `issueTokenPair`, `rotateRefreshToken`, `signOut`, `register`, `signIn`
 - Strategies: `JwtStrategy` (`"jwt-auth-guard"`, validates access tokens, loads the user
-  via `UserService.findOne`, strips `password`), `LocalStrategy` (`"local-auth-guard"`,
-  email/password fields)
+  via `UserService.findOne`, strips `password`)
 - Imports `UserModule` for `UserService`; registers `JwtModule.register({})` (secrets
   supplied per-call, not module-level)
 

@@ -19,7 +19,7 @@
 변경을 하기 전에:
 1. 코드베이스를 철저히 확인한다 — 관련 파일을 읽고, 심볼을 grep하고, 실제 호출 체인을 추적한다.
    관심사 → 진입점 매핑(가장 먼저 확인할 것):
-   - 인증 흐름 변경        → `backend/auth/auth.service.ts`(`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`)와 `backend/auth/strategy/`를 읽는다; `JwtAuthGuard`, `LocalAuthGuard`를 grep한다
+   - 인증 흐름 변경        → `backend/auth/auth.service.ts`(`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`)와 `backend/auth/strategy/`를 읽는다; `JwtAuthGuard`를 grep한다
    - 파일 메타데이터 변경  → `backend/file/file.controller.ts` → `file.service.ts`(수동 QueryRunner 트랜잭션, `temp_` → `granted_` 이름 변경 계약, `uploadFile`의 원샷 claim 해석 — ADR 0019)를 추적한다. 콘텐츠 읽기는 별도의 `backend/file/file-content.controller.ts`(`GET /file/:id/content`, `OptionalJwtAuthGuard`) → `FileService.resolveContentAccess` — visibility 게이트(ADR 0025/0026)를 거친다
    - 물리 업로드 변경      → `backend/upload/upload.module.ts`(Multer `memoryStorage`)와 `upload.controller.ts`(100MB 크기 제한)를 `backend/upload/upload.service.ts`(`stageTemp` — `temp_{uuid}_{timestamp}` 네이밍, `FileStorage` 포트 호출, ADR 0029 D4)와 함께 읽는다
    - 스토리지 어댑터 변경  → `backend/storage/file-storage.interface.ts`(`FileStorage` 포트 + `FILE_STORAGE` 토큰), `local-disk.storage.ts` / `s3.storage.ts`(두 구현체), `storage.module.ts`(`STORAGE_DRIVER` 기반 팩토리, ADR 0029)를 읽는다
@@ -737,9 +737,9 @@ Conflict Protocol을 따른다.
 
 - Breakdown: 이 프로젝트는 새 클래스 계층을 만드는 대신 조합(DI)을 선호한다.
   코드베이스에서 클래스 확장 상속이 있는 곳은 프레임워크가 강제하는 두
-  지점뿐이다 — Passport 인증(`JwtStrategy`/`LocalStrategy extends
-  PassportStrategy`; `JwtAuthGuard`/`LocalAuthGuard`/`OptionalJwtAuthGuard extends
-  AuthGuard`)과 DTO 조합(`UpdateCommentDto`/`UpdateFileDto`/`UpdatePostDto`/
+  지점뿐이다 — Passport 인증(`JwtStrategy extends PassportStrategy`;
+  `JwtAuthGuard`/`OptionalJwtAuthGuard extends AuthGuard`)과 DTO 조합
+  (`UpdateCommentDto`/`UpdateFileDto`/`UpdatePostDto`/
   `UpdateUserDto extends PartialType(CreateXDto)`).
 - Rationale: 둘 다 프레임워크 관용구다 — Passport의 전략/가드 계약과
   `@nestjs/mapped-types`의 `PartialType` 헬퍼 — 프로젝트가 만들어낸 계층이
@@ -832,8 +832,9 @@ Conflict Protocol을 따른다.
   있는 `role` 클레임이 추가되어 있다(ADR 0028) — `RolesGuard`/`AuthUser`는 이
   클레임을 스스로 읽지 않는다
 - 가드: `JwtAuthGuard`(Passport 전략 이름 `"jwt-auth-guard"`)가 클래스 레벨에서
-  auth가 아닌 모든 컨트롤러를 보호한다; `LocalAuthGuard`(`"local-auth-guard"`)는
-  `POST /auth/signin/local`에만 존재한다
+  auth가 아닌 모든 컨트롤러를 보호한다; `POST /auth/signin/local`(Passport local
+  전략)은 2026-09-07 제거됨 — `POST /auth/signin`(Basic)이 유일한 로그인 경로이고,
+  애초에 실사용 호출자가 없었다(frontend/admin 모두 확인됨)
 - Refresh(ADR 0012): refresh 토큰은 오직 httpOnly 쿠키로만 전달된다
   (`refreshToken`: `SameSite=Strict`, `Path=/auth/token`, 프로덕션에서는 `Secure`);
   `POST /auth/token/refresh`는 쿠키를 읽고 토큰 쌍을 회전시키며(SHA-256 앵커는
@@ -1375,14 +1376,15 @@ gitignore), `fs.unlink`는 휴지통을 거치지 않아서 복구 경로 자체
 **AuthModule** (`backend/auth/`)
 - REST: `POST /auth/register`, `POST /auth/signin`(둘 다 Basic 토큰),
   `POST /auth/token/refresh`(httpOnly refresh 쿠키 — 회전),
-  `POST /auth/signin/local`(Passport local 전략, 본문 자격 증명),
-  `POST /auth/signout`(Bearer access 토큰 — 앵커 + 쿠키를 지운다)
+  `POST /auth/signout`(Bearer access 토큰 — 앵커 + 쿠키를 지운다).
+  `POST /auth/signin/local`(Passport local 전략, 본문 자격 증명)은 2026-09-07
+  제거됨 — 실사용 호출자가 없었다; `signIn`과 공유하던 자격 증명 검증
+  `validateUser`는 그대로 남고 이제 `signIn`이 유일한 호출자다
 - `AuthService`: `parseBasicToken`, `verifyToken`, `validateUser`,
   `issueToken`, `issueTokenPair`, `rotateRefreshToken`, `signOut`, `register`,
   `signIn`
 - 전략: `JwtStrategy`(`"jwt-auth-guard"`, access 토큰을 검증하고
-  `UserService.findOne`으로 사용자를 로드하며 `password`를 제거한다),
-  `LocalStrategy`(`"local-auth-guard"`, email/password 필드)
+  `UserService.findOne`으로 사용자를 로드하며 `password`를 제거한다)
 - `UserService`를 위해 `UserModule`을 import한다; `JwtModule.register({})`를
   등록한다(secret은 모듈 레벨이 아니라 호출마다 공급된다)
 
