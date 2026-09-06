@@ -268,6 +268,54 @@ describe('S3Storage', () => {
     });
   });
 
+  describe('listGranted', () => {
+    it('paginates through ListObjectsV2 under the granted/ prefix and remaps keys to file/upload/...', async () => {
+      const lastModified = new Date('2026-09-05T00:00:00Z');
+      send
+        .mockResolvedValueOnce({
+          Contents: [
+            { Key: 'granted/granted_a.mp4', LastModified: lastModified },
+          ],
+          NextContinuationToken: 'token-2',
+        })
+        .mockResolvedValueOnce({
+          Contents: [
+            { Key: 'granted/granted_b.mp4', LastModified: lastModified },
+          ],
+        });
+
+      const result = await storage.listGranted();
+
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          input: {
+            Bucket: 'sharenpo-test-bucket',
+            Prefix: 'granted/',
+            ContinuationToken: undefined,
+          },
+        }),
+      );
+      expect(result).toEqual([
+        {
+          key: 'file/upload/granted_a.mp4',
+          mtimeMs: lastModified.getTime(),
+        },
+        {
+          key: 'file/upload/granted_b.mp4',
+          mtimeMs: lastModified.getTime(),
+        },
+      ]);
+    });
+
+    it('returns an empty list and logs when ListObjectsV2 fails', async () => {
+      send.mockRejectedValue(new Error('network error'));
+
+      await expect(storage.listGranted()).resolves.toEqual([]);
+    });
+  });
+
   describe('getSignedReadUrl', () => {
     it('signs a GetObjectCommand with the response content type and configured TTL (ADR 0036)', async () => {
       getSignedUrl.mockResolvedValue('https://bucket.s3.amazonaws.com/signed');

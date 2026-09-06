@@ -911,13 +911,19 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   `frontend/docs/API-CONTRACT.md`와 계정 삭제 흐름을 함께 갱신해야 하며, 그전까지 프론트엔드
   에는 확인을 통과시킬 경로가 없다. 백엔드 변경은 저장소 경계에서 멈췄다
   ([CLAUDE.md](../CLAUDE.md) > Project Overview).
-- 고아 `granted_` 파일 회수 (2026-07-30 기록,
-  [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — 삭제는 이제 커밋 이후 best-effort로
-  물리 파일을 unlink하므로, 행 없이 `file/upload`에 바이트만 남는 경우가 두 가지 남는다:
-  `unlink` 실패(`warn` 로그), 그리고 경로 조회와 연쇄 삭제 사이에 삽입된 파일. 그 폴더를 훑는
-  장치는 없다. ADR 0018의 스윕을 복사해 해결하지 **않은** 것은 의도적이다 — "행 없이 디스크에
-  있다"는 판정을 파일명만으로 내릴 수 없어 DB 조인 기반 정합 작업과 자체 ADR이 필요하다.
-  일정 미배정 — 감수하는 잔여 위험은 디스크 낭비이며, 깨진 레코드는 발생하지 않는다.
+- ~~고아 `granted_` 파일 회수~~ (2026-07-30 기록,
+  [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — **설계 랜딩 2026-09-05**
+  ([ADR 0051](ADR/0051-orphaned-granted-file-reclaim.ko.md)): 이 항목이 요구했던
+  DB 조인 정합 작업이지, ADR 0018처럼 파일명만 보고 훑는 방식을 복사한 게 아니다.
+  `FileStorage`에 `listGranted()`가 추가되고, `FileModule`이 export하지 않는
+  `GrantedCleanupService` provider를 얻는다(새 모듈이 아니다 — 하는 일 전부가
+  `FileModule` 자신의 엔티티를 디스크와 대조하는 것이다). 이 provider가
+  `file/upload`를 `file_entity.filePath`와 일정에 따라 대조한다. **리포트만
+  하고 출시된다** — `GRANTED_SWEEP_DRY_RUN`이 기본값 `true`라, 이번에 착륙한 건
+  새 삭제 경로가 아니라 관측성(로그 + `granted_cleanup_sweep_total{outcome="candidate"}`
+  메트릭)뿐이다. 실제로 디스크 공간을 회수하려면 여전히 운영자가 그 신호를
+  살펴본 뒤 명시적으로 플래그를 뒤집어야 한다 — 일정 미배정이며, 자동 전환이
+  아니라 사람의 결정에 의도적으로 맡겨 둔다.
 - ~~파일 소유권 이전이 post↔file 같은-작성자 불변식을 깰 수 있음~~ — ✅ **2026-07-31 확정**
   ([ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)). comment 모듈이 기다리던 게이트였다.
   세 후보 중 *`23503`을 타입 있는 거절로 번역*을 택했다 — `FileService.deleteFilesOfCreator`가

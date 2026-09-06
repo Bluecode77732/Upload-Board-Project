@@ -1,6 +1,6 @@
-// Purpose: FileStorage adapter porting the pre-ADR-0029 local-disk behavior behind the new port, unchanged.
-// Usage: constructed by StorageModule's factory when STORAGE_DRIVER=local (the default); never imported directly by consumers.
-// Rationale: ADR 0005's disk mechanics (temp_/granted_ folders, Range reads, guarded batched unlink) had to survive the port intact so this ADR is a pure refactor of call sites, not a behavior change.
+// 목적: ADR 0029 이전의 local-disk 동작을 새 포트 뒤로 그대로 옮겨온 FileStorage 어댑터다.
+// 사용처: STORAGE_DRIVER=local(기본값)일 때 StorageModule의 팩토리가 생성한다 — 소비자가 직접 임포트하는 일은 없다.
+// 이유: ADR 0005의 디스크 메커니즘(temp_/granted_ 폴더, Range 읽기, 가드된 배치 unlink)이 포트 안에서 그대로 살아남아야 했다 — 그래야 이 ADR이 동작 변경이 아니라 호출부의 순수 리팩터링이 된다.
 
 import { Injectable, Logger } from '@nestjs/common';
 import {
@@ -22,6 +22,7 @@ import {
 } from './file-storage.interface';
 
 const TEMP_DIR = join('file', 'temp');
+const UPLOAD_DIR = join('file', 'upload');
 // Only ever unlink inside the promoted-upload folder for a granted key — mirrors the
 // guard `unlink-stored-files.ts` carried before this ADR (a row can hold a path outside
 // file/upload if UpdateFileDto ever accepted a bare name with no folder).
@@ -152,6 +153,44 @@ export class LocalDiskStorage implements FileStorage {
         if (info.isFile()) result.push({ key: name, mtimeMs: info.mtimeMs });
       } catch {
         // A file vanishing mid-list (a concurrent promotion rename) is benign — skip it.
+        continue;
+      }
+    }
+    return result;
+  }
+
+  // 목적: file/upload에 있는 모든 granted 객체와 나이를 나열한다(ADR 0051이 DB와 대조해 훑는 용도).
+  // 이유: DB에 없는 키를 골라내려고 훑으려면 실제 목록이 필요하고, 승격 레이스를 걸러내려면 나이도 필요하다.
+  // 방법: readdir 후 granted_ 접두만 통과, key는 FileEntity.filePath와 동일한 'file/upload/...' 문자열로 반환한다 — 스윕 중 사라진 파일은 건너뛴다.
+  async listGranted(): Promise<StorageTempEntry[]> {
+    const dir = join(process.cwd(), UPLOAD_DIR);
+
+    let entries: string[];
+    try {
+      entries = await readdir(dir);
+    } catch (error) {
+      // An absent file/upload is a normal empty state (nothing promoted yet) — not an error.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      this.logger.error(
+        `Could not read ${UPLOAD_DIR}.`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      return [];
+    }
+
+    const result: StorageTempEntry[] = [];
+    for (const name of entries) {
+      if (!name.startsWith('granted_')) continue;
+      try {
+        const info = await fsStat(join(dir, name));
+        if (info.isFile()) {
+          result.push({
+            key: `${UPLOAD_PREFIX}${name}`,
+            mtimeMs: info.mtimeMs,
+          });
+        }
+      } catch {
+        // A file vanishing mid-list (a concurrent delete) is benign — skip it.
         continue;
       }
     }

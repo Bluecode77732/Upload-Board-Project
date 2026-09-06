@@ -1,6 +1,6 @@
-// Purpose: FileStorage adapter backed by S3 — the concrete answer to ADR 0005's multi-instance gap, built ahead of any real bucket (ADR 0029).
-// Usage: constructed by StorageModule's factory when STORAGE_DRIVER=s3; verified only by unit tests against a mocked S3Client until Stage 4's cutover.
-// Rationale: S3 is the ISP-required second FileStorage implementation — without it the port interface would have no real second consumer to justify itself.
+// 목적: S3 기반 FileStorage 어댑터 — ADR 0005가 남긴 다중 인스턴스 공백에 대한 구체적인 답이며, 실제 버킷이 생기기 전에 미리 만들었다(ADR 0029).
+// 사용처: STORAGE_DRIVER=s3일 때 StorageModule의 팩토리가 생성한다; Stage 4의 전환 전까지는 mock된 S3Client를 상대로 한 단위 테스트로만 검증됐다.
+// 이유: S3는 ISP가 요구하는 FileStorage의 두 번째 구현체다 — 이게 없으면 포트 인터페이스를 정당화할 진짜 두 번째 소비자가 없는 셈이다.
 
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -248,6 +248,44 @@ export class S3Storage implements FileStorage {
         if (!object.Key || !object.LastModified) continue;
         result.push({
           key: object.Key.slice(S3_TEMP_PREFIX.length),
+          mtimeMs: object.LastModified.getTime(),
+        });
+      }
+      continuationToken = response.NextContinuationToken;
+    } while (continuationToken);
+
+    return result;
+  }
+
+  // 목적: 버킷의 모든 granted 객체와 나이를 나열한다(ADR 0051이 DB와 대조해 훑는 용도).
+  // 이유: DB에 없는 키를 골라내려고 훑으려면 실제 목록이 필요하다 — 반환하는 key는 호출자(GrantedCleanupService)가 file_entity.filePath와 그대로 비교할 수 있는 논리 key(file/upload/granted_...) 형태여야 한다.
+  // 방법: ListObjectsV2Command를 물리 Prefix 'granted/'로 페이지네이션해 모으고, 각 Key에서 그 접두를 떼어 UPLOAD_PREFIX를 붙인 논리 key로 돌려준다.
+  async listGranted(): Promise<StorageTempEntry[]> {
+    const result: StorageTempEntry[] = [];
+    let continuationToken: string | undefined;
+
+    do {
+      let response: ListObjectsV2CommandOutput;
+      try {
+        response = await this.client.send(
+          new ListObjectsV2Command({
+            Bucket: this.bucket,
+            Prefix: S3_GRANTED_PREFIX,
+            ContinuationToken: continuationToken,
+          }),
+        );
+      } catch (error) {
+        this.logger.error(
+          'Could not list granted objects in S3.',
+          error instanceof Error ? error.stack : String(error),
+        );
+        return result;
+      }
+
+      for (const object of response.Contents ?? []) {
+        if (!object.Key || !object.LastModified) continue;
+        result.push({
+          key: `${UPLOAD_PREFIX}${object.Key.slice(S3_GRANTED_PREFIX.length)}`,
           mtimeMs: object.LastModified.getTime(),
         });
       }

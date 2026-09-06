@@ -966,14 +966,17 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   the account-deletion flow must both take it up; until they do, the frontend has no path
   that can pass the confirmation. The backend change stopped at the repo boundary
   ([CLAUDE.md](../CLAUDE.md) > Project Overview).
-- Reclaiming orphaned `granted_` files (recorded 2026-07-30,
-  [ADR 0020](ADR/0020-account-deletion-cascade.md)) — deletion now unlinks stored files
-  post-commit and best-effort, so two narrow cases can still leave bytes in `file/upload`
-  with no row: a failed `unlink` (logged at `warn`) and a file inserted between the path
-  read and the cascade delete. Nothing sweeps that folder. Deliberately **not** solved by
-  copying ADR 0018's sweep: "on disk without a row" cannot be decided from the filename
-  alone, so it needs a DB-joined reconciliation with its own ADR. Unscheduled — the
-  accepted residual is disk waste, never a broken record.
+- ~~Reclaiming orphaned `granted_` files~~ (recorded 2026-07-30,
+  [ADR 0020](ADR/0020-account-deletion-cascade.md)) — **design landed 2026-09-05**
+  ([ADR 0051](ADR/0051-orphaned-granted-file-reclaim.md)): the DB-joined reconciliation
+  this entry called for, not a copy of ADR 0018's filename-only sweep. `FileStorage`
+  gains `listGranted()`; `FileModule` gains an unexported `GrantedCleanupService`
+  provider (not a new module — its whole job is reconciling `FileModule`'s own entity
+  against disk) that diffs `file/upload` against `file_entity.filePath` on a schedule. **Ships report-only** — `GRANTED_SWEEP_DRY_RUN`
+  defaults `true`, so this lands observability (log + `granted_cleanup_sweep_total{outcome="candidate"}`
+  metric), not a new deletion path. Actually reclaiming disk space still requires an
+  operator to review that signal and explicitly flip the flag — unscheduled, and
+  deliberately left to a human decision rather than an automatic cutover.
 - ~~File ownership reassignment can break the post↔file same-creator invariant~~ — ✅
   **settled 2026-07-31** ([ADR 0024](ADR/0024-account-cascade-fk-refusal.md)), the gate the
   comment module waited on. Of the three candidates, *translate the `23503` into a typed

@@ -1,6 +1,6 @@
-// Purpose: owns the process-wide Prometheus registry and the counters/histograms other modules record against.
-// Usage: MetricsModule exports this; any module recording a metric imports MetricsModule and injects MetricsService.
-// Rationale: prom-client needs exactly one shared Registry per process — a DI-managed service is its natural home, mirroring StorageModule's role as a cross-cutting operational dependency (ADR 0047).
+// 목적: 프로세스 전체가 공유하는 Prometheus 레지스트리와, 다른 모듈들이 기록하는 카운터/히스토그램을 소유한다.
+// 사용처: MetricsModule이 이걸 export한다; 메트릭을 기록하는 모듈은 MetricsModule을 임포트해 MetricsService를 주입받는다.
+// 이유: prom-client는 프로세스당 공유 Registry가 정확히 하나여야 한다 — DI로 관리되는 서비스가 그 자연스러운 자리이며, StorageModule이 횡단 operational 의존성 역할을 하는 것과 같은 모양이다(ADR 0047).
 
 import { Injectable } from '@nestjs/common';
 import {
@@ -33,6 +33,17 @@ export class MetricsService {
   readonly tempCleanupDeletedTotal = new Counter({
     name: 'temp_cleanup_deleted_total',
     help: 'Orphaned temp_ objects deleted by the scheduled sweep (ADR 0018).',
+    registers: [this.registry],
+  });
+
+  // Outcome mirrors uploadClaimsTotal's shape: one labeled counter, not two separate
+  // ones. 'candidate' is recorded on every sweep run, including dry-run (ADR 0051 D6) —
+  // in report-first mode it's the feature's entire observable signal. 'deleted' is
+  // recorded only when storage.unlink() actually ran.
+  readonly grantedCleanupSweepTotal = new Counter({
+    name: 'granted_cleanup_sweep_total',
+    help: 'Orphaned granted_ objects seen by the DB-joined reclaim sweep, labeled by outcome (candidate found, vs. actually deleted) (ADR 0051).',
+    labelNames: ['outcome'],
     registers: [this.registry],
   });
 

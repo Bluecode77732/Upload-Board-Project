@@ -56,6 +56,12 @@ import { join } from 'node:path';
         TEMP_SWEEP_CRON: Joi.string().default('0 * * * *'),
         TEMP_SWEEP_TTL_HOURS: Joi.number().default(24),
         TEMP_SWEEP_DRY_RUN: Joi.boolean().default(false),
+        // 고아 granted 파일 회수(ADR 0051): file_entity 행이 없는 file/upload 바이트를 찾으려고
+        // DB와 대조해 훑는다. DRY_RUN 기본값은 true(리포트만) — 위 temp 파일을 훑는 것과 다르게,
+        // 여기서의 오탐은 실제 소유된 파일을 파괴한다.
+        GRANTED_SWEEP_ENABLED: Joi.boolean().default(true),
+        GRANTED_SWEEP_CRON: Joi.string().default('0 3 * * *'),
+        GRANTED_SWEEP_DRY_RUN: Joi.boolean().default(true),
         // Storage port-adapter (ADR 0029): selects the FileStorage implementation.
         // AWS credentials are deliberately not here — the SDK's own default provider
         // chain resolves them, since our code never reads them itself.

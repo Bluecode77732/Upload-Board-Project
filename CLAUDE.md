@@ -30,6 +30,7 @@ Before making any change:
    - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
    - Comment/thread change → read `backend/comment/comment.service.ts` (fixed `createdAt ASC` order, `canManage`, `deleteCommentsOfCreator`) and `PostService.assertPostExists` — the one thing CommentModule asks PostModule for. Routes live in **two** controllers (`post-comment.controller.ts` for `/post/:postId/comment`, `comment.controller.ts` for `/comment/:id`); post deletion removes comments via the FK, not the service (ADR 0023 D3)
    - Orphan temp cleanup   → read `backend/temp-cleanup/temp-cleanup.service.ts` (`@nestjs/schedule` `SchedulerRegistry` cron, `temp_`-prefix + TTL sweep of `file/temp`, ADR 0018) and its `selectExpiredTempFiles` pure core
+   - Orphan granted-file reclaim → read `backend/file/granted-cleanup.service.ts` (an unexported `FileModule` provider, DB-joined sweep of `file/upload` against `file_entity.filePath`, `GRANTED_SWEEP_DRY_RUN` defaults `true` — report-only, ADR 0051) and its `selectOrphanedGrantedFiles` pure core
    - Env var change        → read the Joi schema in `backend/app.module.ts` AND `.env.example` — both must stay in sync
    - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides. `backend/post/entity/post.entity.ts` and `backend/comment/entity/comment.entity.ts` are deliberately **unidirectional** (no inverse property on User/File/Post) — do not "fix" that (ADR 0023). A new entity is registered in **`backend/entities.ts` and nowhere else** — `app.module.ts` and `backend/data-source.ts` both import that one `ENTITIES` array, so an entity cannot be live in the app but invisible to `migration:generate` (it was two hand-maintained lists until 2026-07-31, and that divergence made `generate` report success while omitting a whole table). The e2e suite still needs its own line: `test/e2e-utils.ts` (`MIGRATIONS` + `TABLES`) — but omitting it fails loudly on the next run
    - Static file serving   → read the `ServeStaticModule` block in `app.module.ts` (`rootPath: file/temp`, `serveRoot: 'file/temp'` — `file/upload` is deliberately not mounted; granted reads go through `GET /file/:id/content` instead, ADR 0025/0026)
@@ -618,6 +619,15 @@ one of these is violated, follow Principle Conflict Protocol.
   and the transaction that promotes a temp file. It also answers two questions for
   PostModule — may this user attach this file (`assertAttachableBy`, identity-only) and what
   is its public URL (`toResponse`) — and never imports PostModule in return (ADR 0023 D4).
+  It also hosts `GrantedCleanupService` (ADR 0051) — an **unexported** provider running the
+  DB-joined reclaim sweep for orphaned `granted_` files, not a public contract for other
+  modules. Unlike `TempCleanupModule`/`StorageModule`, this isn't cross-cutting
+  infrastructure shared by multiple domain modules — its entire job is reconciling
+  `FileModule`'s own entity against disk, so it stays inside `FileModule` rather than
+  getting its own operational module; everything it needs (`Repository<FileEntity>`,
+  `StorageModule`, `MetricsModule`) is already wired in here. Ships with
+  `GRANTED_SWEEP_DRY_RUN` defaulting `true` — report-only until an operator explicitly
+  opts into deletion.
 - **PostModule** owns board post content only: the `PostEntity` row, its optional 1:1
   reference to a file, and post CRUD. It never reads `file.creator` — attachability is
   FileModule's judgment to make. It exports `PostService` for the account cascade and for
@@ -700,6 +710,19 @@ one of these is violated, follow Principle Conflict Protocol.
   adapter. The sweep only ever considers `temp_`-prefixed objects; `granted_` objects
   are never candidates — the prefix state machine above is exactly what makes "still
   listed as `temp_` ⇒ unclaimed orphan" a safe, DB-free identification.
+- Granted-file reclaim (ADR 0051): unlike the temp sweep above, a `granted_` object's
+  orphan status is **not** decidable from its filename alone — it requires a join
+  against `file_entity.filePath`, since a granted object is only ever missing a row
+  through a failed post-commit unlink or a narrow insert/delete race (ADR 0020), never
+  through simply being unclaimed. `FileModule`'s `GrantedCleanupService` (an unexported
+  provider, not a separate module) does that join through `storage.listGranted()` + a
+  direct `FileEntity` repository read, gates
+  a candidate on a minimum age (a `MIN_AGE_MS` constant — a race guard, not an operator
+  tuning knob) to avoid misreading a
+  mid-flight `storage.promote()` as orphaned, and — unlike the temp sweep — defaults to
+  **report-only** (`GRANTED_SWEEP_DRY_RUN=true`): it logs candidates and records a
+  metric, but never calls `storage.unlink()` until an operator explicitly turns dry-run
+  off.
 
 ### Sanctioned Inheritance Points
 
@@ -928,6 +951,17 @@ Do not suggest alternatives to these decisions without explicit request.
   `FileDetailPage.tsx`/`PostDetailPage.tsx` now branch their `<img>`/`<audio
   controls>`/`<video controls>` tag on, replacing an unconditional `<video>` that
   couldn't play an uploaded image or mp3
+- **Orphaned granted-file reclaim (landed 2026-09-05 — [ADR
+  0051](docs/ADR/0051-orphaned-granted-file-reclaim.md))**: `FileStorage` gains
+  `listGranted()` (both adapters, reusing `StorageTempEntry`); `FileModule` gains an
+  unexported `GrantedCleanupService` provider (not a separate module — its entire job is
+  reconciling `FileModule`'s own entity against disk, and everything it needs was already
+  wired into `FileModule`) that runs a scheduled sweep diffing `file/upload` against
+  `file_entity.filePath` (a direct `Repository<FileEntity>` injection, not a `FileService`
+  export) and reports — never deletes — orphan candidates unless `GRANTED_SWEEP_DRY_RUN`
+  is explicitly set to `false`. Ships inert with respect to deletion: the code path exists
+  and is unit-tested, but no production data has been reclaimed by it yet, and doing so
+  requires an operator decision, not a code change
 - **Never suggest**: streaming/chunked upload, CDN — unless explicitly requested. S3 is no
   longer in this list: the storage port-adapter (ADR 0029, above) landed both an
   `S3Storage` implementation and the `STORAGE_DRIVER` switch, but `local` stays the
@@ -976,8 +1010,11 @@ Do not suggest alternatives to these decisions without explicit request.
   boolean-ish query flag on a destructive path follows the same shape
 - Physical deletion is **post-commit and best-effort** via
   `unlinkStoredFiles` (`backend/common/`), which refuses paths outside `file/upload/` and
-  reports failures for the caller to log at `warn`. Nothing sweeps `file/upload` — a
-  `granted_` sweep would need a DB join (unlike ADR 0018's filename-only decision)
+  reports failures for the caller to log at `warn`. `file/upload` is no longer entirely
+  unwatched: `FileModule`'s `GrantedCleanupService` scans it against
+  `file_entity.filePath` on a schedule (ADR 0051) — but it ships report-only
+  (`GRANTED_SWEEP_DRY_RUN` defaults `true`), so an operator must explicitly opt in
+  before anything found this way is actually deleted
 - File rows stay `FileService`'s responsibility even during an account cascade:
   `UserService` owns the transaction and passes its `EntityManager` to
   `findStoredPathsOfCreator` / `deleteFilesOfCreator`
@@ -1112,10 +1149,12 @@ Architecture Decisions above remain operative.
 - ~~Deleting a user who owns files hits an FK constraint~~ — **resolved 2026-07-30**
   (ADR 0020): `DELETE /user/:id?deleteFiles=true` cascades (post rows → file rows →
   user row → stored files; posts joined the order 2026-07-31, ADR 0023); unconfirmed,
-  it is a typed 409 `USER_HAS_FILES`. Residual, accepted:
-  nothing sweeps `file/upload`, so a failed unlink (or a file inserted between the
-  path read and the delete) leaves an orphan on disk — logged at `warn`, not repaired
-  (reclamation needs a DB-joined design; tracked in ROADMAP > Unscheduled).
+  it is a typed 409 `USER_HAS_FILES`. Residual, mostly accepted:
+  a failed unlink (or a file inserted between the path read and the delete) leaves an
+  orphan on disk — logged at `warn`, not repaired inline. `GrantedCleanupService`
+  (ADR 0051) can now detect this class of orphan on a schedule, but ships report-only;
+  actually reclaiming the disk space still needs an operator to flip
+  `GRANTED_SWEEP_DRY_RUN=false`, not a further code change.
   The one path this left as a 500 — a stranger's post referencing the account's file — was
   closed separately by ADR 0024; see the next entry
 - ~~File ownership reassignment can produce an FK-violation 500 on account deletion~~ —
@@ -1257,6 +1296,27 @@ powershell -NoProfile -Command "Stop-Process -Id <pid> -Force"
 
 Confirm what the PID is before killing it (`Get-CimInstance Win32_Process -Filter
 'ProcessId=<pid>'` prints the command line) — never kill a PID you have not identified.
+
+### Live-testing a sweep/reclaim service: never against the real project directory
+
+Incident, 2026-09-05: manually verifying `GrantedCleanupService.sweep()` end to end (real
+DB, real disk, `GRANTED_SWEEP_DRY_RUN=false`) against this repo's actual `file/upload/`
+permanently deleted 44 pre-existing files. The local dev DB had zero `file_entity` rows at
+the time (a fresh, unmigrated-until-then volume) — exactly the "against an empty schema
+everything reads as orphaned" scenario [ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md)
+itself documents as the reason this class of sweep needs a DB join in the first place. The
+risk was written down; it still wasn't applied before running the live-delete step. `git
+ls-files -- file/upload` confirms that directory has never been tracked (deliberately
+gitignored — uploaded media), and `fs.unlink` bypasses the Recycle Bin, so there was no
+recovery path; the deleted files happened to be disposable test data, which was luck, not
+a property of the approach.
+
+Any live (non-dry-run) exercise of a sweep/reclaim service — this one or a future one —
+must run against an isolated sandbox directory (`process.chdir()` into a scratch path
+*before* constructing the storage adapter, which resolves paths off `process.cwd()`), never
+against this repo's real `file/temp`/`file/upload`, regardless of how empty or disposable
+that directory currently looks. Dry-run mode and a pure-selector unit test are not a
+substitute for this once the exercise actually calls the delete path.
 
 ## Architecture
 

@@ -30,6 +30,7 @@
    - 게시글/게시판 변경    → `backend/post/post.service.ts`(`fileId`에 대한 claim 해석, `canManage`, ADR 0021 읽기 레이어 재사용)를 `FileService.assertAttachableBy` / `toResponse` — PostModule이 FileModule에 묻는 두 가지 질문 — 와 함께 읽는다(ADR 0023)
    - 댓글/스레드 변경      → `backend/comment/comment.service.ts`(고정된 `createdAt ASC` 정렬, `canManage`, `deleteCommentsOfCreator`)와 `PostService.assertPostExists` — CommentModule이 PostModule에 묻는 유일한 질문 — 를 읽는다. 라우트는 **두** 컨트롤러에 나뉘어 있다(`/post/:postId/comment`용 `post-comment.controller.ts`, `/comment/:id`용 `comment.controller.ts`); 게시글 삭제는 서비스가 아니라 FK를 통해 댓글을 제거한다(ADR 0023 D3)
    - 임시파일 정리         → `backend/temp-cleanup/temp-cleanup.service.ts`(`@nestjs/schedule`의 `SchedulerRegistry` cron, `file/temp`에 대한 `temp_` 접두사 + TTL 스윕, ADR 0018)와 그 순수 핵심 로직인 `selectExpiredTempFiles`를 읽는다
+   - 고아 granted 파일 회수 → `backend/file/granted-cleanup.service.ts`(export하지 않는 `FileModule` provider, `file/upload`를 `file_entity.filePath`와 대조해 훑는다, `GRANTED_SWEEP_DRY_RUN` 기본값 `true` — 리포트만, ADR 0051)와 그 순수 핵심 로직인 `selectOrphanedGrantedFiles`를 읽는다
    - 환경 변수 변경        → `backend/app.module.ts`의 Joi 스키마와 `.env.example`을 함께 읽는다 — 둘은 항상 동기화되어야 한다
    - 엔티티/관계 변경      → `backend/file/entity/file.entity.ts`와 `backend/user/entity/user.entity.ts`를 함께 읽는다 — `creator` 관계는 양쪽에 모두 선언되어 있다. `backend/post/entity/post.entity.ts`와 `backend/comment/entity/comment.entity.ts`는 의도적으로 **단방향**이다(User/File/Post에 역방향 프로퍼티 없음) — 이를 "고치려" 하지 않는다(ADR 0023). 새 엔티티는 **`backend/entities.ts` 한 곳에만** 등록한다 — `app.module.ts`와 `backend/data-source.ts`가 모두 그 `ENTITIES` 배열 하나를 import하므로, 엔티티가 앱에는 살아 있지만 `migration:generate`에는 보이지 않는 상황이 생길 수 없다(2026-07-31 이전에는 수동 관리 목록이 두 개였고, 그 불일치 때문에 `generate`가 테이블 하나를 통째로 빠뜨리고도 성공했다고 보고한 적이 있다). e2e 스위트는 별도로 자기 줄이 필요하다: `test/e2e-utils.ts`(`MIGRATIONS` + `TABLES`) — 다만 이를 빠뜨리면 다음 실행에서 요란하게 실패한다
    - 정적 파일 서빙 변경   → `app.module.ts`의 `ServeStaticModule` 블록(`rootPath: file/temp`, `serveRoot: 'file/temp'` — `file/upload`는 의도적으로 마운트하지 않는다; granted 읽기는 대신 `GET /file/:id/content`를 거친다, ADR 0025/0026)을 읽는다
@@ -620,7 +621,15 @@ Conflict Protocol을 따른다.
   그리고 temp 파일을 승격시키는 트랜잭션. 또한 PostModule을 위해 두 가지
   질문에 답한다 — 이 사용자가 이 파일을 첨부해도 되는가(`assertAttachableBy`,
   신원만 확인) 그리고 공개 URL은 무엇인가(`toResponse`) — 그리고 반대로
-  PostModule을 절대 import하지 않는다(ADR 0023 D4).
+  PostModule을 절대 import하지 않는다(ADR 0023 D4). 또한 `GrantedCleanupService`
+  (ADR 0051)도 여기서 호스팅한다 — 고아 `granted_` 파일을 회수하려고 DB와 대조해
+  훑는 **export하지 않는** provider이며, 다른 모듈에 공개하는 계약이 아니다.
+  `TempCleanupModule`/`StorageModule`과 달리 이건 여러 도메인 모듈이 공유하는
+  횡단 인프라가 아니다 — 하는 일 전부가 `FileModule` 자신의 엔티티를 디스크와
+  대조하는 것이라, 별도 operational 모듈을 갖는 대신 `FileModule` 안에 남는다;
+  필요한 것(`Repository<FileEntity>`, `StorageModule`, `MetricsModule`)은 이미
+  여기 다 배선돼 있다. `GRANTED_SWEEP_DRY_RUN`은 기본값 `true`로 출시된다 —
+  운영자가 명시적으로 삭제를 켜기 전까지는 리포트만 한다.
 - **PostModule**은 게시판 게시글 콘텐츠만 소유한다: `PostEntity` 행, 파일에
   대한 선택적 1:1 참조, 게시글 CRUD. `file.creator`를 절대 읽지 않는다 —
   첨부 가능 여부는 FileModule의 판단이다. 계정 연쇄 삭제를 위해, 그리고
@@ -711,6 +720,18 @@ Conflict Protocol을 따른다.
   `granted_` 오브젝트는 절대 후보가 아니다 — 위의 접두사 상태 머신이 바로
   "여전히 `temp_`로 남아 있다면 claim되지 않은 고아"라는 안전하고 DB 없이도
   가능한 판별을 성립시킨다.
+- 고아 granted 파일 회수(ADR 0051): 위에서 temp 파일을 훑는 것과 달리 `granted_`
+  오브젝트의 고아 여부는 파일명만으론 판정할 수 **없다** — `file_entity.filePath`와의
+  조인이 필요하다. granted 오브젝트가 행을 잃는 경우는 오직 커밋 후 unlink
+  실패나 좁은 삽입/삭제 경합(ADR 0020)뿐이지, 단순 미청구 때문이 아니기
+  때문이다. `FileModule`의 `GrantedCleanupService`(별도 모듈이 아니라 export하지
+  않는 provider)는 그 조인을 하려고 `storage.listGranted()`와 `FileEntity`
+  리포지토리를 직접 읽어 file/upload를 주기적으로 훑되, 진행 중인
+  `storage.promote()`를 고아로 오판하지 않도록 최소 나이
+  (`MIN_AGE_MS` 상수 — 운영자 튜닝 값이 아니라 레이스 가드)로 후보를 걸러낸다. temp 파일을
+  훑는 것과 달리 **리포트만**(`GRANTED_SWEEP_DRY_RUN=true`)이 기본값이다: 후보를 로그와
+  메트릭으로 남길 뿐, 운영자가 명시적으로 dry-run을 끄기 전까지는
+  `storage.unlink()`를 절대 호출하지 않는다.
 
 ### 허가된 상속 지점
 
@@ -952,6 +973,18 @@ Conflict Protocol을 따른다.
   `PostDetailPage.tsx`는 이제 `FileResponseDto.mediaType`을 기준으로
   `<img>`/`<audio controls>`/`<video controls>` 태그를 고른다 — 이전에는
   무조건 `<video>`만 렌더링해 업로드된 이미지나 mp3가 재생되지 않았다
+- **고아 granted 파일 회수(랜딩 2026-09-05 — [ADR
+  0051](docs/ADR/0051-orphaned-granted-file-reclaim.md))**: `FileStorage`에
+  `listGranted()`가 추가된다(양쪽 어댑터 모두, `StorageTempEntry` 재사용).
+  `FileModule`은 export하지 않는 `GrantedCleanupService` provider를 얻는다(별도
+  모듈이 아니다 — 하는 일 전부가 `FileModule` 자신의 엔티티를 디스크와 대조하는
+  것이고, 필요한 게 이미 `FileModule`에 다 배선돼 있었다). 이 provider는
+  `file/upload`를 `file_entity.filePath`와 대조하려고 주기적으로 훑고
+  (`FileService` export가 아니라 `Repository<FileEntity>` 직접 주입) —
+  `GRANTED_SWEEP_DRY_RUN`을 명시적으로 `false`로 바꾸지 않는 한 고아 후보를
+  삭제하지 않고 **리포트만** 한다. 삭제 관점에서는 무해하게 출시된다: 코드
+  경로는 있고 단위 테스트도 됐지만, 아직 이걸로 실제 데이터가 회수된 적은
+  없으며 그러려면 코드 변경이 아니라 운영자의 결정이 필요하다
 - **절대 제안 금지**: 스트리밍/청크 업로드, CDN — 명시적으로 요청받지 않는 한.
   S3는 더 이상 이 목록에 없다: 스토리지 포트-어댑터(위 ADR 0029)가
   `S3Storage` 구현체와 `STORAGE_DRIVER` 스위치를 둘 다 이미 도입했지만,
@@ -1006,9 +1039,11 @@ Conflict Protocol을 따른다.
   boolean 비슷한 쿼리 플래그는 모두 같은 모양을 따른다
 - 물리적 삭제는 `unlinkStoredFiles`(`backend/common/`)를 통해 **커밋 이후,
   best-effort로** 이루어지며, 이는 `file/upload/` 밖의 경로를 거부하고 실패를
-  호출자가 `warn`으로 로깅하도록 보고한다. `file/upload`를 스윕하는 것은
-  없다 — `granted_` 스윕은 (ADR 0018의 파일 이름만 보는 방식과 달리) DB
-  join이 필요하다
+  호출자가 `warn`으로 로깅하도록 보고한다. 이제 `file/upload`를 아무도 훑지
+  않는 건 아니다: `FileModule`의 `GrantedCleanupService`가 `file_entity.filePath`와
+  대조해 일정에 따라 훑는다(ADR 0051) — 다만 리포트만 하고 출시됐다
+  (`GRANTED_SWEEP_DRY_RUN` 기본값 `true`), 그래서 운영자가 명시적으로 켜기
+  전까지는 이렇게 찾은 것도 실제로 삭제되지 않는다
 - 파일 행은 계정 연쇄 중에도 여전히 `FileService`의 책임이다: `UserService`가
   트랜잭션을 소유하고 자신의 `EntityManager`를 `findStoredPathsOfCreator` /
   `deleteFilesOfCreator`에 넘긴다
@@ -1148,11 +1183,13 @@ Architecture Decisions가 계속 유효하다.
 - ~~파일을 소유한 사용자를 삭제하면 FK 제약에 걸린다~~ — **2026-07-30 해결**
   (ADR 0020): `DELETE /user/:id?deleteFiles=true`가 연쇄한다(게시글 행 →
   파일 행 → 사용자 행 → 저장된 파일; 게시글은 2026-07-31에 순서에
-  합류했다, ADR 0023); 미확인이면 타입화된 409 `USER_HAS_FILES`다. 남아
-  있으며 받아들여진 잔여물: `file/upload`를 스윕하는 것이 없으므로, 실패한
-  unlink(또는 경로 읽기와 삭제 사이에 삽입된 파일)는 디스크에 고아를
-  남긴다 — `warn`으로 로깅될 뿐 복구되지 않는다(복구에는 DB join 설계가
-  필요하다; ROADMAP > Unscheduled에서 추적 중). 이것이 500으로 남겼던 유일한
+  합류했다, ADR 0023); 미확인이면 타입화된 409 `USER_HAS_FILES`다. 대체로
+  받아들여진 잔여물: 실패한 unlink(또는 경로 읽기와 삭제 사이에 삽입된 파일)는
+  디스크에 고아를 남긴다 — `warn`으로 로깅될 뿐 그 자리에서 복구되진 않는다.
+  `GrantedCleanupService`(ADR 0051)가 이제 이런 종류의 고아를 일정에 따라
+  찾아낼 수는 있지만, 리포트만 하고 출시됐다; 실제로 디스크 공간을 회수하려면
+  여전히 운영자가 `GRANTED_SWEEP_DRY_RUN=false`로 뒤집어야 하며, 추가 코드
+  변경은 필요 없다. 이것이 500으로 남겼던 유일한
   경로 — 낯선 사람의 게시글이 계정의 파일을 참조하는 경우 — 는 ADR 0024가
   별도로 닫았다; 다음 항목 참고
 - ~~파일 소유권 재할당이 계정 삭제 시 FK 위반 500을 낼 수 있다~~ —
@@ -1298,6 +1335,28 @@ powershell -NoProfile -Command "Stop-Process -Id <pid> -Force"
 
 종료 전에 그 PID가 무엇인지 반드시 확인한다(`Get-CimInstance Win32_Process -Filter
 'ProcessId=<pid>'`가 커맨드라인을 출력한다) — 정체를 확인하지 않은 PID는 죽이지 않는다.
+
+### 스윕/회수 서비스를 라이브로 테스트할 땐 절대 실제 프로젝트 디렉터리에 대고 하지 않는다
+
+사고, 2026-09-05: `GrantedCleanupService.sweep()`을 실제 DB·실제 디스크로,
+`GRANTED_SWEEP_DRY_RUN=false`로 끝까지 검증하다가 이 저장소의 실제 `file/upload/`에
+있던 기존 파일 44개를 영구히 지웠다. 당시 로컬 개발 DB엔 `file_entity` 행이 0개였다
+(그때까지 마이그레이션을 적용하지 않은 새 볼륨이었다) — 이건 정확히
+[ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.ko.md) 자신이 "이런 종류의
+스윕에 애초에 DB 조인이 필요한 이유"로 문서화해 둔 바로 그 "빈 스키마 기준으로는
+전부 고아로 읽힌다"는 시나리오였다. 위험을 글로 적어뒀는데도, 실제로 라이브 삭제
+단계를 돌리기 전에 그걸 적용하지 못했다. `git ls-files -- file/upload`로 확인해보면
+그 디렉터리는 애초에 git으로 추적된 적이 없고(업로드된 미디어라 의도적으로
+gitignore), `fs.unlink`는 휴지통을 거치지 않아서 복구 경로 자체가 없었다 — 지워진
+파일들이 마침 버려도 되는 테스트 데이터였던 건 운이었지, 이 방식 자체의 안전성이
+아니었다.
+
+이것이든 나중에 나올 다른 것이든, 스윕/회수 서비스를 라이브로(dry-run 아니게) 돌려보는
+검증은 반드시 격리된 샌드박스 디렉터리에 대해서 해야 한다(`process.cwd()`를 기준으로
+경로를 잡는 스토리지 어댑터를 만들기 **전에** `process.chdir()`로 스크래치 경로로
+옮겨간다) — 이 저장소의 실제 `file/temp`/`file/upload`에 대고는 절대 안 되며, 그
+디렉터리가 지금 아무리 비어 있거나 버려도 될 것처럼 보여도 마찬가지다. dry-run 모드와
+순수 selector 단위 테스트는, 실제로 삭제 경로를 호출하는 검증을 대신할 수 없다.
 
 ## 아키텍처
 

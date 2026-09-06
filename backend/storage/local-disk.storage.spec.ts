@@ -177,6 +177,41 @@ describe('LocalDiskStorage', () => {
     });
   });
 
+  describe('listGranted', () => {
+    it('lists only granted_ files with their mtime, keyed as file/upload/...', async () => {
+      readdir.mockResolvedValue([
+        'granted_a.mp4',
+        'temp_leftover.mp4',
+        'random.txt',
+      ]);
+      stat.mockResolvedValue({ isFile: () => true, mtimeMs: 222 });
+
+      const result = await storage.listGranted();
+
+      expect(result).toEqual([
+        { key: 'file/upload/granted_a.mp4', mtimeMs: 222 },
+      ]);
+      expect(stat).not.toHaveBeenCalledWith(
+        join(process.cwd(), 'file', 'upload', 'temp_leftover.mp4'),
+      );
+    });
+
+    it('treats an absent file/upload directory as empty, not an error', async () => {
+      readdir.mockRejectedValue(
+        Object.assign(new Error('missing'), { code: 'ENOENT' }),
+      );
+
+      await expect(storage.listGranted()).resolves.toEqual([]);
+    });
+
+    it('skips an entry that vanishes mid-list', async () => {
+      readdir.mockResolvedValue(['granted_gone.mp4']);
+      stat.mockRejectedValue(new Error('ENOENT'));
+
+      await expect(storage.listGranted()).resolves.toEqual([]);
+    });
+  });
+
   describe('getSignedReadUrl', () => {
     it('always returns null — local disk has no presign concept (ADR 0036)', async () => {
       await expect(
