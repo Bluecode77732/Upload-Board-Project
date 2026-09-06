@@ -1221,6 +1221,20 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   the existing `video[src^="blob:"]` assertion carry the real proof of success; verified
   5/5 green under both drivers. Full record: ADR 0036 > "Addendum (2026-08-16)". Nothing
   from this item remains open.
+- **Resumable/chunked upload (recorded 2026-09-06, no design work done)** — surfaced while
+  explaining [ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)'s `TEMP_SWEEP_TTL_HOURS`: the
+  24h TTL only covers the gap between a successfully-completed `POST /upload/attach` and a
+  not-yet-called `POST /file` (an abandoned or slow *second step*) — it does nothing for a
+  byte-level transfer that is itself interrupted mid-upload (a dropped connection during
+  `POST /upload/attach`). Today that case has no resume path at all: the client must
+  re-send the entire file from scratch, since Multer's `memoryStorage` (ADR 0029 D4)
+  receives a request as one atomic buffer with no chunking or range support. CLAUDE.md's
+  Architecture Decisions > File Storage already lists "streaming/chunked upload" under
+  **Never suggest** — that stance is unchanged and this entry does not reopen it now; it
+  exists so the *next* time app scale or a slow-network user base makes large-file
+  re-upload-from-scratch genuinely costly, there is a named starting point instead of a
+  fresh investigation. No comparison table, no ADR, no design decided — purely a marker
+  for a future task to pick up if and when it becomes worth prioritizing.
 
 ## 8. Advisory notes
 

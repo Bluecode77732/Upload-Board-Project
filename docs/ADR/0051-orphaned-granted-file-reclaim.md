@@ -99,7 +99,21 @@ that TTL is a maximum age a temp file may reach before being deleted; this is a 
 age a disk-only granted key must reach before being *considered* orphaned at all, sized
 generously against `promote()`'s typical sub-second duration, the same "generous enough
 that a slow-but-genuine claim is never reaped" reasoning ADR 0018 used for its own 24h
-TTL. Unlike that TTL, this floor is **not** exposed as config — a corrected earlier draft
+TTL.
+
+**The two numbers (24h vs. 1h) are not meant to agree, and comparing them as if they
+should is comparing different quantities.** `TEMP_SWEEP_TTL_HOURS` bounds a
+**human/client-timescale** wait — how long a real user might reasonably take to complete
+the second half of a two-step upload (browser closed, distracted, slow retry). `MIN_AGE_MS`
+bounds a **server-internal-timescale** race — how long a single transaction commit could
+plausibly take. The latter resolves in milliseconds under normal operation, so 1 hour is
+already enormously generous relative to what it actually guards; raising it to match the
+24h TTL would add no safety; it would only delay reclaiming disk debris that is either
+already-decided cleanup (a completed deletion whose `unlink()` failed) or the debris of an
+upload attempt that has *already failed* from the caller's own perspective — see the
+Consequences' residual note on a third leak source this comparison surfaced.
+
+Unlike that TTL, this floor is **not** exposed as config — a corrected earlier draft
 had a `GRANTED_SWEEP_MIN_AGE_MINUTES` env var, but reconsidered: `TEMP_SWEEP_TTL_HOURS`
 really is an operational judgment call (how long to tolerate an abandoned upload is a
 business decision an operator might reasonably want to change), while this floor is a
@@ -130,7 +144,7 @@ on its own dry-run flag.
 ### D5 — Config (Joi + `.env.example`, mirroring the `TEMP_SWEEP_*` block)
 
 - `GRANTED_SWEEP_ENABLED` (bool, default `true`)
-- `GRANTED_SWEEP_CRON` (string, default `'0 3 * * *'` — daily, not hourly: the DB join
+- `GRANTED_SWEEP_CRON` (string, default `'0 0 * * *'` — daily at midnight, not hourly: the DB join
   is heavier than a bare `readdir`, and a granted-file leak accumulates far slower than
   an abandoned temp upload)
 - `GRANTED_SWEEP_DRY_RUN` (bool, default `true` — see D4)
@@ -206,6 +220,17 @@ the default mode ships blind), and `inc({ outcome: 'deleted' }, deleted)` only w
   be misread as orphaned in the same narrow window ADR 0018 already accepts for its own
   TTL reasoning. In report-first mode this only affects a log line and a counter, not
   a deletion, until dry-run is turned off.
+- A third orphan source, surfaced by comparing D3's floor against ADR 0018's TTL rather
+  than by the original design pass: `FileService.uploadFile` inserts the row, then calls
+  `storage.promote()`, then commits, all inside one `try` (`file.service.ts`) — if
+  `promote()` succeeds but `commitTransaction()` then fails (a dropped DB connection,
+  a deadlock), the `catch` rolls the insert back while the physical rename already
+  happened, leaving a permanently row-less `granted_` file. This is not a "user's active
+  file" case — the caller's own request already failed with a 500 at that point, so
+  nothing legitimate is still "in flight" from their perspective by the time the file
+  clears `MIN_AGE_MS`. Covered by the existing D3 selector with no code change; recorded
+  here because no prior leak-path list (this ADR's Context, or ROADMAP's original two)
+  had named it.
 
 ### Addendum (2026-09-05) — live-verifying this ADR's own design deleted 44 real files
 

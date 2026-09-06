@@ -60,7 +60,7 @@ import { join } from 'node:path';
         // DB와 대조해 훑는다. DRY_RUN 기본값은 true(리포트만) — 위 temp 파일을 훑는 것과 다르게,
         // 여기서의 오탐은 실제 소유된 파일을 파괴한다.
         GRANTED_SWEEP_ENABLED: Joi.boolean().default(true),
-        GRANTED_SWEEP_CRON: Joi.string().default('0 3 * * *'),
+        GRANTED_SWEEP_CRON: Joi.string().default('0 0 * * *'),
         GRANTED_SWEEP_DRY_RUN: Joi.boolean().default(true),
         // Storage port-adapter (ADR 0029): selects the FileStorage implementation.
         // AWS credentials are deliberately not here — the SDK's own default provider

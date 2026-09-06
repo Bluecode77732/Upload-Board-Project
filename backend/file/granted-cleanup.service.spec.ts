@@ -17,7 +17,7 @@ const cronFrom = CronJob.from as unknown as jest.Mock;
 
 const config = {
   enabled: true,
-  cron: '0 3 * * *',
+  cron: '0 0 * * *',
   dryRun: true,
 };
 
@@ -61,7 +61,7 @@ describe('GrantedCleanupService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     config.enabled = true;
-    config.cron = '0 3 * * *';
+    config.cron = '0 0 * * *';
     config.dryRun = true;
     mockFileRepository.find.mockResolvedValue([]);
 
@@ -158,7 +158,7 @@ describe('GrantedCleanupService', () => {
       service.onModuleInit();
 
       expect(cronFrom).toHaveBeenCalledWith(
-        expect.objectContaining({ cronTime: '0 3 * * *' }),
+        expect.objectContaining({ cronTime: '0 0 * * *' }),
       );
       expect(mockSchedulerRegistry.addCronJob).toHaveBeenCalledWith(
         'orphan-granted-file-sweep',
