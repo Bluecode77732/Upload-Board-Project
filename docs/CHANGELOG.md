@@ -12,6 +12,16 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Added
+- **`LICENSE` file: MIT (2026-09-07)** — the project had no license file at all; `package.json`
+  said `UNLICENSED` since the first commit, and the pre-rewrite README's `License / MIT`
+  section was silently dropped (not decided) during the 2026-07-22 doc rewrite. Decided MIT
+  after confirming the repo is already public on GitHub (not "before publishing" — already
+  live) and that no runtime dependency is copyleft (all MIT/BSD-3-Clause). Root `LICENSE`
+  file added; `package.json` (root + `frontend/` + `admin/`, the latter two previously had no
+  `license` field) set to `"MIT"`; `README.md`(+ko) gained a `## License` section linking to
+  it. Tracked as an open decision in `docs/ROADMAP.md` since 2026-07-24 — now closed.
+
 ### Removed
 - **`POST /auth/signin/local` (Passport local strategy) (2026-09-07)** — retired the
   removal candidate ROADMAP.md flagged since 2026-07-24, once `POST /auth/signin` (Basic)

@@ -329,6 +329,10 @@ real secrets manager, and HTTPS termination stay open items ([ADR 0033](docs/ADR
 [ADR 0034](docs/ADR/0034-https-termination-stance.md), and ROADMAP.md > Unscheduled for
 distroless). `pnpm lint` is clean as of 2026-07-22.
 
+## License
+
+[MIT](LICENSE)
+
 ## Author
 
 BLUECODE77732 — https://github.com/Bluecode77732

@@ -882,8 +882,15 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   Postgres에 의존한다. Testcontainers(실행마다 격리 컨테이너를 Nest provider
   override로 주입)는 둘 다 제거한다. 유예: 새 dev 의존성과 CI 변경을 수반하므로 배포
   환경(Stage 4) 확정 시 재검토.
-- 라이선스: `package.json`은 `UNLICENSED`인데 재작성 전 README는 MIT로 표기 —
-  저장소 공개 전 결정 필요.
+- ~~라이선스~~ — **2026-09-07 결정: MIT.** `package.json`은 첫 커밋 때부터 계속
+  `UNLICENSED`였고, 재작성 전 README의 `License / MIT` 섹션은 2026-07-22 문서 재작성 때
+  결정이 아니라 그냥 삭제되면서 라이선스 파일 자체가 하나도 없는 상태가 됐다. 결정 전
+  재조사한 내용: 이 저장소는 이미 GitHub에 **Public**으로 공개돼 있음("공개 전"이 아니라
+  이미 라이브 상태), 실제 런타임 의존성 중 카피레프트는 하나도 없어(전부 MIT/BSD-3-Clause)
+  어느 쪽을 골라도 무방했음, Public 포트폴리오형 저장소에 사실상 관례인 건 MIT. 반영:
+  루트 `LICENSE` 파일(MIT 본문), `package.json`(루트 + `frontend/` + `admin/` — 뒤 둘은
+  원래 `license` 필드 자체가 없었음) → `"MIT"`, `README.md`(+ko)에 `LICENSE`를 가리키는
+  `## License`(`## 라이선스`) 섹션 복원.
 - Chat 프로젝트 잔재 처리 ([계획서](CHAT-REMNANT-REMOVAL-PLAN.ko.md)): git
   히스토리 결정 + 신규/붙여넣기 문서 재검증 트리거.
 - dev 전이 의존성 `pnpm audit` 지적(handlebars — ts-jest 경유;

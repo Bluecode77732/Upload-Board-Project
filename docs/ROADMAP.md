@@ -933,8 +933,15 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   pre-provisioned Postgres. Testcontainers (an ephemeral per-run container injected via
   a Nest provider override) would remove both. Deferred: a new dev dependency plus a CI
   change; revisit when the deploy environment (Stage 4) is set.
-- License: `package.json` says `UNLICENSED`; the pre-rewrite README claimed
-  MIT — decide before the repo is published.
+- ~~License~~ — **decided 2026-09-07: MIT.** `package.json` had said `UNLICENSED` since
+  the first commit; the pre-rewrite README's `License / MIT` section was silently dropped
+  (not decided) during the 2026-07-22 doc rewrite, leaving the project with no license
+  file at all. Re-investigated before deciding: the repo is already **public** on GitHub
+  (not "before publishing" — already live), no runtime dependency is copyleft (all
+  MIT/BSD-3-Clause, so either choice was compatible), and MIT is the de facto convention
+  for a public portfolio-style repo. Landed: root `LICENSE` file (MIT text), `package.json`
+  (root + `frontend/` + `admin/`, the latter two previously had no `license` field at all)
+  → `"MIT"`, and a restored `## License` section in `README.md`(+ko) linking to it.
 - Chat-project remnant handling ([plan](CHAT-REMNANT-REMOVAL-PLAN.md)):
   git-history decision + re-verification trigger for new or pasted-in docs.
 - Dev-transitive `pnpm audit` findings (handlebars via ts-jest;

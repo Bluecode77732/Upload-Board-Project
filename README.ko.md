@@ -323,6 +323,10 @@ distroless 런타임 베이스, 실제 시크릿 매니저, HTTPS 종단은 여�
 [ADR 0034](docs/ADR/0034-https-termination-stance.ko.md), distroless는 ROADMAP.md >
 Unscheduled). `pnpm lint`는 2026-07-22 기준 클린.
 
+## 라이선스
+
+[MIT](LICENSE)
+
 ## 작성자
 
 BLUECODE77732 — https://github.com/Bluecode77732

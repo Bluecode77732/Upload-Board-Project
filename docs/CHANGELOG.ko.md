@@ -12,6 +12,17 @@
 
 ## [Unreleased]
 
+### 추가
+- **`LICENSE` 파일: MIT (2026-09-07)** — 프로젝트에 라이선스 파일이 아예 없었다.
+  `package.json`은 첫 커밋 때부터 `UNLICENSED`였고, 재작성 전 README의
+  `License / MIT` 섹션은 2026-07-22 문서 재작성 때 결정이 아니라 그냥 삭제됐다.
+  저장소가 이미 GitHub에 Public으로 공개돼 있고("공개 전"이 아니라 이미 라이브),
+  실제 런타임 의존성 중 카피레프트가 없음(전부 MIT/BSD-3-Clause)을 확인한 뒤
+  MIT로 결정했다. 루트 `LICENSE` 파일 추가; `package.json`(루트 +
+  `frontend/` + `admin/` — 뒤 둘은 원래 `license` 필드 자체가 없었음)을
+  `"MIT"`로 설정; `README.md`(+ko)에 `LICENSE`를 가리키는 `## License` 섹션
+  추가. `docs/ROADMAP.md`에 2026-07-24부터 열려 있던 결정 항목 — 이제 닫힘.
+
 ### 제거
 - **`POST /auth/signin/local`(Passport local 전략) (2026-09-07)** — ROADMAP.md가
   2026-07-24부터 제거 후보로 기록해온 것을 정리했다. `POST /auth/signin`(Basic)이
