@@ -860,15 +860,22 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   경우에만 재검토한다 — 오늘 이 프로젝트의 로드맵에는 그런 시나리오가 없다.
 - ADR 0026 콘텐츠 엔드포인트 후속 (2026-08-01 기록, `GET /file/:id/content`
   [file-content.controller.ts](../backend/file/file-content.controller.ts) 구현 후 검토), 심각도 순:
-  1. **[중간] 스트림 에러 미처리** — 200·206 경로의 `createReadStream(...).pipe(res)`에
-     `'error'` 리스너가 없어, 헤더가 나간 뒤 읽기 실패(스트리밍 중 `DELETE /file/:id` 경합,
-     디스크 오류)가 미처리 `'error'` 이벤트로 프로세스를 크래시시킨다(Never Do Group 1). 수정:
-     응답을 destroy하고 `warn`으로 로그하는 `stream.on('error', …)` 부착.
-  2. **[낮음] Suffix `Range: bytes=-N` 오처리** — 마지막 N바이트 요청을 앞 N+1바이트로 서빙한다.
-     플레이어는 `bytes=N-`를 써서 영향 낮음. 여유 될 때 suffix 분기 추가.
-  코드 불요 관찰(수정 없음): `416` 응답에 `ErrorBody` code 없음(프로토콜 레벨); 다중 필드 첨부
-  거부 시 남는 temp orphan은 ADR 0018 스윕이 회수; `file/temp`는 여전히 정적 서빙(기존 동작,
-  가시성 범위 밖). 전체 서술은 [ADR 0026](ADR/0026-file-visibility-implementation.ko.md) > 알려진 한계.
+  1. ~~**[중간] 스트림 에러 미처리**~~ — **2026-09-07 해결**: 200·206 경로의
+     `createReadStream(...).pipe(res)`에 `'error'` 리스너가 없어, 헤더가 나간 뒤 읽기
+     실패(스트리밍 중 `DELETE /file/:id` 경합, 디스크 오류)가 미처리 `'error'` 이벤트로
+     프로세스를 크래시시켰다(Never Do Group 1). 두 호출부 모두 이제 private
+     `pipeContentStream` 헬퍼를 거치며, 여기서 `stream.on('error', …)`를 걸어 응답을
+     destroy하고 `warn`으로 로그한다 — 이 컨트롤러는 unit spec이 없어서(커버리지 제외
+     대상) 기존 e2e Range 커버리지가 그대로 통과하는 것으로 검증했다.
+  2. ~~**[낮음] Suffix `Range: bytes=-N` 오처리**~~ — **2026-09-07 해결**: 마지막 N바이트
+     요청을 앞 N+1바이트로 서빙하던 문제. suffix 형태(start 비어있고 end만 있음)를 따로
+     감지해 `start = max(0, size - N)` / `end = size - 1`로 계산하도록 고쳤고, `N-`/`N-M`
+     형태는 그대로 뒀다. 새 e2e 케이스 `supports a suffix Range request (last N bytes)`
+     추가, `STORAGE_DRIVER=local`에서 76/76 통과.
+  코드 불요 관찰(수정 없음, 여전히 열림): `416` 응답에 `ErrorBody` code 없음(프로토콜 레벨);
+  다중 필드 첨부 거부 시 남는 temp orphan은 ADR 0018 스윕이 회수; `file/temp`는 여전히
+  정적 서빙(기존 동작, 가시성 범위 밖). 전체 서술은
+  [ADR 0026](ADR/0026-file-visibility-implementation.ko.md) > 알려진 한계.
 - e2e용 Testcontainers (2026-07-26 기록): e2e 스위트는 throwaway DB와 jest
   `setupFiles` env 오버라이드([ADR 0016](ADR/0016-github-actions-ci.ko.md),
   `test/e2e-env.ts`)를 쓴다 — 유효하지만 env-before-import 타이밍과 사전 프로비저닝된

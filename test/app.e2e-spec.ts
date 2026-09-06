@@ -840,6 +840,28 @@ describe('Sharenpo API (e2e)', () => {
       expect(res.body.toString()).toBe(BYTES.slice(0, 4));
     });
 
+    it('supports a suffix Range request (last N bytes)', async () => {
+      const owner = await createUser('vis-suffix-range-owner@e.com');
+      const file = await promoteFile(owner.accessToken, 'vis-suffix-range');
+      await request(server)
+        .patch(`/file/${file.id}`)
+        .set(auth(owner.accessToken))
+        .send({ visibility: 'public' })
+        .expect(200);
+
+      const size = Buffer.byteLength(BYTES);
+      const res = await request(server)
+        .get(`/file/${file.id}/content`)
+        .set('Range', 'bytes=-4')
+        .buffer(true)
+        .expect(206);
+
+      expect(res.headers['content-range']).toBe(
+        `bytes ${size - 4}-${size - 1}/${size}`,
+      );
+      expect(res.body.toString()).toBe(BYTES.slice(-4));
+    });
+
     it('switches to unlisted, hands the owner a shareUrl, and rotation invalidates the old token', async () => {
       const owner = await createUser('vis-unlisted-owner@e.com');
       const file = await promoteFile(owner.accessToken, 'vis-unlisted-content');
