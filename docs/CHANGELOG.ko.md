@@ -25,10 +25,15 @@
   추가하고, `UploadForm.tsx`의 `POST /file` 호출부에서만 사용해 200(멱등 replay,
   ADR 0019)이면 기존 성공 경로 대신 "This file was already uploaded — reusing the
   existing entry."를 보여준다 — `api.post()` 시그니처는 다른 모든 호출부에서 그대로다.
-  `frontend/docs/API-CONTRACT.md`와 `frontend/README.md`도 함께 갱신했다. 실제
-  브라우저(Playwright)에서 mock 백엔드로(이 세션엔 살아있는 Postgres/Docker가
-  없었음) 두 기능 각각의 409-재시도 경로와 성공 경로를 검증했고, `pnpm build`/
-  `pnpm lint` 그린 — 실제 계정 연쇄 삭제까지 end-to-end로 확인한 것은 아직 아니다.
+  `frontend/docs/API-CONTRACT.md`와 `frontend/README.md`도 함께 갱신했다. 처음엔
+  실제 브라우저(Playwright)에서 mock 백엔드로(이 세션엔 살아있는 Postgres/Docker가
+  없었음) 검증했고, **같은 날 Docker가 다시 살아난 뒤 실제 백엔드 + 실제 Postgres
+  DB로 재검증**했다: 실제 계정이 파일을 첨부·승격(실제 `201`)한 뒤 같은 청구
+  임시 파일명을 재제출하자 실제 `200`이 응답됐고 원래 title이 유지됐음을
+  `psql` 직접 조회로 확인했다. 그리고 그 파일을 보유한 실제 계정이 실제 `409
+  USER_HAS_FILES`(정확한 개수 포함)를 받았고, `deleteFiles=true` 재확인 요청이
+  실제로 연쇄 삭제돼 `psql`/파일시스템 확인으로 유저 행·파일 행·실물 파일이 전부
+  사라졌음을 확인했다. `pnpm build`/`pnpm lint` 내내 그린. 발견된 버그 없음.
 
 ### 변경
 - **오래 대기 중이던 백로그 3건을 "필요할 때만 구현"으로 정리 (2026-09-07)** —

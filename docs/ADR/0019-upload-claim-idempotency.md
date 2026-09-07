@@ -115,3 +115,10 @@ already branched on it. What remained — `client.ts` discarding `response.statu
 response now shows "This file was already uploaded — reusing the existing entry." instead
 of the ordinary success path. `frontend/docs/API-CONTRACT.md` already documented the
 200/201 split; no change needed there.
+
+Verified against a real backend and a real Postgres DB (not just a mocked one): a real
+account attached and promoted a file (fresh `POST /file`, real `201`), then resubmitted
+the same claimed temp filename — the real backend answered `200`, the resubmitted title
+was ignored exactly as this ADR's Consequences already specified, a direct `psql` read
+confirmed a single row still carrying the original title, and the notice rendered in the
+real running form.

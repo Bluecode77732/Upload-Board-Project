@@ -124,6 +124,9 @@ SettingsPage.tsx`(`/settings`에 라우팅, `NavBar`에서 링크)가 먼저 쿼
 포함)를 그대로 노출한 뒤 2차 `window.confirm`을 거쳐 `?deleteFiles=true`로 재요청한다.
 성공하면 `signOut()`을 호출하고 `/login`으로 이동해 삭제된 계정의 토큰이 메모리에 남지
 않게 한다. `frontend/docs/API-CONTRACT.md`에도 빠져 있던 `?deleteFiles=`/`USER_HAS_FILES`
-행을 추가했다. 실제 브라우저에서 mock 백엔드(해당 세션에 살아있는 Postgres가 없었음)로
-409-재시도 경로와 성공 경로 둘 다 검증했다 — 실제 연쇄 삭제까지 end-to-end로 확인한 것은
-아직 아니다.
+행을 추가했다. mock 백엔드로 먼저 검증한 뒤, 실제 백엔드 + 실제 Postgres DB로
+재검증했다(2026-09-07): 실제 파일 1개를 보유한 실제 계정이 실제 `409
+USER_HAS_FILES`를 받았고(메시지의 개수도 정확), `deleteFiles=true` 재확인
+요청이 실제로 연쇄 삭제됐으며, `psql`/파일시스템 직접 확인으로 유저 행·파일
+행·저장된 실물 파일이 전부 실제로 사라졌음을 확인했다 — 200 응답만 본 것이
+아니다.

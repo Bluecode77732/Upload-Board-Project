@@ -963,8 +963,11 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   위의 `requestWithStatus()`/`api.postWithStatus()`를 추가하고, `UploadForm.tsx`의
   `POST /file` 호출부에서만 사용한다 — `api.post()` 시그니처는 다른 모든 호출부에서
   그대로다. 200이면 "This file was already uploaded — reusing the existing entry."를
-  보여준다. 실제 브라우저에서 mock 백엔드로 검증(빌드/린트 그린, 해당 세션엔 살아있는
-  DB가 없었음).
+  보여준다. mock 백엔드로 먼저 검증한 뒤, **실제 백엔드 + 실제 Postgres DB로
+  재검증(2026-09-07)**: 실제 계정으로 파일을 첨부·승격(신규 `POST /file`, 실제 `201`,
+  실제 행 생성)한 뒤 같은 청구 임시 파일명을 재제출 — 실제 백엔드가 `200`을 응답했고,
+  재제출한 title은 설계대로 무시됐으며(`psql` 직접 조회로 행이 하나뿐이고 원래
+  title을 그대로 갖고 있음을 확인), 실제 실행 중인 폼에서 안내 문구가 렌더링됐다.
 - ~~삭제 계약의 프론트엔드 반영~~ (2026-07-30 기록,
   [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — **2026-09-07 랜딩** (ADR 0020
   추가 기록), 같은 날 재확인에서 여전히 완전히 미착수(계정 삭제 UI 자체가 없고
@@ -974,8 +977,11 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   백엔드 메시지(이미 파일 개수 포함)를 2차 확인 뒤에 보여주고 `?deleteFiles=true`로
   재요청하며, 성공하면 로그아웃 후 `/login`으로 이동한다. `frontend/docs/
   API-CONTRACT.md`에도 빠져 있던 `?deleteFiles=`/`USER_HAS_FILES` 행을 추가했다.
-  실제 브라우저에서 mock 백엔드로 409-재시도 경로와 성공 경로 둘 다 검증 — 실제
-  연쇄 삭제까지 end-to-end로 확인한 것은 아직 아니다
+  mock 백엔드로 먼저 검증한 뒤, **실제 백엔드 + 실제 Postgres DB로 재검증
+  (2026-09-07)**: 실제 파일 1개를 보유한 실제 계정이 실제 `409 USER_HAS_FILES`를
+  받았고(메시지의 개수도 정확), `deleteFiles=true` 재확인 요청이 실제로 연쇄
+  삭제됐으며, `psql`/파일시스템 직접 확인으로 유저 행·파일 행·저장된 실물 파일이
+  전부 실제로 사라졌음을 확인했다 — 200 응답만 본 것이 아니다
   ([CLAUDE.md](../CLAUDE.md) > Project Overview).
 - ~~고아 `granted_` 파일 회수~~ (2026-07-30 기록,
   [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — **설계 랜딩 2026-09-05**

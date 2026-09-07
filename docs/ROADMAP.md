@@ -1020,8 +1020,12 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   duplicated) and `requestWithStatus()`/`api.postWithStatus()` on top of it, used only by
   `UploadForm.tsx`'s `POST /file` call — `api.post()`'s signature is unchanged everywhere
   else. A 200 now shows "This file was already uploaded — reusing the existing entry."
-  Verified in a real browser against a mocked backend (build/lint green, no live DB in
-  that session).
+  First verified against a mocked backend, then **re-verified against the real backend +
+  a real Postgres DB (2026-09-07)**: a real account attached and promoted a file (fresh
+  `POST /file`, real `201`, real row), then resubmitted the same claimed temp filename —
+  the real backend answered `200`, the resubmitted title was ignored exactly as designed
+  (a direct `psql` read confirmed a single row, still carrying the original title), and
+  the notice rendered in the real running form.
 - ~~Frontend adoption of the deletion contract~~ (recorded 2026-07-30,
   [ADR 0020](ADR/0020-account-deletion-cascade.md)) — **landed 2026-09-07** (ADR 0020
   Addendum), after being re-confirmed fully open the same day (no account-deletion UI
@@ -1031,9 +1035,12 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   message (already names the file count) behind a second confirm, then retries with
   `?deleteFiles=true`; on success it signs out and redirects to `/login`.
   `frontend/docs/API-CONTRACT.md` gained the `?deleteFiles=`/`USER_HAS_FILES` row it was
-  missing. Verified in a real browser against a mocked backend, both the 409-then-retry
-  and the plain-success paths — not yet exercised against the real cascade end to end
-  ([CLAUDE.md](../CLAUDE.md) > Project Overview).
+  missing. First verified against a mocked backend, then **re-verified against the real
+  backend + a real Postgres DB (2026-09-07)**: a real account owning one real file hit the
+  real `409 USER_HAS_FILES` (message correctly named the count), the confirmed retry with
+  `deleteFiles=true` actually cascaded, and a direct `psql`/filesystem check confirmed the
+  user row, the file row, and the stored bytes were all really gone — not just a 200
+  response ([CLAUDE.md](../CLAUDE.md) > Project Overview).
 - ~~Reclaiming orphaned `granted_` files~~ (recorded 2026-07-30,
   [ADR 0020](ADR/0020-account-deletion-cascade.md)) — **design landed 2026-09-05**
   ([ADR 0051](ADR/0051-orphaned-granted-file-reclaim.md)): the DB-joined reconciliation

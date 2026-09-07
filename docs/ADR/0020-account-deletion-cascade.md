@@ -135,6 +135,9 @@ account/SettingsPage.tsx` (routed at `/settings`, linked from `NavBar`) calls `D
 verbatim (it already names the file count) behind a second `window.confirm`, then retries
 with `?deleteFiles=true`; on success it calls `signOut()` and navigates to `/login` so the
 deleted account's token never lingers in memory. `frontend/docs/API-CONTRACT.md` gained the
-`?deleteFiles=` / `USER_HAS_FILES` row it was missing. Verified against a mocked backend
-(no live Postgres in that session) exercising both the 409-then-retry path and the plain
-success path in a real browser — not yet exercised against the real cascade end to end.
+`?deleteFiles=` / `USER_HAS_FILES` row it was missing. First verified against a mocked
+backend, then re-verified against the real backend + a real Postgres DB (2026-09-07): a
+real account owning one real file hit the real `409 USER_HAS_FILES` (message correctly
+named the count), the confirmed retry with `deleteFiles=true` actually cascaded, and a
+direct `psql`/filesystem check confirmed the user row, the file row, and the stored bytes
+were all really gone — not just a 200 response.

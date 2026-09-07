@@ -25,11 +25,15 @@ development line (package.json version).
   `UploadForm.tsx`'s `POST /file` call so a 200 (idempotent replay, ADR 0019) shows "This
   file was already uploaded — reusing the existing entry." instead of the ordinary success
   path — `api.post()`'s signature is unchanged for every other caller.
-  `frontend/docs/API-CONTRACT.md` and `frontend/README.md` updated to match. Verified in a
-  real browser (Playwright) against a mocked backend — this session had no live
-  Postgres/Docker — exercising both the 409-then-retry and plain-success paths for each
-  feature; `pnpm build`/`pnpm lint` green. Not yet exercised against the real account
-  cascade end to end.
+  `frontend/docs/API-CONTRACT.md` and `frontend/README.md` updated to match. First verified
+  in a real browser (Playwright) against a mocked backend (no live Postgres/Docker in that
+  session), then **re-verified the same day against the real backend + a real Postgres DB**
+  once Docker became available: a real account attached/promoted a file (real `201`) and
+  resubmitting its claimed temp filename got a real `200` with the original title preserved
+  (confirmed by a direct `psql` read); a real account owning that file hit the real `409
+  USER_HAS_FILES` with the correct count, and the confirmed `deleteFiles=true` retry really
+  cascaded — `psql`/filesystem checks confirmed the user row, file row, and stored bytes
+  were all actually gone. `pnpm build`/`pnpm lint` green throughout. No bugs found.
 
 ### Changed
 - **Three long-standing "waiting" backlog items resolved to implement-only-if-needed

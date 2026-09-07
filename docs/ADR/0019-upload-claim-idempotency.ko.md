@@ -111,3 +111,9 @@ Group 3)를 강제하는 코드가 없었던 셈이다.
 응답이면 "This file was already uploaded — reusing the existing entry."를 보여주고, 기존
 성공 경로는 타지 않는다. `frontend/docs/API-CONTRACT.md`는 200/201 구분을 이미 문서화해둔
 상태라 추가 수정이 필요 없었다.
+
+mock이 아니라 실제 백엔드 + 실제 Postgres DB로 검증했다: 실제 계정이 파일을
+첨부·승격(신규 `POST /file`, 실제 `201`)한 뒤 같은 청구 임시 파일명을 재제출 —
+실제 백엔드가 `200`을 응답했고, 재제출한 title은 이 ADR의 영향 절이 이미 명시한
+대로 무시됐으며, `psql` 직접 조회로 행이 하나뿐이고 원래 title을 그대로 갖고
+있음을 확인했고, 실제 실행 중인 폼에서 안내 문구가 렌더링됐다.
