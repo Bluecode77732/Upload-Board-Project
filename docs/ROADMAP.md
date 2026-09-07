@@ -997,14 +997,29 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   (neither Passport strategy ever carried a spec file, a pre-existing gap this
   removal doesn't need to backfill).
 - Frontend adoption of the upload claim contract (recorded 2026-07-27,
-  [ADR 0019](ADR/0019-upload-claim-idempotency.md)) — **owned by a frontend-scoped
-  task, not by backend work**. `POST /file` now answers 200 (idempotent replay) as
-  well as 201, and 409 `FILE_ALREADY_CLAIMED` is a status this API had never emitted
-  before. `frontend/docs/API-CONTRACT.md` and the client's upload flow must both be
-  updated; until then the frontend treats a replay as a fresh creation and has no
-  branch for 409. The backend change deliberately stopped at the repo boundary
-  ([CLAUDE.md](../CLAUDE.md) > Project Overview: `frontend/` has its own scoped
-  CLAUDE.md and tooling — do not edit frontend files from a backend task).
+  [ADR 0019](ADR/0019-upload-claim-idempotency.md)) — **narrowed 2026-09-07, partially
+  stale.** The 409 half is already done: `frontend/src/api/errorCodes.ts` lists
+  `FILE_ALREADY_CLAIMED` and `UploadForm.tsx`'s `messageForError()` branches on it with a
+  real user-facing message — this row's original "has no branch for 409" claim is false as
+  of whenever that landed. What's still genuinely missing is narrower: `POST /file`
+  answering 200 (idempotent replay) vs 201 (fresh) is a distinction `client.ts`'s
+  `request()` discards (it returns only the parsed body, never `response.status`), so
+  `UploadForm.tsx` runs the identical success path either way — a user re-submitting a
+  claimed upload sees "uploaded" with no indication it was actually a replay. Remains
+  **owned by a frontend-scoped task**: expose status from `client.ts` (or a dedicated
+  return shape for this one call site) and branch the UI copy on it.
+- Frontend adoption of the deletion contract (recorded 2026-07-30,
+  [ADR 0020](ADR/0020-account-deletion-cascade.md)) — **re-confirmed still fully open,
+  2026-09-07**: no account-deletion UI exists anywhere in `frontend/` at all — no route, no
+  settings/profile page, no call to `DELETE /user/:id` in any component (checked all of
+  `frontend/src` for `.delete(`/`/user/` usage), and `USER_HAS_FILES` appears only as an
+  unused catalog entry in `errorCodes.ts`, never branched on. **owned by a frontend-scoped
+  task, not by backend work**, exactly like the claim-contract item above. `DELETE /user/:id`
+  now needs `?deleteFiles=true` for an account that owns files, and answers 409
+  `USER_HAS_FILES` (count in the message) otherwise; the warning dialog, the confirmed
+  retry, and the 409 branch all live in `frontend/`. `frontend/docs/API-CONTRACT.md` and
+  the account-deletion flow must both take it up; until they do, the frontend has no path
+  that can pass the confirmation. The backend change stopped at the repo boundary
 - Frontend adoption of the deletion contract (recorded 2026-07-30,
   [ADR 0020](ADR/0020-account-deletion-cascade.md)) — **owned by a frontend-scoped task,
   not by backend work**, exactly like the claim-contract item above. `DELETE /user/:id`
@@ -1067,15 +1082,16 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   ([ADR 0020](ADR/0020-account-deletion-cascade.md)). Until then `search`/`creatorId` are
   sequential scans and the sort is a full sort — the accepted trade at this scale. Reverse it
   on measurement, not intuition.
-- Frontend adoption of the list-query parameters (recorded 2026-07-30,
-  [ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — **owned by a frontend-scoped
-  task, not by backend work**, like the claim- and deletion-contract items above.
-  `GET /file` now accepts `search`, `sortBy`, `order`, and `creatorId`, and returns results
-  ordered newest-first by default where the order was previously arbitrary.
-  `frontend/docs/API-CONTRACT.md` and the list view (search box, sort control, author
-  filter) must both take it up; until they do, the frontend simply keeps sending
-  `take`/`skip` and gets the new deterministic ordering for free. The backend change stopped
-  at the repo boundary ([CLAUDE.md](../CLAUDE.md) > Project Overview).
+- ~~Frontend adoption of the list-query parameters~~ (recorded 2026-07-30,
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — **found already resolved,
+  2026-09-07** (stale row — this item was done at some point without ever being struck
+  through here). `frontend/src/features/files/FileBoard.tsx` fully wires all four params
+  against `GET /file`: a debounced `search` input, a `sortBy` `<select>` driven by
+  `FILE_SORT_FIELDS`, an `order` ASC/DESC `<select>`, and a validated `creatorId` filter
+  (plus a "filter by this creator" affordance from `FilePreviewTile` and a "Clear filters"
+  button) — confirmed live in `DashboardPage`, not dead code.
+  `frontend/docs/API-CONTRACT.md` already documents the full param/validation shape too.
+  Nothing left to do here.
 - ~~Frontend adoption of the post/comment API~~ — ✅ **resolved 2026-08-11** (recorded
   2026-08-11, [ADR 0023](ADR/0023-board-domain-schema.md)) — **owned by a frontend-scoped
   task, not by backend work**, like the item above. Routing groundwork landed first: `/` is

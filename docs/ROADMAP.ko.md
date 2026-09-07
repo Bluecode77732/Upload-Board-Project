@@ -942,17 +942,24 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   원래 없었다(두 Passport 전략 모두 spec 파일을 가진 적이 없었던 기존 공백이라,
   이번 제거가 새로 메울 필요는 없다).
 - 업로드 청구 계약의 프론트엔드 반영 (2026-07-27 기록,
-  [ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)) — **백엔드 작업이 아니라
-  프론트엔드 전용 과제가 담당한다.** `POST /file`은 이제 201뿐 아니라 200(멱등
-  replay)도 응답하고, 409 `FILE_ALREADY_CLAIMED`는 이 API가 처음 내보내는 상태
-  코드다. `frontend/docs/API-CONTRACT.md`와 클라이언트 업로드 흐름을 함께 갱신해야
-  하며, 그전까지 프론트엔드는 replay를 새 생성으로 취급하고 409 분기도 갖고 있지
-  않다. 백엔드 변경은 저장소 경계에서 의도적으로 멈췄다([CLAUDE.md](../CLAUDE.md) >
-  Project Overview: `frontend/`는 자체 CLAUDE.md와 툴체인을 가지며, 백엔드 작업에서
-  프론트엔드 파일을 편집하지 않는다).
+  [ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)) — **2026-09-07 범위 축소, 일부
+  낡은 기록이었음.** 409 쪽은 이미 돼 있었다: `frontend/src/api/errorCodes.ts`에
+  `FILE_ALREADY_CLAIMED`가 등록돼 있고 `UploadForm.tsx`의 `messageForError()`가
+  실제 사용자 메시지로 분기한다 — "409 분기가 없다"던 이 항목의 원래 주장은 그게
+  반영된 시점부터 이미 틀린 서술이었다. 실제로 아직 안 된 건 더 좁은 부분이다:
+  `POST /file`이 200(멱등 replay)과 201(신규)을 구분해 응답하는데, `client.ts`의
+  `request()`가 파싱된 본문만 반환하고 `response.status`를 절대 넘겨주지 않아서
+  `UploadForm.tsx`는 두 경우 모두 완전히 동일한 성공 경로를 탄다 — 이미 청구된
+  업로드를 재제출한 사용자에게 그게 replay였다는 표시가 전혀 없다. 여전히
+  **프론트엔드 전용 과제 소관**: `client.ts`에서 status를 노출하거나(혹은 이 호출부
+  전용 반환 형태) 그걸로 UI 문구를 분기시켜야 한다.
 - 삭제 계약의 프론트엔드 반영 (2026-07-30 기록,
-  [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — 위의 청구 계약 항목과 마찬가지로
-  **백엔드 작업이 아니라 프론트엔드 전용 과제가 담당한다.** `DELETE /user/:id`는 파일을
+  [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — **2026-09-07 재확인, 여전히
+  완전히 열려 있음**: `frontend/` 어디에도 계정 삭제 UI가 없다 — 라우트도, 설정/프로필
+  페이지도, 어떤 컴포넌트에서도 `DELETE /user/:id` 호출이 없다(`frontend/src` 전체를
+  `.delete(`/`/user/` 사용처로 확인함), `USER_HAS_FILES`는 `errorCodes.ts`의 미사용
+  카탈로그 항목으로만 존재하고 어디서도 분기하지 않는다. 위의 청구 계약 항목과
+  마찬가지로 **백엔드 작업이 아니라 프론트엔드 전용 과제가 담당한다.** `DELETE /user/:id`는 파일을
   보유한 계정에 대해 `?deleteFiles=true`를 요구하고, 없으면 409 `USER_HAS_FILES`(메시지에
   개수 포함)를 낸다. 경고 다이얼로그, 확인 후 재요청, 409 분기는 모두 `frontend/`의 몫이다.
   `frontend/docs/API-CONTRACT.md`와 계정 삭제 흐름을 함께 갱신해야 하며, 그전까지 프론트엔드
@@ -1007,13 +1014,15 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   연쇄 삭제([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) 양쪽에 쓰인다. 그때까지
   `search`/`creatorId`는 순차 스캔이고 정렬은 전체 정렬이다 — 이 규모에서 감수하는 트레이드다.
   뒤집는 근거는 직관이 아니라 측정이어야 한다.
-- 목록 조회 파라미터의 프론트엔드 반영 (2026-07-30 기록,
-  [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) — 위의 청구 계약·삭제 계약 항목과
-  마찬가지로 **백엔드 작업이 아니라 프론트엔드 전용 과제가 담당한다.** `GET /file`이 이제
-  `search`, `sortBy`, `order`, `creatorId`를 받고, 이전에는 임의였던 순서를 기본 최신순으로
-  돌려준다. `frontend/docs/API-CONTRACT.md`와 목록 화면(검색창, 정렬 컨트롤, 작성자 필터)을
-  함께 갱신해야 하며, 그전까지 프론트엔드는 기존처럼 `take`/`skip`만 보내면서 결정적 정렬만
-  그대로 얻는다. 백엔드 변경은 저장소 경계에서 멈췄다([CLAUDE.md](../CLAUDE.md) > Project Overview).
+- ~~목록 조회 파라미터의 프론트엔드 반영~~ (2026-07-30 기록,
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) — **2026-09-07, 이미 끝나 있던
+  걸 뒤늦게 발견**(취소선 없이 방치된 낡은 항목). `frontend/src/features/files/FileBoard.tsx`가
+  `GET /file`의 네 파라미터를 전부 연결해뒀다: `FILE_SORT_FIELDS`로 구동되는 `sortBy`
+  `<select>`, ASC/DESC `order` `<select>`, 디바운스된 `search` 입력, 검증된 `creatorId`
+  필터(`FilePreviewTile`에서 오는 "이 작성자로 필터" 연동과 "필터 초기화" 버튼까지) —
+  `DashboardPage`에서 실제로 라이브 상태임을 확인했고 죽은 코드가 아니다.
+  `frontend/docs/API-CONTRACT.md`도 이미 전체 파라미터/검증 규칙을 문서화해뒀다. 여기 더
+  할 일 없음.
 - ~~게시글/댓글 API의 프론트엔드 반영~~ — ✅ **2026-08-11 해소** (2026-08-11 기록,
   [ADR 0023](ADR/0023-board-domain-schema.ko.md)) — 위 항목과 마찬가지로 **백엔드 작업이
   아니라 프론트엔드 전용 과제가 담당한다.** 라우팅 기반 작업이 먼저 착지했다: `/`가
