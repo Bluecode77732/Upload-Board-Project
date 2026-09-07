@@ -115,3 +115,15 @@ sweep의 전제는 "`file/temp`에 있는 `temp_` 파일은 미청구 상태"라
   아니라 `UserEntity` 리포지토리에 의존한다).
 - 테스트 계정을 그냥 지우던 개발 편의는 그 계정이 파일을 보유한 경우 사라진다. 이제 플래그가
   요청의 일부다.
+
+## 추가 기록 (2026-09-07) — 프론트엔드 반영 완료
+
+이 ADR이 미뤄뒀던 프론트 계정 삭제 흐름이 완성됐다: `frontend/src/features/account/
+SettingsPage.tsx`(`/settings`에 라우팅, `NavBar`에서 링크)가 먼저 쿼리 없이 `DELETE
+/user/:id`를 호출하고, 409 `USER_HAS_FILES`를 받으면 백엔드 메시지(이미 보유 파일 개수를
+포함)를 그대로 노출한 뒤 2차 `window.confirm`을 거쳐 `?deleteFiles=true`로 재요청한다.
+성공하면 `signOut()`을 호출하고 `/login`으로 이동해 삭제된 계정의 토큰이 메모리에 남지
+않게 한다. `frontend/docs/API-CONTRACT.md`에도 빠져 있던 `?deleteFiles=`/`USER_HAS_FILES`
+행을 추가했다. 실제 브라우저에서 mock 백엔드(해당 세션에 살아있는 Postgres가 없었음)로
+409-재시도 경로와 성공 경로 둘 다 검증했다 — 실제 연쇄 삭제까지 end-to-end로 확인한 것은
+아직 아니다.

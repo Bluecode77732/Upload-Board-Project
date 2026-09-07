@@ -98,3 +98,16 @@ Group 3)를 강제하는 코드가 없었던 셈이다.
   돌려받는다.
 - `23505` 판별은 Postgres 드라이버 에러 코드를 읽는다. `DB_TYPE=postgres`로 이미 고정된 범위
   안에서의 의도적이고 국소적인 결합이다.
+
+## 추가 기록 (2026-09-07) — 프론트엔드 반영 완료
+
+409 쪽 공백은 별도 언급 없이 먼저 메워져 있었다: `frontend/src/api/errorCodes.ts`가
+`FILE_ALREADY_CLAIMED`를 이미 카탈로그에 올렸고 `UploadForm.tsx`의 `messageForError()`도
+이미 이를 분기하고 있었다. 남아 있던 진짜 공백 — `client.ts`가 `response.status`를 버려서
+200 replay와 201 신규 승격이 동일한 성공 경로를 탔던 문제 — 는 이제 해소됐다: `client.ts`에
+공유 401-refresh-retry 로직을 뽑아낸 `fetchWithAuthRetry()`와 이를 기반으로 한
+`requestWithStatus()`/`api.postWithStatus()`를 추가하고, `UploadForm.tsx`의 `POST /file`
+호출부에서만 사용한다 — `api.post()`의 시그니처는 다른 모든 호출부에서 그대로다. 200
+응답이면 "This file was already uploaded — reusing the existing entry."를 보여주고, 기존
+성공 경로는 타지 않는다. `frontend/docs/API-CONTRACT.md`는 200/201 구분을 이미 문서화해둔
+상태라 추가 수정이 필요 없었다.

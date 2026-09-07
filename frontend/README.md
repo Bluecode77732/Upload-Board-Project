@@ -69,7 +69,7 @@ src/
     │             own author/admin, PATCH/DELETE /comment/:id), and CommentForm (POST
     │             /post/:id/comment, triggers a refetch on success — no realtime/polling
     │             infrastructure exists in this app)
-    └── files/    DashboardPage (protected, "/files" — upload form (image/audio/video,
+    ├── files/    DashboardPage (protected, "/files" — upload form (image/audio/video,
                   with upload-progress bar) + file board: search/sort/
                   creator filter/pagination + visibility badges, FileBoard.tsx) and
                   FileDetailPage (protected, "/view/:id" — metadata + visibility-gated
@@ -78,6 +78,12 @@ src/
                   per the file's mediaType (ADR 0040); for the creator or an admin, a
                   management section — visibility toggle, unlisted share-link copy/
                   rotation, and delete — all via PATCH/DELETE /file/:id)
+    └── account/  SettingsPage (protected, "/settings" — not "/user" or "/account", which
+                  the dev proxy claims; linked from NavBar). Backend ADR 0020's
+                  DELETE /user/:id?deleteFiles= confirmation flow: delete → on 409
+                  USER_HAS_FILES show the backend's message (already names the file
+                  count) behind a second confirm → retry with deleteFiles=true → on
+                  success sign out and redirect to /login
 ```
 
 There is no `admin/` feature folder or `/admin` route here — the reserved stub was

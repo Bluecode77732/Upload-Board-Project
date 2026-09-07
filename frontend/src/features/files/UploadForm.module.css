@@ -76,6 +76,12 @@
   font-size: 0.9rem;
 }
 
+.notice {
+  margin: 0;
+  color: var(--success);
+  font-size: 0.9rem;
+}
+
 .submit {
   justify-self: start;
   padding: 9px 18px;

@@ -102,3 +102,16 @@ record that the claim was spent.
   client that retries with a *changed* title gets the original title back, not a 400.
 - The `23505` check reads the Postgres driver error code, a small, deliberate coupling to
   the driver already fixed by `DB_TYPE=postgres`.
+
+## Addendum (2026-09-07) — frontend adoption landed
+
+The 409 half of the Consequences gap closed earlier and unremarked: `frontend/src/api/
+errorCodes.ts` lists `FILE_ALREADY_CLAIMED` and `UploadForm.tsx`'s `messageForError()`
+already branched on it. What remained — `client.ts` discarding `response.status` so a
+200 replay and a 201 fresh promotion ran the identical success path — is closed now:
+`client.ts` gained `fetchWithAuthRetry()` (the shared 401-refresh-retry core) and
+`requestWithStatus()`/`api.postWithStatus()` built on it, used only by `UploadForm.tsx`'s
+`POST /file` call; `api.post()`'s signature is unchanged for every other caller. A 200
+response now shows "This file was already uploaded — reusing the existing entry." instead
+of the ordinary success path. `frontend/docs/API-CONTRACT.md` already documented the
+200/201 split; no change needed there.

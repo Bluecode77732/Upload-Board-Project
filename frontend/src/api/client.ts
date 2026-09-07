@@ -46,15 +46,11 @@ async function parseError(response: Response): Promise<ErrorBody | undefined> {
   }
 }
 
-// 목적: 인증 헤더/크리덴셜을 붙여 백엔드 REST 호출을 수행하고 성공 응답을 호출자가 기대하는 타입으로 반환한다.
-// 이유: 만료된 액세스 토큰의 401→refresh→재시도, 그리고 JSON이 아닌 성공 응답(예: DELETE /file/:id의
-//       순수 텍스트 200 "File 3 deleted.")의 파싱까지 호출자마다 각자 처리하면 ADR 0012 토큰 로직과
-//       파싱 예외 처리가 흩어진다. 후자는 response.json()이 무조건 호출되어 SyntaxError로 깨지던 실제
-//       버그였다(FileDetailPage.handleDelete가 성공한 삭제를 "Network error"로 오인).
-// 방법: fetch → 401이면 1회 리프레시 후 재시도 → !ok면 ApiError. 204는 그대로 undefined, Content-Type이
-//       application/json이 아니면 파싱하지 않고 undefined를 반환 — 어떤 api.delete 호출부도 반환값을
-//       쓰지 않으므로 안전하다.
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+// 목적: 인증 헤더/크리덴셜을 붙여 fetch를 수행하고, 만료된 액세스 토큰이면 1회 리프레시 후 재시도한다.
+// 이유: request()와 postWithStatus() 둘 다 이 401→refresh→재시도 로직이 그대로 필요한데, 응답 바디를
+//       어떻게 소비할지(파싱된 값만 vs status까지)는 서로 다르다 — fetch/재시도 부분만 공유해 중복을 없앤다.
+// 방법: doFetch → 401이면 tryRefresh 성공 시에만 한 번 더 doFetch. ok 여부 판정과 바디 파싱은 호출자 몫.
+async function fetchWithAuthRetry(path: string, options: RequestOptions): Promise<Response> {
   const { method = 'GET', body, headers = {}, skipAuthRefresh = false } = options
 
   // For multipart the browser must set Content-Type itself (with the boundary),
@@ -84,6 +80,19 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (refreshed) response = await doFetch()
   }
 
+  return response
+}
+
+// 목적: 인증 헤더/크리덴셜을 붙여 백엔드 REST 호출을 수행하고 성공 응답을 호출자가 기대하는 타입으로 반환한다.
+// 이유: 만료된 액세스 토큰의 401→refresh→재시도, 그리고 JSON이 아닌 성공 응답(예: DELETE /file/:id의
+//       순수 텍스트 200 "File 3 deleted.")의 파싱까지 호출자마다 각자 처리하면 ADR 0012 토큰 로직과
+//       파싱 예외 처리가 흩어진다. 후자는 response.json()이 무조건 호출되어 SyntaxError로 깨지던 실제
+//       버그였다(FileDetailPage.handleDelete가 성공한 삭제를 "Network error"로 오인).
+// 방법: fetchWithAuthRetry → !ok면 ApiError. 204는 그대로 undefined, Content-Type이 application/json이
+//       아니면 파싱하지 않고 undefined를 반환 — 어떤 api.delete 호출부도 반환값을 쓰지 않으므로 안전하다.
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const response = await fetchWithAuthRetry(path, options)
+
   if (!response.ok) {
     throw new ApiError(response.status, await parseError(response))
   }
@@ -92,6 +101,29 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const contentType = response.headers.get('content-type') ?? ''
   if (!contentType.includes('application/json')) return undefined as T
   return (await response.json()) as T
+}
+
+// 목적: request()와 동일하게 호출하되 HTTP status도 함께 돌려준다.
+// 이유: POST /file은 replay(멱등 재청구, ADR 0019)와 신규 승격을 각각 200/201로 구분해 응답하는데,
+//       request()는 status를 버려서 UploadForm이 이 둘을 구분할 방법이 없었다. 이 한 호출부만을 위한
+//       헬퍼로 두고 api.post<T>()의 범용 시그니처는 그대로 둔다 — 다른 호출부는 status를 쓸 일이 없다.
+// 방법: fetchWithAuthRetry로 응답을 받아 request()와 같은 방식으로 파싱한 뒤 { data, status }로 감싼다.
+async function requestWithStatus<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<{ data: T; status: number }> {
+  const response = await fetchWithAuthRetry(path, options)
+
+  if (!response.ok) {
+    throw new ApiError(response.status, await parseError(response))
+  }
+
+  const contentType = response.headers.get('content-type') ?? ''
+  const data =
+    response.status === 204 || !contentType.includes('application/json')
+      ? (undefined as T)
+      : ((await response.json()) as T)
+  return { data, status: response.status }
 }
 
 // Authenticated binary fetch (e.g. GET /file/:id/content for a private file) — mirrors
@@ -239,6 +271,9 @@ export async function signout(): Promise<void> {
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
+  // Like post(), but also returns the HTTP status — see requestWithStatus above (ADR 0019 replay UX).
+  postWithStatus: <T>(path: string, body?: unknown) =>
+    requestWithStatus<T>(path, { method: 'POST', body }),
   // Multipart POST — pass a FormData; the browser sets the boundary Content-Type.
   postForm: <T>(path: string, form: FormData) => request<T>(path, { method: 'POST', body: form }),
   // Multipart POST with upload-progress reporting (XHR-based — see requestFormWithProgress).

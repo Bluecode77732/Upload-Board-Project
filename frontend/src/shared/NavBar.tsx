@@ -29,6 +29,9 @@ export function NavBar() {
         <NavLink to="/files" className={navLinkClassName}>
           My Files
         </NavLink>
+        <NavLink to="/settings" className={navLinkClassName}>
+          Settings
+        </NavLink>
       </nav>
       <div className={styles.actions}>
         <button

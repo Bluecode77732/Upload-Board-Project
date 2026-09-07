@@ -1010,38 +1010,29 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   green after removal; no dedicated test existed for the deleted endpoint itself
   (neither Passport strategy ever carried a spec file, a pre-existing gap this
   removal doesn't need to backfill).
-- Frontend adoption of the upload claim contract (recorded 2026-07-27,
-  [ADR 0019](ADR/0019-upload-claim-idempotency.md)) — **narrowed 2026-09-07, partially
-  stale.** The 409 half is already done: `frontend/src/api/errorCodes.ts` lists
-  `FILE_ALREADY_CLAIMED` and `UploadForm.tsx`'s `messageForError()` branches on it with a
-  real user-facing message — this row's original "has no branch for 409" claim is false as
-  of whenever that landed. What's still genuinely missing is narrower: `POST /file`
-  answering 200 (idempotent replay) vs 201 (fresh) is a distinction `client.ts`'s
-  `request()` discards (it returns only the parsed body, never `response.status`), so
-  `UploadForm.tsx` runs the identical success path either way — a user re-submitting a
-  claimed upload sees "uploaded" with no indication it was actually a replay. Remains
-  **owned by a frontend-scoped task**: expose status from `client.ts` (or a dedicated
-  return shape for this one call site) and branch the UI copy on it.
-- Frontend adoption of the deletion contract (recorded 2026-07-30,
-  [ADR 0020](ADR/0020-account-deletion-cascade.md)) — **re-confirmed still fully open,
-  2026-09-07**: no account-deletion UI exists anywhere in `frontend/` at all — no route, no
-  settings/profile page, no call to `DELETE /user/:id` in any component (checked all of
-  `frontend/src` for `.delete(`/`/user/` usage), and `USER_HAS_FILES` appears only as an
-  unused catalog entry in `errorCodes.ts`, never branched on. **owned by a frontend-scoped
-  task, not by backend work**, exactly like the claim-contract item above. `DELETE /user/:id`
-  now needs `?deleteFiles=true` for an account that owns files, and answers 409
-  `USER_HAS_FILES` (count in the message) otherwise; the warning dialog, the confirmed
-  retry, and the 409 branch all live in `frontend/`. `frontend/docs/API-CONTRACT.md` and
-  the account-deletion flow must both take it up; until they do, the frontend has no path
-  that can pass the confirmation. The backend change stopped at the repo boundary
-- Frontend adoption of the deletion contract (recorded 2026-07-30,
-  [ADR 0020](ADR/0020-account-deletion-cascade.md)) — **owned by a frontend-scoped task,
-  not by backend work**, exactly like the claim-contract item above. `DELETE /user/:id`
-  now needs `?deleteFiles=true` for an account that owns files, and answers 409
-  `USER_HAS_FILES` (count in the message) otherwise; the warning dialog, the confirmed
-  retry, and the 409 branch all live in `frontend/`. `frontend/docs/API-CONTRACT.md` and
-  the account-deletion flow must both take it up; until they do, the frontend has no path
-  that can pass the confirmation. The backend change stopped at the repo boundary
+- ~~Frontend adoption of the upload claim contract~~ (recorded 2026-07-27,
+  [ADR 0019](ADR/0019-upload-claim-idempotency.md)) — **landed 2026-09-07** (ADR 0019
+  Addendum). The 409 half was already done: `frontend/src/api/errorCodes.ts` lists
+  `FILE_ALREADY_CLAIMED` and `UploadForm.tsx`'s `messageForError()` branches on it. The
+  genuinely missing half — `client.ts` discarding `response.status` so a 200 replay and a
+  201 fresh promotion ran the identical success path — is closed: `client.ts` gained
+  `fetchWithAuthRetry()` (the shared 401-refresh-retry core, extracted so it wasn't
+  duplicated) and `requestWithStatus()`/`api.postWithStatus()` on top of it, used only by
+  `UploadForm.tsx`'s `POST /file` call — `api.post()`'s signature is unchanged everywhere
+  else. A 200 now shows "This file was already uploaded — reusing the existing entry."
+  Verified in a real browser against a mocked backend (build/lint green, no live DB in
+  that session).
+- ~~Frontend adoption of the deletion contract~~ (recorded 2026-07-30,
+  [ADR 0020](ADR/0020-account-deletion-cascade.md)) — **landed 2026-09-07** (ADR 0020
+  Addendum), after being re-confirmed fully open the same day (no account-deletion UI
+  anywhere in `frontend/`, `USER_HAS_FILES` an unused catalog entry). New
+  `frontend/src/features/account/SettingsPage.tsx`, routed at `/settings` and linked from
+  `NavBar`, calls `DELETE /user/:id`; on 409 `USER_HAS_FILES` it shows the backend's
+  message (already names the file count) behind a second confirm, then retries with
+  `?deleteFiles=true`; on success it signs out and redirects to `/login`.
+  `frontend/docs/API-CONTRACT.md` gained the `?deleteFiles=`/`USER_HAS_FILES` row it was
+  missing. Verified in a real browser against a mocked backend, both the 409-then-retry
+  and the plain-success paths — not yet exercised against the real cascade end to end
   ([CLAUDE.md](../CLAUDE.md) > Project Overview).
 - ~~Reclaiming orphaned `granted_` files~~ (recorded 2026-07-30,
   [ADR 0020](ADR/0020-account-deletion-cascade.md)) — **design landed 2026-09-05**

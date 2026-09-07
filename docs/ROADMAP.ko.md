@@ -953,29 +953,29 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   unit 263개·e2e 76개 전부 통과 — 삭제된 엔드포인트 자체를 위한 전용 테스트는
   원래 없었다(두 Passport 전략 모두 spec 파일을 가진 적이 없었던 기존 공백이라,
   이번 제거가 새로 메울 필요는 없다).
-- 업로드 청구 계약의 프론트엔드 반영 (2026-07-27 기록,
-  [ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)) — **2026-09-07 범위 축소, 일부
-  낡은 기록이었음.** 409 쪽은 이미 돼 있었다: `frontend/src/api/errorCodes.ts`에
-  `FILE_ALREADY_CLAIMED`가 등록돼 있고 `UploadForm.tsx`의 `messageForError()`가
-  실제 사용자 메시지로 분기한다 — "409 분기가 없다"던 이 항목의 원래 주장은 그게
-  반영된 시점부터 이미 틀린 서술이었다. 실제로 아직 안 된 건 더 좁은 부분이다:
-  `POST /file`이 200(멱등 replay)과 201(신규)을 구분해 응답하는데, `client.ts`의
-  `request()`가 파싱된 본문만 반환하고 `response.status`를 절대 넘겨주지 않아서
-  `UploadForm.tsx`는 두 경우 모두 완전히 동일한 성공 경로를 탄다 — 이미 청구된
-  업로드를 재제출한 사용자에게 그게 replay였다는 표시가 전혀 없다. 여전히
-  **프론트엔드 전용 과제 소관**: `client.ts`에서 status를 노출하거나(혹은 이 호출부
-  전용 반환 형태) 그걸로 UI 문구를 분기시켜야 한다.
-- 삭제 계약의 프론트엔드 반영 (2026-07-30 기록,
-  [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — **2026-09-07 재확인, 여전히
-  완전히 열려 있음**: `frontend/` 어디에도 계정 삭제 UI가 없다 — 라우트도, 설정/프로필
-  페이지도, 어떤 컴포넌트에서도 `DELETE /user/:id` 호출이 없다(`frontend/src` 전체를
-  `.delete(`/`/user/` 사용처로 확인함), `USER_HAS_FILES`는 `errorCodes.ts`의 미사용
-  카탈로그 항목으로만 존재하고 어디서도 분기하지 않는다. 위의 청구 계약 항목과
-  마찬가지로 **백엔드 작업이 아니라 프론트엔드 전용 과제가 담당한다.** `DELETE /user/:id`는 파일을
-  보유한 계정에 대해 `?deleteFiles=true`를 요구하고, 없으면 409 `USER_HAS_FILES`(메시지에
-  개수 포함)를 낸다. 경고 다이얼로그, 확인 후 재요청, 409 분기는 모두 `frontend/`의 몫이다.
-  `frontend/docs/API-CONTRACT.md`와 계정 삭제 흐름을 함께 갱신해야 하며, 그전까지 프론트엔드
-  에는 확인을 통과시킬 경로가 없다. 백엔드 변경은 저장소 경계에서 멈췄다
+- ~~업로드 청구 계약의 프론트엔드 반영~~ (2026-07-27 기록,
+  [ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)) — **2026-09-07 랜딩** (ADR 0019
+  추가 기록). 409 쪽은 이미 돼 있었다: `frontend/src/api/errorCodes.ts`에
+  `FILE_ALREADY_CLAIMED`가 등록돼 있고 `UploadForm.tsx`의 `messageForError()`가 이를
+  분기한다. 진짜 남아 있던 공백 — `client.ts`가 `response.status`를 버려서 200 replay와
+  201 신규 승격이 동일한 성공 경로를 탔던 문제 — 는 해소됐다: `client.ts`에 공유
+  401-refresh-retry 로직을 뽑아낸 `fetchWithAuthRetry()`(중복을 피하려고 분리)와 그
+  위의 `requestWithStatus()`/`api.postWithStatus()`를 추가하고, `UploadForm.tsx`의
+  `POST /file` 호출부에서만 사용한다 — `api.post()` 시그니처는 다른 모든 호출부에서
+  그대로다. 200이면 "This file was already uploaded — reusing the existing entry."를
+  보여준다. 실제 브라우저에서 mock 백엔드로 검증(빌드/린트 그린, 해당 세션엔 살아있는
+  DB가 없었음).
+- ~~삭제 계약의 프론트엔드 반영~~ (2026-07-30 기록,
+  [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — **2026-09-07 랜딩** (ADR 0020
+  추가 기록), 같은 날 재확인에서 여전히 완전히 미착수(계정 삭제 UI 자체가 없고
+  `USER_HAS_FILES`는 미사용 카탈로그 항목뿐)임을 다시 확인한 직후. 신설된
+  `frontend/src/features/account/SettingsPage.tsx`(`/settings`에 라우팅,
+  `NavBar`에서 링크)가 `DELETE /user/:id`를 호출한다 — 409 `USER_HAS_FILES`면
+  백엔드 메시지(이미 파일 개수 포함)를 2차 확인 뒤에 보여주고 `?deleteFiles=true`로
+  재요청하며, 성공하면 로그아웃 후 `/login`으로 이동한다. `frontend/docs/
+  API-CONTRACT.md`에도 빠져 있던 `?deleteFiles=`/`USER_HAS_FILES` 행을 추가했다.
+  실제 브라우저에서 mock 백엔드로 409-재시도 경로와 성공 경로 둘 다 검증 — 실제
+  연쇄 삭제까지 end-to-end로 확인한 것은 아직 아니다
   ([CLAUDE.md](../CLAUDE.md) > Project Overview).
 - ~~고아 `granted_` 파일 회수~~ (2026-07-30 기록,
   [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — **설계 랜딩 2026-09-05**

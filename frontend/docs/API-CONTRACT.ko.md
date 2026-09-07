@@ -6,7 +6,7 @@
 **같은 변경**에서 함께 갱신한다.
 
 여기서 참조하는 백엔드 결정 사항은 저장소 루트의 `ADR/`(0001, 0010,
-0011, 0012, 0021, 0023, 0024, 0050)에 있다 — 이 문서는 클라이언트가 지켜야 할 부분만 다시 정리한다.
+0011, 0012, 0020, 0021, 0023, 0024, 0050)에 있다 — 이 문서는 클라이언트가 지켜야 할 부분만 다시 정리한다.
 
 ## Base URL과 전송
 
@@ -109,7 +109,8 @@
 | `POST` | `/upload/attach` | multipart — `image`/`audio`/`video` 중 정확히 하나, 100MB (ADR 0027) |
 | `GET` | `/user`, `/user/:id` | `/user`(목록)는 **admin 전용**; `/user/:id`는 인증된 유저 누구나 |
 | `GET` | `/user/lookup?email=` | 인증된 유저 누구나; 이메일 정확 일치, 없으면 `404 USER_NOT_FOUND` — `POST /file/:id/transfer`가 필요로 하는 숫자 id를 이메일로부터 구한다 (ADR 0050) |
-| `PATCH`/`DELETE` | `/user/:id` | self/admin |
+| `PATCH` | `/user/:id` | self/admin |
+| `DELETE` | `/user/:id?deleteFiles=true\|false` | self/admin; 파일을 보유한 채 `deleteFiles=true` 없이 삭제 시도하면 `409 USER_HAS_FILES`(메시지에 보유 개수 포함); `deleteFiles=true`면 댓글→게시글→파일→계정 순으로 연쇄 삭제한 뒤 실물 파일까지 삭제(ADR 0020) |
 | `GET` | `/post?take=&skip=&search=&sortBy=&order=&creatorId=` | `[rows, total]` 튜플; `/file`과 같은 쿼리 형태(ADR 0021 read layer 재사용), `sortBy`는 `createdAt`\|`title`\|`id` 중 하나 |
 | `GET` | `/post/:id` | 게시글 + creator + 첨부된 `file`(`FileResponseDto`, 텍스트만 있는 글이면 없음); 없으면 404 `POST_NOT_FOUND` |
 | `POST` | `/post` | `{ title, body, fileId? }`; `fileId`는 요청자 본인의 파일이면서 다른 게시글이 아직 점유하지 않은 것이어야 한다 — 같은 `fileId`로 동일하게 재요청하면 `200`으로 재생(replay)되고, title/body가 다르면 `409 POST_FILE_TAKEN` (ADR 0023 D1) |

@@ -1,0 +1,69 @@
+.page {
+  max-width: 720px;
+  margin: 5vh auto;
+  padding: 24px;
+  text-align: left;
+}
+
+.danger {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+}
+
+.dangerHeading {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.meta {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.warningBox {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: var(--warning-bg);
+  border-radius: 8px;
+}
+
+.warningText {
+  margin: 0;
+  color: var(--warning);
+  font-size: 0.9rem;
+}
+
+.deleteButton {
+  padding: 8px 14px;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+
+.deleteButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .page {
+    margin: 2vh auto;
+    padding: 16px;
+  }
+}

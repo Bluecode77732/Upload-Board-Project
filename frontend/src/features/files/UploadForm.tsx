@@ -58,15 +58,26 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
   // Percent (0-100) of phase 1 (the attach upload) sent so far; null while idle or during
   // phase 2 (the small JSON promote call, which has no meaningful progress of its own).
   const [progress, setProgress] = useState<number | null>(null)
+  // Distinguishes a replayed claim (200) from a fresh promotion (201, ADR 0019) — cleared on
+  // the next submit so a stale notice never survives past the upload it described.
+  const [notice, setNotice] = useState<string | null>(null)
 
   function onFieldTypeChange(next: UploadFieldType) {
     setFieldType(next)
     setFile(null) // a file chosen for one type is not valid for another's allowlist
   }
 
+  // 목적: 두 단계 업로드(attach→promote)를 수행하고, promote 응답이 신규(201)인지 이미 청구된
+  //       업로드의 replay(200, ADR 0019)인지를 사용자에게 구분해 보여준다.
+  // 이유: request()는 status를 버려 200/201을 구분 못 했다 — 이 호출부만 postWithStatus로 바꿔
+  //       status를 읽는다. 409 FILE_ALREADY_CLAIMED(다른 사람이 이미 청구)는 이 얘기와 다르며
+  //       messageForError가 이미 처리한다.
+  // 방법: attach는 그대로 두고, promote만 api.postWithStatus로 바꿔 status===200이면 replay 문구,
+  //       201이면 기존 성공 흐름(별도 안내 없음).
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
+    setNotice(null)
     if (!file) {
       setError(`Please choose a ${FIELD_CONFIG[fieldType].label.toLowerCase()} file to upload.`)
       return
@@ -86,7 +97,10 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
 
       // Phase 2: promote the temp_ file into a permanent FileEntity row.
       setProgress(null)
-      await api.post<FileResponse>('/file', { title, filePath: filename })
+      const { status } = await api.postWithStatus<FileResponse>('/file', { title, filePath: filename })
+      if (status === 200) {
+        setNotice('This file was already uploaded — reusing the existing entry.')
+      }
 
       setTitle('')
       setFile(null)
@@ -137,6 +151,7 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
           <span className={styles.progressText}>{progress}%</span>
         </div>
       )}
+      {notice && <p className={styles.notice}>{notice}</p>}
       {error && <p className={styles.error}>{error}</p>}
       <button type="submit" className={styles.submit} disabled={busy}>
         {busy ? 'Uploading…' : 'Upload'}

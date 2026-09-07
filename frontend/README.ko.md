@@ -70,7 +70,7 @@ src/
     │             수정/삭제 가능, PATCH/DELETE /comment/:id), CommentForm(POST
     │             /post/:id/comment — 성공 시 재fetch를 트리거한다, 이 앱에는
     │             실시간/폴링 인프라가 없기 때문)
-    └── files/    DashboardPage (보호됨, "/files" — 업로드 폼(이미지/오디오/비디오,
+    ├── files/    DashboardPage (보호됨, "/files" — 업로드 폼(이미지/오디오/비디오,
                   업로드 진행률 표시줄 포함) + 파일 보드: 검색/정렬/
                   작성자 필터/페이지네이션 + visibility 배지, FileBoard.tsx),
                   FileDetailPage (보호됨, "/view/:id" — 메타데이터 + visibility별
@@ -80,6 +80,12 @@ src/
                   섹션도 노출된다
                   — visibility 전환, unlisted 공유 링크 복사/회전, 삭제를 모두
                   PATCH/DELETE /file/:id로 처리)
+    └── account/  SettingsPage (보호됨, "/settings" — dev 프록시가 선점한 "/user"나
+                  "/account"가 아님; NavBar에서 링크). 백엔드 ADR 0020의
+                  DELETE /user/:id?deleteFiles= 확인 흐름을 그대로 구현: 삭제 시도 →
+                  409 USER_HAS_FILES면 백엔드 메시지(이미 보유 파일 개수 포함)를
+                  2차 확인 뒤에 노출 → deleteFiles=true로 재요청 → 성공 시 로그아웃
+                  후 /login으로 이동
 ```
 
 여기에는 `admin/` 기능 폴더도 `/admin` 라우트도 없다 — 예약해 뒀던 stub은 저장소

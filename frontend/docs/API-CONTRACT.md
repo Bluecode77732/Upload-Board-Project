@@ -6,7 +6,7 @@ contract the app depends on. When the backend changes it, update this file
 **and** the mirrored types in `src/api/` in the same change.
 
 Backend decisions referenced here live in the repo-root `ADR/` (0001, 0010,
-0011, 0012, 0021, 0023, 0024, 0050) — this file restates only what a client must obey.
+0011, 0012, 0020, 0021, 0023, 0024, 0050) — this file restates only what a client must obey.
 
 ## Base URL & transport
 
@@ -106,7 +106,8 @@ Every error is the frozen `ErrorBody` shape:
 | `POST` | `/upload/attach` | multipart — exactly one of `image`/`audio`/`video`, 100 MB (ADR 0027) |
 | `GET` | `/user`, `/user/:id` | `/user` (list) is **admin-only**; `/user/:id` is any authenticated user |
 | `GET` | `/user/lookup?email=` | any authenticated user; exact-email match, `404 USER_NOT_FOUND` otherwise — resolves an email to the numeric id `POST /file/:id/transfer` needs (ADR 0050) |
-| `PATCH`/`DELETE` | `/user/:id` | self/admin |
+| `PATCH` | `/user/:id` | self/admin |
+| `DELETE` | `/user/:id?deleteFiles=true\|false` | self/admin; owns files without `deleteFiles=true` → `409 USER_HAS_FILES` (message names the count); `deleteFiles=true` cascades comments→posts→files→the account, then unlinks the stored files (ADR 0020) |
 | `GET` | `/post?take=&skip=&search=&sortBy=&order=&creatorId=` | tuple `[rows, total]`; same query shape as `/file` (ADR 0021 read layer reused), `sortBy` one of `createdAt`\|`title`\|`id` |
 | `GET` | `/post/:id` | post + creator + attached `file` (`FileResponseDto`, absent for a text-only post); 404 `POST_NOT_FOUND` |
 | `POST` | `/post` | `{ title, body, fileId? }`; `fileId` must be the requester's own file, unclaimed by another post — identical resubmit for the same `fileId` replays `200`, a differing title/body is `409 POST_FILE_TAKEN` (ADR 0023 D1) |

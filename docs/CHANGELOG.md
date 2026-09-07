@@ -12,6 +12,25 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Added
+- **Frontend: account-deletion UI + upload-replay UX (2026-09-07)** — closes the last two
+  open "frontend adoption" gaps ROADMAP.md §7 tracked ([ADR 0019](ADR/0019-upload-claim-idempotency.md),
+  [ADR 0020](ADR/0020-account-deletion-cascade.md), both gained an Addendum recording this).
+  New `frontend/src/features/account/SettingsPage.tsx`, routed at `/settings` and linked
+  from `NavBar`: calls `DELETE /user/:id`, and on 409 `USER_HAS_FILES` shows the backend's
+  message (already names the file count) behind a second confirm before retrying with
+  `?deleteFiles=true`; on success signs out and redirects to `/login`. Separately,
+  `client.ts` gained `fetchWithAuthRetry()` (the shared 401-refresh-retry core, extracted
+  so `requestWithStatus()` doesn't duplicate it) and `api.postWithStatus()`, used only by
+  `UploadForm.tsx`'s `POST /file` call so a 200 (idempotent replay, ADR 0019) shows "This
+  file was already uploaded — reusing the existing entry." instead of the ordinary success
+  path — `api.post()`'s signature is unchanged for every other caller.
+  `frontend/docs/API-CONTRACT.md` and `frontend/README.md` updated to match. Verified in a
+  real browser (Playwright) against a mocked backend — this session had no live
+  Postgres/Docker — exercising both the 409-then-retry and plain-success paths for each
+  feature; `pnpm build`/`pnpm lint` green. Not yet exercised against the real account
+  cascade end to end.
+
 ### Changed
 - **Three long-standing "waiting" backlog items resolved to implement-only-if-needed
   (2026-09-07)** — closes out the last purely backend-scoped, decision-only items in

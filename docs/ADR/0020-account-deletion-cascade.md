@@ -126,3 +126,15 @@ Mechanics that are part of the decision, not incidental:
   `UserEntity` repository, not on `UserModule`).
 - The dev-time convenience of "just delete that test user" is gone when the user owns
   files; the flag is now part of the request.
+
+## Addendum (2026-09-07) — frontend adoption landed
+
+The frontend delete-account flow this ADR deferred is done: `frontend/src/features/
+account/SettingsPage.tsx` (routed at `/settings`, linked from `NavBar`) calls `DELETE
+/user/:id` with no query first, and on 409 `USER_HAS_FILES` shows the backend's message
+verbatim (it already names the file count) behind a second `window.confirm`, then retries
+with `?deleteFiles=true`; on success it calls `signOut()` and navigates to `/login` so the
+deleted account's token never lingers in memory. `frontend/docs/API-CONTRACT.md` gained the
+`?deleteFiles=` / `USER_HAS_FILES` row it was missing. Verified against a mocked backend
+(no live Postgres in that session) exercising both the 409-then-retry path and the plain
+success path in a real browser — not yet exercised against the real cascade end to end.

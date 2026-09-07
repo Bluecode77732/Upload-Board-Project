@@ -12,6 +12,24 @@
 
 ## [Unreleased]
 
+### 추가
+- **프론트엔드: 계정 삭제 UI + 업로드 replay UX (2026-09-07)** — `docs/ROADMAP.md` §7이
+  추적하던 마지막 두 "프론트엔드 반영" 공백을 닫는다([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md),
+  [ADR 0020](ADR/0020-account-deletion-cascade.ko.md) 둘 다 이를 기록한 추가 기록을
+  얻었다). 신설된 `frontend/src/features/account/SettingsPage.tsx`(`/settings`에
+  라우팅, `NavBar`에서 링크): `DELETE /user/:id`를 호출하고, 409 `USER_HAS_FILES`면
+  백엔드 메시지(이미 파일 개수 포함)를 2차 확인 뒤에 보여준 다음
+  `?deleteFiles=true`로 재요청 — 성공하면 로그아웃 후 `/login`으로 이동한다.
+  별도로 `client.ts`에 공유 401-refresh-retry 로직을 뽑아낸 `fetchWithAuthRetry()`
+  (`requestWithStatus()`가 중복하지 않도록 분리)와 `api.postWithStatus()`를
+  추가하고, `UploadForm.tsx`의 `POST /file` 호출부에서만 사용해 200(멱등 replay,
+  ADR 0019)이면 기존 성공 경로 대신 "This file was already uploaded — reusing the
+  existing entry."를 보여준다 — `api.post()` 시그니처는 다른 모든 호출부에서 그대로다.
+  `frontend/docs/API-CONTRACT.md`와 `frontend/README.md`도 함께 갱신했다. 실제
+  브라우저(Playwright)에서 mock 백엔드로(이 세션엔 살아있는 Postgres/Docker가
+  없었음) 두 기능 각각의 409-재시도 경로와 성공 경로를 검증했고, `pnpm build`/
+  `pnpm lint` 그린 — 실제 계정 연쇄 삭제까지 end-to-end로 확인한 것은 아직 아니다.
+
 ### 변경
 - **오래 대기 중이던 백로그 3건을 "필요할 때만 구현"으로 정리 (2026-09-07)** —
   `docs/ROADMAP.md` §7에 남아있던 순수 결정형·backend-scope 항목들을 마무리:
