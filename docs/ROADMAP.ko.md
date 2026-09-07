@@ -139,8 +139,8 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   ADR 0015가 미뤘던 컨테이너/배포 하드닝 — non-root 이미지 사용자, `HEALTHCHECK` +
   liveness/readiness 엔드포인트, 별도 배포 단계로 분리한 마이그레이션은 코드와 함께
   반영됐고, 시크릿 전달 목표와 HTTPS 종단 방침은 설계만 담은 ADR로 반영됐다.
-  distroless와 멀티아치는 명시적으로 계속 보류한다(7절 미일정) — 자세한 내용은
-  6절 Stage 4 참고.
+  distroless는 명시적으로 계속 보류한다(7절 미일정) — **멀티아치는 보류가 아니다**,
+  아래 정정 참고. 자세한 내용은 6절 Stage 4 참고.
 
 ## 1. 비전과 본질
 
@@ -385,7 +385,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 
 | 작업 | 근거 / 의존성 |
 |---|---|
-| **프로덕션 DevOps 스택 도입 — 배포 직전 작업** | **이 스택을 도입하는 이유:** 업계에서 널리 쓰이는 표준 DevOps 툴체인으로, 이를 기반으로 실무와 유사한 개발·배포·운영 환경을 경험하고 향후 서비스 확장에도 대응하기 위함이다. 구성요소와 역할: **AWS**(클라우드 플랫폼 / 배포 대상), **Docker**(컨테이너화 — *이미 반영됨*, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.ko.md)), **Kubernetes**(컨테이너 오케스트레이션), **Helm**(릴리스 패키징/템플릿), **GitHub Actions**(CI/CD — *이미 반영됨*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.ko.md)), **Prometheus**(메트릭 수집), **Grafana**(메트릭 대시보드), **Terraform**(코드형 인프라, IaC). **S3**(오브젝트 스토리지)는 이 작업이 실제로 전환하는 구체적 백엔드다 — 호스트 디스크에서 물리 파일 조작을 분리하는 `FileStorage` 포트-어댑터(4절) 자체는 이미 2026-08-07에 랜딩했으므로([ADR 0029](ADR/0029-storage-port-adapter.ko.md), `S3Storage` 구현 포함, 단위 테스트만 거침), 이 행에 남은 스토리지 작업은 추상화를 만드는 것이 아니라 실제 버킷을 대상으로 `STORAGE_DRIVER=s3`를 켜는 것이다. 이 작업은 또한 Stage 1 이미지가 미룬 컨테이너·배포 하드닝을 담는다([ADR 0015](ADR/0015-docker-and-compose.ko.md)에서 드러남) — ~~비루트 `USER`, 헬스/레디니스 엔드포인트, 별도 배포 단계로 분리한 마이그레이션~~ **2026-08-08 반영**([ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)–[ADR 0034](ADR/0034-https-termination-stance.ko.md)): 이미지는 이제 전용 non-root 사용자로 실행되며 새 `GET /health/live`/`GET /health/ready`를 호출하는 `HEALTHCHECK`를 갖는다(ADR 0030/0031); `docker-compose.yml`의 one-shot `migrate` 서비스가 향후 Kubernetes Job을 모델링해 스케일된 `api`가 `migration:run`을 경합하는 일이 구조적으로 없어졌다(ADR 0032); 시크릿 전달 목표(네이티브 Kubernetes `Secret`, AWS Secrets Manager는 Terraform으로 보류)와 HTTPS 종단 방침(ingress/ALB, 앱 안에서는 하지 않음)은 코드 없이 설계만 담은 ADR로 기록됐다(ADR 0033/0034). distroless 런타임 베이스와 타깃 아키텍처(ARM/Graviton) 빌드는 검토했지만 명시적으로 보류했다(ADR 0030) — 이유는 아래 새 미일정 항목 두 개 참고. 반영된 각 구성요소는 계획대로 자체 ADR을 갖는다; Stage 1의 Docker + CI에 의존. |
+| **프로덕션 DevOps 스택 도입 — 배포 직전 작업** | **이 스택을 도입하는 이유:** 업계에서 널리 쓰이는 표준 DevOps 툴체인으로, 이를 기반으로 실무와 유사한 개발·배포·운영 환경을 경험하고 향후 서비스 확장에도 대응하기 위함이다. 구성요소와 역할: **AWS**(클라우드 플랫폼 / 배포 대상), **Docker**(컨테이너화 — *이미 반영됨*, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.ko.md)), **Kubernetes**(컨테이너 오케스트레이션), **Helm**(릴리스 패키징/템플릿), **GitHub Actions**(CI/CD — *이미 반영됨*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.ko.md)), **Prometheus**(메트릭 수집), **Grafana**(메트릭 대시보드), **Terraform**(코드형 인프라, IaC). **S3**(오브젝트 스토리지)는 이 작업이 실제로 전환하는 구체적 백엔드다 — 호스트 디스크에서 물리 파일 조작을 분리하는 `FileStorage` 포트-어댑터(4절) 자체는 이미 2026-08-07에 랜딩했으므로([ADR 0029](ADR/0029-storage-port-adapter.ko.md), `S3Storage` 구현 포함, 단위 테스트만 거침), 이 행에 남은 스토리지 작업은 추상화를 만드는 것이 아니라 실제 버킷을 대상으로 `STORAGE_DRIVER=s3`를 켜는 것이다. 이 작업은 또한 Stage 1 이미지가 미룬 컨테이너·배포 하드닝을 담는다([ADR 0015](ADR/0015-docker-and-compose.ko.md)에서 드러남) — ~~비루트 `USER`, 헬스/레디니스 엔드포인트, 별도 배포 단계로 분리한 마이그레이션~~ **2026-08-08 반영**([ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)–[ADR 0034](ADR/0034-https-termination-stance.ko.md)): 이미지는 이제 전용 non-root 사용자로 실행되며 새 `GET /health/live`/`GET /health/ready`를 호출하는 `HEALTHCHECK`를 갖는다(ADR 0030/0031); `docker-compose.yml`의 one-shot `migrate` 서비스가 향후 Kubernetes Job을 모델링해 스케일된 `api`가 `migration:run`을 경합하는 일이 구조적으로 없어졌다(ADR 0032); 시크릿 전달 목표(네이티브 Kubernetes `Secret`, AWS Secrets Manager는 Terraform으로 보류)와 HTTPS 종단 방침(ingress/ALB, 앱 안에서는 하지 않음)은 코드 없이 설계만 담은 ADR로 기록됐다(ADR 0033/0034). distroless 런타임 베이스와 타깃 아키텍처(ARM/Graviton) 빌드는 둘 다 2026-08-08(ADR 0030)에 검토됐고, bcrypt가 x64 전용이라는 전제로 일단 보류했다 — 그 전제는 나흘 뒤 정정됐다([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md), 2026-08-12): `bcrypt@6.0.0`은 QEMU 에뮬레이션 하에서 검증된, 실제로 동작하는 `linux-arm64` prebuild를 번들한다. 그래서 멀티아치(ARM/Graviton)는 **보류가 아니다** — CI는 2026-08-13부터 `main`에서 실제 `linux/amd64,linux/arm64` 이미지를 빌드·발행했고, `cluster/main.tf`의 `graviton`/`t4g.medium` 노드그룹은 Terraform이 반영된 2026-08-18부터 EKS 클러스터의 예비가 아닌 **주력** 용량이었으며, 2026-08-27 라이브 배포에서 앱 pod가 실제로 그 위에서 동작해 개발자가 영구 아키텍처로 확정했다. distroless만 계속 보류 대상이다 — 이유는 아래 미일정 항목 참고. 반영된 각 구성요소는 계획대로 자체 ADR을 갖는다; Stage 1의 Docker + CI에 의존. |
 | ~~파일 가시성·접근 제어 서빙~~ **(2026-08-01 구현, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D1/D2/D3/D6 + [ADR 0026](ADR/0026-file-visibility-implementation.ko.md); 기존 "VOD 재생 접근 제어" 행을 일반화)** | 업로드된 파일은 예전엔 단순 공개 URL이었다 — 링크만 알면 누구나 봤다. `FileEntity`는 이제 3-상태 `visibility`(공개/비공개/**링크공유**, 회전 가능한 공유 토큰 + 선택적 TTL)를 가지며, `GET /file/:id/content`가 유일한 접근 제어 읽기 경로(Range 지원)이고, `ServeStaticModule`은 더 이상 `file/upload`를 노출하지 않는다. [ADR 0005](ADR/0005-local-disk-storage.ko.md)(서빙)를 부분 개정한다. 새 `fileUrl`/`visibility` 형태에 대한 프론트엔드 반영은 2026-08-03에 착지했다 — 아래 미배정 참고. |
 | ~~미디어 타입 확장 (이미지/오디오, 타입별 업로드 필드)~~ **(2026-08-01 구현, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D4/D5 + [ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md) — 2026-08-01에 위 행에서 분리)** | `POST /upload/attach`는 이제 `image`(jpg/jpeg/png/webp), `audio`(mp3), `video`(mp4/mov/webm, 변경 없음) 세 타입별 필드를 받으며 각각 자신만의 허용 목록을 가진다 — 단일 `video` 필드를 대체했다. [ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)(업로드 필드, 살아 있는 프론트엔드에 대한 breaking 변경)을 개정한다. 스키마 변경은 없다. 새 업로드 필드에 대한 프론트엔드 반영은 2026-08-03에 착지했다 — 아래 미배정 참고. |
 | ~~성능/용량 기준 적용~~ — ✅ 2026-08-31 랜딩 ([ADR 0049](ADR/0049-performance-capacity-criteria.ko.md)) | 엔드포인트 유형별 응답시간 목표(p50/p95) 확정; ADR 0021이 유예해 둔 `file_entity` 인덱스 3종을 1만 행 시드로 측정한 뒤 `file_entity`와 `post_entity` **양쪽 모두**에 채택(EXPLAIN 결과 이 테이블 실제 쿼리 모양에서 최대 70배 — 이 인덱스가 없어도 모든 엔드포인트가 이미 새 목표를 통과했으므로, 급하게 필요해서가 아니라 저렴하고 실측된 이득이라 채택). 디스크 상한: 절대치가 아니라 이미 배포된 `node-exporter`(ADR 0047)를 통한 사용률 모니터링 — 측정 결과 중 절대 상한을 요구하는 근거는 없었다. 새 `perf/` 도구(`autocannon` + 원시 `EXPLAIN`)는 이 기준선을 나중에 재측정할 때 재사용 가능하다. |
@@ -399,7 +399,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 
 | 구성요소 | 역할 | 상태 | 완료/잔여 | ADR / 출처 |
 |---|---|---|---|---|
-| **Docker** | 컨테이너화 | ✅ + 하드닝 | 멀티스테이지 이미지(Stage 1); 이제 전용 **비루트** 사용자로 실행 + `HEALTHCHECK`. **distroless** 베이스와 **멀티아치(ARM/Graviton)** 빌드는 검토 후 **유예**(감수). | [0015](ADR/0015-docker-and-compose.ko.md), [0030](ADR/0030-container-non-root-and-arch-stance.ko.md) |
+| **Docker** | 컨테이너화 | ✅ + 하드닝, 멀티아치 완료 | 멀티스테이지 이미지(Stage 1); 이제 전용 **비루트** 사용자로 실행 + `HEALTHCHECK`. **멀티아치(ARM/Graviton)는 완료돼 라이브로 검증됨** — 유예가 아니다: bcrypt "x64 전용" 전제는 2026-08-12 정정됐고([0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md)), CI는 `main`에서 실제 `linux/amd64,linux/arm64` 이미지를 발행하며, graviton 노드그룹이 2026-08-27 실서비스를 운영했다. **distroless** 베이스는 검토 후 계속 **유예**(감수 — 검증된 Node 24 distroless 태그도 없고, 대체 디버그 수단 없이 유일한 디버그 경로(`docker exec`)를 잃는다). | [0015](ADR/0015-docker-and-compose.ko.md), [0030](ADR/0030-container-non-root-and-arch-stance.ko.md), [0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md) |
 | **GitHub Actions** | CI(/CD) | 🔶 CI + 이미지 게시 | push/PR에서 `lint`+unit+e2e 워크플로 — 이제 `frontend-e2e`/`admin-e2e`와 `frontend/`/`admin/`의 lint/unit 잡도 포함(둘 다 이전엔 CI에서 검증되지 않았다). **AWS로의 배포 파이프라인(CD)은 여전히 없음** — AWS가 대상이 될 때 추가. **예외, 2026-08-13 기록**: 명시적 요청으로 `docker-publish` 잡이 추가됐다 — main 푸시마다 `linux/amd64,linux/arm64`를 buildx로 빌드해 `bluecode1775/sharenpo`를 Docker Hub에 푸시한다. 이것은 이미지 게시 CD이지 앱 배포가 아니며, 해당 커밋(`1b72ec9`) 자체가 이 행이 정한 계획(AWS가 대상이 될 때만 CD)을 대체하는 게 아니라 그보다 앞서 진행하는 것이라고 명시하고 있다. | [0016](ADR/0016-github-actions-ci.ko.md) |
 | **S3** | 오브젝트 스토리지 | 🔶 어댑터 ✅ / 리다이렉트 ✅ / 버킷 코드 ✅ / 전환 ✅ 현재 가동 중, Range 동작은 여전히 미검증 | `FileStorage` 포트 + `S3Storage` 구현 랜딩(단위테스트만). 프록시 스트리밍 경로가 앱 계층에 대역폭 부담을 지우고 있어, `STORAGE_DRIVER=s3`에서는 `GET /file/:id/content`가 이제 수명이 짧은 presigned S3 URL로 `302` 리다이렉트한다(세 가시성 등급 전부, 기존 `resolveContentAccess` 검사로 게이트) — `local`은 기존 스트리밍 그대로. Terraform([0043](ADR/0043-terraform-project-adaptation.ko.md) D8, 2026-08-18)이 private 버킷 + 앱 전용 IRSA 역할을 프로비저닝한다. 실제 Helm 릴리스가 `STORAGE_DRIVER=s3`와 앱의 IRSA 역할이 연결된 채로 동작했었고(2026-08-27, §9) 전환도 켜져 있었지만, 검증이 끝난 뒤 2026-08-28에 버킷과 클러스터가 destroy됐다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 2026-08-29/30에 재적용** — `values-prod.yaml`은 여전히 `STORAGE_DRIVER=s3`를 담고 있다. 실제 버킷을 상대로 한 업로드/읽기 왕복과 `frontend`/`admin` 미디어 플레이어의 리다이렉트-경유 Range 요청 동작은 여전히 미검증이다 — 이번 세션의 확인은 메트릭 경로만 다뤘다. | [0029](ADR/0029-storage-port-adapter.ko.md), [0036](ADR/0036-s3-presigned-content-redirect.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md) |
 | **헬스/레디니스** | 프로브 | ✅ | LB·오케스트레이터 프로브용 `GET /health/live` + `GET /health/ready`. | [0031](ADR/0031-health-and-readiness-endpoints.ko.md) |
@@ -819,13 +819,25 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   태그가 확인되고 Kubernetes 단계(아래)가 ephemeral-debug 도구를 갖춘 뒤
   재검토한다 — 이미 반영된 non-root 하드닝과는 별개다. 그쪽은 이런 미검증
   의존성이 없었기 때문이다.
-- ARM/Graviton(멀티아치) 컨테이너 빌드 (2026-08-08 기록,
-  [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)) — **미착수
-  이유**: `bcrypt`의 프리빌드 바이너리가 x64 전용이고, 아직 어떤 배포 타깃도
-  인스턴스 아키텍처를 선택하지 않았다 — 아무것도 돌지 않을 아키텍처를 위해
-  미리 빌드하는 것은 Scope Discipline이 배제하는 추측성 작업이다. 위 Terraform
-  노드 그룹 결정(프로덕션 DevOps 스택 도입)의 일부로 재검토한다 — 실제로 이
-  작업이 대상 인스턴스 패밀리를 고른다.
+- ~~ARM/Graviton(멀티아치) 컨테이너 빌드~~ (2026-08-08 기록,
+  [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)) — **이 항목은
+  낡은 기록이었고, 2026-09-07에 정정했다.** 원래는 "`bcrypt`의 프리빌드 바이너리가
+  x64 전용이고, 아직 어떤 배포 타깃도 인스턴스 아키텍처를 선택하지 않았다"가
+  미착수 이유였는데, 다음에 이 행을 누가 다시 읽었을 때쯤엔 이미 둘 다 사실이
+  아니었다. [ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md)가 나흘 뒤
+  (2026-08-12) bcrypt 주장을 정정했다: `bcrypt@6.0.0`은 QEMU 에뮬레이션 하에서
+  끝까지 검증된(`docker run --platform linux/arm64 ...` + `require('bcrypt').hashSync(...)`)
+  실제로 동작하는 `linux-arm64` prebuild를 번들한다. CI는 2026-08-13부터 `main`에서
+  실제 `linux/amd64,linux/arm64` 이미지를 발행했고; `cluster/main.tf`의
+  `graviton`/`t4g.medium` 노드그룹은 Terraform이 반영된 2026-08-18부터 EKS
+  클러스터의 예비가 아닌 **주력** 용량이었다(`x64`/`m5.large`는 `desired_size = 0`) —
+  그 코드 주석 자체가 ADR 0035를 근거로 명시한다. 2026-08-27 라이브 배포에서 앱
+  pod가 실제로 그 graviton 노드그룹 위에서 동작했고, 같은 날 개발자가 `t4g.medium`을
+  **영구** 노드 타입으로 확정했다. 이 항목, `ROADMAP.md` 자체의 Stage 4 표(6절)와
+  DevOps 스택 서술(6절), `CLAUDE.md`의 CI/CD 섹션까지 2026-09-07 시점까지 전부
+  "보류"라고 계속 적혀 있었다 — 2026-08-08 전제가 정정된 뒤로 아무도 다시 손대지
+  않았던 것이고, 넷 다 이번에 같이 고쳤다. 여기 더 할 일은 없다: ARM/Graviton은
+  반영됐고, 라이브로 검증됐고, 확정된 아키텍처다 — 열린 항목이 아니다.
 - AWS Secrets Manager + External Secrets Operator(ESO) 연동 (2026-08-08 기록,
   [ADR 0033](ADR/0033-secrets-delivery-target.ko.md)) — **미착수 이유**: 실제
   AWS 계정, IRSA용 IAM 롤, ESO가 설치된 동작 중인 Kubernetes 클러스터가

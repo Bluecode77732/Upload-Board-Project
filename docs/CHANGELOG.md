@@ -12,6 +12,25 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Fixed
+- **`ROADMAP.md`/`CLAUDE.md`: stale "ARM/Graviton multi-arch is deferred" claims corrected
+  (2026-09-07)** — four passages (the Unscheduled entry, the Stage 4 status table's Docker
+  row, the Production DevOps stack prose, and `CLAUDE.md`'s CI/CD section) still said
+  multi-arch was deferred because `bcrypt`'s prebuilt binaries are x64-only. That premise
+  was recorded 2026-08-08 (ADR 0030) and retracted four days later
+  ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.md), 2026-08-12: `bcrypt@6.0.0` bundles a
+  working `linux-arm64` prebuild, verified under QEMU emulation) — none of the four passages
+  were revisited after that correction. In the meantime CI had been publishing real
+  `linux/amd64,linux/arm64` images from `main` since 2026-08-13, `cluster/main.tf`'s
+  `graviton`/`t4g.medium` node group had been the EKS cluster's primary capacity (not a
+  reserve) since 2026-08-18, and the 2026-08-27 live deployment's app pod actually ran on
+  it, with the developer confirming `t4g.medium` as the permanent choice the same day. Found
+  while documenting an unrelated conversation about which infra items still need
+  implementing — surfaced by a direct contradiction between this stale text and
+  `cluster/main.tf`'s own comment citing ADR 0035. Distroless remains genuinely deferred;
+  only the multi-arch claim was wrong. No code change — pure documentation correction across
+  `docs/ROADMAP.md`(+ko) and `CLAUDE.md`(+ko).
+
 ### Added
 - **`LICENSE` file: MIT (2026-09-07)** — the project had no license file at all; `package.json`
   said `UNLICENSED` since the first commit, and the pre-rewrite README's `License / MIT`

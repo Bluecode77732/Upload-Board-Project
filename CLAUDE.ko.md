@@ -1100,8 +1100,11 @@ Conflict Protocol을 따른다.
   — **2026-08-08 도입**([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.ko.md)–
   [ADR 0034](docs/ADR/0034-https-termination-stance.ko.md)): ADR 0015가 미룬 컨테이너/배포
   하드닝 — CI/CD와 Module Responsibility > HealthModule 참고. Distroless, 실제
-  시크릿 매니저, HTTPS 종료, 멀티 아키텍처는 아직 미정으로 남아 있다
-  (ROADMAP.md > Unscheduled)
+  시크릿 매니저, HTTPS 종료는 아직 미정으로 남아 있다(ROADMAP.md > Unscheduled) —
+  멀티 아키텍처(ARM/Graviton)는 **미정이 아니다**: bcrypt가 x64 전용이라던 전제는
+  2026-08-12 ADR 0035로 정정됐고, CI는 2026-08-13부터 `main`에서 실제
+  `linux/amd64,linux/arm64` 이미지를 발행 중이며, graviton 노드그룹이 2026-08-27
+  라이브 앱의 주력이자 개발자가 확정한 아키텍처였다
 - 채팅 프로젝트 잔재 처리 — 문서는 2026-07-22에 감사되어 깨끗함이 확인됨;
   git 히스토리 관련 결정과 재검증 트리거가 남아 있다.
   `docs/CHAT-REMNANT-REMOVAL-PLAN.md`와 ROADMAP.md > Unscheduled / open decisions

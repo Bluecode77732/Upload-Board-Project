@@ -1067,7 +1067,11 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
   **landed 2026-08-08** ([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.md)–
   [ADR 0034](docs/ADR/0034-https-termination-stance.md)): the container/deploy hardening ADR
   0015 deferred — see CI/CD and Module Responsibility > HealthModule. Distroless, a real
-  secrets manager, HTTPS termination, and multi-arch stay open (ROADMAP.md > Unscheduled)
+  secrets manager, and HTTPS termination stay open (ROADMAP.md > Unscheduled) — multi-arch
+  (ARM/Graviton) is **not** open: `bcrypt`'s x64-only premise was retracted 2026-08-12
+  (ADR 0035), CI has published real `linux/amd64,linux/arm64` images from `main` since
+  2026-08-13, and the graviton node group was the live app's primary, developer-confirmed
+  architecture as of 2026-08-27
 - Chat-project remnant handling — docs audited clean 2026-07-22; pending git-history
   decision + re-verification trigger. See `CHAT-REMNANT-REMOVAL-PLAN.md` and
   ROADMAP.md > Unscheduled / open decisions

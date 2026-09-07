@@ -12,6 +12,24 @@
 
 ## [Unreleased]
 
+### 수정
+- **`ROADMAP.md`/`CLAUDE.md`: "ARM/Graviton 멀티아치는 보류 중"이라는 낡은 기록 정정
+  (2026-09-07)** — 네 군데(미일정 항목, Stage 4 상태표의 Docker 행, 프로덕션 DevOps
+  스택 서술, `CLAUDE.md`의 CI/CD 섹션)가 여전히 `bcrypt`의 프리빌드 바이너리가
+  x64 전용이라 멀티아치가 보류 중이라고 적혀 있었다. 이 전제는 2026-08-08(ADR 0030)에
+  기록됐고 나흘 뒤 정정됐는데([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md),
+  2026-08-12: `bcrypt@6.0.0`은 QEMU 에뮬레이션 하에서 검증된 실제로 동작하는
+  `linux-arm64` prebuild를 번들함), 그 정정 이후 이 네 곳 중 어디도 다시 손대지
+  않았다. 그 사이 CI는 2026-08-13부터 `main`에서 실제 `linux/amd64,linux/arm64`
+  이미지를 발행해왔고, `cluster/main.tf`의 `graviton`/`t4g.medium` 노드그룹은
+  2026-08-18부터 EKS 클러스터의 예비가 아닌 주력 용량이었으며, 2026-08-27 라이브
+  배포의 앱 pod가 실제로 그 위에서 동작해 개발자가 같은 날 `t4g.medium`을 영구
+  선택으로 확정했다. 어떤 인프라 항목이 아직 구현이 필요한지에 대한 별개의 대화를
+  문서화하다가 발견함 — `cluster/main.tf`의 주석 자체가 ADR 0035를 인용하고 있어서
+  낡은 문구와 직접 모순됨이 드러났다. distroless는 여전히 진짜 보류 상태고, 틀린 건
+  멀티아치 주장뿐이었다. 코드 변경 없음 — `docs/ROADMAP.md`(+ko)와
+  `CLAUDE.md`(+ko)에 걸친 순수 문서 정정.
+
 ### 추가
 - **`LICENSE` 파일: MIT (2026-09-07)** — 프로젝트에 라이선스 파일이 아예 없었다.
   `package.json`은 첫 커밋 때부터 `UNLICENSED`였고, 재작성 전 README의
