@@ -14,7 +14,7 @@ variable "region" {
 variable "cluster_name" {
   description = "태그 접두사(local.tags.Blueprint) — cluster/variables.tf의 cluster_name과 동일한 값을 유지해야 한다. 클러스터 이름 자체는 cluster/의 remote_state 출력(cluster_name)에서 읽으므로 이 변수가 그 값을 대신하지 않는다"
   type        = string
-  default     = "upload-board-project"
+  default     = "sharenpo"
 }
 
 variable "tags" {

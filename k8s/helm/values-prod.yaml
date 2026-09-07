@@ -6,6 +6,13 @@
 # 항목). 비밀값은 여기 없다 — existingSecret 참조만 있을 뿐, values.yaml 상단
 # 주석이 설명하는 대로 Secret 리소스는 이 파일이 적용되기 전에 이미
 # `kubectl create secret`으로 따로 만들어져 있어야 한다.
+#
+# 2026-09-07 Terraform 리네이밍(docs/ROADMAP.md §7) 이후로는 이 파일이 더 이상 순수
+# 스냅샷이 아니다 — cluster_name에서 결정적으로 유도되는 값(DB_DATABASE/S3_BUCKET/
+# existingSecret/role-arn)은 새 이름으로 미리 갱신해 뒀지만, AWS가 생성 시점에
+# 랜덤하게 부여하는 DB_HOST만은 다음 실제 apply 전까지 알 수 없어 플레이스홀더로
+# 남겨뒀다. 다음 실제 `deploy.sh all` 이후 `terraform output -raw db_host`(app-infra/)로
+# 다시 채워 넣을 것.
 
 image:
   tag: 2cd73b9
@@ -13,8 +20,13 @@ image:
 env:
   AWS_REGION: ap-northeast-2
   BASE_URL: https://sharenpo.cloud
-  DB_HOST: upload-board-project-db.chygueeqyek9.ap-northeast-2.rds.amazonaws.com
-  DB_DATABASE: upload_board
+  # 2026-09-07 Terraform 리네이밍(docs/ROADMAP.md §7) 이후, RDS identifier 접두사는
+  # "sharenpo-db"가 되지만 뒤의 랜덤 서브도메인(구 값의 "chygueeqyek9")은 AWS가 생성
+  # 시점에 새로 부여하는 값이라 apply 전엔 알 수 없다 — 다음 실제 apply 후
+  # `terraform output -raw db_host`(app-infra/)로 다시 채워 넣어야 한다. 아래는
+  # 더 이상 존재하지 않는 구 인스턴스의 호스트네임이므로 그대로 쓰면 안 된다.
+  DB_HOST: REPLACE_AFTER_NEXT_APPLY__terraform_output_db_host
+  DB_DATABASE: sharenpo
   # app-infra의 RDS는 rds.force_ssl 파라미터로 TLS를 강제한다 — 이 값이 없으면
   # 마이그레이션 Job이 "no pg_hba.conf entry ... no encryption"로 실패한다.
   DB_SSL: true
@@ -100,10 +112,13 @@ env:
     PtjwbKW0hYAhIttT0Q==
     -----END CERTIFICATE-----
   STORAGE_DRIVER: s3
-  S3_BUCKET: upload-board-project-074416822640
+  # s3_bucket_name은 Terraform 변수가 아니라 apply 시점에 -var로 직접 넘기는 값이다
+  # (버킷 이름은 전역 유일해야 해서 안전한 기본값이 없음, ADR 0043 D8) — 다음 apply 때
+  # -var="s3_bucket_name=sharenpo-074416822640"로 이 값을 실제로 만들어야 아래가 맞다.
+  S3_BUCKET: sharenpo-074416822640
 
 secrets:
-  existingSecret: upload-board-project-app-secrets
+  existingSecret: sharenpo-app-secrets
 
 # app-infra/main.tf의 aws_iam_role.app IRSA trust policy가 2026-09-03부로
 # system:serviceaccount:default:sharenpo를 신뢰하도록 바뀌었다(docs/ROADMAP.md
@@ -111,15 +126,15 @@ secrets:
 # serviceAccount.create만 켜면 이름은 릴리스 이름(sharenpo)을 그대로 따라가
 # trust policy와 자동으로 일치한다 — serviceAccount.name을 따로 줄 필요 없음.
 # role-arn은 이 role의 name이 "${cluster_name}-app"(app-infra/main.tf)이라
-# CLUSTER_NAME 기본값(upload-board-project)에서 고정으로 정해지므로, DB_HOST/
-# S3_BUCKET처럼 이 파일에 그대로 박아뒀다 — CLUSTER_NAME이나 AWS 계정을
-# 바꾸면 이 값도 함께 갱신해야 한다. 이걸 안 켜면(또는 릴리스를 다른 이름으로
-# 설치하면) S3 IRSA 인증이 실패한다 — STORAGE_DRIVER: s3인 이 오버레이에서는
+# CLUSTER_NAME 기본값(2026-09-07부로 sharenpo, docs/ROADMAP.md §7)에서 고정으로
+# 정해지므로, DB_HOST/S3_BUCKET처럼 이 파일에 그대로 박아뒀다 — CLUSTER_NAME이나
+# AWS 계정을 바꾸면 이 값도 함께 갱신해야 한다. 이걸 안 켜면(또는 릴리스를 다른
+# 이름으로 설치하면) S3 IRSA 인증이 실패한다 — STORAGE_DRIVER: s3인 이 오버레이에서는
 # 곧바로 업로드가 막히는 회귀다.
 serviceAccount:
   create: true
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::074416822640:role/upload-board-project-app
+    eks.amazonaws.com/role-arn: arn:aws:iam::074416822640:role/sharenpo-app
 
 # ADR 0047 D2/D4 — 라이브 클러스터에는 addons 상태가 kube-prometheus-stack을 설치하므로
 # 여기서만 ServiceMonitor를 켠다(로컬 kind 클러스터에는 그 CRD가 없어 기본은 비활성).

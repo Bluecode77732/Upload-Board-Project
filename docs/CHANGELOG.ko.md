@@ -12,6 +12,20 @@
 
 ## [Unreleased]
 
+### 변경
+- **Terraform/AWS 인프라 식별자를 `sharenpo`로 개명 (2026-09-07)** — ROADMAP.md가
+  2026-08-25부터 보류해온 개명을, 그 항목이 직접 예고했던 무료 타이밍에 정확히 맞춰
+  진행했다. 손대기 전에 라이브 상태를 다시 확인함(`aws eks/rds/s3` 전부 비어 있고,
+  로컬 `.tfstate` 3개 다 리소스 0개) — 그래서 이건 순수 코드 수정이지 실제 `apply`가
+  아니다. 바꾼 것: `cluster/variables.tf` + `app-infra/variables.tf`의 `cluster_name`
+  기본값, `app-infra/variables.tf`의 `db_name`(`upload_board` → `sharenpo`)과
+  `db_username`(`upload_board_admin` → `sharenpo_admin`), `addons/variables.tf`의
+  `cluster_name`, `deploy.sh`의 `CLUSTER_NAME` 기본값 + `--help` 문구,
+  `k8s/infra/terraform/README.md`(+ko) 제목 둘 다. `terraform validate`/`fmt -check`가
+  세 디렉터리 모두 통과했고, `cluster/`의 `terraform plan`은 **70 add, 0 change, 0
+  destroy**를 보여준다 — 교체가 아니라 처음부터 새로 만드는 계획임을 확인. 아무것도
+  apply하지 않았다 — 새 이름은 다음 실제 `deploy.sh all`에서 반영된다.
+
 ### 수정
 - **`ROADMAP.md`/`CLAUDE.md`: "ARM/Graviton 멀티아치는 보류 중"이라는 낡은 기록 정정
   (2026-09-07)** — 네 군데(미일정 항목, Stage 4 상태표의 Docker 행, 프로덕션 DevOps

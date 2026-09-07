@@ -765,8 +765,23 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   container references (naming a real hand-created container — renaming would make the
   instruction false). **One premise turned out to be false**: this row said "Terraform
   unapplied", and it is applied — see the next row.
-- **Rename the Terraform/AWS infrastructure identifiers to `sharenpo`** (recorded 2026-08-25,
-  deferred deliberately) — **not started, and not urgent.** Discovered while doing the row
+- ~~**Rename the Terraform/AWS infrastructure identifiers to `sharenpo`**~~ (recorded
+  2026-08-25, deferred deliberately) — **done 2026-09-07, exactly at the free window this row
+  itself named.** Re-verified live before touching anything: `aws eks list-clusters`/
+  `aws rds describe-db-instances`/`aws s3 ls` all empty, and all three local `.tfstate` files
+  hold 0 resources — nothing to replace, so this was a pure code edit, not a live `apply`.
+  Renamed: `cluster/variables.tf` and `app-infra/variables.tf`'s `cluster_name` default,
+  `app-infra/variables.tf`'s `db_name` (`upload_board` → `sharenpo`) and `db_username`
+  (`upload_board_admin` → `sharenpo_admin`), `addons/variables.tf`'s `cluster_name`,
+  `deploy.sh`'s `CLUSTER_NAME` default (+ its own `--help` text), and both
+  `k8s/infra/terraform/README.md`(+ko) titles. `terraform validate`/`fmt -check` pass in all
+  three directories; `terraform plan` in `cluster/` confirms **70 to add, 0 to change, 0 to
+  destroy** — a from-scratch plan, not a replacement, proving the "free" framing held.
+  Nothing applied — the new names take effect on the next real `deploy.sh all`/
+  `terraform apply`. The `Blueprint` tag's *value* (`local.name`/`var.cluster_name` in both
+  `cluster/main.tf` and `addons/main.tf`) now correctly follows the rename; only the tag's
+  *key* ("Blueprint") is the fixed upstream `terraform-aws-eks-blueprints` convention this
+  row already noted can't be renamed. Discovered while doing the row
   above: `CLAUDE.md` and ADR 0043/0044's addenda both still claim Terraform has never been
   applied against real AWS, but `cluster/` and `app-infra/` hold state at serial 235 and 23
   with 108 resource instances between them — a live EKS cluster, an RDS instance, an S3

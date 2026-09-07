@@ -12,6 +12,20 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Changed
+- **Terraform/AWS infrastructure identifiers renamed to `sharenpo` (2026-09-07)** — landed
+  the rename ROADMAP.md deferred since 2026-08-25, at exactly the free window that entry
+  named: re-verified live (`aws eks/rds/s3` all empty, all three local `.tfstate` files hold
+  0 resources) before touching anything, so this was a pure code edit, not a live `apply`.
+  Renamed `cluster/variables.tf` + `app-infra/variables.tf`'s `cluster_name` default,
+  `app-infra/variables.tf`'s `db_name` (`upload_board` → `sharenpo`) and `db_username`
+  (`upload_board_admin` → `sharenpo_admin`), `addons/variables.tf`'s `cluster_name`,
+  `deploy.sh`'s `CLUSTER_NAME` default + `--help` text, and both
+  `k8s/infra/terraform/README.md`(+ko) titles. `terraform validate`/`fmt -check` pass in all
+  three directories; `cluster/`'s `terraform plan` shows **70 to add, 0 to change, 0 to
+  destroy** — confirming a from-scratch plan, not a replacement. Nothing applied — the new
+  names take effect on the next real `deploy.sh all`.
+
 ### Fixed
 - **`ROADMAP.md`/`CLAUDE.md`: stale "ARM/Graviton multi-arch is deferred" claims corrected
   (2026-09-07)** — four passages (the Unscheduled entry, the Stage 4 status table's Docker

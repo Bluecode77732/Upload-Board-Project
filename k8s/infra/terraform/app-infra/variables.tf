@@ -15,7 +15,7 @@ variable "region" {
 variable "cluster_name" {
   description = "리소스 이름 접두사 — cluster/variables.tf의 cluster_name과 동일한 값을 유지해야 한다"
   type        = string
-  default     = "upload-board-project"
+  default     = "sharenpo"
 }
 
 variable "db_instance_class" {
@@ -33,13 +33,13 @@ variable "db_allocated_storage" {
 variable "db_name" {
   description = "RDS 안에 생성할 데이터베이스 이름 — Helm 배포 시 env.DB_DATABASE에 그대로 전달"
   type        = string
-  default     = "upload_board"
+  default     = "sharenpo"
 }
 
 variable "db_username" {
   description = "RDS 마스터 사용자 이름 — 비밀이 아님(비밀번호는 D7이 생성). Helm 배포 시 secrets의 DB_USERNAME으로 전달"
   type        = string
-  default     = "upload_board_admin"
+  default     = "sharenpo_admin"
 }
 
 variable "s3_bucket_name" {

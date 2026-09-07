@@ -1,4 +1,4 @@
-# upload-board-project (Terraform)
+# sharenpo (Terraform)
 
 > 한국어: [README.ko.md](README.ko.md)
 

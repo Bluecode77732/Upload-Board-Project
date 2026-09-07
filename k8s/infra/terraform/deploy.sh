@@ -36,7 +36,7 @@ cd "$SCRIPT_DIR"
 # 환경변수로 값을 주면 그 값을 쓰고, 안 주면 :- 뒤의 기본값을 쓴다.
 # (이 기본값들은 각 상태(cluster/app-infra/addons)의 variables.tf 기본값과 같다)
 REGION="${REGION:-ap-northeast-2}"
-CLUSTER_NAME="${CLUSTER_NAME:-upload-board-project}"
+CLUSTER_NAME="${CLUSTER_NAME:-sharenpo}"
 S3_BUCKET_NAME="${S3_BUCKET_NAME:-}"
 DOMAIN_NAME="${DOMAIN_NAME:-}"
 HELM_RELEASE="${HELM_RELEASE:-sharenpo}"
@@ -78,7 +78,7 @@ print_usage() {
   echo ""
   echo "환경변수:"
   echo "  REGION            기본값: ap-northeast-2"
-  echo "  CLUSTER_NAME      기본값: upload-board-project"
+  echo "  CLUSTER_NAME      기본값: sharenpo"
   echo "  S3_BUCKET_NAME    app-infra/all 실행 시 필수 (전역적으로 유일한 버킷 이름)"
   echo "  DOMAIN_NAME       app-infra/all 실행 시 필수 (도메인은 미리 구매돼 있어야 함)"
   echo "  HELM_RELEASE      기본값: sharenpo (app-infra의 IRSA trust policy가 신뢰하는"

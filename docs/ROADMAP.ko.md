@@ -729,8 +729,23 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   그리고 레거시 `upload-board-pg` 컨테이너 참조(실제로 존재하는 수동 생성 컨테이너를 가리키므로
   이름을 바꾸면 안내문이 거짓이 된다). **전제 하나가 틀린 것으로 드러났다** — 이 행은
   "Terraform 미적용"이라고 적고 있었지만 실제로는 적용되어 있다. 다음 행 참고.
-- **Terraform/AWS 인프라 식별자를 `sharenpo`로 개명** (2026-08-25 기록, 의도적 보류) —
-  **미착수이며, 급하지 않다.** 위 행을 작업하다 발견했다: `CLAUDE.md`와 ADR 0043·0044의 추가
+- ~~**Terraform/AWS 인프라 식별자를 `sharenpo`로 개명**~~ (2026-08-25 기록, 의도적 보류) —
+  **2026-09-07 완료, 이 행이 직접 예고했던 그 무료 타이밍에 정확히 맞춰서.** 손대기 전에
+  라이브 상태를 다시 확인했다: `aws eks list-clusters`/`aws rds describe-db-instances`/
+  `aws s3 ls` 전부 비어 있고, 로컬 `.tfstate` 3개 다 리소스 0개 — 교체할 게 없으니 이건
+  순수 코드 수정이지 실제 `apply`가 아니다. 바꾼 것: `cluster/variables.tf`와
+  `app-infra/variables.tf`의 `cluster_name` 기본값, `app-infra/variables.tf`의 `db_name`
+  (`upload_board` → `sharenpo`)과 `db_username`(`upload_board_admin` → `sharenpo_admin`),
+  `addons/variables.tf`의 `cluster_name`, `deploy.sh`의 `CLUSTER_NAME` 기본값(+ 자체
+  `--help` 문구), `k8s/infra/terraform/README.md`(+ko) 제목 둘 다. `terraform validate`/
+  `fmt -check`가 세 디렉터리 모두 통과했고, `cluster/`에서 돌린 `terraform plan`은 **70
+  add, 0 change, 0 destroy**를 보여준다 — 교체가 아니라 처음부터 새로 만드는 계획이라는
+  뜻이고, "공짜" 프레이밍이 실제로 맞았음을 증명한다. 아무것도 apply하지 않았다 — 새
+  이름은 다음 실제 `deploy.sh all`/`terraform apply`에서 반영된다. `Blueprint` 태그의
+  *값*(`cluster/main.tf`와 `addons/main.tf` 양쪽의 `local.name`/`var.cluster_name`)은
+  이제 개명을 정확히 따라가고, 태그의 *키*("Blueprint")만 이 행이 이미 지적한 대로
+  upstream `terraform-aws-eks-blueprints` 관례라 바꿀 수 없다. 위 행을 작업하다 발견했다:
+  `CLAUDE.md`와 ADR 0043·0044의 추가
   기록은 아직도 Terraform이 실제 AWS에 적용된 적 없다고 말하지만, `cluster/`와 `app-infra/`의
   상태 파일이 각각 serial 235·23이고 둘을 합쳐 리소스 인스턴스 108개를 담고 있다 — 살아 있는
   EKS 클러스터, RDS 인스턴스, S3 버킷, Route53 존, ACM 인증서. 기본값을 바꾼 뒤 돌린

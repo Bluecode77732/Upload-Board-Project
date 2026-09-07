@@ -1,4 +1,4 @@
-# upload-board-project (Terraform)
+# sharenpo (Terraform)
 
 > English: [README.md](README.md)
 

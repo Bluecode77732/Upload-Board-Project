@@ -12,7 +12,7 @@ variable "region" {
 variable "cluster_name" {
   description = "EKS 클러스터 이름이자 대부분의 리소스 이름 접두사. basename(path.cwd) 대신 명시적으로 둔다 — 클론/CI 체크아웃마다 디렉터리 이름이 달라지면 깨지는 값이었다"
   type        = string
-  default     = "upload-board-project"
+  default     = "sharenpo"
 }
 
 variable "vpc_cidr" {
