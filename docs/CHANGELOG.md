@@ -13,6 +13,24 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Frontend: login mark, heading typeface, mobile touch targets (2026-09-07)** — resolves
+  `frontend/docs/STYLE-PLAN.md` open questions 3 and 5, and `docs/ROADMAP.md` §7's
+  touch-target-sizing row, via a comparison-table Q&A that grew into an artifact preview
+  page as more candidates were requested (19 marks explored, A–S). **Mark**: confirmed S —
+  two overlapping circles, stroke only, no badge/fill, colored `var(--brand)`.
+  `LoginPage.tsx` now inlines the SVG (was `<img src="/favicon.svg">`) so the stroke tracks
+  the light/dark `--brand` swap; `public/favicon.svg` carries the same shape with a
+  hardcoded color plus a `prefers-color-scheme` `<style>` block; `public/icons.svg` (zero
+  references) is deleted. **Typeface**: `index.css`'s `--heading` — previously
+  byte-identical to `--sans` — is now `ui-serif, Georgia, 'Times New Roman', serif`, chosen
+  over 5 web-font candidates specifically because it adds no dependency. **Touch targets**:
+  scope was narrowed to touch-target sizing only (not the coupled focus-visible gap the
+  ROADMAP row had flagged) — every bordered/background button across 12 components had its
+  padding raised to clear 44px CSS-px (`NavBar.themeToggle` 36×36 → 44×44); plain-text-style
+  controls were left alone under WCAG 2.5.8's inline-target exception. Verified: `pnpm
+  build`/`pnpm lint` green, Playwright screenshots of `LoginPage` in both themes, button
+  height measured at 47.17px post-change.
+
 - **Server-side thumbnail endpoint confirmed implement-only-if-needed (2026-09-07)** — the
   current click-gate/lazy-load workaround (`FilePreviewTile.tsx`, documented precisely in
   the same ROADMAP entry earlier the same day) has caused no reported problem, so this

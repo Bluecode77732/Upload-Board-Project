@@ -157,40 +157,44 @@ because whoever touches these files for restyling will see them:
    existing purple brand seed. Item 1 is clear to dispatch.
 2. Confirm whether the two remaining "related but out of scope" items above
    should be picked up later as their own tasks, or intentionally left alone.
-3. **Typography was never actually decided** (recorded 2026-08-25) — the plan
-   above settled the palette and called the direction "brand-forward", but
-   `index.css` defines `--heading` and `--sans` as **byte-identical**
-   (`system-ui, 'Segoe UI', Roboto, sans-serif`). The heading token exists and
-   expresses nothing, so the whole brand-forward direction currently rests on
-   one accent color. A follow-up task will **explore first, then implement**,
-   with no option pre-committed: a hosted web font, a self-hosted face, or
-   staying on system fonts are all live candidates. Two constraints it
-   inherits rather than decides — `frontend/CLAUDE.md` requires proposing any
-   dependency (a hosted font counts) before adding it, and the palette above
-   is settled, so this is a typography question and not a re-opening of the
-   brand color. Tracked in [ROADMAP.md](../../docs/ROADMAP.md) > 7.
-4. **No motion, and depth used once** (recorded 2026-08-25, alongside item 3) —
+3. ~~**Typography was never actually decided**~~ (recorded 2026-08-25) —
+   **resolved 2026-09-07**. The exploration ran as a comparison-table Q&A
+   (per CLAUDE.md's Clarification Protocol), then an artifact preview page
+   rendering 6 heading-font candidates against the real `LoginPage` card in
+   both themes: a system serif fallback, and 5 web-font candidates (Fraunces,
+   Bricolage Grotesque, Instrument Serif, Unbounded, Manrope). **Confirmed:
+   the system serif fallback** — `--heading: ui-serif, Georgia, 'Times New
+   Roman', serif` (was byte-identical to `--sans`). Zero new dependency, so
+   `frontend/CLAUDE.md`'s dependency-proposal gate never triggers — the
+   lowest-risk candidate on the table, chosen over the 5 web-font options.
+   `--sans` is untouched.
+4. **No motion, and depth used once** (recorded 2026-08-25, alongside item 3)
+   — **still open as of 2026-09-07**: item 3's typography session stayed
+   scoped to the mark + heading font the developer actually asked for and
+   deliberately did not fold this in, so it remains unstarted.
    `transition`, `animation`, and `@keyframes` appear **zero times** across
    every stylesheet in `src/`, so every hover and focus state jumps; and
    `--shadow` is applied in exactly one place (`LoginPage.module.css`'s card),
-   leaving every other surface flat. Both are cheap to add once as tokens and
-   are grouped with item 3 rather than dispatched separately, since a typeface
-   change is the natural moment to settle the rest of the expressive layer.
-5. **The login mark is a starter template's logo** (recorded 2026-08-25, group
-   with item 3) — the Sharenpo rename (`0a14039`) built the login lockup out of
-   `<img src="/favicon.svg">` plus the wordmark, reusing what existed instead of
-   inventing a mark mid-rename. But `frontend/public/favicon.svg` came from the
-   2026-07-24 Vite scaffold commit (`6950034`), not from this project: a purple
-   bolt exported from a design tool, shipped alongside `public/icons.svg` whose
-   symbols are `bluesky`/`discord`/`github`/`x`/`documentation`/`social`. Two
-   measured consequences — the mark is `#863bff` against a `--brand` of
-   `#8a2be2`/`#c084fc`, so a **third** purple sits inside the lockup; and
-   `icons.svg` has **zero** references in `src/` or `index.html`. Open decision:
-   design a real mark, or drop the icon and let the wordmark stand alone. The
-   `icons.svg` deletion needs no decision either way. Grouped with item 3
-   because a wordmark's typeface and its mark are one design decision — split
-   them and the lockup gets designed twice. Tracked in
-   [ROADMAP.md](../../docs/ROADMAP.md) > 7.
+   leaving every other surface flat. Both are cheap to add once as tokens.
+5. ~~**The login mark is a starter template's logo**~~ (recorded 2026-08-25,
+   grouped with item 3) — **resolved 2026-09-07**. The exploration ran the
+   same way as item 3 — comparison tables, then an artifact preview page —
+   and grew far past the original two-way "design one vs. wordmark-only"
+   framing as the developer kept asking for more candidates: 19 marks total
+   (A–S), spanning free MIT/ISC-licensed icons (Lucide — D–P), fully
+   original hand-drawn shapes (B, Q–S), a sharp/angular "growing" direction
+   (T–V), and a faceted-gem direction tying the existing `--brand` purple to
+   a literal sapphire cut (W–Y). Badge treatment was decided first (no badge
+   — a bare `--brand`-colored line icon, not a filled/rounded/circular
+   container). **Confirmed: mark S** — two overlapping circles (stroke only,
+   `var(--brand)`, no fill), read as both an abstract "connection" between
+   uploader and viewer and, softened, the app's own initial. `LoginPage.tsx`
+   now inlines the SVG directly (so its stroke tracks the light/dark
+   `--brand` swap) instead of `<img src="/favicon.svg">`; `favicon.svg`
+   carries the same two-circle shape with a hardcoded color (a `<style>`
+   `prefers-color-scheme` block for browsers that honor it in a favicon, a
+   flat fallback for those that don't) since the browser tab can't see page
+   CSS custom properties. `icons.svg` is deleted.
 
 ## Ready-to-paste prompts
 

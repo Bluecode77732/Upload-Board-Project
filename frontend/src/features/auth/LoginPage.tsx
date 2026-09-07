@@ -57,7 +57,10 @@ export function LoginPage() {
     <main className={styles.page}>
       <div className={styles.card}>
         <div className={styles.lockup}>
-          <img src="/favicon.svg" alt="" width={21} height={20} />
+          <svg className={styles.mark} width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="9" cy="12" r="6" />
+            <circle cx="15" cy="12" r="6" />
+          </svg>
           <span>Sharenpo</span>
         </div>
         <h1 className={styles.heading}>{mode === 'signin' ? 'Sign in' : 'Register'}</h1>

@@ -13,6 +13,23 @@
 ## [Unreleased]
 
 ### 변경
+- **프론트엔드: 로그인 마크, 헤딩 서체, 모바일 터치 타겟 (2026-09-07)** —
+  `frontend/docs/STYLE-PLAN.ko.md`의 확인 필요 사항 3번·5번과, `docs/ROADMAP.ko.md` §7의
+  터치 타겟 크기 조정 행을 해결한다. 비교표 기반 Q&A로 시작했다가 개발자가 후보를 계속
+  요청하면서 아티팩트 프리뷰 페이지로 커졌다(마크 총 19개, A–S 탐색). **마크**: S 확정 —
+  겹친 원 두 개, 채우기 없이 선만, 배지 없음, `var(--brand)` 색. `LoginPage.tsx`는 이제
+  (기존 `<img src="/favicon.svg">` 대신) SVG를 직접 인라인해 라이트/다크 `--brand` 전환에
+  선 색이 따라가도록 했고, `public/favicon.svg`는 같은 형태를 고정 색상 + `prefers-color-scheme`
+  `<style>` 블록으로 담으며, 참조 0건이던 `public/icons.svg`는 삭제했다. **서체**:
+  `index.css`의 `--heading`(기존에는 `--sans`와 바이트 단위로 동일했음)이
+  `ui-serif, Georgia, 'Times New Roman', serif`로 바뀌었다 — 웹폰트 후보 5개를 제치고
+  신규 의존성이 없다는 이유로 선택됐다. **터치 타겟**: 범위를 터치 타겟 크기 조정으로만
+  좁혔다(ROADMAP 행이 함께 묶자고 했던 focus-visible 공백은 이번에 다루지 않음) —
+  컴포넌트 12곳에 걸친 테두리/배경이 있는 버튼 전부가 44px CSS px 기준을 넘도록 패딩을
+  올렸고(`NavBar.themeToggle`은 36×36 → 44×44), 순수 텍스트 링크 스타일 컨트롤은 WCAG
+  2.5.8의 인라인 타겟 예외에 따라 그대로 두었다. 검증: `pnpm build`/`pnpm lint` 그린,
+  Playwright로 `LoginPage`를 라이트/다크 모두 스크린샷, 변경 후 버튼 높이 47.17px 실측.
+
 - **서버사이드 썸네일 엔드포인트, 필요할 때만 구현으로 확정 (2026-09-07)** — 지금의
   클릭 게이트/지연 로드 방식(`FilePreviewTile.tsx`, 같은 날 같은 ROADMAP 항목에
   정확히 문서화됨)이 실제 문제를 일으킨 적이 없어서, 예정된 작업이 아니라 문서화된

@@ -16,14 +16,22 @@
   box-shadow: var(--shadow);
 }
 
-/* Brand lockup above the form heading — reuses the app favicon as the mark so the
-   browser tab and the login screen carry the same one. */
+/* Brand lockup above the form heading. The mark is inlined (not <img src="/favicon.svg">)
+   so its stroke can track --brand across the light/dark toggle; public/favicon.svg carries
+   the same two-circle shape as a static, hardcoded-color fallback for the browser tab, which
+   can't see page CSS custom properties. */
 .lockup {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 9px;
   margin: 0 0 8px;
+}
+
+.mark {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 2;
 }
 
 .lockup span {
@@ -73,7 +81,7 @@
 }
 
 .submit {
-  padding: 10px 16px;
+  padding: 12px 16px;
   border: none;
   border-radius: 6px;
   background: var(--brand);
@@ -95,6 +103,7 @@
 .switchButton {
   display: block;
   margin: 16px auto 0;
+  padding: 12px 4px;
   background: none;
   border: none;
   color: var(--brand);

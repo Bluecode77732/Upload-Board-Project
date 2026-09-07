@@ -662,23 +662,22 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   `values-prod.yaml`은 아직 존재하지도 않았고, 이틀 뒤 만들어지면서 그 결정을 따라가는
   대신 실제 첫 라이브 배포를 따라 `upload-board`로 드리프트했을 뿐이다. 전체 경위는
   [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > 수정` 참고.
-- **로그인 화면의 마크를 교체하거나 걷어내고, 쓰이지 않는 아이콘 스프라이트를 삭제** (2026-08-25
-  기록) — Sharenpo 통일 작업(`0a14039`)이 로그인 카드에 워드마크와 나란히
-  `<img src="/favicon.svg">` 락업을 넣었다. 그 작업 기준으로는 옳은 판단이었다. 이름 변경
-  도중에 마크를 새로 만드는 대신 이미 있는 것을 재사용했기 때문이다. 그런데 **재사용한 그
-  파일이 애초에 이 프로젝트 것이 아니다.** `frontend/public/favicon.svg`는 2026-07-24 Vite
-  스캐폴드 커밋(`6950034`)에 스타터 템플릿 아트워크로 딸려 들어왔고(디자인 툴에서 export한
-  보라색 번개 도형 — 9.5KB, 마스크, display-p3 색), 같은 커밋이 `frontend/public/icons.svg`도
-  가져왔는데 그 심볼이 `bluesky`·`discord`·`github`·`x`·`documentation`·`social`이다. 즉
-  사용자가 Sharenpo 로그인 화면에서 가장 먼저 보는 것이 템플릿의 로고다. 실측한 문제가 둘:
-  마크는 `#863bff`인데 `--brand`는 `#8a2be2`(라이트)/`#c084fc`(다크)라 **세 번째 보라색**이
-  자기가 대표해야 할 브랜드 옆에 놓인다. 그리고 `icons.svg`는 `frontend/src`와 `index.html`
-  어디에서도 **참조가 0건**이다 — `admin/`에서 걷어낸 Chat Project 잔재와 같은 종류의 죽은
-  템플릿 잔여물이다. 열린 결정은 방향이다: 진짜 Sharenpo 마크를 만들 것인가, 아니면 아이콘을
-  걷어내고 워드마크 하나로 락업을 유지할 것인가(가장 저렴하고, 워드마크가 이미 있으므로
-  방어 가능한 선택). 어느 쪽이든 `icons.svg`는 삭제 대상이며 이쪽은 결정이 필요 없다.
-  **아래 디스플레이 서체 항목과 함께 묶어 진행할 것** — 워드마크의 서체와 마크는 하나의
-  결정이지 둘이 아니며, 따로 하면 락업을 두 번 설계하게 된다.
+- ~~**로그인 화면의 마크를 교체하거나 걷어내고, 쓰이지 않는 아이콘 스프라이트를 삭제**~~
+  (2026-08-25 기록) — **2026-09-07 완료**. Sharenpo 통일 작업(`0a14039`)이 로그인 카드에
+  워드마크와 나란히 `<img src="/favicon.svg">` 락업을 넣어 이름 변경 도중 마크를 새로 만드는
+  대신 있는 것을 재사용했지만, 재사용한 파일은 스타터 템플릿 아트워크였다(`#863bff`, `--brand`의
+  `#8a2be2`/`#c084fc` 옆에 놓인 세 번째 보라색). 형제 파일 `icons.svg`는 참조가 0건이었다.
+  비교표 기반 Q&A로 시작했다가 개발자가 계속 더 많은 후보를 요청하면서 아티팩트 프리뷰
+  페이지로 커진 결정 과정을 거쳤다 — 총 19개 마크(A–S) 탐색: 무료 MIT/ISC 아이콘(Lucide,
+  D–P), 완전 오리지널 손그림 도형(B, Q–S), 각지고 "성장하는" 방향(T–V), `--brand`를 실제
+  사파이어 커팅과 연결하는 보석 방향(W–Y). 배지 처리를 먼저 정했다 — 배지 없음, `--brand`
+  색 선 아이콘 하나만. **확정: 마크 S**, 겹친 원 두 개(채우기 없이 선만) — 업로더와 열람자
+  사이의 연결이자, 부드럽게 보면 이 앱 이름의 이니셜로도 읽힌다. `LoginPage.tsx`는 이제
+  `<img src="/favicon.svg">` 대신 SVG를 직접 인라인해(라이트/다크 `--brand` 전환에 선 색이
+  따라가도록) 렌더링하며, `favicon.svg`는 같은 형태를 고정 색상으로 담는다(파비콘에서도
+  `prefers-color-scheme`를 지원하는 브라우저를 위한 `<style>` 블록 포함) — 브라우저 탭은
+  페이지 CSS 커스텀 프로퍼티를 볼 수 없기 때문이다. `icons.svg`는 삭제됐다. 전체 결정 경위:
+  [frontend/docs/STYLE-PLAN.ko.md](../frontend/docs/STYLE-PLAN.ko.md) > 5번 항목.
 - ~~전 화면 반응형 레이아웃~~ — **2026-08-24 완료**(커밋 `d746257`,
   [CHANGELOG.ko.md](CHANGELOG.ko.md) `[Unreleased] > 변경`). *측정이 계획을 반박했다는 점*
   때문에 기록해 둔다: 이 작업은 "`@media` 블록이 없는 `*.module.css`는 휴대폰에서 다 깨진다"는
@@ -691,16 +690,21 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   이미 있던 1024px와 640px을 재사용했고 세 번째 값은 만들지 않았다. 프레임은 모든 단계에서
   충분히 크다(346×196 / 368×208 / 589×332). 화면 5개 × 폭 5종에서 오버플로 0, e2e 22/22 통과를
   확인했다. 터치 타겟 크기는 명시적으로 제외했다 — 다음 행 참고.
-- 모바일 터치 타겟 크기 (2026-08-24 기록) — **미착수 이유**: 위 반응형 작업에서 의도적으로
-  범위 밖에 뒀다. 모든 버튼과 링크를 최소 44px로 키우는 일은 이 앱에 이미 필요한 접근성 작업과
-  겹치는데, 폭 구간 작업 안에서 그 절반만 처리하면 나머지 절반이 이미 끝난 것처럼 보이게 된다.
-  2026-08-24 실측: 프론트엔드에 `aria-*` 속성은 6개 있지만 그중 5개는 이모지 아이콘에 붙은
-  장식용 `aria-hidden`이고, 실제로 정보를 전달하는 것은 `NavBar` 테마 토글의 `aria-label`
-  하나뿐이다. `:focus-visible` 규칙 18개 중 4개를 뺀 나머지는 전부 input·select·textarea에
-  붙어 있고, 버튼에 붙은 4개는 모두 새 파일 그리드(`FilePreviewTile`, `FileBoard`)에 있다.
-  즉 그 외의 모든 버튼 — `PostBoard`의 clear/creator/페이저, `PostDetailPage`의 delete/primary,
-  `CommentThread`의 delete/load-more, `FileDetailPage`의 copy/rotate/delete — 은 여전히 키보드
-  포커스가 보이지 않는다. 단독으로 하지 말고 그 접근성 작업과 함께 진행한다.
+- ~~모바일 터치 타겟 크기~~ (2026-08-24 기록) — **2026-09-07 완료, 범위는 의도적으로
+  좁혔다**. 이 행은 원래 아래쪽 focus-visible 공백과 함께 처리하자고 주장했다(터치 타겟만
+  키우고 키보드 포커스는 그대로 두면 절반만 끝난 것처럼 보인다는 이유) — 직접 물어본 결과
+  개발자는 터치 타겟만 선택했고, 그래서 focus-visible 쪽은 **이 행이 실측한 그대로** 남아
+  있다(파일 그리드 `FilePreviewTile`/`FileBoard`만 `:focus-visible`을 가지고 있고,
+  `PostBoard`의 clear/creator/페이저, `PostDetailPage`의 delete/primary, `CommentThread`의
+  delete/load-more, `FileDetailPage`의 copy/rotate/delete는 여전히 없다) — 미착수. 실제로
+  반영된 것: `NavBar`, `SettingsPage`, `LoginPage`, `CommentForm`, `CommentThread`,
+  `FileBoard`, `FileDetailPage`, `FilePreviewTile`의 `.loadButton`, `PostBoard`,
+  `UploadForm`, `PostForm`, `PostDetailPage`에 걸친 테두리/배경이 있는 "버튼형" 컨트롤 전부가
+  44px CSS px 최소 기준을 넘도록 패딩을 올렸다(`NavBar`의 아이콘 전용 `.themeToggle`은 고정
+  36×36에서 44×44로). 변경 후 Playwright로 `LoginPage`에서 실측하니 47.17px. 순수 텍스트
+  링크 스타일 컨트롤(`FilePreviewTile`의 `.title`/`.creatorButton`, `PostBoard`의
+  `.creatorButton`, 모든 `.backLink`)은 WCAG 2.5.8의 인라인 타겟 예외에 따라 의도적으로
+  손대지 않았다 — 빠뜨린 게 아니다.
 - ~~파일 보드 프리뷰 그리드화 (`/files`)~~ — **2026-08-24 완료**(커밋 `e567277`,
   [CHANGELOG.ko.md](CHANGELOG.ko.md) `[Unreleased] > 변경`). 보드가 파일당 텍스트 한
   줄만 보여줬기 때문에, 상세 페이지를 열지 않고서는 어떤 파일인지 알 방법이 없었다.
@@ -772,17 +776,17 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   라는 이름을 가진 게 아무것도 없어서, 이 행이 이미 언급했던 "재구축 시 공짜"인 순간이 바로
   지금 열려 있다 — 다음에 처음부터 다시 apply할 때가, 이 행의 논리가 다시 그 창을 닫기 전에
   식별자를 개명할 정확한 타이밍이다.
-- **디스플레이 서체 탐구 후 구현** (2026-08-25 기록) — **의도적으로 열어 둔다.** 제약을 미리
-  박지 않았다: 웹폰트, 셀프호스팅, 시스템 폰트 유지가 모두 후보이며 그 선택 자체가 탐구의
-  결과물이다. 메우려는 공백은 구체적이다: `index.css`가 `--heading`과 `--sans`를 **바이트
-  단위로 동일하게**(`system-ui, 'Segoe UI', Roboto, sans-serif`) 정의하고 있어 헤딩 토큰이
-  존재하되 아무것도 표현하지 않으며, `frontend/docs/STYLE-PLAN.ko.md`가 확정한 "브랜드 전면"
-  방향을 지금은 강조색 하나가 떠받치고 있다. 탐구 세션이 결정하는 게 아니라 물려받는 제약이
-  둘 있다: `frontend/CLAUDE.md`는 의존성 추가 전 제안을 요구하며(호스팅 폰트도 여기 해당),
-  팔레트는 이미 확정이다 — 이건 타이포그래피 문제이지 브랜드 색을 다시 여는 일이 아니다.
-  별개지만 함께 묶기 충분히 저렴한 사항: 이 앱에는 **모션이 전무하고**
-  (`transition`·`animation`·`@keyframes`가 전 스타일시트에 0회 등장) `--shadow`는 정확히 한
-  곳에서만 쓰여, hover·focus가 즉시 점프하고 모든 표면이 평면으로 읽힌다.
+- ~~**디스플레이 서체 탐구 후 구현**~~ (2026-08-25 기록) — **2026-09-07 완료**. 비교표 기반
+  Q&A에 이어, 헤딩 서체 후보 6개(시스템 세리프 폴백 + 웹폰트 5개 — Fraunces·Bricolage
+  Grotesque·Instrument Serif·Unbounded·Manrope)를 실제 `LoginPage` 카드 위에 라이트/다크
+  두 테마로 렌더링한 아티팩트 프리뷰 페이지로 진행했다. **확정: 시스템 세리프 폴백** —
+  `--heading: ui-serif, Georgia, 'Times New Roman', serif`(기존에는 `--sans`와 바이트 단위로
+  동일했고, `--sans`는 그대로 유지). 신규 의존성 0건이라 `frontend/CLAUDE.md`의 의존성 사전
+  제안 게이트가 아예 걸리지 않았다 — 웹폰트 후보 5개보다 위험이 가장 낮은 안이 선택됐다.
+  같은 행의 "별개지만 함께 묶기 충분히 저렴한" 모션/그림자 사항(`transition`·`animation`·
+  `@keyframes` 0회, `--shadow` 정확히 한 곳)은 **함께 처리하지 않았다** — 물어본 결과
+  개발자는 이번 작업 범위를 마크 + 헤딩 서체로만 한정했고, 모션은 그대로 열려 있다. 전체
+  결정 경위: [frontend/docs/STYLE-PLAN.ko.md](../frontend/docs/STYLE-PLAN.ko.md) > 3번 항목.
 - `admin/`의 작은 화면 전용 레이아웃 (2026-08-24 기록) — **미착수 이유**: 이 콘솔은 배포
   대상이 없고 데스크톱에서 운영되므로 현재 노출이 사실상 없다. 대신 접근을 되살리는 최소
   조치만 반영했다 — 세 테이블 래퍼를 `overflow-x-auto`로 바꿨다. 375px에서 users 테이블이

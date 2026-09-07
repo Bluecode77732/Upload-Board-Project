@@ -692,25 +692,24 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   and drifted to `upload-board` (matching the actual first live deploy two days later)
   instead of picking it up. See [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Fixed` for the
   full account.
-- **Replace or drop the login page's mark, and delete the unused icon sprite** (recorded
-  2026-08-25) — the Sharenpo unification (`0a14039`) gave the login card a lockup of
-  `<img src="/favicon.svg">` beside the wordmark, which was the right call for that task:
-  it reused what already existed rather than inventing a mark mid-rename. But **the file it
-  reuses was never this project's**. `frontend/public/favicon.svg` arrived on 2026-07-24 in
-  the Vite scaffold commit (`6950034`) as starter-template artwork — a purple bolt exported
-  from a design tool (9.5KB, masks, display-p3 color) — and the same commit brought
-  `frontend/public/icons.svg`, a sprite whose symbols are `bluesky`, `discord`, `github`,
-  `x`, `documentation`, and `social`. So the first thing a user sees on Sharenpo's login
-  screen is a template's logo. Two concrete problems, both measured: the mark is `#863bff`
-  while `--brand` is `#8a2be2` (light) / `#c084fc` (dark), so **a third purple** sits next
-  to the brand it is meant to represent; and `icons.svg` has **zero references** anywhere in
-  `frontend/src` or `index.html` — dead template residue, the same class of thing as the
-  Chat Project remnants cleaned out of `admin/`. The open decision is which way to go:
-  commission/design a real Sharenpo mark, or drop the icon and let the wordmark carry the
-  lockup alone (cheapest, and defensible — the wordmark is already there). Either way
-  `icons.svg` should go, and that half needs no decision. **Sequence this with the display
-  typeface item below**: a wordmark's typeface and its mark are one decision, not two, and
-  doing them separately means designing the lockup twice.
+- ~~**Replace or drop the login page's mark, and delete the unused icon sprite**~~
+  (recorded 2026-08-25) — **landed 2026-09-07**. The Sharenpo unification (`0a14039`) gave
+  the login card a lockup of `<img src="/favicon.svg">` beside the wordmark, reusing what
+  already existed rather than inventing a mark mid-rename — but the file it reused was
+  starter-template artwork (`#863bff`, a third purple against `--brand`'s `#8a2be2`/
+  `#c084fc`), and the sibling `icons.svg` had zero references anywhere. Decided via a
+  comparison-table Q&A that grew into an artifact preview page as the developer kept asking
+  for more candidates — 19 marks explored in total (A–S): free MIT/ISC icons (Lucide,
+  D–P), fully original hand-drawn shapes (B, Q–S), a sharp/angular "growing" direction
+  (T–V), and a faceted-gem direction tying `--brand` to a literal sapphire cut (W–Y). Badge
+  treatment was settled first — no badge, a bare `--brand`-colored line icon. **Confirmed:
+  mark S**, two overlapping circles (stroke only, no fill) — read as both the connection
+  between an uploader and a viewer and, softened, the app's own initial. `LoginPage.tsx`
+  now inlines the SVG (so its stroke tracks the light/dark `--brand` swap) instead of
+  `<img src="/favicon.svg">`; `favicon.svg` carries the same shape with a hardcoded color
+  (plus a `prefers-color-scheme` `<style>` block for browsers that honor it in a favicon)
+  since the browser tab can't read page CSS custom properties. `icons.svg` is deleted. Full
+  decision trail: [frontend/docs/STYLE-PLAN.md](../frontend/docs/STYLE-PLAN.md) > item 5.
 - ~~Responsive layout across every screen~~ — **landed 2026-08-24** (commit `d746257`,
   [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Changed`). Worth recording *because the
   measurement contradicted the plan*: the work was scoped on the assumption that every
@@ -724,17 +723,22 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   no third value was added. Frames stay large at every step (346×196 / 368×208 / 589×332).
   Verified across 5 screens × 5 widths at zero overflow, 22/22 e2e passing. Touch-target
   sizing was explicitly excluded — next row.
-- Touch-target sizing on mobile (recorded 2026-08-24) — **not started because** it was
-  deliberately scoped out of the responsive pass above: raising every button and link to a
-  44px minimum overlaps the accessibility work this app already needs, and doing half of it
-  inside a width-tier pass would leave the other half looking done. Measured 2026-08-24: the
-  frontend carries six `aria-*` attributes, but five are decorative `aria-hidden` on emoji
-  icons — `NavBar`'s theme-toggle `aria-label` is the only one conveying anything. Of 18
-  `:focus-visible` rules, all but four sit on inputs, selects, and textareas; the four button
-  rules are all in the new file grid (`FilePreviewTile`, `FileBoard`), so every other button
-  in the app — `PostBoard`'s clear/creator/pager, `PostDetailPage`'s delete/primary,
-  `CommentThread`'s delete/load-more, `FileDetailPage`'s copy/rotate/delete — still has no
-  visible keyboard focus. Pick this up together with that accessibility work, not on its own.
+- ~~Touch-target sizing on mobile~~ (recorded 2026-08-24) — **landed 2026-09-07, scope
+  narrowed on purpose**. This row originally argued for pairing touch-target sizing with the
+  focus-visible gap below it (raising every button while leaving keyboard focus undone would
+  read as half-finished) — asked directly, the developer chose touch targets only, so the
+  focus-visible half **stays exactly as this row measured it** (only the file-grid buttons in
+  `FilePreviewTile`/`FileBoard` carry `:focus-visible`; `PostBoard`'s clear/creator/pager,
+  `PostDetailPage`'s delete/primary, `CommentThread`'s delete/load-more, `FileDetailPage`'s
+  copy/rotate/delete still don't) and is unstarted. What landed: every bordered/background
+  "chrome" button across `NavBar`, `SettingsPage`, `LoginPage`, `CommentForm`,
+  `CommentThread`, `FileBoard`, `FileDetailPage`, `FilePreviewTile`'s `.loadButton`,
+  `PostBoard`, `UploadForm`, `PostForm`, and `PostDetailPage` had its padding raised to clear
+  a 44px CSS-px minimum (`NavBar`'s icon-only `.themeToggle` went from a fixed 36×36 to
+  44×44); Playwright-measured on `LoginPage` post-change at 47.17px. Plain-text-styled
+  controls (`FilePreviewTile`'s `.title`/`.creatorButton`, `PostBoard`'s `.creatorButton`,
+  every `.backLink`) were deliberately left alone under WCAG 2.5.8's inline-target exception,
+  not overlooked.
 - ~~File board as a preview grid (`/files`)~~ — **landed 2026-08-24** (commit `e567277`,
   [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Changed`). The board listed one text row per
   file, so nothing identified a file short of opening its detail page. It is now a
@@ -811,19 +815,18 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `upload-board-project` currently exists in AWS, so the rebuild-driven "free" window this
   row already names is open right now — the next `apply` from scratch is exactly the moment
   to rename the identifiers before this row's own logic closes the window again.
-- **Explore and implement a display typeface** (recorded 2026-08-25) — **deliberately left
-  open**, no constraint pre-committed: web font, self-hosted, or staying on system fonts are
-  all still candidates, and the exploration decides between them. The gap it addresses is
-  concrete: `index.css` defines `--heading` and `--sans` as **byte-identical**
-  (`system-ui, 'Segoe UI', Roboto, sans-serif`), so the heading token exists but expresses
-  nothing, and `frontend/docs/STYLE-PLAN.md`'s confirmed "brand-forward" direction is carried
-  today by a single accent color. Two constraints the exploring session inherits rather than
-  decides: `frontend/CLAUDE.md` requires proposing any dependency (a hosted font counts)
-  before adding it, and the palette is settled — this is a typography question, not a
-  re-opening of the brand color. Related but separate, and cheap enough to fold in: the app
-  has **no motion at all** (`transition`/`animation`/`@keyframes` appear zero times across
-  every stylesheet) and `--shadow` is used in exactly one place, so hover and focus states
-  jump and every surface reads flat.
+- ~~**Explore and implement a display typeface**~~ (recorded 2026-08-25) — **landed
+  2026-09-07**. Ran as a comparison-table Q&A followed by an artifact preview page rendering
+  6 heading-font candidates (a system serif fallback plus 5 web fonts — Fraunces, Bricolage
+  Grotesque, Instrument Serif, Unbounded, Manrope) against the real `LoginPage` card in both
+  themes. **Confirmed: the system serif fallback** —
+  `--heading: ui-serif, Georgia, 'Times New Roman', serif` (was byte-identical to `--sans`,
+  which stays untouched). Zero new dependency, so `frontend/CLAUDE.md`'s dependency-proposal
+  gate never triggered — the lowest-risk candidate on the table won over the 5 web-font
+  options. The "related but separate" motion/shadow note in this same row (`transition`/
+  `animation`/`@keyframes` at zero uses, `--shadow` used exactly once) was **not** folded in
+  — asked, the developer scoped this task to mark + heading font only, so motion stays open.
+  Full decision trail: [frontend/docs/STYLE-PLAN.md](../frontend/docs/STYLE-PLAN.md) > item 3.
 - A small-screen layout for `admin/` (recorded 2026-08-24) — **not started because** the
   console has no deploy target and is operated on a desktop, so the exposure today is nil.
   What landed instead was the minimum that restores access: the three table wrappers became
