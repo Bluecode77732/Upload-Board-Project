@@ -147,6 +147,41 @@ grep -rniE "RbacGuard|GqlTransaction|QueryRunnerDecorator|RateLimitGuard|kickPre
 버킷 1 결과는 없습니다. `admin/`은 이번 재검증 기준으로 문서 범위와 코드 범위 모두에서
 깨끗합니다.
 
+## 재검증 — 전체 범위, "공개 직전" 트리거 (2026-09-07)
+
+재검증 트리거의 세 번째 조건 — "저장소를 공개/태깅하기 직전" — 은 아무도 알아채지
+못한 채 이미 발동해 있었습니다: `gh repo view`로 확인한 결과 이 저장소의 GitHub
+가시성이 `PUBLIC`이고, 상당 기간 그래 왔습니다. 이번 검토는 그 공백을 닫으면서,
+같은 실행에서 2026-07-22 검토 당시엔 아예 존재하지 않아 방법 표(위)에 없던 두
+범위까지 넓혔습니다: `frontend/`(2026-07-24 생성)와 `backend/` 전체(2026-07-22
+`CLAUDE.md` 재작성 이후 클린하다고 암묵적으로만 가정했을 뿐, 세트 A/B로 명시적으로
+재실행한 적은 없었습니다).
+
+세트 A와 세트 B를 원문 그대로 다음 대상에 실행: 루트 `*.md`, `docs/`(`ADR/` 포함),
+`.env.example`, `frontend/src` + `frontend/index.html` + `frontend/package.json`,
+`backend/` 전체, 그리고 신선도 확인을 위해 재실행한 `admin/src` +
+`admin/vercel.json` + `admin/index.html` + `admin/package.json` + `admin/e2e`
+(2026-08-13 이후 변화 없음: 같은 `session-guard.ts`/`protected-route.tsx` 고유
+파일 히트, 같은 "moderation" 부정문).
+
+**발견된 잔재: 0건.** 모든 검색 결과 분류:
+
+| 검색 결과 | 위치 | 분류 | 조치 |
+|---|---|---|---|
+| ADR 본문(0009, 0010, 0013, 0022) 및 다른 곳의 설계 참조 문구에 나오는 "Chat Project" 서술 | `docs/ADR/*`, `CLAUDE.md`, `docs/CHANGELOG.md` | 부정문 / 설계 참조 | 유지 — 각각 그 용어를 배제하거나("GraphQL/WebSocket/gRPC 제안 금지"), admin 콘솔의 이식 출처로 Chat Project를 명시적으로 인용함 |
+| `winston`/`Sentry` | `CLAUDE.md`, `docs/ADR/0017` | 부정문 | 유지 — "새 의존성 없음" / "아직 도입 안 함" |
+| `superadmin` | `backend/auth/role/role.ts` 및 모든 RBAC 호출부 | 고유 기능 | 유지 — 이 저장소의 실제 3단계 역할(ADR 0013)이지, chat 프로젝트 잔재가 아님 |
+| `AuditLogService`/`AuditLogModule`/`AuditLogEntity` | `backend/audit-log/` 및 이를 주입하는 모든 모듈 | 고유 기능 | 유지 — 이 저장소의 실제 append-only 감사 로그(ADR 0013). 세트 B의 `AuditLog` 용어는 원래 *다른* 동명의 chat 프로젝트 개념을 잡기 위한 것이었을 뿐 |
+| "ported from Chat-project's filter minus its GraphQL branch and logger" | `backend/common/filter/all-exceptions.filter.ts:3`(파일 헤더) | 설계 참조 | 유지 — 목적/이유/방법 필수 헤더(File Creation Convention)가 출처를 명시적으로 밝힌 것이지, 이 저장소의 현재 동작을 서술한 게 아님 |
+| "no WebSocket in this project" | `frontend/src/features/posts/PostDetailPage.tsx:4` | 부정문 | 유지 — 명시적 사용자 액션에만 스레드를 다시 불러오는 이유를 설명 |
+| `resolveRoute` | `backend/metrics/metrics.interceptor.ts` | 오탐 | 유지 — "resolver"의 부분 문자열 일치, GraphQL과 무관한 HTTP 라우트 해석기 |
+
+`.env.example`: 두 세트 모두 결과 없음.
+
+버킷 1 결과는 어디에도 없습니다. 이 저장소는 이번 재검증 기준으로 전체 문서,
+`.env.example`, `frontend/`, `backend/` 범위에서 깨끗하며, 이 계획서가 실행한
+검토 중 가장 넓은 단일 패스입니다.
+
 ## 잔여 작업 (처리 예정)
 
 1. **Git 히스토리 결정** — `4d00bc2` 이전 커밋들에는 채팅 앱 `CLAUDE.md`가 여전히
@@ -161,9 +196,12 @@ grep -rniE "RbacGuard|GqlTransaction|QueryRunnerDecorator|RateLimitGuard|kickPre
    - 다른 프로젝트나 과거 브랜치에서 내용을 붙여넣을 때
    - 저장소를 공개/태깅하기 직전
 
-   지금까지 2회 발동 — `admin/` 이식(2026-07-30, 문서 범위)과 위의 코드 범위 재검증
-   (2026-08-13, 첫 검토가 남긴 문서 전용 공백을 닫음). 앞으로 `admin/`을 다시 검토할 때도
-   문서만 보는 쪽으로 되돌아가지 말고 계속 코드까지 넓혀야 합니다.
+   지금까지 3회 발동 — `admin/` 이식(2026-07-30, 문서 범위), 코드 범위 재검증
+   (2026-08-13, 첫 검토가 남긴 문서 전용 공백을 닫음), 그리고 "공개 직전" 조건
+   (2026-09-07, 예상해서 대비한 게 아니라 이미 발동한 걸 뒤늦게 발견함 — 아무도 이
+   방법을 다시 실행해보기 전까지 저장소는 이미 한동안 공개 상태였습니다). 앞으로의
+   모든 검토는 범위를 문서 전용이나 특정 하위폴더로 되돌리지 말고 계속 넓혀야
+   합니다.
 3. **메모리 위생** — 저장소 외부 메모리 파일은 2026-07-22 기준 클린; 프로젝트
    아키텍처를 언급하는 메모리 항목이 추가될 때마다 재확인.
 

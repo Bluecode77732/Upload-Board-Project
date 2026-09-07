@@ -149,6 +149,39 @@ grep -rniE "RbacGuard|GqlTransaction|QueryRunnerDecorator|RateLimitGuard|kickPre
 No bucket-1 hit. `admin/` is clean at both doc scope and code scope as of this
 re-verification.
 
+## Re-verification — Full Scope, "About to Be Published" Trigger (2026-09-07)
+
+The re-verification trigger's third condition — "the repo is about to be published/tagged"
+— had already fired without anyone noticing: confirmed via `gh repo view` that this
+repository's GitHub visibility is `PUBLIC`, and has been for some time. This pass closes
+that gap and, in the same run, extends coverage to two scopes the Method table (above)
+never listed because they didn't exist yet at the 2026-07-22 audit: `frontend/` (created
+2026-07-24) and a full `backend/` sweep (previously assumed clean by inheritance from the
+2026-07-22 `CLAUDE.md` rewrite, never explicitly re-run against Set A/B).
+
+Set A and Set B, run verbatim against: root `*.md`, `docs/` (including `ADR/`),
+`.env.example`, `frontend/src` + `frontend/index.html` + `frontend/package.json`, all of
+`backend/`, and `admin/src` + `admin/vercel.json` + `admin/index.html` +
+`admin/package.json` + `admin/e2e` re-run for freshness (unchanged since 2026-08-13: same
+`session-guard.ts`/`protected-route.tsx` own-file hits, same "moderation" negation).
+
+**Remnants found: 0.** Every hit classified:
+
+| Hit | Location(s) | Bucket | Action |
+|---|---|---|---|
+| "Chat Project" prose in ADR bodies (0009, 0010, 0013, 0022) and their design-reference callouts elsewhere | `docs/ADR/*`, `CLAUDE.md`, `docs/CHANGELOG.md` | Negation / design reference | Keep — each either rejects the term ("Never suggest GraphQL/WebSocket/gRPC") or explicitly cites the Chat Project as the admin console's declared import source |
+| `winston`/`Sentry` | `CLAUDE.md`, `docs/ADR/0017` | Negation | Keep — "no new dependency" / "not yet adopted" |
+| `superadmin` | `backend/auth/role/role.ts` and every RBAC call site | Own feature | Keep — this repo's real third role tier (ADR 0013), not a chat-project holdover |
+| `AuditLogService`/`AuditLogModule`/`AuditLogEntity` | `backend/audit-log/`, and every module that injects it | Own feature | Keep — this repo's real append-only audit log (ADR 0013), matched only because Set B's `AuditLog` term was written to catch a *different* chat-project concept of the same name |
+| "ported from Chat-project's filter minus its GraphQL branch and logger" | `backend/common/filter/all-exceptions.filter.ts:3` (file header) | Design reference | Keep — the mandatory Purpose/Usage/Rationale header (File Creation Convention) explicitly attributing provenance, not a description of this repo's current behavior |
+| "no WebSocket in this project" | `frontend/src/features/posts/PostDetailPage.tsx:4` | Negation | Keep — explains why the thread refetches on explicit action instead |
+| `resolveRoute` | `backend/metrics/metrics.interceptor.ts` | False positive | Keep — substring match on "resolver," an HTTP-route resolver, unrelated to GraphQL |
+
+`.env.example`: zero hits, either set.
+
+No bucket-1 hit anywhere. The repository is clean at full doc, `.env.example`, `frontend/`,
+and `backend/` scope as of this re-verification — the widest single pass this plan has run.
+
 ## Remaining Work (Pending)
 
 1. **Git history decision** — commits up to `4d00bc2` still contain the chat-app
@@ -163,9 +196,12 @@ re-verification.
    - content is pasted in from another project or an older branch, or
    - the repo is about to be published/tagged.
 
-   Fired twice so far — the `admin/` import (2026-07-30, doc scope) and the code-scope
-   re-verification above (2026-08-13, closing the doc-only gap the first pass left open). Any
-   future `admin/` pass should keep widening to code, not fall back to docs-only.
+   Fired three times so far — the `admin/` import (2026-07-30, doc scope), the code-scope
+   re-verification (2026-08-13, closing the doc-only gap the first pass left open), and the
+   "about to be published" condition (2026-09-07, discovered already-fired rather than
+   anticipated — the repo had been public for a while before anyone re-ran this Method
+   against it). Any future pass should keep widening scope rather than narrowing back to
+   docs-only or to a single subfolder.
 3. **Memory hygiene** — out-of-repo memory files were clean on 2026-07-22; re-check
    whenever a memory entry is added that references project architecture.
 
