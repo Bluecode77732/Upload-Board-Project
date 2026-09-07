@@ -865,6 +865,12 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   A thumbnail endpoint would remove the gate and let every tile preview instantly.
   Revisit alongside the Stage 4 S3 cutover, since where thumbnails live is a storage
   decision (ADR 0029's `FileStorage` port would need a new operation).
+  **Confirmed 2026-09-07: implement only if actually needed, not proactively.** The
+  current click-gate/lazy-load workaround has no reported problem to fix — this stays
+  a documented gap (now precisely described above) rather than a scheduled task. Revisit
+  only if the video click-gate or the private-file full-download cost actually becomes a
+  real complaint, or naturally alongside a future S3 cutover that touches the same
+  `FileStorage` port anyway.
 - ~~Dev-database rows whose stored bytes are gone~~ (recorded 2026-08-24) — **moot as of
   2026-09-07, nothing to decide.** Measured 2026-08-24: of the **25** public files then
   visible in the shared dev DB, **23 returned `404 FILE_NOT_FOUND`** — metadata rows left

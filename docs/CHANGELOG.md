@@ -12,6 +12,15 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Changed
+- **Server-side thumbnail endpoint confirmed implement-only-if-needed (2026-09-07)** — the
+  current click-gate/lazy-load workaround (`FilePreviewTile.tsx`, documented precisely in
+  the same ROADMAP entry earlier the same day) has caused no reported problem, so this
+  stays a documented gap rather than a scheduled task. Revisit only if the video
+  click-gate or the private-file full-download cost becomes an actual complaint, or
+  naturally alongside a future S3 cutover touching the same `FileStorage` port. No code
+  change — pure documentation in `docs/ROADMAP.md`(+ko).
+
 ### Added
 - **Frontend: account-deletion UI + upload-replay UX (2026-09-07)** — closes the last two
   open "frontend adoption" gaps ROADMAP.md §7 tracked ([ADR 0019](ADR/0019-upload-claim-idempotency.md),
