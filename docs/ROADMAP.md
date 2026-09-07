@@ -959,8 +959,15 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   plus a jest `setupFiles` env override ([ADR 0016](ADR/0016-github-actions-ci.md),
   `test/e2e-env.ts`) — valid, but it relies on env-before-import timing and a
   pre-provisioned Postgres. Testcontainers (an ephemeral per-run container injected via
-  a Nest provider override) would remove both. Deferred: a new dev dependency plus a CI
-  change; revisit when the deploy environment (Stage 4) is set.
+  a Nest provider override) would remove both. **Deferral reconfirmed 2026-09-07**: the
+  original trigger ("revisit when the deploy environment, Stage 4, is set") has actually
+  already passed — Stage 4's AWS deploy was proven end-to-end and the current
+  manual-Postgres approach never caused a problem getting there, so that trigger alone
+  isn't a reason to act. Restated as an implement-when-actually-needed item: introduce it
+  only if the current approach starts causing real friction (a second developer's local
+  setup, CI flakiness tied to the pre-provisioned DB) — not proactively. New dev
+  dependency plus a CI change either way, so it still needs the same approval this row
+  always required.
 - ~~License~~ — **decided 2026-09-07: MIT.** `package.json` had said `UNLICENSED` since
   the first commit; the pre-rewrite README's `License / MIT` section was silently dropped
   (not decided) during the 2026-07-22 doc rewrite, leaving the project with no license
@@ -970,11 +977,18 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   for a public portfolio-style repo. Landed: root `LICENSE` file (MIT text), `package.json`
   (root + `frontend/` + `admin/`, the latter two previously had no `license` field at all)
   → `"MIT"`, and a restored `## License` section in `README.md`(+ko) linking to it.
-- Chat-project remnant handling ([plan](CHAT-REMNANT-REMOVAL-PLAN.md)):
-  git-history decision + re-verification trigger for new or pasted-in docs.
+- ~~Chat-project remnant handling~~ ([plan](CHAT-REMNANT-REMOVAL-PLAN.md)): git-history
+  decision **made 2026-09-07 — leave as-is**, matching the plan's own recommended option
+  (rewriting is destructive and would break every commit hash `CHANGELOG.md`/`ROADMAP.md`
+  already cite; the only case for rewriting — content that must not be publishable — never
+  applied here, it's design docs, not secrets). Re-verification trigger stays a standing
+  habit (already fired three times, see the plan's own log), not a one-time task to close.
 - Dev-transitive `pnpm audit` findings (handlebars via ts-jest;
   glob/minimatch/webpack via jest and @nestjs/cli) — build/test-time only;
   waiting on upstream releases. (`pnpm audit --prod` is clean as of 2026-07-24.)
+  **Reconfirmed 2026-09-07**: nothing actionable from this codebase — there's no fix to
+  apply here, only upstream releases to wait for, so "implement when needed" collapses to
+  "re-run `pnpm audit` occasionally and act only once an upstream release actually lands."
 - API versioning timing — the consumer is now decided; versioning activates
   when a post-freeze breaking change actually needs it (see Design criteria).
 - Frontend stack — **decided 2026-07-24: React + Vite** (SPA consuming this

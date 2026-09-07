@@ -2,8 +2,10 @@
 
 > 한국어 버전: [CHAT-REMNANT-REMOVAL-PLAN.ko.md](CHAT-REMNANT-REMOVAL-PLAN.ko.md)
 
-**Status: Pending (recorded for future processing)** — audit executed 2026-07-22;
-remaining actions are listed under [Remaining Work](#remaining-work-pending).
+**Status: Mostly closed** — audit executed 2026-07-22; the git-history decision (the
+plan's item 1) was made 2026-09-07. What's left is item 2, the re-verification trigger —
+fired three times manually so far but not yet automated, so not "closed" by the plan's
+own Completion Criteria — see [Remaining Work](#remaining-work-pending).
 
 ## Background
 
@@ -184,13 +186,17 @@ and `backend/` scope as of this re-verification — the widest single pass this 
 
 ## Remaining Work (Pending)
 
-1. **Git history decision** — commits up to `4d00bc2` still contain the chat-app
-   `CLAUDE.md` (readable via `git show c8eb19f:CLAUDE.md`). Options:
-   - **Leave as-is (recommended)** — it is an honest historical record; a history
-     rewrite (`filter-repo`) is destructive, breaks all existing commit hashes cited
-     in `CHANGELOG.md`/`ROADMAP.md`, and the content misleads no one reading HEAD.
-   - Rewrite history — only justifiable if the old content must not be publishable.
-   Decision deferred to the developer; no action until explicitly chosen.
+1. ~~**Git history decision**~~ — **decided 2026-09-07: leave as-is.** Commits up to
+   `4d00bc2` still contain the chat-app `CLAUDE.md` (readable via
+   `git show c8eb19f:CLAUDE.md`). The recommended option was chosen: it is an honest
+   historical record; a history rewrite (`filter-repo`) is destructive, breaks all
+   existing commit hashes cited in `CHANGELOG.md`/`ROADMAP.md`, and the content misleads
+   no one reading HEAD. The only case that would have justified rewriting — content that
+   must not be publishable — never applied here (design docs and code, not secrets or
+   PII), and the 2026-09-07 full-scope re-verification above reconfirmed the repo is
+   clean at HEAD regardless of what old commits carry. Framed as implement-only-if-needed:
+   revisit only if a future, currently unforeseen reason to scrub history actually
+   surfaces — not proactively.
 2. **Re-verification trigger** — re-run the Method grep sets whenever:
    - a new documentation file is added, or
    - content is pasted in from another project or an older branch, or

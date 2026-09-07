@@ -13,6 +13,24 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Three long-standing "waiting" backlog items resolved to implement-only-if-needed
+  (2026-09-07)** — closes out the last purely backend-scoped, decision-only items in
+  `docs/ROADMAP.md` §7:
+  - **Chat-project remnant git history**: decided **leave as-is**, the plan's own
+    recommended option (`docs/CHAT-REMNANT-REMOVAL-PLAN.md` item 1) — rewriting is
+    destructive and would break every commit hash already cited in `CHANGELOG.md`/
+    `ROADMAP.md`, and the one case that would justify it (unpublishable content) never
+    applied here. Revisit only if a genuinely new reason surfaces.
+  - **Testcontainers for e2e**: deferral reconfirmed, but the reasoning updated — the
+    original trigger ("Stage 4 deploy environment set") already passed without the
+    current manual-Postgres approach causing any problem, so that trigger alone isn't
+    a reason to act. Re-scoped to introduce only if real friction actually shows up
+    (a second developer, CI flakiness).
+  - **`pnpm audit` dev-transitive findings**: reconfirmed there is nothing actionable
+    from this codebase — no fix to apply, only upstream releases to wait for.
+  No code changes; pure documentation in `docs/ROADMAP.md`(+ko) and
+  `docs/CHAT-REMNANT-REMOVAL-PLAN.md`(+ko).
+
 - **Terraform/AWS infrastructure identifiers renamed to `sharenpo` (2026-09-07)** — landed
   the rename ROADMAP.md deferred since 2026-08-25, at exactly the free window that entry
   named: re-verified live (`aws eks/rds/s3` all empty, all three local `.tfstate` files hold
