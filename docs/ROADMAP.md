@@ -842,12 +842,26 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   of it is a design decision first and a code change second.
 - Server-side thumbnail endpoint (recorded 2026-08-24) — **not started because** it is a
   backend change (a new derived artifact per file, plus where to store and when to
-  generate it) that the grid above does not strictly need. But it is the root cause of
-  that grid's sharpest compromise: with no thumbnail, a `private` file's preview means
-  downloading the entire object — up to the 100MB upload ceiling
-  ([ADR 0027](ADR/0027-media-type-expansion-implementation.md)) — because `<img>`/`<video
-  src>` cannot carry a Bearer header and only the authenticated blob path can read those
-  bytes (ADR 0025/0026). The click gate on video tiles exists solely to bound that cost.
+  generate it) that the grid above does not strictly need. **Current mechanism, precisely
+  (2026-09-07 addition — no thumbnail is generated anywhere; this describes conditional
+  *rendering of the original*, not thumbnail generation)**: `frontend/src/features/files/
+  FilePreviewTile.tsx` picks a load strategy per `mediaType`, gated separately from
+  visibility —
+  - `image`: loads automatically once the tile enters the viewport
+    (`IntersectionObserver`, latched so re-scrolling doesn't refetch).
+  - `video`: does not auto-load at all — shows a 🎬 placeholder + "Load preview" button;
+    bytes are only requested after an explicit click (`videoRequested` state).
+  - `audio`: never loads preview bytes — a fixed 🎵 placeholder only, since there is no
+    visual frame to fill.
+  Independently of the above, `public`/`unlisted` files stream directly via `<img
+  src>`/`<video src>` pointed at `fileUrl`/`shareUrl` (`directSrc()`), while `private`
+  files can't — `<img>`/`<video>` can't carry a Bearer header — so those go through
+  `api.getBlob('/file/:id/content')` into an `objectURL`, revoked on unmount/file change.
+  This is why that grid's sharpest compromise exists: with no thumbnail, a `private`
+  file's preview means downloading the *entire* object — up to the 100MB upload ceiling
+  ([ADR 0027](ADR/0027-media-type-expansion-implementation.md)) — through that same
+  authenticated blob path (ADR 0025/0026). The video click-gate above exists solely to
+  bound that cost for the one media type large enough for it to matter.
   A thumbnail endpoint would remove the gate and let every tile preview instantly.
   Revisit alongside the Stage 4 S3 cutover, since where thumbnails live is a storage
   decision (ADR 0029's `FileStorage` port would need a new operation).
