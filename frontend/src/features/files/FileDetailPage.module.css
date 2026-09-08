@@ -111,6 +111,11 @@
   color: var(--brand);
 }
 
+.copyButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
 .copyFeedback {
   color: var(--success);
 }
@@ -169,6 +174,11 @@
   color: var(--brand);
 }
 
+.rotateButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
 .rotateButton:disabled,
 .select:disabled {
   opacity: 0.6;
@@ -187,6 +197,11 @@
 
 .deleteButton:hover:not(:disabled) {
   background: var(--danger-bg);
+}
+
+.deleteButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .deleteButton:disabled {

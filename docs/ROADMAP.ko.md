@@ -704,7 +704,28 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   36×36에서 44×44로). 변경 후 Playwright로 `LoginPage`에서 실측하니 47.17px. 순수 텍스트
   링크 스타일 컨트롤(`FilePreviewTile`의 `.title`/`.creatorButton`, `PostBoard`의
   `.creatorButton`, 모든 `.backLink`)은 WCAG 2.5.8의 인라인 타겟 예외에 따라 의도적으로
-  손대지 않았다 — 빠뜨린 게 아니다.
+  손대지 않았다 — 빠뜨린 게 아니다. **갱신 (2026-09-08)**: 이 행이 미착수로 남겨둔
+  focus-visible 쪽도 이제 마무리됐다 — 다음 행 참고.
+- ~~키보드 포커스 표시 공백~~ (위 행에서 2026-08-24에 측정, 2026-09-08에 해결) — 위 행이
+  `:focus-visible`이 없다고 나열했던 테두리/배경이 있는 버튼 전부가 이제
+  `FilePreviewTile`/`FileBoard`에서 이미 검증된 패턴(`outline: 2px solid var(--brand);
+  outline-offset: 2px;`)을 그대로 복붙해 갖췄다 — 새로 고안하지 않았다: `NavBar`
+  (`.themeToggle`, `.signOut`), `PostBoard`(`.clearButton`, `.creatorButton`,
+  `.pageButton`), `PostDetailPage`(`.primaryButton`, `.button`, `.deleteButton`),
+  `CommentThread`(`.button`, `.deleteButton`, `.loadMoreButton`),
+  `FileDetailPage`(`.copyButton`, `.rotateButton`, `.deleteButton`),
+  `SettingsPage`(`.deleteButton`), `PostForm`/`CommentForm`/`UploadForm`(`.submit`) — 파일
+  9개에 걸쳐 셀렉터 20개, 순수 CSS만 추가하고 로직·마크업은 건드리지 않았다. grep이
+  아니라 실제로 검증했다: 임시 계정을 등록하고 실제 `Tab` 키 입력(Chromium의
+  `:focus-visible` 휴리스틱이 무시하는 `.focus()` 호출이 아니라)으로 `NavBar`,
+  `PostBoard`, `PostDetailPage`, `CommentThread`, `CommentForm`, `SettingsPage`,
+  `UploadForm`을 순회하며 포커스된 요소의 계산된 `outline*` 값을 읽었다 — 나열된 모든
+  셀렉터가 2px `--brand` 링을 그렸고, 이 목록에 **일부러 넣지 않은** `FileBoard`의
+  `.clearButton`은 브라우저 기본 아웃라인만 그렸다 — 범위를 정확히 지켰다는 것을 보여주는
+  실측 음성 대조군이다. `FileBoard`의 `.loadMoreButton`/페이지네이션과 `FileDetailPage`
+  자체는 (임시 계정에 업로드된 파일이 없어) 실측으로 별도 확인하지 못했다 — 동일한 규칙이
+  이미 8번 확인된 뒤라 변경의 공백은 아니다. 테스트 계정은 앱 자체의
+  `DELETE /user/:id`로 삭제해, 개발 DB에 인위적인 데이터를 남기지 않았다.
 - ~~파일 보드 프리뷰 그리드화 (`/files`)~~ — **2026-08-24 완료**(커밋 `e567277`,
   [CHANGELOG.ko.md](CHANGELOG.ko.md) `[Unreleased] > 변경`). 보드가 파일당 텍스트 한
   줄만 보여줬기 때문에, 상세 페이지를 열지 않고서는 어떤 파일인지 알 방법이 없었다.

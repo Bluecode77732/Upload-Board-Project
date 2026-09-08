@@ -63,6 +63,11 @@
   color: var(--brand);
 }
 
+.clearButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
 .error {
   color: var(--danger);
 }
@@ -126,6 +131,11 @@
   color: var(--brand);
 }
 
+.creatorButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
 .pagination {
   display: flex;
   gap: 12px;
@@ -147,6 +157,11 @@
 .pageButton:hover:not(:disabled) {
   border-color: var(--brand);
   color: var(--brand);
+}
+
+.pageButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .pageButton:disabled {

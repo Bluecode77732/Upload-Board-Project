@@ -31,6 +31,24 @@ development line (package.json version).
   build`/`pnpm lint` green, Playwright screenshots of `LoginPage` in both themes, button
   height measured at 47.17px post-change.
 
+- **Frontend: keyboard focus indicator for every remaining button (2026-09-08)** — closes
+  the focus-visible half the touch-target row above deliberately left unstarted. Added
+  `:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }` — the exact
+  pattern already in `FilePreviewTile.module.css`/`FileBoard.module.css`, copied verbatim,
+  never re-derived — to 20 selectors across 9 files: `NavBar` (`.themeToggle`, `.signOut`),
+  `PostBoard` (`.clearButton`, `.creatorButton`, `.pageButton`), `PostDetailPage`
+  (`.primaryButton`, `.button`, `.deleteButton`), `CommentThread` (`.button`,
+  `.deleteButton`, `.loadMoreButton`), `FileDetailPage` (`.copyButton`, `.rotateButton`,
+  `.deleteButton`), `SettingsPage` (`.deleteButton`), and `PostForm`/`CommentForm`/
+  `UploadForm` (`.submit`). Pure CSS — no logic or markup change. Verified live: registered
+  a throwaway account, tabbed through `NavBar`/`PostBoard`/`PostDetailPage`/`CommentThread`/
+  `CommentForm`/`SettingsPage`/`UploadForm` with real `Tab` keypresses (not `.focus()`,
+  which Chromium's `:focus-visible` heuristic ignores), and read each focused element's
+  computed `outline*` — every listed selector showed the 2px `--brand` ring, while
+  `FileBoard`'s `.clearButton` (deliberately excluded) still showed the browser default, a
+  live negative control confirming scope was followed exactly. Account deleted afterward
+  via the app's own `DELETE /user/:id`, leaving no test data behind.
+
 - **Server-side thumbnail endpoint confirmed implement-only-if-needed (2026-09-07)** — the
   current click-gate/lazy-load workaround (`FilePreviewTile.tsx`, documented precisely in
   the same ROADMAP entry earlier the same day) has caused no reported problem, so this

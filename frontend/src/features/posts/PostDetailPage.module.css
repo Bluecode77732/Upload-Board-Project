@@ -121,6 +121,11 @@
   color: var(--brand);
 }
 
+.button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
 .primaryButton {
   padding: 12px 14px;
   border: none;
@@ -136,6 +141,11 @@
   background: var(--brand-hover);
 }
 
+.primaryButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
 .deleteButton {
   padding: 12px 14px;
   border: 1px solid var(--danger);
@@ -148,6 +158,11 @@
 
 .deleteButton:hover:not(:disabled) {
   background: var(--danger-bg);
+}
+
+.deleteButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .button:disabled,

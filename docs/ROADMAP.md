@@ -738,7 +738,29 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   44×44); Playwright-measured on `LoginPage` post-change at 47.17px. Plain-text-styled
   controls (`FilePreviewTile`'s `.title`/`.creatorButton`, `PostBoard`'s `.creatorButton`,
   every `.backLink`) were deliberately left alone under WCAG 2.5.8's inline-target exception,
-  not overlooked.
+  not overlooked. **Update (2026-09-08)**: the focus-visible half this row left unstarted is
+  now closed too — see the next row.
+- ~~Keyboard focus indicator gap~~ (measured 2026-08-24 in the row above, closed 2026-09-08)
+  — every bordered/background button the row above listed as missing `:focus-visible` now
+  carries the exact pattern already proven on `FilePreviewTile`/`FileBoard`
+  (`outline: 2px solid var(--brand); outline-offset: 2px;`), copied verbatim rather than
+  reinvented: `NavBar` (`.themeToggle`, `.signOut`), `PostBoard` (`.clearButton`,
+  `.creatorButton`, `.pageButton`), `PostDetailPage` (`.primaryButton`, `.button`,
+  `.deleteButton`), `CommentThread` (`.button`, `.deleteButton`, `.loadMoreButton`),
+  `FileDetailPage` (`.copyButton`, `.rotateButton`, `.deleteButton`), `SettingsPage`
+  (`.deleteButton`), and `PostForm`/`CommentForm`/`UploadForm` (`.submit`) — 20 selectors
+  across 9 files, pure CSS, no logic or markup change. Verified live, not just by grep:
+  registered a throwaway account, tabbed with real `Tab` keypresses (not `.focus()`, which
+  Chromium's `:focus-visible` heuristic ignores) through `NavBar`, `PostBoard`,
+  `PostDetailPage`, `CommentThread`, `CommentForm`, `SettingsPage`, and `UploadForm`,
+  reading each focused element's computed `outline*` — every listed selector rendered the
+  2px `--brand` ring, and `FileBoard`'s `.clearButton` (deliberately **not** in this list)
+  rendered the browser's plain default outline instead, a live negative control that the
+  scope was followed exactly. `FileBoard`'s `.loadMoreButton`/pagination and
+  `FileDetailPage` itself weren't independently re-verified live (no uploaded file existed
+  in the throwaway account to reach them) — not a gap in the change, since the identical
+  rule was already confirmed working 8 times over; the test account was deleted via the
+  app's own `DELETE /user/:id` afterward, so nothing artificial was left in the dev DB.
 - ~~File board as a preview grid (`/files`)~~ — **landed 2026-08-24** (commit `e567277`,
   [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Changed`). The board listed one text row per
   file, so nothing identified a file short of opening its detail page. It is now a

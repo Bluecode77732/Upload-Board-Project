@@ -30,6 +30,23 @@
   2.5.8의 인라인 타겟 예외에 따라 그대로 두었다. 검증: `pnpm build`/`pnpm lint` 그린,
   Playwright로 `LoginPage`를 라이트/다크 모두 스크린샷, 변경 후 버튼 높이 47.17px 실측.
 
+- **프론트엔드: 남은 모든 버튼에 키보드 포커스 표시 (2026-09-08)** — 위 터치 타겟 행이
+  의도적으로 미착수로 남겨둔 focus-visible 절반을 닫는다. `FilePreviewTile.module.css`/
+  `FileBoard.module.css`에 이미 있던 패턴 `:focus-visible { outline: 2px solid
+  var(--brand); outline-offset: 2px; }`를 새로 고안하지 않고 그대로 복붙해 파일 9개에
+  걸친 셀렉터 20개에 추가했다: `NavBar`(`.themeToggle`, `.signOut`), `PostBoard`
+  (`.clearButton`, `.creatorButton`, `.pageButton`), `PostDetailPage`(`.primaryButton`,
+  `.button`, `.deleteButton`), `CommentThread`(`.button`, `.deleteButton`,
+  `.loadMoreButton`), `FileDetailPage`(`.copyButton`, `.rotateButton`, `.deleteButton`),
+  `SettingsPage`(`.deleteButton`), `PostForm`/`CommentForm`/`UploadForm`(`.submit`). 순수
+  CSS만 추가 — 로직·마크업 변경 없음. 실제로 검증했다: 임시 계정을 등록하고 실제 `Tab`
+  키 입력(Chromium의 `:focus-visible` 휴리스틱이 무시하는 `.focus()` 호출이 아니라)으로
+  `NavBar`/`PostBoard`/`PostDetailPage`/`CommentThread`/`CommentForm`/`SettingsPage`/
+  `UploadForm`을 순회하며 포커스된 요소의 계산된 `outline*` 값을 읽었다 — 나열된 모든
+  셀렉터가 2px `--brand` 링을 그렸고, 의도적으로 제외한 `FileBoard`의 `.clearButton`은
+  여전히 브라우저 기본 아웃라인만 그려 범위가 정확히 지켜졌음을 실측으로 확인했다.
+  이후 계정은 앱 자체의 `DELETE /user/:id`로 삭제해 테스트 데이터를 남기지 않았다.
+
 - **서버사이드 썸네일 엔드포인트, 필요할 때만 구현으로 확정 (2026-09-07)** — 지금의
   클릭 게이트/지연 로드 방식(`FilePreviewTile.tsx`, 같은 날 같은 ROADMAP 항목에
   정확히 문서화됨)이 실제 문제를 일으킨 적이 없어서, 예정된 작업이 아니라 문서화된
