@@ -13,6 +13,26 @@
 ## [Unreleased]
 
 ### 변경
+- **프론트엔드: NavBar 컨트롤 크기 축소 (2026-09-08)** — `.themeToggle` 44×44px→40×40px,
+  `.signOut` padding `12px 14px`→`9px 12px`, 사용자 명시적 요청("약간만 축소, 40px
+  안팎")에 따름. 바로 아래 터치 타겟 크기 조정 작업이 이 두 컨트롤에 세워둔 44px WCAG
+  2.5.8 기준 아래로 다시 내려가는 결정 — 구현 전 개발자에게 트레이드오프를 알렸고 확정을
+  받았다. 그 작업이 키운 다른 버튼들은 영향받지 않는다. 검증: `pnpm build`/`pnpm lint`
+  클린, 실측 `themeToggle` 40×40px / `signOut` ~75×34px. `docs/ROADMAP.md` §7의 터치
+  타겟 행에도 이 예외를 2026-09-08 추가 기록으로 남겨, 여전히 44×44라고 읽히지 않도록
+  갱신했다.
+
+- **프론트엔드: NavBar "My Files" → "Files" 라벨 (2026-09-08)** — 375px에서 nav 링크가
+  두 줄로 줄바꿈되는 문제를 고쳤다. `white-space: nowrap`을 먼저 시도했으나 줄바꿈은
+  없앴지만 320px에서 헤더 행이 페이지 밖으로 넘쳐 "Sign out"이 잘리는 회귀를 일으켜
+  폐기했다 — 라벨 축약은 어떤 폭에서도 그런 위험이 없다. `e2e/navigation.spec.ts`/
+  `e2e/helpers.ts`의 "My Files" 텍스트 매처를 "Files"로 갱신했고(`exact: true` 추가 —
+  짧은 공통 단어 충돌 방지, `frontend/CLAUDE.md`의 E2E 매칭 주의사항), `README.md`(+ko)
+  설명도 함께 고쳤다. 검증: `pnpm build`/`pnpm lint` 클린, e2e navigation 스위트 5/5
+  통과, 실제 320px/375px 라이브 확인 결과 줄바꿈·페이지 넘침 모두 없음(이 검증 도중 이
+  기기의 Windows 디스플레이 배율 110%가 Playwright `setViewportSize`를 실제보다 작게
+  만드는 문제를 발견해 1.1배로 보정한 뒤 재확인했다).
+
 - **프론트엔드: transition/shadow 토큰; admin: 가로 스크롤 + 키보드 접근성 유지
   (2026-09-08)** — `docs/ROADMAP.ko.md` §7에 남아 있던 낮은 우선순위 폴리시 항목 2건을
   마무리한다. **프론트엔드**: `index.css`에 `--transition: all 150ms ease;`를 추가하고,

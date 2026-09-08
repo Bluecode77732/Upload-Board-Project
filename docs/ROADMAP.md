@@ -735,7 +735,11 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `CommentThread`, `FileBoard`, `FileDetailPage`, `FilePreviewTile`'s `.loadButton`,
   `PostBoard`, `UploadForm`, `PostForm`, and `PostDetailPage` had its padding raised to clear
   a 44px CSS-px minimum (`NavBar`'s icon-only `.themeToggle` went from a fixed 36×36 to
-  44×44); Playwright-measured on `LoginPage` post-change at 47.17px. Plain-text-styled
+  44×44); Playwright-measured on `LoginPage` post-change at 47.17px. **Update (2026-09-08)**:
+  `NavBar`'s `.themeToggle`/`.signOut` were reduced again, to 40×40px / a smaller padding —
+  a deliberate, explicit user request (not a regression), landing them back below this row's
+  own 44px WCAG 2.5.8 floor for these two controls specifically. Every other button this row
+  raised is unaffected. Plain-text-styled
   controls (`FilePreviewTile`'s `.title`/`.creatorButton`, `PostBoard`'s `.creatorButton`,
   every `.backLink`) were deliberately left alone under WCAG 2.5.8's inline-target exception,
   not overlooked. **Update (2026-09-08)**: the focus-visible half this row left unstarted is

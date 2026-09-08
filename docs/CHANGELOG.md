@@ -13,6 +13,27 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Frontend: NavBar control sizing (2026-09-08)** — `.themeToggle` 44×44px → 40×40px,
+  `.signOut` padding `12px 14px` → `9px 12px`, on explicit user request ("약간만 축소,
+  40px 안팎"). Deliberately reduces both controls back below the 44px WCAG 2.5.8 floor the
+  touch-target-sizing pass (below) had just established for them — flagged to the developer
+  before implementing, who confirmed the trade-off. Every other button that row raised is
+  unaffected. Verified: `pnpm build`/`pnpm lint` clean, live-measured
+  `themeToggle` 40×40px / `signOut` ~75×34px. `docs/ROADMAP.md` §7's touch-target row updated
+  to record the exception (see its 2026-09-08 addendum) so it no longer reads as still 44×44.
+
+- **Frontend: NavBar "My Files" → "Files" label (2026-09-08)** — fixes a two-line wrap of
+  the nav link at 375px. `white-space: nowrap` was tried first and rejected: it fixed the
+  wrap but caused the header row to overflow the page horizontally at 320px (clipping "Sign
+  out"), a regression the shorter label doesn't risk at any width. Updated
+  `e2e/navigation.spec.ts`/`e2e/helpers.ts`'s "My Files" text matchers to "Files"
+  (`exact: true` added — a short common word, per `frontend/CLAUDE.md`'s E2E matching
+  gotcha) and `README.md`(+ko)'s description. Verified: `pnpm build`/`pnpm lint` clean, e2e
+  navigation suite 5/5 green, live 320px/375px checks show no wrap and no page overflow
+  (a display-scaling calibration issue in the test setup was found and corrected mid-check —
+  Playwright's `setViewportSize` needed a 1.1× request to land the true CSS width on this
+  machine's 110% Windows display scaling).
+
 - **Frontend: transition/shadow tokens; admin: keep horizontal scroll + keyboard access
   (2026-09-08)** — closes both remaining low-priority polish items from `docs/ROADMAP.md`
   §7. **Frontend**: `index.css` gained `--transition: all 150ms ease;`, applied via

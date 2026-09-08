@@ -701,7 +701,11 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   `FileBoard`, `FileDetailPage`, `FilePreviewTile`의 `.loadButton`, `PostBoard`,
   `UploadForm`, `PostForm`, `PostDetailPage`에 걸친 테두리/배경이 있는 "버튼형" 컨트롤 전부가
   44px CSS px 최소 기준을 넘도록 패딩을 올렸다(`NavBar`의 아이콘 전용 `.themeToggle`은 고정
-  36×36에서 44×44로). 변경 후 Playwright로 `LoginPage`에서 실측하니 47.17px. 순수 텍스트
+  36×36에서 44×44로). 변경 후 Playwright로 `LoginPage`에서 실측하니 47.17px. **갱신
+  (2026-09-08)**: `NavBar`의 `.themeToggle`/`.signOut`은 이후 다시 40×40px / 더 작은
+  padding으로 축소됐다 — 회귀가 아니라 사용자의 명시적 요청에 따른 의도적 결정이며, 이
+  두 컨트롤에 한해 이 행이 세운 44px WCAG 2.5.8 기준 아래로 다시 내려갔다. 이 행이 키운
+  다른 버튼들은 영향받지 않는다. 순수 텍스트
   링크 스타일 컨트롤(`FilePreviewTile`의 `.title`/`.creatorButton`, `PostBoard`의
   `.creatorButton`, 모든 `.backLink`)은 WCAG 2.5.8의 인라인 타겟 예외에 따라 의도적으로
   손대지 않았다 — 빠뜨린 게 아니다. **갱신 (2026-09-08)**: 이 행이 미착수로 남겨둔
