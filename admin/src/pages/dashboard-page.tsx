@@ -58,8 +58,8 @@ function DashboardPage() {
                     <div className="flex gap-3 items-center">
                         <button onClick={() => navigate('/users')} data-testid="nav-users" className="text-sm text-blue-600 hover:underline dark:text-blue-400">Users</button>
                         <button onClick={() => navigate('/logs')} data-testid="nav-logs" className="text-sm text-blue-600 hover:underline dark:text-blue-400">Logs</button>
-                        <button onClick={signOut} data-testid="sign-out-button" className="text-sm text-red-600 hover:underline dark:text-red-400">Sign out</button>
                         <ThemeToggle />
+                        <button onClick={signOut} data-testid="sign-out-button" className="text-sm text-red-600 hover:underline dark:text-red-400">Sign out</button>
                     </div>
                 </div>
 

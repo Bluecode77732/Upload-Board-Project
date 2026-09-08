@@ -261,6 +261,7 @@ function UsersPage() {
                         >
                             Logs
                         </button>
+                        <ThemeToggle />
                         <button
                             onClick={signOut}
                             data-testid="sign-out-button"
@@ -268,7 +269,6 @@ function UsersPage() {
                         >
                             Sign out
                         </button>
-                        <ThemeToggle />
                     </div>
                 </div>
 
