@@ -73,15 +73,24 @@ in `admin/` only, with no backend, contract, or schema change.
   discriminator column. `targetLabel` now reads that field instead of mapping the action, and
   the client-side action -> noun map was deleted; the display fix above stands unchanged.
 - **Every table hid its own controls on a narrow screen.** All three wrappers were
-  `overflow-hidden`, and `overflow-x-auto` appeared nowhere in `src/` (the whole console has
-  two responsive utilities). At a 375px viewport the users table clipped 272px — taking the
+  `overflow-hidden`, and `overflow-x-auto` appeared nowhere in `src/` (the whole console had,
+  at the time, what this section believed to be two responsive utilities — corrected below).
+  At a 375px viewport the users table clipped 272px — taking the
   Created, Role, and Actions columns with it, so the role `<select>` and the Delete button,
   the two things an operator comes here to do, could not be reached — and the logs table
   clipped 233px, hiding Detail. The page reported no overflow, so nothing hinted the columns
   existed, and there was no scrollbar to drag. The three wrappers are now `overflow-x-auto`.
-  This restores access and nothing more: on a phone these are still wide tables, and a
-  layout actually designed for that width remains open
-  ([ROADMAP.md](../docs/ROADMAP.md) > 7).
+  This restores access and nothing more: on a phone these are still wide tables. **Decided
+  2026-09-08**: keep the horizontal-scroll wrappers rather than build a card layout — a
+  comparison table (column-hiding vs. card conversion vs. status quo) put the trade-off to
+  the developer directly, and card conversion's maintenance cost (conditional
+  rendering/CSS across all three tables) wasn't worth it for a desktop-only tool. The one
+  gap the same review raised — no `tabindex` on the wrappers, so a keyboard-only user
+  couldn't scroll one unless focus landed on an inner control — is closed: all three now
+  carry `tabIndex={0}`. Also corrected in the same pass: the console carries **one**
+  `sm:`/`md:`-prefixed responsive utility, not two (`dashboard-page.tsx`'s
+  `md:grid-cols-3` stat-card grid) — re-verified by grep, no second one found. Full
+  decision trail: [ROADMAP.md](../docs/ROADMAP.md) > 7.
 
 Verified live at 375px and 1280px; `pnpm build`, `pnpm lint` (0 errors), `pnpm test` (19/19),
 and `pnpm e2e` (11/11) all pass.

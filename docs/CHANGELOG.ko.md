@@ -13,6 +13,30 @@
 ## [Unreleased]
 
 ### 변경
+- **프론트엔드: transition/shadow 토큰; admin: 가로 스크롤 + 키보드 접근성 유지
+  (2026-09-08)** — `docs/ROADMAP.ko.md` §7에 남아 있던 낮은 우선순위 폴리시 항목 2건을
+  마무리한다. **프론트엔드**: `index.css`에 `--transition: all 150ms ease;`를 추가하고,
+  이미 `:hover`/`:focus-visible` 상태를 가진 기존 버튼 클래스 전부 — `*.module.css` 12개
+  파일에 걸친 24개 셀렉터, 아래 `:focus-visible` 작업 목록을 거의 그대로 포함하는 범위 —
+  에 `transition: var(--transition);`을 적용했다. `--shadow`(기존에는
+  `LoginPage.module.css`의 `.card`에만 적용)는 카드형 표면 중 선별한 일부로 확장했다:
+  `UploadForm`/`PostForm`/`CommentForm`의 `.form`, `PostDetailPage`의 `.editForm`.
+  `.playerWrapper`·`.tile`·`.item`·필터 바 같은 수동적 표시 표면은 의도적으로 평면으로
+  남겼다. 전체 경위: `frontend/docs/STYLE-PLAN.ko.md` > 4번 항목. **Admin**: 비교표 기반
+  Q&A(컬럼 숨기기 vs. 카드 전환 vs. 현행 유지)로 카드 레이아웃 대신 기존 가로 스크롤
+  `overflow-x-auto` 래퍼를 유지하기로 확정했다 — 카드 전환의 유지보수 비용(테이블 3곳
+  조건부 렌더링/CSS)이 데스크톱 전용 콘솔에는 맞지 않았다. 검토 중 나온 유일한 실질적
+  빈틈 — 래퍼에 `tabindex`가 없어 내부 컨트롤에 우연히 포커스가 가지 않는 한 키보드만으로
+  스크롤할 수 없었던 점 — 은 `users-page.tsx`/`logs-page.tsx`/`dashboard-page.tsx`의 세
+  테이블 래퍼에 `tabIndex={0}`을 추가해 닫았다. 같은 작업에서 바로잡은 것도 있다:
+  `admin/README.md`와 `docs/ROADMAP.md` 둘 다 콘솔 전체에 "반응형 유틸리티 2개"라고
+  적어 뒀는데, 다시 grep해 보니 1개뿐이었다(`dashboard-page.tsx`의 `md:grid-cols-3`) —
+  두 문서 모두 정정했다. 검증: 두 앱 모두 `pnpm build`/`pnpm lint` 클린; 실제
+  백엔드+Postgres를 띄운 상태로 Playwright 실검증 — admin 세 테이블 모두 375px에서 진짜로
+  스크롤 가능하고(`scrollWidth > clientWidth`, 조용히 잘리지 않음) `tabIndex: 0`; 프론트엔드
+  버튼의 `transitionProperty`/`transitionDuration`과 확장된 카드의 `boxShadow`를
+  `getComputedStyle`로 확인.
+
 - **프론트엔드: 로그인 마크, 헤딩 서체, 모바일 터치 타겟 (2026-09-07)** —
   `frontend/docs/STYLE-PLAN.ko.md`의 확인 필요 사항 3번·5번과, `docs/ROADMAP.ko.md` §7의
   터치 타겟 크기 조정 행을 해결한다. 비교표 기반 Q&A로 시작했다가 개발자가 후보를 계속

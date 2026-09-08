@@ -13,6 +13,30 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Frontend: transition/shadow tokens; admin: keep horizontal scroll + keyboard access
+  (2026-09-08)** — closes both remaining low-priority polish items from `docs/ROADMAP.md`
+  §7. **Frontend**: `index.css` gained `--transition: all 150ms ease;`, applied via
+  `transition: var(--transition);` to 24 selectors across 12 `*.module.css` files — every
+  existing button class already carrying a `:hover`/`:focus-visible` state, a near-exact
+  superset of the `:focus-visible` pass below. `--shadow` (previously applied only to
+  `LoginPage.module.css`'s `.card`) was extended to a curated subset of card-like surfaces:
+  `UploadForm`/`PostForm`/`CommentForm`'s `.form` and `PostDetailPage`'s `.editForm`;
+  passive display surfaces (`.playerWrapper`, `.tile`, `.item`, filter bars) were left flat
+  on purpose. Full trail: `frontend/docs/STYLE-PLAN.md` > item 4. **Admin**: a
+  comparison-table Q&A (column-hiding vs. card conversion vs. status quo) settled on keeping
+  the existing horizontal-scroll `overflow-x-auto` wrappers rather than building a card
+  layout — card conversion's maintenance cost (conditional rendering/CSS across 3 tables)
+  wasn't worth it for a desktop-only console. The one real gap raised — no `tabindex`, so a
+  keyboard-only user couldn't scroll a wrapper unless focus landed on an inner control — was
+  closed with `tabIndex={0}` on `users-page.tsx`/`logs-page.tsx`/`dashboard-page.tsx`'s three
+  table wrappers. Also corrected in the same pass: `admin/README.md` and `docs/ROADMAP.md`
+  had both claimed "two responsive utilities" console-wide; re-grepped and found only one
+  (`dashboard-page.tsx`'s `md:grid-cols-3`) — both docs fixed. Verified: `pnpm build`/`pnpm
+  lint` clean on both apps; live Playwright check against the real backend+Postgres — all
+  three admin tables at 375px genuinely scroll (`scrollWidth > clientWidth`, not silently
+  clipped) with `tabIndex: 0`; frontend button `transitionProperty`/`transitionDuration` and
+  an extended card's `boxShadow` confirmed via `getComputedStyle`.
+
 - **Frontend: login mark, heading typeface, mobile touch targets (2026-09-07)** — resolves
   `frontend/docs/STYLE-PLAN.md` open questions 3 and 5, and `docs/ROADMAP.md` §7's
   touch-target-sizing row, via a comparison-table Q&A that grew into an artifact preview
