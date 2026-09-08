@@ -218,6 +218,17 @@ folder's code can work around, and it is unset by default (`backend/.env.example
   `frontend/src/features/admin/AdminPage.tsx` was deleted. See
   [ROADMAP.md](../docs/ROADMAP.md) > Stage 5.
 
+## Dark mode (added 2026-09-08)
+
+Every page (login, dashboard, users, logs) now has a light/dark toggle
+(`components/theme-toggle.tsx`), backed by `store/theme.store.ts`. Not part of the Chat Project
+import or its adaptation — a new feature, not a defect fix. On first load it follows the OS
+`prefers-color-scheme`; once toggled, the choice is written to `localStorage` (`admin-theme`)
+and wins over the OS setting on every later load. Applied via Tailwind v4's `dark:` variant,
+repointed at a `.dark` class on `<html>` instead of the framework default of `prefers-color-scheme`
+only (`@custom-variant dark` in `index.css`) — the class is set at module load, before React's
+first render, so there is no flash of the wrong theme.
+
 ## Related decisions
 
 - [ADR 0022](../docs/ADR/0022-admin-console-import-from-chat-project.md) — the import; amends

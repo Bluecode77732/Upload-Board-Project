@@ -17,6 +17,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/auth.store';
 import { clearSessionUser } from '../auth/session-guard';
 import { actionColor, targetLabel, type AuditLog } from '../lib/audit';
+import ThemeToggle from '../components/theme-toggle';
 
 // Mirrors backend/audit-log/dto/audit-log-query.dto.ts's AUDIT_ACTIONS exactly.
 const ACTIONS = ['ROLE_CHANGE', 'USER_DELETE', 'FILE_DELETE', 'POST_DELETE', 'COMMENT_DELETE'];
@@ -166,24 +167,25 @@ function LogsPage() {
     const totalPages = Math.max(1, Math.ceil(total / TAKE));
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
             <div className="max-w-5xl mx-auto">
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-bold">Audit Logs</h1>
-                    <div className="flex gap-3">
-                        <button onClick={() => navigate('/dashboard')} data-testid="nav-dashboard" className="text-sm text-blue-600 hover:underline">Dashboard</button>
-                        <button onClick={() => navigate('/users')} data-testid="nav-users" className="text-sm text-blue-600 hover:underline">Users</button>
-                        <button onClick={signOut} data-testid="sign-out-button" className="text-sm text-red-600 hover:underline">Sign out</button>
+                    <h1 className="text-2xl font-bold dark:text-gray-100">Audit Logs</h1>
+                    <div className="flex gap-3 items-center">
+                        <button onClick={() => navigate('/dashboard')} data-testid="nav-dashboard" className="text-sm text-blue-600 hover:underline dark:text-blue-400">Dashboard</button>
+                        <button onClick={() => navigate('/users')} data-testid="nav-users" className="text-sm text-blue-600 hover:underline dark:text-blue-400">Users</button>
+                        <button onClick={signOut} data-testid="sign-out-button" className="text-sm text-red-600 hover:underline dark:text-red-400">Sign out</button>
+                        <ThemeToggle />
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
-                    <label className="text-sm text-gray-600">Action</label>
+                    <label className="text-sm text-gray-600 dark:text-gray-400">Action</label>
                     <select
                         value={action}
                         onChange={(e) => changeAction(e.target.value)}
                         data-testid="log-action-filter"
-                        className="text-sm border rounded px-2 py-1"
+                        className="text-sm border rounded px-2 py-1 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
                     >
                         <option value="">All</option>
                         {ACTIONS.map((a) => (
@@ -192,12 +194,12 @@ function LogsPage() {
                     </select>
 
                     {userId !== null && (
-                        <span data-testid="user-filter-banner" className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 rounded px-3 py-1">
+                        <span data-testid="user-filter-banner" className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 rounded px-3 py-1 dark:bg-blue-900 dark:text-blue-200">
                             Filtering by user {userId}
                             <button
                                 onClick={clearUserFilter}
                                 data-testid="clear-user-filter"
-                                className="text-blue-500 hover:text-blue-800 font-medium"
+                                className="text-blue-500 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100 font-medium"
                             >
                                 ✕
                             </button>
@@ -208,33 +210,33 @@ function LogsPage() {
                         onClick={() => { void exportCsv(); }}
                         disabled={exporting}
                         data-testid="export-csv-button"
-                        className="ml-auto text-sm px-3 py-1 rounded border border-blue-600 text-blue-600 hover:bg-blue-50 disabled:opacity-40"
+                        className="ml-auto text-sm px-3 py-1 rounded border border-blue-600 text-blue-600 hover:bg-blue-50 disabled:opacity-40 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-950"
                     >
                         {exporting ? 'Exporting...' : 'Export CSV'}
                     </button>
                 </div>
 
                 {loadError && (
-                    <p data-testid="load-error-message" className="mb-4 text-sm text-red-700 bg-red-50 rounded px-3 py-2">{loadError}</p>
+                    <p data-testid="load-error-message" className="mb-4 text-sm text-red-700 bg-red-50 rounded px-3 py-2 dark:text-red-200 dark:bg-red-900">{loadError}</p>
                 )}
 
                 {exportError && (
-                    <p data-testid="export-error-message" className="mb-4 text-sm text-red-700 bg-red-50 rounded px-3 py-2">{exportError}</p>
+                    <p data-testid="export-error-message" className="mb-4 text-sm text-red-700 bg-red-50 rounded px-3 py-2 dark:text-red-200 dark:bg-red-900">{exportError}</p>
                 )}
 
                 {exportCapped && (
-                    <p data-testid="export-capped-banner" className="mb-4 text-sm text-amber-700 bg-amber-50 rounded px-3 py-2">
+                    <p data-testid="export-capped-banner" className="mb-4 text-sm text-amber-700 bg-amber-50 rounded px-3 py-2 dark:text-amber-200 dark:bg-amber-900">
                         1000건까지만 포함되었습니다. 필터로 좁혀서 나머지를 확인하세요.
                     </p>
                 )}
 
                 {loading ? (
-                    <p className="text-gray-500">Loading...</p>
+                    <p className="text-gray-500 dark:text-gray-400">Loading...</p>
                 ) : (
                     <>
-                        <div data-testid="logs-table" className="bg-white rounded-xl shadow overflow-x-auto" tabIndex={0}>
+                        <div data-testid="logs-table" className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto" tabIndex={0}>
                             <table className="w-full text-sm">
-                                <thead className="bg-gray-100 text-left">
+                                <thead className="bg-gray-100 dark:bg-gray-700 text-left dark:text-gray-200">
                                     <tr>
                                         {/* Newest-first is server-fixed (no sort parameter) — not a toggle button. */}
                                         <th className="px-4 py-3">Time</th>
@@ -246,8 +248,8 @@ function LogsPage() {
                                 </thead>
                                 <tbody>
                                     {logs.map((log) => (
-                                        <tr key={log.id} data-testid={`log-row-${log.id}`} className="border-t">
-                                            <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                                        <tr key={log.id} data-testid={`log-row-${log.id}`} className="border-t dark:border-gray-700 dark:text-gray-200">
+                                            <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
                                                 {new Date(log.createdAt).toLocaleString()}
                                             </td>
                                             <td className="px-4 py-3">
@@ -257,32 +259,32 @@ function LogsPage() {
                                             </td>
                                             <td className="px-4 py-3">User {log.actorId}</td>
                                             <td className="px-4 py-3">{targetLabel(log.targetType, log.targetId)}</td>
-                                            <td className="px-4 py-3 text-gray-500">{log.detail ?? '—'}</td>
+                                            <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{log.detail ?? '—'}</td>
                                         </tr>
                                     ))}
                                     {logs.length === 0 && (
                                         <tr>
-                                            <td colSpan={5} className="px-4 py-6 text-center text-gray-400">No logs yet.</td>
+                                            <td colSpan={5} className="px-4 py-6 text-center text-gray-400 dark:text-gray-500">No logs yet.</td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
                         </div>
 
-                        <div className="flex justify-between items-center mt-4 text-sm text-gray-600">
+                        <div className="flex justify-between items-center mt-4 text-sm text-gray-600 dark:text-gray-400">
                             <span>Page {page} of {totalPages} ({total} total)</span>
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => changePage(Math.max(1, page - 1))}
                                     disabled={page <= 1}
-                                    className="px-3 py-1 rounded border disabled:opacity-40"
+                                    className="px-3 py-1 rounded border disabled:opacity-40 dark:border-gray-600"
                                 >
                                     Prev
                                 </button>
                                 <button
                                     onClick={() => changePage(Math.min(totalPages, page + 1))}
                                     disabled={page >= totalPages}
-                                    className="px-3 py-1 rounded border disabled:opacity-40"
+                                    className="px-3 py-1 rounded border disabled:opacity-40 dark:border-gray-600"
                                 >
                                     Next
                                 </button>

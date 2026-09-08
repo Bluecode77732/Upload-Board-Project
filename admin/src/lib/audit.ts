@@ -42,12 +42,14 @@ export function targetLabel(targetType: string | null, targetId: number | null):
     return noun ? `${noun} ${targetId}` : `#${targetId}`;
 }
 
-// Mirrors backend/audit-log/dto/audit-log-query.dto.ts's AUDIT_ACTIONS exactly.
+// Mirrors backend/audit-log/dto/audit-log-query.dto.ts's AUDIT_ACTIONS exactly. Each pair
+// carries a dark: variant (900-level background, 200-level text) so the badge stays legible
+// once theme.store.ts adds the `dark` class to documentElement.
 export function actionColor(action: string): string {
-    if (action === 'ROLE_CHANGE') return 'bg-indigo-100 text-indigo-700';
-    if (action === 'USER_DELETE') return 'bg-red-100 text-red-700';
-    if (action === 'FILE_DELETE') return 'bg-orange-100 text-orange-700';
-    if (action === 'POST_DELETE') return 'bg-rose-100 text-rose-700';
-    if (action === 'COMMENT_DELETE') return 'bg-amber-100 text-amber-700';
-    return 'bg-gray-100 text-gray-600';
+    if (action === 'ROLE_CHANGE') return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200';
+    if (action === 'USER_DELETE') return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200';
+    if (action === 'FILE_DELETE') return 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200';
+    if (action === 'POST_DELETE') return 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-200';
+    if (action === 'COMMENT_DELETE') return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200';
+    return 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
 }

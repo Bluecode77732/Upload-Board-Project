@@ -12,6 +12,32 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Added
+- **Admin: light/dark toggle on every page (2026-09-08)** — on direct developer request.
+  `admin/src/store/theme.store.ts` (new, zustand) resolves the initial theme from
+  `localStorage` (`admin-theme`) and falls back to `prefers-color-scheme` when nothing is
+  stored; toggling writes both the class and the storage key. `admin/src/index.css` gained
+  `@custom-variant dark (&:where(.dark, .dark *));` — Tailwind v4 defaults `dark:` to
+  `prefers-color-scheme` only, so this repoints it at a `.dark` class on `<html>` instead,
+  the precondition for a manual toggle (not just following the OS setting) to work at all.
+  `admin/src/components/theme-toggle.tsx` (new) is the shared button, placed in
+  login/dashboard/users/logs' nav bars; `main.tsx` imports the store before rendering so the
+  class lands before first paint (no flash of the wrong theme). `lib/audit.ts`'s
+  `actionColor()` and `users-page.tsx`'s `ROLE_COLOR` badge maps gained `dark:` pairs so the
+  audit-action and role badges stay legible. Resolves the dark-mode clause of
+  `docs/ROADMAP.md` §7's "`admin/` diverging from `frontend/`'s design system" row (recorded
+  2026-08-24) — the accent-color and login-label divergences that row also named are
+  untouched. Independent of `frontend/`'s own theme system (`theme/ThemeProvider.tsx`, CSS
+  custom properties) — no shared code, since the two apps aren't a pnpm workspace. jsdom does
+  not implement `matchMedia`, which crashed two existing specs that render a page importing
+  the toggle (`session-guard.spec.tsx` and the new `theme.store.spec.ts` itself); fixed with a
+  `window.matchMedia` polyfill in `admin/src/test/setup.ts`. Verified: `pnpm lint` clean,
+  `pnpm test` 22/22 (`theme.store.spec.ts` new), live Playwright check against the dev server —
+  toggle flips `<html class="dark">` and recomputed backgrounds (`oklch(...)` gray-900/800),
+  persists across reload, no live-backend screenshot of dashboard/users/logs (none was running)
+  but they share the identical component and `dark:` token pairs as the verified login page.
+  `admin/README.md`(+ko) and `docs/ROADMAP.md`(+ko) updated in the same pass.
+
 ### Changed
 - **Frontend: NavBar control sizing (2026-09-08)** — `.themeToggle` 44×44px → 40×40px,
   `.signOut` padding `12px 14px` → `9px 12px`, on explicit user request ("약간만 축소,

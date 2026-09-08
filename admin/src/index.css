@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+/* Tailwind v4 defaults `dark:` to `prefers-color-scheme` only; this repoints it at a
+   `.dark` class on an ancestor (documentElement) so theme.store.ts can toggle it manually
+   instead of only following the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));

@@ -6,6 +6,7 @@ import { useAuthStore, type UserRole } from '../store/auth.store';
 import { ROLE_RANK } from '../auth/role';
 import { recordSessionUser } from '../auth/session-guard';
 import { useState } from 'react';
+import ThemeToggle from '../components/theme-toggle';
 
 interface LoginForm {
     email: string;
@@ -44,31 +45,34 @@ function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+            <div className="absolute top-4 right-4">
+                <ThemeToggle />
+            </div>
             <form
                 onSubmit={handleSubmit(onSubmit)}
-                className="bg-white p-8 rounded-xl shadow w-80 flex flex-col gap-4"
+                className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow w-80 flex flex-col gap-4"
             >
-                <h1 className="text-xl font-bold text-center">Admin Login</h1>
-                {error && <p data-testid="login-error" className="text-red-500 text-sm text-center">{error}</p>}
+                <h1 className="text-xl font-bold text-center dark:text-gray-100">Admin Login</h1>
+                {error && <p data-testid="login-error" className="text-red-500 dark:text-red-400 text-sm text-center">{error}</p>}
                 <input
                     {...register('email', { required: true })}
                     type="email"
                     placeholder="Email"
                     data-testid="login-email-input"
-                    className="border rounded px-3 py-2 text-sm"
+                    className="border rounded px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400"
                 />
                 <input
                     {...register('password', { required: true })}
                     type="password"
                     placeholder="Password"
                     data-testid="login-password-input"
-                    className="border rounded px-3 py-2 text-sm"
+                    className="border rounded px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400"
                 />
                 <button
                     type="submit"
                     data-testid="login-submit-button"
-                    className="bg-blue-600 text-white rounded py-2 text-sm font-semibold hover:bg-blue-700"
+                    className="bg-blue-600 text-white rounded py-2 text-sm font-semibold hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600"
                 >
                     Sign In
                 </button>

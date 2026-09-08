@@ -15,6 +15,7 @@ import { useAuthStore, type UserRole } from '../store/auth.store';
 import { clearSessionUser } from '../auth/session-guard';
 import { ROLE_RANK, ROLE_LABEL } from '../auth/role';
 import { actionColor, targetLabel, type AuditLog } from '../lib/audit';
+import ThemeToggle from '../components/theme-toggle';
 
 interface User {
     id: number;
@@ -29,9 +30,9 @@ const SEARCH_DEBOUNCE_MS = 400;
 const RECENT_ACTIVITY_TAKE = 5;
 const ROLE_OPTIONS: UserRole[] = ['user', 'admin', 'superadmin'];
 const ROLE_COLOR: Record<UserRole, string> = {
-    user: 'bg-gray-100 text-gray-600',
-    admin: 'bg-purple-100 text-purple-700',
-    superadmin: 'bg-red-100 text-red-700',
+    user: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+    admin: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200',
+    superadmin: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200',
 };
 
 // Mirrors backend/user/dto/get-users.dto.ts's USER_SORT_FIELDS — `role` is deliberately
@@ -241,37 +242,38 @@ function UsersPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
             <div className="max-w-4xl mx-auto">
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-bold">Users</h1>
-                    <div className="flex gap-3">
+                    <h1 className="text-2xl font-bold dark:text-gray-100">Users</h1>
+                    <div className="flex gap-3 items-center">
                         <button
                             onClick={() => navigate('/dashboard')}
                             data-testid="nav-dashboard"
-                            className="text-sm text-blue-600 hover:underline"
+                            className="text-sm text-blue-600 hover:underline dark:text-blue-400"
                         >
                             Dashboard
                         </button>
                         <button
                             onClick={() => navigate('/logs')}
                             data-testid="nav-logs"
-                            className="text-sm text-blue-600 hover:underline"
+                            className="text-sm text-blue-600 hover:underline dark:text-blue-400"
                         >
                             Logs
                         </button>
                         <button
                             onClick={signOut}
                             data-testid="sign-out-button"
-                            className="text-sm text-red-600 hover:underline"
+                            className="text-sm text-red-600 hover:underline dark:text-red-400"
                         >
                             Sign out
                         </button>
+                        <ThemeToggle />
                     </div>
                 </div>
 
                 {actionMsg && (
-                    <p data-testid="action-message" className="mb-4 text-sm text-blue-700 bg-blue-50 rounded px-3 py-2">{actionMsg}</p>
+                    <p data-testid="action-message" className="mb-4 text-sm text-blue-700 bg-blue-50 rounded px-3 py-2 dark:text-blue-200 dark:bg-blue-900">{actionMsg}</p>
                 )}
 
                 <div className="mb-4">
@@ -281,23 +283,23 @@ function UsersPage() {
                         onChange={(e) => setSearchInput(e.target.value)}
                         placeholder="Search by email..."
                         data-testid="user-search-input"
-                        className="w-full max-w-sm text-sm border rounded px-3 py-2"
+                        className="w-full max-w-sm text-sm border rounded px-3 py-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
                     />
                 </div>
 
                 {loading ? (
-                    <p className="text-gray-500">Loading...</p>
+                    <p className="text-gray-500 dark:text-gray-400">Loading...</p>
                 ) : (
-                    <div className="bg-white rounded-xl shadow overflow-x-auto" tabIndex={0}>
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto" tabIndex={0}>
                         <table className="w-full text-sm">
-                            <thead className="bg-gray-100 text-left">
+                            <thead className="bg-gray-100 dark:bg-gray-700 text-left dark:text-gray-200">
                                 <tr>
                                     {(['id', 'email', 'createdAt'] as SortField[]).map((field) => (
                                         <th
                                             key={field}
                                             onClick={() => toggleSort(field)}
                                             data-testid={`user-sort-${field}`}
-                                            className="px-4 py-3 cursor-pointer select-none hover:bg-gray-200"
+                                            className="px-4 py-3 cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600"
                                         >
                                             {COLUMN_LABEL[field]}
                                             {sortBy === field && (
@@ -315,11 +317,11 @@ function UsersPage() {
                                         key={u.id}
                                         data-testid={`user-row-${u.id}`}
                                         onClick={() => selectRow(u)}
-                                        className={`border-t cursor-pointer hover:bg-gray-50${selectedUser?.id === u.id ? ' bg-blue-50' : ''}`}
+                                        className={`border-t dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-200${selectedUser?.id === u.id ? ' bg-blue-50 dark:bg-blue-900' : ''}`}
                                     >
                                         <td className="px-4 py-3">{u.id}</td>
                                         <td className="px-4 py-3">{u.email}</td>
-                                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
                                             {new Date(u.createdAt).toLocaleString()}
                                         </td>
                                         <td className="px-4 py-3">
@@ -333,7 +335,7 @@ function UsersPage() {
                                                     value={u.role}
                                                     onChange={(e) => updateRole(u.id, e.target.value as UserRole)}
                                                     data-testid={`user-role-select-${u.id}`}
-                                                    className="text-xs border rounded px-1 py-1"
+                                                    className="text-xs border rounded px-1 py-1 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                                                 >
                                                     {ROLE_OPTIONS.map((r) => (
                                                         <option key={r} value={r}>{r}</option>
@@ -344,7 +346,7 @@ function UsersPage() {
                                                 <button
                                                     onClick={() => deleteUser(u.id)}
                                                     data-testid={`user-delete-${u.id}`}
-                                                    className="text-xs px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200"
+                                                    className="text-xs px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800"
                                                 >
                                                     Delete
                                                 </button>
@@ -358,20 +360,20 @@ function UsersPage() {
                 )}
 
                 {!loading && (
-                    <div className="flex justify-between items-center mt-4 text-sm text-gray-600">
+                    <div className="flex justify-between items-center mt-4 text-sm text-gray-600 dark:text-gray-400">
                         <span>Page {page} of {totalPages} ({total} total)</span>
                         <div className="flex gap-2">
                             <button
                                 onClick={() => changePage(Math.max(1, page - 1))}
                                 disabled={page <= 1}
-                                className="px-3 py-1 rounded border disabled:opacity-40"
+                                className="px-3 py-1 rounded border disabled:opacity-40 dark:border-gray-600"
                             >
                                 Prev
                             </button>
                             <button
                                 onClick={() => changePage(Math.min(totalPages, page + 1))}
                                 disabled={page >= totalPages}
-                                className="px-3 py-1 rounded border disabled:opacity-40"
+                                className="px-3 py-1 rounded border disabled:opacity-40 dark:border-gray-600"
                             >
                                 Next
                             </button>
@@ -390,16 +392,16 @@ function UsersPage() {
                     data-testid="panel-backdrop"
                 >
                     <div
-                        className="absolute right-0 top-0 h-full w-96 bg-white shadow-2xl overflow-y-auto"
+                        className="absolute right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 shadow-2xl overflow-y-auto"
                         onClick={(e) => e.stopPropagation()}
                         data-testid="user-detail-panel"
                     >
-                        <div className="flex justify-between items-center px-5 py-4 border-b">
-                            <h2 className="font-semibold text-gray-800">User Detail</h2>
+                        <div className="flex justify-between items-center px-5 py-4 border-b dark:border-gray-700">
+                            <h2 className="font-semibold text-gray-800 dark:text-gray-100">User Detail</h2>
                             <button
                                 onClick={() => setSelectedUser(null)}
                                 data-testid="panel-close"
-                                className="text-gray-400 hover:text-gray-700 text-lg leading-none"
+                                className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-lg leading-none"
                             >
                                 ✕
                             </button>
@@ -407,35 +409,35 @@ function UsersPage() {
 
                         <div className="px-5 py-4 space-y-3 text-sm">
                             <div className="flex justify-between">
-                                <span className="text-gray-500">ID</span>
-                                <span className="font-mono">{selectedUser.id}</span>
+                                <span className="text-gray-500 dark:text-gray-400">ID</span>
+                                <span className="font-mono dark:text-gray-200">{selectedUser.id}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-gray-500">Email</span>
-                                <span className="truncate max-w-48">{selectedUser.email}</span>
+                                <span className="text-gray-500 dark:text-gray-400">Email</span>
+                                <span className="truncate max-w-48 dark:text-gray-200">{selectedUser.email}</span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className="text-gray-500">Role</span>
+                                <span className="text-gray-500 dark:text-gray-400">Role</span>
                                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${ROLE_COLOR[selectedUser.role]}`}>
                                     {ROLE_LABEL[selectedUser.role]}
                                 </span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-gray-500">Joined</span>
-                                <span className="text-gray-600">{new Date(selectedUser.createdAt).toLocaleString()}</span>
+                                <span className="text-gray-500 dark:text-gray-400">Joined</span>
+                                <span className="text-gray-600 dark:text-gray-300">{new Date(selectedUser.createdAt).toLocaleString()}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-gray-500">Updated</span>
-                                <span className="text-gray-600">{new Date(selectedUser.updatedAt).toLocaleString()}</span>
+                                <span className="text-gray-500 dark:text-gray-400">Updated</span>
+                                <span className="text-gray-600 dark:text-gray-300">{new Date(selectedUser.updatedAt).toLocaleString()}</span>
                             </div>
                         </div>
 
-                        <div className="border-t px-5 py-4">
-                            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-3">Recent activity</h3>
+                        <div className="border-t dark:border-gray-700 px-5 py-4">
+                            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">Recent activity</h3>
                             {recentActivityLoading ? (
-                                <p className="text-sm text-gray-400">Loading...</p>
+                                <p className="text-sm text-gray-400 dark:text-gray-500">Loading...</p>
                             ) : recentActivity.length === 0 ? (
-                                <p className="text-sm text-gray-400">No activity yet.</p>
+                                <p className="text-sm text-gray-400 dark:text-gray-500">No activity yet.</p>
                             ) : (
                                 <ul data-testid="recent-activity-list" className="space-y-2">
                                     {recentActivity.map((log) => (
@@ -444,7 +446,7 @@ function UsersPage() {
                                                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${actionColor(log.action)}`}>
                                                     {log.action}
                                                 </span>
-                                                <span className="text-gray-400 text-xs">
+                                                <span className="text-gray-400 dark:text-gray-500 text-xs">
                                                     {new Date(log.createdAt).toLocaleString()}
                                                 </span>
                                             </div>
@@ -452,11 +454,11 @@ function UsersPage() {
                                                 guessed from its action; the server now names it (ADR 0045), so
                                                 the panel can show which file/post/comment an entry was about
                                                 instead of leaving `detail` as the only clue. */}
-                                            <p className="text-gray-500 text-xs mt-1">
+                                            <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
                                                 Target: {targetLabel(log.targetType, log.targetId)}
                                             </p>
                                             {log.detail && (
-                                                <p className="text-gray-500 text-xs mt-1">{log.detail}</p>
+                                                <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">{log.detail}</p>
                                             )}
                                         </li>
                                     ))}
@@ -465,7 +467,7 @@ function UsersPage() {
                             <button
                                 onClick={() => navigate(`/logs?userId=${selectedUser.id}`)}
                                 data-testid="recent-activity-view-all"
-                                className="mt-3 text-sm text-blue-600 hover:underline"
+                                className="mt-3 text-sm text-blue-600 hover:underline dark:text-blue-400"
                             >
                                 View all →
                             </button>

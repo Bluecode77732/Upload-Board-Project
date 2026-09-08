@@ -12,6 +12,32 @@
 
 ## [Unreleased]
 
+### 추가
+- **Admin: 모든 페이지에 라이트/다크 토글 추가 (2026-09-08)** — 개발자의 직접 요청.
+  `admin/src/store/theme.store.ts`(신규, zustand)가 `localStorage`(`admin-theme`)에서 초기
+  테마를 읽고, 저장된 값이 없으면 `prefers-color-scheme`로 폴백한다. 토글하면 클래스와
+  저장값을 함께 갱신한다. `admin/src/index.css`에 `@custom-variant dark (&:where(.dark,
+  .dark *));`를 추가했다 — Tailwind v4의 `dark:`는 기본적으로 `prefers-color-scheme`만
+  따르므로, 이를 `<html>`의 `.dark` 클래스를 보도록 재설정해야 수동 토글(OS 설정만 따르는
+  게 아니라)이 애초에 동작할 수 있다. `admin/src/components/theme-toggle.tsx`(신규)가
+  공용 버튼이고, 로그인/대시보드/사용자/로그 페이지의 nav 바에 배치했다. `main.tsx`가
+  렌더 전에 스토어를 import해서 첫 페인트 전에 클래스가 반영되도록 했다(잘못된 테마가
+  잠깐 보이는 깜빡임 방지). `lib/audit.ts`의 `actionColor()`와 `users-page.tsx`의
+  `ROLE_COLOR` 배지 색상 맵에도 `dark:` 짝을 추가해 감사 로그 액션·역할 배지가 다크
+  모드에서도 잘 보이게 했다. `docs/ROADMAP.md` §7의 "`admin/`이 `frontend/`의 디자인
+  체계에서 분리됨" 행(2026-08-24 기록) 중 다크 모드 항목을 해소한다 — 같은 행이 언급한
+  강조색·로그인 라벨 분리는 그대로 남아 있다. `frontend/`의 자체 테마 시스템
+  (`theme/ThemeProvider.tsx`, CSS 커스텀 프로퍼티)과는 독립적이다 — 두 앱은 pnpm
+  워크스페이스가 아니라 코드를 공유하지 않는다. jsdom이 `matchMedia`를 구현하지 않아서
+  토글을 import하는 페이지를 렌더링하는 기존 스펙 두 개(`session-guard.spec.tsx`와 신규
+  `theme.store.spec.ts` 자신)가 깨졌다 — `admin/src/test/setup.ts`에 `window.matchMedia`
+  폴리필을 추가해 고쳤다. 검증: `pnpm lint` 클린, `pnpm test` 22/22
+  (`theme.store.spec.ts` 신규), 개발 서버 대상 실제 Playwright 점검 — 토글이
+  `<html class="dark">`를 켜고 배경색이 재계산되며(`oklch(...)` gray-900/800),
+  새로고침 후에도 유지됨을 확인. 백엔드가 켜져 있지 않아 대시보드/사용자/로그 페이지는
+  실제 스크린샷으로 확인하지 못했지만, 검증된 로그인 페이지와 동일한 컴포넌트·`dark:`
+  토큰 짝을 쓴다. `admin/README.md`(+ko), `docs/ROADMAP.md`(+ko)도 같은 작업에서 갱신했다.
+
 ### 변경
 - **프론트엔드: NavBar 컨트롤 크기 축소 (2026-09-08)** — `.themeToggle` 44×44px→40×40px,
   `.signOut` padding `12px 14px`→`9px 12px`, 사용자 명시적 요청("약간만 축소, 40px

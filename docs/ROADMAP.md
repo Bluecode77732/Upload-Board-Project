@@ -877,7 +877,17 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   standing decision, not a defect: no dark-mode support at all (`dark:` appears zero times,
   while `frontend/` ships an explicit light/dark toggle), a blue accent against
   `frontend/`'s brand purple, and login fields labelled by placeholder only. Reversing any
-  of it is a design decision first and a code change second.
+  of it is a design decision first and a code change second. **Update (2026-09-08): the
+  dark-mode clause is resolved, on direct developer request** — every page (login,
+  dashboard, users, logs) now has a light/dark toggle (`admin/src/components/theme-toggle.tsx`,
+  `admin/src/store/theme.store.ts`), following the OS `prefers-color-scheme` until toggled,
+  then pinned via `localStorage`. Independent of and structurally different from
+  `frontend/`'s toggle — Tailwind v4's `dark:` variant repointed at a `.dark` class
+  (`@custom-variant dark` in `index.css`) rather than `frontend/`'s CSS-custom-property
+  `ThemeProvider`. The other two divergences named in this row — the blue accent and the
+  placeholder-only login labels — are untouched and still open. Verified: `pnpm lint`/`pnpm
+  test` clean (22/22, including a new `theme.store.spec.ts`), live Playwright check confirms
+  the toggle, its `localStorage` persistence, and no flash of the wrong theme on reload.
 - Server-side thumbnail endpoint (recorded 2026-08-24) — **not started because** it is a
   backend change (a new derived artifact per file, plus where to store and when to
   generate it) that the grid above does not strictly need. **Current mechanism, precisely

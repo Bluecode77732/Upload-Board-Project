@@ -214,6 +214,17 @@ pnpm e2e:seed    # superadmin 시딩. e2e/.env 필요(git 무시 대상)
   그래서 이 콘솔이 유일한 admin 화면이다. `frontend/src/features/admin/AdminPage.tsx`는
   삭제됐다. [ROADMAP.md](../docs/ROADMAP.ko.md) > Stage 5 참고.
 
+## 야간 모드(다크 모드) (2026-09-08 추가)
+
+모든 페이지(로그인, 대시보드, 사용자, 로그)에 라이트/다크 토글이 붙었다
+(`components/theme-toggle.tsx`), 상태는 `store/theme.store.ts`가 관리한다. 채팅 프로젝트 이식이나
+그 적응 작업의 일부가 아니라 순수 신규 기능이다 — 결함 수정이 아니다. 처음 로드할 때는 OS의
+`prefers-color-scheme`를 따르고, 한 번이라도 토글하면 그 선택을 `localStorage`(`admin-theme`)에
+저장해 이후 모든 로드에서 OS 설정보다 우선한다. Tailwind v4의 `dark:` 변형을 프레임워크 기본값인
+`prefers-color-scheme` 단독 판단 대신 `<html>`의 `.dark` 클래스를 보도록 재설정해서 적용했다
+(`index.css`의 `@custom-variant dark`) — 이 클래스는 React의 첫 렌더보다 먼저, 모듈 로드 시점에
+설정되므로 잘못된 테마가 잠깐 보이는 깜빡임이 없다.
+
 ## 관련 결정
 
 - [ADR 0022](../docs/ADR/0022-admin-console-import-from-chat-project.ko.md) — 이번 이식. ADR 0010의
