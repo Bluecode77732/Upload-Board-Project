@@ -440,6 +440,14 @@ res.sendFile(req.query.path)
 // unintended actions.
 // ✅ Describe the artifact's location, name, and size to the developer.
 // Never retrieve and display the content. Have the developer read it directly and report back.
+
+// ❌ AI tool exposing an env-stored key's value → leaks into chat output, shell scrollback,
+// logs, or a committed file. The var/key NAME is fine to read, log, or discuss (e.g. which
+// var is missing, which key a Joi entry validates) — the VALUE never is, through any channel.
+cat .env; echo $ACCESS_TOKEN_SECRET; console.log(this.configService.getOrThrow('DB_PASSWORD'))
+// ✅ Check presence/shape without revealing the value (e.g. `[ -n "$VAR" ]`, or grep for the
+// var NAME only). If the actual value must be verified, have the developer check it directly —
+// never retrieve, print, log, or write a key's value anywhere.
 ```
 
 ## 엔지니어링 원칙
