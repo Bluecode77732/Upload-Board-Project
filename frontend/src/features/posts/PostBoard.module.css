@@ -56,6 +56,7 @@
   color: var(--text);
   cursor: pointer;
   align-self: center;
+  transition: var(--transition);
 }
 
 .clearButton:hover {
@@ -125,6 +126,7 @@
   color: var(--text-muted);
   cursor: pointer;
   font-size: 0.9rem;
+  transition: var(--transition);
 }
 
 .creatorButton:hover {
@@ -152,6 +154,7 @@
   background: var(--surface-raised);
   color: var(--text);
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .pageButton:hover:not(:disabled) {

@@ -847,16 +847,25 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   gate never triggered — the lowest-risk candidate on the table won over the 5 web-font
   options. The "related but separate" motion/shadow note in this same row (`transition`/
   `animation`/`@keyframes` at zero uses, `--shadow` used exactly once) was **not** folded in
-  — asked, the developer scoped this task to mark + heading font only, so motion stays open.
+  — asked, the developer scoped this task to mark + heading font only, so motion stayed open
+  at the time. **Resolved 2026-09-08** as its own pass — see
+  [frontend/docs/STYLE-PLAN.md](../frontend/docs/STYLE-PLAN.md) > item 4.
   Full decision trail: [frontend/docs/STYLE-PLAN.md](../frontend/docs/STYLE-PLAN.md) > item 3.
-- A small-screen layout for `admin/` (recorded 2026-08-24) — **not started because** the
-  console has no deploy target and is operated on a desktop, so the exposure today is nil.
-  What landed instead was the minimum that restores access: the three table wrappers became
-  `overflow-x-auto`, because at 375px the users table was clipping the role `<select>` and
-  the Delete button out of reach entirely (272px hidden, with no scrollbar and no page-level
-  overflow to signal it). They are still wide tables on a phone. A layout designed for that
-  width — cards instead of rows, or column priority — is the open work, and it is larger than
-  it looks: the whole console carries two responsive utilities in total.
+- ~~A small-screen layout for `admin/`~~ (recorded 2026-08-24) — **decided 2026-09-08: keep
+  horizontal scroll, don't build cards.** The console has no deploy target and is operated on
+  a desktop, so exposure is nil; a comparison table (column-hiding vs. card conversion vs.
+  status quo) put the trade-off in front of the developer directly — card conversion's
+  maintenance cost (conditional rendering/CSS across all three tables) wasn't worth it for a
+  desktop-only tool. The prior `overflow-x-auto` minimum fix already restores access (no
+  page-level clipping); the one gap raised in review — the wrappers had no `tabindex`, so a
+  keyboard-only user couldn't scroll one unless focus happened to land on a control inside —
+  is now closed: `users-page.tsx`, `logs-page.tsx`, and `dashboard-page.tsx`'s recent-logs
+  table all carry `tabIndex={0}` on the wrapper div. Live-verified at a 375px viewport across
+  all three pages (Playwright): each wrapper's `scrollWidth` exceeds its `clientWidth`
+  (genuinely scrollable, not silently clipped) and `tabIndex === 0`. Correcting this row's
+  earlier count in the same pass: the console carries **one** responsive (`sm:`/`md:`-prefixed)
+  utility, not two — `dashboard-page.tsx`'s `md:grid-cols-3` stat-card grid; grep found no
+  second one at the time of this edit.
 - `admin/` diverging from `frontend/`'s design system (recorded 2026-08-24) — **not started
   because** this is the state [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)
   deliberately chose: the Chat Project console was imported with its colors and layout

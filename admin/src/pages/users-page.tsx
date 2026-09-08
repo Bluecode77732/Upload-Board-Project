@@ -288,7 +288,7 @@ function UsersPage() {
                 {loading ? (
                     <p className="text-gray-500">Loading...</p>
                 ) : (
-                    <div className="bg-white rounded-xl shadow overflow-x-auto">
+                    <div className="bg-white rounded-xl shadow overflow-x-auto" tabIndex={0}>
                         <table className="w-full text-sm">
                             <thead className="bg-gray-100 text-left">
                                 <tr>

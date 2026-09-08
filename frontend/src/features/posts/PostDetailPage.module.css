@@ -70,6 +70,7 @@
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 10px;
+  box-shadow: var(--shadow);
 }
 
 .field {
@@ -114,6 +115,7 @@
   color: var(--text);
   font: inherit;
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .button:hover:not(:disabled) {
@@ -135,6 +137,7 @@
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .primaryButton:hover:not(:disabled) {
@@ -154,6 +157,7 @@
   color: var(--danger);
   font: inherit;
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .deleteButton:hover:not(:disabled) {

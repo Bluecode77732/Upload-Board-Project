@@ -9,6 +9,7 @@
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 10px;
+  box-shadow: var(--shadow);
 }
 
 .heading {
@@ -92,6 +93,7 @@
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .submit:hover:not(:disabled) {

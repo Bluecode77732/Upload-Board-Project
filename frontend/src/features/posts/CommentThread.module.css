@@ -78,6 +78,7 @@
   color: var(--text);
   font: inherit;
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .button:hover:not(:disabled) {
@@ -98,6 +99,7 @@
   color: var(--danger);
   font: inherit;
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .deleteButton:hover:not(:disabled) {
@@ -123,6 +125,7 @@
   background: var(--surface-raised);
   color: var(--text);
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .loadMoreButton:hover:not(:disabled) {

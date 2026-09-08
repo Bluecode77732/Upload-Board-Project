@@ -89,6 +89,7 @@
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .submit:hover:not(:disabled) {
@@ -109,6 +110,7 @@
   color: var(--brand);
   cursor: pointer;
   font: inherit;
+  transition: var(--transition);
 }
 
 .switchButton:hover {

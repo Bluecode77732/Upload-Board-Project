@@ -104,6 +104,7 @@
   background: var(--surface);
   color: var(--text);
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .copyButton:hover {
@@ -167,6 +168,7 @@
   background: var(--surface);
   color: var(--text);
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .rotateButton:hover:not(:disabled) {
@@ -193,6 +195,7 @@
   background: var(--surface);
   color: var(--danger);
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .deleteButton:hover:not(:disabled) {

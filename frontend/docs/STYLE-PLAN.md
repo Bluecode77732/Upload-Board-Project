@@ -168,14 +168,25 @@ because whoever touches these files for restyling will see them:
    `frontend/CLAUDE.md`'s dependency-proposal gate never triggers — the
    lowest-risk candidate on the table, chosen over the 5 web-font options.
    `--sans` is untouched.
-4. **No motion, and depth used once** (recorded 2026-08-25, alongside item 3)
-   — **still open as of 2026-09-07**: item 3's typography session stayed
-   scoped to the mark + heading font the developer actually asked for and
-   deliberately did not fold this in, so it remains unstarted.
-   `transition`, `animation`, and `@keyframes` appear **zero times** across
-   every stylesheet in `src/`, so every hover and focus state jumps; and
-   `--shadow` is applied in exactly one place (`LoginPage.module.css`'s card),
-   leaving every other surface flat. Both are cheap to add once as tokens.
+4. ~~**No motion, and depth used once**~~ (recorded 2026-08-25, alongside item 3)
+   — **resolved 2026-09-08**. Item 3's typography session had stayed scoped
+   to the mark + heading font and deliberately left this open; this pass
+   closed it, code-ready with no further design decision needed. A single
+   `--transition: all 150ms ease;` token was added to `index.css` and applied
+   to `transition: var(--transition);` on every existing button class that
+   already carries a `:hover`/`:focus-visible` state — 24 selectors across
+   12 `*.module.css` files, a near-exact superset of the button classes the
+   `:focus-visible` keyboard-focus pass (commit `4e6e229`) had already
+   touched. `--shadow` (previously applied only to `LoginPage.module.css`'s
+   `.card`) was extended to a curated, non-exhaustive subset of card-like
+   surfaces — the primary action-form panels: `UploadForm`, `PostForm`, and
+   `CommentForm`'s `.form`, plus `PostDetailPage`'s `.editForm`. Passive
+   display surfaces (`.playerWrapper`, `.tile`, `.item`, filter bars) were
+   deliberately left flat — extending `--shadow` everywhere would read as
+   excessive rather than selective. Verified visually (Playwright,
+   `getComputedStyle`): `transitionProperty: "all"`, `transitionDuration:
+   "0.15s"` on a sampled button; `boxShadow` present on a sampled extended
+   form card.
 5. ~~**The login mark is a starter template's logo**~~ (recorded 2026-08-25,
    grouped with item 3) — **resolved 2026-09-07**. The exploration ran the
    same way as item 3 — comparison tables, then an artifact preview page —

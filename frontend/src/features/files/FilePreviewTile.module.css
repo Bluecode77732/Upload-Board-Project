@@ -65,6 +65,7 @@
   cursor: pointer;
   font: inherit;
   font-size: 0.85rem;
+  transition: var(--transition);
 }
 
 .loadButton:hover {
@@ -118,6 +119,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: var(--transition);
 }
 
 .creatorButton:hover {
