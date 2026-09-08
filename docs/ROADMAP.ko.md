@@ -922,19 +922,26 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   "보류"라고 계속 적혀 있었다 — 2026-08-08 전제가 정정된 뒤로 아무도 다시 손대지
   않았던 것이고, 넷 다 이번에 같이 고쳤다. 여기 더 할 일은 없다: ARM/Graviton은
   반영됐고, 라이브로 검증됐고, 확정된 아키텍처다 — 열린 항목이 아니다.
-- AWS Secrets Manager + External Secrets Operator(ESO) 연동 (2026-08-08 기록,
-  [ADR 0033](ADR/0033-secrets-delivery-target.ko.md)) — **미착수 이유**: 실제
-  AWS 계정, IRSA용 IAM 롤, ESO가 설치된 동작 중인 Kubernetes 클러스터가
-  필요한데 지금은 그중 아무것도 존재하지 않는다. 목표 형태(K8s `Secret`을 앱의
-  직접 인터페이스로, 그 안으로 Secrets Manager가 동기화)는 확정됐다 —
-  프로비저닝은 Terraform/IaC 작업이며, 위 Terraform 도입 행과 함께 착수하도록
-  스케줄링한다.
-- Kubernetes `Ingress`/ALB + TLS 인증서 프로비저닝 (2026-08-08 기록,
-  [ADR 0034](ADR/0034-https-termination-stance.ko.md)) — **미착수 이유**: 동작
-  중인 Kubernetes 클러스터와 확정된 인증서 소스(ACM vs. cert-manager +
-  Let's Encrypt)가 필요한데 둘 다 아직 정해지지 않았다. 방침(ingress에서 종단,
-  앱 안에서는 하지 않음)은 확정됐다 — 위 Helm/K8s 작업과 함께 착수하도록
-  스케줄링한다.
+- ~~AWS Secrets Manager + External Secrets Operator(ESO) 연동~~ (2026-08-08 기록,
+  [ADR 0033](ADR/0033-secrets-delivery-target.ko.md)) — **이 항목은 낡은 기록이었고,
+  2026-09-08에 정정했다.** "실제 AWS 계정... 지금은 그중 아무것도 존재하지 않는다"는
+  서술이 원래 이유였는데, Terraform([ADR 0043](ADR/0043-terraform-project-adaptation.ko.md)
+  D7, 2026-08-18)이 정확히 이걸 프로비저닝하면서 더 이상 사실이 아니게 됐다: Secrets
+  Manager 항목, ESO 설치, IRSA 롤까지. 두 번 라이브 검증됨(2026-08-27, 그리고
+  철거·재적용 사이클을 거친 2026-08-29/30) — 지금 실제로 적용돼 있는지는 §6 Stage 4
+  표의 "Secrets delivery" 행을 참고할 것(그 셀도 스냅샷이니 이 행이든 그 행이든 그냥
+  믿지 말고 `helm list -A`/`terraform output`으로 재확인). 이 행이 마지막으로 손질됐을
+  때 실제로 열려 있던 건 이미 오래전에 다 반영됐다 — 더 이상 스케줄링할 게 없다.
+- ~~Kubernetes `Ingress`/ALB + TLS 인증서 프로비저닝~~ (2026-08-08 기록,
+  [ADR 0034](ADR/0034-https-termination-stance.ko.md)) — **이 항목도 낡은 기록이었고,
+  2026-09-08에 정정했다.** "확정된 인증서 소스가... 아직 정해지지 않았다"고 적혀
+  있었는데, 인증서 소스는 *이미 정해졌었다*(ACM, Terraform이 프로비저닝한 Route53
+  존을 통한 DNS 검증, ADR 0043 D4/D5) — 2026-08-25~27 라이브 배포 중 실제 인증서가
+  `ISSUED`까지 도달했다. Helm 차트의 `Ingress` 템플릿도 이미 존재하고 ACM ARN 주석을
+  받을 수 있게 연결돼 있다. 꺼져 있는 이유는 빠진 의존성이 아니라 **개발자의 의도적
+  선택**이다 — 2026-08-27에 확정된 대로, 외부 테스터가 실제로 필요해지기 전까지는
+  `ingress.enabled`를 `false`로 둔다. 전체 기록은 §6 Stage 4 표의 "HTTPS termination"
+  행 참고. 여기 뭔가 아직 안 만들어져서가 아니라, 그 조건이 바뀔 때만 재검토한다.
 - Istio(Kubernetes 클러스터 위 서비스 메시) — **프로덕션 DevOps 스택 도입 행과 Stage 4
   구성요소 상태 표에서 제외**(2026-08-31 이동, 이번 세션에서 진행한 규모 적합성 검토 뒤
   개발자가 내린 결정 — ROADMAP 자체의 순서 계획과는 별개). **미착수 이유**: 이 프로젝트의

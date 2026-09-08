@@ -12,6 +12,19 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Fixed
+- **`ROADMAP.md`(+ko): two more stale "not started" §7 entries corrected (2026-09-08)**
+  — same class of bug as the earlier ARM/Graviton fix. "AWS Secrets Manager + ESO wiring"
+  and "Kubernetes Ingress/ALB + TLS certificate provisioning" both still said they were
+  blocked on infrastructure/decisions that didn't exist, while §6's Stage 4 status table
+  already recorded both as landed and live-verified (ADR 0043 D4/D5/D7, 2026-08-18) — the
+  Ingress row specifically because it's `enabled: false` by **deliberate developer
+  choice** (confirmed 2026-08-27), not a missing dependency. Found while re-checking
+  whether the four "infra conditional holds" items discussed earlier needed an
+  implement-only-if-needed confirmation like Testcontainers/etc. did — two of the four
+  turned out not to need that framing at all, because they were never actually blocked;
+  the §7 entries just never caught up with §6. No code change — pure documentation.
+
 ### Added
 - **Admin: light/dark toggle on every page (2026-09-08)** — on direct developer request.
   `admin/src/store/theme.store.ts` (new, zustand) resolves the initial theme from

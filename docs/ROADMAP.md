@@ -968,19 +968,28 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   2026-09-07 — none had been revisited since the 2026-08-08 premise was corrected;
   all four are fixed in this same pass. Nothing left to do here: ARM/Graviton is landed,
   live-verified, and the confirmed architecture, not an open item.
-- AWS Secrets Manager + External Secrets Operator (ESO) wiring (recorded 2026-08-08,
-  [ADR 0033](ADR/0033-secrets-delivery-target.md)) — **not started because** it needs
-  a live AWS account, an IAM role for IRSA, and a running Kubernetes cluster with ESO
-  installed — none of which exist yet. The target shape (K8s `Secret` as the app's
-  direct interface, Secrets Manager syncing into it) is decided; provisioning it is
-  Terraform/IaC work, scheduled to land together with the Terraform introduction row
-  (Production DevOps stack introduction, above).
-- Kubernetes `Ingress`/ALB + TLS certificate provisioning (recorded 2026-08-08,
-  [ADR 0034](ADR/0034-https-termination-stance.md)) — **not started because** it
-  depends on a running Kubernetes cluster and a chosen certificate source (ACM vs.
-  cert-manager + Let's Encrypt), neither decided yet. The stance (terminate at the
-  ingress, never in-process) is settled; scheduled to land with the Helm/K8s task
-  (Production DevOps stack introduction, above).
+- ~~AWS Secrets Manager + External Secrets Operator (ESO) wiring~~ (recorded 2026-08-08,
+  [ADR 0033](ADR/0033-secrets-delivery-target.md)) — **this entry was stale, corrected
+  2026-09-08.** It said "not started because it needs a live AWS account... none of which
+  exist yet" — that stopped being true once Terraform ([ADR 0043](ADR/0043-terraform-project-adaptation.md)
+  D7, 2026-08-18) provisioned exactly this: the Secrets Manager entry, ESO's install, and
+  its IRSA role. Live-verified twice (2026-08-27, then again 2026-08-29/30 after a
+  teardown/re-apply cycle) — see §6's Stage 4 table, "Secrets delivery" row, for the
+  authoritative status of whether it's currently applied (that cell is a snapshot,
+  re-verify with `helm list -A`/`terraform output` rather than trusting either this row
+  or that one on sight). What was actually still open when this row was last touched has
+  long since landed; nothing left to schedule here.
+- ~~Kubernetes `Ingress`/ALB + TLS certificate provisioning~~ (recorded 2026-08-08,
+  [ADR 0034](ADR/0034-https-termination-stance.md)) — **this entry was stale, corrected
+  2026-09-08.** It said "depends on... a chosen certificate source, neither decided yet"
+  — the cert source *was* decided (ACM, DNS-validated via a Terraform-provisioned Route53
+  zone, ADR 0043 D4/D5) and a real cert reached `ISSUED` during the 2026-08-25–27 live
+  deploy. The Helm chart's `Ingress` template exists and is wired for the ACM ARN
+  annotation. The reason it's off is not a missing dependency, it's a **deliberate
+  developer choice** confirmed 2026-08-27: `ingress.enabled` stays `false` until an
+  outside tester actually needs external access — see §6's Stage 4 table, "HTTPS
+  termination" row, for the full record. Revisit only when that condition changes, not
+  because anything here is still unbuilt.
 - Istio (service mesh over the Kubernetes cluster) — **pulled from the Production DevOps
   stack introduction row and the Stage 4 component-status table** (moved 2026-08-31,
   developer decision after a scale-fit review run this session, independent of the
