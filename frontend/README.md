@@ -49,7 +49,7 @@ src/
 │                 errorCodes + types (mirror of the backend contract, now including
 │                 PostResponse/CommentResponse)
 ├── auth/         session state: AuthProvider (silent refresh), useAuth, RequireAuth guard
-├── shared/       NavBar — the Posts/My Files/Sign out header shown on every
+├── shared/       NavBar — the Posts/Files/Sign out header shown on every
 │                 authenticated screen
 └── features/
     ├── auth/     LoginPage (Basic signin/register)

@@ -17,11 +17,11 @@ test('authenticated home is the post board, reachable via the NavBar "Posts" lin
 
   await expect(page.getByRole('heading', { name: 'Posts' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Posts' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'My Files' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Files', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
 })
 
-test('NavBar "My Files" link reaches the file board at /files, not swallowed by the dev proxy', async ({
+test('NavBar "Files" link reaches the file board at /files, not swallowed by the dev proxy', async ({
   page,
 }) => {
   await registerAndSignIn(page, uniqueEmail('nav-files'))
@@ -62,7 +62,7 @@ test('a direct load of /posts/:id renders PostDetailPage (regex-anchored proxy, 
   // exact: true — PostDetailPage's own error-state "Back to posts" link otherwise also
   // matches a plain substring query for "Posts" (frontend/CLAUDE.md E2E gotchas).
   await expect(page.getByRole('link', { name: 'Posts', exact: true })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'My Files' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Files', exact: true })).toBeVisible()
 })
 
 test('unauthenticated visits to /files and /posts/:id redirect to /login', async ({ page }) => {

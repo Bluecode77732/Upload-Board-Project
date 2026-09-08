@@ -51,7 +51,7 @@ export async function registerAndSignIn(page: Page, email: string, password = TE
 // PostBoard) — call after registerAndSignIn in any spec whose assertions target the upload
 // form or file list.
 export async function goToFiles(page: Page): Promise<void> {
-  await page.getByRole('link', { name: 'My Files' }).click()
+  await page.getByRole('link', { name: 'Files', exact: true }).click()
   await expect(page).toHaveURL(/\/files$/)
   await expect(page.getByRole('heading', { name: 'Files' })).toBeVisible()
 }

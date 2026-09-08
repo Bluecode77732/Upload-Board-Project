@@ -50,7 +50,7 @@ src/
 │                 errorCodes + types (백엔드 계약의 미러, 이제 PostResponse/
 │                 CommentResponse도 포함)
 ├── auth/         세션 상태: AuthProvider (사일런트 리프레시), useAuth, RequireAuth 가드
-├── shared/       NavBar — 인증된 모든 화면에 표시되는 Posts/My Files/Sign out 헤더
+├── shared/       NavBar — 인증된 모든 화면에 표시되는 Posts/Files/Sign out 헤더
 └── features/
     ├── auth/     LoginPage (Basic 로그인/회원가입)
     ├── posts/    PostBoard (보호됨, "/" — 앱의 홈: PostForm + 게시글 목록 —

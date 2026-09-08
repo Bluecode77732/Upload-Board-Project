@@ -27,7 +27,7 @@ export function NavBar() {
           Posts
         </NavLink>
         <NavLink to="/files" className={navLinkClassName}>
-          My Files
+          Files
         </NavLink>
         <NavLink to="/settings" className={navLinkClassName}>
           Settings
