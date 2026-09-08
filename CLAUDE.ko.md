@@ -441,17 +441,17 @@ res.sendFile(req.query.path)
 // ✅ Describe the artifact's location, name, and size to the developer.
 // Never retrieve and display the content. Have the developer read it directly and report back.
 
-// ❌ AI tool exposing an env-stored key's value → leaks into chat output, shell scrollback,
-// logs, or a committed file. The var/key NAME is fine to read, log, or discuss (e.g. which
-// var is missing, which key a Joi entry validates) — the VALUE never is, through any channel.
+// ❌ AI 도구가 env에 저장된 키의 값을 노출시킴 → 채팅 출력, 셸 스크롤백, 로그, 커밋된
+// 파일로 값이 새어나간다. 변수/키 이름은 읽거나 로그에 남기거나 언급해도 된다(예: 어떤
+// 변수가 빠졌는지, Joi 항목이 어떤 키를 검증하는지) — 하지만 값은 어떤 경로로도 안 된다.
 cat .env; echo $ACCESS_TOKEN_SECRET; console.log(this.configService.getOrThrow('DB_PASSWORD'))
-// ✅ Check presence/shape without revealing the value (e.g. `[ -n "$VAR" ]`, or grep for the
-// var NAME only). If the actual value must be verified, have the developer check it directly —
-// never retrieve, print, log, or write a key's value anywhere. If a value slips out by mistake
-// despite this, first check how serious the exposure is — where it landed (a local response
-// only, vs. a pushed commit, a shared log, a channel someone else can read) and whether it's
-// still reachable there — then report that severity assessment to the developer immediately,
-// along with which key and where; do not stay quiet about it or just move on.
+// ✅ 값을 드러내지 않고 존재 여부·형식만 확인한다(예: `[ -n "$VAR" ]`, 또는 변수 이름만
+// grep). 실제 값을 꼭 확인해야 한다면 개발자가 직접 확인하게 한다 — 어떤 경로로도 키
+// 값을 가져오거나 출력하거나 로그에 남기거나 어딘가에 적지 않는다. 그럼에도 실수로
+// 값이 새어나갔다면, 보고에 앞서 먼저 노출 범위(로컬 응답에만 남았는지, 커밋·로그·
+// 다른 사람이 볼 수 있는 채널까지 갔는지)와 여전히 접근 가능한지를 확인해 심각성을
+// 파악하고, 어떤 키가 어디서 노출됐는지와 함께 그 심각성 평가를 개발자에게 즉시
+// 보고한다 — 침묵하거나 그냥 넘어가지 않는다.
 ```
 
 ## 엔지니어링 원칙
