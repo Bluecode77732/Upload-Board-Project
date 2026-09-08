@@ -1072,9 +1072,11 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
   (ADR 0035), CI has published real `linux/amd64,linux/arm64` images from `main` since
   2026-08-13, and the graviton node group was the live app's primary, developer-confirmed
   architecture as of 2026-08-27
-- Chat-project remnant handling — docs audited clean 2026-07-22; pending git-history
-  decision + re-verification trigger. See `CHAT-REMNANT-REMOVAL-PLAN.md` and
-  ROADMAP.md > Unscheduled / open decisions
+- ~~Chat-project remnant handling~~ — docs (and, as of a 2026-09-07 full-scope
+  re-verification, `frontend/`/`backend/` code too) audited clean; the git-history
+  decision was **made 2026-09-07: leave as-is**, the plan's own recommended option. See
+  `CHAT-REMNANT-REMOVAL-PLAN.md` and ROADMAP.md > Unscheduled / open decisions — the
+  re-verification trigger itself stays a standing habit, not a one-time task
 - ~~Helm chart project adaptation + `k8s/`/`helm/` directory consolidation~~ —
   **landed 2026-08-17** ([ADR 0041](docs/ADR/0041-helm-chart-project-adaptation.md),
   [ADR 0042](docs/ADR/0042-k8s-helm-directory-consolidation.md), lifting ADR 0037's
@@ -1194,8 +1196,10 @@ Architecture Decisions above remain operative.
   replaced the false "Non-Existent Infrastructure" section with an accurate summary pointing
   at README.md/ROADMAP.md. Verify against code going forward, not against memory of this
   entry.
-- License mismatch: `package.json` says `UNLICENSED` while the pre-rewrite README
-  claimed MIT — needs an explicit decision before the repo is published
+- ~~License mismatch~~ — **decided 2026-09-07: MIT** (see ROADMAP.md > Unscheduled for
+  the full record). `package.json` (root + `frontend/` + `admin/`) and a root `LICENSE`
+  file both say MIT now; the "before published" framing was already stale by the time
+  this was decided — the repo turned out to already be public
 - CORS is opt-in via the optional `CORS_ORIGIN` env var (added 2026-07-22): unset =
   CORS disabled (same-origin/Swagger use); a browser frontend sets a comma-separated
   origin allowlist

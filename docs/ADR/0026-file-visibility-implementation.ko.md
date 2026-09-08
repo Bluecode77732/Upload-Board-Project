@@ -156,3 +156,14 @@ ADR 0025가 이미 이 옵션의 근거로 남긴 이유 그대로 선택했다.
 코드 불요 관찰(기록만): `416` 응답에 `ErrorBody` `code`가 없음(도메인 에러가 아닌 프로토콜
 레벨 응답); 다중 필드 첨부 거부 시 남는 temp orphan은 [ADR 0018](0018-orphan-temp-file-cleanup.ko.md)
 스윕이 회수; `file/temp`는 여전히 정적 서빙(기존 동작·추측 불가 uuid — 가시성 범위 밖).
+
+### 추가 기록 (Addendum, 2026-09-07) — 1·2번 항목 완료
+
+위 코드 항목 둘 다 고쳐졌다. `FileContentController`는 이제 200·206 두 `pipe(res)` 호출
+모두 private `pipeContentStream()` 헬퍼를 거치며, 여기서 `stream.on('error', …)`를 걸어
+응답을 destroy하고 `warn`으로 로그한다 — Never Do Group 1의 크래시 위험을 닫는다.
+Suffix-Range 파서는 이제 `bytes=-N` 형태(start 비어있고 end만 있음)를 감지해
+`start = max(0, size - N)` / `end = size - 1`로 계산하고, `N-`/`N-M` 형태는 그대로 둔다.
+새 e2e 케이스(`supports a suffix Range request (last N bytes)`)로 커버, `STORAGE_DRIVER=local`
+기준 76/76 통과. 코드 불요 관찰 두 건은 영향 없이 그대로 열려 있다. 전체 기록:
+[ROADMAP.ko.md](../ROADMAP.ko.md) > 미일정(이제 해소됨)과 [CHANGELOG.ko.md](../CHANGELOG.ko.md).

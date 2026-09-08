@@ -1105,10 +1105,11 @@ Conflict Protocol을 따른다.
   2026-08-12 ADR 0035로 정정됐고, CI는 2026-08-13부터 `main`에서 실제
   `linux/amd64,linux/arm64` 이미지를 발행 중이며, graviton 노드그룹이 2026-08-27
   라이브 앱의 주력이자 개발자가 확정한 아키텍처였다
-- 채팅 프로젝트 잔재 처리 — 문서는 2026-07-22에 감사되어 깨끗함이 확인됨;
-  git 히스토리 관련 결정과 재검증 트리거가 남아 있다.
+- ~~채팅 프로젝트 잔재 처리~~ — 문서(그리고 2026-09-07 전체 범위 재검증으로
+  `frontend/`/`backend/` 코드까지)가 깨끗함이 확인됨; git 히스토리 결정은
+  **2026-09-07에 내려짐 — 현상 유지**, 계획서 자체가 권장하던 옵션 그대로.
   `docs/CHAT-REMNANT-REMOVAL-PLAN.md`와 ROADMAP.md > Unscheduled / open decisions
-  참고
+  참고 — 재검증 트리거 자체는 한 번 끝낼 과제가 아니라 계속되는 상시 습관으로 남는다
 - ~~Helm 차트 프로젝트 적응 + `k8s/`/`helm/` 디렉터리 통합~~ — **2026-08-17 도입**
   ([ADR 0041](docs/ADR/0041-helm-chart-project-adaptation.ko.md),
   [ADR 0042](docs/ADR/0042-k8s-helm-directory-consolidation.ko.md), ADR 0037의 유예
@@ -1230,8 +1231,10 @@ Architecture Decisions가 계속 유효하다.
   `roots`를 `["src"]`에서 `["backend"]`로 바로잡았고, e2e 스위트를 문서화했고, 사실이
   아니게 된 "존재하지 않는 인프라" 절을 README.md/ROADMAP.md로 연결되는 정확한 요약으로
   교체했다. 앞으로는 이 항목의 기억이 아니라 코드에 대조해 검증한다.
-- 라이선스 불일치: `package.json`은 `UNLICENSED`라고 적혀 있지만 재작성 이전
-  README는 MIT라고 주장했다 — 저장소를 공개하기 전에 명시적 결정이 필요하다
+- ~~라이선스 불일치~~ — **2026-09-07 결정: MIT** (전체 기록은 ROADMAP.md >
+  Unscheduled 참고). `package.json`(루트 + `frontend/` + `admin/`)과 루트 `LICENSE`
+  파일 모두 이제 MIT를 표기한다 — "공개 전"이라는 프레이밍은 결정 시점에 이미
+  낡은 것이었다, 저장소는 알고 보니 이미 공개 상태였다
 - CORS는 선택적 `CORS_ORIGIN` 환경 변수를 통해 opt-in이다(2026-07-22 추가):
   미설정 = CORS 비활성화(동일 출처/Swagger 용도); 브라우저 프론트엔드는
   쉼표로 구분된 출처 허용목록을 설정한다

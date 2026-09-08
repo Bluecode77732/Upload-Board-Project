@@ -169,3 +169,16 @@ Non-code observations (recorded, no fix): the `416` reply carries no `ErrorBody`
 (a protocol-level response, not a domain error); a rejected multi-field upload leaves temp
 orphans the [ADR 0018](0018-orphan-temp-file-cleanup.md) sweep reclaims; and `file/temp`
 stays statically served (pre-existing, unguessable-uuid — outside the visibility scope).
+
+### Addendum (2026-09-07) — items 1 and 2 landed
+
+Both code items above are fixed. `FileContentController` now routes both the 200 and 206
+`pipe(res)` calls through a private `pipeContentStream()` helper that attaches
+`stream.on('error', …)`, destroys the response, and logs at `warn` — closing the Never Do
+Group 1 crash risk. The suffix-Range parser now detects the `bytes=-N` form (empty start,
+non-empty end) and computes `start = max(0, size - N)` / `end = size - 1` for it
+specifically, leaving `N-`/`N-M` untouched; a new e2e case
+(`supports a suffix Range request (last N bytes)`) covers it, 76/76 green under
+`STORAGE_DRIVER=local`. The two non-code observations are unaffected and remain open.
+Full record: [ROADMAP.md](../ROADMAP.md) > Unscheduled (now resolved) and
+[CHANGELOG.md](../CHANGELOG.md).
