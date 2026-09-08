@@ -448,8 +448,10 @@ cat .env; echo $ACCESS_TOKEN_SECRET; console.log(this.configService.getOrThrow('
 // ✅ Check presence/shape without revealing the value (e.g. `[ -n "$VAR" ]`, or grep for the
 // var NAME only). If the actual value must be verified, have the developer check it directly —
 // never retrieve, print, log, or write a key's value anywhere. If a value slips out by mistake
-// despite this, tell the developer immediately — which key, where it was exposed — so they can
-// rotate it; do not stay quiet about it or just move on.
+// despite this, first check how serious the exposure is — where it landed (a local response
+// only, vs. a pushed commit, a shared log, a channel someone else can read) and whether it's
+// still reachable there — then report that severity assessment to the developer immediately,
+// along with which key and where; do not stay quiet about it or just move on.
 ```
 
 ## 엔지니어링 원칙
