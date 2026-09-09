@@ -599,8 +599,11 @@ rule, established pattern, or current implementation — including when a violat
 discovered mid-task — stop work immediately. Do not continue past the conflict, and do
 not silently resolve it by picking a side.
 
-1. **Stop and explain**: state which principle is in tension with which existing rule or
-   pattern (cite file:line), and why the conflict exists.
+1. **Stop and explain**: before naming a principle as the conflicting side, look up why it
+   exists — its inline `Rationale:` line, the ADR or doc it cites, or, absent either, the
+   convention it follows ("How to read the rules here" at the top of this file). Then state
+   which principle is in tension with which existing rule or pattern (cite file:line), why
+   the conflict exists, and that background.
 2. **State a prevention plan**: a concrete, scoped way to avoid this same conflict
    recurring (e.g., a new row in Clarification Protocol, a documented convention).
 3. **Ask step-by-step, not as one flat question**: narrow down with the developer what
