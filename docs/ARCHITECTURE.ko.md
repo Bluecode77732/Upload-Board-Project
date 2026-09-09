@@ -23,7 +23,7 @@ AppModule
 ├── ServeStaticModule    — file/temp만 /file/temp로 정적 서빙. granted 파일은 정적 URL이 없습니다(ADR 0025/0026)
 ├── ScheduleModule       — TempCleanupModule의 크론 작업을 돌리는 기반
 ├── AuthModule           — 토큰 + RBAC: Basic 파싱, JWT 발급/검증, Passport 전략, 역할 가드(ADR 0013)
-├── UserModule           — 사용자 CRUD, 역할 부여, SUPERADMIN_EMAIL로 첫 superadmin 부팅
+├── UserModule           — 사용자 CRUD, 역할 부여
 ├── FileModule           — 파일 메타데이터: 행, 가시성, 매체 종류, temp 승격 트랜잭션
 ├── PostModule           — 게시글 본문과 그에 딸린 선택적 첨부 파일(ADR 0023)
 ├── CommentModule        — 게시글에 매달린 댓글(ADR 0023)
@@ -383,8 +383,9 @@ DB/JWT/해싱 같은 기본값 말고도, 특정 기능을 위한 그룹이 몇 
   얼마나 유효한지)(ADR 0029, ADR 0036).
 - **고아 파일 청소**: `TEMP_SWEEP_ENABLED`(기본 켜짐), `TEMP_SWEEP_CRON`,
   `TEMP_SWEEP_TTL_HOURS`(기본 24), `TEMP_SWEEP_DRY_RUN`(ADR 0018).
-- **RBAC 시드**: `SUPERADMIN_EMAIL` — 선택 사항이며, 이 이메일과 일치하는 계정이
-  부팅 시 superadmin으로 승격됩니다.
+- **RBAC 시드**: `SUPERADMIN_EMAIL` — 선택 사항이며, `pnpm promote-superadmin`이
+  superadmin으로 승격시킬 대상 계정을 지정합니다(부팅 시 자동이 아니라 수동 단계 —
+  [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.ko.md)).
 - **선택 사항**: `BASE_URL`(기본 `http://localhost:3000`), `CORS_ORIGIN`(미설정 =
   CORS 꺼짐; 브라우저 프론트엔드가 필요할 때 콤마로 구분한 허용 목록 — ADR 0008).
 

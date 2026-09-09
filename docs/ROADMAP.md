@@ -1388,6 +1388,19 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   re-upload-from-scratch genuinely costly, there is a named starting point instead of a
   fresh investigation. No comparison table, no ADR, no design decided — purely a marker
   for a future task to pick up if and when it becomes worth prioritizing.
+- **Superadmin bootstrap identity verification (found 2026-09-09, resolved by removing
+  the automatic trigger — [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.md), amends
+  ADR 0013)** — the boot-time auto-promotion this replaced trusted whoever registered
+  `SUPERADMIN_EMAIL` first, with no proof of ownership. Two stronger options were
+  weighed and declined for this project's current stage (no live users, no mail
+  infrastructure) rather than closed off permanently:
+  - **Email verification before promotion** — the actual fix for the identity gap, but a
+    real feature addition (SMTP account, new dependency, a verification-token schema
+    change, new endpoints/env vars) disproportionate to a project with no live users yet.
+  - **Gate promotion on "zero superadmins currently exist"** — cheap, but does not close
+    the race it would be proposed for: at the moment of the original race (fresh deploy,
+    before the owner's first registration), the superadmin count is already zero.
+  Revisit if this project ever carries real, adversarial-facing traffic.
 
 ## 8. Advisory notes
 

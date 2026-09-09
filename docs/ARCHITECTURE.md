@@ -23,7 +23,7 @@ AppModule
 ├── ServeStaticModule    — serves only file/temp at /file/temp; granted files have no static URL (ADR 0025/0026)
 ├── ScheduleModule       — powers TempCleanupModule's cron job
 ├── AuthModule           — tokens + RBAC: Basic parsing, JWT issue/verify, Passport strategies, role guard (ADR 0013)
-├── UserModule           — user CRUD, role assignment, boots the first superadmin from SUPERADMIN_EMAIL
+├── UserModule           — user CRUD, role assignment
 ├── FileModule           — file metadata: rows, visibility, media type, the promote-from-temp transaction
 ├── PostModule           — a board post's text plus its optional attached file (ADR 0023)
 ├── CommentModule        — comment text hanging off a post (ADR 0023)
@@ -374,8 +374,9 @@ Beyond the DB/JWT/hashing basics, a few groups exist for specific features:
   presigned content URL stays valid) (ADR 0029, ADR 0036).
 - **Orphan sweep**: `TEMP_SWEEP_ENABLED` (default on), `TEMP_SWEEP_CRON`,
   `TEMP_SWEEP_TTL_HOURS` (default 24), `TEMP_SWEEP_DRY_RUN` (ADR 0018).
-- **RBAC seed**: `SUPERADMIN_EMAIL` — optional; the matching account is promoted to
-  superadmin on boot.
+- **RBAC seed**: `SUPERADMIN_EMAIL` — optional; names the account `pnpm
+  promote-superadmin` promotes to superadmin (a manual step, not automatic on boot —
+  [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.md)).
 - **Optional**: `BASE_URL` (default `http://localhost:3000`), `CORS_ORIGIN` (unset = CORS
   off; a comma-separated allowlist when a browser frontend needs it — ADR 0008).
 

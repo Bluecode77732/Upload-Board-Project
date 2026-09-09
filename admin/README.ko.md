@@ -18,8 +18,11 @@ REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" �
 1. **사용자 권한 계층 관리.** RBAC은 [ADR 0013](../docs/ADR/0013-rbac-and-audit-log.ko.md)에서
    도입됐다 — `ROLE_RANK` 순위를 가진 3단계(`user`/`admin`/`superadmin`), superadmin 전용
    `PATCH /user/:id/role`, `ROLE_CHANGE` 감사 기록 — 그런데 **그것을 운영할 수단은 함께 나오지
-   않았다.** 지금 첫 superadmin은 `SUPERADMIN_EMAIL` 부팅 시딩으로 생기고, 그 이후의 모든
-   승격·강등은 직접 HTTP 요청이거나 Swagger 폼이다. 더 문제는 계층을 보호하는 두 불변식이
+   않았다.** 지금 첫 superadmin은 `SUPERADMIN_EMAIL` 계정이며, 부팅 시 자동이 아니라
+   의도적인 수동 단계(`pnpm promote-superadmin` —
+   [ADR 0052](../docs/ADR/0052-superadmin-seed-manual-trigger.ko.md))로 승격된다. 그
+   이후의 모든 승격·강등은 직접 HTTP 요청이거나 Swagger 폼이다. 더 문제는 계층을 보호하는
+   두 불변식이
    그것을 쓰는 사람에게 보이지 않는다는 점이다: **마지막** superadmin 강등은 거부되고
    (400 `AUTH_LAST_SUPERADMIN`), **모든** 역할 변경은 대상의 `refreshTokenHash`를 null로 만들어
    세션을 즉시 끊는다. 이 콘솔이 바로 그 운영 화면이다.

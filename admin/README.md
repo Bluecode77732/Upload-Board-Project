@@ -17,9 +17,12 @@ surface (rooms, presence, Apollo/GraphQL) had no counterpart here and was delete
 1. **User privilege-hierarchy management.** RBAC landed in
    [ADR 0013](../docs/ADR/0013-rbac-and-audit-log.md) — three tiers (`user`/`admin`/`superadmin`)
    with a `ROLE_RANK` ordering, a superadmin-only `PATCH /user/:id/role`, and a `ROLE_CHANGE`
-   audit trail — but shipped **no way to operate any of it**. Today the first superadmin comes
-   from the `SUPERADMIN_EMAIL` boot seed, and every promotion or demotion after that is a raw
-   HTTP call or a Swagger form. Worse, the two invariants that protect the hierarchy are
+   audit trail — but shipped **no way to operate any of it**. Today the first superadmin is
+   the `SUPERADMIN_EMAIL` account, promoted by a deliberate manual step
+   (`pnpm promote-superadmin`, not automatic on boot —
+   [ADR 0052](../docs/ADR/0052-superadmin-seed-manual-trigger.md)), and every promotion or
+   demotion after that is a raw HTTP call or a Swagger form. Worse, the two invariants that
+   protect the hierarchy are
    invisible to whoever is using it: demoting the **last** superadmin is refused
    (400 `AUTH_LAST_SUPERADMIN`), and **any** role change nulls the target's `refreshTokenHash`,
    ending their session immediately. This console is the operator surface for that.
