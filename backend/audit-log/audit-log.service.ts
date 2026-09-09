@@ -1,6 +1,6 @@
-// Purpose: writes and reads audit records for privileged actions (role change, user/file delete).
-// Usage: log() called by UserService/FileService after their transactions commit; findAll() by GET /audit-log.
-// Rationale: centralizes the audit trail RBAC requires (ADR 0013); a single write, so a plain repository call suffices.
+// 목적: 권한 필요 작업(역할 변경, 유저/파일 삭제)의 감사 기록을 쓰고 읽는다.
+// 사용처: log()는 UserService/FileService가 트랜잭션 커밋 후 호출; findAll()은 GET /audit-log가 호출.
+// 근거: RBAC(ADR 0013)가 요구하는 감사 로그를 한곳에 모은다; 단일 쓰기라 일반 repository 호출로 충분하다.
 
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -50,9 +50,9 @@ export class AuditLogService {
   async findAll(query: AuditLogQueryDto): Promise<[AuditLogEntity[], number]> {
     const { action, userId, take, skip } = query;
 
-    // actorId/targetId/targetType currently have no index of their own (the entity's only
-    // index is (action, createdAt)) — acceptable for this low-volume portfolio project;
-    // add a dedicated index if this filter sees real traffic.
+    // actorId/targetId/targetType은 아직 자체 인덱스가 없다(엔티티의 유일한 인덱스는
+    // (action, createdAt)) — 트래픽이 적은 포트폴리오 프로젝트라 지금은 허용 가능한 수준이며,
+    // 이 필터에 실제 트래픽이 몰리면 전용 인덱스를 추가한다.
     const where = userId
       ? [
           { ...(action && { action }), actorId: userId },

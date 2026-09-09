@@ -1,6 +1,6 @@
-// Purpose: exposes GET /audit-log for admins to review the privileged-action trail.
-// Usage: mounted by AuditLogModule; behind JwtAuthGuard + RolesGuard(@Roles admin).
-// Rationale: RBAC (ADR 0013) makes admin actions consequential; admins need read access to the audit trail.
+// 목적: 관리자가 권한 필요 작업 이력을 조회하는 GET /audit-log를 노출한다.
+// 사용처: AuditLogModule에서 마운트; JwtAuthGuard + RolesGuard(@Roles admin) 뒤에 위치.
+// 근거: RBAC(ADR 0013)로 관리자 작업이 중대해졌으므로, 관리자에게 감사 로그 읽기 권한이 필요하다.
 
 import {
   ClassSerializerInterceptor,

@@ -18,9 +18,9 @@ import { JwtAuthGuard } from 'backend/auth/guard/jwt-auth.guard';
 import { ErrorCode } from 'backend/common/error-code';
 import { UploadService } from './upload.service';
 
-// One class allowlist per type-specific field (ADR 0025 D4/D5). A Map (not a plain
-// object) keeps file.fieldname -> allowlist lookup honestly typed as possibly-undefined
-// without a type cast, since fieldname is client-supplied.
+// 타입별 필드마다 클래스 허용목록 하나씩(ADR 0025 D4/D5). 일반 객체가 아니라 Map을 쓰면
+// file.fieldname -> 허용목록 조회가 타입 캐스팅 없이도 정직하게 possibly-undefined로
+// 잡힌다 — fieldname은 클라이언트가 넘긴 값이므로.
 const UPLOAD_FIELD_NAMES = ['image', 'audio', 'video'] as const;
 type UploadField = (typeof UPLOAD_FIELD_NAMES)[number];
 
@@ -96,11 +96,11 @@ export class UploadController {
       UPLOAD_FIELD_NAMES.map((name) => ({ name, maxCount: 1 })),
       {
         limits: {
-          fileSize: 100000000, // 100MB in bytes
+          fileSize: 100000000, // 100MB (바이트 단위)
         },
         fileFilter: (req, file, cb) => {
-          // Both mimetype and extension are client-supplied, so this is an
-          // allowlist against accidental/blatant misuse, not a content guarantee.
+          // mimetype과 extension 둘 다 클라이언트가 넘긴 값이므로, 이건 콘텐츠를
+          // 보장하는 게 아니라 실수·명백한 오남용을 막는 허용목록일 뿐이다.
           const allowlist = UPLOAD_ALLOWLIST.get(file.fieldname);
           const extension =
             file.originalname.split('.').pop()?.toLowerCase() ?? '';

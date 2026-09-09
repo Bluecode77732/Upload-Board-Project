@@ -1,6 +1,6 @@
-// Purpose: the outward shape of a post — its text, its author, and the attached file as a public URL.
-// Usage: returned by every PostService method; composed in PostService.toResponse().
-// Rationale: entities stay pure DB models (Boundary Validation & Response Shaping), and the file half is delegated to FileService's existing FileResponseDto rather than recomposed here.
+// 목적: 게시글을 외부에 내보내는 형태 — 본문, 작성자, 그리고 첨부 파일을 공개 URL로 담는다.
+// 사용처: PostService의 모든 메서드가 이 형태로 반환하며, PostService.toResponse()에서 조립된다.
+// 근거: 엔티티는 순수 DB 모델로 남겨야 하고(Boundary Validation & Response Shaping), 파일 부분은 여기서 다시 조립하지 않고 FileService의 기존 FileResponseDto에 위임한다.
 
 import { FileResponseDto } from 'backend/file/dto/file-response.dto';
 
@@ -12,8 +12,8 @@ export class PostResponseDto {
     id: number;
     email: string;
   };
-  // Absent for a text-only post. Built by FileService so the BASE_URL composition
-  // has exactly one home (ADR 0023).
+  // 텍스트만 있는 게시글에는 없다. BASE_URL 조립이 한 곳에서만 이뤄지도록
+  // FileService가 만들어 넣는다 (ADR 0023).
   file?: FileResponseDto;
   createdAt!: Date;
   updatedAt!: Date;

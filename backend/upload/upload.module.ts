@@ -8,9 +8,9 @@ import { StorageModule } from 'backend/storage/storage.module';
 @Module({
   imports: [
     MulterModule.register({
-      // Buffers into memory instead of writing to local disk directly — the
-      // physical write now happens through the FileStorage port (UploadService),
-      // so a driver switch actually reaches temp bytes too (ADR 0029 D4).
+      // 로컬 디스크에 직접 쓰는 대신 메모리에 버퍼링한다 — 실제 물리 쓰기는 이제
+      // FileStorage 포트(UploadService)를 거치므로, 드라이버를 바꾸면 temp 바이트에도
+      // 실제로 영향이 미친다(ADR 0029 D4).
       storage: memoryStorage(),
     }),
     StorageModule,

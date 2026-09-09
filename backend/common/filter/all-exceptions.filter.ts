@@ -1,6 +1,6 @@
-// Purpose: shapes every thrown error into the frozen { statusCode, code, message, timestamp, path } contract.
-// Usage: registered once as APP_FILTER in AppModule; throw sites attach codes via { code, message } HttpException bodies.
-// Rationale: Stage F error-code task (ADR 0010/0011) — ported from Chat-project's filter minus its GraphQL branch and logger.
+// 목적: 던져지는 모든 에러를 고정된 { statusCode, code, message, timestamp, path } 계약 형태로 만든다.
+// 사용처: AppModule에 APP_FILTER로 한 번 등록됨; throw하는 곳들은 { code, message } HttpException 본문으로 code를 붙인다.
+// 근거: Stage F 에러 코드 작업(ADR 0010/0011) — Chat-project의 필터에서 GraphQL 분기와 logger를 뺀 이식판.
 
 import {
   ArgumentsHost,
@@ -15,8 +15,8 @@ import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { ErrorBody, ErrorCode } from '../error-code';
 
-// Status-based defaults for exceptions thrown without an explicit code
-// (framework 404s, passport 401s, third-party throws).
+// 명시적 code 없이 던져진 예외를 위한 상태 코드 기반 기본값
+// (프레임워크 404, passport 401, 서드파티가 던지는 예외 등).
 const FALLBACK_CODES: Partial<Record<number, ErrorCode>> = {
   [HttpStatus.BAD_REQUEST]: ErrorCode.BAD_REQUEST,
   [HttpStatus.UNAUTHORIZED]: ErrorCode.AUTH_UNAUTHORIZED,
@@ -56,7 +56,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       exception instanceof HttpException ? exception.getResponse() : undefined;
 
     let code: ErrorCode | undefined;
-    // Non-HttpException errors stay generic outward (Never Do Group 3).
+    // HttpException이 아닌 에러는 밖으로는 제네릭 메시지만 내보낸다(Never Do Group 3).
     let message: string | string[] = 'Internal server error';
 
     if (typeof raw === 'string') {
@@ -79,7 +79,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     if (!code) {
-      // The global ValidationPipe reports its failures as a message array.
+      // 전역 ValidationPipe는 자신의 실패를 message 배열로 알린다.
       code =
         status === HttpStatus.BAD_REQUEST && Array.isArray(message)
           ? ErrorCode.VALIDATION_FAILED
@@ -100,10 +100,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     response.status(status).json(body);
 
-    // Observability (ADR 0017): a 5xx is a server fault — log it with the stack we
-    // deliberately withhold from the client (Never Do Group 3); a 4xx is a client
-    // error, logged at debug so routine auth/validation failures don't flood the log.
-    // Only status/code/method/url are logged — never bodies, headers, or tokens.
+    // 관측성(ADR 0017): 5xx는 서버 쪽 결함이므로 클라이언트에는 일부러 숨긴 stack과
+    // 함께 기록한다(Never Do Group 3); 4xx는 클라이언트 쪽 에러이므로, 흔한 인증/검증
+    // 실패가 로그를 뒤덮지 않도록 debug 레벨로 남긴다.
+    // status/code/method/url만 로그에 남기고 — body, header, token은 절대 남기지 않는다.
     const logLine = `${status} ${code} ${request.method} ${request.url}`;
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(logLine, stack);

@@ -1,7 +1,8 @@
-// Purpose: one file-board grid tile — a 16:9 preview frame plus the file's visibility badge, title link, and creator filter.
-// Usage: rendered by FileBoard for every row of GET /file; not intended for use outside that grid.
-// Rationale: each tile owns an independent lazy-load/blob/objectURL lifecycle, and folding N of those
-//   into FileBoard's own state would put N unrelated fetch lifecycles in one component.
+// 목적: 파일 보드 그리드 타일 하나 — 16:9 미리보기 프레임에 파일의 visibility 배지, 제목 링크,
+//   creator 필터를 더한 것.
+// 사용처: FileBoard가 GET /file의 모든 행마다 렌더링한다; 그 그리드 밖에서 쓸 용도가 아니다.
+// 근거: 타일마다 독립적인 lazy-load/blob/objectURL 생명주기를 가진다 — 이걸 N개 FileBoard 자체
+//   상태로 접으면 서로 무관한 fetch 생명주기 N개가 한 컴포넌트에 몰리게 된다.
 
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -11,8 +12,8 @@ import type { FileResponse } from '../../api/types'
 import { VisibilityBadge } from './VisibilityBadge'
 import styles from './FilePreviewTile.module.css'
 
-// Branch on the stable code (backend ADR 0011), never on the human-readable message. Kept
-// terser than FileDetailPage's copy — a tile has room for a phrase, not a sentence.
+// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011). FileDetailPage의
+// 문구보다 짧게 유지한다 — 타일에는 문장이 아니라 짧은 구 하나 들어갈 공간뿐이다.
 function messageForPreviewError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
@@ -56,8 +57,8 @@ export function FilePreviewTile({ file, onFilterCreator }: FilePreviewTileProps)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const frameRef = useRef<HTMLDivElement | null>(null)
 
-  // Latch on first intersection: once a tile has been seen, scrolling past it again must not
-  // re-trigger the fetch below.
+  // 최초 교차 시점에 래치를 건다: 한 번 보인 타일은 다시 스크롤해서 지나가도 아래 fetch를
+  // 재트리거하면 안 된다.
   useEffect(() => {
     const node = frameRef.current
     if (!node || inView) return
@@ -75,8 +76,8 @@ export function FilePreviewTile({ file, onFilterCreator }: FilePreviewTileProps)
   const shouldLoadBytes =
     file.mediaType === 'image' ? inView : file.mediaType === 'video' ? videoRequested : false
 
-  // Only a private file needs the authenticated blob read; public/unlisted stream straight from
-  // `direct`. The objectURL is revoked on unmount or file change so decoded bytes don't linger.
+  // 인증된 blob 읽기가 필요한 건 private 파일뿐이다; public/unlisted는 `direct`에서 곧바로
+  // 스트리밍한다. objectURL은 언마운트나 파일 변경 시 revoke해 디코딩된 바이트가 남지 않게 한다.
   useEffect(() => {
     setObjectUrl(null)
     setPreviewError(null)
@@ -160,8 +161,8 @@ export function FilePreviewTile({ file, onFilterCreator }: FilePreviewTileProps)
     }
 
     if (file.mediaType === 'image') {
-      // Without this the browser paints its own broken-image state (alt text on an empty box)
-      // whenever the stored bytes are gone — the tile must fail the same way the video branch does.
+      // 이게 없으면 저장된 바이트가 사라졌을 때 브라우저가 자체 깨진-이미지 상태(빈 박스에
+      // alt 텍스트)를 그려버린다 — 이 타일도 video 분기와 같은 방식으로 실패해야 한다.
       return (
         <img
           src={src}

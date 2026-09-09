@@ -1,6 +1,6 @@
-// Purpose: pure TTL-selection of orphan temp_ objects, isolated so the delete decision is unit-testable without a storage adapter.
-// Usage: called by TempCleanupService.sweep() after it lists file/temp entries through the FileStorage port.
-// Rationale: keeps the "which objects are expired" rule out of the I/O path so it can be asserted directly.
+// 목적: 고아 temp_ 객체를 순수하게 TTL로만 골라낸다 — 삭제 판단을 스토리지 어댑터 없이 단위 테스트할 수 있도록 분리했다.
+// 사용처: TempCleanupService.sweep()이 FileStorage 포트로 file/temp 항목을 나열한 뒤 이 함수를 호출한다.
+// 근거: "어떤 객체가 만료됐는가"라는 규칙을 I/O 경로 밖에 둬야 직접 검증할 수 있다.
 
 import { StorageTempEntry } from 'backend/storage/file-storage.interface';
 

@@ -1,9 +1,9 @@
 import { UploadService } from './upload.service';
 import { FileStorage } from 'backend/storage/file-storage.interface';
 
-// uuid v13 ships ESM-only, which ts-jest's default CJS transform cannot parse
-// (node_modules is untransformed by default) — mocking it avoids ever loading the
-// real module under Jest, unrelated to this file's actual runtime behavior.
+// uuid v13은 ESM-only로 배포되는데, ts-jest 기본 CJS 트랜스폼은 이를 파싱하지 못한다
+// (node_modules는 기본적으로 트랜스폼 대상이 아니다) — mock 처리하면 Jest 아래서
+// 실제 모듈을 로드하는 일 자체가 없어진다, 이 파일의 실제 런타임 동작과는 무관하다.
 jest.mock('uuid', () => ({ v4: () => '00000000-0000-4000-8000-000000000000' }));
 
 describe('UploadService', () => {

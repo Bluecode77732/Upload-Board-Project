@@ -1,6 +1,6 @@
-// Purpose: promotes the SUPERADMIN_EMAIL account to superadmin on boot so a first superadmin can exist.
-// Usage: registered in UserModule providers; runs once via OnApplicationBootstrap. No-op if the env var is unset.
-// Rationale: role defaults to 'user' (ADR 0013), so someone must be seeded; env + boot hook avoids a manual SQL step and needs no new infra.
+// 목적: 부팅 시 SUPERADMIN_EMAIL 계정을 superadmin으로 승격해 최초의 superadmin이 존재하게 한다.
+// 사용처: UserModule providers에 등록되며, OnApplicationBootstrap을 통해 한 번 실행된다. env var가 없으면 no-op.
+// 근거: role 기본값이 'user'라서(ADR 0013) 누군가는 시딩되어야 한다 — env var + 부팅 훅이면 수동 SQL 단계도, 새 인프라도 필요 없다.
 
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -29,7 +29,7 @@ export class SuperadminSeedService implements OnApplicationBootstrap {
     }
 
     const user = await this.userRepository.findOne({ where: { email } });
-    // Absent account: no-op — register it, then the next boot promotes it.
+    // 계정이 아직 없으면 no-op — 가입시키면 다음 부팅에서 승격된다.
     if (!user || user.role === UserRole.superadmin) {
       return;
     }

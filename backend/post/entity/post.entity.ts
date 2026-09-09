@@ -1,6 +1,6 @@
-// Purpose: the board post row — authored text plus an optional 1:1 reference to one uploaded file.
-// Usage: managed by PostService; read by UserService's account cascade through PostService only.
-// Rationale: ADR 0023's schema gate settled this shape; no existing entity can hold post text without conflating file metadata with board content.
+// 목적: 게시글 행 — 작성한 텍스트와, 업로드된 파일 하나를 가리키는 선택적 1:1 참조.
+// 사용처: PostService가 관리하며, UserService의 계정 삭제 cascade는 PostService를 통해서만 읽는다.
+// 근거: ADR 0023의 스키마 결정이 이 형태를 확정했다 — 기존 엔티티 중 어느 것도 파일 메타데이터와 게시글 내용을 섞지 않고 글 텍스트를 담을 수 없었다.
 
 import { UserEntity } from 'backend/user/entity/user.entity';
 import { FileEntity } from 'backend/file/entity/file.entity';
@@ -32,22 +32,22 @@ export class PostEntity {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  // Deliberately NOT unique, unlike FileEntity.title: a board where one title can be
-  // used once across all authors is a defect (ADR 0023). Length is bounded at the DTO.
+  // FileEntity.title과 달리 의도적으로 unique가 아니다: 게시판에서 제목을 전체 작성자에
+  // 걸쳐 한 번만 쓸 수 있게 하는 건 결함이다 (ADR 0023). 길이 제한은 DTO에서 건다.
   @Column()
   title!: string;
 
   @Column({ type: 'text' })
   body!: string;
 
-  // Unidirectional: UserEntity gains no inverse collection. The one inverse that exists
-  // today (UserEntity.creator) is read by zero queries, so a second one is dead weight.
+  // 단방향이다: UserEntity 쪽에는 역방향 컬렉션을 추가하지 않는다. 현재 존재하는 유일한
+  // 역방향(UserEntity.creator)조차 어떤 쿼리도 읽지 않으니, 하나 더 두는 건 죽은 코드다.
   @ManyToOne(() => UserEntity, { nullable: false })
   creator!: UserEntity;
 
-  // Unique + nullable: a post carries at most one video, a video belongs to at most one
-  // post. The unique constraint is also POST /post's idempotency key, and the FK is what
-  // turns deleting an attached file into a typed 409 instead of a 500 (ADR 0023 D1/D4).
+  // unique + nullable이다: 게시글 하나는 동영상을 최대 하나만 담고, 동영상 하나는
+  // 게시글 하나에만 속한다. 이 unique 제약은 POST /post의 멱등성 키이기도 하고, FK는
+  // 첨부 파일 삭제를 500이 아니라 타입 있는 409로 바꿔주는 장치다 (ADR 0023 D1/D4).
   @OneToOne(() => FileEntity, { nullable: true })
   @JoinColumn()
   file!: FileEntity | null;

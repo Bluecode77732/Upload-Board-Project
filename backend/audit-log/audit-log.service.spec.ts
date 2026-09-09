@@ -144,10 +144,10 @@ describe('AuditLogService', () => {
     });
   });
 
-  // ADR 0045 regression: asserting the where *shape* above cannot show that the shape
-  // actually excludes the wrong rows, so these run the produced where against fixtures.
-  // The matcher mirrors the one TypeORM semantic this query relies on — a where array is
-  // OR, an object's keys are AND — which is exactly what the service's comment claims.
+  // ADR 0045 회귀 테스트: 위에서 where *구조*만 검증해서는 그 구조가 실제로
+  // 잘못된 행을 걸러내는지 알 수 없으므로, 여기서는 생성된 where를 픽스처에 직접 적용해본다.
+  // 이 매처는 이 쿼리가 의존하는 TypeORM의 시맨틱 하나를 그대로 재현한다 — where 배열은
+  // OR, 객체 내부 키들은 AND — 이는 서비스 쪽 주석이 주장하는 바와 정확히 같다.
   describe('findAll — polymorphic targetId (ADR 0045)', () => {
     type WhereBranch = Partial<Record<keyof AuditLogEntity, unknown>>;
 
@@ -167,8 +167,8 @@ describe('AuditLogService', () => {
       createdAt: new Date(),
     });
 
-    // Every fixture below uses target id 269 on purpose: the reproduction case is a file
-    // whose id happens to equal an unrelated user's id (observed 2026-08-23).
+    // 아래 픽스처는 모두 일부러 target id를 269로 맞췄다 — 재현 케이스는 우연히
+    // 어떤 무관한 유저의 id와 같은 id를 가진 파일이다(2026-08-23 관측).
     const rows = [
       row(1, 7, 269, AuditTargetType.file, 'FILE_DELETE'),
       row(2, 7, 269, AuditTargetType.post, 'POST_DELETE'),
@@ -199,9 +199,9 @@ describe('AuditLogService', () => {
     it('should not return file/post/comment records whose target id equals the user id', async () => {
       const [found] = await service.findAll({ userId: 269, take: 20, skip: 0 });
 
-      // Rows 1-3 are the false positives: there 269 is a file/post/comment id, not a user
-      // id. Row 4 (269 really was the role-change target) and row 5 (269 was the actor)
-      // are legitimate and must survive.
+      // 1~3번 행은 오탐이다: 여기서 269는 유저 id가 아니라 파일/게시글/댓글 id다.
+      // 4번 행(269가 실제 역할 변경 대상)과 5번 행(269가 actor)은 정상 결과이므로
+      // 반드시 살아남아야 한다.
       expect(found.map((entry) => entry.id).sort()).toEqual([4, 5]);
       expect(found.some((entry) => [1, 2, 3].includes(entry.id))).toBe(false);
     });

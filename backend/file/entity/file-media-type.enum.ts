@@ -1,7 +1,7 @@
-// Purpose: the three-way classification of a granted file's content, used to pick a playback tag.
-// Usage: imported by FileEntity.mediaType, FileService.uploadFile's extension-derivation, and FileResponseDto.
-// Rationale: ADR 0040 needs a persisted signal the frontend can branch a <img>/<audio>/<video> tag on; a
-// varchar-backed TS enum matches the existing FileVisibility convention (file-visibility.enum.ts).
+// 목적: granted 파일 콘텐츠를 세 갈래로 분류해 재생 태그를 고르는 데 쓴다.
+// 사용처: FileEntity.mediaType, FileService.uploadFile의 확장자 판정, FileResponseDto에서 임포트한다.
+// 근거: ADR 0040은 프런트엔드가 <img>/<audio>/<video> 태그를 분기할 영속 신호가 필요하다 —
+// varchar 기반 TS enum은 기존 FileVisibility 컨벤션(file-visibility.enum.ts)과 맞춘 것이다.
 
 export enum FileMediaType {
   image = 'image',

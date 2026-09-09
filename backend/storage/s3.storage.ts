@@ -25,13 +25,12 @@ import {
 } from './file-storage.interface';
 
 const UPLOAD_PREFIX = 'file/upload/';
-// S3's DeleteObjects API caps a single request at 1000 keys.
+// S3의 DeleteObjects API는 요청 한 번에 최대 1000개 키까지만 받는다.
 const DELETE_BATCH_SIZE = 1000;
-// Physical S3 bucket layout only (a console-organization decision, not a port
-// contract change) — logical keys (temp_..., file/upload/granted_...) stay the
-// app-wide naming scheme FileService/UploadService own (ADR 0029 D1); this
-// adapter alone maps them onto two S3 prefixes so temp/granted objects sit in
-// separate top-level "folders" in the bucket.
+// 순수 S3 버킷의 물리 배치일 뿐이다(콘솔 정리 차원의 결정이지, 포트 계약 변경이 아니다) —
+// 논리 키(temp_..., file/upload/granted_...)는 FileService/UploadService가 소유한
+// 앱 전역 네이밍 스킴 그대로 유지된다(ADR 0029 D1); 이 어댑터만 그걸 두 S3 prefix로 매핑해
+// 버킷 안의 별도 최상위 "폴더"에 temp/granted 객체가 나뉘어 있게 한다.
 const S3_TEMP_PREFIX = 'temp/';
 const S3_GRANTED_PREFIX = 'granted/';
 
@@ -43,15 +42,15 @@ export class S3Storage implements FileStorage {
   private readonly signedUrlTtlSeconds: number;
 
   constructor(configService: ConfigService) {
-    // No explicit credentials: the SDK's default provider chain (env vars, shared
-    // config, IAM role) resolves them — this app's ConfigService never reads
-    // AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY itself (ADR 0029 D3).
+    // 명시적 자격증명 없음: SDK의 기본 provider chain(env var, shared config, IAM role)이
+    // 알아서 해석한다 — 이 앱의 ConfigService는 AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
+    // 자체를 읽지 않는다(ADR 0029 D3).
     this.client = new S3Client({
       region: configService.getOrThrow<string>('AWS_REGION'),
     });
     this.bucket = configService.getOrThrow<string>('S3_BUCKET');
-    // Read once at construction, not per call — TTL is an adapter-internal
-    // concern the controller never sees (ADR 0036 D1).
+    // 호출마다가 아니라 생성 시점에 한 번만 읽는다 — TTL은 컨트롤러가 알 필요 없는
+    // 어댑터 내부 관심사다(ADR 0036 D1).
     this.signedUrlTtlSeconds = configService.getOrThrow<number>(
       'CONTENT_SIGNED_URL_TTL_SECONDS',
     );

@@ -1,6 +1,6 @@
-// Purpose: bounds and whitelists the GET /post list query (pagination, title search, creator filter, sort).
-// Usage: bound via @Query() in PostController.getPosts(); values forwarded to PostService.getPosts().
-// Rationale: ADR 0023 says the post listing extends the ADR 0021 read layer rather than restating it — this mirrors GetFilesDto's shape so both endpoints answer to one set of rules.
+// 목적: GET /post 목록 조회 쿼리(페이지네이션, 제목 검색, 작성자 필터, 정렬)를 제한하고 화이트리스트로 걸러낸다.
+// 사용처: PostController.getPosts()에서 @Query()로 바인딩되어 값이 PostService.getPosts()로 전달된다.
+// 근거: ADR 0023은 게시글 목록 조회가 ADR 0021의 read layer를 새로 만들지 않고 그대로 확장해야 한다고 정한다 — 이 DTO가 GetFilesDto와 같은 모양을 따르는 이유이며, 두 엔드포인트가 같은 규칙 하나를 공유하게 한다.
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
@@ -13,13 +13,13 @@ import {
   Min,
 } from 'class-validator';
 import { SORT_ORDERS } from 'backend/file/dto/get-files.dto';
-// `import type` is required: emitDecoratorMetadata + isolatedModules cannot emit a
-// value-import for a type used in a decorated signature.
+// `import type`이 필요하다: emitDecoratorMetadata + isolatedModules 조합에서는
+// 데코레이터가 붙은 시그니처에 쓰이는 타입을 value-import로 내보낼 수 없다.
 import type { SortOrder } from 'backend/file/dto/get-files.dto';
 
-// The only sort keys a client may name. A literal tuple so PostService can key a total
-// Record off it: a key added here without a column mapping is a compile error, and no
-// client string ever reaches the query as a column name (ADR 0021).
+// 클라이언트가 지정할 수 있는 정렬 키는 이것뿐이다. 리터럴 튜플로 만들어 PostService가
+// 이를 기반으로 total Record의 키를 잡을 수 있게 한다 — 컬럼 매핑 없이 여기에 키를
+// 추가하면 컴파일 에러가 나고, 어떤 클라이언트 문자열도 컬럼명으로 쿼리에 도달하지 못한다 (ADR 0021).
 export const POST_SORT_FIELDS = ['createdAt', 'title', 'id'] as const;
 export type PostSortField = (typeof POST_SORT_FIELDS)[number];
 
@@ -46,8 +46,8 @@ export class GetPostsDto {
   })
   skip: number = 0;
 
-  // Bounded length: the term becomes an ILIKE pattern, and an unbounded one is a
-  // free pattern-matching cost with no legitimate use.
+  // 길이를 제한한다: 검색어는 ILIKE 패턴이 되므로, 제한 없이 두면 정당한 용도 없이
+  // 패턴 매칭 비용만 무한정 늘어난다.
   @IsOptional()
   @IsString()
   @MaxLength(100)

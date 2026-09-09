@@ -1,10 +1,10 @@
-// Purpose: adds the three file_entity/post_entity indexes ADR 0021 deferred, now measured
-// and adopted by docs/ADR/0049-performance-capacity-criteria.md.
-// Usage: applied by `pnpm migration:run`; also required by test/e2e-utils.ts's MIGRATIONS list.
-// Rationale: hand-authored, not migration:generate output — the pg_trgm GIN indexes need the
-// gin_trgm_ops operator class, which @Index cannot express (file.entity.ts/post.entity.ts carry
-// only the two plain-btree candidates), the same "generate can't express it" reason
-// AddFileMediaType1786818802632 was hand-authored for.
+// 목적: ADR 0021이 유예해 뒀던 file_entity/post_entity 인덱스 세 개를 추가한다 — 이제 실측을
+// 거쳐 docs/ADR/0049-performance-capacity-criteria.md에서 채택됐다.
+// 사용처: `pnpm migration:run`으로 적용되며, test/e2e-utils.ts의 MIGRATIONS 목록에도 필요하다.
+// 근거: migration:generate 출력이 아니라 직접 손으로 작성했다 — pg_trgm GIN 인덱스는
+// gin_trgm_ops 연산자 클래스가 필요한데, @Index로는 표현할 수 없다(file.entity.ts/post.entity.ts에는
+// 일반 btree 후보 두 개만 있다) — AddFileMediaType1786818802632를 손으로 작성했던 것과
+// 같은 "generate가 표현하지 못한다"는 이유다.
 
 import { MigrationInterface, QueryRunner } from 'typeorm';
 

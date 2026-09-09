@@ -18,10 +18,9 @@ import { MetricsService } from 'backend/metrics/metrics.service';
 
 const CRON_JOB_NAME = 'orphan-granted-file-sweep';
 
-// A promotion-race guard, not an operator tuning knob (unlike TEMP_SWEEP_TTL_HOURS,
-// which really is an operational judgment call) — sized generously against
-// storage.promote()'s typical sub-second duration, so kept as a constant rather than
-// a config surface nothing in this codebase ever needs to vary (ADR 0051 D3).
+// 승격 레이스를 막기 위한 가드일 뿐, 운영자가 조정할 값이 아니다(진짜 운영 판단이 필요한
+// TEMP_SWEEP_TTL_HOURS와 다르다) — storage.promote()의 통상 1초 미만 소요 시간보다
+// 넉넉히 잡았으므로, 이 코드베이스 안에서 값을 바꿀 일이 없는 상수로 둔다(ADR 0051 D3).
 const MIN_AGE_MS = 60 * 60 * 1000;
 
 @Injectable()

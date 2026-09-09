@@ -1,16 +1,16 @@
-// Purpose: carries the explicit cascade confirmation for DELETE /user/:id (?deleteFiles=true).
-// Usage: bound via @Query() in UserController.remove(); the controller maps it to the boolean UserService.remove takes.
-// Rationale: an irreversible cascade must not hinge on implicit string→boolean coercion, so the flag gets its own validated DTO (ADR 0020).
+// 목적: DELETE /user/:id의 명시적 cascade 확인(?deleteFiles=true)을 전달한다.
+// 사용처: UserController.remove()에서 @Query()로 바인딩되며, 컨트롤러가 UserService.remove가 받는 boolean으로 변환한다.
+// 근거: 되돌릴 수 없는 cascade가 암묵적인 string→boolean 강제 변환에 좌우돼서는 안 되므로, 이 플래그는 자체 검증 DTO를 갖는다 (ADR 0020).
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional } from 'class-validator';
 
-// Deliberately typed as a string literal, not a boolean: the global pipe runs
-// enableImplicitConversion, whose Boolean cast is pure truthiness and lands BEFORE any
-// custom @Transform — a measured fact, asserted in this DTO's spec. A boolean-typed
-// flag would turn `?deleteFiles=false` into `true` and destroy the very files the
-// caller asked to keep. As a string the value survives untouched, and @IsIn rejects
-// everything but the two literals as VALIDATION_FAILED (400).
+// boolean이 아니라 의도적으로 문자열 리터럴로 타입을 잡는다: 전역 파이프는
+// enableImplicitConversion을 실행하는데, 그 Boolean 캐스팅은 순수한 truthiness 판정이고
+// 어떤 커스텀 @Transform보다도 먼저 적용된다 — 이 사실은 이 DTO의 스펙에서 실측·검증된다.
+// boolean 타입 플래그였다면 `?deleteFiles=false`가 `true`로 바뀌어, 호출자가 남겨두려던
+// 바로 그 파일들이 삭제됐을 것이다. 문자열로 두면 값이 손상 없이 그대로 살아남고,
+// @IsIn이 두 리터럴 외의 모든 값을 VALIDATION_FAILED(400)로 거부한다.
 export const DELETE_FILES_VALUES = ['true', 'false'] as const;
 
 export class DeleteUserQueryDto {

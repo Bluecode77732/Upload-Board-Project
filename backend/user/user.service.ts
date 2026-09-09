@@ -27,9 +27,9 @@ import {
   type FileStorage,
 } from 'backend/storage/file-storage.interface';
 
-// The sole bridge from a client sort key to a column (ADR 0021 pattern). Typed as a total
-// Record over UserSortField, so a key added to USER_SORT_FIELDS without a column here fails
-// to compile — the whitelist cannot silently drift out of sync with the query.
+// 클라이언트 정렬 키를 컬럼으로 잇는 유일한 다리다 (ADR 0021 패턴). UserSortField에 대한
+// total Record로 타입을 잡아서, USER_SORT_FIELDS에 컬럼 매핑 없이 키를 추가하면
+// 컴파일이 실패한다 — 화이트리스트가 쿼리와 조용히 어긋날 수 없다.
 const SORT_COLUMN: Record<UserSortField, string> = {
   createdAt: 'user.createdAt',
   email: 'user.email',
@@ -76,8 +76,8 @@ export class UserService {
     }
 
     queryBuilder.orderBy(SORT_COLUMN[sortBy], order);
-    // A unique tiebreaker makes the page boundary deterministic when the sort column ties;
-    // sorting by id already is one, so adding it twice would only duplicate the clause.
+    // 고유한 tiebreaker는 정렬 컬럼 값이 같을 때 페이지 경계를 결정적으로 만든다;
+    // id로 정렬하는 경우는 이미 그 자체가 tiebreaker이므로, 다시 추가하면 절만 중복될 뿐이다.
     if (sortBy !== 'id') {
       queryBuilder.addOrderBy('user.id', order);
     }
@@ -205,8 +205,8 @@ export class UserService {
 
         const previous = target.role;
 
-        // superadmins are demotable (model ①), but never the last one — that would
-        // lock the role system (nobody left to promote anyone).
+        // superadmin은 강등될 수 있지만(모델 ①), 마지막 한 명은 절대 안 된다 — 그러면
+        // 누구도 승격시킬 사람이 없이 role 체계가 잠긴다.
         if (previous === UserRole.superadmin && role !== UserRole.superadmin) {
           const superadminCount = await manager.count(UserEntity, {
             where: { role: UserRole.superadmin },
@@ -219,8 +219,8 @@ export class UserService {
           }
         }
 
-        // Any role change ends the target's refresh session (refreshTokenHash: null)
-        // so a demotion is fully in effect immediately, not just on the next access.
+        // role이 바뀌면 무조건 대상의 refresh 세션을 끊는다(refreshTokenHash: null) —
+        // 강등이 다음 접근이 아니라 즉시 완전히 적용되도록 하기 위해서다.
         await manager.update(UserEntity, targetId, {
           role,
           refreshTokenHash: null,
@@ -230,7 +230,7 @@ export class UserService {
       },
     );
 
-    // Audit after commit (side effect isolated — a log failure must not roll back the role change).
+    // 커밋 이후에 감사 로그를 남긴다 (부수효과를 분리 — 로그 실패가 role 변경을 롤백해서는 안 된다).
     await this.auditLogService.log(
       actorId,
       targetId,
@@ -262,8 +262,8 @@ export class UserService {
     id: number,
     deleteFiles = false,
   ) {
-    // Pure multi-DB-write — the filesystem side effect deliberately sits outside the
-    // boundary, so dataSource.transaction applies (Transaction Boundary table, row 3).
+    // 순수 다중 DB 쓰기다 — 파일시스템 부수효과는 의도적으로 트랜잭션 경계 밖에 두므로,
+    // dataSource.transaction이 적용된다 (Transaction Boundary 표, 세 번째 행).
     const { storedPaths, deletedPosts } = await this.dataSource.transaction(
       async (manager) => {
         const user = await manager.findOne(UserEntity, { where: { id } });
@@ -296,9 +296,9 @@ export class UserService {
           id,
         );
 
-        // The cascade is irreversible, so it needs an explicit confirmation; the count
-        // lets the client warn with the real number before asking for one. The flag
-        // deliberately still guards files only — it names the media bytes it protects.
+        // 이 cascade는 되돌릴 수 없어서 명시적 확인이 필요하다; 개수를 함께 돌려주면
+        // 클라이언트가 확인을 요구하기 전에 실제 숫자로 경고할 수 있다. 이 플래그는
+        // 의도적으로 파일만 지킨다 — 자신이 보호하는 게 미디어 바이트라는 걸 이름으로 드러낸다.
         if (paths.length > 0 && !deleteFiles) {
           throw new ConflictException({
             code: ErrorCode.USER_HAS_FILES,
@@ -306,18 +306,18 @@ export class UserService {
           });
         }
 
-        // Comments the account wrote anywhere go first: the ones on *other people's*
-        // posts are reachable no other way, since the FK cascade only fires when the
-        // owning post is deleted (ADR 0023 D5).
+        // 이 계정이 어디에 썼든 댓글부터 먼저 지운다: *다른 사람의* 게시글에 단 댓글은
+        // 그 게시글이 삭제될 때만 FK cascade가 발동하므로, 다른 방법으로는 닿을 수 없다
+        // (ADR 0023 D5).
         await this.commentService.deleteCommentsOfCreator(manager, id);
 
-        // Posts next: FK_post_entity_file references the file rows about to go, and
-        // FK_post_entity_creator references the user row — both are ON DELETE NO ACTION.
-        // Whatever comments remain on these posts go with them via ON DELETE CASCADE.
+        // 다음은 게시글이다: FK_post_entity_file은 곧 지워질 파일 행을 참조하고,
+        // FK_post_entity_creator는 유저 행을 참조하는데 — 둘 다 ON DELETE NO ACTION이다.
+        // 이 게시글들에 남아 있는 댓글은 ON DELETE CASCADE로 함께 지워진다.
         const posts = await this.postService.deletePostsOfCreator(manager, id);
 
-        // Files next — FK_file_entity_creator is ON DELETE NO ACTION, so the user row
-        // cannot go while any file still references it.
+        // 다음은 파일이다 — FK_file_entity_creator가 ON DELETE NO ACTION이라, 파일이
+        // 하나라도 참조하는 동안은 유저 행이 지워질 수 없다.
         if (paths.length > 0) {
           await this.fileService.deleteFilesOfCreator(manager, id);
         }
@@ -327,8 +327,8 @@ export class UserService {
       },
     );
 
-    // Post-commit on purpose: unlink cannot be rolled back, so its failure leaves a
-    // recoverable orphan on disk rather than a row pointing at a missing file.
+    // 의도적으로 커밋 이후에 실행한다: unlink는 롤백할 수 없으므로, 실패해도 존재하지 않는
+    // 파일을 가리키는 행이 아니라 디스크에 남은 복구 가능한 고아 파일이 되게 한다.
     const { failures } = await this.storage.unlink(storedPaths);
     for (const failure of failures) {
       this.logger.warn(

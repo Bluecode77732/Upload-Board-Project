@@ -1,7 +1,7 @@
-// Purpose: browser-level verification of the register/sign-in/sign-out flow (LoginPage + RequireAuth).
-// Usage: run via `pnpm test:e2e`; builds on the shared harness (playwright.config.ts).
-// Rationale: auth is the gate every other flow (upload, board) sits behind — this is the one spec
-//   that exercises it directly instead of only relying on registerAndSignIn as a fixture helper.
+// 목적: register/sign-in/sign-out 흐름(LoginPage + RequireAuth)에 대한 브라우저 레벨 검증.
+// 사용처: `pnpm test:e2e`로 실행된다; 공유 하네스(playwright.config.ts) 위에서 동작한다.
+// 근거: 인증은 다른 모든 흐름(upload, board)이 그 뒤에 있는 게이트다 — registerAndSignIn을
+//   fixture 헬퍼로만 의존하지 않고 직접 검증하는 유일한 spec이다.
 
 import { test, expect } from '@playwright/test'
 import { registerAndSignIn, uniqueEmail, TEST_PASSWORD } from './helpers'
@@ -35,8 +35,8 @@ test('registering an already-used email surfaces the AUTH_EMAIL_TAKEN message', 
   await page.getByLabel('Password').fill(TEST_PASSWORD)
   await page.getByRole('button', { name: 'Register & sign in' }).click()
 
-  // LoginPage's messageForError maps ErrorCode.AUTH_EMAIL_TAKEN to this fixed string —
-  // asserting on it (not the backend's raw message) is the code-based check.
+  // LoginPage의 messageForError는 ErrorCode.AUTH_EMAIL_TAKEN을 이 고정 문자열로 매핑한다 —
+  // (백엔드의 원본 메시지가 아니라) 이 문자열을 단언하는 것이 code 기반 검증이다.
   await expect(page.getByText('That email is already registered — try signing in.')).toBeVisible()
   await expect(page).toHaveURL(/\/login$/)
 })

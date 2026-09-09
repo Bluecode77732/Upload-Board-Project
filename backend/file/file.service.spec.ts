@@ -31,8 +31,8 @@ import {
 } from 'backend/storage/file-storage.interface';
 import { MetricsService } from 'backend/metrics/metrics.service';
 
-// mockFileEntity.creator.id === 1, so `owner` manages by ownership; `stranger`
-// (non-creator, plain user) is forbidden; `admin` manages by role (RBAC).
+// mockFileEntity.creator.id === 1이므로 `owner`는 소유권으로 관리 가능; `stranger`
+// (creator가 아닌 일반 user)는 금지; `admin`은 role로 관리 가능(RBAC).
 const owner = { id: 1, role: UserRole.user };
 const stranger = { id: 2, role: UserRole.user };
 const admin = { id: 9, role: UserRole.admin };
@@ -160,7 +160,7 @@ describe('FileService', () => {
       title: 'New Video',
       filePath: 'temp_67ff0c79-a1f0-4d4f-865c-681af920378d_1764581241716.mp4',
     };
-    // The row a first, successful claim of that filename leaves behind.
+    // 그 파일명을 첫 번째로 성공 청구했을 때 남는 행.
     const claimedFile: FileEntity = {
       ...mockFileEntity,
       filePath:
@@ -176,7 +176,7 @@ describe('FileService', () => {
       execute,
     });
 
-    // Postgres unique_violation as TypeORM surfaces it (driverError.code).
+    // TypeORM이 드러내는 형태의 Postgres unique_violation(driverError.code).
     const uniqueViolation = () =>
       new QueryFailedError(
         'INSERT',
@@ -185,8 +185,8 @@ describe('FileService', () => {
       );
 
     beforeEach(() => {
-      // Make the temp-object existence check pass by default (mock implementations
-      // survive clearAllMocks, so it is set per test run).
+      // temp 객체 존재 확인이 기본적으로 통과하게 만든다(mock 구현체는
+      // clearAllMocks에도 살아남으므로, 테스트 실행마다 다시 설정한다).
       mockStorage.existsTemp.mockResolvedValue(true);
       mockStorage.promote.mockResolvedValue(undefined);
     });
@@ -198,7 +198,7 @@ describe('FileService', () => {
       queryRunner.manager.createQueryBuilder = jest
         .fn()
         .mockReturnValue(builder);
-      // findOne order: claim pre-check (unclaimed), duplicate-title pre-check, post-commit re-read.
+      // findOne 호출 순서: 청구 사전 체크(미청구), 중복 제목 사전 체크, 커밋 후 재조회.
       jest
         .spyOn(fileRepository, 'findOne')
         .mockResolvedValueOnce(null)
@@ -212,16 +212,16 @@ describe('FileService', () => {
         id: 1,
         title: 'Test File',
         fileUrl: 'http://localhost:3000/file/1/content',
-        // The post-commit re-read must load the creator relation so a freshly
-        // promoted file's response shape matches updateFile's.
+        // 커밋 후 재조회는 creator relation을 반드시 로드해야 방금 승격된 파일의
+        // 응답 모양이 updateFile의 것과 일치한다.
         creator: { id: 1, email: 'creator@test.com' },
       });
       expect(fileRepository.findOne).toHaveBeenNthCalledWith(3, {
         where: { id: 1 },
         relations: ['creator'],
       });
-      // The insert derives mediaType from the .mp4 extension in uploadFileDto.filePath
-      // itself, never from a client-supplied field (ADR 0040 D2).
+      // insert는 uploadFileDto.filePath 자체의 .mp4 확장자로부터 mediaType을 판정한다 —
+      // 클라이언트가 넘긴 필드에서 가져오는 게 아니다(ADR 0040 D2).
       expect(builder.values).toHaveBeenCalledWith(
         expect.objectContaining({ mediaType: FileMediaType.video }),
       );
@@ -355,10 +355,9 @@ describe('FileService', () => {
     });
 
     it('includes shareUrl in the fresh-creation response for an unlisted upload', async () => {
-      // Live-verification finding: toResponse() only includes shareUrl when a
-      // requester is passed and canManage() returns true for it — the creator of a
-      // freshly-promoted file is always its own manager, so the response must carry
-      // that requester rather than omitting it.
+      // 라이브 검증에서 발견한 사실: toResponse()는 requester가 넘어오고 그것에 대해
+      // canManage()가 true일 때만 shareUrl을 포함한다 — 방금 승격된 파일의 creator는
+      // 항상 자기 자신의 manager이므로, 응답은 그 requester를 생략하지 않고 담아야 한다.
       const unlistedDto = {
         ...uploadFileDto,
         visibility: FileVisibility.unlisted,
@@ -394,7 +393,7 @@ describe('FileService', () => {
 
       expect(result.replayed).toBe(true);
       expect(result.file).toMatchObject({ id: 1, title: 'Test File' });
-      // A retry of an already-succeeded request opens no transaction and moves no file.
+      // 이미 성공한 요청의 재시도는 트랜잭션을 열지도, 파일을 옮기지도 않는다.
       expect(queryRunner.connect).not.toHaveBeenCalled();
       expect(queryRunner.startTransaction).not.toHaveBeenCalled();
       expect(mockStorage.promote).not.toHaveBeenCalled();
@@ -417,7 +416,7 @@ describe('FileService', () => {
       await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(
         BadRequestException,
       );
-      // Nothing was written: the precondition fails before the transaction opens.
+      // 아무것도 쓰이지 않는다: 트랜잭션이 열리기 전에 전제조건이 실패한다.
       expect(queryRunner.startTransaction).not.toHaveBeenCalled();
       expect(mockStorage.promote).not.toHaveBeenCalled();
     });
@@ -458,7 +457,7 @@ describe('FileService', () => {
     });
 
     it('should throw BadRequestException (FILE_TITLE_TAKEN) when the title already exists', async () => {
-      // Unclaimed filename, but the duplicate-title pre-check finds an existing row.
+      // 청구되지 않은 파일명이지만, 중복 제목 사전 체크가 기존 행을 발견한다.
       jest
         .spyOn(fileRepository, 'findOne')
         .mockResolvedValueOnce(null)
@@ -467,8 +466,8 @@ describe('FileService', () => {
       await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(
         BadRequestException,
       );
-      // The typed exception survives the catch (not collapsed to a generic 500),
-      // the transaction rolls back, and the connection is released.
+      // 타입 있는 예외가 catch를 통과해 그대로 살아남고(일반 500으로 뭉개지지 않음),
+      // 트랜잭션은 롤백되며, 커넥션은 반환된다.
       expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
       expect(queryRunner.release).toHaveBeenCalled();
       expect(mockStorage.promote).not.toHaveBeenCalled();
@@ -480,8 +479,8 @@ describe('FileService', () => {
         .mockReturnValue(
           insertQueryBuilder(jest.fn().mockRejectedValue(uniqueViolation())),
         );
-      // Claim pre-check and title pre-check both pass (the race is still open), then the
-      // post-rollback lookup finds the row the winning submit committed.
+      // 청구 사전 체크와 제목 사전 체크 둘 다 통과한다(경합이 아직 열려 있다), 그 다음
+      // 롤백 후 조회가 승자 제출이 커밋한 행을 발견한다.
       jest
         .spyOn(fileRepository, 'findOne')
         .mockResolvedValueOnce(null)
@@ -501,7 +500,7 @@ describe('FileService', () => {
         .mockReturnValue(
           insertQueryBuilder(jest.fn().mockRejectedValue(uniqueViolation())),
         );
-      // No row claims this filename afterwards, so the collision was on the title alone.
+      // 이후로도 이 파일명을 청구한 행이 없으므로, 충돌은 제목 하나에서만 났다는 뜻이다.
       jest.spyOn(fileRepository, 'findOne').mockResolvedValue(null);
 
       await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(
@@ -584,8 +583,8 @@ describe('FileService', () => {
       expect(queryRunner.commitTransaction).toHaveBeenCalled();
     });
 
-    // The precheck at line ~459 is an unlocked read, so a concurrent PATCH racing on
-    // the same title can pass it before the unique constraint decides a winner.
+    // ~459행의 사전 체크는 잠금 없는 읽기라, 같은 제목으로 경합하는 동시 PATCH가
+    // unique 제약이 승자를 정하기 전에 통과할 수 있다.
     describe('title race (23505)', () => {
       const uniqueViolation = () =>
         new QueryFailedError(
@@ -598,7 +597,7 @@ describe('FileService', () => {
         queryRunner.manager.findOne = jest
           .fn()
           .mockResolvedValue(mockFileEntity);
-        // Duplicate-title precheck passes (the race is still open).
+        // 중복 제목 사전 체크는 통과한다(경합이 아직 열려 있다).
         jest.spyOn(fileRepository, 'findOne').mockResolvedValueOnce(null);
 
         const mockUpdateQueryBuilder = {
@@ -673,8 +672,8 @@ describe('FileService', () => {
       );
     });
 
-    // ADR 0025 D1/D3: visibility toggling reuses this write path rather than a new
-    // endpoint, so token issuance/rotation/clearing all live inside the same tx.
+    // ADR 0025 D1/D3: visibility 토글은 새 엔드포인트가 아니라 이 쓰기 경로를 재사용하므로,
+    // 토큰 발급/회전/폐기가 모두 같은 트랜잭션 안에 있다.
     describe('visibility toggling', () => {
       const setupUpdate = (existing: FileEntity) => {
         queryRunner.manager.findOne = jest.fn().mockResolvedValue(existing);
@@ -785,9 +784,9 @@ describe('FileService', () => {
     });
   });
 
-  // ADR 0050: replaces the old immediate-reassignment `userId` field with a
-  // propose/accept/reject/cancel consent flow. mockFileEntity's creator is id 1 (owner);
-  // these tests use id 2 as the proposed target throughout.
+  // ADR 0050: 옛 즉시-재배정 `userId` 필드를 propose/accept/reject/cancel 동의 흐름으로
+  // 대체한다. mockFileEntity의 creator는 id 1(owner)이고, 이 테스트들은 전부 id 2를
+  // 제안 대상으로 쓴다.
   describe('proposeTransfer', () => {
     const setupUpdateQueryBuilder = () => {
       const mockUpdateQueryBuilder = {
@@ -1104,7 +1103,7 @@ describe('FileService', () => {
   });
 
   describe('getFiles', () => {
-    // The DTO instance the global pipe would hand the controller for a bare `GET /file`.
+    // 순수 `GET /file`에 대해 전역 pipe가 컨트롤러에 넘길 DTO 인스턴스.
     const listQuery = (overrides: Partial<GetFilesDto> = {}): GetFilesDto => ({
       take: 20,
       skip: 0,
@@ -1132,9 +1131,9 @@ describe('FileService', () => {
         );
     });
 
-    // Every generic behavior test below runs as admin so the visibility filter
-    // (its own dedicated block further down) never adds an extra andWhere call
-    // that these unrelated assertions would have to account for.
+    // 아래의 일반 동작 테스트는 전부 admin으로 실행한다 — 그래야 visibility 필터
+    // (더 아래 전용 블록에서 다룬다)가 추가 andWhere 호출을 붙이지 않아, 이 무관한
+    // 검증들이 그걸 신경 쓸 필요가 없다.
     it('should apply take and skip to the query', async () => {
       const [files, count] = await fileService.getFiles(listQuery(), admin);
 
@@ -1155,8 +1154,8 @@ describe('FileService', () => {
         'file.createdAt',
         'DESC',
       );
-      // Without a unique tiebreaker, rows tying on createdAt could repeat or vanish
-      // across pages (offset order is undefined for ties).
+      // 고유한 tiebreaker가 없으면 createdAt이 같은 행들이 페이지 사이에서 중복되거나
+      // 누락될 수 있다(동률일 때 offset 순서는 미정의다).
       expect(listQueryBuilder.addOrderBy).toHaveBeenCalledWith(
         'file.id',
         'DESC',
@@ -1198,7 +1197,7 @@ describe('FileService', () => {
     it('should escape LIKE wildcards so they match literally', async () => {
       await fileService.getFiles(listQuery({ search: '100%_a\\b' }), admin);
 
-      // Unescaped, `%` and `_` would widen the match far beyond what was typed.
+      // 이스케이프하지 않으면 `%`와 `_`가 실제 입력보다 훨씬 넓게 매칭돼 버린다.
       expect(listQueryBuilder.andWhere).toHaveBeenCalledWith(
         "file.title ILIKE :term ESCAPE '\\'",
         { term: '%100\\%\\_a\\\\b%' },
@@ -1218,7 +1217,7 @@ describe('FileService', () => {
         'creator.id = :creatorId',
         { creatorId: 7 },
       );
-      // The creator is joined once, not queried per row (N+1).
+      // creator는 한 번만 join된다 — 행마다 별도 조회하지 않는다(N+1 방지).
       expect(listQueryBuilder.leftJoinAndSelect).toHaveBeenCalledTimes(1);
     });
 
@@ -1231,8 +1230,8 @@ describe('FileService', () => {
       expect(listQueryBuilder.andWhere).toHaveBeenCalledTimes(2);
     });
 
-    // ADR 0025: private/unlisted metadata must not leak to a non-owner/non-admin —
-    // 'unlisted' hides from listings too since the whole point is "not listed".
+    // ADR 0025: private/unlisted 메타데이터는 소유자·admin이 아닌 사람에게 새면 안 된다 —
+    // 'unlisted'도 목록에서 숨긴다, "목록에 없음"이 원래 취지 자체이므로.
     it('should hide private/unlisted files from a non-admin who does not own them', async () => {
       await fileService.getFiles(listQuery(), stranger);
 
@@ -1252,8 +1251,8 @@ describe('FileService', () => {
     });
   });
 
-  // ADR 0025: getFileById answers 404 (not 403) for a file the requester cannot see,
-  // so a non-owner cannot even confirm a private/unlisted file exists.
+  // ADR 0025: getFileById는 요청자가 볼 수 없는 파일에 대해 403이 아니라 404로 답한다 —
+  // 소유자가 아니면 private/unlisted 파일이 존재한다는 사실조차 확인할 수 없다.
   describe('getFileById', () => {
     it('returns a public file to anyone', async () => {
       const getOne = jest.fn().mockResolvedValue(mockFileEntity);
@@ -1389,8 +1388,8 @@ describe('FileService', () => {
   describe('deleteFile', () => {
     beforeEach(() => {
       mockStorage.unlink.mockResolvedValue({ deleted: 1, failures: [] });
-      // Default: the row this test's findOne mock returned is the one actually deleted.
-      // Individual tests override this (23503 rejection, affected: 0) as needed.
+      // 기본값: 이 테스트의 findOne mock이 돌려준 행이 실제로 삭제되는 행이다.
+      // 개별 테스트가 필요에 따라 이를 재정의한다(23503 거부, affected: 0 등).
       jest
         .spyOn(fileRepository, 'delete')
         .mockResolvedValue({ raw: [], affected: 1 });
@@ -1433,8 +1432,8 @@ describe('FileService', () => {
         failures: [{ key: 'file/upload/granted_test.mp4', reason: 'ENOENT' }],
       });
 
-      // The row is already gone; a failed unlink leaves an orphan, not an error path
-      // (the port never rejects — failures are reported, not thrown).
+      // 행은 이미 사라졌다; unlink 실패는 에러 경로가 아니라 고아를 남길 뿐이다
+      // (포트는 절대 reject하지 않는다 — 실패는 보고될 뿐 던져지지 않는다).
       await expect(fileService.deleteFile(1, owner)).resolves.toBe(
         'File 1 deleted.',
       );
@@ -1486,12 +1485,12 @@ describe('FileService', () => {
         ),
       );
 
-      // No pre-check query exists by design (module cycle + race) — the FK is the
-      // authority, and its violation is a client outcome, not a server fault (ADR 0023 D4).
+      // 사전 조회 쿼리는 설계상 존재하지 않는다(모듈 순환 + 경합) — FK가 최종 권위이고,
+      // 그 위반은 서버 결함이 아니라 클라이언트 측 결과다(ADR 0023 D4).
       await expect(fileService.deleteFile(1, owner)).rejects.toThrow(
         ConflictException,
       );
-      // The row survived, so its stored file must not be unlinked.
+      // 행이 살아남았으므로, 그 저장 파일은 unlink되면 안 된다.
       expect(mockStorage.unlink).not.toHaveBeenCalled();
       expect(mockAuditLogService.log).not.toHaveBeenCalled();
     });
@@ -1502,9 +1501,9 @@ describe('FileService', () => {
         .spyOn(fileRepository, 'delete')
         .mockResolvedValue({ raw: [], affected: 0 });
 
-      // affected: 0 means another request deleted the row between this request's
-      // findOne read and its delete call — report it the same as "not found" rather
-      // than running unlink/audit a second time for a row that is already gone.
+      // affected: 0은 이 요청의 findOne 읽기와 delete 호출 사이에 다른 요청이 행을
+      // 지웠다는 뜻이다 — 이미 사라진 행에 unlink/감사 로그를 또 실행하는 대신
+      // "찾을 수 없음"과 동일하게 보고한다.
       await expect(fileService.deleteFile(1, owner)).rejects.toThrow(
         NotFoundException,
       );
@@ -1513,8 +1512,8 @@ describe('FileService', () => {
     });
   });
 
-  // Asked by PostService before it attaches a file: the ownership decision belongs to
-  // the layer that owns file state, never to a reach-through on file.creator (ADR 0023 D1).
+  // PostService가 파일을 첨부하기 전에 물어보는 것: 소유권 판정은 파일 상태를 소유한
+  // 계층의 몫이지, file.creator를 직접 들여다보는 reach-through가 아니다(ADR 0023 D1).
   describe('assertAttachableBy', () => {
     it('passes for the file creator', async () => {
       jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
@@ -1535,16 +1534,16 @@ describe('FileService', () => {
     it('refuses an admin attaching a file they did not create', async () => {
       jest.spyOn(fileRepository, 'findOne').mockResolvedValue(mockFileEntity);
 
-      // Identity-only on purpose, unlike canManage: "a post references only its own
-      // author's file" is what makes the account cascade FK-safe.
+      // canManage과 달리 의도적으로 신원만 본다: "게시글은 오직 자기 작성자의 파일만
+      // 참조한다"는 규칙이 계정 연쇄 삭제를 FK 안전하게 만든다.
       await expect(fileService.assertAttachableBy(1, admin.id)).rejects.toThrow(
         ForbiddenException,
       );
     });
   });
 
-  // The account-deletion cascade (ADR 0020): UserService owns the transaction and
-  // passes its EntityManager in, so file rows still go through FileService.
+  // 계정 삭제 연쇄(ADR 0020): UserService가 트랜잭션을 소유하고 자신의 EntityManager를
+  // 넘겨주지만, 파일 행은 여전히 FileService를 거친다.
   describe('creator cascade helpers', () => {
     const mockDeleteBuilder = {
       delete: jest.fn().mockReturnThis(),
@@ -1603,8 +1602,8 @@ describe('FileService', () => {
         ),
       );
 
-      // Reachable only after a prior ownership reassignment, but reachable — so the
-      // cascade must answer 409 USER_FILES_IN_USE, never the opaque 500 (ADR 0024).
+      // 이전에 소유권이 재배정된 뒤에만 도달 가능하지만, 그래도 도달 가능하다 — 그래서
+      // 연쇄 삭제는 정체불명 500이 아니라 반드시 409 USER_FILES_IN_USE로 답해야 한다(ADR 0024).
       await expect(
         fileService.deleteFilesOfCreator(
           mockManager as unknown as EntityManager,
@@ -1617,8 +1616,8 @@ describe('FileService', () => {
       const failure = new Error('connection lost');
       mockDeleteBuilder.execute.mockRejectedValueOnce(failure);
 
-      // Only the foreseeable client-reachable outcome is typed; a genuine server
-      // fault must stay a 500 rather than be disguised as a conflict.
+      // 예측 가능한, 클라이언트가 도달할 수 있는 결과만 타입을 붙인다; 진짜 서버 결함은
+      // 충돌로 위장하지 않고 500으로 남아야 한다.
       await expect(
         fileService.deleteFilesOfCreator(
           mockManager as unknown as EntityManager,
@@ -1628,8 +1627,8 @@ describe('FileService', () => {
     });
   });
 
-  // GET /file/:id/content's access matrix (ADR 0025 D1/D2/D3/D6): every granted read
-  // now goes through this judgment, since file/upload is no longer statically served.
+  // GET /file/:id/content의 접근 매트릭스(ADR 0025 D1/D2/D3/D6): 이제 모든 granted 읽기가
+  // 이 판정을 거친다 — file/upload가 더 이상 정적으로 서빙되지 않으므로.
   describe('resolveContentAccess', () => {
     it('serves a public file to an anonymous requester', async () => {
       const publicFile = {
@@ -1738,7 +1737,7 @@ describe('FileService', () => {
       };
       jest.spyOn(fileRepository, 'findOne').mockResolvedValue(unlistedFile);
 
-      // The old link, captured before rotation, must stop working immediately.
+      // 회전 전에 받아둔 옛 링크는 즉시 동작을 멈춰야 한다.
       await expect(
         fileService.resolveContentAccess(1, null, 'old-token'),
       ).rejects.toThrow(ForbiddenException);

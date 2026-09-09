@@ -1,6 +1,6 @@
-// Purpose: exposes the Prometheus scrape endpoint.
-// Usage: registered via MetricsModule in AppModule; deliberately unauthenticated — Prometheus scrapes carry no bearer token, mirroring HealthController (ADR 0031/0047).
-// Rationale: nothing in this API previously exported time-series metrics (ADR 0047).
+// 목적: Prometheus 스크레이프 엔드포인트를 노출한다.
+// 사용처: AppModule에서 MetricsModule을 통해 등록되며, 의도적으로 인증을 걸지 않는다 — Prometheus 스크레이프는 bearer 토큰을 갖지 않으며, HealthController와 같은 방식이다 (ADR 0031/0047).
+// 근거: 이전에는 이 API가 시계열 지표를 전혀 내보내지 않았다 (ADR 0047).
 
 import { Controller, Get, Res } from '@nestjs/common';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';

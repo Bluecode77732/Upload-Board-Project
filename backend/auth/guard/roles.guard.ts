@@ -1,6 +1,6 @@
-// Purpose: enforces the @Roles minimum-role requirement using the JWT-populated request.user.role.
-// Usage: @UseGuards(JwtAuthGuard, RolesGuard) + @Roles(UserRole.admin); runs after JwtAuthGuard sets request.user.
-// Rationale: Stage 0 RBAC (ADR 0013) — rank comparison lets a higher role satisfy a lower requirement; unmarked handlers pass.
+// 목적: JWT로 채워진 request.user.role을 사용해 @Roles의 최소 역할 요구사항을 강제한다.
+// 사용처: @UseGuards(JwtAuthGuard, RolesGuard) + @Roles(UserRole.admin); JwtAuthGuard가 request.user를 채운 뒤 실행.
+// 근거: Stage 0 RBAC(ADR 0013) — 랭크 비교로 상위 역할이 하위 요구사항을 만족시키고, @Roles가 없는 핸들러는 통과한다.
 
 import {
   CanActivate,
@@ -26,7 +26,7 @@ export class RolesGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const required = this.reflector.get(Roles, context.getHandler());
 
-    // No @Roles on the handler → this guard imposes nothing (JwtAuthGuard still applies).
+    // 핸들러에 @Roles가 없으면 이 가드는 아무것도 강제하지 않는다(JwtAuthGuard는 여전히 적용됨).
     if (!required) {
       return true;
     }

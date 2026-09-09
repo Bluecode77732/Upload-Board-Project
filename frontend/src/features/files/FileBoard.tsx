@@ -1,9 +1,9 @@
-// Purpose: the file board — title search, sort, creator filter, and an infinitely-scrolling 3-column
-//   preview grid over GET /file, with a visibility badge per tile (ADR 0021 list query, ADR 0025/0026).
-// Usage: rendered by DashboardPage; bumping `refreshSignal` re-runs the current query from page 0
-//   (e.g. after upload).
-// Rationale: DashboardPage's list was take/skip-only — this consumes the rest of the ADR 0021 contract
-//   without a data-fetching library (plain fetch + React state, per frontend CLAUDE.md).
+// 목적: 파일 보드 — 제목 검색, 정렬, creator 필터, 그리고 GET /file 위에 무한 스크롤되는 3열
+//   미리보기 그리드, 타일마다 visibility 배지가 붙는다(ADR 0021 목록 쿼리, ADR 0025/0026).
+// 사용처: DashboardPage가 렌더링한다; `refreshSignal`이 올라가면 현재 쿼리를 0페이지부터
+//   다시 실행한다(예: 업로드 후).
+// 근거: DashboardPage의 목록은 take/skip만 있었다 — 이 컴포넌트가 데이터 페칭 라이브러리 없이
+//   (frontend CLAUDE.md 방침대로 plain fetch + React state) ADR 0021 계약의 나머지를 소비한다.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../../api/client'
@@ -13,13 +13,13 @@ import type { FileListResponse, FileResponse, FileSortField, SortOrder } from '.
 import { FilePreviewTile } from './FilePreviewTile'
 import styles from './FileBoard.module.css'
 
-// One page fills exactly one 3x3 screen of the grid, so scrolling extends 3xN a row-triple at a time.
+// 한 페이지가 그리드의 3x3 화면 하나를 정확히 채우므로, 스크롤은 한 번에 3xN 행 단위로 늘어난다.
 const TAKE = 9
-// Auto-loading stops once the grid holds 3 columns x 60 rows; past that the user asks explicitly, so
-// an idle scroll cannot walk the whole table into memory.
+// 그리드가 3열 x 60행을 채우면 자동 로딩이 멈춘다; 그 뒤부터는 사용자가 명시적으로 요청해야 하므로
+// 가만히 스크롤만 해서는 테이블 전체가 메모리로 딸려 들어오지 않는다.
 const AUTO_LOAD_MAX = 180
 
-// Branch on the stable code (backend ADR 0011), never on the human-readable message.
+// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
@@ -43,11 +43,11 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
-  // Only the newest request may write state: a filter change mid-flight would otherwise let the
-  // stale page append itself onto the new query's results.
+  // 가장 최신 요청만 상태를 쓸 수 있다: 그렇지 않으면 요청 도중 필터가 바뀌었을 때 오래된
+  // 페이지가 새 쿼리의 결과 뒤에 이어 붙어버릴 수 있다.
   const requestId = useRef(0)
 
-  // Debounce the free-text search so every keystroke doesn't fire a request.
+  // 자유 텍스트 검색을 디바운스해 키 입력마다 요청이 나가지 않게 한다.
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedSearch(search.trim()), 400)
     return () => clearTimeout(handle)
@@ -55,8 +55,8 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
 
   const creatorIdTrimmed = creatorIdInput.trim()
   const creatorId = creatorIdTrimmed === '' ? undefined : Number(creatorIdTrimmed)
-  // Mirrors GetFilesDto's @IsInt @Min(1) — an invalid value is held back client-side
-  // instead of being sent as a guaranteed 400 VALIDATION_FAILED.
+  // GetFilesDto의 @IsInt @Min(1)을 그대로 반영한다 — 잘못된 값은 무조건 400
+  // VALIDATION_FAILED로 보내는 대신 클라이언트에서 미리 막아둔다.
   const creatorIdValid = creatorId === undefined || (Number.isInteger(creatorId) && creatorId >= 1)
 
   // 목적: GET /file의 한 페이지를 읽어 그리드에 이어 붙이거나(append) 처음부터 채운다.
@@ -94,8 +94,8 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
     [debouncedSearch, sortBy, order, creatorId, creatorIdValid],
   )
 
-  // Any filter change (or a bumped refreshSignal) invalidates everything accumulated so far —
-  // drop the grid and refill it from page 0.
+  // 필터가 바뀌거나(또는 refreshSignal이 올라가면) 지금까지 쌓인 것이 전부 무효가 된다 —
+  // 그리드를 버리고 0페이지부터 다시 채운다.
   useEffect(() => {
     setFiles(null)
     fetchPage(0, false)
@@ -105,8 +105,8 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
   const hasMore = files !== null && loadedCount < total
   const autoLoadPaused = loadedCount >= AUTO_LOAD_MAX
 
-  // Auto-extend the grid when the sentinel below it comes into view. Re-created after every load
-  // (files is a dep) so the next page arms only once the previous one has landed.
+  // 그리드 아래 sentinel이 뷰포트에 들어오면 그리드를 자동으로 늘린다. 매 로드 후 다시 만들어지므로
+  // (files가 의존성이다) 다음 페이지는 이전 페이지가 도착한 뒤에만 준비된다.
   useEffect(() => {
     if (files === null || !hasMore || autoLoadPaused || loading) return
     const node = sentinelRef.current

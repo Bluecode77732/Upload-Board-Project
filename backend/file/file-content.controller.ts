@@ -1,7 +1,7 @@
-// Purpose: serves a file's stored bytes behind the visibility access check, replacing static file/upload serving.
-// Usage: GET /file/:id/content — the only path a client may read granted bytes from (ADR 0025 D2).
-// Rationale: public/unlisted access must reach unauthenticated visitors, which the class-level JwtAuthGuard
-// on FileController forbids; a separate controller keeps that guard untouched for the other five routes.
+// 목적: 공개범위 접근 검사를 통과한 파일의 저장 바이트를 서빙한다 — 정적 file/upload 서빙을 대체한다.
+// 사용처: GET /file/:id/content — 클라이언트가 granted 바이트를 읽을 수 있는 유일한 경로다(ADR 0025 D2).
+// 근거: public/unlisted 접근은 비로그인 방문자에게도 열려야 하는데, FileController의 클래스 레벨
+// JwtAuthGuard는 그걸 막는다 — 별도 컨트롤러로 분리해야 나머지 다섯 라우트의 가드는 그대로 둘 수 있다.
 
 import {
   Controller,
@@ -29,9 +29,9 @@ import {
   type FileStorage,
 } from 'backend/storage/file-storage.interface';
 
-// Mirrors the image/audio/video allowlist upload.controller.ts enforces (ADR 0025 D4/D5)
-// — the extension is server-assigned, never client-chosen, so this is a lookup, not a
-// validated allowlist.
+// upload.controller.ts가 강제하는 image/audio/video 허용목록을 그대로 반영한다(ADR 0025 D4/D5)
+// — 확장자는 서버가 부여한 값이지 클라이언트가 고른 값이 아니므로, 이건 검증용 허용목록이
+// 아니라 단순 조회 테이블이다.
 const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
@@ -123,8 +123,8 @@ export class FileContentController {
     try {
       stats = await this.storage.stat(file.filePath);
     } catch {
-      // The row exists but the stored copy does not (orphaned metadata) — a client
-      // outcome (the resource is gone), not a server fault.
+      // 행은 있지만 저장된 실물이 없다(고아 메타데이터) — 서버 결함이 아니라
+      // 클라이언트 관점의 결과다(리소스가 사라졌을 뿐).
       throw new NotFoundException({
         code: ErrorCode.FILE_NOT_FOUND,
         message: 'No file found.',
@@ -146,8 +146,8 @@ export class FileContentController {
     const match = RANGE_PATTERN.exec(range);
     const startStr = match?.[1] ?? '';
     const endStr = match?.[2] ?? '';
-    // A `bytes=-N` suffix range means "the last N bytes", not "bytes 0..N" —
-    // it carries no start, only a length counted back from the end.
+    // `bytes=-N` suffix range는 "bytes 0..N"이 아니라 "마지막 N바이트"를 뜻한다 —
+    // 시작점이 없고, 끝에서부터 거꾸로 센 길이만 있다.
     const isSuffixRange = startStr === '' && endStr !== '';
     const start = isSuffixRange
       ? Math.max(0, stats.size - parseInt(endStr, 10))

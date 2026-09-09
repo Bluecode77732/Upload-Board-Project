@@ -4,7 +4,7 @@
 
 import { Readable } from 'stream';
 
-// No runtime representation for a TS interface — Nest needs a token to inject by.
+// TS interface는 런타임 표현이 없다 — Nest가 주입할 때 쓸 토큰이 필요하다.
 export const FILE_STORAGE = Symbol('FILE_STORAGE');
 
 export interface StorageByteRange {
@@ -14,7 +14,7 @@ export interface StorageByteRange {
 
 export interface StorageUnlinkResult {
   deleted: number;
-  // One entry per key that stayed in storage; callers log these at warn (ADR 0017).
+  // 스토리지에 그대로 남은 키마다 항목 하나씩; 호출자는 이걸 warn으로 로그한다(ADR 0017).
   failures: { key: string; reason: string }[];
 }
 

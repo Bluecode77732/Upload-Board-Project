@@ -1,6 +1,7 @@
-// Purpose: sweeps orphaned temp_ upload objects past a TTL — the only unmanaged resource leak (ADR 0018).
-// Usage: provided by TempCleanupModule; registers a dynamic CronJob via SchedulerRegistry on module init.
-// Rationale: promotion moves objects OUT of the temp namespace, so anything left is unclaimed. Reads/deletes go through the FileStorage port (ADR 0029) so the sweep works under either adapter.
+// 목적: TTL을 넘긴 고아 temp_ 업로드 객체를 지운다 — 유일하게 관리되지 않는 리소스 누수다(ADR 0018).
+// 사용처: TempCleanupModule이 제공한다; 모듈 초기화 시 SchedulerRegistry로 동적 CronJob을 등록한다.
+// 근거: 승격은 객체를 temp 네임스페이스 밖으로 옮기므로, 남아있는 건 전부 미청구 상태다. 읽기/삭제는
+// FileStorage 포트(ADR 0029)를 거치므로 어느 어댑터에서든 스윕이 동일하게 동작한다.
 
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -13,7 +14,7 @@ import {
 } from 'backend/storage/file-storage.interface';
 import { MetricsService } from 'backend/metrics/metrics.service';
 
-// Unique name so the job is addressable via SchedulerRegistry (start/stop/delete).
+// SchedulerRegistry로 잡을 찾을 수 있도록(start/stop/delete) 고유한 이름을 붙인다.
 const CRON_JOB_NAME = 'orphan-temp-file-sweep';
 
 @Injectable()
@@ -50,8 +51,8 @@ export class TempCleanupService implements OnModuleInit {
     const cronTime = this.configService.getOrThrow<string>('TEMP_SWEEP_CRON');
     const job = CronJob.from({
       cronTime,
-      // Errors are handled inside sweep(); .catch() guards against an unexpected
-      // throw becoming an unhandledRejection (Never Do G1 — floating promise).
+      // 에러는 sweep() 안에서 처리된다; .catch()는 예상치 못한 throw가
+      // unhandledRejection이 되는 걸 막는 가드다(Never Do G1 — floating promise).
       onTick: () => {
         this.sweep().catch((error) =>
           this.logger.error(
@@ -60,7 +61,7 @@ export class TempCleanupService implements OnModuleInit {
           ),
         );
       },
-      // Skip a tick rather than overlap if a previous sweep is still running.
+      // 이전 스윕이 아직 돌고 있으면 겹치지 말고 이번 틱을 건너뛴다.
       waitForCompletion: true,
     });
 
@@ -84,7 +85,7 @@ export class TempCleanupService implements OnModuleInit {
 
     const candidates = await this.storage.listTemp();
 
-    // The pure selector re-checks the temp_ prefix and the TTL.
+    // 순수 선택기가 temp_ 접두와 TTL을 다시 확인한다.
     const expired = selectExpiredTempFiles(candidates, Date.now(), ttlMs);
     if (expired.length === 0) return;
 
@@ -97,7 +98,7 @@ export class TempCleanupService implements OnModuleInit {
 
     const { deleted, failures } = await this.storage.unlink(expired);
     for (const failure of failures) {
-      // One failed unlink must not abort the whole sweep — log and continue.
+      // unlink 실패 하나가 스윕 전체를 중단시키면 안 된다 — 로그만 남기고 계속한다.
       this.logger.warn(
         `Orphan temp-file sweep could not delete ${failure.key}: ${failure.reason}`,
       );

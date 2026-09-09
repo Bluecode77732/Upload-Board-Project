@@ -39,30 +39,30 @@ import {
 } from 'backend/storage/file-storage.interface';
 import { MetricsService } from 'backend/metrics/metrics.service';
 
-// The acting user's identity + role (from the JWT), enough for creator-OR-admin checks.
+// 행위자의 신원 + role(JWT로부터) — creator-OR-admin 판정에 필요한 만큼만 담는다.
 interface Requester {
   id: number;
   role: UserRole;
 }
 
-// Outcome of a claim attempt: `replayed` marks a retry that found its own earlier
-// success, so the controller can answer 200 instead of a second 201 (ADR 0019).
+// 청구 시도의 결과: `replayed`는 재시도가 자신의 이전 성공을 그대로 발견했다는 표시로,
+// 컨트롤러가 두 번째 201 대신 200으로 응답할 수 있게 한다(ADR 0019).
 export interface FileClaimResult {
   replayed: boolean;
   file: FileResponseDto;
 }
 
-// Postgres unique_violation. A concurrent double-submit loses this race by design;
-// it is a client-side duplicate, not a server fault, so it must not surface as 500.
+// Postgres unique_violation. 동시 이중 제출은 설계상 이 경합에서 진다 —
+// 서버 결함이 아니라 클라이언트 측 중복이므로 500으로 새어 나가면 안 된다.
 const UNIQUE_VIOLATION = '23505';
 
-// Postgres foreign_key_violation. Raised when a post still references the file row
-// being deleted — a legitimate client outcome (409), not a server fault (ADR 0023 D4).
+// Postgres foreign_key_violation. 삭제하려는 파일 행을 게시글이 아직 참조 중일 때 발생한다
+// — 서버 결함이 아니라 정당한 클라이언트 결과(409)다(ADR 0023 D4).
 const FOREIGN_KEY_VIOLATION = '23503';
 
-// The sole bridge from a client sort key to a column (ADR 0021). Typed as a total Record
-// over FileSortField, so a key added to FILE_SORT_FIELDS without a column here fails to
-// compile — the whitelist cannot silently drift out of sync with the query.
+// 클라이언트가 지정한 정렬 키를 컬럼으로 잇는 유일한 다리(ADR 0021). FileSortField 전체를
+// 커버하는 total Record로 타입을 잡아, 컬럼 매핑 없이 FILE_SORT_FIELDS에 키를 추가하면
+// 컴파일이 깨진다 — 화이트리스트가 쿼리와 조용히 어긋날 수 없다.
 const SORT_COLUMN: Record<FileSortField, string> = {
   createdAt: 'file.createdAt',
   title: 'file.title',
@@ -91,7 +91,7 @@ export class FileService {
     private readonly metricsService: MetricsService,
   ) {}
 
-  // A file is manageable by its creator, or by an admin/superadmin (RBAC, ADR 0013).
+  // 파일은 자신의 creator이거나 admin/superadmin이면 관리할 수 있다(RBAC, ADR 0013).
   private canManage(creatorId: number, requester: Requester): boolean {
     return (
       creatorId === requester.id ||
@@ -197,7 +197,7 @@ export class FileService {
       });
     }
 
-    // The creator join already exists, so the filter costs one predicate and no extra query.
+    // creator join은 이미 있으므로, 이 필터는 predicate 하나만 더 붙고 추가 쿼리는 없다.
     if (creatorId !== undefined) {
       queryBuilder.andWhere('creator.id = :creatorId', { creatorId });
     }
@@ -210,8 +210,8 @@ export class FileService {
     }
 
     queryBuilder.orderBy(SORT_COLUMN[sortBy], order);
-    // A unique tiebreaker makes the page boundary deterministic when the sort column ties;
-    // sorting by id already is one, so adding it twice would only duplicate the clause.
+    // 정렬 컬럼 값이 같을 때 페이지 경계를 결정론적으로 만들려면 고유한 tiebreaker가 필요하다;
+    // id로 정렬하는 경우는 이미 그 자체가 tiebreaker이므로 또 붙이면 절만 중복될 뿐이다.
     if (sortBy !== 'id') {
       queryBuilder.addOrderBy('file.id', order);
     }
@@ -309,8 +309,8 @@ export class FileService {
   //       FILE_ALREADY_CLAIMED(ADR 0047 — replay 빈도 관측). role은 무엇을 넣어도 무관하다 —
   //       canManage은 creator.id === requester.id에서 이미 참으로 판정된다.
   private resolveClaim(claim: FileEntity, userId: number): FileClaimResult {
-    // Deliberately identity-only: replay belongs to the original submitter, so an
-    // admin re-posting someone else's filename is a conflict, not a retry.
+    // 의도적으로 신원만 본다: replay는 원래 제출자의 것이므로, admin이 남의 파일명을
+    // 다시 제출하는 건 재시도가 아니라 충돌이다.
     if (claim.creator.id !== userId) {
       throw new ConflictException({
         code: ErrorCode.FILE_ALREADY_CLAIMED,
@@ -358,9 +358,9 @@ export class FileService {
       });
     }
 
-    // Deliberately identity-only, not canManage: "a post references only its own
-    // author's file" is what makes the account cascade FK-safe (ADR 0023 D1), and an
-    // admin attaching someone else's file would break that invariant, not enforce it.
+    // 의도적으로 canManage가 아니라 신원만 본다: "게시글은 오직 자기 작성자의 파일만
+    // 참조한다"는 규칙이 계정 연쇄 삭제를 FK 안전하게 만드는 전제다(ADR 0023 D1) —
+    // admin이 남의 파일을 첨부할 수 있게 하면 이 불변식을 지키는 게 아니라 깨는 셈이다.
     if (file.creator.id !== requesterId) {
       throw new ForbiddenException({
         code: ErrorCode.FORBIDDEN_NOT_OWNER,
@@ -392,14 +392,15 @@ export class FileService {
   ): Promise<FileClaimResult> {
     const storedPath = this.toStoredPath(uploadFileDto.filePath);
 
-    // A retry of an already-succeeded request must not open a transaction at all.
+    // 이미 성공한 요청의 재시도는 트랜잭션을 아예 열지 않아야 한다.
     const existingClaim = await this.findClaim(storedPath);
     if (existingClaim) {
       return this.resolveClaim(existingClaim, userId);
     }
 
-    // Nothing claims the filename and no temp object backs it: never issued, or swept
-    // past its TTL (ADR 0018). That is a client precondition failure, not a 500.
+    // 이 파일명을 청구한 행도 없고 뒤에 temp 객체도 없다: 애초에 발급된 적 없거나
+    // TTL이 지나 스윕됐거나(ADR 0018) 둘 중 하나 — 서버 결함이 아니라 클라이언트 측
+    // 전제조건 실패다.
     const tempExists = await this.storage.existsTemp(uploadFileDto.filePath);
     if (!tempExists) {
       throw new BadRequestException({
@@ -414,8 +415,8 @@ export class FileService {
 
     let fileId: number;
     try {
-      // Title is unique — pre-check so the DB constraint surfaces as a typed
-      // FILE_TITLE_TAKEN instead of being swallowed into a generic 500 (mirrors updateFile).
+      // title은 unique다 — 사전 체크를 해 둬야 DB 제약 위반이 타입 없는 500에 묻히지 않고
+      // 타입 있는 FILE_TITLE_TAKEN으로 드러난다(updateFile과 동일한 패턴).
       const duplicatedTitle = await this.fileRepository.findOne({
         where: { title: uploadFileDto.title },
       });
@@ -435,13 +436,13 @@ export class FileService {
           creator: { id: userId },
           filePath: storedPath,
           mediaType: this.mediaTypeFromExtension(storedPath),
-          // Omitted entirely when not provided, so the DB column default (private)
-          // applies exactly as before this field existed (no regression).
+          // 값이 주어지지 않으면 아예 넣지 않는다 — 그래야 이 필드가 생기기 전과 똑같이
+          // DB 컬럼 기본값(private)이 그대로 적용된다(회귀 없음).
           ...(uploadFileDto.visibility !== undefined
             ? { visibility: uploadFileDto.visibility }
             : {}),
-          // Mirrors updateFile's enteringUnlisted branch: a fresh unlisted file needs a
-          // token issued in the same transaction as the row, not a follow-up PATCH.
+          // updateFile의 enteringUnlisted 분기와 동일하다: 새로 만드는 unlisted 파일도
+          // 후속 PATCH가 아니라 같은 트랜잭션 안에서 토큰을 발급받아야 한다.
           ...(uploadFileDto.visibility === FileVisibility.unlisted
             ? { shareToken: this.generateShareToken() }
             : {}),
@@ -462,13 +463,13 @@ export class FileService {
       await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      // Preserve typed domain exceptions (e.g. FILE_TITLE_TAKEN); only opaque
-      // failures collapse to a generic message so no internal detail leaks out.
+      // 타입 있는 도메인 예외(예: FILE_TITLE_TAKEN)는 그대로 보존한다 — 정체불명 실패만
+      // 일반 메시지로 뭉뚱그려 내부 정보가 새지 않게 한다.
       if (error instanceof HttpException) throw error;
 
-      // The title pre-check is an unlocked read, so simultaneous submits can both pass
-      // it and let the unique constraint pick the winner. If the winner claimed this same
-      // filename, the loser is the same request twice — replay it instead of erroring.
+      // title 사전 체크는 잠금 없는 읽기라, 동시 제출 둘 다 이걸 통과하고 unique 제약이
+      // 승자를 가릴 수 있다. 승자가 바로 이 파일명을 청구한 것이라면, 패자는 같은 요청이
+      // 두 번 온 것이므로 에러 대신 replay로 처리한다.
       if (this.isPgErrorCode(error, UNIQUE_VIOLATION)) {
         const winner = await this.findClaim(storedPath);
         if (winner) {
@@ -488,9 +489,9 @@ export class FileService {
       await queryRunner.release();
     }
 
-    // Post-commit re-read stays outside the try: a read failure here must not
-    // attempt a rollback of the already-committed transaction. relations: ['creator']
-    // mirrors updateFile's re-read so both write paths return the same response shape.
+    // 커밋 후 재조회는 try 밖에 둔다: 여기서 읽기가 실패해도 이미 커밋된 트랜잭션을
+    // 롤백하려 들면 안 된다. relations: ['creator']는 updateFile의 재조회와 맞춰서
+    // 두 쓰기 경로가 같은 응답 모양을 돌려주게 한다.
     const saved = await this.fileRepository.findOne({
       where: { id: fileId },
       relations: ['creator'],
@@ -544,8 +545,8 @@ export class FileService {
         });
       }
 
-      // Creator or admin may modify. Ownership itself no longer moves through this method —
-      // see proposeTransfer/acceptTransfer (ADR 0050).
+      // creator 또는 admin만 수정할 수 있다. 소유권 자체는 더 이상 이 메서드로 옮겨지지 않는다 —
+      // proposeTransfer/acceptTransfer 참고(ADR 0050).
       if (!this.canManage(file.creator.id, requester)) {
         throw new ForbiddenException({
           code: ErrorCode.FORBIDDEN_NOT_OWNER,
@@ -597,18 +598,18 @@ export class FileService {
         enteringUnlisted &&
         (file.visibility !== FileVisibility.unlisted || rotateShareToken)
       ) {
-        // Newly unlisted, or an explicit rotation: a fresh token invalidates any
-        // previously shared link (ADR 0025 D3).
+        // 새로 unlisted가 되거나 명시적으로 회전을 요청한 경우: 새 토큰을 발급하면
+        // 이전에 공유됐던 링크는 전부 무효화된다(ADR 0025 D3).
         updateFields.shareToken = this.generateShareToken();
         updateFields.shareExpiresAt = null;
       } else if (!enteringUnlisted && file.shareToken !== null) {
-        // Leaving (or never entering) unlisted: no token should remain.
+        // unlisted를 벗어나거나(또는 애초에 unlisted가 아니었다면) 토큰이 남아있으면 안 된다.
         updateFields.shareToken = null;
         updateFields.shareExpiresAt = null;
       }
 
-      // Only meaningful once the file is (or becomes) unlisted — silently has no
-      // effect otherwise, since there is no token for it to bound.
+      // 파일이 unlisted이거나 unlisted가 될 때만 의미가 있다 — 그 외에는 묶을 토큰
+      // 자체가 없으므로 조용히 아무 효과도 없다.
       if (shareExpiresAt !== undefined && enteringUnlisted) {
         updateFields.shareExpiresAt = new Date(shareExpiresAt);
       }
@@ -623,10 +624,9 @@ export class FileService {
       await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      // The title precheck above is an unlocked read; a concurrent PATCH racing on the
-      // same title can both pass it before the unique constraint picks a winner. Only
-      // that race is intercepted — every other error (including the typed HttpExceptions
-      // thrown above) rethrows unchanged, as before.
+      // 위의 title 사전 체크는 잠금 없는 읽기라, 같은 title로 경합하는 동시 PATCH 둘 다
+      // unique 제약이 승자를 정하기 전에 통과할 수 있다. 이 레이스만 가로채고, 그 외
+      // 모든 에러(위에서 던진 타입 있는 HttpException 포함)는 예전처럼 그대로 rethrow한다.
       if (this.isPgErrorCode(error, UNIQUE_VIOLATION)) {
         throw new BadRequestException({
           code: ErrorCode.FILE_TITLE_TAKEN,
@@ -638,8 +638,8 @@ export class FileService {
       await queryRunner.release();
     }
 
-    // Post-commit re-read stays outside the try: a read failure here must not
-    // attempt a rollback of the already-committed transaction.
+    // 커밋 후 재조회는 try 밖에 둔다: 여기서 읽기가 실패해도 이미 커밋된 트랜잭션을
+    // 롤백하려 들면 안 된다.
     const updated = await this.fileRepository.findOne({
       where: { id },
       relations: ['creator'],
@@ -955,8 +955,8 @@ export class FileService {
         .execute();
     } catch (error) {
       if (this.isPgErrorCode(error, FOREIGN_KEY_VIOLATION)) {
-        // The account's own posts are already gone by this point in the cascade order,
-        // so whatever still references these files provably belongs to someone else.
+        // 연쇄 삭제 순서상 이 시점엔 이미 계정 본인의 게시글은 다 사라졌으므로,
+        // 여전히 이 파일들을 참조하는 게 있다면 그건 확실히 남의 게시글이다.
         throw new ConflictException({
           code: ErrorCode.USER_FILES_IN_USE,
           message:
@@ -996,9 +996,9 @@ export class FileService {
       });
     }
 
-    // No pre-check query: asking post_entity here would make FileModule depend on
-    // PostModule (a cycle, since PostService already asks this service about ownership)
-    // and would still leave a race window. The database is the authority (ADR 0023 D4).
+    // 사전 조회 쿼리는 없다: 여기서 post_entity를 물어보면 FileModule이 PostModule에
+    // 의존하게 되고(PostService가 이미 소유권을 이 서비스에 묻고 있으니 순환이 된다),
+    // 그래도 경합 창은 여전히 남는다. DB가 최종 권위다(ADR 0023 D4).
     let deleteResult: DeleteResult;
     try {
       deleteResult = await this.fileRepository.delete(id);
@@ -1012,9 +1012,9 @@ export class FileService {
       throw error;
     }
 
-    // A concurrent delete already removed the row between the findOne read above and
-    // this delete: unlinking or auditing again would duplicate both for a row that is
-    // already gone, so report the same 404 as "not found" instead.
+    // 위 findOne 읽기와 이 delete 사이에 동시 삭제 요청이 먼저 행을 지운 경우다:
+    // 이미 사라진 행에 대해 unlink나 감사 로그를 또 실행하면 둘 다 중복되므로,
+    // 그냥 "찾을 수 없음"과 동일한 404로 처리한다.
     if (deleteResult.affected === 0) {
       throw new NotFoundException({
         code: ErrorCode.FILE_NOT_FOUND,
@@ -1022,11 +1022,11 @@ export class FileService {
       });
     }
 
-    // Stored file goes only after the row is gone: unlink cannot be rolled back, so the
-    // recoverable failure (an orphan on disk) must be the only one reachable (ADR 0020).
+    // 저장된 파일은 행이 사라진 뒤에만 지운다: unlink는 롤백할 수 없으므로, 도달 가능한
+    // 유일한 실패는 복구 가능한 것(디스크에 남는 고아)이어야 한다(ADR 0020).
     await this.removeStoredFiles([file.filePath]);
 
-    // Audit after the delete succeeds (side effect isolated from the delete).
+    // 삭제가 성공한 뒤에 감사 로그를 남긴다(부수 효과를 삭제 자체와 분리).
     await this.auditLogService.log(
       requester.id,
       id,
@@ -1075,8 +1075,8 @@ export class FileService {
       });
     }
 
-    // unlisted: owner/admin bypass the token entirely; anyone else needs a valid,
-    // unexpired share token — no login required (ADR 0025 D1/D2).
+    // unlisted: 소유자/admin은 토큰 없이 그냥 통과한다; 그 외에는 유효하고 만료되지 않은
+    // 공유 토큰이 있어야 한다 — 로그인은 필요 없다(ADR 0025 D1/D2).
     if (isManager) return file;
 
     const expired =

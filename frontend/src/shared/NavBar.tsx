@@ -1,11 +1,10 @@
-// Purpose: header navigation shown on every authenticated screen — links to the post board
-//   (home) and the file board, a light/dark theme toggle, and sign-out.
-// Usage: rendered at the top of each screen behind RequireAuth (PostBoard, PostDetailPage,
+// 목적: 인증된 모든 화면 상단에 표시되는 헤더 내비게이션 — 게시글 보드(홈)와 파일 보드로 가는
+//   링크, 라이트/다크 테마 토글, 로그아웃.
+// 사용처: RequireAuth 하위 각 화면 상단에 렌더링된다(PostBoard, PostDetailPage,
 //   DashboardPage, FileDetailPage).
-// Rationale: Posts moved to "/" as the app's home (backend Stage 3 board complete); this
-//   centralizes the nav/sign-out markup that used to live only in DashboardPage's header.
-//   Converted to a CSS Module and gained the theme toggle as part of the STYLE-PLAN.md
-//   token-foundation pass (frontend/docs/STYLE-PLAN.md).
+// 근거: Posts가 앱의 홈인 "/"로 옮겨오면서(backend Stage 3 board 완료) 예전에는 DashboardPage
+//   헤더에만 있던 nav/로그아웃 마크업을 여기로 모았다. STYLE-PLAN.md의 토큰 기반 작업
+//   (frontend/docs/STYLE-PLAN.md)에서 CSS Module로 전환하고 테마 토글이 추가됐다.
 
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'

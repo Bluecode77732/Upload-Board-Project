@@ -1,6 +1,6 @@
-// Purpose: exposes the thread routes that hang off a post (/post/:postId/comment) behind JwtAuthGuard.
-// Usage: routed by CommentModule; delegates every decision to CommentService and derives identity from the JWT only.
-// Rationale: ADR 0023 puts listing and creating under the post's path while editing and deleting live at /comment/:id — two prefixes cannot share one @Controller, and PostController cannot host these without importing CommentService across a module boundary.
+// 목적: 게시글에 매달린 스레드 라우트(/post/:postId/comment)를 JwtAuthGuard 뒤에 노출한다.
+// 사용처: CommentModule이 라우팅; 모든 판단은 CommentService에 위임하고 신원은 JWT에서만 가져온다.
+// 근거: ADR 0023은 목록 조회와 생성을 게시글 경로 아래에, 수정과 삭제는 /comment/:id에 둔다 — 두 프리픽스는 @Controller 하나로 공유할 수 없고, PostController는 모듈 경계를 넘어 CommentService를 임포트하지 않는 한 이걸 호스팅할 수 없다.
 
 import {
   Body,

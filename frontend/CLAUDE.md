@@ -75,8 +75,10 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
 - **Fast-refresh**: a file that exports a component must not also export a
   context object or hook — keep context/provider/hook in separate files (see
   `src/auth/`).
-- **File header comment** (new files only): three lines — Purpose / Usage /
-  Rationale — above the imports, matching the existing files.
+- **File header comment** (new files only): three lines — 목적 (Purpose) / 사용처
+  (Usage) / 근거 (Rationale) — above the imports, matching the existing files.
+  (Switched from English labels to Korean 2026-09-09, matching the root
+  CLAUDE.md's File Creation Convention.)
 - **Admin**: there is no `/admin` route in this app. ADR 0010 originally reserved one
   as a stub; ADR 0022 imported a standalone Chat Project console to `admin/` instead as
   the operator surface, and once that console's role-management slice was adapted to

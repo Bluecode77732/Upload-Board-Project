@@ -1,8 +1,8 @@
-// Purpose: holds the access token in module memory (never localStorage) and notifies subscribers on change.
-// Usage: the API client reads/sets the token here; AuthContext subscribes to reflect auth state in the UI.
-// Rationale: ADR 0012 keeps the refresh token in an httpOnly cookie the JS can't read; the access token is
-//   deliberately memory-only so an XSS payload can't exfiltrate a persistable credential. A page reload
-//   drops it and the app silently re-refreshes from the cookie.
+// 목적: 액세스 토큰을 모듈 메모리에만 보관하고(localStorage에는 절대 저장하지 않음) 변경 시 구독자에게 알린다.
+// 사용처: API 클라이언트가 여기서 토큰을 읽고/설정한다; AuthContext는 UI의 인증 상태를 반영하려고 구독한다.
+// 근거: ADR 0012는 refresh 토큰을 JS가 읽을 수 없는 httpOnly 쿠키에 둔다; 액세스 토큰을 의도적으로
+//   메모리에만 두는 이유는 XSS 페이로드가 영속 가능한 크리덴셜을 빼돌리지 못하게 하기 위해서다.
+//   페이지를 새로고침하면 토큰은 사라지고, 앱은 쿠키를 이용해 조용히 다시 리프레시한다.
 
 let accessToken: string | null = null
 let currentUserId: number | null = null
@@ -32,7 +32,7 @@ export function getAccessToken(): string | null {
   return accessToken
 }
 
-// The `sub` claim of the current access token, or null when signed out / unparsable.
+// 현재 액세스 토큰의 `sub` 클레임, 로그아웃 상태이거나 파싱할 수 없으면 null.
 export function getCurrentUserId(): number | null {
   return currentUserId
 }

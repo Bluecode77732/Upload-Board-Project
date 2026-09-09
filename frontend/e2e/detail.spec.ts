@@ -1,19 +1,18 @@
-// Purpose: browser-level verification of FileDetailPage (/view/:id) — visibility-gated playback
-//   (private via authenticated blob, public/unlisted via the direct content URL), the manage
-//   actions (visibility toggle, share-link rotation, delete), and the access-control branches
-//   around them (ADR 0025/0026).
-// Usage: run via `pnpm test:e2e`; builds on the shared harness (playwright.config.ts) and the
-//   registerAndSignIn fixture from helpers.ts. Talks to the backend directly (BACKEND_BASE_URL)
-//   only to attach a post as delete-blocking setup — the frontend has no post UI yet.
-// Rationale: GET /file/:id/content is the only byte-serving path and the one gated on visibility —
-//   this is the hardest path to exercise because a private read needs a Bearer header a plain
-//   <video src> cannot carry, and the manage actions are only reachable by the file's own creator.
+// 목적: FileDetailPage(/view/:id)에 대한 브라우저 레벨 검증 — visibility로 게이트된 재생
+//   (private는 인증된 blob, public/unlisted는 직접 콘텐츠 URL), 관리 액션(visibility 토글,
+//   공유 링크 회전, 삭제), 그리고 그 주변의 접근 제어 분기들(ADR 0025/0026).
+// 사용처: `pnpm test:e2e`로 실행된다; 공유 하네스(playwright.config.ts)와 helpers.ts의
+//   registerAndSignIn fixture 위에서 동작한다. 백엔드(BACKEND_BASE_URL)를 직접 호출하는
+//   경우는 삭제를 막는 게시글을 첨부하는 셋업뿐이다 — 프론트에는 아직 게시글 UI가 없다.
+// 근거: GET /file/:id/content가 유일한 바이트 서빙 경로이자 visibility로 게이트되는 경로다 —
+//   private 읽기는 일반 <video src>가 실을 수 없는 Bearer 헤더가 필요하고, 관리 액션은 그
+//   파일의 소유자만 도달할 수 있어 검증하기 가장 까다로운 경로다.
 
 import { test, expect, type APIRequestContext, type Page, type Response } from '@playwright/test'
 import { registerAndSignIn, goToFiles, uniqueEmail, uniqueTitle, VIDEO_FIXTURE_PATH, TEST_PASSWORD } from './helpers'
 
-// Same origin the Vite dev proxy forwards /file, /auth, /post to (vite.config.ts) — used here to
-// call the backend directly, since the `request` fixture (unlike `page`) never goes through it.
+// Vite dev 프록시가 /file, /auth, /post를 전달하는 것과 동일한 origin(vite.config.ts) —
+// `request` fixture는 (`page`와 달리) 이 프록시를 거치지 않으므로 여기서는 백엔드를 직접 호출한다.
 const BACKEND_BASE_URL = 'http://localhost:3000'
 
 async function uploadVideo(page: Page, title: string): Promise<void> {
@@ -26,15 +25,14 @@ async function uploadVideo(page: Page, title: string): Promise<void> {
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('', { timeout: 30_000 })
 }
 
-// Opens the /view/:id page for the board row matching `title` and returns its file id together
-// with the response to the content fetch that FileDetailPage always issues on mount (every fresh
-// upload defaults to `visibility: private`, so this is the authenticated blob request). The
-// waitForResponse is armed *before* the click so it cannot miss a request that completes faster
-// than the caller gets back around to awaiting it.
+// `title`과 일치하는 보드 행의 /view/:id 페이지를 열고, 그 파일 id를 FileDetailPage가 마운트
+// 시 항상 발생시키는 콘텐츠 fetch의 응답과 함께 반환한다(새로 업로드한 파일은 기본값이
+// `visibility: private`이므로, 이건 인증된 blob 요청이다). waitForResponse는 클릭 *전에*
+// 걸어둬야 호출부가 await로 돌아오기 전에 더 빨리 끝나는 요청을 놓치지 않는다.
 //
-// `contentResponse` is only ever the *first* hop of that request: under `STORAGE_DRIVER=s3`
-// (ADR 0036) the backend answers `302` to a cross-origin presigned S3 URL, and that final S3
-// response never matches this predicate (different URL) — so callers must not assume `200` here.
+// `contentResponse`는 그 요청의 *첫 번째* 홉일 뿐이다: `STORAGE_DRIVER=s3`(ADR 0036)에서는
+// 백엔드가 cross-origin presigned S3 URL로 `302`를 응답하고, 그 최종 S3 응답은 이 predicate와
+// 절대 일치하지 않는다(URL이 다르다) — 그래서 호출부는 여기서 `200`을 가정하면 안 된다.
 async function openDetailPage(page: Page, title: string): Promise<{ id: number; contentResponse: Response }> {
   const link = page.locator('li', { hasText: title }).getByRole('link', { name: title })
   const href = await link.getAttribute('href')
@@ -50,8 +48,8 @@ async function openDetailPage(page: Page, title: string): Promise<{ id: number; 
   return { id, contentResponse }
 }
 
-// Signs in against the backend directly (Basic header) and attaches `fileId` to a fresh post,
-// so DELETE /file/:id hits the FK guard (409 FILE_IN_USE, ADR 0023 D4) without any frontend post UI.
+// 백엔드에 직접(Basic 헤더) 로그인해 새 게시글에 `fileId`를 첨부한다 — 프론트에 게시글 UI가
+// 없어도 DELETE /file/:id가 FK 가드(409 FILE_IN_USE, ADR 0023 D4)에 걸리도록 하기 위해서다.
 async function attachFileToPost(
   request: APIRequestContext,
   email: string,
@@ -80,8 +78,8 @@ test('a private file plays for its owner via an authenticated blob fetch and rev
   test.setTimeout(60_000)
   const title = uniqueTitle('detail-private')
 
-  // Tracks URL.revokeObjectURL calls from inside the page — installed before the first
-  // navigation so it is present when FileDetailPage's cleanup effect runs.
+  // 페이지 내부에서 URL.revokeObjectURL 호출을 추적한다 — FileDetailPage의 클린업 이펙트가
+  // 실행될 때 존재하도록 첫 내비게이션 전에 설치한다.
   await page.addInitScript(() => {
     ;(window as unknown as { __revokedUrls: string[] }).__revokedUrls = []
     const original = URL.revokeObjectURL.bind(URL)
@@ -96,17 +94,16 @@ test('a private file plays for its owner via an authenticated blob fetch and rev
   await uploadVideo(page, title)
   const { contentResponse } = await openDetailPage(page, title)
 
-  // 200 under STORAGE_DRIVER=local (direct stream); 302 under STORAGE_DRIVER=s3 (ADR 0036
-  // presigned redirect — this is only the first hop, see openDetailPage above). Either is a
-  // correct first hop; the real proof of success is the blob: src assertion below, which can
-  // only be set once the browser actually follows the redirect, reads the S3 response body,
-  // and FileDetailPage turns it into an objectURL.
+  // STORAGE_DRIVER=local이면 200(직접 스트림); STORAGE_DRIVER=s3면 302(ADR 0036 presigned
+  // 리다이렉트 — 위 openDetailPage 설명대로 이건 첫 번째 홉일 뿐이다). 둘 다 올바른 첫 홉이다;
+  // 실제 성공 증거는 아래 blob: src 단언이다 — 이건 브라우저가 실제로 리다이렉트를 따라가서
+  // S3 응답 본문을 읽고 FileDetailPage가 그걸 objectURL로 바꿔야만 설정될 수 있다.
   expect([200, 302]).toContain(contentResponse.status())
   await expect(page.getByText('Private', { exact: true })).toBeVisible()
   await expect(page.locator('video')).toHaveAttribute('src', /^blob:/, { timeout: 15_000 })
   await expect(page.getByText('Network error. Is the backend running?')).toHaveCount(0)
 
-  // Manage controls are visible to the creator; no share link exists for a private file.
+  // 관리 컨트롤은 creator에게만 보인다; private 파일에는 공유 링크가 존재하지 않는다.
   await expect(page.getByRole('heading', { name: 'Manage' })).toBeVisible()
   await expect(page.getByLabel('Visibility')).toHaveValue('private')
   await expect(page.getByRole('button', { name: 'Rotate share link' })).toHaveCount(0)
@@ -141,9 +138,9 @@ test('switching visibility to public serves the content endpoint directly, witho
   const directUrl = `${BACKEND_BASE_URL}/file/${fileId}/content`
   await expect(page.locator('video')).toHaveAttribute('src', directUrl)
 
-  // The `request` fixture is a bare APIRequestContext with no cookies and no relation to the
-  // page's in-memory access token — it proves the byte stream needs no authentication now that
-  // the file is public.
+  // `request` fixture는 쿠키도 없고 page의 메모리 상 액세스 토큰과도 무관한 순수
+  // APIRequestContext다 — 이건 파일이 public이 된 지금 바이트 스트림에 인증이 필요 없음을
+  // 증명한다.
   const anonResponse = await request.get(directUrl)
   expect([200, 206]).toContain(anonResponse.status())
   expect(anonResponse.headers()['content-type']).toMatch(/^video\//)
@@ -178,7 +175,7 @@ test('switching visibility to unlisted exposes a rotatable share link that plays
   const rotatedShareUrl = (await page.locator('code').textContent()) ?? ''
   expect(rotatedShareUrl).not.toBe(originalShareUrl)
 
-  // The old token is rotated out — replaying it is refused, not served.
+  // 옛 토큰은 회전되어 빠졌다 — 재사용을 시도하면 거절되지, 서빙되지 않는다.
   const staleResponse = await request.get(originalShareUrl)
   expect(staleResponse.status()).toBe(403)
   expect(((await staleResponse.json()) as { code: string }).code).toBe('FILE_SHARE_INVALID')
@@ -240,7 +237,7 @@ test('a file referenced by a post cannot be deleted (409 FILE_IN_USE) until the 
   await expect(
     page.getByText('This file is attached to a post and cannot be deleted. Delete the post first.'),
   ).toBeVisible()
-  // The row is still there — the delete was refused, not merely slow.
+  // 행이 여전히 남아있다 — 삭제가 그저 느린 게 아니라 거절된 것이다.
   await expect(page.getByRole('heading', { name: 'Manage' })).toBeVisible()
 
   const basic = Buffer.from(`${email}:${TEST_PASSWORD}`).toString('base64')

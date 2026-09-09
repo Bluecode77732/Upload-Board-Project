@@ -1,8 +1,8 @@
-// Purpose: pins the session-owner record's lifecycle — login writes it, sign-out clears it —
-// so a same-tab account switch is not misread as a sibling tab hijacking the session.
-// Usage: `pnpm test` in admin/; the only spec that drives session-guard's real doRefresh path.
-// Rationale: recordSessionUser/clearSessionUser had zero call sites outside session-guard.ts,
-// and no existing spec (protected-route/axios) mocks the guard away rather than exercising it.
+// 목적: 세션 소유자 기록의 생명주기를 고정한다 — 로그인 시 기록하고 로그아웃 시 지워서,
+// 같은 탭에서의 계정 전환이 형제 탭의 세션 탈취로 오인되지 않게 한다.
+// 사용처: admin/에서 `pnpm test`로 실행; session-guard의 실제 doRefresh 경로를 구동하는 유일한 spec.
+// 근거: recordSessionUser/clearSessionUser는 session-guard.ts 밖에서 호출되는 곳이 전혀 없었고,
+// 기존 spec(protected-route/axios)들은 guard를 mock으로 걷어내기만 할 뿐 실제로 실행하지 않았다.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -26,7 +26,7 @@ const mockApi = api as unknown as {
 
 const SESSION_USER_KEY = 'admin:sessionUserId';
 
-// jwt-decode never verifies a signature, so an unsigned base64url payload is enough here.
+// jwt-decode는 서명을 검증하지 않으므로 서명 없는 base64url payload만으로도 충분하다.
 const makeAccessToken = (sub: number, role = 'admin') => {
     const encode = (value: object) =>
         btoa(JSON.stringify(value))
@@ -53,8 +53,8 @@ const renderDashboardPage = () =>
         </MemoryRouter>,
     );
 
-// Drives the real login form so the session-owner record is written by the page under
-// test, not by the spec — a direct recordSessionUser() call would pass even unfixed.
+// 실제 로그인 폼을 구동해서 세션 소유자 기록이 spec이 아니라 테스트 대상 페이지에 의해
+// 작성되도록 한다 — recordSessionUser()를 직접 호출하면 고치지 않아도 테스트가 통과해버린다.
 const signInAs = async (userId: number) => {
     mockApi.post.mockResolvedValue({ data: { accessToken: makeAccessToken(userId) } });
     const view = renderLoginPage();
@@ -65,7 +65,7 @@ const signInAs = async (userId: number) => {
     view.unmount();
 };
 
-// Drives a real page's sign-out button for the same reason.
+// 같은 이유로 실제 페이지의 로그아웃 버튼을 구동한다.
 const signOutFromDashboard = async () => {
     const view = renderDashboardPage();
     await userEvent.click(await screen.findByTestId('sign-out-button'));
@@ -79,10 +79,11 @@ describe('admin session-owner lifecycle', () => {
         useAuthStore.getState().clearTokens();
         mockApi.get.mockReset();
         mockApi.post.mockReset();
-        // DashboardPage's mount fires four stat reads; every response is a [rows, total] tuple.
+        // DashboardPage가 마운트되면 통계 조회 4건이 발생하며, 각 응답은 [rows, total] 튜플이다.
         mockApi.get.mockResolvedValue({ data: [[], 0] });
         mockApi.post.mockResolvedValue({ data: {} });
-        // rejectSession() hard-navigates; jsdom cannot, so observe the attempt instead.
+        // rejectSession()은 강제 페이지 이동을 하는데 jsdom은 이를 수행할 수 없으므로
+        // 시도 자체를 관찰한다.
         Object.defineProperty(window, 'location', {
             configurable: true,
             value: { ...window.location, replace: vi.fn() },
@@ -130,12 +131,12 @@ describe('admin session-owner lifecycle', () => {
     });
 
     it("accepts the next account's refresh after a sign-out and re-login in the same tab.", async () => {
-        // Account A owns the tab, then signs out.
+        // A 계정이 탭을 소유한 후 로그아웃한다.
         await signInAs(1);
         expect(sessionStorage.getItem(SESSION_USER_KEY)).toBe('1');
         await signOutFromDashboard();
 
-        // Account B signs in and the tab reloads — the guard's first refresh must adopt B.
+        // B 계정이 로그인하고 탭이 새로고침된다 — guard의 첫 갱신은 B를 받아들여야 한다.
         await signInAs(2);
         expect(sessionStorage.getItem(SESSION_USER_KEY)).toBe('2');
         const tokenB = makeAccessToken(2);
@@ -150,7 +151,7 @@ describe('admin session-owner lifecycle', () => {
     });
 
     it('still rejects a refresh for a different account while the tab is owned.', async () => {
-        // The multi-tab defence itself is unchanged: only the record's lifecycle was broken.
+        // 다중 탭 방어 로직 자체는 변경되지 않았다 — 깨져 있던 것은 기록의 생명주기뿐이다.
         recordSessionUser(1);
         vi.stubGlobal(
             'fetch',

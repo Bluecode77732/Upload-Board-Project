@@ -1,6 +1,6 @@
-// Purpose: landing page after login — shows at-a-glance stats (user count, recent logs).
-// Usage: rendered at /dashboard; linked from App.tsx and all page nav bars.
-// Rationale: admins previously landed on /users with no overview; a dashboard reduces navigation burden.
+// 목적: 로그인 후 진입하는 첫 화면 — 사용자 수, 최근 로그 등 한눈에 보이는 통계를 보여준다.
+// 사용처: /dashboard에서 렌더링되며, App.tsx와 모든 페이지 nav bar에서 링크된다.
+// 근거: 예전에는 관리자가 개요 없이 바로 /users로 진입했다 — 대시보드가 그 탐색 부담을 줄인다.
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -10,9 +10,9 @@ import { clearSessionUser } from '../auth/session-guard';
 import { actionColor, type AuditLog } from '../lib/audit';
 import ThemeToggle from '../components/theme-toggle';
 
-// This backend has no presence/room concept (that was the Chat Project's domain) — the
-// dashboard's stat cards are the GET /user, GET /file, and GET /post totals (each read via
-// take=1 so the tuple's count is the only field used); no dedicated /stats endpoint exists.
+// 이 백엔드에는 접속 현황/room 개념이 없다 (그건 Chat Project의 영역이었다) — 대시보드의
+// 통계 카드는 GET /user, GET /file, GET /post의 총합이다 (각각 take=1로 조회해 튜플의
+// count 필드만 사용한다); 별도의 /stats 엔드포인트는 존재하지 않는다.
 function DashboardPage() {
     const [userTotal, setUserTotal] = useState<number | null>(null);
     const [fileTotal, setFileTotal] = useState<number | null>(null);

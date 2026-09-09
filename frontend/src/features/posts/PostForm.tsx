@@ -1,7 +1,7 @@
-// Purpose: creates a new board post — title, body, and an optional attached file.
-// Usage: rendered inside PostBoard; calls onCreated() so the list refreshes after a successful submit.
-// Rationale: mirrors UploadForm's write-then-reset shape; a 200 replay and a 201 fresh post are handled
-//   identically here (ADR 0023 D1) — the status code is not a UI concern.
+// 목적: 새 게시글(제목, 본문, 선택적으로 첨부 파일)을 생성한다.
+// 사용처: PostBoard 내부에 렌더링된다; 제출 성공 시 onCreated()를 호출해 목록을 새로고침한다.
+// 근거: UploadForm의 작성-후-초기화 형태를 그대로 따른다; 200 replay와 201 신규 게시글은
+//   여기서 동일하게 처리한다(ADR 0023 D1) — status 코드는 UI 관심사가 아니다.
 
 import { useState, type FormEvent } from 'react'
 import { api, ApiError } from '../../api/client'
@@ -10,7 +10,7 @@ import type { CreatePostRequest, PostResponse } from '../../api/types'
 import { FilePicker } from './FilePicker'
 import styles from './PostForm.module.css'
 
-// Branch on the stable code (backend ADR 0011), never on the human-readable message.
+// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {

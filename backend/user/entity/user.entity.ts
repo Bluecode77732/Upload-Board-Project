@@ -29,13 +29,13 @@ export class UserEntity {
   @Exclude({ toPlainOnly: true })
   password!: string;
 
-  // RBAC tier (ADR 0013). Server-assigned only — UpdateUserDto has no role field,
-  // so the whitelist pipe strips any client attempt to set it. PATCH /user/:id/role
-  // (superadmin) is the sole mutation path.
+  // RBAC 등급 (ADR 0013). 오직 서버만 부여한다 — UpdateUserDto에는 role 필드가 없어서
+  // 화이트리스트 파이프가 클라이언트의 설정 시도를 모두 걸러낸다. PATCH /user/:id/role
+  // (superadmin 전용)이 이를 바꾸는 유일한 경로다.
   @Column({ type: 'varchar', default: UserRole.user })
   role!: UserRole;
 
-  // SHA-256 of the current refresh token (rotation/reuse detection — ADR 0012); null = no active session.
+  // 현재 refresh token의 SHA-256 해시 (rotation/재사용 탐지 — ADR 0012); null이면 활성 세션 없음.
   @Column({ type: 'varchar', nullable: true })
   @Exclude({ toPlainOnly: true })
   @ApiHideProperty()

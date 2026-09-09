@@ -26,13 +26,13 @@ import { bearerTokenType } from './dto/token-types.auth.dto';
 import { UserId } from 'backend/user/decorator/userId.decorator';
 import type { Request as ExpressRequest, Response } from 'express';
 
-// The refresh token travels only in this httpOnly cookie (ADR 0012) — never in a response body.
+// 리프레시 토큰은 이 httpOnly 쿠키로만 오간다(ADR 0012) — 응답 본문에는 절대 싣지 않는다.
 const REFRESH_TOKEN_COOKIE = 'refreshToken';
 
 @Controller('auth')
 @ApiTags('Authentication API')
-// register returns a UserEntity — without this, @Exclude fields (password,
-// refreshTokenHash) leak in the response (Never Do Group 3).
+// register가 UserEntity를 반환하므로, 이게 없으면 @Exclude 필드(password,
+// refreshTokenHash)가 응답에 그대로 노출된다(Never Do Group 3).
 @UseInterceptors(ClassSerializerInterceptor)
 export class AuthController {
   constructor(

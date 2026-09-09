@@ -32,7 +32,7 @@ import { UserRole } from 'backend/auth/role/role';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  // Listing exposes every user's email — admin-only (RBAC, ADR 0013).
+  // 목록 조회는 모든 유저의 이메일을 노출하므로 admin 전용이다 (RBAC, ADR 0013).
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.admin)
@@ -97,12 +97,12 @@ export class UserController {
     @Body() updateUserDto: UpdateUserDto,
     @AuthUser() actor: AuthUser,
   ) {
-    // Self, or an admin acting on a strictly lower-ranked account — UserService.update
-    // owns the check since it already loads the target row (RBAC ownership extension).
+    // 본인이거나, 자신보다 확실히 낮은 등급의 계정에 대해 조치하는 admin이어야 한다 —
+    // 대상 행을 이미 로드하는 UserService.update가 이 검사를 소유한다 (RBAC 소유권 확장).
     return this.userService.update(actor.id, actor.role, id, updateUserDto);
   }
 
-  // superadmin-only role assignment; the sole path that mutates UserEntity.role.
+  // superadmin 전용 role 할당; UserEntity.role을 바꾸는 유일한 경로다.
   @Patch(':id/role')
   @UseGuards(RolesGuard)
   @Roles(UserRole.superadmin)
@@ -137,8 +137,8 @@ export class UserController {
     @Query() query: DeleteUserQueryDto,
     @AuthUser() actor: AuthUser,
   ) {
-    // Self, or an admin acting on a strictly lower-ranked account — UserService.remove
-    // owns the check since it already loads the target row (RBAC ownership extension).
+    // 본인이거나, 자신보다 확실히 낮은 등급의 계정에 대해 조치하는 admin이어야 한다 —
+    // 대상 행을 이미 로드하는 UserService.remove가 이 검사를 소유한다 (RBAC 소유권 확장).
     return this.userService.remove(
       actor.id,
       actor.role,

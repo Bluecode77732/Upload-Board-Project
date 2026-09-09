@@ -1,6 +1,6 @@
-// Purpose: records request duration for every HTTP request against the shared Prometheus histogram.
-// Usage: registered as a global APP_INTERCEPTOR by MetricsModule; not intended for per-controller use.
-// Rationale: a single global interceptor is the one place every request already passes through, avoiding a manual timing call in each controller (ADR 0047).
+// 목적: 모든 HTTP 요청의 처리 시간을 공유 Prometheus 히스토그램에 기록한다.
+// 사용처: MetricsModule이 전역 APP_INTERCEPTOR로 등록한다; 컨트롤러별 사용을 의도하지 않는다.
+// 근거: 전역 인터셉터 하나면 이미 모든 요청이 지나가는 지점이 되어, 각 컨트롤러에서 수동으로 시간을 재지 않아도 된다 (ADR 0047).
 
 import {
   CallHandler,
@@ -41,8 +41,8 @@ export class MetricsInterceptor implements NestInterceptor {
     return next.handle();
   }
 
-  // Express attaches `route` once a handler has matched; typed narrowly here rather
-  // than widening the shared Request type (Never Do Group 1 — no `any`).
+  // Express는 핸들러가 매치된 뒤에야 `route`를 붙인다; 공유 Request 타입을 넓히는 대신
+  // 여기서 좁게 타입을 잡는다 (Never Do Group 1 — `any` 금지).
   private resolveRoute(request: Request): string {
     const matchedPath = (request as { route?: { path?: unknown } }).route?.path;
     return typeof matchedPath === 'string' ? matchedPath : request.originalUrl;

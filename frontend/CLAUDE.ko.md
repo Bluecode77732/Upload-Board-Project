@@ -73,8 +73,10 @@
 - **Fast-refresh**: 컴포넌트를 export하는 파일은 context 객체나 훅을 같이
   export하면 안 된다 — context/provider/훅은 별도 파일에 둔다(`src/auth/`
   참고).
-- **파일 헤더 주석**(새 파일에만): imports 위에 세 줄 — Purpose / Usage /
-  Rationale — 기존 파일과 동일한 형식으로.
+- **파일 헤더 주석**(새 파일에만): imports 위에 세 줄 — 목적(Purpose) /
+  사용처(Usage) / 근거(Rationale) — 기존 파일과 동일한 형식으로.
+  (2026-09-09에 영어 라벨에서 한글로 전환 — 루트 CLAUDE.md의 File Creation
+  Convention과 표기를 통일했다.)
 - **Admin**: 이 앱에는 `/admin` 라우트가 없다. ADR 0010이 처음에 스텁으로
   하나를 자리 잡아 뒀지만, ADR 0022가 독립된 Chat Project 콘솔을 `admin/`으로
   대신 들여와 운영자 화면으로 삼았고, 그 콘솔의 역할-관리 슬라이스가 이

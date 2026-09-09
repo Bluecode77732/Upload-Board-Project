@@ -13,7 +13,7 @@ jest.mock('cron');
 
 const cronFrom = CronJob.from as unknown as jest.Mock;
 
-// Mutable config the mock ConfigService reads from — reset in beforeEach.
+// mock ConfigService가 읽는 가변 설정 — beforeEach에서 초기화한다.
 const config = {
   enabled: true,
   cron: '0 * * * *',

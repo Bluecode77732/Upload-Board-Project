@@ -191,17 +191,21 @@ templates, or other non-code files. Those are exempt from this section.
 
 When creating a new file (not when editing an existing one), add a short header
 comment above the imports stating:
-- Purpose: why this file exists (the gap it fills)
-- Usage: who/what is expected to import or call into it
-- Rationale: why it was added now, or why an existing file could not absorb this
+- 목적 (Purpose): why this file exists (the gap it fills)
+- 사용처 (Usage): who/what is expected to import or call into it
+- 근거 (Rationale): why it was added now, or why an existing file could not absorb this
 
 ```typescript
-// Purpose: isolates the temp_→granted_ path rewrite so it is testable without a DB.
-// Usage: imported by FileService.uploadFile(); not intended for direct use elsewhere.
-// Rationale: the rewrite logic was inline in file.service.ts and untestable in isolation.
+// 목적: temp_→granted_ 경로 재작성을 분리해 DB 없이도 테스트 가능하게 한다.
+// 사용처: FileService.uploadFile()에서 임포트한다 — 다른 곳에서 직접 쓸 용도가 아니다.
+// 근거: 재작성 로직이 file.service.ts에 인라인으로 있어 단독 테스트가 불가능했다.
 
 import ...
 ```
+
+(2026-09-09 결정: 파일 헤더 라벨을 영어 Purpose/Usage/Rationale에서 한글로 전환 — 함수
+블록의 목적/이유/방법과 표기를 통일. `사용처`/`근거`는 함수 블록의 `이유`/`방법`과 의미가
+달라 별도 라벨을 쓴다 — 사용처는 "누가 부르는가", 근거는 "왜 지금·왜 기존 파일이 아닌가"다.)
 
 Keep it to three lines, one per field — no exceptions for "obvious" files. This is the
 one place a file header comment is required regardless of how self-explanatory the file

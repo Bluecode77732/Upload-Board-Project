@@ -21,8 +21,8 @@ export class MetricsService {
     registers: [this.registry],
   });
 
-  // Outcome mirrors FileClaimResult.replayed (ADR 0019): 'fresh' is a new promotion,
-  // 'replayed' is an idempotent retry hitting its own earlier success.
+  // 결과 라벨은 FileClaimResult.replayed(ADR 0019)와 같은 모양이다: 'fresh'는 새로운 promotion,
+  // 'replayed'는 자기 이전 성공에 부딪힌 멱등 재시도다.
   readonly uploadClaimsTotal = new Counter({
     name: 'upload_claims_total',
     help: 'Upload claim resolutions, labeled by outcome (fresh promotion or idempotent replay).',
@@ -36,10 +36,10 @@ export class MetricsService {
     registers: [this.registry],
   });
 
-  // Outcome mirrors uploadClaimsTotal's shape: one labeled counter, not two separate
-  // ones. 'candidate' is recorded on every sweep run, including dry-run (ADR 0051 D6) —
-  // in report-first mode it's the feature's entire observable signal. 'deleted' is
-  // recorded only when storage.unlink() actually ran.
+  // 결과 라벨은 uploadClaimsTotal과 같은 모양이다: 카운터 두 개가 아니라 라벨 하나로 구분한다.
+  // 'candidate'는 dry-run을 포함해 모든 스윕 실행에서 기록되며(ADR 0051 D6) — report-first
+  // 모드에서는 이 기능이 관측 가능한 신호 전부다. 'deleted'는 storage.unlink()가 실제로
+  // 실행됐을 때만 기록된다.
   readonly grantedCleanupSweepTotal = new Counter({
     name: 'granted_cleanup_sweep_total',
     help: 'Orphaned granted_ objects seen by the DB-joined reclaim sweep, labeled by outcome (candidate found, vs. actually deleted) (ADR 0051).',

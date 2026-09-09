@@ -1,6 +1,6 @@
-// Purpose: validates the POST /post/:postId/comment body — the comment text, and nothing else.
-// Usage: bound via @Body() in PostCommentController.create(); forwarded to CommentService.create().
-// Rationale: the global pipe only keeps what a DTO declares, and the entity bounds no length — ADR 0023's ≤1,000 limit has to live here. postId comes from the route and creatorId from the token, so neither belongs in the body.
+// 목적: POST /post/:postId/comment의 본문 — 댓글 텍스트 하나만 검증한다.
+// 사용처: PostCommentController.create()에서 @Body()로 바인딩되어 CommentService.create()로 전달된다.
+// 근거: 전역 파이프는 DTO가 선언한 것만 남기고, 엔티티에는 길이 제한이 없다 — ADR 0023의 ≤1,000 제한이 여기 있어야 한다. postId는 라우트에서, creatorId는 토큰에서 오므로 둘 다 body에 있으면 안 된다.
 
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, MaxLength } from 'class-validator';

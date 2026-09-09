@@ -13,8 +13,8 @@ describe('MetricsInterceptor', () => {
     interceptor = new MetricsInterceptor(metricsService);
   });
 
-  // A bare EventEmitter stands in for Express's Response — only `.on('finish', ...)`
-  // and `.statusCode` are used by the interceptor.
+  // Express의 Response 대역으로 순수 EventEmitter를 쓴다 — 인터셉터는 `.on('finish', ...)`와
+  // `.statusCode`만 사용한다.
   function buildResponse(statusCode: number) {
     const response = new EventEmitter() as EventEmitter & {
       statusCode: number;

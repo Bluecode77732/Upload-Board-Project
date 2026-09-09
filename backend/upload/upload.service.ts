@@ -1,6 +1,7 @@
-// Purpose: generates a temp key for a newly attached upload and stages its bytes through the FileStorage port.
-// Usage: called by UploadController.uploadMedia() — the only service UploadModule now has (ADR 0029 D4).
-// Rationale: Multer moved to memoryStorage (no longer writes to disk itself), so something must push the buffered bytes through the port; a bare controller cannot hold that dependency.
+// 목적: 새로 첨부된 업로드에 temp 키를 발급하고 FileStorage 포트를 통해 바이트를 임시 저장한다.
+// 사용처: UploadController.uploadMedia()가 호출한다 — 이제 UploadModule이 가진 유일한 서비스다(ADR 0029 D4).
+// 근거: Multer가 memoryStorage로 바뀌면서(더 이상 스스로 디스크에 쓰지 않는다) 버퍼링된 바이트를 포트로 밀어넣을
+// 무언가가 필요해졌다; 컨트롤러만으로는 그 의존성을 가질 수 없다.
 
 import { Inject, Injectable } from '@nestjs/common';
 import { v4 } from 'uuid';

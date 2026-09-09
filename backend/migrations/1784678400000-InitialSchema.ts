@@ -1,6 +1,6 @@
-// Purpose: baseline migration capturing the schema that was previously applied manually (user_entity, file_entity, creator FK).
-// Usage: executed by pnpm migration:run on a fresh database; on a pre-existing manually-created database run pnpm migration:run -- --fake to mark it applied without re-creating tables.
-// Rationale: migration adoption (ADR 0006) needs an explicit starting point; constraint names are readable rather than TypeORM's hashed defaults, so review any future migration:generate output and strip spurious constraint-rename statements.
+// 목적: 이전까지 수동으로 적용해 온 스키마(user_entity, file_entity, creator FK)를 담는 베이스라인 마이그레이션이다.
+// 사용처: 새 DB에서는 pnpm migration:run으로 실행하고, 이미 수동으로 만들어진 DB에서는 테이블을 다시 만들지 않고 적용됨으로 표시하기 위해 pnpm migration:run -- --fake를 실행한다.
+// 근거: 마이그레이션 도입(ADR 0006)에는 명확한 출발점이 필요하다; 제약 이름은 TypeORM의 해시 기본값이 아니라 읽을 수 있는 이름을 쓰므로, 이후 migration:generate 출력에서는 매번 불필요한 제약 이름 변경 문을 걷어내고 검토해야 한다.
 
 import { MigrationInterface, QueryRunner } from 'typeorm';
 

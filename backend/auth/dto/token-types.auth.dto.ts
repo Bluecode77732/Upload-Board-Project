@@ -8,5 +8,5 @@ export class bearerTokenType {
   accessToken: string;
 }
 
-// The former tokenType ({ refreshToken, accessToken }) was removed with ADR 0012:
-// the refresh token now travels only as an httpOnly cookie, never in a body.
+// 예전 tokenType({ refreshToken, accessToken })은 ADR 0012로 제거됐다:
+// 이제 리프레시 토큰은 httpOnly 쿠키로만 오가며, body에는 절대 실리지 않는다.

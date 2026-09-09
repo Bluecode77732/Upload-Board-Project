@@ -1,6 +1,6 @@
-// Purpose: owns board comment business logic — the thread listing, CRUD, ownership checks, and the account-cascade delete.
-// Usage: injected by PostCommentController and CommentController; deleteCommentsOfCreator is called by UserService inside its deletion transaction.
-// Rationale: ADR 0023 gives comment its own module; folding it into PostService would put a post's own text and the thread under it in one service, and would make the account cascade reach across two row types from one place.
+// 목적: 게시판 댓글 비즈니스 로직 — 스레드 목록, CRUD, 소유권 검사, 계정 캐스케이드 삭제를 담당한다.
+// 사용처: PostCommentController와 CommentController가 주입해 사용; deleteCommentsOfCreator는 UserService가 삭제 트랜잭션 안에서 호출한다.
+// 근거: ADR 0023이 comment에 자체 모듈을 부여했다; PostService에 합치면 게시글 본문과 그 아래 스레드가 한 서비스에 뒤섞이고, 계정 캐스케이드가 한곳에서 두 종류의 행에 손을 뻗게 된다.
 
 import {
   ForbiddenException,
@@ -21,7 +21,7 @@ import { AuditTargetType } from 'backend/audit-log/audit-target-type.enum';
 import { ErrorCode } from 'backend/common/error-code';
 import { ROLE_RANK, UserRole } from 'backend/auth/role/role';
 
-// The acting user's identity + role (from the JWT), enough for creator-OR-admin checks.
+// 행위자의 신원 + role(JWT에서 옴), creator-OR-admin 검사에 필요한 만큼만 담는다.
 interface Requester {
   id: number;
   role: UserRole;
@@ -37,9 +37,9 @@ export class CommentService {
     private readonly auditLogService: AuditLogService,
   ) {}
 
-  // A comment is manageable by its author, or by an admin/superadmin (RBAC, ADR 0013).
-  // Deliberately NOT "or the author of the post it sits on": that third axis would need a
-  // comment.post.creator.id reach-through, and admin moderation already covers the case.
+  // 댓글은 작성자 본인이거나 admin/superadmin이면 관리할 수 있다(RBAC, ADR 0013).
+  // 의도적으로 "또는 이 댓글이 달린 게시글의 작성자"는 포함하지 않는다: 그 세 번째 축은
+  // comment.post.creator.id reach-through가 필요하고, admin 관리 권한이 이미 그 경우를 커버한다.
   private canManage(creatorId: number, requester: Requester): boolean {
     return (
       creatorId === requester.id ||
@@ -82,15 +82,15 @@ export class CommentService {
       .leftJoinAndSelect('comment.creator', 'creator')
       .where('comment.postId = :postId', { postId })
       .orderBy('comment.createdAt', 'ASC')
-      // A unique tiebreaker keeps the page boundary deterministic when two comments
-      // share a timestamp — the same defect ADR 0021 fixed for the file listing.
+      // 유일 타이브레이커를 두면 두 댓글이 같은 타임스탬프를 가져도 페이지 경계가
+      // 결정적으로 유지된다 — 파일 목록에서 ADR 0021이 고친 것과 같은 결함이다.
       .addOrderBy('comment.id', 'ASC')
       .take(query.take)
       .skip(query.skip)
       .getManyAndCount();
 
-    // postId is known from the route, so the post relation is never joined — that join
-    // would repeat one post's row across every comment in the thread for no gain.
+    // postId는 라우트에서 이미 알고 있으므로 post 관계는 절대 조인하지 않는다 — 조인하면
+    // 얻는 것 없이 스레드의 모든 댓글마다 같은 게시글 행이 반복된다.
     return [comments.map((comment) => this.toResponse(comment, postId)), count];
   }
 
@@ -152,8 +152,8 @@ export class CommentService {
       });
     }
 
-    // Re-read through the shared path: the insert result carries no relations, so a
-    // response composed from it would omit the author email.
+    // 공통 조회 경로로 다시 읽는다: insert 결과에는 관계가 실려 있지 않아, 그것만으로
+    // 응답을 구성하면 작성자 이메일이 빠진다.
     return this.getCommentById(identifier);
   }
 
@@ -174,7 +174,7 @@ export class CommentService {
       });
     }
 
-    // An empty PATCH is a no-op, not an error — TypeORM rejects an empty update set.
+    // 빈 PATCH는 에러가 아니라 아무 동작도 하지 않는다 — TypeORM은 빈 update set을 거부한다.
     if (dto.body !== undefined) {
       await this.commentRepository.update({ id }, { body: dto.body });
     }

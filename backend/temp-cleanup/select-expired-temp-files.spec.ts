@@ -2,7 +2,7 @@ import { selectExpiredTempFiles } from './select-expired-temp-files';
 import { StorageTempEntry } from 'backend/storage/file-storage.interface';
 
 describe('selectExpiredTempFiles', () => {
-  const now = 1_000_000_000_000; // fixed epoch ms for deterministic ages
+  const now = 1_000_000_000_000; // 나이를 결정론적으로 만들기 위한 고정 epoch ms
   const ttlMs = 24 * 60 * 60 * 1000; // 24h
 
   const at = (hoursAgo: number): number => now - hoursAgo * 60 * 60 * 1000;

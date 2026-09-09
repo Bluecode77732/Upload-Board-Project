@@ -1,6 +1,6 @@
-// Purpose: adds user_entity.refreshTokenHash — the server-side anchor for refresh-token rotation/reuse detection (ADR 0012).
-// Usage: applied via pnpm migration:run; written by hand (no live DB for migration:generate) mirroring the baseline's readable style.
-// Rationale: rotation must compare the presented refresh token against a stored SHA-256; nullable because null means "no active session".
+// 목적: user_entity.refreshTokenHash를 추가한다 — refresh token rotation/재사용 탐지를 위한 서버 측 앵커다 (ADR 0012).
+// 사용처: pnpm migration:run으로 적용된다; migration:generate를 돌릴 라이브 DB가 없어 베이스라인의 읽기 쉬운 스타일을 따라 직접 손으로 작성했다.
+// 근거: rotation은 제시된 refresh token을 저장된 SHA-256과 비교해야 한다; null은 "활성 세션 없음"을 의미하므로 nullable로 둔다.
 
 import { MigrationInterface, QueryRunner } from 'typeorm';
 

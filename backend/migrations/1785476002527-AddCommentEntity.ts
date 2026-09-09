@@ -1,6 +1,6 @@
-// Purpose: creates comment_entity — the board comment table, its two foreign keys, and the thread index (ADR 0023).
-// Usage: applied by pnpm migration:run after AddPostEntity; also run by the e2e suite to build its throwaway database.
-// Rationale: generate emitted six spurious statements (dropping and re-adding FK_file_entity_creator, FK_post_entity_creator, FK_post_entity_file and IDX_audit_log_entity_action_createdAt purely to rename them to TypeORM hashes) — stripped per ADR 0006; the new constraints follow the baseline's readable naming instead.
+// 목적: comment_entity를 만든다 — 게시판 댓글 테이블, 두 개의 외래키, 스레드 인덱스다 (ADR 0023).
+// 사용처: AddPostEntity 다음에 pnpm migration:run으로 적용되며, e2e 스위트가 일회용 DB를 만들 때도 실행된다.
+// 근거: generate는 불필요한 문 여섯 개를 함께 뽑아냈다(FK_file_entity_creator, FK_post_entity_creator, FK_post_entity_file, IDX_audit_log_entity_action_createdAt을 오직 TypeORM 해시로 이름 바꾸려고 drop 후 재생성) — ADR 0006에 따라 이를 걷어냈고, 새 제약들은 대신 베이스라인의 읽기 쉬운 이름 규칙을 따른다.
 
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
@@ -19,8 +19,8 @@ export class AddCommentEntity1785476002527 implements MigrationInterface {
         CONSTRAINT "PK_comment_entity" PRIMARY KEY ("id")
       )`,
     );
-    // "One post's comments, oldest first" is this table's only query shape; the leading
-    // column also serves FK_comment_entity_post, which Postgres does not index for us.
+    // "한 게시글의 댓글을, 오래된 순으로"가 이 테이블의 유일한 쿼리 형태다; 앞선 컬럼은
+    // FK_comment_entity_post도 함께 서빙한다 — Postgres는 이 컬럼을 알아서 인덱싱해주지 않는다.
     await queryRunner.query(
       `CREATE INDEX "IDX_comment_entity_postId_createdAt"
         ON "comment_entity" ("postId", "createdAt")`,
@@ -31,10 +31,10 @@ export class AddCommentEntity1785476002527 implements MigrationInterface {
         FOREIGN KEY ("creatorId") REFERENCES "user_entity"("id")
         ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    // CASCADE on purpose, and the only one in this schema (ADR 0023 D3): a comment has
-    // no URL, no file and no existence outside its post, so nothing must be read before
-    // the rows go. ADR 0020's prohibition stays scoped to FileEntity.creator, where the
-    // stored paths to unlink have to be read first.
+    // 의도적으로 CASCADE이며, 이 스키마에서 유일한 CASCADE다 (ADR 0023 D3): 댓글은 URL도
+    // 파일도 없고 게시글 밖에서는 존재 자체가 없으므로, 행이 지워지기 전에 아무것도 읽을
+    // 필요가 없다. ADR 0020의 금지 규칙은 FileEntity.creator에만 적용되는데, 거기서는
+    // unlink할 저장 경로를 먼저 읽어야 하기 때문이다.
     await queryRunner.query(
       `ALTER TABLE "comment_entity"
         ADD CONSTRAINT "FK_comment_entity_post"

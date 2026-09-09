@@ -1,15 +1,15 @@
-// Purpose: read-only view of the privileged-action audit trail (backend ADR 0013).
-// Usage: rendered at /logs; linked from every page's nav bar, and from users-page.tsx's
-// "View all" link (`/logs?userId={id}`).
-// Rationale: rewritten from the imported Chat Project page, which targeted a userId/from/to
-// filter set, a client-side sort toggle, and a CSV export this API did not have — see
-// admin/README.md's backlog table. GET /audit-log's order is server-fixed at createdAt DESC
-// (no sort parameter exists). `AuditLogQueryDto` gained `userId` 2026-08-12; this page now
-// reads it from the URL. It matches the actor, or the target of a user-targeting action
-// (`targetType = 'user'`) — narrowed from "any matching targetId" by backend ADR 0045, since
-// a file/post/comment id could collide with a user id. There is still no `/audit-log/export`
-// endpoint, so CSV export is synthesized client-side by paging through the existing filtered
-// query and capping at EXPORT_CAP records.
+// 목적: 권한 있는 작업의 audit trail을 읽기 전용으로 보여준다 (backend ADR 0013).
+// 사용처: /logs에서 렌더링되며, 모든 페이지의 nav bar와 users-page.tsx의 "View all" 링크
+// (`/logs?userId={id}`)에서 연결된다.
+// 근거: 원본은 userId/from/to 필터 세트, 클라이언트 측 정렬 토글, 이 API에 없는 CSV 내보내기를
+// 다루던 Chat Project 페이지를 그대로 가져온 것이었다 — admin/README.md의 backlog 표 참고.
+// GET /audit-log의 정렬 순서는 createdAt DESC로 서버에 고정되어 있다(정렬 파라미터가 없다).
+// `AuditLogQueryDto`는 2026-08-12에 `userId`를 추가했고, 이 페이지는 이제 URL에서 그 값을
+// 읽는다. actor이거나, 사용자를 대상으로 한 action의 target(`targetType = 'user'`)일 때
+// 매칭된다 — file/post/comment id가 사용자 id와 겹칠 수 있어서, backend ADR 0045로
+// "targetId가 일치하면 무조건"에서 이렇게 좁혀졌다. `/audit-log/export` 엔드포인트는 여전히
+// 없으므로, CSV 내보내기는 기존 필터가 적용된 쿼리를 페이지 단위로 순회해 EXPORT_CAP까지
+// 클라이언트에서 합성한다.
 
 import { useEffect, useState } from 'react';
 import api from '../api/axios';
@@ -19,28 +19,28 @@ import { clearSessionUser } from '../auth/session-guard';
 import { actionColor, targetLabel, type AuditLog } from '../lib/audit';
 import ThemeToggle from '../components/theme-toggle';
 
-// Mirrors backend/audit-log/dto/audit-log-query.dto.ts's AUDIT_ACTIONS exactly.
+// backend/audit-log/dto/audit-log-query.dto.ts의 AUDIT_ACTIONS를 그대로 반영한다.
 const ACTIONS = ['ROLE_CHANGE', 'USER_DELETE', 'FILE_DELETE', 'POST_DELETE', 'COMMENT_DELETE'];
 const TAKE = 20;
-// AuditLogQueryDto.take is capped at 100 (@Max(100)) — the largest page size export can
-// request per round trip.
+// AuditLogQueryDto.take는 100으로 상한(@Max(100))이 걸려 있다 — 내보내기가 한 번의
+// 왕복에서 요청할 수 있는 최대 페이지 크기다.
 const EXPORT_PAGE_SIZE = 100;
-// Hard ceiling on rows included in a CSV download, independent of the real total — an
-// admin who needs more narrows the filter instead of exporting an unbounded file.
+// CSV 다운로드에 포함할 행 수의 하드 상한이며, 실제 총 개수와 무관하다 — 더 필요한
+// 관리자는 무제한 파일을 내보내는 대신 필터를 좁혀야 한다.
 const EXPORT_CAP = 1000;
-// `targetType` sits beside `targetId` (backend ADR 0045) so an exported file says what kind
-// of id the target column holds — without it, a bare "269" in a FILE_DELETE row reads as a
-// user id, the same ambiguity the on-screen Target column was fixed for.
+// `targetType`은 `targetId`와 나란히 붙는다 (backend ADR 0045). 그래야 내보낸 파일이
+// target 컬럼이 어떤 종류의 id를 담고 있는지 알려준다 — 없으면 FILE_DELETE 행의 "269"가
+// user id로 읽히는데, 이는 화면상의 Target 컬럼에서 이미 고쳐졌던 것과 같은 모호함이다.
 const CSV_COLUMNS = ['id', 'createdAt', 'action', 'actorId', 'targetType', 'targetId', 'detail'] as const;
 
 function csvEscape(value: string): string {
     return `"${value.replace(/"/g, '""')}"`;
 }
 
-// Serializes fetched audit-log rows into CSV text with a fixed column order
-// (id, createdAt, action, actorId, targetType, targetId, detail), since there is no
-// server-side export. `targetType` joined the schema when the backend began sending it
-// (ADR 0045); a null one is written as an empty field, exactly like a null `targetId`.
+// 서버 측 내보내기가 없으므로, 조회한 audit-log 행들을 고정된 컬럼 순서
+// (id, createdAt, action, actorId, targetType, targetId, detail)로 CSV 텍스트로
+// 직렬화한다. `targetType`은 백엔드가 이 값을 보내기 시작하면서 스키마에 추가됐고
+// (ADR 0045), null이면 `targetId`가 null일 때와 마찬가지로 빈 필드로 기록한다.
 function toCsv(rows: AuditLog[]): string {
     const header = CSV_COLUMNS.join(',');
     const lines = rows.map((row) =>
@@ -77,15 +77,15 @@ function LogsPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const clearTokens = useAuthStore((s) => s.clearTokens);
 
-    // Derived, not stateful — the URL (`?userId=`) is the single source of truth for this
-    // filter so a fresh navigation from users-page.tsx's "View all" link (`/logs?userId={id}`)
-    // is reflected with no separate sync step.
+    // state가 아니라 파생값이다 — 이 필터는 URL(`?userId=`)이 유일한 진실 소스이므로,
+    // users-page.tsx의 "View all" 링크(`/logs?userId={id}`)로 새로 진입해도 별도의
+    // 동기화 단계 없이 그대로 반영된다.
     const userIdParam = searchParams.get('userId');
     const userId = userIdParam !== null && /^\d+$/.test(userIdParam) ? Number(userIdParam) : null;
 
-    // setLoading(true) is intentionally NOT in this effect body (react-hooks/set-state-in-effect) —
-    // changeAction(), changePage(), and clearUserFilter() each set it before updating the
-    // dependency that re-triggers this.
+    // setLoading(true)는 의도적으로 이 effect 본문에 넣지 않았다 (react-hooks/set-state-in-effect) —
+    // changeAction(), changePage(), clearUserFilter()가 각각 이 effect를 재실행시키는
+    // 의존성을 갱신하기 전에 미리 호출한다.
     useEffect(() => {
         let cancelled = false;
         api.get('/audit-log', {
@@ -121,9 +121,9 @@ function LogsPage() {
         });
     };
 
-    // exportCsv: pages through GET /audit-log at EXPORT_PAGE_SIZE (the DTO's take ceiling)
-    // with the current action/userId filters applied, stopping at EXPORT_CAP or an empty
-    // page, then downloads the result as CSV — there is no /audit-log/export endpoint.
+    // exportCsv: 현재의 action/userId 필터를 적용한 채 GET /audit-log를 EXPORT_PAGE_SIZE
+    // (DTO의 take 상한) 단위로 순회하다가 EXPORT_CAP 또는 빈 페이지에서 멈추고, 결과를
+    // CSV로 다운로드한다 — /audit-log/export 엔드포인트는 존재하지 않는다.
     const exportCsv = async () => {
         setExporting(true);
         setExportError('');

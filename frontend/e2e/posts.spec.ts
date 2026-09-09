@@ -1,9 +1,9 @@
-// Purpose: browser-level verification of the post board home screen — creating a post (with and
-//   without an attached file) through the real UI, and its effect on the list and its detail link.
-// Usage: run via `pnpm test:e2e`; builds on the shared harness (playwright.config.ts).
-// Rationale: PostBoard/PostForm/FilePicker are the app's first post-board write UI (backend Stage 3,
-//   ADR 0021/0023) — this exercises POST /post end to end, complementing FileBoard's read-side
-//   query-control spec (board.spec.ts) with the write path this app didn't have before.
+// 목적: 게시글 보드 홈 화면에 대한 브라우저 레벨 검증 — 실제 UI로 게시글을 생성하고(파일 첨부
+//   여부 둘 다), 그것이 목록과 상세 링크에 미치는 영향을 확인한다.
+// 사용처: `pnpm test:e2e`로 실행된다; 공유 하네스(playwright.config.ts) 위에서 동작한다.
+// 근거: PostBoard/PostForm/FilePicker는 이 앱의 첫 post-board 쓰기 UI다(backend Stage 3,
+//   ADR 0021/0023) — POST /post를 end to end로 검증해, FileBoard의 읽기 측 쿼리 제어 spec
+//   (board.spec.ts)을 이 앱에 그동안 없던 쓰기 경로로 보완한다.
 
 import { test, expect } from '@playwright/test'
 import { registerAndSignIn, goToFiles, goToHome, uniqueEmail, uniqueTitle, VIDEO_FIXTURE_PATH } from './helpers'
@@ -18,7 +18,7 @@ test('creating a text-only post appears on the board and links to its detail pag
   await page.getByLabel('Body', { exact: true }).fill('A text-only post body.')
   await page.getByRole('button', { name: 'Post', exact: true }).click()
 
-  // PostForm clears its own fields only after the write succeeds.
+  // 이 폼은 쓰기가 성공한 뒤에만 필드를 스스로 비운다.
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('', { timeout: 15_000 })
 
   const row = page.locator('li', { hasText: title })
@@ -78,19 +78,19 @@ test('submitting a post with a file already attached to another of my posts surf
 
   await goToHome(page)
 
-  // Claim the file with the first post.
+  // 첫 번째 게시글로 파일을 청구한다.
   await page.getByLabel('Title', { exact: true }).fill(firstPostTitle)
   await page.getByLabel('Body', { exact: true }).fill('First post claims the file.')
   await page.getByRole('radio', { name: fileTitle }).check()
   await page.getByRole('button', { name: 'Post', exact: true }).click()
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('', { timeout: 15_000 })
 
-  // A second, different post trying to attach the same (now-claimed) file is refused.
+  // 이미 청구된 같은 파일을 첨부하려는 다른 두 번째 게시글은 거절된다.
   await page.getByLabel('Title', { exact: true }).fill(secondPostTitle)
   await page.getByLabel('Body', { exact: true }).fill('Second post tries the same file.')
   await page.getByRole('radio', { name: fileTitle }).check()
   await page.getByRole('button', { name: 'Post', exact: true }).click()
 
-  // PostForm's messageForError maps ErrorCode.POST_FILE_TAKEN to this fixed string.
+  // PostForm의 messageForError는 ErrorCode.POST_FILE_TAKEN을 이 고정 문자열로 매핑한다.
   await expect(page.getByText('That file is already attached to another post.')).toBeVisible({ timeout: 15_000 })
 })

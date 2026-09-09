@@ -1,8 +1,8 @@
-// Purpose: bounds and validates the GET /audit-log query (action filter, related-user filter, take/skip pagination).
-// Usage: bound via @Query() in AuditLogController.findAll(); forwarded to AuditLogService.findAll().
-// Rationale: list endpoints must paginate (Never Do G2) and validate at the boundary; take/skip matches
-// GetFilesDto. userId was added for the admin console's user detail panel (admin/README.md "What was adapted"
-// lists "recent activity" as removed for lack of backend support).
+// 목적: GET /audit-log 쿼리(action 필터, 관련 유저 필터, take/skip 페이지네이션)를 검증하고 범위를 제한한다.
+// 사용처: AuditLogController.findAll()에서 @Query()로 바인딩되어 AuditLogService.findAll()로 전달된다.
+// 근거: 목록 엔드포인트는 페이지네이션이 필수이고(Never Do G2) 경계에서 검증해야 한다; take/skip은
+// GetFilesDto와 맞췄다. userId는 admin 콘솔의 유저 상세 패널을 위해 추가됐다(admin/README.md
+// "What was adapted"에 "recent activity"가 백엔드 미지원으로 제거됐다고 기록됨).
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';

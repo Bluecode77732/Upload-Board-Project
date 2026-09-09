@@ -15,8 +15,8 @@ export const UserId = createParamDecorator(
       .switchToHttp()
       .getRequest<{ user?: { id?: number } }>();
 
-    // Identity always comes from the JWT-populated request.user
-    // (set by JwtStrategy.validate), never from the request body.
+    // 신원은 항상 JWT로 채워진 request.user에서만 온다
+    // (JwtStrategy.validate가 설정), 요청 본문에서는 절대 오지 않는다.
     if (!request.user?.id) {
       throw new UnauthorizedException({
         code: ErrorCode.AUTH_UNAUTHORIZED,

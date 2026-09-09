@@ -1,9 +1,9 @@
-// Purpose: creates a new comment on a post.
-// Usage: rendered inside PostDetailPage below CommentThread; calls onCreated() so the thread
-//   refetches after a successful submit.
-// Rationale: a comment has no natural idempotency key (ADR 0023 D1) — an identical resubmit
-//   creates a second comment by design, so this form only guards the common double-click case
-//   by disabling the button while a submit is in flight; anything stronger is a backend decision.
+// 목적: 게시글에 새 댓글을 생성한다.
+// 사용처: PostDetailPage 내부 CommentThread 아래에 렌더링된다; 제출 성공 시 onCreated()를 호출해
+//   스레드를 다시 불러온다.
+// 근거: 댓글은 자연스러운 idempotency 키가 없다(ADR 0023 D1) — 동일한 재제출은 설계상 두 번째
+//   댓글을 만든다. 그래서 이 폼은 흔한 더블클릭 케이스만 제출 중 버튼을 비활성화해 막아둘 뿐,
+//   그보다 강한 방지는 백엔드가 결정할 일이다.
 
 import { useState, type FormEvent } from 'react'
 import { api, ApiError } from '../../api/client'

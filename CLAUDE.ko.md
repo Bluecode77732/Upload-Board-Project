@@ -189,17 +189,22 @@
 
 새 파일을 만들 때(기존 파일을 편집할 때는 아님), import 위에 다음을 명시하는
 짧은 헤더 주석을 추가한다:
-- Purpose: 이 파일이 왜 존재하는가(메우는 공백)
-- Usage: 누가/무엇이 이 파일을 import하거나 호출할 것으로 예상되는가
-- Rationale: 왜 지금 추가되었는가, 또는 왜 기존 파일이 이를 흡수할 수 없었는가
+- 목적 (Purpose): 이 파일이 왜 존재하는가(메우는 공백)
+- 사용처 (Usage): 누가/무엇이 이 파일을 import하거나 호출할 것으로 예상되는가
+- 근거 (Rationale): 왜 지금 추가되었는가, 또는 왜 기존 파일이 이를 흡수할 수 없었는가
 
 ```typescript
-// Purpose: isolates the temp_→granted_ path rewrite so it is testable without a DB.
-// Usage: imported by FileService.uploadFile(); not intended for direct use elsewhere.
-// Rationale: the rewrite logic was inline in file.service.ts and untestable in isolation.
+// 목적: temp_→granted_ 경로 재작성을 분리해 DB 없이도 테스트 가능하게 한다.
+// 사용처: FileService.uploadFile()에서 임포트한다 — 다른 곳에서 직접 쓸 용도가 아니다.
+// 근거: 재작성 로직이 file.service.ts에 인라인으로 있어 단독 테스트가 불가능했다.
 
 import ...
 ```
+
+(2026-09-09 결정: 파일 헤더 라벨을 영어 Purpose/Usage/Rationale에서 한글로 전환 —
+함수 블록의 목적/이유/방법과 표기를 통일. `사용처`/`근거`는 함수 블록의 `이유`/`방법`과
+의미가 달라 별도 라벨을 쓴다 — 사용처는 "누가 부르는가", 근거는 "왜 지금·왜 기존
+파일이 아닌가"다.)
 
 세 줄, 필드당 한 줄을 지킨다 — "뻔한" 파일이라고 예외를 두지 않는다. 이는 파일이
 아무리 자명해 보여도 헤더 주석이 필수인 유일한 자리인데, "지금은 뻔함"은 시간이

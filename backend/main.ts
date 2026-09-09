@@ -12,8 +12,8 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  // CORS stays off unless CORS_ORIGIN is set — same-origin/Swagger use needs none;
-  // a browser frontend on another origin sets a comma-separated allowlist.
+  // CORS_ORIGIN이 설정되지 않으면 CORS는 계속 꺼져 있다 — same-origin/Swagger 사용에는
+  // 필요 없다; 다른 origin의 브라우저 프론트엔드는 콤마로 구분된 allowlist를 설정한다.
   const corsOrigin = configService.get<string>('CORS_ORIGIN');
   if (corsOrigin) {
     app.enableCors({
@@ -24,7 +24,7 @@ async function bootstrap() {
     });
   }
 
-  // Parses the httpOnly refresh cookie for POST /auth/token/refresh (ADR 0012).
+  // POST /auth/token/refresh를 위해 httpOnly refresh 쿠키를 파싱한다 (ADR 0012).
   app.use(cookieParser());
 
   app.useGlobalPipes(

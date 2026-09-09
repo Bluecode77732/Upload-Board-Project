@@ -1,8 +1,8 @@
-// Purpose: lets the signed-in user delete their own account, driving the backend's already-
-//   complete DELETE /user/:id?deleteFiles= confirmation flow (ADR 0020) — no other UI called it.
-// Usage: rendered at /settings behind RequireAuth; linked from NavBar.
-// Rationale: neither DashboardPage nor FileDetailPage is the right home for account-level
-//   (not file-level) actions — a new feature folder mirrors files/posts/auth's own layout.
+// 목적: 로그인한 사용자가 본인 계정을 삭제하게 한다 — 백엔드에 이미 완성돼 있던
+//   DELETE /user/:id?deleteFiles= 확인 흐름(ADR 0020)을 호출하는 UI가 그동안 없었다.
+// 사용처: RequireAuth 하위 /settings에 렌더링된다; NavBar에서 링크로 연결된다.
+// 근거: DashboardPage도 FileDetailPage도 (파일 수준이 아닌) 계정 수준 액션을 둘 적절한 곳이
+//   아니어서, files/posts/auth와 같은 레이아웃을 따르는 새 feature 폴더를 만들었다.
 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -12,7 +12,7 @@ import { useAuth } from '../../auth/useAuth'
 import { NavBar } from '../../shared/NavBar'
 import styles from './SettingsPage.module.css'
 
-// Branch on the stable code (backend ADR 0011), never on the human-readable message.
+// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
@@ -29,8 +29,8 @@ export function SettingsPage() {
   const { currentUserId, signOut } = useAuth()
   const navigate = useNavigate()
   const [error, setError] = useState<string | null>(null)
-  // The backend's 409 USER_HAS_FILES message (file count included) — displayed verbatim so the
-  // developer doesn't re-derive a count the backend already computed.
+  // 백엔드의 409 USER_HAS_FILES 메시지(파일 개수 포함) — 백엔드가 이미 계산한 개수를
+  // 다시 산출하지 않도록 그대로 표시한다.
   const [filesWarning, setFilesWarning] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 

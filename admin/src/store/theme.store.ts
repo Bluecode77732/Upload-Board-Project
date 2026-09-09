@@ -1,9 +1,9 @@
-// Purpose: holds the admin console's light/dark theme choice and keeps the DOM in sync with it.
-// Usage: imported by main.tsx (before render, to avoid a flash of the wrong theme) and by
-// theme-toggle.tsx (to read/flip it).
-// Rationale: auth.store.ts's zustand pattern already exists in this project; a theme toggle
-// needs the same shape (state + setter) but with localStorage persistence instead of
-// session-only state, since a UI preference should survive across sign-outs.
+// 목적: admin 콘솔의 라이트/다크 테마 선택 상태를 보관하고 DOM과 동기화한다.
+// 사용처: main.tsx(렌더 전에 호출해 잘못된 테마가 잠깐 보이는 것을 막는다)와
+// theme-toggle.tsx(상태 조회/전환용)에서 import한다.
+// 근거: auth.store.ts의 zustand 패턴이 이미 이 프로젝트에 있으므로, 테마 토글도 같은 형태
+// (state + setter)를 쓰되 세션 한정 상태 대신 localStorage 영속화를 쓴다 — UI 선호는
+// 로그아웃 이후에도 유지되어야 한다.
 
 import { create } from 'zustand';
 
@@ -44,6 +44,6 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
     },
 }));
 
-// Applies the resolved initial theme immediately on module load (not inside a component
-// effect) so the `dark` class is on documentElement before React's first paint.
+// 컴포넌트 effect 안이 아니라 모듈 로드 시점에 즉시 초기 테마를 적용해서, React의 첫
+// 페인트 이전에 `dark` 클래스가 documentElement에 반영되도록 한다.
 applyTheme(useThemeStore.getState().theme);

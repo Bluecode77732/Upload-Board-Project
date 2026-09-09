@@ -1,10 +1,10 @@
-// Purpose: shows one post's body, its attached file (if any), and its comment thread.
-// Usage: rendered at "/posts/:id" behind RequireAuth; links from PostBoard.
-// Rationale: comment order is fixed createdAt ASC with no realtime infrastructure (ADR 0023,
-//   no WebSocket in this project), so the thread refetches only on an explicit user action —
-//   no polling. File playback follows FileDetailPage's visibility-gated access pattern
-//   (FileDetailPage.tsx:81-116): a private file's bytes are fetched authenticated as a Blob,
-//   public/unlisted stream directly via <video src>.
+// 목적: 게시글 하나의 본문, 첨부 파일(있다면), 댓글 스레드를 보여준다.
+// 사용처: RequireAuth 하위 "/posts/:id"에 렌더링된다; PostBoard에서 링크로 연결된다.
+// 근거: 댓글 순서는 실시간 인프라 없이 createdAt ASC로 고정돼 있어(ADR 0023, 이 프로젝트에는
+//   WebSocket이 없다) 스레드는 명시적인 사용자 액션에서만 다시 불러온다 — 폴링은 하지 않는다.
+//   파일 재생은 FileDetailPage의 visibility 기반 접근 제어 패턴을 따른다
+//   (FileDetailPage.tsx:81-116): private 파일의 바이트는 인증된 Blob으로 받아오고,
+//   public/unlisted는 <video src>로 직접 스트리밍한다.
 
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -17,7 +17,7 @@ import { CommentForm } from './CommentForm'
 import { CommentThread } from './CommentThread'
 import styles from './PostDetailPage.module.css'
 
-// Branch on the stable code (backend ADR 0011), never on the human-readable message.
+// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
@@ -30,8 +30,7 @@ function messageForError(error: unknown): string {
   return 'Network error. Is the backend running?'
 }
 
-// Errors from the management actions (edit, delete) branch on a different set of codes
-// than the read.
+// 관리 액션(수정, 삭제)의 에러는 읽기와는 다른 코드 집합으로 분기한다.
 function messageForManageError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
@@ -99,8 +98,8 @@ export function PostDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  // Has no meaning of its own — bumping it only re-triggers CommentThread's current query
-  // (mirrors PostBoard's refreshSignal for PostForm).
+  // 값 자체에는 의미가 없다 — 값을 올리면 CommentThread의 현재 쿼리만 다시 트리거된다
+  // (PostForm에 대한 PostBoard의 refreshSignal과 같은 패턴).
   const [commentRefreshSignal, setCommentRefreshSignal] = useState(0)
 
   useEffect(() => {
@@ -116,8 +115,8 @@ export function PostDetailPage() {
       .catch((err: unknown) => setMetaError(messageForError(err)))
   }, [postId])
 
-  // A plain <video src> can't carry a Bearer header, so a private file's bytes are fetched
-  // authenticated as a Blob and played from an objectURL. Revoked on file change/unmount.
+  // 일반 <video src>는 Bearer 헤더를 실을 수 없으므로, private 파일의 바이트는 인증된
+  // Blob으로 받아 objectURL로 재생한다. 파일이 바뀌거나 언마운트되면 revoke한다.
   useEffect(() => {
     setObjectUrl(null)
     setPlaybackError(null)
@@ -152,8 +151,8 @@ export function PostDetailPage() {
       .catch((err: unknown) => setPlaybackError(messageForPlaybackError(err)))
   }
 
-  // A UI hint only (decoded token claim, not a server round trip) — every write below is
-  // re-checked server-side and a wrong guess here just surfaces as a 403, never a silent bypass.
+  // 단순 UI 힌트일 뿐이다(서버 왕복이 아니라 디코딩된 토큰 클레임) — 아래 모든 쓰기는
+  // 서버에서 다시 검증되므로 여기서 잘못 판단해도 403으로 드러날 뿐, 조용히 우회되지 않는다.
   const canManage = currentUserId !== null && post?.creator?.id === currentUserId
 
   function startEdit() {

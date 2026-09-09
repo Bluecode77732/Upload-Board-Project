@@ -23,13 +23,13 @@ import {
 
 const TEMP_DIR = join('file', 'temp');
 const UPLOAD_DIR = join('file', 'upload');
-// Only ever unlink inside the promoted-upload folder for a granted key — mirrors the
-// guard `unlink-stored-files.ts` carried before this ADR (a row can hold a path outside
-// file/upload if UpdateFileDto ever accepted a bare name with no folder).
+// granted 키는 오직 승격된 upload 폴더 안에서만 unlink한다 — 이 ADR 이전에
+// `unlink-stored-files.ts`가 갖고 있던 가드와 같다(UpdateFileDto가 폴더 없는 bare
+// 이름을 받아들인 적이 있다면, 행이 file/upload 바깥의 경로를 가질 수도 있었다).
 const UPLOAD_PREFIX = 'file/upload/';
-// Bound parallelism so deleting an account's whole library, or a large temp/ backlog,
-// cannot open thousands of concurrent fs handles at once (ADR 0018's batching rationale,
-// now shared by every unlink caller through this one adapter method).
+// 병렬성을 제한해, 계정 전체 라이브러리를 지우거나 temp/ 적체가 크더라도 수천 개의
+// fs 핸들을 동시에 여는 일이 없게 한다(ADR 0018의 배치 근거를 이제 이 어댑터 메서드 하나를
+// 거치는 모든 unlink 호출자가 공유한다).
 const UNLINK_BATCH_SIZE = 100;
 
 @Injectable()
@@ -136,7 +136,7 @@ export class LocalDiskStorage implements FileStorage {
     try {
       entries = await readdir(dir);
     } catch (error) {
-      // An absent file/temp is a normal empty state (nothing uploaded yet) — not an error.
+      // file/temp가 없는 건 정상적인 빈 상태다(아직 아무것도 업로드되지 않음) — 에러가 아니다.
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
       this.logger.error(
         `Could not read ${TEMP_DIR}.`,
@@ -152,7 +152,7 @@ export class LocalDiskStorage implements FileStorage {
         const info = await fsStat(join(dir, name));
         if (info.isFile()) result.push({ key: name, mtimeMs: info.mtimeMs });
       } catch {
-        // A file vanishing mid-list (a concurrent promotion rename) is benign — skip it.
+        // 목록 조회 중 파일이 사라지는 건(동시 승격 rename) 무해하다 — 건너뛴다.
         continue;
       }
     }
@@ -169,7 +169,7 @@ export class LocalDiskStorage implements FileStorage {
     try {
       entries = await readdir(dir);
     } catch (error) {
-      // An absent file/upload is a normal empty state (nothing promoted yet) — not an error.
+      // file/upload가 없는 건 정상적인 빈 상태다(아직 아무것도 승격되지 않음) — 에러가 아니다.
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
       this.logger.error(
         `Could not read ${UPLOAD_DIR}.`,
@@ -190,7 +190,7 @@ export class LocalDiskStorage implements FileStorage {
           });
         }
       } catch {
-        // A file vanishing mid-list (a concurrent delete) is benign — skip it.
+        // 목록 조회 중 파일이 사라지는 건(동시 삭제) 무해하다 — 건너뛴다.
         continue;
       }
     }
@@ -202,7 +202,7 @@ export class LocalDiskStorage implements FileStorage {
   //       stat()/createReadStream() 스트리밍 경로로 폴백하도록 하는 신호가 필요하다(ADR 0036).
   // 방법: 항상 null을 반환한다 — 예외를 던지지 않는다(existsTemp의 boolean 계약과 같은 성격).
   getSignedReadUrl(key: string, contentType: string): Promise<string | null> {
-    // Deliberately unused — kept named to match the FileStorage arity (ADR 0036).
+    // 의도적으로 미사용 — FileStorage의 인자 개수를 맞추려고 이름만 남겨둔다(ADR 0036).
     void key;
     void contentType;
     return Promise.resolve(null);

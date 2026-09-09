@@ -1,10 +1,10 @@
-// Purpose: shows one post's comment thread and lets the author of a comment (or an admin,
-//   server-enforced) edit or delete it.
-// Usage: rendered inside PostDetailPage; refreshSignal bumps trigger a fresh first page (e.g.
-//   after CommentForm creates a comment) the same way PostBoard's refreshSignal does for posts.
-// Rationale: the backend fixes thread order at createdAt ASC with no sort params (ADR 0023) and
-//   there is no realtime/polling infrastructure, so paging is a manual "load more" that appends
-//   rather than a prev/next pager like PostBoard/FileBoard use for their newest-first lists.
+// 목적: 게시글 하나의 댓글 스레드를 보여주고, 댓글 작성자(또는 서버가 판정하는 admin)가
+//   수정/삭제할 수 있게 한다.
+// 사용처: PostDetailPage 내부에 렌더링된다; refreshSignal이 올라가면(예: CommentForm이 댓글을
+//   생성한 뒤) 첫 페이지를 새로 불러온다 — 게시글에 대한 PostBoard의 refreshSignal과 같은 패턴.
+// 근거: 백엔드가 스레드 순서를 정렬 파라미터 없이 createdAt ASC로 고정하고(ADR 0023) 실시간/
+//   폴링 인프라도 없어서, 페이징은 PostBoard/FileBoard가 최신순 목록에 쓰는 이전/다음 페이저가
+//   아니라 이어붙이는 수동 "더 보기" 방식이다.
 
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../../api/client'
@@ -14,7 +14,7 @@ import styles from './CommentThread.module.css'
 
 const TAKE = 20
 
-// Branch on the stable code (backend ADR 0011), never on the human-readable message.
+// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
@@ -27,7 +27,7 @@ function messageForError(error: unknown): string {
   return 'Network error. Is the backend running?'
 }
 
-// Errors from edit/delete branch on a different set of codes than the list load.
+// 수정/삭제의 에러는 목록 조회와는 다른 코드 집합으로 분기한다.
 function messageForActionError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
@@ -79,7 +79,7 @@ export function CommentThread({
     [postId],
   )
 
-  // A fresh postId, or a bump from CommentForm after a successful submit, reloads the first page.
+  // postId가 바뀌거나 CommentForm 제출 성공 후 값이 올라가면 첫 페이지를 다시 불러온다.
   useEffect(() => {
     setComments(null)
     void fetchPage(0, true)

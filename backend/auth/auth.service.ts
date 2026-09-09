@@ -136,8 +136,8 @@ export class AuthService {
     const payload: Payload = {
       sub: user.id,
       type: isRefreshToken ? 'refresh' : 'access',
-      // jti makes every refresh token unique — same-second issuance would
-      // otherwise produce identical signatures, blinding reuse detection.
+      // jti는 모든 리프레시 토큰을 유일하게 만든다 — 없으면 같은 초에 발급된 토큰들이
+      // 동일한 서명을 갖게 되어 재사용 탐지가 무력화된다.
       ...(isRefreshToken ? { jti: randomUUID() } : { role: user.role }),
     };
 

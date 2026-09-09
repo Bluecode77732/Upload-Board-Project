@@ -10,10 +10,9 @@ import {
 import { UploadFileDto } from './create-uploadFile.dto';
 import { FileVisibility } from '../entity/file-visibility.enum';
 
-// filePath is omitted from the inherited shape rather than inherited: the two endpoints
-// sit on opposite sides of the prefix state machine (ADR 0003) — POST /file takes an
-// unclaimed `temp_` filename, PATCH takes an already-promoted `granted_` one — so
-// inheriting the temp_ pattern would reject every legitimate update.
+// filePath는 상속하지 않고 상속받은 형태에서 제외한다: 두 엔드포인트는 접두사 상태 기계(ADR 0003)의
+// 반대편에 있다 — POST /file은 아직 청구되지 않은 `temp_` 파일명을 받고, PATCH는 이미 승격된
+// `granted_` 파일명을 받는다 — 그래서 temp_ 패턴을 그대로 물려받으면 정당한 업데이트를 전부 거부하게 된다.
 export class UpdateFileDto extends PartialType(
   OmitType(UploadFileDto, ['filePath'] as const),
 ) {

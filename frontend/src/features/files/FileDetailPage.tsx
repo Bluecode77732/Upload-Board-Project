@@ -1,8 +1,8 @@
-// Purpose: shows one file's metadata and plays its content according to visibility (ADR 0025/0026).
-// Usage: rendered at /view/:id behind RequireAuth; linked from FileBoard rows. (Not "/file/:id" —
-//   that prefix is claimed by the dev proxy to the backend API, see App.tsx.)
-// Rationale: GET /file/:id/content is the only byte-serving path and is visibility-gated — a plain
-//   <video src> can't carry a Bearer header, so a private file's bytes are fetched authenticated.
+// 목적: 파일 하나의 메타데이터를 보여주고 visibility에 따라 콘텐츠를 재생한다(ADR 0025/0026).
+// 사용처: RequireAuth 하위 /view/:id에 렌더링된다; FileBoard 행에서 링크로 연결된다. ("/file/:id"가
+//   아닌 이유는 그 접두사가 백엔드 API로 가는 dev 프록시가 차지하고 있기 때문이다 — App.tsx 참고.)
+// 근거: GET /file/:id/content가 유일한 바이트 서빙 경로이고 visibility로 게이트된다 — 일반
+//   <video src>는 Bearer 헤더를 실을 수 없으므로, private 파일의 바이트는 인증해서 받아온다.
 
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -23,7 +23,7 @@ import styles from './FileDetailPage.module.css'
 
 const VISIBILITY_OPTIONS: FileVisibility[] = ['public', 'private', 'unlisted']
 
-// Branch on the stable code (backend ADR 0011), never on the human-readable message.
+// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
@@ -40,8 +40,8 @@ function messageForError(error: unknown): string {
   return 'Network error. Is the backend running?'
 }
 
-// Errors from the management actions (visibility toggle, share rotation, delete) branch on
-// a different set of codes than read/playback (409 FILE_IN_USE only applies to delete).
+// 관리 액션(visibility 토글, 공유 링크 회전, 삭제)의 에러는 읽기/재생과는 다른 코드 집합으로
+// 분기한다(409 FILE_IN_USE는 삭제에만 해당한다).
 function messageForManageError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
@@ -62,13 +62,13 @@ function messageForManageError(error: unknown): string {
 
 type TransferAction = 'propose' | 'cancel' | 'accept' | 'reject'
 
-// Errors from the transfer actions (propose/accept/reject/cancel) branch on the ADR 0050
-// codes plus USER_NOT_FOUND (the email→id lookup step) and VALIDATION_FAILED (a malformed
-// email in the propose form never reaches the backend as anything else). FORBIDDEN_NOT_OWNER
-// needs the calling action to word correctly: propose stays creator-or-admin, but cancel was
-// narrowed to creator-only (an admin could otherwise cancel a pending transfer between two
-// other users with no stated reason to — a permission inherited by reusing canManage(), not a
-// deliberate decision; propose's admin branch is unaffected, it has its own ADR 0050 D4 basis).
+// 이전 액션(propose/accept/reject/cancel)의 에러는 ADR 0050 코드에 더해 USER_NOT_FOUND(이메일→id
+// 조회 단계)와 VALIDATION_FAILED(propose 폼의 잘못된 형식 이메일은 백엔드에 다른 형태로 도달할
+// 일이 없다)로 분기한다. FORBIDDEN_NOT_OWNER는 호출한 액션에 맞춰 문구를 골라야 한다: propose는
+// creator-or-admin 그대로지만, cancel은 creator 전용으로 좁혀졌다(그러지 않으면 admin이 아무
+// 이유 없이 다른 두 사용자 사이의 대기 중인 이전을 취소할 수 있었을 것이다 — canManage()를
+// 재사용하다 딸려온 권한이지 의도한 결정이 아니다; propose의 admin 분기는 영향받지 않으며
+// 그 자체로 ADR 0050 D4 근거가 있다).
 function messageForTransferError(error: unknown, action: TransferAction): string {
   if (error instanceof ApiError) {
     switch (error.code) {
@@ -143,9 +143,9 @@ export function FileDetailPage() {
       .catch((err: unknown) => setMetaError(messageForError(err)))
   }, [fileId])
 
-  // A plain <video src> can't carry a Bearer header, so a private file's bytes are fetched
-  // authenticated as a Blob and played from an objectURL. The URL is revoked whenever the
-  // file changes or this page unmounts, so decoded bytes never linger in memory.
+  // 일반 <video src>는 Bearer 헤더를 실을 수 없으므로, private 파일의 바이트는 인증된
+  // Blob으로 받아 objectURL로 재생한다. 파일이 바뀌거나 이 페이지가 언마운트되면 URL을
+  // revoke하므로 디코딩된 바이트가 메모리에 남지 않는다.
   useEffect(() => {
     setObjectUrl(null)
     setPlaybackError(null)
@@ -170,8 +170,8 @@ export function FileDetailPage() {
     }
   }, [file])
 
-  // public/unlisted stream directly via <video src> (keeps Range-based seeking). On failure,
-  // one diagnostic call through the api wrapper reads the real ErrorCode for messaging.
+  // public/unlisted는 <video src>로 직접 스트리밍한다(Range 기반 탐색 유지). 실패하면
+  // api 래퍼를 통한 진단용 호출 1회로 실제 ErrorCode를 읽어 메시지를 만든다.
   function diagnosePlaybackError() {
     if (!file) return
     api
@@ -180,8 +180,8 @@ export function FileDetailPage() {
       .catch((err: unknown) => setPlaybackError(messageForError(err)))
   }
 
-  // A UI hint only (decoded token claim, not a server round trip) — every write below is
-  // re-checked server-side and a wrong guess here just surfaces as a 403, never a silent bypass.
+  // 단순 UI 힌트일 뿐이다(서버 왕복이 아니라 디코딩된 토큰 클레임) — 아래 모든 쓰기는
+  // 서버에서 다시 검증되므로 여기서 잘못 판단해도 403으로 드러날 뿐, 조용히 우회되지 않는다.
   const canManage = currentUserId !== null && file?.creator?.id === currentUserId
   const isPendingTarget =
     currentUserId !== null && file?.pendingTransferTo?.id === currentUserId

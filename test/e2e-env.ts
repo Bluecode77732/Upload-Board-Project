@@ -3,21 +3,21 @@
 // 이유: ConfigModule.forRoot()가 AppModule 임포트 시점에 DB_DATABASE를 스냅샷 뜬다 — beforeAll에서 설정하면 이미 늦어서, 마이그레이션이 일회용 DB를 채우는 동안 앱은 진짜 DB(예: `postgres`)에 붙어 모든 쿼리가 없는 테이블에 부딪히게 된다.
 
 try {
-  // Local runs: load .env for DB host/port/secrets. In CI there is no .env and the
-  // workflow supplies these directly, so the throw is expected and ignored.
+  // 로컬 실행: DB 호스트/포트/시크릿을 위해 .env를 로드한다. CI에는 .env가 없고
+  // 워크플로가 이 값들을 직접 공급하므로, 이 throw는 예상된 것이고 무시한다.
   process.loadEnvFile();
 } catch {
-  // No .env present — env comes from the real process environment.
+  // .env가 없다 — env는 실제 프로세스 환경에서 온다.
 }
 
-// The suite owns a throwaway database (dropped/recreated per run). This must run
-// before AppModule is imported; e2e-utils reads this same value back for TEST_DB_NAME.
+// 스위트는 일회용 데이터베이스를 소유한다(실행마다 drop/recreate). AppModule이
+// 임포트되기 전에 반드시 실행돼야 한다; e2e-utils가 같은 값을 TEST_DB_NAME으로 다시 읽는다.
 process.env.DB_DATABASE = 'sharenpo_e2e';
 
-// Keep the orphan temp-file sweep (ADR 0018) from registering its cron during e2e:
-// the tests exercise the two-phase upload directly and never need the background sweep.
+// e2e 동안 고아 temp 파일 스윕(ADR 0018)이 자신의 cron을 등록하지 않게 막는다:
+// 테스트는 2단계 업로드를 직접 다루므로 백그라운드 스윕이 전혀 필요 없다.
 process.env.TEMP_SWEEP_ENABLED = 'false';
 
-// Same reason, for the granted-file reclaim sweep (ADR 0051): e2e boots a real DB and
-// must not race a background cron against its own fixtures.
+// granted 파일 회수 스윕(ADR 0051)도 같은 이유다: e2e는 실제 DB를 띄우므로
+// 백그라운드 cron이 자기 자신의 픽스처와 경합하면 안 된다.
 process.env.GRANTED_SWEEP_ENABLED = 'false';

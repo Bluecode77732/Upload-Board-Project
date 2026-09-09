@@ -1,8 +1,8 @@
-// Purpose: request body for POST /file/:id/transfer — names who a transfer is proposed to.
-// Usage: imported by FileController.proposeTransfer(); validated by the global ValidationPipe.
-// Rationale: the old UpdateFileDto.userId field conflated "propose" with "immediately reassign"
-//   (ADR 0050) — a dedicated DTO on its own route keeps propose/accept/reject/cancel as four
-//   distinct actions instead of overloading PATCH /file/:id's semantics further.
+// 목적: POST /file/:id/transfer의 요청 본문 — 이전을 제안할 대상을 지정한다.
+// 사용처: FileController.proposeTransfer()에서 임포트하며, 전역 ValidationPipe가 검증한다.
+// 근거: 옛 UpdateFileDto.userId 필드는 "제안"과 "즉시 재배정"을 뒤섞고 있었다
+//   (ADR 0050) — 전용 라우트에 전용 DTO를 두면 propose/accept/reject/cancel을 PATCH /file/:id의
+//   의미를 더 늘리는 대신 네 개의 독립된 동작으로 유지할 수 있다.
 
 import { ApiProperty } from '@nestjs/swagger';
 import { IsInt, Min } from 'class-validator';

@@ -48,31 +48,30 @@ export class FileEntity {
   @IsString()
   filePath!: string;
 
-  // Which playback tag the content is (image/audio/video); server-derived from the
-  // filePath extension at upload time, never client-supplied (ADR 0040 D2).
+  // 콘텐츠가 어떤 재생 태그인지(image/audio/video); 업로드 시점 filePath 확장자로부터
+  // 서버가 판정하며, 클라이언트가 넘긴 값이 아니다(ADR 0040 D2).
   @Column({ type: 'varchar' })
   mediaType!: FileMediaType;
 
-  // Gates access to the stored bytes via GET /file/:id/content (ADR 0025 D1/D2).
-  // Default private: a fresh upload is unreachable until the owner opts in.
+  // GET /file/:id/content를 통한 저장 바이트 접근을 통제한다(ADR 0025 D1/D2).
+  // 기본값은 private: 소유자가 명시적으로 바꾸기 전까지 새 업로드는 아무도 접근할 수 없다.
   @Column({ type: 'varchar', default: FileVisibility.private })
   visibility!: FileVisibility;
 
-  // Server-generated random opaque token (never a guessable id); set only while
-  // visibility is 'unlisted', cleared otherwise. Rotation is the revocation mechanism
-  // for a leaked link (ADR 0025 D3).
+  // 서버가 생성한 랜덤 opaque 토큰(추측 가능한 id가 아니다); visibility가 'unlisted'일 때만
+  // 값이 있고, 그 외엔 비운다. 회전이 곧 유출된 링크의 무효화 수단이다(ADR 0025 D3).
   @Column({ type: 'varchar', nullable: true })
   shareToken!: string | null;
 
-  // Optional TTL on the current share token; null = no expiry (ADR 0025 D3).
+  // 현재 공유 토큰의 선택적 TTL; null이면 만료 없음(ADR 0025 D3).
   @Column({ type: 'timestamptz', nullable: true })
   shareExpiresAt!: Date | null;
 
-  // The one user this file is currently proposed to, or null when no transfer is pending
-  // (ADR 0050 D1/D2). Never set directly by an update — only the propose/accept/reject/
-  // cancel flow in FileService writes this column. ON DELETE SET NULL: if the pending
-  // target's own account is deleted before responding, only the pending state disappears —
-  // this file (A's) is untouched, since B never became its owner.
+  // 현재 이 파일이 이전 제안된 대상 한 명, 또는 대기중인 이전이 없으면 null
+  // (ADR 0050 D1/D2). 일반 업데이트로는 직접 설정되지 않는다 — FileService의
+  // propose/accept/reject/cancel 흐름만이 이 컬럼을 쓴다. ON DELETE SET NULL: 응답하기
+  // 전에 대기 대상의 계정이 삭제되면 대기 상태만 사라진다 — 이 파일(A의 것)은 그대로다,
+  // B가 소유자가 된 적이 없으므로.
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'pendingTransferToUserId' })
   pendingTransferTo!: UserEntity | null;
