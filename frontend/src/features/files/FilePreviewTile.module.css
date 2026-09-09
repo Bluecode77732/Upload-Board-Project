@@ -14,8 +14,8 @@
   border-color: var(--brand);
 }
 
-/* Fixed ratio so a tile reserves its space before any bytes arrive — the grid never
-   reflows as previews resolve one by one. */
+/* 비율을 고정해서 바이트가 도착하기 전에도 타일이 미리 자기 공간을 차지하게 한다 —
+   미리보기가 하나씩 로드돼도 그리드가 다시 흐트러지지 않는다. */
 .frame {
   position: relative;
   aspect-ratio: 16 / 9;

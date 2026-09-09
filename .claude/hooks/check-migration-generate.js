@@ -1,8 +1,8 @@
-// Purpose: forces an explicit-approval prompt before running migration:generate.
-// Usage: invoked by the PreToolUse/Bash hook in .claude/settings.json.
-// Rationale: CLAUDE.md Scope Discipline requires a prior plain-text description of the
-// entity change and a line-by-line review of generate's output before running it — this
-// is a deterministic backstop for that rule, independent of the model remembering.
+// 목적: migration:generate 실행 전에 명시적 승인 프롬프트를 강제한다.
+// 사용처: .claude/settings.json의 PreToolUse/Bash 훅에서 호출된다.
+// 근거: CLAUDE.md의 Scope Discipline은 실행 전에 엔티티 변경에 대한 사전 평문 설명과 generate
+// 출력에 대한 한 줄씩의 검토를 요구한다 — 이는 모델이 기억하는지와 무관하게 그 규칙을 강제하는
+// 결정적(deterministic) backstop이다.
 
 let data = '';
 process.stdin.on('data', (chunk) => {

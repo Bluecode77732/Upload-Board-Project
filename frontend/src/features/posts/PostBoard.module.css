@@ -112,9 +112,9 @@
   text-decoration: underline;
 }
 
-/* `flex: none` here was the one hard responsive break in the app: a long creator email
-   refused to shrink, so a row's min-content held the whole page at ~591px and every screen
-   under that overflowed horizontally. It may shrink now, and truncates instead. */
+/* 여기 있던 `flex: none`은 이 앱에서 반응형이 확실하게 깨지는 유일한 지점이었다: 긴
+   작성자 이메일이 줄어들길 거부해서, 행의 min-content가 페이지 전체를 ~591px에 붙잡아
+   두고 그보다 좁은 화면은 전부 가로로 넘쳤다. 이제는 줄어들 수 있고, 대신 말줄임된다. */
 .creatorButton {
   flex: 0 1 auto;
   min-width: 0;
@@ -172,9 +172,9 @@
   cursor: default;
 }
 
-/* Narrow screens: reclaim the page gutter, let each filter take a full line rather than
-   wrapping into slivers, and stack a row's title above its creator so the truncation above
-   is a fallback rather than the normal reading experience. */
+/* 좁은 화면: 페이지 여백을 되찾고, 필터가 잘게 줄바꿈되는 대신 한 줄씩 차지하게 하고,
+   행의 제목을 작성자 위에 쌓아서 위에서 다룬 말줄임이 기본 읽기 방식이 아니라
+   폴백이 되도록 한다. */
 @media (max-width: 640px) {
   .page {
     margin: 2vh auto;
@@ -190,9 +190,9 @@
     width: 100%;
   }
 
-  /* `width: auto`, not `100%`: these inputs are content-box, so a percentage width adds the
-     padding and border on top and pushes the control past its panel. The .field grid already
-     stretches an auto-width child to the full row. */
+  /* `100%`가 아니라 `width: auto`인 이유: 이 입력 요소들은 content-box라서 퍼센트 너비를
+     주면 padding과 border가 그 위에 더해져 패널 밖으로 밀려난다. .field 그리드는 이미
+     auto 너비 자식을 행 전체로 늘려주고 있다. */
   .creatorInput {
     width: auto;
   }
@@ -203,10 +203,10 @@
     gap: 4px;
   }
 
-  /* Both of these must wrap, not truncate: a single-line title or email keeps its whole
-     string as the row's minimum width, and that minimum propagates all the way up to the
-     page — measured, with only one of the two wrapping the page still sat 77px past a
-     375px viewport. Truncation is the desktop affordance; a phone has the vertical room. */
+  /* 이 둘은 말줄임이 아니라 줄바꿈이어야 한다: 한 줄짜리 제목이나 이메일은 그 전체
+     문자열을 행의 최소 너비로 유지하고, 그 최소값이 페이지까지 그대로 전파된다 —
+     실측 결과, 둘 중 하나만 줄바꿈해도 페이지가 375px 뷰포트보다 여전히 77px 더
+     넓었다. 말줄임은 데스크톱용 방식이고, 폰에는 세로 여유가 있다. */
   .rowInfo a,
   .creatorButton {
     white-space: normal;
@@ -215,8 +215,8 @@
     text-overflow: clip;
   }
 
-  /* Once a title wraps, its second line inherits #root's `text-align: center` (index.css)
-     and sits centred above a left-aligned email. Pin both to the left. */
+  /* 제목이 줄바꿈되면 둘째 줄이 #root의 `text-align: center`(index.css)를 물려받아
+     왼쪽 정렬된 이메일 위에 가운데 정렬로 놓인다. 둘 다 왼쪽에 고정한다. */
   .rowInfo {
     align-items: flex-start;
     text-align: left;

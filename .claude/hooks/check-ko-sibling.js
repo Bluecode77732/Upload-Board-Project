@@ -1,8 +1,8 @@
-// Purpose: reminds Claude to update a Markdown file's .ko.md sibling in the same change.
-// Usage: invoked by the PostToolUse/Edit|Write hook in .claude/settings.json.
-// Rationale: CLAUDE.md's Documentation Convention requires every tracked doc keep its
-// .ko.md sibling in sync in the same change; this surfaces that reminder automatically
-// instead of relying on the model remembering the prose rule on every edit.
+// 목적: Markdown 파일의 .ko.md 형제 문서를 같은 변경 안에서 갱신하도록 Claude에게 상기시킨다.
+// 사용처: .claude/settings.json의 PostToolUse/Edit|Write 훅에서 호출된다.
+// 근거: CLAUDE.md의 Documentation Convention은 추적되는 모든 문서가 같은 변경 안에서 .ko.md
+// 형제 문서를 동기화하도록 요구한다; 매 수정마다 모델이 이 규칙을 기억하는 데 의존하는 대신
+// 이 알림을 자동으로 띄운다.
 
 const fs = require('fs');
 

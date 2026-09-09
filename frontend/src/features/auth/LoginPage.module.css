@@ -16,10 +16,10 @@
   box-shadow: var(--shadow);
 }
 
-/* Brand lockup above the form heading. The mark is inlined (not <img src="/favicon.svg">)
-   so its stroke can track --brand across the light/dark toggle; public/favicon.svg carries
-   the same two-circle shape as a static, hardcoded-color fallback for the browser tab, which
-   can't see page CSS custom properties. */
+/* 폼 제목 위의 브랜드 락업. 마크를 <img src="/favicon.svg">가 아니라 인라인으로 넣은 이유는
+   stroke가 라이트/다크 전환에 따라 --brand를 따라가야 하기 때문이다. public/favicon.svg는
+   페이지 CSS 커스텀 프로퍼티를 볼 수 없는 브라우저 탭을 위해 같은 두 원 모양을 색상
+   하드코딩된 정적 폴백으로 따로 갖고 있다. */
 .lockup {
   display: flex;
   align-items: center;
@@ -118,8 +118,8 @@
   text-decoration: underline;
 }
 
-/* The card already caps at 360px; on a phone the outer gutter and inner padding are what
-   squeeze the fields, so both shrink rather than the card. */
+/* 카드는 이미 360px로 상한이 걸려 있다. 폰 화면에서 필드를 압박하는 건 바깥 여백과
+   안쪽 padding이므로, 카드 대신 이 둘을 줄인다. */
 @media (max-width: 640px) {
   .page {
     padding: 16px;

@@ -37,7 +37,7 @@ provider "kubernetes" {
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
-    # This requires the awscli to be installed locally where Terraform is executed
+    # Terraform을 실행하는 로컬 환경에 awscli가 설치되어 있어야 한다
     args = ["eks", "get-token", "--cluster-name", data.terraform_remote_state.cluster.outputs.cluster_name]
   }
 }
@@ -53,7 +53,7 @@ provider "helm" {
     exec = {
       api_version = "client.authentication.k8s.io/v1beta1"
       command     = "aws"
-      # This requires the awscli to be installed locally where Terraform is executed
+      # Terraform을 실행하는 로컬 환경에 awscli가 설치되어 있어야 한다
       args = ["eks", "get-token", "--cluster-name", data.terraform_remote_state.cluster.outputs.cluster_name]
     }
   }

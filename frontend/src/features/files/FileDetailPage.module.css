@@ -19,8 +19,8 @@
 .header {
   display: flex;
   gap: 10px;
-  /* flex-start, not center: a long title wraps to multiple lines, and centering would float
-     the badges in the vertical middle of the whole wrapped block instead of by the first line. */
+  /* center가 아니라 flex-start인 이유: 긴 제목은 여러 줄로 감싸지는데, center를 쓰면
+     배지가 첫 줄 기준이 아니라 감싸진 블록 전체의 세로 가운데로 떠버린다. */
   align-items: flex-start;
   margin: 16px 0;
 }
@@ -29,8 +29,8 @@
   margin: 0;
   min-width: 0;
   overflow-wrap: break-word;
-  /* Clamp to 3 lines instead of letting an extreme-length title push the whole header
-     tall — the full text is still reachable via the native title-attribute tooltip. */
+  /* 극단적으로 긴 제목이 헤더 전체를 늘어뜨리게 두는 대신 3줄로 클램프한다 — 전체
+     텍스트는 title 속성의 네이티브 툴팁으로 여전히 볼 수 있다. */
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;

@@ -38,7 +38,7 @@
   }
 }
 
-/* System preference, unless the user picked "light" explicitly via ThemeProvider. */
+/* ThemeProvider로 "light"를 명시적으로 고르지 않았으면 시스템 설정을 따른다. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --brand: #c084fc;
@@ -62,7 +62,7 @@
   }
 }
 
-/* Explicit dark pick via ThemeProvider — wins regardless of OS preference. */
+/* ThemeProvider로 명시적으로 고른 dark — OS 설정과 무관하게 우선한다. */
 :root[data-theme='dark'] {
   --brand: #c084fc;
   --brand-hover: #d4a6fd;

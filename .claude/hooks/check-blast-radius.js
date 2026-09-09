@@ -1,8 +1,8 @@
-// Purpose: forces an explicit-approval prompt before edits to CLAUDE.md's high-blast-radius files.
-// Usage: invoked by the PreToolUse/Edit|Write hook in .claude/settings.json.
-// Rationale: app.module.ts/main.ts/*.entity.ts changes radiate repo-wide (Scope Discipline);
-// Auto Mode's bias toward proceeding without asking makes a model-memory-only safeguard
-// unreliable, so this adds a deterministic backstop independent of the model remembering.
+// 목적: CLAUDE.md의 고위험(high-blast-radius) 파일을 수정하기 전에 명시적 승인 프롬프트를 강제한다.
+// 사용처: .claude/settings.json의 PreToolUse/Edit|Write 훅에서 호출된다.
+// 근거: app.module.ts/main.ts/*.entity.ts 변경은 저장소 전체로 영향이 번진다(Scope Discipline) —
+// Auto Mode는 묻지 않고 진행하는 쪽으로 기울어 있어서 모델 기억에만 의존하는 안전장치는 믿을 수 없다,
+// 그래서 모델이 기억하는지와 무관하게 동작하는 결정적(deterministic) backstop을 추가한다.
 
 const path = require('path');
 

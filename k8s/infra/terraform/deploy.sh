@@ -1,11 +1,11 @@
 #!/bin/bash
-# Purpose: wraps k8s/infra/terraform/README.md's fixed cluster -> app-infra -> addons ->
-#   Helm apply order in one script instead of a developer re-deriving it from prose
-#   each time.
-# Usage: run by hand from any directory, e.g. `bash k8s/infra/terraform/deploy.sh all`.
-# Rationale: docs/ROADMAP.md section 7 "Automate the cluster -> app-infra -> addons ->
-#   Helm deploy sequence" recorded 8 order-dependent failure modes hit during the first
-#   real apply; this is that automation, scoped to Terraform + Helm only
+# 목적: k8s/infra/terraform/README.md가 정한 cluster -> app-infra -> addons ->
+#   Helm apply 순서를 매번 개발자가 산문에서 다시 유도하지 않도록 스크립트 하나로
+#   묶는다.
+# 사용법: 어느 디렉터리에서든 손으로 실행. 예: `bash k8s/infra/terraform/deploy.sh all`.
+# 근거: docs/ROADMAP.md 섹션 7 "cluster -> app-infra -> addons -> Helm 배포 순서
+#   자동화"가 첫 실제 apply에서 겪은 순서 의존 실패 8가지를 기록했다; 이 스크립트가
+#   그 자동화이며, 범위는 Terraform + Helm으로 한정한다
 #   (docs/ADR/0046-deploy-sequence-automation.md).
 #
 # 이 스크립트는 일부러 "쉬운" 스타일로 짰다: bash 배열, trap 같은 고급 기능 대신

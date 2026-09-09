@@ -9,7 +9,7 @@ provider "aws" {
 }
 
 data "aws_availability_zones" "available" {
-  # Do not include local zones
+  # local zone은 제외한다
   filter {
     name   = "opt-in-status"
     values = ["opt-in-not-required"]
@@ -44,8 +44,8 @@ module "eks" {
   cluster_version                = "1.34"
   cluster_endpoint_public_access = true
 
-  # Give the Terraform identity admin access to the cluster
-  # which will allow resources to be deployed into the cluster
+  # Terraform 자격 주체에 클러스터 admin 권한을 부여한다 —
+  # 이래야 클러스터에 리소스를 배포할 수 있다
   enable_cluster_creator_admin_permissions = true
 
   cluster_addons = {

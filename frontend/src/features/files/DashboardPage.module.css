@@ -1,13 +1,13 @@
-/* Widened from 720px so FileBoard's three preview columns get a usable frame size — at 720px
-   each 16:9 frame was only ~227px wide. 1126px matches #root's own width (index.css), so the
-   page uses the full column it already occupies rather than introducing a new outer width. */
+/* FileBoard의 3열 미리보기가 쓸 만한 프레임 크기를 확보하도록 720px에서 넓혔다 —
+   720px에서는 16:9 프레임 하나가 겨우 ~227px였다. 1126px는 #root 자체 너비(index.css)와
+   맞춘 값이라, 새 바깥 너비를 도입하는 대신 이미 차지하고 있는 컬럼 전체를 쓰게 된다. */
 .page {
   max-width: 1126px;
   margin: 5vh auto;
   padding: 24px;
 }
 
-/* Narrow screens: the 24px gutter costs more than it gives once the grid is one column wide. */
+/* 좁은 화면: 그리드가 한 컬럼이 되고 나면 24px 여백은 얻는 것보다 잃는 공간이 더 크다. */
 @media (max-width: 640px) {
   .page {
     margin: 2vh auto;

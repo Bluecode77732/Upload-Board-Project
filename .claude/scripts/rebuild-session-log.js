@@ -1,6 +1,6 @@
-// Purpose: regenerates docs/SESSION-LOG.md from Claude Code's own transcripts — one row per session, carrying its true first-creation time and title.
-// Usage: run `node .claude/scripts/rebuild-session-log.js` from the repo root whenever the session index should be refreshed; takes an optional transcript-directory override as argv[2].
-// Rationale: the SessionStart/UserPromptSubmit hooks this replaces could only ever see sessions created after they were installed, appended a row per resume rather than per session, and had no access to the real session title — all three are already recorded in ~/.claude/projects/<project>/<session_id>.jsonl.
+// 목적: Claude Code 자체 트랜스크립트로부터 docs/SESSION-LOG.md를 다시 생성한다 — 세션당 한 행, 실제 최초 생성 시각과 제목을 담는다.
+// 사용처: 세션 인덱스를 갱신하고 싶을 때 저장소 루트에서 `node .claude/scripts/rebuild-session-log.js`를 실행한다; argv[2]로 트랜스크립트 디렉터리를 선택적으로 override할 수 있다.
+// 근거: 이 스크립트가 대체한 SessionStart/UserPromptSubmit 훅은 설치된 이후 생성된 세션만 볼 수 있었고, 세션당이 아니라 재개(resume)할 때마다 행을 추가했으며, 실제 세션 제목에는 접근할 수 없었다 — 이 세 가지 모두 이미 ~/.claude/projects/<project>/<session_id>.jsonl 안에 기록되어 있다.
 
 const fs = require('fs');
 const os = require('os');

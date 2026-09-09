@@ -22,8 +22,8 @@
   font-size: 0.9rem;
 }
 
-/* Title search is the primary way to find one file among many now that the board paints
-   previews rather than a scannable text list — give it the row's spare width. */
+/* 보드가 이제 훑어보기 좋은 텍스트 목록 대신 미리보기를 그리므로, 제목 검색이 여러
+   파일 중 하나를 찾는 주된 수단이 됐다 — 행에서 남는 너비를 검색창에 준다. */
 .searchField {
   flex: 1 1 240px;
   min-width: 180px;
@@ -69,9 +69,9 @@
   color: var(--danger);
 }
 
-/* Three fixed columns — one page (TAKE = 9) is exactly one 3x3 screen, and each further page
-   extends the same three columns downward into 3xN. minmax(0, 1fr) keeps a long title from
-   widening its column past its share. */
+/* 고정 3열 — 한 페이지(TAKE = 9)가 정확히 3x3 화면 하나이고, 다음 페이지들은 같은
+   3열을 아래로 이어 3xN이 된다. minmax(0, 1fr)는 긴 제목이 자기 몫 이상으로 컬럼을
+   넓히는 걸 막는다. */
 .grid {
   list-style: none;
   padding: 0;
@@ -81,10 +81,10 @@
   gap: 16px;
 }
 
-/* Column count steps down at the two breakpoints this app already uses (index.css switches
-   its type scale at 1024px, and 640px is where the grid stops making sense at all), rather
-   than introducing a third value. Frames stay large enough to read at every step: 3 columns
-   above 1024px, 2 through the tablet range, 1 on a phone. */
+/* 새 값을 하나 더 도입하는 대신, 이 앱이 이미 쓰고 있는 두 브레이크포인트에서 컬럼
+   수가 단계적으로 줄어든다(index.css가 타입 스케일을 바꾸는 1024px, 그리고 그리드가
+   더 이상 의미가 없어지는 640px). 각 단계에서 프레임은 읽을 수 있을 만큼 크게 유지된다:
+   1024px 이상은 3열, 태블릿 구간은 2열, 폰은 1열. */
 @media (max-width: 1024px) {
   .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -105,9 +105,9 @@
     width: 100%;
   }
 
-  /* `width: auto`, not `100%`: these inputs are content-box, so a percentage width adds the
-     padding and border on top and pushes the control past its panel. The .field grid already
-     stretches an auto-width child to the full row. */
+  /* `100%`가 아니라 `width: auto`인 이유: 이 입력 요소들은 content-box라서 퍼센트 너비를
+     주면 padding과 border가 그 위에 더해져 패널 밖으로 밀려난다. .field 그리드는 이미
+     auto 너비 자식을 행 전체로 늘려주고 있다. */
   .creatorInput {
     width: auto;
   }
@@ -117,8 +117,8 @@
   }
 }
 
-/* Zero-height probe under the grid: the observer watches this, not the last tile, so the
-   trigger point does not move as tiles resize. */
+/* 그리드 아래의 높이 0짜리 감지용 요소: observer가 마지막 타일이 아니라 이걸 지켜보므로,
+   타일 크기가 바뀌어도 트리거 지점이 움직이지 않는다. */
 .sentinel {
   height: 1px;
 }

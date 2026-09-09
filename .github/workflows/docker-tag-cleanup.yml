@@ -1,29 +1,30 @@
-# Purpose: keeps Docker Hub's bluecode1775/sharenpo repo from accumulating
-# unbounded commit-sha tags now that docker-publish (ADR 0048) runs on every
-# dev push, not just rare main merges.
-# Usage: runs daily via cron; also runnable on demand via workflow_dispatch
-# (which defaults to a dry run — see the `dry_run` input).
-# Branch note: `on.schedule` has no `branches:` filter — GitHub Actions always
-# runs a scheduled trigger from the file on the repo's default branch (`main`),
-# never from `dev`, no matter what this file says. Until this file reaches
-# `main` (a future dev->main merge), the cron entry below is inert; the only
-# way to run this workflow before then is `workflow_dispatch` with an explicit
-# `--ref dev` (or the "Use workflow from" branch picker in the Actions UI).
-# The cleanup logic itself is not branch-scoped either way — it walks Docker
-# Hub's full tag list with no awareness of which branch produced a given sha,
-# so a run from either branch's copy cleans up sha tags from both.
-# Rationale: Docker Hub's free tier has no built-in tag-retention policy.
-# Safety by construction, not by exclusion list: this only ever considers
-# tags matching a 40-hex-char git SHA (exactly the shape `${{ github.sha }}`
-# produces) — :latest and any manually-created tag (e.g. values-prod.yaml's
-# pinned image.tag) can never match that pattern, so they can never be
-# selected for deletion no matter what KEEP is set to.
+# 목적: docker-publish(ADR 0048)가 이제 드문 main 머지가 아니라 모든 dev
+# push마다 도는 만큼, Docker Hub의 bluecode1775/sharenpo 저장소에 commit-sha
+# 태그가 무한정 쌓이는 걸 막는다.
+# 사용법: cron으로 매일 돌고, workflow_dispatch로 필요할 때도 실행 가능
+# (기본값은 dry run — `dry_run` 입력 참고).
+# 브랜치 관련 주의: `on.schedule`엔 `branches:` 필터가 없다 — GitHub Actions는
+# 이 파일에 뭐라고 적혀 있든 항상 저장소의 기본 브랜치(`main`)에 있는 파일
+# 사본에서만 예약 트리거를 실행하고, `dev`에서는 절대 실행하지 않는다. 이
+# 파일이 `main`에 반영되기(향후 dev->main 머지) 전까지는 아래 cron 항목이
+# 죽어 있는 상태이며, 그 전에 이 워크플로우를 돌릴 유일한 방법은
+# `workflow_dispatch`를 `--ref dev`로 명시하는 것(또는 Actions UI의 "Use
+# workflow from" 브랜치 선택기)이다.
+# 정리 로직 자체는 어느 쪽이든 브랜치에 종속되지 않는다 — 어떤 sha가 어느
+# 브랜치에서 나왔는지 신경 쓰지 않고 Docker Hub의 전체 태그 목록을 훑으므로,
+# 어느 브랜치의 사본에서 돌리든 양쪽 sha 태그를 모두 정리한다.
+# 근거: Docker Hub 무료 티어에는 태그 보존 정책이 내장되어 있지 않다.
+# 제외 목록이 아니라 구조적으로 안전하게 만들었다: 이 로직은 40자리 hex
+# git SHA 형태(정확히 `${{ github.sha }}`가 만드는 모양)와 일치하는 태그만
+# 고려한다 — :latest나 수동으로 만든 태그(예: values-prod.yaml에 고정된
+# image.tag)는 이 패턴과 절대 일치할 수 없으므로, KEEP을 뭐로 설정하든
+# 삭제 대상으로 선택될 수 없다.
 
 name: Docker Hub Tag Cleanup
 
 on:
   schedule:
-    - cron: '0 3 * * *' # daily, 03:00 UTC — see the Branch note above for which branch's copy actually runs
+    - cron: '0 3 * * *' # 매일 03:00 UTC — 실제로 어느 브랜치 사본이 도는지는 위 브랜치 관련 주의 참고
   workflow_dispatch:
     inputs:
       dry_run:
@@ -41,9 +42,9 @@ jobs:
       NAMESPACE: bluecode1775
       REPO: sharenpo
       KEEP: 30
-      # workflow_dispatch inputs don't exist on a schedule-triggered run, so a
-      # cron firing always resolves to "false" (actually delete); a manual run
-      # defaults to "true" (preview only) unless the person running it opts out.
+      # schedule로 트리거된 실행에는 workflow_dispatch 입력 자체가 없으므로,
+      # cron 발동은 항상 "false"(실제 삭제)로 결정된다; 수동 실행은 실행하는
+      # 사람이 명시적으로 끄지 않는 한 기본값 "true"(미리보기만)로 간다.
       DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
     steps:
       - name: Delete old commit-sha tags beyond the newest KEEP

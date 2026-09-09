@@ -79,8 +79,8 @@
   outline-offset: 2px;
 }
 
-/* The bar's four controls fit a phone width, but only once the gaps stop reserving
-   desktop-sized space between them. */
+/* 바의 네 컨트롤은 폰 너비에 들어맞긴 하지만, 그 사이 간격이 데스크톱 크기 공간을
+   더 이상 차지하지 않을 때만 그렇다. */
 @media (max-width: 640px) {
   .header {
     gap: 12px;

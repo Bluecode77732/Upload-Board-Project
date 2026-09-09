@@ -1,5 +1,5 @@
-/* The page around this form widened to 1126px for the preview grid (DashboardPage.module.css);
-   a form stretched that far reads as a sprawl, so it keeps its original width and centers. */
+/* 이 폼을 감싸는 페이지는 미리보기 그리드를 위해 1126px로 넓어졌다(DashboardPage.module.css).
+   폼까지 그만큼 늘어나면 산만해 보이므로, 원래 너비를 유지하고 가운데 정렬한다. */
 .form {
   display: grid;
   gap: 14px;

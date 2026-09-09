@@ -1,12 +1,12 @@
-// Purpose: shared Playwright harness config that later flow E2Es (login, upload, board, detail, admin) build on.
-// Usage: read by `pnpm test:e2e`; specs live under frontend/e2e/.
-// Rationale: the app has no browser-level verification today (build/lint/unit stop at tsc and jsdom-free unit
-//   tests) — this is the one config later sessions extend rather than each inventing their own.
+// 목적: 이후의 플로우 E2E(로그인, 업로드, 게시판, 상세, admin)가 딛고 설 공유 Playwright 하네스 설정.
+// 사용처: `pnpm test:e2e`가 읽는다; 스펙은 frontend/e2e/ 아래에 있다.
+// 근거: 지금 이 앱에는 브라우저 레벨 검증이 없다(build/lint/unit은 tsc와 jsdom 없는 unit test에서 멈춘다) —
+//   이후 세션들은 각자 새로 만들지 말고 이 설정 하나를 확장해서 쓴다.
 
 import { defineConfig, devices } from '@playwright/test'
 
-// Same-origin dev server (:5173) so the refresh cookie (SameSite=Strict) behaves exactly as in real use —
-// tests must never target the backend's :3000 directly.
+// 리프레시 쿠키(SameSite=Strict)가 실제 사용 환경과 동일하게 동작하도록 same-origin dev 서버(:5173)를 쓴다 —
+// 테스트가 백엔드의 :3000을 직접 타겟해서는 안 된다.
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,

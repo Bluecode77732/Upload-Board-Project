@@ -1,9 +1,9 @@
-# CI (ADR 0016): backend lint + unit + e2e, plus frontend/admin lint and admin
-# unit tests. frontend/ and admin/ are independent projects with their own
-# pnpm-lock.yaml (not a pnpm workspace), so each gets its own job with
-# `working-directory` and its own install.
-# Toolchain comes from the ADR 0014 pin (.nvmrc + packageManager via Corepack);
-# the e2e DB image matches ADR 0015 (postgres:16).
+# CI (ADR 0016): 백엔드 lint + unit + e2e, 그리고 frontend/admin lint와 admin
+# unit 테스트까지 담당한다. frontend/와 admin/은 각자 자신의 pnpm-lock.yaml을
+# 가진 독립된 프로젝트라서(pnpm 워크스페이스가 아님) 각각 `working-directory`와
+# 별도 install을 갖는 자기 job으로 분리했다.
+# 툴체인은 ADR 0014에서 고정한 값(.nvmrc + Corepack의 packageManager)을 쓰고,
+# e2e DB 이미지는 ADR 0015와 동일하게 postgres:16을 쓴다.
 
 name: Sharenpo CI/CD
 
@@ -13,9 +13,9 @@ on:
   pull_request:
     branches: [main]
 
-# A rapid string of pushes to the same branch (dev especially, now that it
-# triggers the full pipeline) would otherwise run every workflow to
-# completion — cancel a superseded run instead of letting it finish.
+# 같은 브랜치에 연속으로 push가 몰리면(특히 이제 전체 파이프라인을 트리거하는
+# dev) 워크플로우가 매번 끝까지 돌게 된다 — 뒤에 밀린 실행은 끝까지 두지 않고
+# 취소한다.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -28,9 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Corepack activates the pnpm version pinned in package.json (packageManager);
-      # it must run before setup-node's cache step, which shells out to pnpm to
-      # resolve the store path.
+      # Corepack이 package.json(packageManager)에 고정된 pnpm 버전을 활성화한다;
+      # setup-node의 cache 단계가 pnpm을 셸아웃해 store 경로를 알아내므로 그
+      # 전에 실행되어야 한다.
       - run: corepack enable
       - uses: actions/setup-node@v4
         with:
@@ -57,12 +57,12 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      # No .env in CI — the suite reads these from the environment (e2e-utils
-      # overrides DB_DATABASE to its throwaway DB at runtime).
+      # CI에는 .env가 없다 — 스위트는 이 값들을 환경변수에서 그대로 읽는다
+      # (e2e-utils가 실행 시점에 DB_DATABASE를 임시 DB로 덮어쓴다).
       ENV: dev
       DB_TYPE: postgres
-      # 127.0.0.1, not localhost: the service port is mapped on IPv4 only, and
-      # `localhost` can resolve to ::1 first and fail to connect.
+      # localhost가 아니라 127.0.0.1: 서비스 포트는 IPv4로만 매핑되어 있고,
+      # `localhost`는 ::1로 먼저 풀려 연결에 실패할 수 있다.
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
       DB_USERNAME: postgres
@@ -81,7 +81,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Upload folders are runtime dirs (untracked); the promotion test needs both.
+      # 업로드 폴더는 런타임 디렉터리(git 추적 대상 아님)이며, promotion 테스트가
+      # 둘 다 필요로 한다.
       - run: mkdir -p file/temp file/upload
       - run: pnpm run test:e2e
 
@@ -147,9 +148,9 @@ jobs:
       REFRESH_TOKEN_SECRET: ci-refresh-secret
       ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
       REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
-      # frontend/vite.config.ts proxies API calls to :3000 same-origin, so the
-      # frontend itself needs no VITE_API_* var — only the backend needs to
-      # know which browser origin to allow.
+      # frontend/vite.config.ts가 API 호출을 same-origin으로 :3000에 프록시하므로
+      # frontend 쪽엔 VITE_API_* 변수가 필요 없다 — 백엔드만 어떤 브라우저
+      # origin을 허용할지 알면 된다.
       CORS_ORIGIN: http://localhost:5173
     steps:
       - uses: actions/checkout@v4
@@ -160,15 +161,15 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
-      # Upload folders are runtime dirs (untracked); the app writes into both on boot.
+      # 업로드 폴더는 런타임 디렉터리(git 추적 대상 아님)이며, 앱이 부팅 시 둘 다에 쓴다.
       - run: mkdir -p file/temp file/upload
       - run: pnpm run migration:run
       - name: Start backend
-        # Output must not stay attached to this step's stdout/stderr pipe: once the step
-        # ends, the runner closes it, and Node's next log write throws EPIPE (or the
-        # process gets SIGPIPE), killing the server before the health check below ever
-        # gets a response. Redirect to a file instead, and nohup so a stray SIGHUP can't
-        # take it down either.
+        # 출력을 이 단계의 stdout/stderr 파이프에 계속 붙여두면 안 된다: 단계가
+        # 끝나는 순간 러너가 파이프를 닫아버리고, 그 다음 Node 로그 쓰기에서
+        # EPIPE가 발생하거나(혹은 프로세스가 SIGPIPE를 받아) 아래 헬스체크가
+        # 응답을 받기도 전에 서버가 죽는다. 대신 파일로 리다이렉트하고, 갑작스런
+        # SIGHUP에도 안 죽도록 nohup을 붙인다.
         run: nohup node dist/main > backend.log 2>&1 &
       - name: Wait for backend
         run: |
@@ -222,14 +223,14 @@ jobs:
       REFRESH_TOKEN_SECRET: ci-refresh-secret
       ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
       REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
-      # Admin has no dev-server proxy (unlike frontend) — it calls the backend
-      # directly via admin/src/api/axios.ts's VITE_API_URL, and runs on a
-      # different origin (:5174) than frontend (:5173).
+      # Admin은 (frontend와 달리) dev 서버 프록시가 없다 — admin/src/api/axios.ts의
+      # VITE_API_URL을 통해 백엔드를 직접 호출하고, frontend(:5173)와는 다른
+      # origin(:5174)에서 돈다.
       CORS_ORIGIN: http://localhost:5174
       VITE_API_URL: http://localhost:3000
-      # No in-app flow can create a superadmin (admin/e2e/seed-superadmin.mjs
-      # inserts one directly via SQL). This DB is fresh and thrown away after
-      # the job, so a fixed CI-only credential here is not a real secret.
+      # 앱 내 플로우로는 superadmin을 만들 수 없다(admin/e2e/seed-superadmin.mjs가
+      # SQL로 직접 하나 넣는다). 이 DB는 job이 끝나면 버려지는 새 DB라서, 여기
+      # 고정된 CI 전용 자격 증명은 실제 시크릿이 아니다.
       E2E_SUPERADMIN_EMAIL: e2e-superadmin@ci.local
       E2E_SUPERADMIN_PASSWORD: ci-superadmin-pw-e2e
     steps:
@@ -244,11 +245,11 @@ jobs:
       - run: mkdir -p file/temp file/upload
       - run: pnpm run migration:run
       - name: Start backend
-        # Output must not stay attached to this step's stdout/stderr pipe: once the step
-        # ends, the runner closes it, and Node's next log write throws EPIPE (or the
-        # process gets SIGPIPE), killing the server before the health check below ever
-        # gets a response. Redirect to a file instead, and nohup so a stray SIGHUP can't
-        # take it down either.
+        # 출력을 이 단계의 stdout/stderr 파이프에 계속 붙여두면 안 된다: 단계가
+        # 끝나는 순간 러너가 파이프를 닫아버리고, 그 다음 Node 로그 쓰기에서
+        # EPIPE가 발생하거나(혹은 프로세스가 SIGPIPE를 받아) 아래 헬스체크가
+        # 응답을 받기도 전에 서버가 죽는다. 대신 파일로 리다이렉트하고, 갑작스런
+        # SIGHUP에도 안 죽도록 nohup을 붙인다.
         run: nohup node dist/main > backend.log 2>&1 &
       - name: Wait for backend
         run: |
@@ -277,25 +278,24 @@ jobs:
         run: pnpm run e2e
 
   docker-publish:
-    # Only the jobs that actually exercise what this image packages: the root
-    # Dockerfile builds backend/ only (frontend/ and admin/ are independent
-    # projects, not part of this build — CLAUDE.md). frontend-e2e/admin-e2e
-    # failures say nothing about whether the backend image is safe to publish,
-    # and gating on them (pre-existing before ADR 0048) mattered little when
-    # this job was main-only; now that dev triggers it on every push, an
-    # unrelated frontend flake would block a correct backend image far more
-    # often — narrowed here (ADR 0048 addendum, 2026-08-31).
+    # 이 이미지가 담는 것을 실제로 검증하는 job만 건다: 루트 Dockerfile은
+    # backend/만 빌드한다(frontend/와 admin/은 이 빌드와 무관한 독립 프로젝트 —
+    # CLAUDE.md). frontend-e2e/admin-e2e가 실패해도 백엔드 이미지가 publish해도
+    # 안전한지와는 무관하고, 이 job이 main 전용이던 시절엔 거기 게이팅해도(ADR
+    # 0048 이전부터 있던 방식) 별 문제 없었지만, 이제 dev의 모든 push에서
+    # 트리거되니 무관한 frontend flake가 정상 백엔드 이미지를 훨씬 자주 막게
+    # 된다 — 그래서 여기서 범위를 좁혔다(ADR 0048 addendum, 2026-08-31).
     needs: [lint-and-unit, e2e]
-    # dev added alongside main (2026-08-30): dev is where all actual work
-    # lands, and until now no push there ever built an image, so a deployed
-    # tag could go stale silently (ROADMAP.md §7). main keeps :latest +
-    # multi-arch; dev only ever gets a :sha tag — see the tag/platform step.
+    # dev를 main과 함께 추가함(2026-08-30): 실제 작업은 전부 dev에 쌓이는데
+    # 지금까지 거기서 push해도 이미지가 빌드된 적이 없어서, 배포된 태그가 조용히
+    # 낡을 수 있었다(ROADMAP.md §7). main은 :latest + multi-arch를 유지하고,
+    # dev는 :sha 태그만 받는다 — 아래 tag/platform 단계 참고.
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    # Only for the smoke-test container below — the actual push target is
-    # Docker Hub, this DB is thrown away with the runner.
+    # 아래 smoke-test 컨테이너 전용이다 — 실제 push 대상은 Docker Hub이고,
+    # 이 DB는 러너와 함께 버려진다.
     services:
       postgres:
         image: postgres:16
@@ -312,10 +312,10 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
-      # Migrations must actually run before the smoke test container starts:
-      # without this, the smoke test only ever proved the process boots, never
-      # that it can serve a real DB-backed request — the same throwaway
-      # postgres service below is what the smoke test container connects to.
+      # smoke test 컨테이너가 뜨기 전에 마이그레이션이 실제로 돌아야 한다:
+      # 이게 없으면 smoke test는 프로세스가 부팅된다는 것만 증명할 뿐, 실제
+      # DB 기반 요청을 처리할 수 있는지는 증명하지 못한다 — 아래의 동일한
+      # 임시 postgres 서비스에 smoke test 컨테이너가 접속한다.
       - run: corepack enable
       - uses: actions/setup-node@v4
         with:
@@ -332,24 +332,23 @@ jobs:
           DB_PASSWORD: postgres
           DB_DATABASE: postgres
         run: pnpm run migration:run
-      # QEMU lets the amd64 runner cross-build the arm64 half of the manifest.
+      # QEMU 덕분에 amd64 러너가 manifest의 arm64 절반을 크로스 빌드할 수 있다.
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      # v4 (not v3): v3 is a node20 action, and GitHub now forces node20
-      # actions onto a node24 runtime — under that forced combination this
-      # action fails immediately with "malformed HTTP Authorization header"
-      # regardless of credential correctness. v4 ships a native node24 build;
-      # its inputs (username/password/registry/ecr/scope/logout/registry-auth)
-      # are unchanged from v3, so this is a drop-in version bump, not a
-      # behavior change.
+      # v3가 아니라 v4: v3는 node20 액션인데, GitHub가 이제 node20 액션을
+      # node24 런타임에서 강제로 돌린다 — 이 조합이 강제되면 자격 증명이
+      # 맞아도 이 액션이 "malformed HTTP Authorization header"로 바로
+      # 실패한다. v4는 네이티브 node24 빌드로 나오고, 입력값
+      # (username/password/registry/ecr/scope/logout/registry-auth)은
+      # v3와 동일해서 동작 변화 없이 버전만 그대로 올린 것이다.
       - uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-      # dev publishes far more often than main now, and gets no :latest
-      # reader depending on it — amd64-only keeps its QEMU cost from
-      # doubling on every push. The smoke test below only ever exercises
-      # amd64 either way, so this doesn't change what's verified before push.
+      # dev는 이제 main보다 훨씬 자주 publish되고, 여기 의존하는 :latest
+      # reader도 없다 — amd64 전용으로 두면 push마다 QEMU 비용이 두 배로
+      # 늘어나는 걸 막을 수 있다. 아래 smoke test는 어차피 amd64만 검증하므로
+      # push 전 검증 범위는 달라지지 않는다.
       - name: Compute image tags and platforms
         id: image
         run: |
@@ -360,8 +359,8 @@ jobs:
             echo "tags=-t bluecode1775/sharenpo:${{ github.sha }}" >> "$GITHUB_OUTPUT"
             echo "platforms=linux/amd64" >> "$GITHUB_OUTPUT"
           fi
-      # Builds are cached (type=gha) so this amd64-only smoke build and the
-      # push build below don't each pay the full compile cost.
+      # 빌드는 캐시된다(type=gha) — 이 amd64 전용 smoke 빌드와 아래 push
+      # 빌드가 각각 전체 컴파일 비용을 다 치르지 않도록.
       - name: Build amd64 image for smoke test
         run: >-
           docker buildx build
@@ -373,8 +372,8 @@ jobs:
           --cache-to type=gha,mode=max
           --cache-from type=gha
           .
-      # --network host: the postgres service's port is published on the
-      # runner's own loopback, not reachable from an isolated bridge network.
+      # --network host: postgres 서비스의 포트는 러너 자신의 loopback에
+      # publish되어 있어서, 격리된 bridge 네트워크에서는 닿지 않는다.
       - name: Run smoke test container
         run: |
           docker run -d --name smoke-test --network host \
@@ -386,14 +385,14 @@ jobs:
             -e ACCESS_TOKEN_SECRET_EXPIRES_IN=180 \
             -e REFRESH_TOKEN_SECRET_EXPIRES_IN=43200 \
             sharenpo:smoke-test
-      # Polls the image's own HEALTHCHECK (Dockerfile) rather than curling
-      # directly, so this reuses the same liveness definition Docker/k8s use.
-      # Window derived from the Dockerfile's actual HEALTHCHECK constants
-      # (interval=30s, start-period=10s, retries=3) rather than copied from
-      # the unrelated bare-process curl loops elsewhere in this file: Docker
-      # only re-evaluates health once per interval, so 18 x 5s = 90s comfortably
-      # covers two full check cycles (~t=0s, ~t=30s) plus margin — a container
-      # that hasn't gone healthy by then is genuinely stuck, not just slow.
+      # curl을 직접 날리는 대신 이미지 자체의 HEALTHCHECK(Dockerfile)를
+      # 폴링한다 — Docker/k8s가 쓰는 것과 동일한 liveness 정의를 그대로
+      # 재사용하는 셈이다. 대기 윈도우는 이 파일 다른 곳의 무관한 bare-process
+      # curl 루프를 베낀 게 아니라, Dockerfile의 실제 HEALTHCHECK 상수
+      # (interval=30s, start-period=10s, retries=3)에서 유도했다: Docker는
+      # interval마다 한 번씩만 헬스를 재평가하므로 18 x 5s = 90s면 전체 체크
+      # 두 사이클(~t=0s, ~t=30s)에 여유까지 넉넉히 커버한다 — 그때까지도
+      # healthy가 안 됐다면 느린 게 아니라 정말 멈춘 것이다.
       - name: Wait for smoke test container health
         run: |
           for i in $(seq 1 18); do
@@ -413,11 +412,12 @@ jobs:
           echo "Smoke test failed: container did not become healthy in time" >&2
           docker logs smoke-test >&2
           exit 1
-      # /health/live is deliberately DB-independent (ADR 0031) — the check
-      # above only proves the process is up, not that it can reach Postgres.
-      # /health/ready explicitly pings the DB (HealthService.checkDatabase);
-      # --network host means the container's port 3000 is the runner's own,
-      # so this curls it directly without exec'ing into the container.
+      # /health/live는 의도적으로 DB에 의존하지 않는다(ADR 0031) — 위 체크는
+      # 프로세스가 떠 있다는 것만 증명할 뿐 Postgres에 접속 가능한지는 증명하지
+      # 않는다. /health/ready는 DB에 명시적으로 ping을 보낸다
+      # (HealthService.checkDatabase); --network host라서 컨테이너의 3000
+      # 포트가 곧 러너 자신의 포트이므로, 컨테이너에 exec하지 않고 바로
+      # curl한다.
       - name: Verify database connectivity (GET /health/ready)
         run: |
           if ! curl -sf http://localhost:3000/health/ready > /dev/null; then
@@ -429,11 +429,11 @@ jobs:
       - name: Stop smoke test container
         if: always()
         run: docker rm -f smoke-test || true
-      # Same build as build-and-push.sh (multi-arch, production target), with
-      # --push added: a multi-platform buildx build with no --push/--output
-      # just builds and discards each arch (buildx warns, nothing is loaded
-      # locally), so the script's separate `docker push` afterward has
-      # nothing new to push. `--push` publishes straight from the build.
+      # build-and-push.sh와 동일한 빌드(multi-arch, production target)에 --push만
+      # 더했다: --push/--output 없이 multi-platform buildx build를 하면 각
+      # arch를 빌드만 하고 버린다(buildx가 경고를 띄우고 로컬엔 아무것도
+      # 로드되지 않는다), 그래서 스크립트가 뒤에서 따로 실행하는 `docker push`엔
+      # push할 새 결과물이 없게 된다. `--push`는 빌드에서 바로 publish한다.
       - name: Build and push Docker image
         run: >-
           docker buildx build
