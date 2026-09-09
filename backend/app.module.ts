@@ -79,6 +79,7 @@ import { join } from 'node:path';
         CONTENT_SIGNED_URL_TTL_SECONDS: Joi.number().default(300),
       }),
       isGlobal: true,
+      envFilePath: ['.env.local', '.env'],
     }),
     // 목적: 앱 부팅 시 TypeORM DB 연결을 구성한다.
     // 이유: RDS PostgreSQL 등 TLS를 강제하는 인스턴스에 평문으로 접속하면
