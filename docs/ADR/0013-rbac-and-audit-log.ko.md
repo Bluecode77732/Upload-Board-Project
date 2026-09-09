@@ -95,3 +95,13 @@
 > 백필)을 추가하고 필터를 그에 맞게 좁힌다. 여기의 컬럼 목록은 `actorId`, `targetId`,
 > `targetType`, `action`, `detail`, `createdAt`으로 읽어야 한다. 이 ADR의 나머지 — 역할,
 > 가드, 엔드포인트, 시드, FK 없음과 커밋 후 기록 성질 — 는 바뀌지 않는다.
+
+> **2026-09-09 추가 — [ADR 0052](0052-superadmin-seed-manual-trigger.ko.md)가 amend** —
+> 위 "First superadmin via env seed" 항목은 대체됐다: 2026-09-09 보안 점검에서 부팅 시
+> 자동 승격이 `SUPERADMIN_EMAIL` 계정을 현재 누가 쥐고 있든 그대로 신뢰하며, 그가 진짜
+> 소유자인지 전혀 검증하지 않는다는 사실이 드러났다 — 그 이메일을 먼저 등록한 공격자가
+> 다음 부팅에서 아무 검증 없이 승격된다. `SuperadminSeedService`는 제거됐고, 승격은 이제
+> 운영자가 계정 소유권을 직접 확인한 뒤에만 실행하는 의도적인 수동 단계
+> (`pnpm promote-superadmin`)가 됐다. `SUPERADMIN_EMAIL` 자체는 그대로다 — 여전히 Joi
+> 선택 항목이고 여전히 스크립트의 입력값이다 — 사라진 건 자동 트리거뿐이다. 이 ADR의
+> 나머지 — 역할, 가드, 엔드포인트, audit log — 는 영향받지 않는다.

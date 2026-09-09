@@ -104,3 +104,13 @@ and deferred behind Stage F so the API surface froze first.
 > filter accordingly. The column list here should be read as `actorId`, `targetId`,
 > `targetType`, `action`, `detail`, `createdAt`; nothing else in this ADR — roles, guards,
 > endpoints, the seed, the FK-free and post-commit-write properties — is changed.
+
+> **Note added 2026-09-09 — amended by [ADR 0052](0052-superadmin-seed-manual-trigger.md)** —
+> the "First superadmin via env seed" bullet above is superseded: a 2026-09-09 security
+> review found that automatic per-boot promotion trusts whoever currently holds the
+> `SUPERADMIN_EMAIL` account, with no check that they are its intended owner — an attacker
+> who registers that address first is silently promoted on the next boot. `SuperadminSeedService`
+> is removed; promotion is now a deliberate manual step (`pnpm promote-superadmin`), run only
+> once an operator has confirmed the account's ownership. `SUPERADMIN_EMAIL` itself is
+> unchanged — still Joi-optional, still the script's input — only the automatic trigger is
+> gone. Nothing else in this ADR — roles, guards, endpoints, the audit log — is affected.

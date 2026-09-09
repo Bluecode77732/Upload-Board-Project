@@ -4,7 +4,6 @@ import { UserController } from './user.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserEntity } from './entity/user.entity';
 import { AuditLogModule } from 'backend/audit-log/audit-log.module';
-import { SuperadminSeedService } from './superadmin-seed.service';
 import { FileModule } from 'backend/file/file.module';
 import { PostModule } from 'backend/post/post.module';
 import { CommentModule } from 'backend/comment/comment.module';
@@ -24,7 +23,7 @@ import { StorageModule } from 'backend/storage/storage.module';
     StorageModule,
   ],
   controllers: [UserController],
-  providers: [UserService, SuperadminSeedService],
+  providers: [UserService],
   exports: [UserService],
 })
 export class UserModule {}

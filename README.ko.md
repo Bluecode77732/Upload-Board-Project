@@ -73,6 +73,11 @@ pnpm run start:dev
 # 6. Swagger UI 열기
 #    http://localhost:3000/doc
 
+# 7. (선택) superadmin 계정 승격 — POST /auth/register로 먼저 계정을 만들고,
+#    .env의 SUPERADMIN_EMAIL을 그 주소로 설정한 뒤:
+#      pnpm promote-superadmin
+#    (ADR 0013/0052 — 자동이 아니라 의도적인 수동 단계다)
+
 # 테스트
 pnpm test              # 단위 테스트
 pnpm run test:cov      # 커버리지 (서비스만 측정)
@@ -108,8 +113,9 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 목록은 `.env.example` 참고): `BASE_URL`(기본 `http://localhost:3000`; 공개 파일 URL
 조합에 사용), `PORT`(기본 `3000`), `CORS_ORIGIN`(미설정 = CORS 비활성; 콤마 구분
 허용 목록 — [ADR 0008](docs/ADR/0008-opt-in-cors.ko.md)), `SUPERADMIN_EMAIL`(미설정 =
-비활성; 부팅 시 해당 계정을 superadmin으로 승격 —
-[ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md)), `TEMP_SWEEP_ENABLED` /
+비활성; 수동 `pnpm promote-superadmin` 단계의 대상 계정일 뿐 부팅 시 자동으로
+승격되지 않음 —
+[ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md)/[ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.ko.md)), `TEMP_SWEEP_ENABLED` /
 `TEMP_SWEEP_CRON` / `TEMP_SWEEP_TTL_HOURS` / `TEMP_SWEEP_DRY_RUN`(고아 temp 파일
 정리 — [ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.ko.md)), `STORAGE_DRIVER`
 (`local` 기본 | `s3`, `s3`일 때 `S3_BUCKET`/`AWS_REGION` 필수 —

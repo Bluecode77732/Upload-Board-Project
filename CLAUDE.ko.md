@@ -869,7 +869,11 @@ Conflict Protocol을 따른다.
   확장되었다; `PATCH /user/:id/role`은 superadmin 전용이다(SERIALIZABLE
   트랜잭션, 마지막 superadmin의 강등을 거부하고, 대상의 refresh 세션을 지운다).
   삭제와 역할 변경은 append-only인 `audit_log_entity`에 기록된다(FK 없음;
-  기본 커밋 이후에 기록됨). `SUPERADMIN_EMAIL`이 부팅 시 첫 superadmin을 시딩한다
+  기본 커밋 이후에 기록됨). `SUPERADMIN_EMAIL`은 첫 superadmin의 대상 계정을
+  지정할 뿐, 승격은 부팅 시 자동이 아니라 의도적인 수동 단계
+  (`pnpm promote-superadmin`)다 — 원래의 부팅 시 자동 승격은 그 이메일을 먼저
+  등록한 사람을 소유자 검증 없이 그대로 신뢰했기 때문에 2026-09-09 제거됐다
+  ([ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.ko.md), ADR 0013 amend)
 - **절대 제안 금지**: 세션 기반 인증, 단일 공유 JWT secret, 원문 토큰을 서버
   측에 저장(세션 인증과 단일 secret에 대한 근거: ADR 0001/0002 — 상태 없는 API는
   의도적으로 세션 저장소를 피하며, 별도 secret은 refresh 토큰이 access
@@ -1268,6 +1272,18 @@ Architecture Decisions가 계속 유효하다.
   (`findOne`을 `try/catch`로 감싸기)은 검토했으나 보류했다 — 두 전략 모두 전용 스펙
   파일이 없어(전략은 측정 대상 커버리지에서 제외) 새 분기가 테스트 안전망 없이
   들어가게 되기 때문이다. 여기 기록만 해 두고 아직 일정에 넣지 않는다
+- ~~superadmin 부팅 시 자동 승격이 소유자 미검증 계정을 그대로 신뢰~~ — **2026-09-09
+  해결됨**([ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.ko.md), ADR 0013
+  amend): 보안 점검 결과 `SuperadminSeedService`가 매 부팅마다 `SUPERADMIN_EMAIL`을
+  쥔 계정을 소유권 확인 없이 그대로 승격시키고 있었다는 사실이 드러났다 — 그 이메일을
+  먼저 등록한 공격자가 그대로 승격될 수 있었다. 이 서비스는 제거됐고, 승격은 이제
+  운영자가 계정 소유권을 직접 확인한 뒤에만 실행하는 수동 단계
+  (`pnpm promote-superadmin`)다. `SUPERADMIN_EMAIL` 자체는 그대로다(여전히 Joi
+  선택 항목, 새 env var 없음). 이메일 인증과 "0명 게이트"는 둘 다 검토 후 지금은
+  기각됐다 — 이유는 ADR 0052의 Context 참고. **2026-09-10 실제 검증**: 격리된 일회용
+  DB(`sharenpo_promote_verify`, 검증 후 drop)에서 승격/재실행 no-op/미존재 이메일
+  에러/env var 미설정 에러 네 가지가 모두 설계대로 동작함을 확인 — ADR 0052 addendum
+  참고
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은
@@ -1335,6 +1351,7 @@ pnpm migration:run    # Apply pending migrations (builds first, runs dist/data-s
 pnpm migration:generate -- backend/migrations/Name   # Diff entities vs DB (review output line-by-line)
 pnpm migration:revert # Revert the last applied migration
 pnpm migration:show   # List applied/pending migrations
+pnpm promote-superadmin  # Promote SUPERADMIN_EMAIL's account to superadmin (manual, ADR 0052)
 ```
 
 ### 단일 테스트 파일 지정

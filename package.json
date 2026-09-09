@@ -27,7 +27,8 @@
     "migration:generate": "pnpm build && typeorm migration:generate -d dist/data-source.js",
     "migration:run": "pnpm build && typeorm migration:run -d dist/data-source.js",
     "migration:revert": "pnpm build && typeorm migration:revert -d dist/data-source.js",
-    "migration:show": "pnpm build && typeorm migration:show -d dist/data-source.js"
+    "migration:show": "pnpm build && typeorm migration:show -d dist/data-source.js",
+    "promote-superadmin": "pnpm build && node dist/scripts/promote-superadmin.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1105.0",

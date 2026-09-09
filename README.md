@@ -73,6 +73,11 @@ pnpm run start:dev
 # 6. Open Swagger UI
 #    http://localhost:3000/doc
 
+# 7. (optional) Promote a superadmin account — register it first via
+#    POST /auth/register, set SUPERADMIN_EMAIL to that address in .env, then:
+#      pnpm promote-superadmin
+#    (ADR 0013/0052 — a deliberate manual step, not automatic)
+
 # Tests
 pnpm test              # unit tests
 pnpm run test:cov      # coverage (only services are measured)
@@ -108,8 +113,9 @@ Optional (all Joi-validated with a default, or gated by their own condition — 
 `http://localhost:3000`; composes public file URLs), `PORT` (default `3000`),
 `CORS_ORIGIN` (unset = CORS disabled; comma-separated allowlist —
 [ADR 0008](docs/ADR/0008-opt-in-cors.md)), `SUPERADMIN_EMAIL` (unset = disabled;
-promotes that account to superadmin on boot —
-[ADR 0013](docs/ADR/0013-rbac-and-audit-log.md)), `TEMP_SWEEP_ENABLED` /
+the target account for the manual `pnpm promote-superadmin` step, not an
+automatic boot-time promotion —
+[ADR 0013](docs/ADR/0013-rbac-and-audit-log.md)/[ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.md)), `TEMP_SWEEP_ENABLED` /
 `TEMP_SWEEP_CRON` / `TEMP_SWEEP_TTL_HOURS` / `TEMP_SWEEP_DRY_RUN` (orphan temp-file
 sweep — [ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.md)), `STORAGE_DRIVER`
 (`local` default | `s3`, with `S3_BUCKET`/`AWS_REGION` required when `s3` —

@@ -855,7 +855,11 @@ Do not suggest alternatives to these decisions without explicit request.
   OR admin"; `PATCH /user/:id/role` is superadmin-only (SERIALIZABLE tx, refuses
   to demote the last superadmin, clears the target refresh session). Deletes and
   role changes are recorded in the append-only `audit_log_entity` (no FKs; written
-  after the primary commit). `SUPERADMIN_EMAIL` seeds the first superadmin on boot
+  after the primary commit). `SUPERADMIN_EMAIL` names the first superadmin, but
+  promotion is a deliberate manual step (`pnpm promote-superadmin`), not automatic on
+  boot — the original boot-time auto-promotion trusted whoever registered that email
+  first, with no ownership check, so it was removed 2026-09-09 ([ADR
+  0052](docs/ADR/0052-superadmin-seed-manual-trigger.md), amends ADR 0013)
 - **Never suggest**: session-based auth, a single shared JWT secret, storing raw
   tokens server-side (session-auth and single-secret rationale: ADR 0001/0002 — a
   stateless API deliberately avoids a session store, and separate secrets stop a
@@ -1233,6 +1237,18 @@ Architecture Decisions above remain operative.
   Converting that (wrapping `findOne` in a `try/catch`) was weighed and deferred — neither
   strategy has a spec file (strategies are excluded from measured coverage), so a new
   branch there would ship with no test safety net. Tracked here, not yet scheduled
+- ~~Superadmin boot-time auto-promotion trusted an unverified account~~ — **resolved
+  2026-09-09** ([ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.md), amends ADR
+  0013): a security review found `SuperadminSeedService` promoted whichever account held
+  `SUPERADMIN_EMAIL` on every boot with no ownership check — an attacker who registered
+  that address first would be silently promoted. The service is removed; promotion is now
+  `pnpm promote-superadmin`, a manual step an operator runs only after confirming the
+  account's ownership. `SUPERADMIN_EMAIL` itself is unchanged (still Joi-optional, no new
+  env var). Email verification and a "zero-superadmin" gate were both considered and
+  rejected for now — see ADR 0052's Context for why. **Live-verified 2026-09-10** against
+  an isolated throwaway DB (`sharenpo_promote_verify`, dropped after) — promote, re-run
+  no-op, unknown-email error, and unset-env-var error all behaved as designed; see ADR
+  0052's addendum
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for
@@ -1297,6 +1313,7 @@ pnpm migration:run    # Apply pending migrations (builds first, runs dist/data-s
 pnpm migration:generate -- backend/migrations/Name   # Diff entities vs DB (review output line-by-line)
 pnpm migration:revert # Revert the last applied migration
 pnpm migration:show   # List applied/pending migrations
+pnpm promote-superadmin  # Promote SUPERADMIN_EMAIL's account to superadmin (manual, ADR 0052)
 ```
 
 ### Targeting a single test file

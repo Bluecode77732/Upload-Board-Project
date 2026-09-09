@@ -59,6 +59,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0049](0049-performance-capacity-criteria.ko.md) | 성능·용량 기준 — 응답시간 목표, ADR 0021이 유예한 인덱스 채택, 디스크는 사용률 모니터링으로 | 승인됨 — 구현됨 | 2026-08-31 |
 | [0050](0050-consent-based-file-ownership-transfer.ko.md) | 동의 기반 파일 소유권 이전 — 제안/수락/거절/취소, 무동의 userId 필드 대체, 0024 amend | 승인됨 — 구현됨 | 2026-09-04 |
 | [0051](0051-orphaned-granted-file-reclaim.ko.md) | 고아 `granted_` 파일 회수 — DB 조인 훑기(Sweep), 리포트 우선 기본값, 0018/0029/0020 확장 | 승인됨 — 구현됨 (리포트만) | 2026-09-05 |
+| [0052](0052-superadmin-seed-manual-trigger.ko.md) | Superadmin 시딩을 수동 트리거로 전환 — 부팅 시 무검증 자동 승격 제거, 0013 amend | 승인됨 — 구현됨 | 2026-09-09 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

@@ -1,6 +1,6 @@
 // 목적: admin e2e 테스트용 superadmin 계정을 생성/갱신한다 — in-app 플로우로는 만들 수
-// 없다 (실제 생성 메커니즘은 SUPERADMIN_EMAIL + superadmin-seed.service.ts, backend
-// ADR 0013 — 이 저장소 어디에도 "Role Population Invariants" 같은 절은 없다).
+// 없다 (실제 생성 메커니즘은 SUPERADMIN_EMAIL + `pnpm promote-superadmin`, backend
+// ADR 0013/ADR 0052 — 이 저장소 어디에도 "Role Population Invariants" 같은 절은 없다).
 // 사용처: 저장소 루트에서 `pnpm --filter admin e2e` 실행 전에 `pnpm --filter admin
 // e2e:seed`로 실행한다. 로컬(e2e/.env 읽음)과 CI(job 레벨 env를 직접 읽음) 모두 해당.
 // 근거: 로컬 개발과 CI가 공유하므로 시딩 로직이 정확히 한 곳에만 존재한다.

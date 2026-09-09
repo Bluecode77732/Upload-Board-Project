@@ -60,6 +60,7 @@ each ADR records the *why* behind those rules.
 | [0049](0049-performance-capacity-criteria.md) | Performance and capacity criteria — response-time targets, adopts ADR 0021's deferred indexes, disk via usage-rate monitoring | Accepted — implemented | 2026-08-31 |
 | [0050](0050-consent-based-file-ownership-transfer.md) | Consent-based file ownership transfer — propose/accept/reject/cancel, replaces the unconsented `userId` field, amends 0024 | Accepted — implemented | 2026-09-04 |
 | [0051](0051-orphaned-granted-file-reclaim.md) | Orphaned `granted_` file reclaim — DB-joined sweep, report-first default, extends 0018/0029/0020 | Accepted — implemented (report-only) | 2026-09-05 |
+| [0052](0052-superadmin-seed-manual-trigger.md) | Superadmin seed becomes a manual trigger — removes unverified auto-promotion on boot, amends 0013 | Accepted — implemented | 2026-09-09 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status
