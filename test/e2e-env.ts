@@ -21,3 +21,8 @@ process.env.TEMP_SWEEP_ENABLED = 'false';
 // granted 파일 회수 스윕(ADR 0051)도 같은 이유다: e2e는 실제 DB를 띄우므로
 // 백그라운드 cron이 자기 자신의 픽스처와 경합하면 안 된다.
 process.env.GRANTED_SWEEP_ENABLED = 'false';
+
+// 전역 요청 횟수 제한(ADR 0053)도 꺼둔다: 이 스위트는 같은 서버 인스턴스에 순차로
+// 수백 건의 HTTP 요청을 보내고, supertest의 인프로세스 요청은 전부 같은 클라이언트 IP로
+// 잡혀 하나의 카운터를 공유하므로 분당 100회 기본값에 금방 걸려 429로 스위트가 깨진다.
+process.env.THROTTLE_ENABLED = 'false';

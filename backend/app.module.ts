@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { FileModule } from './file/file.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AllExceptionsFilter } from './common/filter/all-exceptions.filter';
@@ -14,6 +14,7 @@ import { PostModule } from './post/post.module';
 import { CommentModule } from './comment/comment.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TempCleanupModule } from './temp-cleanup/temp-cleanup.module';
 import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
@@ -77,6 +78,11 @@ import { join } from 'node:path';
         // GET /file/:id/content의 presigned-redirect TTL (ADR 0036). S3Storage만
         // 읽는다 — STORAGE_DRIVER=local에서는 쓰이지 않는 무해한 기본값일 뿐이다.
         CONTENT_SIGNED_URL_TTL_SECONDS: Joi.number().default(300),
+        // 전역 요청 횟수 제한(ADR 0053). false면 제한을 사실상 무제한으로 우회한다 —
+        // e2e 스위트가 같은 인스턴스에 순차로 수백 건을 보내 429로 깨지는 것을 막기 위한
+        // 테스트 전용 탈출구이며(test/e2e-env.ts에서만 false로 override), dev/prod는
+        // 항상 true다.
+        THROTTLE_ENABLED: Joi.boolean().default(true),
       }),
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
@@ -101,6 +107,27 @@ import { join } from 'node:path';
         entities: ENTITIES,
         synchronize: false,
         autoLoadEntities: true,
+      }),
+      inject: [ConfigService],
+    }),
+    // 목적: 요청 횟수 제한의 기본 한도를 구성한다(ADR 0053).
+    // 이유: backend 전체에 rate limiting이 전혀 없어 로그인/회원가입 등이 무차별 대입
+    //       공격에 노출돼 있었다 — 구체적 제한값 세분화는 후속 작업으로 미루고, 우선
+    //       관례적인 보수적 기본값(분당 100회)만 전역으로 건다.
+    // 방법: THROTTLE_ENABLED=false면 limit을 사실상 무제한으로 키워 우회한다 — 가드
+    //       프로바이더 자체를 조건부로 등록할 수는 없으므로(NestJS 모듈 그래프는
+    //       정적이다), e2e 스위트만 이 값을 꺼서 같은 IP로 잡히는 수백 건의 순차 요청이
+    //       429로 스위트를 깨뜨리지 않게 한다(test/e2e-env.ts).
+    ThrottlerModule.forRootAsync({
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: 60000,
+            limit: configService.get<boolean>('THROTTLE_ENABLED')
+              ? 100
+              : Number.MAX_SAFE_INTEGER,
+          },
+        ],
       }),
       inject: [ConfigService],
     }),
@@ -130,6 +157,15 @@ import { join } from 'node:path';
     {
       provide: APP_FILTER,
       useClass: AllExceptionsFilter,
+    },
+    // 목적: 모든 라우트에 요청 횟수 제한을 강제한다(이 저장소 최초의 전역 APP_GUARD, ADR 0053).
+    // 이유: 컨트롤러별 @UseGuards로 하면 새 컨트롤러가 생길 때마다 빠뜨리기 쉽고, 빠뜨려도
+    //       인증 가드처럼 401로 시끄럽게 드러나지 않아 조용히 무제한으로 남는다.
+    // 방법: HealthController/MetricsController는 kubelet/Prometheus의 초 단위 반복 호출을
+    //       위해 @SkipThrottle()로 개별 예외 처리한다.
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
   ],
 })

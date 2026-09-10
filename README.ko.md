@@ -43,6 +43,9 @@ JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, 트랜
   [ADR 0007](docs/ADR/0007-ownership-checks-without-rbac.ko.md) 위에 얹힘)
 - **경계 검증** — 전역 `ValidationPipe`(`whitelist` + `forbidNonWhitelisted`);
   직렬화된 엔티티는 `password`를 유출하지 않음
+- **요청 횟수 제한** — 모든 라우트가 기본 분당 100회 제한을 받음(`@nestjs/throttler`);
+  health/metrics 프로브는 예외라 오케스트레이터/Prometheus 트래픽이 남용으로
+  오인되지 않음([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md))
 - **Swagger** — `/doc`에서 전체 API 문서 열람과 수동 테스트 가능
 
 ## 빠른 시작
@@ -121,7 +124,9 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 (`local` 기본 | `s3`, `s3`일 때 `S3_BUCKET`/`AWS_REGION` 필수 —
 [ADR 0029](docs/ADR/0029-storage-port-adapter.ko.md)), `CONTENT_SIGNED_URL_TTL_SECONDS`
 (S3 presigned 리다이렉트 TTL, `local`에서는 미사용 —
-[ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.ko.md)).
+[ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.ko.md)), 그리고
+`THROTTLE_ENABLED`(기본값 `true` — dev/prod를 가르는 스위치가 아니라 e2e 스위트가
+전역 제한을 우회하기 위한 용도로만 존재 — [ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md)).
 
 ## API 엔드포인트
 
@@ -300,6 +305,8 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
   ([ADR 0004](docs/ADR/0004-transaction-pattern-selection.ko.md))
 - **Passport** — `JwtAuthGuard` 뒤의 `jwt` 전략
 - **Multer** — 서버가 생성한 파일명(`temp_{uuid}_{timestamp}`)으로 디스크에 저장
+- **`@nestjs/throttler`** — 전역 `APP_GUARD` 요청 횟수 제한, 기본값 분당 100회
+  ([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md))
 - **Jest** — 소스 파일 옆에 `*.spec.ts`로 배치한 단위 테스트; 리포지토리/QueryRunner 모킹, DB 접근 없음
 - **Swagger** — `/doc`, `persistAuthorization`으로 Bearer 세션 유지
 

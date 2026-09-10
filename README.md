@@ -43,6 +43,9 @@ Each document has a Korean sibling (`*.ko.md`).
   [ADR 0007](docs/ADR/0007-ownership-checks-without-rbac.md))
 - **Boundary validation** — global `ValidationPipe` (`whitelist` +
   `forbidNonWhitelisted`); serialized entities never leak `password`
+- **Rate limiting** — every route defaults to 100 requests/minute
+  (`@nestjs/throttler`); health/metrics probes are exempt so orchestrator/Prometheus
+  traffic is never mistaken for abuse ([ADR 0053](docs/ADR/0053-global-rate-limiting.md))
 - **Swagger** — full API documentation and manual test bench at `/doc`
 
 ## Quick Start
@@ -119,9 +122,10 @@ automatic boot-time promotion —
 `TEMP_SWEEP_CRON` / `TEMP_SWEEP_TTL_HOURS` / `TEMP_SWEEP_DRY_RUN` (orphan temp-file
 sweep — [ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.md)), `STORAGE_DRIVER`
 (`local` default | `s3`, with `S3_BUCKET`/`AWS_REGION` required when `s3` —
-[ADR 0029](docs/ADR/0029-storage-port-adapter.md)), and
-`CONTENT_SIGNED_URL_TTL_SECONDS` (S3 presigned-redirect TTL, unused under `local` —
-[ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md)).
+[ADR 0029](docs/ADR/0029-storage-port-adapter.md)), `CONTENT_SIGNED_URL_TTL_SECONDS` (S3 presigned-redirect TTL, unused under `local` —
+[ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md)), and `THROTTLE_ENABLED`
+(default `true` — not a dev/prod switch; exists only so the e2e suite can bypass the
+global rate limit — [ADR 0053](docs/ADR/0053-global-rate-limiting.md)).
 
 ## API Endpoints
 
@@ -307,6 +311,8 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full request and data flow.
   ([ADR 0004](docs/ADR/0004-transaction-pattern-selection.md))
 - **Passport** — `jwt` strategy behind `JwtAuthGuard`
 - **Multer** — disk storage with server-generated filenames (`temp_{uuid}_{timestamp}`)
+- **`@nestjs/throttler`** — global `APP_GUARD` rate limiting, 100 req/min default
+  ([ADR 0053](docs/ADR/0053-global-rate-limiting.md))
 - **Jest** — unit tests colocated as `*.spec.ts`; repository/QueryRunner mocks, no DB access
 - **Swagger** — `/doc`, with `persistAuthorization` for a persistent Bearer session
 

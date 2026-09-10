@@ -23,6 +23,9 @@ const FALLBACK_CODES: Partial<Record<number, ErrorCode>> = {
   [HttpStatus.FORBIDDEN]: ErrorCode.FORBIDDEN,
   [HttpStatus.NOT_FOUND]: ErrorCode.NOT_FOUND,
   [HttpStatus.PAYLOAD_TOO_LARGE]: ErrorCode.PAYLOAD_TOO_LARGE,
+  // ThrottlerException(@nestjs/throttler)은 code 없는 문자열 메시지로 던져진다 — 이
+  // 항목이 없으면 429가 INTERNAL_ERROR로 잘못 표시된다(ADR 0053 도입 중 발견).
+  [HttpStatus.TOO_MANY_REQUESTS]: ErrorCode.RATE_LIMITED,
 };
 
 @Injectable()

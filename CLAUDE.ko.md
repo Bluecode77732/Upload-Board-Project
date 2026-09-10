@@ -34,6 +34,7 @@
    - 환경 변수 변경        → `backend/app.module.ts`의 Joi 스키마와 `.env.example`을 함께 읽는다 — 둘은 항상 동기화되어야 한다
    - 엔티티/관계 변경      → `backend/file/entity/file.entity.ts`와 `backend/user/entity/user.entity.ts`를 함께 읽는다 — `creator` 관계는 양쪽에 모두 선언되어 있다. `backend/post/entity/post.entity.ts`와 `backend/comment/entity/comment.entity.ts`는 의도적으로 **단방향**이다(User/File/Post에 역방향 프로퍼티 없음) — 이를 "고치려" 하지 않는다(ADR 0023). 새 엔티티는 **`backend/entities.ts` 한 곳에만** 등록한다 — `app.module.ts`와 `backend/data-source.ts`가 모두 그 `ENTITIES` 배열 하나를 import하므로, 엔티티가 앱에는 살아 있지만 `migration:generate`에는 보이지 않는 상황이 생길 수 없다(2026-07-31 이전에는 수동 관리 목록이 두 개였고, 그 불일치 때문에 `generate`가 테이블 하나를 통째로 빠뜨리고도 성공했다고 보고한 적이 있다). e2e 스위트는 별도로 자기 줄이 필요하다: `test/e2e-utils.ts`(`MIGRATIONS` + `TABLES`) — 다만 이를 빠뜨리면 다음 실행에서 요란하게 실패한다
    - 정적 파일 서빙 변경   → `app.module.ts`의 `ServeStaticModule` 블록(`rootPath: file/temp`, `serveRoot: 'file/temp'` — `file/upload`는 의도적으로 마운트하지 않는다; granted 읽기는 대신 `GET /file/:id/content`를 거친다, ADR 0025/0026)을 읽는다
+   - 요청 횟수 제한 변경   → `app.module.ts`의 `ThrottlerModule.forRootAsync` 블록(전역 기본값 + `THROTTLE_ENABLED` 우회)과 `APP_GUARD` 프로바이더, 그리고 `backend/health/health.controller.ts` / `backend/metrics/metrics.controller.ts`의 `@SkipThrottle()` 예외(ADR 0053)를 함께 읽는다
 2. 코드베이스에 존재함을 확인하지 않은 API, 파일, 함수, 타입을 절대 지어내지 않는다.
 3. 기존 패턴만 재사용한다; 명시적으로 요청받지 않는 한 새 추상화를 도입하지 않는다.
 4. 모든 가정을 실제 코드, 검색 결과, 테스트 출력으로 검증한다 — 기억이나 추론만으로 판단하지 않는다.
@@ -1029,6 +1030,20 @@ Conflict Protocol을 따른다.
   throw 지점은 반드시 코드를 붙여야 한다 — 상태 코드 기반 폴백은 프레임워크가
   발생시키는 throw만을 위한 것이다. 코드의 이름 변경이나 제거는 breaking
   change이며, 추가는 자유롭다
+- **요청 횟수 제한(landed 2026-09-10, [ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md))**:
+  전역 `ThrottlerGuard`(`@nestjs/throttler`)가 `APP_GUARD`로 모든 라우트에서 돈다 —
+  이 저장소 최초의 전역 가드다 — 우선 보수적인 기본값 분당 100회(`app.module.ts`의
+  `ThrottlerModule.forRootAsync`)만 걸었다; 라우트별 세분화(예: `POST /auth/signin`을
+  더 빡빡하게)는 후속 작업으로 미뤘고 이 ADR이 확정한 범위가 아니다.
+  `HealthController`/`MetricsController`는 클래스 레벨 `@SkipThrottle()`을 단다 —
+  kubelet의 probe와 Prometheus의 스크레이프는 파드가 떠 있는 내내 고정 간격으로
+  반복되는데, 같은 IP 기준 카운터를 공유하면 이 트래픽을 남용으로 오인하게 된다.
+  `THROTTLE_ENABLED`(Joi, 기본값 `true`)는 `test/app.e2e-spec.ts`를 격리하기 위한
+  용도로만 존재한다(`test/e2e-env.ts`가 `false`로 설정) — dev/prod는 항상 `true`이며
+  dev/prod를 가르는 축이 아니다. 알려진 한계: 기본 storage가 단일 인스턴스
+  in-memory라서, 향후 다중 replica 배포 시 진짜 하나의 전역 한도를 유지하려면
+  Redis 기반 storage가 필요하다 — 이 앱이 실제로 replica 2개 이상으로 돌기 전까지는
+  범위 밖이다
 - **절대 제안 금지**: GraphQL, WebSocket, gRPC — 작은 요청/응답 CRUD 표면은
   이들 각각이 더할 스키마 레이어, 클라이언트 구현, 운영 오버헤드를 정당화하지
   못한다(전체 근거: ADR 0009)

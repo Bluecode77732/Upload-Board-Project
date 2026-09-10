@@ -4,10 +4,14 @@
 
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { HealthService } from './health.service';
 
 @ApiTags('health')
 @Controller('health')
+// kubelet의 liveness/readiness probe는 파드가 떠 있는 내내 초 단위로 영구 반복 호출하도록
+// 설계돼 있다 — 전역 요청 횟수 제한(ADR 0053)에 걸리면 정상 프로세스가 재시작될 수 있다.
+@SkipThrottle()
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 

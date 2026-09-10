@@ -4,11 +4,15 @@
 
 import { Controller, Get, Res } from '@nestjs/common';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { MetricsService } from './metrics.service';
 
 @ApiTags('metrics')
 @Controller('metrics')
+// Prometheus는 이 엔드포인트를 고정 간격으로 영구 스크레이프한다 — 전역 요청 횟수 제한
+// (ADR 0053)에 걸려 429를 받으면 그 구간의 시계열 데이터가 비게 된다.
+@SkipThrottle()
 export class MetricsController {
   constructor(private readonly metricsService: MetricsService) {}
 

@@ -34,6 +34,7 @@ Before making any change:
    - Env var change        → read the Joi schema in `backend/app.module.ts` AND `.env.example` — both must stay in sync
    - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides. `backend/post/entity/post.entity.ts` and `backend/comment/entity/comment.entity.ts` are deliberately **unidirectional** (no inverse property on User/File/Post) — do not "fix" that (ADR 0023). A new entity is registered in **`backend/entities.ts` and nowhere else** — `app.module.ts` and `backend/data-source.ts` both import that one `ENTITIES` array, so an entity cannot be live in the app but invisible to `migration:generate` (it was two hand-maintained lists until 2026-07-31, and that divergence made `generate` report success while omitting a whole table). The e2e suite still needs its own line: `test/e2e-utils.ts` (`MIGRATIONS` + `TABLES`) — but omitting it fails loudly on the next run
    - Static file serving   → read the `ServeStaticModule` block in `app.module.ts` (`rootPath: file/temp`, `serveRoot: 'file/temp'` — `file/upload` is deliberately not mounted; granted reads go through `GET /file/:id/content` instead, ADR 0025/0026)
+   - Rate limiting change  → read the `ThrottlerModule.forRootAsync` block in `app.module.ts` (global default + `THROTTLE_ENABLED` bypass) together with the `APP_GUARD` provider, and the `@SkipThrottle()` exemptions in `backend/health/health.controller.ts` / `backend/metrics/metrics.controller.ts` (ADR 0053)
 2. Never invent APIs, files, functions, or types that you have not confirmed exist in the codebase.
 3. Reuse existing patterns only; do not introduce new abstractions unless explicitly asked.
 4. Verify every assumption with actual code, search results, or test output — not memory or inference alone.
@@ -1003,6 +1004,19 @@ Do not suggest alternatives to these decisions without explicit request.
   (`APP_FILTER` in `app.module.ts`). New throw sites must attach a code — the
   status-based fallbacks cover framework-originated throws only. Renaming or
   removing a code is a breaking change; adding one is free
+- **Rate limiting (landed 2026-09-10, [ADR 0053](docs/ADR/0053-global-rate-limiting.md))**:
+  a global `ThrottlerGuard` (`@nestjs/throttler`) runs on every route via `APP_GUARD` —
+  this repository's first global guard — at a conservative default of 100 requests/minute
+  (`ThrottlerModule.forRootAsync` in `app.module.ts`); per-route tuning (e.g. a tighter
+  bound on `POST /auth/signin`) is deferred to a follow-up task, not settled by this ADR.
+  `HealthController`/`MetricsController` carry a class-level `@SkipThrottle()` — kubelet's
+  probes and Prometheus' scrapes repeat on a fixed interval for a pod's whole lifetime, a
+  traffic shape a shared per-IP counter would misread as abuse. `THROTTLE_ENABLED` (Joi,
+  default `true`) exists only to isolate `test/app.e2e-spec.ts` (`test/e2e-env.ts` sets it
+  `false`) — dev/prod always run `true`; it is not a dev/prod axis. Known limitation: the
+  default storage is single-instance in-memory, so a future multi-replica deployment would
+  need Redis-backed storage to keep one true global ceiling — out of scope until this app
+  actually runs more than one replica
 - **Never suggest**: GraphQL, WebSocket, gRPC — the small request/response CRUD surface
   does not justify the schema layer, client story, or operational overhead each would add
   (full reasoning: ADR 0009)

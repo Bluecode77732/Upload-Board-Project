@@ -11,6 +11,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ThrottlerException } from '@nestjs/throttler';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 import { ErrorCode } from '../error-code';
 
@@ -97,6 +98,18 @@ describe('AllExceptionsFilter', () => {
       expect.objectContaining({
         statusCode: 413,
         code: ErrorCode.PAYLOAD_TOO_LARGE,
+      }),
+    );
+  });
+
+  it('should map 429 (ThrottlerException) to RATE_LIMITED, not INTERNAL_ERROR', () => {
+    filter.catch(new ThrottlerException(), mockHost);
+
+    expect(mockStatus).toHaveBeenCalledWith(429);
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 429,
+        code: ErrorCode.RATE_LIMITED,
       }),
     );
   });

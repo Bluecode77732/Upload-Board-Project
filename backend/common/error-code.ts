@@ -71,6 +71,11 @@ export enum ErrorCode {
   // 413
   PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',
 
+  // 429
+  // ThrottlerGuard가 전역 요청 횟수 제한을 거부했다 — 프레임워크가 code 없는 문자열
+  // 메시지로 던지므로 AllExceptionsFilter의 FALLBACK_CODES가 이 코드로 채운다(ADR 0053).
+  RATE_LIMITED = 'RATE_LIMITED',
+
   // 500
   INTERNAL_ERROR = 'INTERNAL_ERROR',
 }
