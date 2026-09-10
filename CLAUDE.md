@@ -195,7 +195,7 @@ One line each — what the role does, not how:
 - **Migration Review** — reviews a `migration:generate` diff line by line (Scope
   Discipline > Schema changes; `migration-review` skill).
 - **Observability Review** — checks whether logs/metrics would actually surface a
-  failure (Engineering Principles > Observability).
+  failure (Engineering Principles > Collaboration & Quality > Observability).
 - **Code Review** — judges correctness and convention adherence from the diff itself,
   not the implementer's account of it.
 - **Debugging** — reproduces a failure and narrows it to a root cause before fixing it.

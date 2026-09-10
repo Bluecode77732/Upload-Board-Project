@@ -190,7 +190,7 @@ Implementation과 Review는 같은 패스여서는 안 된다: Review는 구현�
 - **Migration Review** — `migration:generate` diff를 한 줄씩 검토한다(범위 준수 > 스키마
   변경; `migration-review` 스킬).
 - **Observability Review** — 로그/메트릭이 실제로 장애를 드러낼 수 있는지 점검한다
-  (엔지니어링 원칙 > 협업 & 품질의 Observability).
+  (엔지니어링 원칙 > 협업 & 품질 > Observability).
 - **Code Review** — 구현자의 설명이 아니라 diff 자체를 근거로 정합성과 컨벤션 준수를
   판단한다.
 - **Debugging** — 실패를 재현하고 근본 원인을 좁혀낸 뒤에 고친다.
