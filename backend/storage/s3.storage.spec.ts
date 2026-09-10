@@ -2,6 +2,7 @@ import { Readable } from 'stream';
 import { S3Storage } from './s3.storage';
 
 const send = jest.fn();
+const getSignedUrl = jest.fn();
 
 jest.mock('@aws-sdk/client-s3', () => {
   const actual =
@@ -14,10 +15,16 @@ jest.mock('@aws-sdk/client-s3', () => {
   };
 });
 
+jest.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: (...args: unknown[]) =>
+    (getSignedUrl as (...args: unknown[]) => unknown)(...args),
+}));
+
 const mockConfigService = {
   getOrThrow: jest.fn((key: string) => {
     if (key === 'AWS_REGION') return 'ap-northeast-2';
-    if (key === 'S3_BUCKET') return 'upload-board-test-bucket';
+    if (key === 'S3_BUCKET') return 'sharenpo-test-bucket';
+    if (key === 'CONTENT_SIGNED_URL_TTL_SECONDS') return 300;
     throw new Error(`unexpected key ${key}`);
   }),
 } as unknown as import('@nestjs/config').ConfigService;
@@ -40,8 +47,8 @@ describe('S3Storage', () => {
       expect(send).toHaveBeenCalledWith(
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
-            Key: 'temp_a.mp4',
+            Bucket: 'sharenpo-test-bucket',
+            Key: 'temp/temp_a.mp4',
             Body: Buffer.from('data'),
           },
         }),
@@ -72,9 +79,9 @@ describe('S3Storage', () => {
         1,
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
-            CopySource: 'upload-board-test-bucket/temp_a.mp4',
-            Key: 'file/upload/granted_a.mp4',
+            Bucket: 'sharenpo-test-bucket',
+            CopySource: 'sharenpo-test-bucket/temp%2Ftemp_a.mp4',
+            Key: 'granted/granted_a.mp4',
           },
         }),
       );
@@ -82,8 +89,8 @@ describe('S3Storage', () => {
         2,
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
-            Key: 'temp_a.mp4',
+            Bucket: 'sharenpo-test-bucket',
+            Key: 'temp/temp_a.mp4',
           },
         }),
       );
@@ -97,6 +104,14 @@ describe('S3Storage', () => {
       await expect(storage.stat('file/upload/granted_a.mp4')).resolves.toEqual({
         size: 5678,
       });
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: {
+            Bucket: 'sharenpo-test-bucket',
+            Key: 'granted/granted_a.mp4',
+          },
+        }),
+      );
     });
 
     it('defaults to 0 when ContentLength is missing', async () => {
@@ -121,8 +136,8 @@ describe('S3Storage', () => {
       expect(send).toHaveBeenCalledWith(
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
-            Key: 'file/upload/granted_a.mp4',
+            Bucket: 'sharenpo-test-bucket',
+            Key: 'granted/granted_a.mp4',
           },
         }),
       );
@@ -140,8 +155,8 @@ describe('S3Storage', () => {
       expect(send).toHaveBeenCalledWith(
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
-            Key: 'file/upload/granted_a.mp4',
+            Bucket: 'sharenpo-test-bucket',
+            Key: 'granted/granted_a.mp4',
             Range: 'bytes=0-9',
           },
         }),
@@ -171,11 +186,11 @@ describe('S3Storage', () => {
       expect(send).toHaveBeenCalledWith(
         expect.objectContaining({
           input: {
-            Bucket: 'upload-board-test-bucket',
+            Bucket: 'sharenpo-test-bucket',
             Delete: {
               Objects: [
-                { Key: 'file/upload/granted_a.mp4' },
-                { Key: 'temp_b.mp4' },
+                { Key: 'granted/granted_a.mp4' },
+                { Key: 'temp/temp_b.mp4' },
               ],
             },
           },
@@ -190,9 +205,9 @@ describe('S3Storage', () => {
       ]);
     });
 
-    it('reports per-key errors returned by DeleteObjects', async () => {
+    it('reports per-key errors returned by DeleteObjects, translated back to the logical key', async () => {
       send.mockResolvedValue({
-        Errors: [{ Key: 'file/upload/granted_a.mp4', Message: 'AccessDenied' }],
+        Errors: [{ Key: 'granted/granted_a.mp4', Message: 'AccessDenied' }],
       });
 
       const result = await storage.unlink(['file/upload/granted_a.mp4']);
@@ -216,20 +231,30 @@ describe('S3Storage', () => {
   });
 
   describe('listTemp', () => {
-    it('paginates through ListObjectsV2 and collects temp entries', async () => {
+    it('paginates through ListObjectsV2 under the temp/ prefix and strips it from the returned keys', async () => {
       const lastModified = new Date('2026-08-01T00:00:00Z');
       send
         .mockResolvedValueOnce({
-          Contents: [{ Key: 'temp_a.mp4', LastModified: lastModified }],
+          Contents: [{ Key: 'temp/temp_a.mp4', LastModified: lastModified }],
           NextContinuationToken: 'token-2',
         })
         .mockResolvedValueOnce({
-          Contents: [{ Key: 'temp_b.mp4', LastModified: lastModified }],
+          Contents: [{ Key: 'temp/temp_b.mp4', LastModified: lastModified }],
         });
 
       const result = await storage.listTemp();
 
       expect(send).toHaveBeenCalledTimes(2);
+      expect(send).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          input: {
+            Bucket: 'sharenpo-test-bucket',
+            Prefix: 'temp/',
+            ContinuationToken: undefined,
+          },
+        }),
+      );
       expect(result).toEqual([
         { key: 'temp_a.mp4', mtimeMs: lastModified.getTime() },
         { key: 'temp_b.mp4', mtimeMs: lastModified.getTime() },
@@ -240,6 +265,78 @@ describe('S3Storage', () => {
       send.mockRejectedValue(new Error('network error'));
 
       await expect(storage.listTemp()).resolves.toEqual([]);
+    });
+  });
+
+  describe('listGranted', () => {
+    it('paginates through ListObjectsV2 under the granted/ prefix and remaps keys to file/upload/...', async () => {
+      const lastModified = new Date('2026-09-05T00:00:00Z');
+      send
+        .mockResolvedValueOnce({
+          Contents: [
+            { Key: 'granted/granted_a.mp4', LastModified: lastModified },
+          ],
+          NextContinuationToken: 'token-2',
+        })
+        .mockResolvedValueOnce({
+          Contents: [
+            { Key: 'granted/granted_b.mp4', LastModified: lastModified },
+          ],
+        });
+
+      const result = await storage.listGranted();
+
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          input: {
+            Bucket: 'sharenpo-test-bucket',
+            Prefix: 'granted/',
+            ContinuationToken: undefined,
+          },
+        }),
+      );
+      expect(result).toEqual([
+        {
+          key: 'file/upload/granted_a.mp4',
+          mtimeMs: lastModified.getTime(),
+        },
+        {
+          key: 'file/upload/granted_b.mp4',
+          mtimeMs: lastModified.getTime(),
+        },
+      ]);
+    });
+
+    it('returns an empty list and logs when ListObjectsV2 fails', async () => {
+      send.mockRejectedValue(new Error('network error'));
+
+      await expect(storage.listGranted()).resolves.toEqual([]);
+    });
+  });
+
+  describe('getSignedReadUrl', () => {
+    it('signs a GetObjectCommand with the response content type and configured TTL (ADR 0036)', async () => {
+      getSignedUrl.mockResolvedValue('https://bucket.s3.amazonaws.com/signed');
+
+      const result = await storage.getSignedReadUrl(
+        'file/upload/granted_a.mp4',
+        'video/mp4',
+      );
+
+      expect(result).toBe('https://bucket.s3.amazonaws.com/signed');
+      expect(getSignedUrl).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          input: {
+            Bucket: 'sharenpo-test-bucket',
+            Key: 'granted/granted_a.mp4',
+            ResponseContentType: 'video/mp4',
+          },
+        }),
+        { expiresIn: 300 },
+      );
     });
   });
 });

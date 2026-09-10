@@ -1,6 +1,6 @@
-// Purpose: FileStorage adapter porting the pre-ADR-0029 local-disk behavior behind the new port, unchanged.
-// Usage: constructed by StorageModule's factory when STORAGE_DRIVER=local (the default); never imported directly by consumers.
-// Rationale: ADR 0005's disk mechanics (temp_/granted_ folders, Range reads, guarded batched unlink) had to survive the port intact so this ADR is a pure refactor of call sites, not a behavior change.
+// 목적: ADR 0029 이전의 local-disk 동작을 새 포트 뒤로 그대로 옮겨온 FileStorage 어댑터다.
+// 사용처: STORAGE_DRIVER=local(기본값)일 때 StorageModule의 팩토리가 생성한다 — 소비자가 직접 임포트하는 일은 없다.
+// 이유: ADR 0005의 디스크 메커니즘(temp_/granted_ 폴더, Range 읽기, 가드된 배치 unlink)이 포트 안에서 그대로 살아남아야 했다 — 그래야 이 ADR이 동작 변경이 아니라 호출부의 순수 리팩터링이 된다.
 
 import { Injectable, Logger } from '@nestjs/common';
 import {
@@ -22,13 +22,14 @@ import {
 } from './file-storage.interface';
 
 const TEMP_DIR = join('file', 'temp');
-// Only ever unlink inside the promoted-upload folder for a granted key — mirrors the
-// guard `unlink-stored-files.ts` carried before this ADR (a row can hold a path outside
-// file/upload if UpdateFileDto ever accepted a bare name with no folder).
+const UPLOAD_DIR = join('file', 'upload');
+// granted 키는 오직 승격된 upload 폴더 안에서만 unlink한다 — 이 ADR 이전에
+// `unlink-stored-files.ts`가 갖고 있던 가드와 같다(UpdateFileDto가 폴더 없는 bare
+// 이름을 받아들인 적이 있다면, 행이 file/upload 바깥의 경로를 가질 수도 있었다).
 const UPLOAD_PREFIX = 'file/upload/';
-// Bound parallelism so deleting an account's whole library, or a large temp/ backlog,
-// cannot open thousands of concurrent fs handles at once (ADR 0018's batching rationale,
-// now shared by every unlink caller through this one adapter method).
+// 병렬성을 제한해, 계정 전체 라이브러리를 지우거나 temp/ 적체가 크더라도 수천 개의
+// fs 핸들을 동시에 여는 일이 없게 한다(ADR 0018의 배치 근거를 이제 이 어댑터 메서드 하나를
+// 거치는 모든 unlink 호출자가 공유한다).
 const UNLINK_BATCH_SIZE = 100;
 
 @Injectable()
@@ -135,7 +136,7 @@ export class LocalDiskStorage implements FileStorage {
     try {
       entries = await readdir(dir);
     } catch (error) {
-      // An absent file/temp is a normal empty state (nothing uploaded yet) — not an error.
+      // file/temp가 없는 건 정상적인 빈 상태다(아직 아무것도 업로드되지 않음) — 에러가 아니다.
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
       this.logger.error(
         `Could not read ${TEMP_DIR}.`,
@@ -151,13 +152,67 @@ export class LocalDiskStorage implements FileStorage {
         const info = await fsStat(join(dir, name));
         if (info.isFile()) result.push({ key: name, mtimeMs: info.mtimeMs });
       } catch {
-        // A file vanishing mid-list (a concurrent promotion rename) is benign — skip it.
+        // 목록 조회 중 파일이 사라지는 건(동시 승격 rename) 무해하다 — 건너뛴다.
         continue;
       }
     }
     return result;
   }
 
+  // 목적: file/upload에 있는 모든 granted 객체와 나이를 나열한다(ADR 0051이 DB와 대조해 훑는 용도).
+  // 이유: DB에 없는 키를 골라내려고 훑으려면 실제 목록이 필요하고, 승격 레이스를 걸러내려면 나이도 필요하다.
+  // 방법: readdir 후 granted_ 접두만 통과, key는 FileEntity.filePath와 동일한 'file/upload/...' 문자열로 반환한다 — 스윕 중 사라진 파일은 건너뛴다.
+  async listGranted(): Promise<StorageTempEntry[]> {
+    const dir = join(process.cwd(), UPLOAD_DIR);
+
+    let entries: string[];
+    try {
+      entries = await readdir(dir);
+    } catch (error) {
+      // file/upload가 없는 건 정상적인 빈 상태다(아직 아무것도 승격되지 않음) — 에러가 아니다.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      this.logger.error(
+        `Could not read ${UPLOAD_DIR}.`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      return [];
+    }
+
+    const result: StorageTempEntry[] = [];
+    for (const name of entries) {
+      if (!name.startsWith('granted_')) continue;
+      try {
+        const info = await fsStat(join(dir, name));
+        if (info.isFile()) {
+          result.push({
+            key: `${UPLOAD_PREFIX}${name}`,
+            mtimeMs: info.mtimeMs,
+          });
+        }
+      } catch {
+        // 목록 조회 중 파일이 사라지는 건(동시 삭제) 무해하다 — 건너뛴다.
+        continue;
+      }
+    }
+    return result;
+  }
+
+  // 목적: presigned 읽기 URL을 요청받았을 때 이 어댑터가 지원 불가함을 알린다.
+  // 이유: 로컬 디스크에는 서명 URL 개념이 없다 — 컨트롤러가 null을 받아 기존
+  //       stat()/createReadStream() 스트리밍 경로로 폴백하도록 하는 신호가 필요하다(ADR 0036).
+  // 방법: 항상 null을 반환한다 — 예외를 던지지 않는다(existsTemp의 boolean 계약과 같은 성격).
+  getSignedReadUrl(key: string, contentType: string): Promise<string | null> {
+    // 의도적으로 미사용 — FileStorage의 인자 개수를 맞추려고 이름만 남겨둔다(ADR 0036).
+    void key;
+    void contentType;
+    return Promise.resolve(null);
+  }
+
+  // 목적: unlink 대상 키가 granted/temp 중 어느 쪽인지 판별해 절대 경로로 바꾼다.
+  // 이유: unlink()가 임의의 문자열을 그대로 fs.unlink에 넘기면 file/upload·file/temp
+  //       바깥의 경로도 지울 수 있다 — 인식 가능한 두 접두사만 허용해야 한다.
+  // 방법: file/upload/ 접두는 그대로 cwd에 결합, temp_ 접두는 TEMP_DIR 아래로 결합.
+  //       둘 다 아니면 null을 반환해 호출자가 실패로 기록하게 한다.
   private resolveUnlinkPath(key: string): string | null {
     if (key.startsWith(UPLOAD_PREFIX)) return join(process.cwd(), key);
     if (key.startsWith('temp_')) return join(process.cwd(), TEMP_DIR, key);

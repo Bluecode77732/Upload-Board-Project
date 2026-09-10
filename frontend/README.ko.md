@@ -1,9 +1,10 @@
-# Upload Board — 프론트엔드
+# Sharenpo — 프론트엔드
 
-Upload Board 프로젝트를 위한 React + Vite(TypeScript) SPA. 프로젝트 저장소의
+Sharenpo를 위한 React + Vite(TypeScript) SPA. 프로젝트 저장소의
 `frontend/` 하위 폴더로 존재하며(리포지토리 루트의 백엔드와 나란히), 백엔드
-REST API를 HTTP로 소비한다. 관리자 화면도 이 안에 `/admin` 라우트 섹션으로
-들어 있다(백엔드 ADR 0010).
+REST API를 HTTP로 소비한다. 이 앱에는 `/admin` 라우트가 **없다** — ADR 0010이
+처음에 자리를 잡아 뒀지만 그 스텁은 2026-08-06에 삭제됐고, 운영자 화면은 형제
+디렉터리인 `admin/` 콘솔이 맡는다(백엔드 ROADMAP.md > Stage 5).
 
 ## 스택
 
@@ -49,7 +50,7 @@ src/
 │                 errorCodes + types (백엔드 계약의 미러, 이제 PostResponse/
 │                 CommentResponse도 포함)
 ├── auth/         세션 상태: AuthProvider (사일런트 리프레시), useAuth, RequireAuth 가드
-├── shared/       NavBar — 인증된 모든 화면에 표시되는 Posts/My Files/Sign out 헤더
+├── shared/       NavBar — 인증된 모든 화면에 표시되는 Posts/Files/Sign out 헤더
 └── features/
     ├── auth/     LoginPage (Basic 로그인/회원가입)
     ├── posts/    PostBoard (보호됨, "/" — 앱의 홈: PostForm + 게시글 목록 —
@@ -69,14 +70,22 @@ src/
     │             수정/삭제 가능, PATCH/DELETE /comment/:id), CommentForm(POST
     │             /post/:id/comment — 성공 시 재fetch를 트리거한다, 이 앱에는
     │             실시간/폴링 인프라가 없기 때문)
-    └── files/    DashboardPage (보호됨, "/files" — 업로드 폼(이미지/오디오/비디오,
+    ├── files/    DashboardPage (보호됨, "/files" — 업로드 폼(이미지/오디오/비디오,
                   업로드 진행률 표시줄 포함) + 파일 보드: 검색/정렬/
                   작성자 필터/페이지네이션 + visibility 배지, FileBoard.tsx),
                   FileDetailPage (보호됨, "/view/:id" — 메타데이터 + visibility별
-                  재생: public/unlisted은 <video src> 직접 재생, private은 인증된
-                  blob+objectURL 페치; 작성자 또는 admin에게는 관리 섹션도 노출된다
+                  재생: public/unlisted은 src 직접 재생, private은 인증된
+                  blob+objectURL 페치이며, 파일의 mediaType(ADR 0040)에 따라
+                  <img>/<audio>/<video>로 렌더링된다; 작성자 또는 admin에게는 관리
+                  섹션도 노출된다
                   — visibility 전환, unlisted 공유 링크 복사/회전, 삭제를 모두
                   PATCH/DELETE /file/:id로 처리)
+    └── account/  SettingsPage (보호됨, "/settings" — dev 프록시가 선점한 "/user"나
+                  "/account"가 아님; NavBar에서 링크). 백엔드 ADR 0020의
+                  DELETE /user/:id?deleteFiles= 확인 흐름을 그대로 구현: 삭제 시도 →
+                  409 USER_HAS_FILES면 백엔드 메시지(이미 보유 파일 개수 포함)를
+                  2차 확인 뒤에 노출 → deleteFiles=true로 재요청 → 성공 시 로그아웃
+                  후 /login으로 이동
 ```
 
 여기에는 `admin/` 기능 폴더도 `/admin` 라우트도 없다 — 예약해 뒀던 stub은 저장소
@@ -92,7 +101,7 @@ src/
 - 로그인: `POST /auth/signin`에 Basic 헤더로 요청한다 (`client.ts`에서 조립).
 
 전체 소비 계약은 [docs/API-CONTRACT.ko.md](docs/API-CONTRACT.ko.md)를,
-개발 컨벤션은 [CLAUDE.md](CLAUDE.md)를 참고한다.
+개발 컨벤션은 [CLAUDE.md](CLAUDE.ko.md)를 참고한다.
 
 ## 명령어
 

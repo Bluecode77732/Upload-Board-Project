@@ -16,12 +16,13 @@ import { PostEntity } from './entity/post.entity';
 import { GetPostsDto } from './dto/get-posts.dto';
 import { FileService } from 'backend/file/file.service';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
+import { AuditTargetType } from 'backend/audit-log/audit-target-type.enum';
 import { FileEntity } from 'backend/file/entity/file.entity';
 import { UserEntity } from 'backend/user/entity/user.entity';
 import { UserRole } from 'backend/auth/role/role';
 
-// mockPost.creator.id === 1, so `author` manages by ownership; `stranger` (non-author,
-// plain user) is forbidden; `admin` manages by role (RBAC, ADR 0013).
+// mockPost.creator.id === 1이므로 `author`는 소유권으로 관리 권한을 갖고, `stranger`(작성자가
+// 아닌 일반 user)는 거부되며, `admin`은 역할로 관리 권한을 갖는다 (RBAC, ADR 0013).
 const author = { id: 1, role: UserRole.user };
 const stranger = { id: 2, role: UserRole.user };
 const admin = { id: 9, role: UserRole.admin };
@@ -56,7 +57,7 @@ describe('PostService', () => {
     updatedAt: new Date(),
   };
 
-  // The joined query builder shared by getPosts/getPostById/findByFileId.
+  // getPosts/getPostById/findByFileId가 공유하는, join이 걸린 쿼리 빌더.
   const selectQueryBuilder = (
     result: Partial<Record<'getOne' | 'getManyAndCount', jest.Mock>>,
   ) =>
@@ -79,7 +80,7 @@ describe('PostService', () => {
       execute,
     }) as unknown as SelectQueryBuilder<PostEntity>;
 
-  // Postgres unique_violation as TypeORM surfaces it (driverError.code).
+  // TypeORM이 그대로 드러내는 Postgres unique_violation (driverError.code).
   const uniqueViolation = () =>
     new QueryFailedError(
       'INSERT',
@@ -130,7 +131,7 @@ describe('PostService', () => {
       expect(count).toBe(1);
       expect(posts[0].id).toBe(mockPost.id);
       expect(builder.orderBy).toHaveBeenCalledWith('post.createdAt', 'DESC');
-      // Without a unique tiebreaker, OFFSET paging can repeat or skip rows (ADR 0021).
+      // 고유한 tiebreaker가 없으면 OFFSET 페이징이 행을 중복하거나 건너뛸 수 있다 (ADR 0021).
       expect(builder.addOrderBy).toHaveBeenCalledWith('post.id', 'DESC');
       expect(builder.take).toHaveBeenCalledWith(20);
       expect(builder.skip).toHaveBeenCalledWith(0);
@@ -182,7 +183,7 @@ describe('PostService', () => {
 
       const result = await postService.getPostById(5);
 
-      // The BASE_URL composition has exactly one home (ADR 0023).
+      // BASE_URL 조립은 정확히 한 곳에서만 이뤄진다 (ADR 0023).
       expect(mockFileService.toResponse).toHaveBeenCalledWith(mockFile);
       expect(result.file?.fileUrl).toContain('granted_clip.mp4');
       expect(result.creator?.email).toBe('author@test.com');
@@ -200,14 +201,14 @@ describe('PostService', () => {
     });
   });
 
-  // Asked by CommentService before it writes a comment: whether a post exists is
-  // PostModule's judgment, never a post_entity query from another module (ADR 0023).
+  // CommentService가 댓글을 쓰기 전에 확인을 요청한다: 게시글이 존재하는지는
+  // PostModule의 판단이지, 다른 모듈이 post_entity를 직접 쿼리할 일이 아니다 (ADR 0023).
   describe('assertPostExists', () => {
     it('passes for an existing post without loading relations', async () => {
       jest.spyOn(postRepository, 'exists').mockResolvedValue(true);
 
       await expect(postService.assertPostExists(5)).resolves.toBeUndefined();
-      // getPostById would drag the creator and file joins in for a response nobody reads.
+      // getPostById를 썼다면 아무도 읽지 않을 응답을 위해 creator와 file join까지 끌고 왔을 것이다.
       expect(postRepository.createQueryBuilder).not.toHaveBeenCalled();
     });
 
@@ -273,7 +274,7 @@ describe('PostService', () => {
 
       expect(result.replayed).toBe(true);
       expect(result.post.id).toBe(5);
-      // A retry must not open a write at all — one lookup, no insert.
+      // 재시도는 쓰기를 아예 열면 안 된다 — 조회 한 번, insert는 없다.
       expect(postRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
     });
 
@@ -283,8 +284,8 @@ describe('PostService', () => {
       });
       jest.spyOn(postRepository, 'createQueryBuilder').mockReturnValue(lookup);
 
-      // Unlike ADR 0019's unconditional replay: different author-written text means a
-      // genuinely new submission, which must not be answered with an older post.
+      // ADR 0019의 무조건적 replay와는 다르다: 작성자가 쓴 텍스트가 다르면 실제로
+      // 새로운 제출이므로, 예전 게시글로 응답해서는 안 된다.
       await expect(
         postService.create({ ...dto, body: 'Rewritten.' }, 1),
       ).rejects.toThrow(ConflictException);
@@ -296,7 +297,7 @@ describe('PostService', () => {
       });
       jest.spyOn(postRepository, 'createQueryBuilder').mockReturnValue(lookup);
 
-      // Reachable because file ownership is reassignable (PATCH /file/:id userId).
+      // 파일 소유권을 재할당할 수 있기 때문에(PATCH /file/:id userId) 도달 가능한 경로다.
       await expect(postService.create(dto, 2)).rejects.toThrow(
         ConflictException,
       );
@@ -320,7 +321,7 @@ describe('PostService', () => {
 
       const result = await postService.create(dto, 1);
 
-      // The loser of the race is the same request twice — a replay, never a 500.
+      // 경합에서 진 쪽은 결국 같은 요청이 두 번 온 것이다 — replay일 뿐, 500이 아니다.
       expect(result.replayed).toBe(true);
       expect(result.post.id).toBe(5);
     });
@@ -333,7 +334,7 @@ describe('PostService', () => {
       await expect(postService.create(dto, 2)).rejects.toThrow(
         ForbiddenException,
       );
-      // The ownership check fires before anything is written or even looked up.
+      // 소유권 검사는 무엇이 쓰이거나 조회되기도 전에 먼저 실행된다.
       expect(postRepository.createQueryBuilder).not.toHaveBeenCalled();
     });
   });
@@ -403,7 +404,12 @@ describe('PostService', () => {
       await postService.deletePost(5, author);
 
       expect(postRepository.delete).toHaveBeenCalledWith(5);
-      expect(mockAuditLogService.log).toHaveBeenCalledWith(1, 5, 'POST_DELETE');
+      expect(mockAuditLogService.log).toHaveBeenCalledWith(
+        1,
+        5,
+        AuditTargetType.post,
+        'POST_DELETE',
+      );
     });
 
     it('forbids a stranger from deleting the post', async () => {
@@ -440,8 +446,8 @@ describe('PostService', () => {
       const deleted = await postService.deletePostsOfCreator(manager, 1);
 
       expect(deleted).toBe(3);
-      // By creatorId, never by an id list read moments earlier — that reopens the
-      // read-then-delete race ADR 0020 closed.
+      // creatorId 기준으로만 삭제하고, 직전에 읽어둔 id 목록으로는 절대 삭제하지 않는다 —
+      // 그렇게 하면 ADR 0020이 막았던 read-then-delete 경합이 다시 열린다.
       expect(deleteBuilder.where).toHaveBeenCalledWith(
         '"creatorId" = :creatorId',
         { creatorId: 1 },

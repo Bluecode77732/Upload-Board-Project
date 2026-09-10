@@ -1,9 +1,11 @@
-# Upload Board — Frontend
+# Sharenpo — Frontend
 
-React + Vite (TypeScript) SPA for the Upload Board project. Lives as the
+React + Vite (TypeScript) SPA for Sharenpo. Lives as the
 `frontend/` subfolder of the project repository (alongside the backend at the
-repo root) and consumes the backend REST API over HTTP; admin lives here as an
-`/admin` route section (backend ADR 0010).
+repo root) and consumes the backend REST API over HTTP. There is **no** `/admin`
+route in this app — ADR 0010 originally reserved one, but the stub was deleted
+2026-08-06 and the operator surface lives in the sibling `admin/` console
+instead (backend ROADMAP.md > Stage 5).
 
 ## Stack
 
@@ -47,7 +49,7 @@ src/
 │                 errorCodes + types (mirror of the backend contract, now including
 │                 PostResponse/CommentResponse)
 ├── auth/         session state: AuthProvider (silent refresh), useAuth, RequireAuth guard
-├── shared/       NavBar — the Posts/My Files/Sign out header shown on every
+├── shared/       NavBar — the Posts/Files/Sign out header shown on every
 │                 authenticated screen
 └── features/
     ├── auth/     LoginPage (Basic signin/register)
@@ -67,14 +69,21 @@ src/
     │             own author/admin, PATCH/DELETE /comment/:id), and CommentForm (POST
     │             /post/:id/comment, triggers a refetch on success — no realtime/polling
     │             infrastructure exists in this app)
-    └── files/    DashboardPage (protected, "/files" — upload form (image/audio/video,
+    ├── files/    DashboardPage (protected, "/files" — upload form (image/audio/video,
                   with upload-progress bar) + file board: search/sort/
                   creator filter/pagination + visibility badges, FileBoard.tsx) and
                   FileDetailPage (protected, "/view/:id" — metadata + visibility-gated
-                  playback: direct <video src> for public/unlisted, an authenticated
-                  blob+objectURL fetch for private; for the creator or an admin, a
+                  playback: direct src for public/unlisted, an authenticated
+                  blob+objectURL fetch for private, rendered as <img>/<audio>/<video>
+                  per the file's mediaType (ADR 0040); for the creator or an admin, a
                   management section — visibility toggle, unlisted share-link copy/
                   rotation, and delete — all via PATCH/DELETE /file/:id)
+    └── account/  SettingsPage (protected, "/settings" — not "/user" or "/account", which
+                  the dev proxy claims; linked from NavBar). Backend ADR 0020's
+                  DELETE /user/:id?deleteFiles= confirmation flow: delete → on 409
+                  USER_HAS_FILES show the backend's message (already names the file
+                  count) behind a second confirm → retry with deleteFiles=true → on
+                  success sign out and redirect to /login
 ```
 
 There is no `admin/` feature folder or `/admin` route here — the reserved stub was

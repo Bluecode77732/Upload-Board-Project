@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> 한국어 버전: [CLAUDE.ko.md](CLAUDE.ko.md)
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **How to read the rules here.** Rules are stated as directives so they can be applied
@@ -17,18 +19,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Before making any change:
 1. Inspect the codebase thoroughly — read the relevant files, grep for symbols, trace the actual call chain.
    Concern-to-entrypoint map (check these first):
-   - Auth flow change      → read `backend/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `backend/auth/strategy/`; grep `JwtAuthGuard`, `LocalAuthGuard`
+   - Auth flow change      → read `backend/auth/auth.service.ts` (`parseBasicToken` / `verifyToken` / `issueTokenPair` / `rotateRefreshToken`) and `backend/auth/strategy/`; grep `JwtAuthGuard`
    - File metadata change  → trace `backend/file/file.controller.ts` → `file.service.ts` (manual QueryRunner transactions, `temp_` → `granted_` rename contract, one-shot claim resolution in `uploadFile` — ADR 0019). Content reads go through the separate `backend/file/file-content.controller.ts` (`GET /file/:id/content`, `OptionalJwtAuthGuard`) → `FileService.resolveContentAccess` — the visibility gate (ADR 0025/0026)
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer `memoryStorage`) and `upload.controller.ts` (100MB size limit) together with `backend/upload/upload.service.ts` (`stageTemp` — `temp_{uuid}_{timestamp}` naming, calls the `FileStorage` port, ADR 0029 D4)
    - Storage adapter change→ read `backend/storage/file-storage.interface.ts` (the `FileStorage` port + `FILE_STORAGE` token), `local-disk.storage.ts` / `s3.storage.ts` (the two implementations), and `storage.module.ts` (the `STORAGE_DRIVER`-keyed factory, ADR 0029)
    - Container/deploy change→ read `Dockerfile` (non-root `USER`, `HEALTHCHECK`, migration removed from `CMD` — ADR 0030/0032) and `docker-compose.yml` (the one-shot `migrate` service) together with `backend/health/` (`GET /health/live`/`GET /health/ready` — ADR 0031)
+   - Helm/K8s deploy change→ read `k8s/helm/` (`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/disabled-by-default Ingress) and its `README.md` (Secret creation runbook, `existingSecret`-only consumption). `k8s/` holds no manifests outside this chart — the standalone raw manifests once at `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/` were deleted (ADR 0042); do not re-add static manifests alongside the chart (ADR 0037/0041/0042)
+   - Terraform/infra change  → `k8s/infra/terraform/` is three independent root modules, not one — `cluster/` (`module.vpc`+`module.eks`), `app-infra/` (RDS/S3+IRSA/Secrets Manager/Route53+ACM, reads `cluster/` via `terraform_remote_state`), `addons/` (`module.eks_blueprints_addons` — ALB Controller+ESO, the only state reading **both** other states). Each is `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` with its own local state file; read the one(s) the change actually touches. Read `README.md` (the three-step `cluster` → `app-infra` → `addons` apply order and its destroy-order reversal, the `SecretStore`/`ExternalSecret` one-time manual `kubectl apply` step, and the "Known gap" section covering the app's dedicated-ServiceAccount IRSA wiring — `app-infra/main.tf`'s trust policy, `k8s/helm/`'s `serviceaccount.yaml`+`values-prod.yaml`, and `deploy.sh`'s `HELM_RELEASE` default all pinned to the name `sharenpo` as of 2026-09-03, code-complete and validated but never applied against real AWS; the old `default`-ServiceAccount IRSA annotation this superseded is now dead once that trust policy is ever applied). Design record: ADR 0038 (upstream scaffold, deferred rewrite) → ADR 0043 (project adaptation — implemented 2026-08-18) → ADR 0044 (three-state split — implemented 2026-08-20, `terraform validate`/`fmt -check` pass in all three directories). **Both ADRs' addenda say this config had never been `apply`d against real AWS — that was true when written, then briefly false, then true again.** All three states were applied 2026-08-25–27 (a live EKS cluster, RDS instance, S3 bucket, Route53 zone, ACM certificate, plus the app itself deployed via Helm — ADR 0039's Addendum records a same-window TLS-verification defect found and fixed against that live RDS), then **fully destroyed 2026-08-28** to stop the ongoing AWS bill once the deploy was proven end-to-end — nothing from this stack currently exists or costs money (verified via `aws eks/rds/ec2/elb` describe calls returning empty/not-found across the board). Currently: not applied. Before assuming either state, run `terraform plan` in each of the three directories — the ADR addenda and this line are both point-in-time snapshots, not live state. The ADR addenda are deliberately left as written — they record what was true when written; the correction lives here and in ROADMAP.md §7
    - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `LocalDiskStorage.unlink`/`S3Storage.unlink` (post-commit unlink through the `FileStorage` port, ADR 0020/0023/0029)
    - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
    - Comment/thread change → read `backend/comment/comment.service.ts` (fixed `createdAt ASC` order, `canManage`, `deleteCommentsOfCreator`) and `PostService.assertPostExists` — the one thing CommentModule asks PostModule for. Routes live in **two** controllers (`post-comment.controller.ts` for `/post/:postId/comment`, `comment.controller.ts` for `/comment/:id`); post deletion removes comments via the FK, not the service (ADR 0023 D3)
    - Orphan temp cleanup   → read `backend/temp-cleanup/temp-cleanup.service.ts` (`@nestjs/schedule` `SchedulerRegistry` cron, `temp_`-prefix + TTL sweep of `file/temp`, ADR 0018) and its `selectExpiredTempFiles` pure core
+   - Orphan granted-file reclaim → read `backend/file/granted-cleanup.service.ts` (an unexported `FileModule` provider, DB-joined sweep of `file/upload` against `file_entity.filePath`, `GRANTED_SWEEP_DRY_RUN` defaults `true` — report-only, ADR 0051) and its `selectOrphanedGrantedFiles` pure core
    - Env var change        → read the Joi schema in `backend/app.module.ts` AND `.env.example` — both must stay in sync
    - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides. `backend/post/entity/post.entity.ts` and `backend/comment/entity/comment.entity.ts` are deliberately **unidirectional** (no inverse property on User/File/Post) — do not "fix" that (ADR 0023). A new entity is registered in **`backend/entities.ts` and nowhere else** — `app.module.ts` and `backend/data-source.ts` both import that one `ENTITIES` array, so an entity cannot be live in the app but invisible to `migration:generate` (it was two hand-maintained lists until 2026-07-31, and that divergence made `generate` report success while omitting a whole table). The e2e suite still needs its own line: `test/e2e-utils.ts` (`MIGRATIONS` + `TABLES`) — but omitting it fails loudly on the next run
    - Static file serving   → read the `ServeStaticModule` block in `app.module.ts` (`rootPath: file/temp`, `serveRoot: 'file/temp'` — `file/upload` is deliberately not mounted; granted reads go through `GET /file/:id/content` instead, ADR 0025/0026)
+   - Rate limiting change  → read the `ThrottlerModule.forRootAsync` block in `app.module.ts` (global default + `skipIf`-based `THROTTLE_ENABLED` bypass, ADR 0054 D2) together with the `APP_GUARD` provider, the `@SkipThrottle()` exemptions in `backend/health/health.controller.ts` / `backend/metrics/metrics.controller.ts`, and the `@Throttle({ default: {...} })` overrides in `backend/auth/auth.controller.ts` (register/signIn/rotateAccessToken, 5/min) and `backend/upload/upload.controller.ts` (uploadMedia, 15/min) (ADR 0053, ADR 0054)
 2. Never invent APIs, files, functions, or types that you have not confirmed exist in the codebase.
 3. Reuse existing patterns only; do not introduce new abstractions unless explicitly asked.
 4. Verify every assumption with actual code, search results, or test output — not memory or inference alone.
@@ -52,6 +58,14 @@ Before making any change:
     file the claim is about if anything (a commit, an edit, another session) may have touched
     it since the evidence was gathered. `git status`/`git log` only say *that* something
     changed, never *what* the content now says — they are not a substitute for re-reading.
+11. Before implementing anything non-trivial, confirm what this project actually is and what
+    it builds by reading the real files — `README.md`, `package.json`, this file's Project
+    Overview section — rather than assuming it from memory of a prior session or from the task
+    description alone. Use that concrete picture of the app's nature and characteristics (its
+    domain, its scale, its existing patterns — Sharenpo: a NestJS REST API for authenticated
+    image/audio/video upload and management) to shape an efficient implementation approach:
+    reuse the pattern that already fits this specific app (Project-Specific Principles,
+    Architecture Decisions) rather than reaching for a generic default that ignores it.
 
 ## Scope Discipline (범위 준수)
 
@@ -92,6 +106,119 @@ Before implementing anything non-trivial, ask the one question that applies:
 | Architecturally significant decision (schema change, new module, an alternative weighed and rejected) | Describe the alternatives and the trade-off in plain text first, and confirm whether this needs its own ADR — do not settle the decision in code before it is written down. |
 
 Ask one focused question rather than a list. Do not proceed on assumptions when intent is ambiguous.
+
+## AI Development Workflow (AI 개발 워크플로우)
+
+This section is a process scaffold, not a technical rule set. Where following it would mean
+skipping something Hallucination Prevention, Scope Discipline, Never Do, or Architecture
+Decisions requires, those rules win — use this section to decide *how much process* a task
+needs, not *what the code should do*.
+
+### Development Lifecycle (개발 생명주기)
+
+The full lifecycle a task can move through, in order. Most tasks use a subset — see
+Task-Scale Protocol below.
+
+1. **Requirement** — pin down what is actually being asked; resolve ambiguity via
+   Clarification Protocol rather than assuming it.
+2. **Impact** — identify what the change touches (Scope Discipline's high-blast-radius
+   files, affected modules, cross-module contracts).
+3. **Research** — read the real code, tests, and docs before deciding anything
+   (Hallucination Prevention #1's concern-to-entrypoint map).
+4. **Design** — plan the structure end to end (Analysis Protocol > Structure Analysis).
+5. **Implementation** — write the change per the plan, following Never Do, File Creation
+   Convention, and Project-Specific Principles.
+6. **Testing** — run `pnpm lint`/`pnpm test` (or the relevant subset) (Hallucination
+   Prevention #5, Key Conventions > Testing).
+7. **Review** — check the diff independently against Never Do and Architecture Decisions
+   (Analysis Protocol > Result Review); see Session Separation below for who does this.
+8. **Fix** — address what Review found.
+9. **Regression** — confirm existing behavior the change didn't intend to touch still holds.
+10. **Release** — this repo has no automated CD (CI/CD) — when a task actually reaches
+    deployment, this stage is the human-run `helm upgrade`/`deploy.sh` step, not something
+    CI triggers.
+11. **Production Verification** — confirm real behavior in a live environment when the task
+    actually reaches one (a real DB, a deployed cluster) — see Commands > Live-testing a
+    sweep/reclaim service for the sandboxing rule that applies whenever this step is
+    destructive.
+12. **Retrospective** — briefly note what worked and what didn't.
+13. **Knowledge Capture** — record the decision and its reasoning (Change Summary; an ADR
+    for anything architecturally significant; Known Gaps & Roadmap for anything deferred).
+
+### Task-Scale Protocol (작업 규모별 프로토콜)
+
+Not every task needs the full lifecycle. Classify the task before starting, state the
+classification in one line, and apply only that subset — when in doubt, size up rather than
+down:
+
+| Scale | Examples | Stages |
+|---|---|---|
+| **Small** | Typo, a small bug fix, a one-line config tweak | Implementation → Testing |
+| **Medium** | A typical feature add or change | Requirement → Research → Design → Implementation → Testing → Review → Regression |
+| **Large** | Architectural change, DB migration, a core-flow rewrite | Requirement → Impact → Research → Design (+ Security/Performance Review where relevant) → Implementation → Testing → Review → Fix → Regression → Release → Production Verification → Retrospective → Knowledge Capture |
+
+A Large task that touches a high-blast-radius file or a schema change already requires
+explicit approval under Scope Discipline — that approval gate applies regardless of which
+stage it falls under here.
+
+### Session Separation (세션 분리 원칙)
+
+For Medium/Large work, default order:
+
+Research/Design → Implementation → Testing → Independent Review → Fix → Regression
+
+Implementation and Review should not be the same pass: Review re-derives its findings from
+the actual diff and current code, never from the implementer's own explanation of why the
+change is correct (Hallucination Prevention #4, applied to reviewing rather than
+implementing) — in practice, a separate session for Review on Large work, or at minimum a
+review pass that deliberately does not reuse the implementation session's reasoning. This
+repo already sees parallel sessions on occasion (Hallucination Prevention #10); role sessions
+for a complex task may run in parallel the same way.
+
+### Roles (역할)
+
+One line each — what the role does, not how:
+
+- **Requirement Validation** — confirms what is actually being asked, resolves ambiguity.
+- **Architect** — designs overall structure and module boundaries.
+- **Research** — reads code/docs/history to establish the facts a decision rests on.
+- **Impact Analysis** — identifies which files/modules/contracts a change reaches.
+- **Design** — turns a requirement into a concrete implementation plan.
+- **Implementation** — writes the change per the plan.
+- **Testing** — runs lint/unit/e2e to verify behavior.
+- **Security Review** — checks the diff against Never Do Group 3 and Architecture
+  Decisions > Auth/Config.
+- **Performance Review** — checks for N+1, missing pagination, missing indexes (Never Do
+  Group 2, ADR 0049).
+- **Compatibility Review** — checks the change against existing API contracts and
+  consumers (`frontend/`, `admin/`).
+- **Migration Review** — reviews a `migration:generate` diff line by line (Scope
+  Discipline > Schema changes; `migration-review` skill).
+- **Observability Review** — checks whether logs/metrics would actually surface a
+  failure (Engineering Principles > Collaboration & Quality > Observability).
+- **Code Review** — judges correctness and convention adherence from the diff itself,
+  not the implementer's account of it.
+- **Debugging** — reproduces a failure and narrows it to a root cause before fixing it.
+- **Release Planning** — decides deploy order and the rollback path.
+- **Production Verification** — confirms real post-release behavior.
+- **Retrospective** — briefly reviews what worked and what didn't.
+- **Knowledge Capture** — records the decision and its reasoning (Change Summary/ADR).
+
+### Additional Working Principles (추가 작업 원칙)
+
+Most of what a workflow like this would state — investigate before implementing, verify
+assumptions instead of guessing, run tests, keep changes minimal, summarize on completion —
+is already this file's baseline (Hallucination Prevention, Scope Discipline, Change
+Summary). Two things worth stating that aren't covered elsewhere:
+
+- **Root cause before fix**: when a test or a report surfaces a problem, identify why it
+  happens before changing code — a fix aimed at the symptom tends to leave the actual cause
+  in place.
+- **Review judges the diff, not the intent**: a reviewer (a separate session, or a
+  deliberately independent pass) works from the actual code and diff, never from the
+  implementer's stated reasoning for why it's correct — restated here because it is the one
+  place in this workflow where reusing another session's conclusion defeats the point of
+  doing it separately.
 
 ## Analysis Protocol (분석)
 
@@ -178,17 +305,21 @@ templates, or other non-code files. Those are exempt from this section.
 
 When creating a new file (not when editing an existing one), add a short header
 comment above the imports stating:
-- Purpose: why this file exists (the gap it fills)
-- Usage: who/what is expected to import or call into it
-- Rationale: why it was added now, or why an existing file could not absorb this
+- 목적 (Purpose): why this file exists (the gap it fills)
+- 사용처 (Usage): who/what is expected to import or call into it
+- 근거 (Rationale): why it was added now, or why an existing file could not absorb this
 
 ```typescript
-// Purpose: isolates the temp_→granted_ path rewrite so it is testable without a DB.
-// Usage: imported by FileService.uploadFile(); not intended for direct use elsewhere.
-// Rationale: the rewrite logic was inline in file.service.ts and untestable in isolation.
+// 목적: temp_→granted_ 경로 재작성을 분리해 DB 없이도 테스트 가능하게 한다.
+// 사용처: FileService.uploadFile()에서 임포트한다 — 다른 곳에서 직접 쓸 용도가 아니다.
+// 근거: 재작성 로직이 file.service.ts에 인라인으로 있어 단독 테스트가 불가능했다.
 
 import ...
 ```
+
+(2026-09-09 결정: 파일 헤더 라벨을 영어 Purpose/Usage/Rationale에서 한글로 전환 — 함수
+블록의 목적/이유/방법과 표기를 통일. `사용처`/`근거`는 함수 블록의 `이유`/`방법`과 의미가
+달라 별도 라벨을 쓴다 — 사용처는 "누가 부르는가", 근거는 "왜 지금·왜 기존 파일이 아닌가"다.)
 
 Keep it to three lines, one per field — no exceptions for "obvious" files. This is the
 one place a file header comment is required regardless of how self-explanatory the file
@@ -370,8 +501,8 @@ const secret = this.configService.getOrThrow<string>('ACCESS_TOKEN_SECRET')
 // ❌ Pagination missing on list endpoints → full table scan, OOM, slow response
 getFiles(): Promise<FileEntity[]>
 // ✅
-getFiles(take: number, skip: number): Promise<FileEntity[]>
-// (the current getFiles(take, skip) + GetFilesDto follows this — new list endpoints must too)
+getFiles(query: GetFilesDto): Promise<[FileEntity[], number]>
+// (the current getFiles(query: GetFilesDto) follows this — new list endpoints must too)
 ```
 
 ### GROUP 3 — Security
@@ -429,6 +560,18 @@ res.sendFile(req.query.path)
 // unintended actions.
 // ✅ Describe the artifact's location, name, and size to the developer.
 // Never retrieve and display the content. Have the developer read it directly and report back.
+
+// ❌ AI tool exposing an env-stored key's value → leaks into chat output, shell scrollback,
+// logs, or a committed file. The var/key NAME is fine to read, log, or discuss (e.g. which
+// var is missing, which key a Joi entry validates) — the VALUE never is, through any channel.
+cat .env; echo $ACCESS_TOKEN_SECRET; console.log(this.configService.getOrThrow('DB_PASSWORD'))
+// ✅ Check presence/shape without revealing the value (e.g. `[ -n "$VAR" ]`, or grep for the
+// var NAME only). If the actual value must be verified, have the developer check it directly —
+// never retrieve, print, log, or write a key's value anywhere. If a value slips out by mistake
+// despite this, first check how serious the exposure is — where it landed (a local response
+// only, vs. a pushed commit, a shared log, a channel someone else can read) and whether it's
+// still reachable there — then report that severity assessment to the developer immediately,
+// along with which key and where; do not stay quiet about it or just move on.
 ```
 
 ## Engineering Principles
@@ -445,7 +588,7 @@ Principle Conflict Protocol.
 - Convention over Configuration — favor NestJS framework conventions and the existing
   Joi/class-validator setup over introducing custom configuration
 - Pragmatism over Perfection — conflicts with Never Do's zero-tolerance rules;
-  routed through Principle Conflict Protocol — does not excuse a violation by default
+  structurally non-negotiable — Never Do always wins, no case-by-case exception
 - Unix Philosophy, Orthogonality — treated as restatements of SRP/SoC, not distinct rules
 - Incremental Development — reflected in Introduction Analysis
 - Continuous Improvement — reflected in Result Review; in-session only
@@ -454,12 +597,12 @@ Principle Conflict Protocol.
 - Separation of Concerns, Modularity, High Cohesion & Low Coupling — basis of the
   four-module split (Auth = tokens only, User = CRUD only, File = metadata only,
   Upload = physical files only); see Project-Specific Principles > Module Responsibility
-- Information Hiding, Encapsulation — reflected in centralized config access
-  (ConfigService only) and response shaping via `toResponse()`
+- Information Hiding, Encapsulation — see Architecture Decisions > Config
+  (centralized config access) and Project-Specific Principles > Boundary
+  Validation & Response Shaping (entity-to-DTO shaping)
 - Composition over Inheritance — prefer composition via dependency injection over
-  building new class hierarchies; the only sanctioned inheritance is the Passport
-  strategy/guard pattern (`extends PassportStrategy`, `extends AuthGuard`) and DTO
-  `PartialType` mapping, both framework idioms
+  building new class hierarchies; see Project-Specific Principles > Sanctioned
+  Inheritance Points for the two framework-idiom exceptions
 - Abstraction — conflicts with "no new abstractions unless asked"; routed through
   Principle Conflict Protocol
 - Layered Architecture, Dependency Direction — Controller → Service → Repository;
@@ -473,8 +616,8 @@ Principle Conflict Protocol.
 - OCP — extend via new classes/strategies (e.g. a new Passport strategy), don't
   modify existing logic in place to add a new case
 - DIP — favor constructor injection over direct instantiation; cross-module
-  dependencies via `exports`/`imports` only (e.g. `UserModule` exports `UserService`
-  for `JwtStrategy`)
+  dependencies via `exports`/`imports` only (see Project-Specific Principles >
+  Module Responsibility for the concrete export contracts)
 - LSP — watch for subclasses that strengthen a parent method's precondition; prefer
   composition when adding a stricter variant of existing behavior
 - ISP — DTO role separation: CreateDto / UpdateDto / ResponseDto are independent
@@ -515,10 +658,15 @@ Principle Conflict Protocol.
 ### Reliability
 - Input Validation, Fail Securely — covered by Never Do Group 3; validation happens
   at the boundary only (DTO + global ValidationPipe) — services trust validated input
-- Defensive Programming — conflicts with the boundary-only validation stance; routed
-  through Principle Conflict Protocol — boundary-only wins by default
-- Robustness Principle (Postel's Law) — do not apply; strict input validation
-  (`forbidNonWhitelisted: true`) is the deliberate stance
+- Defensive Programming — scoped conflict with the boundary-only validation stance:
+  input-shape re-validation inside services is redundant and boundary-only wins,
+  structurally non-negotiable; entity-existence/null checks after a DB read are a
+  separate, mandatory rule (Never Do Group 1) and are unaffected by this scoping
+- Robustness Principle (Postel's Law) — partially applies, not rejected outright:
+  the "liberal in what you accept" axis is split — unknown fields are rejected
+  (`forbidNonWhitelisted: true`), but loosely-typed values are coerced
+  (`enableImplicitConversion`, see Project-Specific Principles > Boundary Validation
+  & Response Shaping) — do not cite this bullet to justify accepting undeclared fields
 - Error Transparency — internal detail belongs in server-side logs only; client-facing
   errors stay generic (the existing "Transaction aborted." pattern)
 - Retry Limits / Timeout — no external API integrations currently exist; these
@@ -528,11 +676,8 @@ Principle Conflict Protocol.
 ### Performance & Security
 - Secure by Default, Protect Sensitive Data, Fail Securely — covered by Never Do
   Group 3 and the serialization conventions
-- Principle of Least Privilege — ownership checks (2026-07-22) plus RBAC
-  (2026-07-25, ADR 0013): writes are "self/creator OR admin", role assignment is
-  superadmin-only, `GET /user` and `GET /audit-log` are admin-only. `role` is
-  server-controlled (not on any update DTO). New privileged endpoints follow the
-  same `@Roles` + rank-check pattern
+- Principle of Least Privilege — see Architecture Decisions > Auth for the
+  ownership/RBAC mechanism; new privileged endpoints follow the same pattern
 - Avoid Premature Optimization / Measure Before Optimizing — same principle, treat as one
 - Resource Efficiency — covered by the pagination/N+1 rules and the Multer size limit
 - Minimize Attack Surface — every non-auth endpoint sits behind `JwtAuthGuard`; new
@@ -541,11 +686,10 @@ Principle Conflict Protocol.
   storage-side: upload size limits
 
 ### Collaboration & Quality
-- Consistent Naming, Coding Standards — covered by Code Style and the existing
-  file-naming pattern (`{name}.{layer}.ts`, folders per concern: `dto/`, `entity/`,
-  `guard/`, `strategy/`, `interface/`, `decorator/`)
+- Consistent Naming, Coding Standards — covered by Code Style
 - Automated Testing — covered by Testing conventions; CI runs lint + unit + e2e on push/PR (see CI/CD)
-- Code Reviews, Version Control Discipline — out of scope for this file
+- Code Reviews, Version Control Discipline — out of scope for this file, except commit
+  message language (Korean) — see CI/CD > Commit Messages
 - Documentation as Code — Swagger decorators are the API documentation; the Change
   Summary requirement covers the rest. README endpoint lists must match real routes
 - Reproducible Builds — `pnpm-lock.yaml` is committed; the toolchain is pinned
@@ -569,8 +713,11 @@ rule, established pattern, or current implementation — including when a violat
 discovered mid-task — stop work immediately. Do not continue past the conflict, and do
 not silently resolve it by picking a side.
 
-1. **Stop and explain**: state which principle is in tension with which existing rule or
-   pattern (cite file:line), and why the conflict exists.
+1. **Stop and explain**: before naming a principle as the conflicting side, look up why it
+   exists — its inline `Rationale:` line, the ADR or doc it cites, or, absent either, the
+   convention it follows ("How to read the rules here" at the top of this file). Then state
+   which principle is in tension with which existing rule or pattern (cite file:line), why
+   the conflict exists, and that background.
 2. **State a prevention plan**: a concrete, scoped way to avoid this same conflict
    recurring (e.g., a new row in Clarification Protocol, a documented convention).
 3. **Ask step-by-step, not as one flat question**: narrow down with the developer what
@@ -605,6 +752,15 @@ one of these is violated, follow Principle Conflict Protocol.
   and the transaction that promotes a temp file. It also answers two questions for
   PostModule — may this user attach this file (`assertAttachableBy`, identity-only) and what
   is its public URL (`toResponse`) — and never imports PostModule in return (ADR 0023 D4).
+  It also hosts `GrantedCleanupService` (ADR 0051) — an **unexported** provider running the
+  DB-joined reclaim sweep for orphaned `granted_` files, not a public contract for other
+  modules. Unlike `TempCleanupModule`/`StorageModule`, this isn't cross-cutting
+  infrastructure shared by multiple domain modules — its entire job is reconciling
+  `FileModule`'s own entity against disk, so it stays inside `FileModule` rather than
+  getting its own operational module; everything it needs (`Repository<FileEntity>`,
+  `StorageModule`, `MetricsModule`) is already wired in here. Ships with
+  `GRANTED_SWEEP_DRY_RUN` defaulting `true` — report-only until an operator explicitly
+  opts into deletion.
 - **PostModule** owns board post content only: the `PostEntity` row, its optional 1:1
   reference to a file, and post CRUD. It never reads `file.creator` — attachability is
   FileModule's judgment to make. It exports `PostService` for the account cascade and for
@@ -687,6 +843,36 @@ one of these is violated, follow Principle Conflict Protocol.
   adapter. The sweep only ever considers `temp_`-prefixed objects; `granted_` objects
   are never candidates — the prefix state machine above is exactly what makes "still
   listed as `temp_` ⇒ unclaimed orphan" a safe, DB-free identification.
+- Granted-file reclaim (ADR 0051): unlike the temp sweep above, a `granted_` object's
+  orphan status is **not** decidable from its filename alone — it requires a join
+  against `file_entity.filePath`, since a granted object is only ever missing a row
+  through a failed post-commit unlink or a narrow insert/delete race (ADR 0020), never
+  through simply being unclaimed. `FileModule`'s `GrantedCleanupService` (an unexported
+  provider, not a separate module) does that join through `storage.listGranted()` + a
+  direct `FileEntity` repository read, gates
+  a candidate on a minimum age (a `MIN_AGE_MS` constant — a race guard, not an operator
+  tuning knob) to avoid misreading a
+  mid-flight `storage.promote()` as orphaned, and — unlike the temp sweep — defaults to
+  **report-only** (`GRANTED_SWEEP_DRY_RUN=true`): it logs candidates and records a
+  metric, but never calls `storage.unlink()` until an operator explicitly turns dry-run
+  off.
+
+### Sanctioned Inheritance Points
+
+- Breakdown: this project favors composition (DI) over building new class
+  hierarchies. The only class-extension inheritance in the codebase sits at two
+  framework-mandated points — Passport auth (`JwtStrategy extends PassportStrategy`;
+  `JwtAuthGuard`/`OptionalJwtAuthGuard extends AuthGuard`) and DTO composition
+  (`UpdateCommentDto`/`UpdateFileDto`/`UpdatePostDto`/
+  `UpdateUserDto extends PartialType(CreateXDto)`).
+- Rationale: both are framework idioms — Passport's strategy/guard contract and
+  `@nestjs/mapped-types`' `PartialType` helper — not project-invented hierarchies;
+  extending them is how this codebase plugs into the framework, not a design
+  choice weighed against composition.
+- Goal: any new class hierarchy outside these two points needs an explicit
+  decision (Scope Discipline > Architectural changes); do not add a new `extends`
+  relationship as a shortcut for shared behavior — prefer a shared service
+  injected into both call sites.
 
 ### Transaction Boundary per Multi-Write (트랜잭션 패턴 선택 기준)
 
@@ -765,8 +951,9 @@ Do not suggest alternatives to these decisions without explicit request.
   plus an access-token-only `role` claim (ADR 0028) so a client can read its own role
   without an extra request — `RolesGuard`/`AuthUser` never read this claim themselves
 - Guards: `JwtAuthGuard` (Passport strategy name `"jwt-auth-guard"`) protects all
-  non-auth controllers at class level; `LocalAuthGuard` (`"local-auth-guard"`) exists
-  for `POST /auth/signin/local` only
+  non-auth controllers at class level; `POST /auth/signin/local` (Passport local
+  strategy) was removed 2026-09-07 — `POST /auth/signin` (Basic) is the sole
+  signin path, and it never had a live caller (frontend/admin both confirmed clean)
 - Refresh (ADR 0012): the refresh token travels only as an httpOnly cookie
   (`refreshToken`: `SameSite=Strict`, `Path=/auth/token`, `Secure` in prod);
   `POST /auth/token/refresh` reads the cookie, rotates the pair (SHA-256 anchor
@@ -782,7 +969,11 @@ Do not suggest alternatives to these decisions without explicit request.
   OR admin"; `PATCH /user/:id/role` is superadmin-only (SERIALIZABLE tx, refuses
   to demote the last superadmin, clears the target refresh session). Deletes and
   role changes are recorded in the append-only `audit_log_entity` (no FKs; written
-  after the primary commit). `SUPERADMIN_EMAIL` seeds the first superadmin on boot
+  after the primary commit). `SUPERADMIN_EMAIL` names the first superadmin, but
+  promotion is a deliberate manual step (`pnpm promote-superadmin`), not automatic on
+  boot — the original boot-time auto-promotion trusted whoever registered that email
+  first, with no ownership check, so it was removed 2026-09-09 ([ADR
+  0052](docs/ADR/0052-superadmin-seed-manual-trigger.md), amends ADR 0013)
 - **Never suggest**: session-based auth, a single shared JWT secret, storing raw
   tokens server-side (session-auth and single-secret rationale: ADR 0001/0002 — a
   stateless API deliberately avoids a session store, and separate secrets stop a
@@ -816,7 +1007,7 @@ Do not suggest alternatives to these decisions without explicit request.
   without prior plain-text description of the entity change
 
 ### File Storage
-- **Storage port-adapter (landed 2026-08-07, [ADR 0029](ADR/0029-storage-port-adapter.md),
+- **Storage port-adapter (landed 2026-08-07, [ADR 0029](docs/ADR/0029-storage-port-adapter.md),
   amends this section's former "local disk only" framing)**: physical-file operations go
   through a `FileStorage` interface (`backend/storage/`) selected at boot by
   `STORAGE_DRIVER` (`'local'` default | `'s3'`). `LocalDiskStorage` ports ADR 0005's
@@ -829,6 +1020,21 @@ Do not suggest alternatives to these decisions without explicit request.
   default; switching a real deployment to `s3` is Stage 4 work (ROADMAP.md). Promotion
   (temp → `file/upload/granted_...`) goes through `storage.promote()`
   (`file.service.ts` `uploadFile`)
+- **Presigned S3 redirect (landed 2026-08-13, [ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md),
+  amends the storage port-adapter bullet above and the `GET /file/:id/content` description
+  below)**: `FileStorage` gains `getSignedReadUrl(key, contentType): Promise<string | null>`.
+  `LocalDiskStorage` always returns `null` (no presign concept — the controller falls back to
+  its existing stream/Range/206/416 path, unchanged); `S3Storage` returns a presigned
+  `GetObjectCommand` URL (`@aws-sdk/s3-request-presigner`, TTL read once at construction from
+  `CONTENT_SIGNED_URL_TTL_SECONDS`, default 300s — not a per-call parameter). In
+  `FileContentController.getContent`, this is called immediately after
+  `resolveContentAccess` passes — for all three visibility tiers, not just `public` — and a
+  non-null result short-circuits to a `302` redirect, skipping `stat()`/`createReadStream()`
+  entirely. Under `STORAGE_DRIVER=s3` this removes the app server from the byte-serving path;
+  under `local` nothing changes. No caching or reuse of an issued URL — every request
+  re-derives access and re-signs. Accepted trade-off: once redirected, the signed URL is a
+  bearer credential for private/unlisted content until it expires, independent of the
+  requester's JWT/share-token (ADR 0036 Consequences)
 - **File visibility (landed 2026-08-01, ADR 0025 D1/D2/D3/D6 + ADR 0026)**: `FileEntity`
   carries `visibility` (`public`/`private`/`unlisted`, **default `private`**), a nullable
   `shareToken` (server-generated random opaque string, set only while `unlisted`), and a
@@ -850,15 +1056,15 @@ Do not suggest alternatives to these decisions without explicit request.
   composed as `{BASE_URL}/{filePath}` — `toResponse()` builds `{BASE_URL}/file/:id/content`
   instead
 - **Upload constraint (media-type expansion landed 2026-08-01, ADR 0025 D4/D5 + [ADR
-  0027](ADR/0027-media-type-expansion-implementation.md))**: `POST /upload/attach` accepts
+  0027](docs/ADR/0027-media-type-expansion-implementation.md))**: `POST /upload/attach` accepts
   exactly one of three type-specific multipart fields, each with its own class allowlist —
   `image` (jpg/jpeg/png/webp), `audio` (mp3), `video` (mp4/mov/webm, unchanged) — via
   `FileFieldsInterceptor` and a shared `fileFilter` keyed on `file.fieldname`
   (`backend/upload/upload.controller.ts`). All three share the same `fileSize` limit,
   100,000,000 bytes (100MB), which caps disk usage and bounds an upload-based denial-of-
   service. Zero fields attached is 400 `UPLOAD_FILE_REQUIRED`; more than one is 400
-  `UPLOAD_MULTIPLE_FIELDS`. This **revises** [ADR 0003](ADR/0003-two-phase-upload-contract.md)
-  (the two-phase contract's field) and [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)
+  `UPLOAD_MULTIPLE_FIELDS`. This **revises** [ADR 0003](docs/ADR/0003-two-phase-upload-contract.md)
+  (the two-phase contract's field) and [ADR 0010](docs/ADR/0010-frontend-split-and-api-surface-freeze.md)
   (the frozen surface) — a breaking change against the live `frontend/`, which has not yet
   adopted it. The `temp_{uuid}_{timestamp}.{ext}` naming (extension read off
   `file.originalname`) moved from Multer's `diskStorage` callback to
@@ -867,6 +1073,33 @@ Do not suggest alternatives to these decisions without explicit request.
   and serving stay correct for the new classes: `TEMP_FILENAME_PATTERN`
   (`backend/file/dto/create-uploadFile.dto.ts`) and `CONTENT_TYPE_BY_EXTENSION`
   (`backend/file/file-content.controller.ts`)
+- **Persisted media type for playback (landed 2026-08-16, [ADR
+  0040](docs/ADR/0040-persisted-media-type-for-playback.md))**: `FileEntity` gains
+  `mediaType` (new `FileMediaType` enum: `image`/`audio`/`video`, **`NOT NULL`**,
+  backend/file/entity/file-media-type.enum.ts). `FileService.uploadFile()` derives it
+  from the stored path's extension via a private `mediaTypeFromExtension()` — never
+  client-supplied, no new `UploadFileDto` field, no change to `upload.controller.ts`/
+  `upload.service.ts`. This is a **third** extension-keyed lookup alongside
+  `TEMP_FILENAME_PATTERN` and `CONTENT_TYPE_BY_EXTENSION` above — kept as its own
+  unshared mapping, consistent with those two never having been merged either (ADR
+  0040 D6); a fourth accepted extension needs all three updated together. Every
+  pre-existing row was backfilled by a hand-authored migration (`ADD` nullable →
+  extension-derived `UPDATE` → `SET NOT NULL` — `migration:generate` cannot know a
+  backfill is needed). `FileResponseDto.mediaType` is what `frontend/`'s
+  `FileDetailPage.tsx`/`PostDetailPage.tsx` now branch their `<img>`/`<audio
+  controls>`/`<video controls>` tag on, replacing an unconditional `<video>` that
+  couldn't play an uploaded image or mp3
+- **Orphaned granted-file reclaim (landed 2026-09-05 — [ADR
+  0051](docs/ADR/0051-orphaned-granted-file-reclaim.md))**: `FileStorage` gains
+  `listGranted()` (both adapters, reusing `StorageTempEntry`); `FileModule` gains an
+  unexported `GrantedCleanupService` provider (not a separate module — its entire job is
+  reconciling `FileModule`'s own entity against disk, and everything it needs was already
+  wired into `FileModule`) that runs a scheduled sweep diffing `file/upload` against
+  `file_entity.filePath` (a direct `Repository<FileEntity>` injection, not a `FileService`
+  export) and reports — never deletes — orphan candidates unless `GRANTED_SWEEP_DRY_RUN`
+  is explicitly set to `false`. Ships inert with respect to deletion: the code path exists
+  and is unit-tested, but no production data has been reclaimed by it yet, and doing so
+  requires an operator decision, not a code change
 - **Never suggest**: streaming/chunked upload, CDN — unless explicitly requested. S3 is no
   longer in this list: the storage port-adapter (ADR 0029, above) landed both an
   `S3Storage` implementation and the `STORAGE_DRIVER` switch, but `local` stays the
@@ -884,6 +1117,40 @@ Do not suggest alternatives to these decisions without explicit request.
   (`APP_FILTER` in `app.module.ts`). New throw sites must attach a code — the
   status-based fallbacks cover framework-originated throws only. Renaming or
   removing a code is a breaking change; adding one is free
+- **Rate limiting (landed 2026-09-10, [ADR 0053](docs/ADR/0053-global-rate-limiting.md),
+  per-route tuning [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))**:
+  a global `ThrottlerGuard` (`@nestjs/throttler`) runs on every route via `APP_GUARD` —
+  this repository's first global guard — at a conservative default of 100 requests/minute
+  (`ThrottlerModule.forRootAsync` in `app.module.ts`). ADR 0054 then tightened two surfaces
+  via a route-level `@Throttle({ default: { limit, ttl } })` override: `POST /auth/register`,
+  `POST /auth/signin`, and `POST /auth/token/refresh` (5/minute — the credential-check
+  surface a brute-force attempt would target) and `POST /upload/attach` (15/minute — writes
+  to disk before any ownership check). `POST /auth/signout` deliberately stays at the
+  100/minute default — it requires an already-valid access token, so it isn't a
+  credential-guessing surface. The 100/minute ceiling (and the tighter overrides) are **per
+  route, not shared app-wide**: the library's default `generateKey` hashes controller class +
+  handler method + client IP, so `GET /file` and `POST /auth/signin` from the same client
+  track independently — live-verified by hammering `GET /file` past its own limit (429) and
+  immediately confirming `POST /auth/signin` from the same client was unaffected.
+  `HealthController`/`MetricsController` carry a class-level `@SkipThrottle()` — kubelet's
+  probes and Prometheus' scrapes repeat on a fixed interval for a pod's whole lifetime, and
+  because the limit is per-route, that repetition can run *that one route's own* ceiling dry
+  by itself (a tight probe interval, or several replicas sharing an egress IP) — not a
+  matter of competing with unrelated app traffic. `THROTTLE_ENABLED` (Joi,
+  default `true`) exists only to isolate e2e suites that would otherwise share one
+  counter across hundreds of sequential requests from the same client IP: the Jest-based
+  backend e2e suite (`test/app.e2e-spec.ts`, `test/e2e-env.ts` sets it `false`) and, for
+  the same reason, `frontend-e2e`/`admin-e2e` in `.github/workflows/ci.yml` — both boot
+  the compiled backend directly (`node dist/main`) rather than going through
+  `test/e2e-env.ts`, so each Playwright spec's repeated register+signin calls hit the
+  5/minute auth ceiling (ADR 0054) within a run unless the CI job's own `env:` block sets
+  it too. Dev/prod always run `true`; it is not a dev/prod axis. It is implemented as a
+  module-level `skipIf` in `ThrottlerModule.forRootAsync` (ADR 0054 D2, replacing an earlier
+  `limit: MAX_SAFE_INTEGER` inflation that would not have covered route-level overrides),
+  so it bypasses the default throttler and any `@Throttle()` override uniformly. Known
+  limitation: the default storage is single-instance in-memory, so a future multi-replica
+  deployment would need Redis-backed storage to keep one true global ceiling — out of scope
+  until this app actually runs more than one replica
 - **Never suggest**: GraphQL, WebSocket, gRPC — the small request/response CRUD surface
   does not justify the schema layer, client story, or operational overhead each would add
   (full reasoning: ADR 0009)
@@ -915,8 +1182,11 @@ Do not suggest alternatives to these decisions without explicit request.
   boolean-ish query flag on a destructive path follows the same shape
 - Physical deletion is **post-commit and best-effort** via
   `unlinkStoredFiles` (`backend/common/`), which refuses paths outside `file/upload/` and
-  reports failures for the caller to log at `warn`. Nothing sweeps `file/upload` — a
-  `granted_` sweep would need a DB join (unlike ADR 0018's filename-only decision)
+  reports failures for the caller to log at `warn`. `file/upload` is no longer entirely
+  unwatched: `FileModule`'s `GrantedCleanupService` scans it against
+  `file_entity.filePath` on a schedule (ADR 0051) — but it ships report-only
+  (`GRANTED_SWEEP_DRY_RUN` defaults `true`), so an operator must explicitly opt in
+  before anything found this way is actually deleted
 - File rows stay `FileService`'s responsibility even during an account cascade:
   `UserService` owns the transaction and passes its `EntityManager` to
   `findStoredPathsOfCreator` / `deleteFilesOfCreator`
@@ -961,17 +1231,49 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
 - ~~Ownership checks~~ — **landed 2026-07-22** (commit `0549ca4`): user writes self-only,
   file writes creator-only
 - ~~Storage port-adapter (`FileStorage` interface)~~ — **landed 2026-08-07**
-  ([ADR 0029](ADR/0029-storage-port-adapter.md)): the code-first slice of the Stage 4
+  ([ADR 0029](docs/ADR/0029-storage-port-adapter.md)): the code-first slice of the Stage 4
   cloud-native infrastructure task — see Architecture Decisions > File Storage. `local`
   stays the operative default; the real S3 cutover is still Stage 4 work
 - ~~Container/deploy hardening (non-root, health endpoints, migration deploy step)~~ —
-  **landed 2026-08-08** ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–
-  [ADR 0034](ADR/0034-https-termination-stance.md)): the container/deploy hardening ADR
+  **landed 2026-08-08** ([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.md)–
+  [ADR 0034](docs/ADR/0034-https-termination-stance.md)): the container/deploy hardening ADR
   0015 deferred — see CI/CD and Module Responsibility > HealthModule. Distroless, a real
-  secrets manager, HTTPS termination, and multi-arch stay open (ROADMAP.md > Unscheduled)
-- Chat-project remnant handling — docs audited clean 2026-07-22; pending git-history
-  decision + re-verification trigger. See `CHAT-REMNANT-REMOVAL-PLAN.md` and
-  ROADMAP.md > Unscheduled / open decisions
+  secrets manager, and HTTPS termination stay open (ROADMAP.md > Unscheduled) — multi-arch
+  (ARM/Graviton) is **not** open: `bcrypt`'s x64-only premise was retracted 2026-08-12
+  (ADR 0035), CI has published real `linux/amd64,linux/arm64` images from `main` since
+  2026-08-13, and the graviton node group was the live app's primary, developer-confirmed
+  architecture as of 2026-08-27
+- ~~Chat-project remnant handling~~ — docs (and, as of a 2026-09-07 full-scope
+  re-verification, `frontend/`/`backend/` code too) audited clean; the git-history
+  decision was **made 2026-09-07: leave as-is**, the plan's own recommended option. See
+  `CHAT-REMNANT-REMOVAL-PLAN.md` and ROADMAP.md > Unscheduled / open decisions — the
+  re-verification trigger itself stays a standing habit, not a one-time task
+- ~~Helm chart project adaptation + `k8s/`/`helm/` directory consolidation~~ —
+  **landed 2026-08-17** ([ADR 0041](docs/ADR/0041-helm-chart-project-adaptation.md),
+  [ADR 0042](docs/ADR/0042-k8s-helm-directory-consolidation.md), lifting ADR 0037's
+  deferral): the chart at `k8s/helm/` now ships real image/port, health probes,
+  non-root `securityContext`, a `ConfigMap`, `existingSecret`-only `Secret`
+  consumption, a migration `Job`, and a disabled-by-default `Ingress` —
+  `helm install --wait` verified end-to-end against a throwaway local `kind`
+  cluster (found and fixed 2 real bugs: hook ordering, empty-string env vars).
+  `k8s/`'s five standalone static manifests (unwired, duplicating a strict subset
+  of the chart) were deleted rather than kept in sync. **A real target cluster
+  now exists and runs it**: the app was deployed onto the live AWS/EKS cluster
+  and reached `STATUS: deployed` 2026-08-27 (ROADMAP.md §9)
+- ~~Prometheus/Grafana observability stack~~ — **landed 2026-08-29/30**
+  ([ADR 0047](docs/ADR/0047-observability-prometheus-grafana.md)): self-hosted via
+  `k8s/infra/terraform/addons/main.tf`'s `enable_kube_prometheus_stack` flag
+  (kube-prometheus-stack — Prometheus Operator, Prometheus, Grafana, Alertmanager,
+  one Helm release); app-side, a new `prom-client`-based `MetricsModule` exports
+  `GET /metrics` (unauthenticated, mirrors `HealthController`) and a global
+  `MetricsInterceptor` records per-request duration, with domain counters
+  (`upload_claims_total` in `FileService`, `temp_cleanup_deleted_total` in
+  `TempCleanupService`). A new `k8s/helm/templates/servicemonitor.yaml`
+  (values-gated, off by default — mirrors `Ingress`) wires Prometheus to scrape it.
+  Live-verified against the real cluster: Prometheus target `up=1`, custom counters
+  present in query results, Grafana's `Prometheus` datasource auto-provisioned and
+  its default dashboards rendering. Stage 4's remaining DevOps-stack work is now
+  just Istio and the still-disabled `Ingress`, not the deploy act itself
 
 **Full roadmap plan (decided 2026-07-23)**: an 11-axis decision review fixed the
 overall plan in ROADMAP.md — staged dedicated tasks: Stage F frontend
@@ -993,7 +1295,12 @@ Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform · Is
 Terraform] — the industry-standard toolchain, for a real-world-like dev/deploy/ops environment
 and future scaling; Docker + CI already landed in Stage 1, S3 is the storage port-adapter's
 concrete form)** as the immediate
-pre-deploy task, performance criteria, and finally **deployment itself — the terminal act,
+pre-deploy task, ~~performance criteria~~ [**landed 2026-08-31**, [ADR
+0049](docs/ADR/0049-performance-capacity-criteria.md) — response-time targets (p50/p95) set
+per endpoint tier, all three of ADR 0021's deferred indexes adopted for **both**
+`file_entity`/`post_entity` after measuring at a 10,000-row seed, file-storage disk ceiling
+handled via the existing observability stack's usage-rate monitoring (ADR 0047) rather than an
+absolute cap], and finally **deployment itself — the terminal act,
 deliberately carrying no execution number** (a number only re-invited the Stage 4/Stage 5
 ordering confusion; it is simply the last work) → **Stage 5 operational surface — admin console (appended 2026-07-30,
 ADR 0022**: role-delivery decision, adapting the imported `admin/` console,
@@ -1006,24 +1313,34 @@ still lands only as its own dedicated task with its own ADR — until then, the
 Architecture Decisions above remain operative.
 
 **Known gaps** (documented, not yet scheduled):
-- `pnpm audit --prod` is **clean as of 2026-07-24**: multer was promoted to a
-  direct dependency (upload.module.ts imports it directly — was a phantom
-  transitive dep that crashed `node dist/main`), runtime-reachable advisories
-  pinned via `pnpm.overrides` (multer, body-parser, path-to-regexp, file-type,
-  lodash, diff, scoped `@nestjs/swagger>js-yaml`; jws/validator since
-  2026-07-22), and Nest/typeorm/joi/uuid updated in-range. Dev-transitive
-  findings remain (handlebars via ts-jest; glob/minimatch/webpack via
-  jest/@nestjs/cli/eslint) — build/test-time only, waiting on upstream releases
+- `pnpm audit --prod` is **clean as of 2026-09-10**: qs (DoS + array-limit
+  bypass, `>=6.16.0`) and brace-expansion (DoS, `>=2.1.4`, via
+  `typeorm>glob>minimatch`) pinned via two new `pnpm.overrides` entries; the
+  existing multer (`^2.3.0`) and `@nestjs/swagger>js-yaml` (`^4.3.2`) overrides
+  bumped past their prior floors to cover newly-disclosed DoS/CPU-exhaustion
+  advisories; joi moved to `18.2.8` (prototype-pollution fixes) inside its
+  existing `^18.2.3` range via `pnpm update joi` — no override needed. The
+  unused legacy `aws-sdk` v2 dependency (installed 2026-08-13, `git log`
+  confirms no `.ts` file ever imported it — the project had already settled on
+  `@aws-sdk/client-s3`/`s3-request-presigner` v3 that same evening, ADR 0036)
+  was removed outright rather than overridden, taking its bundled vulnerable
+  `uuid` and its own unpatched region-validation finding with it. Dev-transitive
+  findings stay out of scope — plain `pnpm audit` (not `--prod`) now reports 58
+  (a handful in 2026-07-24), including one critical (`handlebars` via
+  `ts-jest`) — still build/test-time only, waiting on upstream releases in the
+  jest/@nestjs/cli/eslint toolchains
 - `test/app.e2e-spec.ts` is the untouched Nest template: it targets `GET /`, which
   does not exist in this app, and booting AppModule needs a live DB — the e2e suite
   needs a real rewrite before it verifies anything
 - ~~Deleting a user who owns files hits an FK constraint~~ — **resolved 2026-07-30**
   (ADR 0020): `DELETE /user/:id?deleteFiles=true` cascades (post rows → file rows →
   user row → stored files; posts joined the order 2026-07-31, ADR 0023); unconfirmed,
-  it is a typed 409 `USER_HAS_FILES`. Residual, accepted:
-  nothing sweeps `file/upload`, so a failed unlink (or a file inserted between the
-  path read and the delete) leaves an orphan on disk — logged at `warn`, not repaired
-  (reclamation needs a DB-joined design; tracked in ROADMAP > Unscheduled).
+  it is a typed 409 `USER_HAS_FILES`. Residual, mostly accepted:
+  a failed unlink (or a file inserted between the path read and the delete) leaves an
+  orphan on disk — logged at `warn`, not repaired inline. `GrantedCleanupService`
+  (ADR 0051) can now detect this class of orphan on a schedule, but ships report-only;
+  actually reclaiming the disk space still needs an operator to flip
+  `GRANTED_SWEEP_DRY_RUN=false`, not a further code change.
   The one path this left as a 500 — a stranger's post referencing the account's file — was
   closed separately by ADR 0024; see the next entry
 - ~~File ownership reassignment can produce an FK-violation 500 on account deletion~~ —
@@ -1038,26 +1355,83 @@ Architecture Decisions above remain operative.
   consequence of the same break, so do not "simplify" it away as an unreachable guard.
   Accepted residual: an account whose file is attached to *another user's* post cannot be
   deleted until that post is removed (409, actionable — any admin can delete the blocking post)
-- **`PATCH /file/:id { userId }` has never been justified by any decision** (recorded
-  2026-07-31, ADR 0024 > Consequences). The field transfers a file to another account
-  outright — the previous owner loses every write right, the recipient never consents, and
-  `canManage` lets an admin transfer a third party's file. ADR 0007 mentions it only to say
-  the guard is creator-only; nothing argues why the capability exists. It is the sole cause of
-  the invariant break above. Do not build on it as though it were a settled feature, and do
-  not remove it as drive-by cleanup: dropping it would turn ADR 0024's `23503` branch **and**
-  `PostService.resolveAttachment`'s author check into unreachable guards, so that is an ADR
-  that supersedes 0024, not a patch. Candidates are in ROADMAP > Unscheduled
-- `ARCHITECTURE.md` (+ko) lags the code: its "Non-Existent Infrastructure" section still
-  claims no CI workflow, no Dockerfile, and no Nest `Logger` usage (all three exist —
-  ADR 0015/0016/0017), Jest `roots` is written as `["src"]` (actually `["backend"]`), the
-  Testing section describes no e2e suite, and the `PATCH` rows still read "Self only" /
-  "Creator only" from before RBAC (ADR 0013). Verify against code, not against that file;
-  fixing it is a dedicated doc-audit task (tracked in ROADMAP > Unscheduled)
-- License mismatch: `package.json` says `UNLICENSED` while the pre-rewrite README
-  claimed MIT — needs an explicit decision before the repo is published
+- ~~`PATCH /file/:id { userId }` has never been justified by any decision~~ — **resolved
+  2026-09-04** ([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.md), amends
+  ADR 0024): the field's actual purpose (hand off owned files before deleting/leaving an
+  account) is now stated and implemented as a consent-gated propose/accept/reject/cancel
+  flow — the old unconsented immediate reassignment is removed. ADR 0024's `23503` →
+  `USER_FILES_IN_USE` translation and `PostService.resolveAttachment`'s author check both
+  **stay reachable and necessary** — consent changes who can trigger a reassignment, not
+  that a reassignment still produces the same downstream invariant break once accepted; see
+  ADR 0050's Consequences for why this amends ADR 0024 rather than superseding it. Backend
+  only — frontend/admin UI (propose/accept/reject actions, status badges) is a separate
+  follow-up under those directories' own scope
+- ~~`ARCHITECTURE.md` (+ko) lags the code~~ — **resolved 2026-09-01**: rewritten end to end
+  against current code. Added the seven modules missing from the Module Map (Post, Comment,
+  Storage, AuditLog, TempCleanup, Health, Metrics), RBAC (roles, `RolesGuard`, the
+  access-token `role` claim), the `FileController`/`FileContentController` split with
+  visibility/`mediaType`/the storage port/the S3 presigned redirect, the real env var set,
+  corrected Jest `roots` from `["src"]` to `["backend"]`, documented the e2e suite, and
+  replaced the false "Non-Existent Infrastructure" section with an accurate summary pointing
+  at README.md/ROADMAP.md. Verify against code going forward, not against memory of this
+  entry.
+- ~~License mismatch~~ — **decided 2026-09-07: MIT** (see ROADMAP.md > Unscheduled for
+  the full record). `package.json` (root + `frontend/` + `admin/`) and a root `LICENSE`
+  file both say MIT now; the "before published" framing was already stale by the time
+  this was decided — the repo turned out to already be public
 - CORS is opt-in via the optional `CORS_ORIGIN` env var (added 2026-07-22): unset =
   CORS disabled (same-origin/Swagger use); a browser frontend sets a comma-separated
   origin allowlist
+- ~~`JwtStrategy.validate`/`LocalStrategy.validate` each carried an `if (!user)` guard~~ —
+  **removed 2026-09-03**: both were already unreachable dead code — `UserService.findOne`
+  and `AuthService.validateUser` throw before ever returning falsy, so neither guard could
+  fire (`LocalStrategy`'s throw was also a plain-string `UnauthorizedException`, violating
+  the frozen ErrorBody contract, ADR 0011 — removed with it). Pure cleanup, no behavior
+  change. One residual left deliberately alone: `JwtStrategy.validate` still surfaces
+  `UserService.findOne`'s 404 `USER_NOT_FOUND` for a valid access token whose account was
+  deleted after issuance, instead of the originally-intended 401 `AUTH_UNAUTHORIZED`.
+  Converting that (wrapping `findOne` in a `try/catch`) was weighed and deferred — neither
+  strategy has a spec file (strategies are excluded from measured coverage), so a new
+  branch there would ship with no test safety net. Tracked here, not yet scheduled
+- ~~Superadmin boot-time auto-promotion trusted an unverified account~~ — **resolved
+  2026-09-09** ([ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.md), amends ADR
+  0013): a security review found `SuperadminSeedService` promoted whichever account held
+  `SUPERADMIN_EMAIL` on every boot with no ownership check — an attacker who registered
+  that address first would be silently promoted. The service is removed; promotion is now
+  `pnpm promote-superadmin`, a manual step an operator runs only after confirming the
+  account's ownership. `SUPERADMIN_EMAIL` itself is unchanged (still Joi-optional, no new
+  env var). Email verification and a "zero-superadmin" gate were both considered and
+  rejected for now — see ADR 0052's Context for why. **Live-verified 2026-09-10** against
+  an isolated throwaway DB (`sharenpo_promote_verify`, dropped after) — promote, re-run
+  no-op, unknown-email error, and unset-env-var error all behaved as designed; see ADR
+  0052's addendum
+- **Rate limiting keys on `req.ip`, and `trust proxy` is unset** ([ADR
+  0054](docs/ADR/0054-per-route-rate-limit-tuning.md) addendum, found 2026-09-10):
+  `ThrottlerGuard`'s default tracker reads Express's own client-socket resolution, not the
+  real originating client, once a reverse proxy sits in front of the app — confirmed
+  `backend/main.ts` has no `app.set('trust proxy', ...)` call. No live impact today (nothing
+  is deployed; `k8s/helm/`'s `Ingress` is disabled by default with no committed
+  ALB/nginx choice), but the moment `Ingress` is turned on, every external client's `req.ip`
+  resolves to the proxy's own address, collapsing the per-client 5/minute (`auth`) and
+  15/minute (`upload`) buckets ([ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
+  into one bucket shared by every visitor. Not fixed now — the correct `trust proxy` value
+  (a hop count or explicit proxy CIDR) depends on whichever ingress/load-balancer topology
+  is chosen when `Ingress` is actually enabled, which hasn't happened; revisit alongside
+  that task, not before
+- ~~Secret/hash-rounds Joi validation checked presence only, not strength~~ —
+  **resolved 2026-09-11**: a security review found `HASH_ROUNDS`/`ACCESS_TOKEN_SECRET`/
+  `REFRESH_TOKEN_SECRET` in `backend/app.module.ts`'s Joi schema validated only that a
+  value existed, never that it met any minimum strength. `HASH_ROUNDS` now requires
+  `Joi.number().min(10)`; the two secrets require `Joi.string().min(32)` plus a
+  `.pattern()` requiring a lowercase letter, an uppercase letter, a digit, and a symbol
+  — a short or low-entropy value now fails at boot with a named-field Joi error instead
+  of silently weakening JWT signing or the bcrypt cost factor (Never Do Group 3).
+  `.github/workflows/ci.yml`'s four dummy test-secret spots and `.env.example`'s
+  placeholder were updated to satisfy the new rule. **Live-verified 2026-09-11**: booted
+  the compiled app against five throwaway env combinations (too-short, missing-digit,
+  missing-symbol, low-hash-rounds, and a valid baseline) and confirmed each
+  failed/passed exactly as designed, without the real `.env` ever being read or its
+  values ever appearing in output
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for
@@ -1072,7 +1446,7 @@ paginated; `.env.example` documents `BASE_URL`; the "300MB" comment is fixed;
 NestJS REST API for authenticated video-file upload and management. JWT auth
 (Passport), PostgreSQL via TypeORM, Multer disk storage, Swagger documentation.
 A local/portfolio project, no deployment pipeline. **This CLAUDE.md governs the
-backend at the repo root** (`backend/`, `ADR/`, `test/`). A React + Vite frontend
+backend at the repo root** (`backend/`, `docs/ADR/`, `test/`). A React + Vite frontend
 was added 2026-07-24 as the `frontend/` subfolder (ADR 0010) — it has its own
 scoped `frontend/CLAUDE.md` and tooling, and is not a pnpm-workspace monorepo:
 the backend at the root is untouched (its Jest roots, migration paths, and lint
@@ -1122,12 +1496,55 @@ pnpm migration:run    # Apply pending migrations (builds first, runs dist/data-s
 pnpm migration:generate -- backend/migrations/Name   # Diff entities vs DB (review output line-by-line)
 pnpm migration:revert # Revert the last applied migration
 pnpm migration:show   # List applied/pending migrations
+pnpm promote-superadmin  # Promote SUPERADMIN_EMAIL's account to superadmin (manual, ADR 0052)
 ```
 
 ### Targeting a single test file
 ```bash
 pnpm test -- file.service
 ```
+
+### Background servers: kill by port, not by task (Windows)
+
+Any long-running `pnpm` command started in the background (`pnpm run start:dev`,
+`pnpm preview`, `pnpm dev` in `frontend/`/`admin/`) runs the real server as a **child**
+of the `pnpm` wrapper. Windows has no POSIX process-group signalling, so stopping the
+task kills only the wrapper — the orphaned `node` keeps the port bound. Measured
+2026-08-25: a `vite preview --port 4791` survived its task being stopped and still held
+the socket, which would have failed the next `--strictPort` run with a misleading
+"port in use".
+
+After stopping a background server, **verify the port is actually free** and kill the
+listener by PID if it is not:
+
+```bash
+netstat -ano | grep ":4791"                      # empty output = actually stopped
+powershell -NoProfile -Command "Stop-Process -Id <pid> -Force"
+```
+
+Confirm what the PID is before killing it (`Get-CimInstance Win32_Process -Filter
+'ProcessId=<pid>'` prints the command line) — never kill a PID you have not identified.
+
+### Live-testing a sweep/reclaim service: never against the real project directory
+
+Incident, 2026-09-05: manually verifying `GrantedCleanupService.sweep()` end to end (real
+DB, real disk, `GRANTED_SWEEP_DRY_RUN=false`) against this repo's actual `file/upload/`
+permanently deleted 44 pre-existing files. The local dev DB had zero `file_entity` rows at
+the time (a fresh, unmigrated-until-then volume) — exactly the "against an empty schema
+everything reads as orphaned" scenario [ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md)
+itself documents as the reason this class of sweep needs a DB join in the first place. The
+risk was written down; it still wasn't applied before running the live-delete step. `git
+ls-files -- file/upload` confirms that directory has never been tracked (deliberately
+gitignored — uploaded media), and `fs.unlink` bypasses the Recycle Bin, so there was no
+recovery path; the deleted files happened to be disposable test data, which was luck, not
+a property of the approach.
+
+Any live (non-dry-run) exercise of a sweep/reclaim service — this one or a future one —
+must run against an isolated sandbox directory (`process.chdir()` into a scratch path
+*before* constructing the storage adapter, which resolves paths off `process.cwd()`), never
+against this repo's real `file/temp`/`file/upload`, regardless of how empty or disposable
+that directory currently looks. Dry-run mode and a pure-selector unit test are not a
+substitute for this once the exercise actually calls the delete path.
 
 ## Architecture
 
@@ -1144,13 +1561,14 @@ pnpm test -- file.service
 **AuthModule** (`backend/auth/`)
 - REST: `POST /auth/register`, `POST /auth/signin` (both Basic token),
   `POST /auth/token/refresh` (httpOnly refresh cookie — rotation),
-  `POST /auth/signin/local` (Passport local strategy, body credentials),
-  `POST /auth/signout` (Bearer access token — clears anchor + cookie)
+  `POST /auth/signout` (Bearer access token — clears anchor + cookie).
+  `POST /auth/signin/local` (Passport local strategy, body credentials) was
+  removed 2026-09-07 — it never had a live caller; `validateUser` (the
+  credential check it shared with `signIn`) stays, `signIn` is its only caller now
 - `AuthService`: `parseBasicToken`, `verifyToken`, `validateUser`, `issueToken`,
   `issueTokenPair`, `rotateRefreshToken`, `signOut`, `register`, `signIn`
 - Strategies: `JwtStrategy` (`"jwt-auth-guard"`, validates access tokens, loads the user
-  via `UserService.findOne`, strips `password`), `LocalStrategy` (`"local-auth-guard"`,
-  email/password fields)
+  via `UserService.findOne`, strips `password`)
 - Imports `UserModule` for `UserService`; registers `JwtModule.register({})` (secrets
   supplied per-call, not module-level)
 
@@ -1199,8 +1617,9 @@ pnpm test -- file.service
   `GET /file/:id/content`, the sole path serving granted bytes
 - `FileService` — metadata CRUD; `uploadFile`/`updateFile` use the manual QueryRunner
   transaction pattern; `toResponse()` shapes `FileResponseDto` with `BASE_URL`, composing
-  `fileUrl` as the content-endpoint URL and including `shareUrl` only for a manager of an
-  unlisted file. `uploadFile` returns `{ replayed, file }` — the claim outcome (ADR 0019),
+  `fileUrl` as the content-endpoint URL, including `shareUrl` only for a manager of an
+  unlisted file, and `mediaType` (`image`/`audio`/`video`, extension-derived, ADR 0040) for
+  playback tag selection. `uploadFile` returns `{ replayed, file }` — the claim outcome (ADR 0019),
   which the controller maps to 200 (replay) or 201 (fresh promotion), defaulting the new
   row to `visibility: 'private'`. `getFiles`/`getFileById` filter `private`/`unlisted`
   rows from non-owner/non-admin requesters (ADR 0026 D7); `resolveContentAccess` is the
@@ -1234,14 +1653,21 @@ pnpm test -- file.service
 ### Entities (TypeORM)
 - `UserEntity` — email (unique), hashed password (`@Exclude` on serialization),
   `creator: FileEntity[]` (OneToMany), timestamps
-- `FileEntity` — title (unique), `filePath`, `creator: UserEntity` (ManyToOne,
-  `nullable: false`, `cascade: true`), timestamps
+- `FileEntity` — title (unique), `filePath`, `mediaType` (`FileMediaType` enum:
+  `image`/`audio`/`video`, `NOT NULL`, extension-derived, ADR 0040), `creator: UserEntity`
+  (ManyToOne, `nullable: false`, `cascade: true`), timestamps. `@Index('IDX_file_entity_createdAt_id',
+  ['createdAt', 'id'])` and `@Index('IDX_file_entity_creatorId', ['creator'])` serve the ADR
+  0021 list-query shapes (measured and adopted by ADR 0049); a third index,
+  `IDX_file_entity_title_trgm` (GIN + `pg_trgm` on `title`, for the `ILIKE '%term%'` search),
+  exists only in the migration — `@Index` cannot express its operator class
 - `PostEntity` — title (**not** unique — deliberately unlike `FileEntity.title`), `body`
   (text), `creator: UserEntity` (ManyToOne, `nullable: false`), `file: FileEntity | null`
   (OneToOne + `@JoinColumn`, unique + nullable — the idempotency key for `POST /post`),
   timestamps. Relations are **unidirectional**: neither `UserEntity` nor `FileEntity` gains
   an inverse collection, because the one inverse that exists (`UserEntity.creator`) is read
-  by zero queries (ADR 0023)
+  by zero queries (ADR 0023). Carries the same three ADR 0049 indexes as `FileEntity` above —
+  `IDX_post_entity_createdAt_id`, `IDX_post_entity_creatorId`, and the migration-only
+  `IDX_post_entity_title_trgm` — since it inherits the identical read layer
 - `CommentEntity` — `body` (text; ≤1,000 bounded at the DTO, not the column),
   `creator: UserEntity` (ManyToOne, `nullable: false`), `post: PostEntity` (ManyToOne,
   `nullable: false`, **`onDelete: 'CASCADE'`** — the schema's only DB-level cascade, ADR 0023
@@ -1280,7 +1706,7 @@ const mockFileRepository = {
 
 - **E2E (`test/*.e2e-spec.ts`, `pnpm test:e2e`)** — unlike unit tests, these hit a real
   Postgres (docker compose `db` or a manual one on 5435; CI uses a Postgres service). Isolation:
-  a throwaway `upload_board_e2e` database, built by the real migrations and truncated between
+  a throwaway `sharenpo_e2e` database, built by the real migrations and truncated between
   tests, dropped on teardown — the dev DB is never touched (`test/e2e-utils.ts`). The
   `DB_DATABASE` override lives in `test/e2e-env.ts`, wired as jest `setupFiles`, because
   `ConfigModule.forRoot` snapshots env at **AppModule import time** — setting it in `beforeAll`
@@ -1323,10 +1749,155 @@ cosmetic — a missing or wrong one is a documentation bug caught in Result Revi
 
 CI: GitHub Actions (`.github/workflows/ci.yml`, ADR 0016) runs lint (`lint:ci` — the
 0-error gate, no `--fix`) + unit tests and a separate e2e job (against a `postgres:16`
-service) on push/PR to `main`/`dev`. Local containerization: a multi-stage `Dockerfile`
-+ `docker-compose.yml` (ADR 0015; hardened 2026-08-08 — non-root `USER`, a `HEALTHCHECK`
-against `GET /health/live`, and migrations moved out of `CMD` into `docker-compose.yml`'s
-one-shot `migrate` service, ADR 0030–0032). There is **no deploy target and no git
-hooks** — AWS container deployment is a Stage 4 roadmap item (ROADMAP.md), and no
-git-hook tooling is installed. Do not assume a deploy pipeline or hooks; adding either is
+service), plus frontend/admin lint and e2e jobs. Trigger scope is asymmetric
+(ADR 0048 D1): `push` covers `main` and `dev`, `pull_request` covers `main` only —
+`dev` normally receives direct pushes rather than PRs in this project's workflow.
+A final `docker-publish` job (`needs` all other jobs) builds and pushes a Docker
+image with a branch-aware tag/platform split (ADR 0048 D2): `main` gets
+`:latest` + `:<sha>` on a `linux/amd64,linux/arm64` multi-arch build; `dev` gets
+`:<sha>` only on a `linux/amd64`-only build. Before every push, a smoke-test step
+(ADR 0048 D4) boots the built amd64 image against a throwaway `postgres:16`
+service and polls the Dockerfile's own `HEALTHCHECK` (`GET /health/live`) until
+healthy — the image is never pushed unproven. A workflow-wide `concurrency:
+cancel-in-progress` block (ADR 0048 D3) cancels a superseded run when a branch
+gets pushed to again before its CI finishes. Local containerization: a
+multi-stage `Dockerfile` + `docker-compose.yml` (ADR 0015; hardened 2026-08-08 —
+non-root `USER`, a `HEALTHCHECK` against `GET /health/live`, and migrations moved
+out of `CMD` into `docker-compose.yml`'s one-shot `migrate` service, ADR
+0030–0032). There is **no automated deploy pipeline (CD) and no git hooks** —
+the app is deployed to AWS (ROADMAP.md §9, 2026-08-27), but by a human running
+`helm upgrade` from a local session, not by GitHub Actions; CI still only runs
+lint/test/build/**publish** (image publish, landed via ADR 0048, is not the same
+as deploy — nothing triggers `helm upgrade`), and no git-hook tooling is
+installed. Do not assume a CI/CD deploy pipeline or hooks; adding either is
 explicit-request work under Scope Discipline.
+
+**QA stance (decided 2026-09-04)**: no manual QA gate between a passing CI run and a
+deployable image — deliberate, not an oversight. What replaces it: the smoke-test step above
+(a real boot + `/health/live` poll, not just "the build completed"), the Prometheus/Grafana
+observability stack (ADR 0047, live-verified) to catch what tests miss after deploy, and a
+fast, cheap rollback path (`deploy.sh`'s `IMAGE_TAG=<sha>` override — point back at any prior
+published image in one command). At this project's current scale (no live users, `deploy.sh`
+always human-approved via its `y`/N gate), the cost of a manual click-through pass on every
+deploy outweighs what it would catch beyond automated coverage. Revisit if the project ever
+carries real user traffic that a bad deploy could actually harm.
+
+## Commit Messages
+
+Write git commit messages in Korean (제목과 본문 모두) — decided 2026-08-27 at the
+developer's explicit request. This governs the commit message text itself; it does not
+change anything else — code, identifiers, comments, and the `.md`/`.ko.md` sibling
+convention above are unaffected, and the `Co-Authored-By:` trailer stays as-is (a fixed
+attribution line, not prose to translate). Applies from this decision forward; existing
+commit history is not rewritten.
+
+## Writing Tone
+
+Code comments, `.md`/`.ko.md` documentation (entries, edits, cleanup), commit messages, and
+other written artifacts left in this repo are written the way a person on this team would
+actually write them — not in a stock "AI assistant" register. Concretely: say the thing once,
+plainly; skip throat-clearing ("This function is responsible for...", "It should be noted
+that..."), skip restating what the code/diff already shows, skip padding a short fact into a
+long paragraph. This governs *phrasing*, not *content* — every field this file makes
+mandatory still has to be there (the 목적/이유/방법 block on a new/changed function, Korean
+commit messages, the `.ko.md` sibling) — it just has to read like a person wrote it, in
+whichever language the other rule already requires.
+
+## Development Tooling
+
+### MCP Servers
+
+Project-scoped MCP servers are declared in `.mcp.json` (committed) and pre-approved via
+`.claude/settings.json`'s `enabledMcpjsonServers` — added 2026-08-18 after an evidence-based
+review of Context7/Playwright/GitHub/Sentry/DB MCP/Chrome DevTools/Linear/Jira against this
+repo's actual gaps:
+- **Playwright MCP** (`@playwright/mcp`) — closes the "start the dev server and use the
+  feature in a browser" gap for `frontend/`/`admin/` UI changes: without it, verifying a
+  change means writing a throwaway script against the already-installed `@playwright/test`
+  dependency and reading back a screenshot, not an interactive navigate/click/observe loop
+- **Context7 MCP** (`@upstash/context7-mcp`) — up-to-date library docs for this repo's
+  fast-moving dependencies (NestJS, TypeORM, Terraform's AWS provider, `aws-sdk` v3); the
+  `@Transaction()` decorator ban in Never Do Group 2 (removed in TypeORM 0.3) is a concrete
+  precedent for the stale-API-knowledge failure this MCP targets
+- **Rejected**: GitHub MCP (redundant — `gh` CLI is already the sanctioned tool), Sentry MCP
+  (nothing to connect to; error tracking is still Stage 4/undeployed), DB MCP (would let
+  Claude bypass the service-layer visibility/ownership gates that raw SQL has no way to
+  enforce), Chrome DevTools MCP (overlaps Playwright MCP; picking one keeps it consistent
+  with the project's existing Playwright-based e2e convention), Linear/Jira (this repo tracks
+  work in-repo via `docs/ADR/`/`docs/ROADMAP.md`/`docs/CHANGELOG.md`, not an external tracker)
+
+Both require a session restart to take effect (MCP servers load at session start, not
+mid-session). Do not add further MCP servers without the same evidence-based check against
+this repo's actual gaps — the four rejections above are precedent, not an oversight.
+
+### Hooks
+
+Project hooks live in `.claude/hooks/*.js` (plain Node scripts, no dependency beyond `fs`/
+`path`) and are wired in `.claude/settings.json`'s `hooks` block — added 2026-08-18 as a
+deterministic backstop for rules this file already states in prose, on the reasoning that
+Auto Mode's bias toward proceeding without asking makes a model-memory-only safeguard
+unreliable for the highest-severity ones:
+- **`check-ko-sibling.js`** (`PostToolUse`/`Edit|Write`) — on any `.md` edit that isn't
+  itself a `.ko.md` file, reminds to update the `.ko.md` sibling in the same change
+  (Documentation Convention), or to create one if it doesn't exist yet
+- **`check-blast-radius.js`** (`PreToolUse`/`Edit|Write`) — forces an `ask` permission
+  prompt before any edit to `app.module.ts`/`main.ts`/`*.entity.ts` (Scope Discipline's
+  high-blast-radius file list)
+- **`check-migration-generate.js`** (`PreToolUse`/`Bash`) — forces an `ask` permission
+  prompt before any `migration:generate` invocation (Scope Discipline's prior-plain-text-
+  description requirement)
+
+A pair of session-logging hooks (`log-session-start.js`/`log-session-title.js`) lived here
+from 2026-08-19 to 2026-08-23 and were **deleted**, not fixed further — the session index
+they wrote is now generated by `.claude/scripts/rebuild-session-log.js` (see Scripts below).
+Do not reintroduce them: everything they sampled live is already recorded, more accurately,
+in the transcripts that script reads.
+
+All three fail open (`2>/dev/null || true`) — a script crash does not block the underlying
+tool call, since this file's own rules remain the primary safeguard and the hooks are
+defense-in-depth, not the sole enforcement. `migration:run`/`migration:revert`/`migration:show`
+deliberately do not match `check-migration-generate.js` — only `generate` carries the
+prior-description precondition.
+
+### Scripts
+
+`.claude/scripts/` holds on-demand maintenance scripts — plain Node, run by hand, never
+wired into `settings.json` (that is what `.claude/hooks/` is for):
+- **`rebuild-session-log.js`** (added 2026-08-23) — regenerates `docs/SESSION-LOG.md`
+  (+ `.ko.md`) from Claude Code's own transcripts under
+  `~/.claude/projects/<mangled-cwd>/<session_id>.jsonl`. One row per session, sorted by
+  the session's **first creation**, carrying its id, branch, title, and first message.
+  Run `node .claude/scripts/rebuild-session-log.js` from the repo root to refresh.
+  It reads what the deleted hooks could only sample: the first `human` entry supplies the
+  true creation timestamp/branch/first message, and `custom-title`/`ai-title` entries supply
+  the session title a `session_id` alone never carries (a custom title wins over the
+  generated one). Because the source is the transcript rather than a live event, it also
+  covers every session predating the logging hooks — the oldest recovered row is
+  2026-07-22, roughly a month before those hooks existed. `docs/SESSION-LOG.md`
+  (+ `.ko.md`) is gitignored, not committed: it is a regenerable local artifact that churns
+  per developer machine and per parallel session. Do not remove it from `.gitignore`, and
+  do not hand-edit the table — fix this script instead
+
+### Skills
+
+Project skills live in `.claude/skills/<name>/SKILL.md` (+ `.ko.md` sibling, like any other
+tracked document) — added 2026-08-18 to turn three procedures this file already states in
+prose into invocable, step-by-step workflows:
+- **`migration-review`** — the `migration:generate` review sequence (Scope Discipline >
+  Schema changes): plain-text description first, line-by-line diff review, strip spurious
+  constraint-rename statements, separate approval before `migration:run`. Complements
+  `check-migration-generate.js` above — the hook stops you before running the command, this
+  skill is what to actually do once confirmed
+- **`doc-authoring`** — the Documentation Authoring Protocol's five roles
+  (조사→계획→질문→작성→검증) for README/ARCHITECTURE/CHANGELOG/ROADMAP/CONTRIBUTING/ADR work
+- **`adr-authoring`** — the `docs/ADR/README.md` convention (numbering, filename, MADR-lite
+  section layout, amends/extends/supersedes, README table sync) for writing a new ADR once a
+  decision is already confirmed
+- **`principle-conflict`** (added 2026-08-19) — the Principle Conflict Protocol's five steps
+  (stop and explain → state a prevention plan → ask step-by-step → offer three resolution
+  paths → wait for the developer's choice) for when an Engineering Principle conflicts with
+  an existing rule, pattern, or implementation, including a violation discovered mid-task —
+  the one place Auto Mode's default bias toward proceeding does not apply
+
+Skills are read from disk at session start, same as MCP servers — a session restart is
+needed before a newly added or edited skill is invocable.

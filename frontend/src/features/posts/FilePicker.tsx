@@ -1,14 +1,15 @@
-// Purpose: lets a post author pick one of their own files to attach to a new post, or none.
-// Usage: rendered inside PostForm; reports the chosen fileId via onChange for the POST /post body.
-// Rationale: there is no "my unclaimed files" endpoint — GET /file?creatorId=<me> is reused (the
-//   same query FileBoard already consumes), and the server alone enforces the unclaimed invariant
-//   (409 POST_FILE_TAKEN on submit) since FileResponse carries no back-reference to a post.
+// 목적: 게시글 작성자가 본인 소유 파일 중 하나를 새 게시글에 첨부하도록(또는 첨부 안 함) 선택하게 한다.
+// 사용처: PostForm 내부에 렌더링된다; 선택된 fileId를 onChange로 알려 POST /post 본문에 담는다.
+// 근거: "내 미청구 파일" 전용 엔드포인트가 없어 GET /file?creatorId=<me>를 재사용한다(FileBoard가
+//   이미 쓰는 것과 같은 쿼리) — FileResponse가 게시글로의 역참조를 갖지 않으므로, 미청구 불변식은
+//   제출 시 서버가(409 POST_FILE_TAKEN) 단독으로 강제한다.
 
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { FileListResponse, FileResponse } from '../../api/types'
 import { useAuth } from '../../auth/useAuth'
+import styles from './FilePicker.module.css'
 
 const TAKE = 50
 
@@ -39,7 +40,7 @@ export function FilePicker({
   const [files, setFiles] = useState<FileResponse[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // Debounce the free-text search so every keystroke doesn't fire a request.
+  // 자유 텍스트 검색을 디바운스해 키 입력마다 요청이 나가지 않게 한다.
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedSearch(search.trim()), 400)
     return () => clearTimeout(handle)
@@ -66,10 +67,11 @@ export function FilePicker({
   }, [loadFiles])
 
   return (
-    <div style={{ display: 'grid', gap: 8 }}>
-      <label style={{ display: 'grid', gap: 4 }}>
+    <div className={styles.wrapper}>
+      <label className={styles.field}>
         Attach a file (optional)
         <input
+          className={styles.input}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           maxLength={100}
@@ -77,10 +79,10 @@ export function FilePicker({
           disabled={disabled}
         />
       </label>
-      {error && <p style={{ color: 'crimson', margin: 0 }}>{error}</p>}
-      {files === null && !error && <p style={{ margin: 0, color: '#555' }}>Loading your files…</p>}
-      <div style={{ maxHeight: 160, overflowY: 'auto', border: '1px solid #ddd', borderRadius: 6, padding: 8 }}>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      {error && <p className={styles.error}>{error}</p>}
+      {files === null && !error && <p className={styles.loadingText}>Loading your files…</p>}
+      <div className={styles.listBox}>
+        <label className={styles.radioLabel}>
           <input
             type="radio"
             name="filePicker"
@@ -90,9 +92,9 @@ export function FilePicker({
           />
           No file
         </label>
-        {files && files.length === 0 && <p style={{ margin: '4px 0', color: '#555' }}>No files found.</p>}
+        {files && files.length === 0 && <p className={styles.emptyText}>No files found.</p>}
         {files?.map((file) => (
-          <label key={file.id} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <label key={file.id} className={styles.radioLabel}>
             <input
               type="radio"
               name="filePicker"

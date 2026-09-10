@@ -3,7 +3,7 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
 ![Jest](https://img.shields.io/badge/Jest-C21325?style=flat&logo=jest&logoColor=white)
 
-# Upload Board Project
+# Sharenpo
 
 > 한국어 버전: [README.ko.md](README.ko.md)
 
@@ -11,7 +11,7 @@ A NestJS REST API where authenticated users upload and manage image, audio, and 
 files. JWT auth (Passport), PostgreSQL via TypeORM, Multer disk storage, transaction-safe
 file promotion, Swagger documentation. A local/portfolio backend project — no
 deploy pipeline. A React + Vite browser frontend lives in the `frontend/`
-subfolder of this repository ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md));
+subfolder of this repository ([ADR 0010](docs/ADR/0010-frontend-split-and-api-surface-freeze.md));
 this README covers the backend at the repo root.
 
 - Timeline: 6 weeks (initial build), ongoing refinement
@@ -21,11 +21,11 @@ this README covers the backend at the repo root.
 
 | Document | Purpose |
 |---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Module map, request flow, entities, conventions |
-| [ADR/](ADR/README.md) | Architecture decision records — the *why* behind the design |
-| [CHANGELOG.md](CHANGELOG.md) | Version history |
-| [ROADMAP.md](ROADMAP.md) | Full staged project plan and known gaps |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and conventions |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module map, request flow, entities, conventions |
+| [ADR/](docs/ADR/README.md) | Architecture decision records — the *why* behind the design |
+| [CHANGELOG.md](docs/CHANGELOG.md) | Version history |
+| [ROADMAP.md](docs/ROADMAP.md) | Full staged project plan and known gaps |
+| [CONTRIBUTING.md](docs/CONTRIBUTING.md) | Development workflow and conventions |
 | [CLAUDE.md](CLAUDE.md) | Operating contract for AI-assisted development |
 
 Each document has a Korean sibling (`*.ko.md`).
@@ -33,16 +33,24 @@ Each document has a Korean sibling (`*.ko.md`).
 ## Features
 
 - **Authentication** — register/sign-in via HTTP Basic token; dual-secret JWT
-  access/refresh pair with a `type` claim ([ADR 0002](ADR/0002-dual-secret-token-pair.md))
+  access/refresh pair with a `type` claim ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md))
 - **Two-phase upload** — `temp_` → `granted_` prefix state machine; the DB insert and
   the physical file move commit or roll back together
-  ([ADR 0003](ADR/0003-two-phase-upload-contract.md))
+  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md))
 - **RBAC + audit log** — `user`/`admin`/`superadmin` roles; ownership checks
   extend to "self or admin"; role changes and deletes are audited
-  ([ADR 0013](ADR/0013-rbac-and-audit-log.md), layered on
-  [ADR 0007](ADR/0007-ownership-checks-without-rbac.md))
+  ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.md), layered on
+  [ADR 0007](docs/ADR/0007-ownership-checks-without-rbac.md))
 - **Boundary validation** — global `ValidationPipe` (`whitelist` +
   `forbidNonWhitelisted`); serialized entities never leak `password`
+- **Rate limiting** — every route defaults to 100 requests/minute, tracked
+  independently per route (not one pool shared app-wide — `@nestjs/throttler`
+  keys on controller + handler + client IP); `POST /auth/register`/`signin`/
+  `token/refresh` are tightened to 5/minute and `POST /upload/attach` to
+  15/minute; health/metrics probes are exempt so orchestrator/Prometheus
+  traffic is never mistaken for abuse
+  ([ADR 0053](docs/ADR/0053-global-rate-limiting.md),
+  [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
 - **Swagger** — full API documentation and manual test bench at `/doc`
 
 ## Quick Start
@@ -73,6 +81,11 @@ pnpm run start:dev
 # 6. Open Swagger UI
 #    http://localhost:3000/doc
 
+# 7. (optional) Promote a superadmin account — register it first via
+#    POST /auth/register, set SUPERADMIN_EMAIL to that address in .env, then:
+#      pnpm promote-superadmin
+#    (ADR 0013/0052 — a deliberate manual step, not automatic)
+
 # Tests
 pnpm test              # unit tests
 pnpm run test:cov      # coverage (only services are measured)
@@ -80,7 +93,7 @@ pnpm run test:cov      # coverage (only services are measured)
 
 ### With Docker
 
-`docker compose` brings up Postgres and the API together ([ADR 0015](ADR/0015-docker-and-compose.md)).
+`docker compose` brings up Postgres and the API together ([ADR 0015](docs/ADR/0015-docker-and-compose.md)).
 Stop the legacy `upload-board-pg` container first — it holds host port 5435.
 
 ```bash
@@ -90,9 +103,9 @@ docker compose up --build   # db (postgres:16) → migrate (one-shot) → api on
 
 The `db` service publishes `${DB_PORT}` (5435), so host-run `pnpm test:e2e` and
 `pnpm migration:*` reach the same database. Migrations run as their own `migrate`
-service, not inside `api`'s boot ([ADR 0032](ADR/0032-migration-as-separate-deploy-step.md))
+service, not inside `api`'s boot ([ADR 0032](docs/ADR/0032-migration-as-separate-deploy-step.md))
 — `api` waits for `migrate` to exit 0. The image runs as a non-root user
-([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)); on a native Linux host, if
+([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.md)); on a native Linux host, if
 the bind-mounted `./file` directory fails to write, `chown` it once:
 `sudo chown -R 1001:1001 file/` (Windows/Mac Docker Desktop is unaffected).
 
@@ -101,13 +114,29 @@ the bind-mounted `./file` directory fails to write, `chown` it once:
 Required (Joi-validated at boot — missing vars fail fast): `ENV`, `DB_TYPE`
 (`postgres`), `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE`,
 `HASH_ROUNDS`, `ACCESS_TOKEN_SECRET`, `REFRESH_TOKEN_SECRET`,
-`ACCESS_TOKEN_SECRET_EXPIRES_IN`, `REFRESH_TOKEN_SECRET_EXPIRES_IN`.
+`ACCESS_TOKEN_SECRET_EXPIRES_IN`, `REFRESH_TOKEN_SECRET_EXPIRES_IN`. Since
+2026-09-11, validation goes beyond presence for three of these: `HASH_ROUNDS` must be
+`>= 10`, and `ACCESS_TOKEN_SECRET`/`REFRESH_TOKEN_SECRET` must each be at least 32
+characters and contain a lowercase letter, an uppercase letter, a digit, and a symbol —
+a weaker value fails at boot with a Joi error naming the field.
 
-Optional: `BASE_URL` (default `http://localhost:3000`; composes public file URLs),
+Optional (all Joi-validated with a default, or gated by their own condition — see
+`.env.example` for the full list with examples): `BASE_URL` (default
+`http://localhost:3000`; composes public file URLs), `PORT` (default `3000`),
 `CORS_ORIGIN` (unset = CORS disabled; comma-separated allowlist —
-[ADR 0008](ADR/0008-opt-in-cors.md)), `PORT` (default 3000),
-`SUPERADMIN_EMAIL` (unset = disabled; promotes that account to superadmin on boot —
-[ADR 0013](ADR/0013-rbac-and-audit-log.md)).
+[ADR 0008](docs/ADR/0008-opt-in-cors.md)), `SUPERADMIN_EMAIL` (unset = disabled;
+the target account for the manual `pnpm promote-superadmin` step, not an
+automatic boot-time promotion —
+[ADR 0013](docs/ADR/0013-rbac-and-audit-log.md)/[ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.md)), `TEMP_SWEEP_ENABLED` /
+`TEMP_SWEEP_CRON` / `TEMP_SWEEP_TTL_HOURS` / `TEMP_SWEEP_DRY_RUN` (orphan temp-file
+sweep — [ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.md)), `STORAGE_DRIVER`
+(`local` default | `s3`, with `S3_BUCKET`/`AWS_REGION` required when `s3` —
+[ADR 0029](docs/ADR/0029-storage-port-adapter.md)), `CONTENT_SIGNED_URL_TTL_SECONDS` (S3 presigned-redirect TTL, unused under `local` —
+[ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md)), and `THROTTLE_ENABLED`
+(default `true` — not a dev/prod switch; exists only so the e2e suite can bypass the
+global rate limit and the tighter per-route auth/upload limits —
+[ADR 0053](docs/ADR/0053-global-rate-limiting.md),
+[ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md)).
 
 ## API Endpoints
 
@@ -115,23 +144,22 @@ All endpoints except `/auth/*` require a Bearer access token.
 
 **Authentication** — the refresh token travels only as an httpOnly cookie
 (`SameSite=Strict`, `Path=/auth/token`); browsers must call refresh/signout with
-`credentials: 'include'` ([ADR 0012](ADR/0012-refresh-cookie-rotation.md))
+`credentials: 'include'` ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md))
 - `POST /auth/register` — register with a Basic token (`base64(email:password)`)
 - `POST /auth/signin` — get `{ accessToken }` + refresh cookie (Basic token)
-- `POST /auth/signin/local` — same, via body credentials (Passport local strategy)
 - `POST /auth/token/refresh` — rotates the refresh cookie, returns a new access
   token; replaying a rotated-out token invalidates the session (`AUTH_REFRESH_REUSED`)
 - `POST /auth/signout` — invalidates the server-side session anchor and clears
   the cookie (Bearer access token)
 
 **User** — user creation is `POST /auth/register`; there is no `POST /user`.
-Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.md))
+Roles: `user` / `admin` / `superadmin` ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.md))
 - `GET /user` — list users (admin only). `take` (1–100, default 20) and `skip` (default 0)
   paginate; `search` does a case-insensitive partial match on email (wildcards escaped);
   `sortBy` (`createdAt`|`email`|`id`, default `createdAt`) and `order` (`ASC`|`DESC`,
   default `DESC`) control sort, with `id` always added as a tiebreaker — the same
   search/sort shape `GET /file` already has
-  ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)). An undeclared query param is
+  ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md)). An undeclared query param is
   rejected as 400 `VALIDATION_FAILED` rather than silently ignored — the global
   `ValidationPipe`'s `forbidNonWhitelisted` treats a typo like `?orderby=email` as an
   error. Response is a `[users, totalCount]` tuple, matching `GET /file`
@@ -144,22 +172,22 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.m
   An account that owns files is
   refused with 409 `USER_HAS_FILES` unless the request confirms the cascade with
   `?deleteFiles=true`, which deletes the account together with its files — irreversibly
-  ([ADR 0020](ADR/0020-account-deletion-cascade.md)). The account's **posts are always
+  ([ADR 0020](docs/ADR/0020-account-deletion-cascade.md)). The account's **posts are always
   deleted with it**, with no confirmation of their own: the flag deliberately guards
-  media bytes only ([ADR 0023](ADR/0023-board-domain-schema.md)). A confirmed cascade is
+  media bytes only ([ADR 0023](docs/ADR/0023-board-domain-schema.md)). A confirmed cascade is
   still refused with 409 `USER_FILES_IN_USE` when one of the account's files is attached
   to *another user's* post — delete that post first
-  ([ADR 0024](ADR/0024-account-cascade-fk-refusal.md))
+  ([ADR 0024](docs/ADR/0024-account-cascade-fk-refusal.md))
 
 **File**
 - `POST /upload/attach` — upload a file to temp storage, 100 MB limit. Exactly one of three
   multipart fields, each with its own class allowlist: `image` (jpg/jpeg/png/webp), `audio`
   (mp3), `video` (mp4/mov/webm). Zero fields is 400 `UPLOAD_FILE_REQUIRED`; more than one is
   400 `UPLOAD_MULTIPLE_FIELDS`; a file that does not match its field's allowlist is 400
-  `UPLOAD_INVALID_TYPE` ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D4/D5,
-  [ADR 0027](ADR/0027-media-type-expansion-implementation.md))
+  `UPLOAD_INVALID_TYPE` ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md) D4/D5,
+  [ADR 0027](docs/ADR/0027-media-type-expansion-implementation.md))
 - `GET /file` — list files. All query parameters are optional and combinable; an undeclared
-  one is rejected as 400 `VALIDATION_FAILED` ([ADR 0021](ADR/0021-list-query-search-filter-sort.md))
+  one is rejected as 400 `VALIDATION_FAILED` ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md))
 
   | Parameter | Values | Default |
   |---|---|---|
@@ -173,30 +201,35 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](ADR/0013-rbac-and-audit-log.m
   Example: `GET /file?search=holiday&creatorId=3&sortBy=title&order=ASC&take=10`
 - `GET /file/:id` — get file metadata. A `private`/`unlisted` file is 404 `FILE_NOT_FOUND`
   for anyone but its creator/admin — existence itself is hidden
-  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md),
-  [ADR 0026](ADR/0026-file-visibility-implementation.md))
+  ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md),
+  [ADR 0026](docs/ADR/0026-file-visibility-implementation.md))
 - `GET /file/:id/content` — stream the file's stored bytes, gated by `visibility`: `public`
   needs no auth, `private` needs a creator/admin Bearer token (403
   `FORBIDDEN_NOT_OWNER` otherwise), `unlisted` needs a matching `?share=<token>` (no login
   required; 403 `FILE_SHARE_INVALID` if missing/wrong/expired). Supports `Range` requests
   for video/audio seeking. This is the **only** path that serves granted bytes —
   `ServeStaticModule` no longer exposes `file/upload`
-  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2,
-  [ADR 0026](ADR/0026-file-visibility-implementation.md))
+  ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md) D1/D2,
+  [ADR 0026](docs/ADR/0026-file-visibility-implementation.md)). Under `STORAGE_DRIVER=s3`,
+  a passing access check returns a `302` redirect to a short-lived presigned S3 URL
+  instead of streaming the bytes itself; under the default `local` driver, behavior is
+  unchanged ([ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md))
 - `POST /file` — promote a temp file to permanent storage (transactional), defaulting to
   `visibility: private`. The attached filename is a one-shot claim token: resubmitting it
   returns the existing file with 200 (idempotent retry) for the user who claimed it, and
-  409 `FILE_ALREADY_CLAIMED` for anyone else ([ADR 0019](ADR/0019-upload-claim-idempotency.md))
+  409 `FILE_ALREADY_CLAIMED` for anyone else ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md)).
+  The response's `mediaType` (`image`/`audio`/`video`) is derived from the file's extension
+  server-side, never client-supplied ([ADR 0040](docs/ADR/0040-persisted-media-type-for-playback.md))
 - `PATCH /file/:id` — update file metadata (creator or admin), including toggling
   `visibility`. Switching to `unlisted` issues a `shareToken` (returned as `shareUrl`, owner/
   admin only); `rotateShareToken: true` regenerates it, invalidating every previously shared
   link; an optional `shareExpiresAt` bounds it (default: no expiry)
-  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D3)
+  ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md) D3)
 - `DELETE /file/:id` — delete file metadata and the stored file (creator or admin). A file
   attached to a post is refused with 409 `FILE_IN_USE` — delete the post first
-  ([ADR 0023](ADR/0023-board-domain-schema.md))
+  ([ADR 0023](docs/ADR/0023-board-domain-schema.md))
 
-**Post** — the board itself ([ADR 0023](ADR/0023-board-domain-schema.md)). A post carries
+**Post** — the board itself ([ADR 0023](docs/ADR/0023-board-domain-schema.md)). A post carries
 text plus an optional reference to **one** file the author created; the file is *referenced*,
 never owned, so deleting a post leaves it intact
 - `GET /post` — list posts. Same query-parameter contract as `GET /file` above
@@ -213,7 +246,7 @@ never owned, so deleting a post leaves it intact
 - `DELETE /post/:id` — delete a post (author or admin), irreversibly. Its comments go with
   it through the FK cascade; its attached file does not
 
-**Comment** — the thread under a post ([ADR 0023](ADR/0023-board-domain-schema.md)). Flat —
+**Comment** — the thread under a post ([ADR 0023](docs/ADR/0023-board-domain-schema.md)). Flat —
 there are no replies to replies
 - `GET /post/:postId/comment` — list one post's comments, **oldest first** (the opposite of
   the newest-first file and post lists; the order is fixed and takes no sort parameters).
@@ -231,13 +264,21 @@ deleting are the comment author's or an admin's, and nobody else's.
 **Audit log**
 - `GET /audit-log` — review ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE /
   COMMENT_DELETE records (admin only; paginated, `?action` filter). `?userId` returns
-  only records where that user was the actor or the target (the two filters AND
-  together when both are given)
+  only records where that user was the actor, or was the target of a **user-targeting**
+  action — `targetId` is polymorphic, so a record whose target is a file, post, or
+  comment matches only via the actor side ([ADR 0045](docs/ADR/0045-audit-log-target-type.md)).
+  The two filters AND together when both are given
 
 **Health** (operational — for load-balancer/orchestrator probes, not application
-consumers; unauthenticated by design, [ADR 0031](ADR/0031-health-and-readiness-endpoints.md))
+consumers; unauthenticated by design, [ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.md))
 - `GET /health/live` — the process is running; no dependency checks
 - `GET /health/ready` — additionally checks DB connectivity; 503 if unreachable
+
+**Metrics** (operational — for Prometheus scraping, not application consumers;
+unauthenticated by design, [ADR 0047](docs/ADR/0047-observability-prometheus-grafana.md))
+- `GET /metrics` — Prometheus exposition format: default process metrics, per-request
+  duration (`http_request_duration_seconds`), and app counters (`upload_claims_total`,
+  `temp_cleanup_deleted_total`)
 
 ### Typical flow
 
@@ -254,7 +295,7 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
 ### Error responses
 
 Every error follows a frozen machine-readable shape
-([ADR 0011](ADR/0011-error-code-contract.md)):
+([ADR 0011](docs/ADR/0011-error-code-contract.md)):
 
 ```json
 {
@@ -270,7 +311,7 @@ Branch on `code` (stable contract — see `backend/common/error-code.ts`), never
 `message` (free to change). Validation failures use `code: "VALIDATION_FAILED"`
 with a `message` array; when `ENV=dev` a `stack` field is included.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full request and data flow.
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full request and data flow.
 
 ## Stack
 
@@ -278,36 +319,44 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full request and data flow.
   split by single responsibility
 - **TypeORM + PostgreSQL** — `synchronize: false`; manual QueryRunner transactions
   where a filesystem side effect must commit with the DB write
-  ([ADR 0004](ADR/0004-transaction-pattern-selection.md))
-- **Passport** — `jwt` and `local` strategies behind `JwtAuthGuard` / `LocalAuthGuard`
+  ([ADR 0004](docs/ADR/0004-transaction-pattern-selection.md))
+- **Passport** — `jwt` strategy behind `JwtAuthGuard`
 - **Multer** — disk storage with server-generated filenames (`temp_{uuid}_{timestamp}`)
+- **`@nestjs/throttler`** — global `APP_GUARD` rate limiting, 100 req/min default per route,
+  5/min on auth and 15/min on upload
+  ([ADR 0053](docs/ADR/0053-global-rate-limiting.md),
+  [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
 - **Jest** — unit tests colocated as `*.spec.ts`; repository/QueryRunner mocks, no DB access
 - **Swagger** — `/doc`, with `persistAuthorization` for a persistent Bearer session
 
 ## Known Limitations
 
-Tracked in [ROADMAP.md](ROADMAP.md) — since 2026-07-23 the full staged project
+Tracked in [ROADMAP.md](docs/ROADMAP.md) — since 2026-07-23 the full staged project
 plan. Highlights: **Stage 1 foundation is complete** — toolchain pinning,
 Docker/compose, CI (GitHub Actions), logging conventions, and the e2e rewrite all
 landed 2026-07-25 (ADR 0014–0017), and the e2e suite covers the
 auth/ownership/pagination/promotion paths. **Stage 2 has begun** — orphan temp-file
-cleanup landed 2026-07-26 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)).
+cleanup landed 2026-07-26 ([ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.md)).
 **File visibility landed 2026-08-01** — every stored file now has a
 `public`/`private`/`unlisted` state (default `private`) and is served only through the
 access-controlled `GET /file/:id/content`; `file/upload` is no longer statically exposed
-([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6,
-[ADR 0026](ADR/0026-file-visibility-implementation.md)). **Media-type expansion also
+([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6,
+[ADR 0026](docs/ADR/0026-file-visibility-implementation.md)). **Media-type expansion also
 landed 2026-08-01** — `POST /upload/attach` now takes one of three type-specific fields
 (`image`/`audio`/`video`), each with its own allowlist
-([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D4/D5,
-[ADR 0027](ADR/0027-media-type-expansion-implementation.md)). Both changes are breaking
+([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md) D4/D5,
+[ADR 0027](docs/ADR/0027-media-type-expansion-implementation.md)). Both changes are breaking
 for the live `frontend/` consumer, which has not yet adopted either. **Container hardening
 landed 2026-08-08** — non-root image user, liveness/readiness endpoints, and migrations
-moved to their own deploy step ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–
-[ADR 0032](ADR/0032-migration-as-separate-deploy-step.md)); a distroless runtime base, a
-real secrets manager, and HTTPS termination stay open items ([ADR 0033](ADR/0033-secrets-delivery-target.md),
-[ADR 0034](ADR/0034-https-termination-stance.md), and ROADMAP.md > Unscheduled for
+moved to their own deploy step ([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.md)–
+[ADR 0032](docs/ADR/0032-migration-as-separate-deploy-step.md)); a distroless runtime base, a
+real secrets manager, and HTTPS termination stay open items ([ADR 0033](docs/ADR/0033-secrets-delivery-target.md),
+[ADR 0034](docs/ADR/0034-https-termination-stance.md), and ROADMAP.md > Unscheduled for
 distroless). `pnpm lint` is clean as of 2026-07-22.
+
+## License
+
+[MIT](LICENSE)
 
 ## Author
 

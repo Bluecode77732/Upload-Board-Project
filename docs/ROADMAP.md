@@ -1,0 +1,1514 @@
+# Roadmap
+
+> 한국어 버전: [ROADMAP.ko.md](ROADMAP.ko.md)
+
+The full project plan for Sharenpo, established through an
+11-axis decision review on 2026-07-23 (essence → methodology → design criteria →
+architecture → modules → domain → mechanisms → data handling → platform →
+infrastructure → deployment). Amended the same day by the frontend-split
+decision ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)),
+which inserts Stage F (frontend preparation) ahead of Stage 0. Amended again on
+2026-07-30 by [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md),
+which **appends Stage 5 (operational surface — admin console)**: the 11-axis review
+scheduled no stage for the admin surface, even though ADR 0010 had decided its
+placement, so the work existed as a decision with no home in the plan. Amended once
+more on 2026-07-31 by [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md),
+which **generalizes the Stage 4 "VOD playback access control" row** into file
+visibility (public/private/unlisted), access-controlled serving of all media, and a
+media-type expansion — a gap surfaced by restating the project's founding goals. Every
+item below lands as its own dedicated, designed change
+([CLAUDE.md](../CLAUDE.md) > Scope Discipline).
+
+> **Consistency note**: items in this plan that CLAUDE.md marks "never suggest
+> unless explicitly requested" (CI, Docker, cloud storage/deployment) entered
+> this plan **by explicit decision on 2026-07-23**. Until each dedicated task
+> actually lands (with its own ADR), the current Architecture Decisions remain
+> operative.
+
+## Current position (as of 2026-08-31)
+
+> **Summary — the roadmap is complete.** Every stage below (F, 0–5, 4) has landed, including
+> Stage 4's DevOps stack: Helm ([ADR 0041](ADR/0041-helm-chart-project-adaptation.md)/[0042](ADR/0042-k8s-helm-directory-consolidation.md)),
+> Terraform ([ADR 0043](ADR/0043-terraform-project-adaptation.md)/[0044](ADR/0044-terraform-three-state-split.md)),
+> Prometheus/Grafana ([ADR 0047](ADR/0047-observability-prometheus-grafana.md)), and
+> performance/capacity criteria ([ADR 0049](ADR/0049-performance-capacity-criteria.md)) — the
+> table's last undecided row. **The deploy act itself was proven live** on real AWS/EKS
+> (2026-08-27, §9), then **fully torn down 2026-08-28** to stop the AWS bill, then
+> **re-applied 2026-08-29/30** to live-verify ADR 0047's observability stack, per §9's
+> entries — infrastructure state is a point-in-time snapshot each time, not a standing fact;
+> re-verify with `terraform plan` before assuming either state. One item was scoped out
+> rather than left undone: **Istio (service mesh) was pulled from the DevOps stack and
+> deferred** on 2026-08-31 (§7) — this project runs a single backend workload with no
+> east-west traffic for a mesh to manage, so introducing one now would solve a problem this
+> project does not have; revisit only if the architecture grows multiple in-cluster services.
+> What remains is not a build task: it is an **operating decision** (keep the AWS stack applied
+> and paying, or torn down until next needed) and routine doc upkeep — not a new
+> feature or a scheduled ADR. The narrative below is kept as the historical record of how each
+> stage landed; see §9 (Completed) for the day-by-day deploy/teardown/redeploy log and §7 for
+> the Istio deferral's full reasoning.
+
+- The 2026-07-22 hardening run is fully landed: security quick-wins, the
+  zero-error lint baseline, the documentation rewrite, and TypeORM migration
+  adoption (`79603ad`, [ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)),
+  followed by the Korean fluency pass over the `.ko.md` docs (`dc1ad72`).
+- This plan itself was established on 2026-07-23 through the 11-axis review.
+- Frontend split decided 2026-07-23, structure amended 2026-07-24
+  ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)): the frontend
+  lives as a `frontend/` subfolder in this same repository (backend stays at the
+  root, untouched) and consumes this API over HTTP; admin starts as an `/admin`
+  route section inside it. RBAC is re-sequenced after Stage F — it adds
+  permissions without changing the API surface, so deferring it costs the
+  frontend no rework, while freezing the surface first saves it real rework.
+- Route cleanup & contract freeze landed 2026-07-23: `POST /file`,
+  `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` are the
+  canonical routes; the API surface is now frozen (ADR 0010).
+- The error-code contract landed 2026-07-23
+  ([ADR 0011](ADR/0011-error-code-contract.md)): every error response carries a
+  stable machine-readable `code`, shaped by the global exception filter.
+- The refresh-token httpOnly-cookie move + rotation/reuse detection landed
+  2026-07-24 ([ADR 0012](ADR/0012-refresh-cookie-rotation.md)) — **Stage F is
+  complete**: the API surface, error contract, and auth transport a frontend
+  depends on are all settled. The `frontend/` subfolder was created 2026-07-24
+  (React + Vite, auth vertical slice E2E-verified); RBAC proceeds in parallel
+  (it changes no API surface).
+- RBAC + audit log landed 2026-07-25 ([ADR 0013](ADR/0013-rbac-and-audit-log.md))
+  — **Stage 0 is complete**: `user`/`admin`/`superadmin` roles, RolesGuard,
+  ownership extended to "self or admin", superadmin-only role assignment, and an
+  append-only audit trail. The role system backs the frontend `/admin` section.
+- **Stage 1 Foundation is complete** (2026-07-25): Node/pnpm pinning, Docker/compose,
+  CI, logging conventions, and the E2E rewrite all landed (ADR 0014–0017).
+- **Stage 2 is under way**: orphan temp-file cleanup landed 2026-07-26
+  ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)) — a scheduled `@nestjs/schedule`
+  sweep in a new operational `TempCleanupModule` — and the upload duplicate-submission
+  policy landed 2026-07-27 ([ADR 0019](ADR/0019-upload-claim-idempotency.md)): the
+  attach-issued filename is a one-shot claim token, so a retry replays (200) instead of
+  erroring. The deletion policy landed 2026-07-30
+  ([ADR 0020](ADR/0020-account-deletion-cascade.md)): soft delete is not adopted, an
+  account cascades into its files only on an explicit `deleteFiles=true`, and the old
+  FK-violation 500 is now a typed 409 — **Stage 2 is complete**.
+- **Stage 3 is complete (2026-07-31)**: list search / filter / sort landed 2026-07-30
+  ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — `GET /file` now takes
+  `search`, `creatorId`, `sortBy`, and `order`, with sort keys resolved through an in-code
+  whitelist and a deterministic default order the endpoint previously lacked. The board
+  domain's **schema design gate** followed on 2026-07-30
+  ([ADR 0023](ADR/0023-board-domain-schema.md)) — post and comment settled together in
+  plain text, with no code — and its two implementation halves landed on 2026-07-31: the
+  post module first (comment depends on post, not the reverse), then the comment module,
+  with [ADR 0024](ADR/0024-account-cascade-fk-refusal.md) settling the post↔file invariant
+  gap in between. **The board this project is named for now exists**: posts with an optional
+  attached video, and threads under them.
+- **Stage 5 (operational surface — admin console) was appended 2026-07-30**
+  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)), closing a gap in the
+  original plan: ADR 0010 decided where admin lives back on 2026-07-23, but no stage ever
+  owned building it. The Chat Project's admin console was imported to `admin/` as an
+  unadapted modification base in the same change. Nothing in Stage 5 has started, and its
+  first row — how a client learns its own role — is a backend decision that blocks the rest.
+  It does **not** depend on Stage 4 and may run before it.
+- **Execution order for the remaining work fixed 2026-07-31** (see section 6 >
+  Execution order): ~~#1 board comment module~~ (✅ done 2026-07-31) → ~~#2 `GET /user`
+  pagination~~ (✅ done 2026-08-05, pulled forward from Stage 5) → ~~#3 Stage 5 admin
+  surface~~ (✅ **complete 2026-08-06** — role delivery via
+  [ADR 0028](ADR/0028-access-token-role-claim.md), the `admin/` role-management slice adapted
+  to this backend's real routes, moderation-existence settled "no", and the duplicate admin
+  surface resolved in favor of `admin/` — `frontend/src/features/admin/AdminPage.tsx` deleted)
+  → **the remaining work is Stage 4 (production transition), now next**. Its last two tasks
+  are the **production DevOps stack introduction (AWS · Docker · Kubernetes · Helm · GitHub
+  Actions · Prometheus · Grafana · Terraform)** and then
+  **deployment itself** — the latter deliberately **unnumbered**, since it is the terminal
+  act of the whole plan rather than a "step N" (a number only re-invited the Stage 4/Stage 5
+  ordering confusion). This resolves Stage 5's floating position (before Stage 4) and pulled
+  the independent pagination debt ahead of both.
+- **File visibility + media-type expansion decided 2026-07-31** (design gate,
+  [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)): restating the project's
+  founding goals surfaced two gaps — every stored file is served publicly with no
+  private/unlisted option, and the upload allowlist is video-only. The decision adds a
+  3-state `visibility` (public/private/**unlisted** via a rotatable share token, optional
+  TTL), an access-controlled `GET /file/:id/content` endpoint (so `ServeStaticModule` stops
+  exposing `file/upload`), and images+audio+video type-specific upload fields. It
+  **generalizes and replaces the Stage 4 "VOD playback access control" row** and, being
+  independent of the deploy target, may be sequenced ahead of deployment.
+- ~~**Visibility + access-controlled serving implemented 2026-08-01**~~ ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)
+  D1/D2/D3/D6 + [ADR 0026](ADR/0026-file-visibility-implementation.md)): the migration
+  landed (reviewed line-by-line), `GET /file/:id/content` is live with Range support, and
+  `GET /file`/`GET /file/:id` filter private/unlisted metadata from non-owners.
+- ~~**Media-type expansion implemented 2026-08-01**~~ ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md)
+  D4/D5 + [ADR 0027](ADR/0027-media-type-expansion-implementation.md)): `POST /upload/attach`
+  now accepts `image`/`audio`/`video` as three type-specific fields, each with its own class
+  allowlist, replacing the single `video` field. No schema change. ~~Frontend adoption of
+  both the new `fileUrl`/`visibility` response shape and the split upload fields~~ — ✅
+  **done 2026-08-03** (Unscheduled below).
+- ~~**Storage port-adapter implemented 2026-08-07**~~ ([ADR 0029](ADR/0029-storage-port-adapter.md)):
+  the code-first slice of Stage 4's cloud-native infrastructure task, landed ahead of
+  the K8s/Helm work below — see §4 (Architecture direction) for the full breakdown.
+  `local` stays the operative default; only the real S3 cutover remains as part of
+  Stage 4's infrastructure-introduction row.
+- ~~**Container/deploy hardening implemented 2026-08-08**~~
+  ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–[ADR 0034](ADR/0034-https-termination-stance.md)):
+  the container/deploy hardening ADR 0015 deferred — non-root image user,
+  `HEALTHCHECK` + liveness/readiness endpoints, and migrations moved to their own
+  deploy step landed with code; secrets-delivery target and HTTPS-termination
+  stance landed as design-only ADRs; distroless stays explicitly deferred
+  (Unscheduled, §7) — **multi-arch is not deferred**, see the correction below.
+  See §6 Stage 4 for the full breakdown.
+
+## 1. Vision & essence
+
+- **Today**: a portfolio/learning backend — the point is demonstrable
+  engineering discipline (design, documentation, tests) on a small but complete
+  API.
+- **Target**: a production-oriented backend with a browser frontend as its
+  decided consumer (in-repo `frontend/` subfolder, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)).
+  The later stages (foundation infrastructure, AWS deployment, playback access
+  control) exist to make that transition real rather than aspirational.
+- **Priority axis** (supersedes the previous "security → decided architecture
+  work → hygiene → docs/tests"): security → frontend preparation (API surface
+  freeze) → decided architecture work (RBAC) → foundation (reproducibility ·
+  observability · test reliability) → mechanism hardening → domain expansion →
+  production transition.
+
+## 2. Methodology
+
+- **Dedicated task units.** Every roadmap item is an independent task with its
+  own design, review, and documentation — the roadmap-level restatement of
+  [CLAUDE.md](../CLAUDE.md) > Scope Discipline. No bundling, no drive-by scope.
+- The stages in section 6 are **dependency groupings, not milestones**: work
+  proceeds item by item, and crossing a stage boundary carries no ceremony.
+
+## 3. Design criteria
+
+**Frozen (unchanged)** — the three existing axes, Never Do Groups 1–3 in
+[CLAUDE.md](../CLAUDE.md): runtime safety, data integrity, security. All roadmap
+work must pass them; they are not themselves roadmap subjects.
+
+**Adopted 2026-07-23** — five new axes that govern this plan:
+
+| Axis | Rationale |
+|---|---|
+| Observability | Logging infrastructure is currently zero. A backend that cannot be diagnosed cannot be operated — the first prerequisite of the production target. |
+| Reproducibility / portability | Node/pnpm versions unpinned, DB provisioned by hand. Environment drift becomes a direct failure source the moment a deploy target exists. |
+| API contract stability | The consumer is now decided (frontend, 2026-07-23) — Stage F is this axis activating: routes canonicalized and frozen while zero consumers exist, error codes delivered as Stage F work. URI versioning stays deferred until a post-freeze breaking change actually needs it. |
+| Test reliability | The e2e suite is the untouched Nest template; unit tests alone cannot guarantee the auth flow or the `temp_` → `granted_` path end to end. |
+| Performance / capacity | Board-domain expansion raises list-query complexity, and video serving is disk/bandwidth-heavy. Response-time targets, index policy, and disk ceilings become explicit criteria. |
+
+**Advisory (recorded, not governing)**:
+
+- Privacy / compliance — the PII log ban is already mandatory (Never Do G3);
+  deletion policy connects to the Stage 2 deletion-design task.
+- Release / change management — semver tagging + migration-ordering
+  conventions; activates with deployment.
+- Docs-as-code enforcement — machine-checked README/endpoint consistency; a
+  candidate under the CI task.
+
+## 4. Architecture direction
+
+- **Now**: the layered modular monolith stays — Controller → Service →
+  Repository, four single-responsibility modules. No pattern change is in
+  roadmap scope.
+- ~~**Future goal (decided 2026-07-23)**: a storage port-adapter~~ — **landed
+  2026-08-07** ([ADR 0029](ADR/0029-storage-port-adapter.md), the code-first slice of
+  Stage 4's infrastructure task): a `FileStorage` interface (`backend/storage/`)
+  isolates physical-file operations behind `LocalDiskStorage` (ports
+  [ADR 0005](ADR/0005-local-disk-storage.md)'s mechanics unchanged) and `S3Storage`
+  (the ISP-required second implementation, unit-tested only — SDK mocked, no live
+  bucket yet), selected by `STORAGE_DRIVER` (`local` default | `s3`). Multer moved from
+  `diskStorage` to `memoryStorage` so the temp write itself routes through the port too
+  (`UploadService.stageTemp`) — the precondition for the switch to actually fix the
+  multi-instance gap ADR 0005 recorded, not just the promoted-file half of it. `local`
+  stays the operative default; the real S3 cutover is still Stage 4 work below.
+- **Frontend split (decided 2026-07-23, structure amended 2026-07-24, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md))**:
+  the frontend lives as a `frontend/` subfolder in this same repository (backend
+  at the root, untouched) and consumes this API over HTTP; admin starts as an
+  `/admin` route section inside that frontend and is promoted to its own app
+  only after RBAC lands and real admin requirements exist. A pnpm-workspace
+  monorepo (relocating the backend into `apps/backend`) and an immediate
+  three-way split (frontend/backend/admin) were considered and rejected.
+- ~~**Known constraint**: static file serving is unauthenticated~~ — **resolved on the
+  backend 2026-08-01** ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6
+  + [ADR 0026](ADR/0026-file-visibility-implementation.md)): `ServeStaticModule` no longer
+  exposes `file/upload`, and access is enforced by `GET /file/:id/content`
+  (public/private/unlisted, Range-aware). The frontend adopted this 2026-08-03 (see
+  Unscheduled) — it now reads `fileUrl` as the content endpoint and can toggle visibility.
+- Considered and set aside in the review: event-driven reinforcement (only one
+  side effect exists to decouple, and moving the rename out of the transaction
+  would break `temp_`/`granted_` atomicity) and CQRS-lite (the read model is
+  too simple to split; YAGNI).
+- **Module policy**: four modules, planned work absorbed into existing ones
+  (RBAC → auth/user). New modules only when a new domain arrives — the board
+  expansion (Stage 3) is that sanctioned case.
+
+## 5. Domain plan
+
+- **Today**: authenticated video-file upload/management only. The "board" in
+  the project name is unimplemented.
+- **Decided**: expand into an actual upload board — a post/comment domain whose
+  posts reference uploaded files. Entity relations (post ↔ `FileEntity`,
+  comment ↔ post/user) were described in plain text first, per
+  [CLAUDE.md](../CLAUDE.md) > Scope Discipline (schema changes), and land as
+  reviewed migrations in the follow-up implementation task.
+- **Schema settled 2026-07-30** ([ADR 0023](ADR/0023-board-domain-schema.md)) —
+  the design gate ahead of that implementation, with no code: a post references
+  at most one file (unique, nullable FK) that its own creator uploaded, which is
+  also its idempotency key; comments are flat (no threading) and die with their
+  post through the schema's one and only `ON DELETE CASCADE`; deleting a file a
+  post references is refused with 409 `FILE_IN_USE` via the FK rather than a
+  pre-check; the account cascade ([ADR 0020](ADR/0020-account-deletion-cascade.md))
+  absorbs posts and comments while `deleteFiles=true` keeps confirming files
+  only; ownership stays "creator or admin" with no new authorization axis.
+- List search/filter/sort (Stage 3) is the data-layer prerequisite for board
+  listings — landed 2026-07-30 ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)),
+  so the post listing extends that read layer rather than defining its own.
+
+## 6. Staged task list
+
+Ordering is by dependency. Each row is one dedicated task.
+
+### When ordering deviates from dependency (general criteria)
+
+Four items in this plan have run ahead of their nominal dependency order: RBAC
+sequenced after Stage F (Current position, 2026-07-23); file visibility +
+media-type expansion allowed ahead of Stage 4 deployment (Current position,
+2026-07-31); Stage 5 sequenced before Stage 4 (below); and `GET /user`
+pagination pulled ahead of the rest of Stage 5 (Execution order below). Each
+was argued on its own terms at the time; the shared test behind all four,
+distilled after the fact rather than planned in advance, is stated here
+generally so it applies to any future item, not only these four:
+
+1. **No reverse hard dependency.** The item moving forward doesn't require
+   anything from the item it's passing. Necessary, not sufficient — this only
+   shows the two are independent, not that reordering is warranted.
+2. **No added cost to what stays behind.** Moving the item forward creates no
+   rework for the item(s) it passes. If the passed item would have to redo
+   work because of the reorder, the order stays as-is.
+3. **A stated reason to actually move it**, not just permission to move it —
+   e.g. closing a standing debt that isn't entangled with the item being
+   passed, avoiding rework that the reverse order would cause, or an
+   operability/necessity argument for why the moved item can't wait.
+
+All three must hold. (1) alone only proves independence; without (2) or (3),
+default stays dependency order.
+
+### Execution order for remaining work (decided 2026-07-31)
+
+The stages below are grouped by dependency, but several ready items span stages,
+so the actual build sequence is fixed here (completed stages omitted). Each pending
+item carries its execution number in its own row.
+
+1. ~~**Board domain — comment module** (Stage 3)~~ — ✅ done 2026-07-31, **completing
+   Stage 3**. Its gate, the post↔file invariant gap, was settled first by
+   [ADR 0024](ADR/0024-account-cascade-fk-refusal.md), which left the account-cascade
+   delete order untouched, so the comment delete slotted in ahead of posts without
+   rewriting it. **Execution #2 is now the next dedicated task.**
+2. ~~**`GET /user` pagination**~~ (pulled forward from Stage 5) — ✅ done 2026-08-05.
+   New `GetUsersDto` (`take` 1–100 default 20, `skip` ≥0 default 0) mirrors `GetFilesDto`;
+   `UserService.findAll` sorts `createdAt DESC, id DESC` for deterministic pages; response
+   stays the existing `[rows, total]` tuple (`GET /file` shape, no new ADR). Search/sort
+   were deliberately left out of scope — the ROADMAP item named pagination only — and
+   remain open for Stage 5 if the admin console needs them (it did not).
+3. ~~**Stage 5 — operational surface (admin console)**~~ — ✅ **complete 2026-08-06**, all
+   four rows done: role-delivery decision
+   ([ADR 0028](ADR/0028-access-token-role-claim.md), access token gains a `role` claim) →
+   adapt the imported console (role-management slice against real routes) →
+   moderation-existence decision (settled "no" — ban/unban/force-logout deleted, no backend
+   replacement built) → resolve the duplicate admin surface (`admin/` kept,
+   `frontend/src/features/admin/AdminPage.tsx` deleted — see [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s
+   2026-08-06 note). Ran before Stage 4 as planned: a deployed system whose privilege
+   hierarchy is operable only through Swagger is hard to run. **Stage 4 is now the remaining
+   work** — the production DevOps stack introduction (AWS · Docker · Kubernetes · Helm ·
+   GitHub Actions · Prometheus · Grafana · Terraform — the
+   industry-standard toolchain, adopted for a real-world-like dev/deploy/ops environment and
+   future scaling) then, finally,
+   the deploy act itself, deliberately unnumbered (see below).
+4. **Production DevOps stack introduction** — the immediate pre-deployment task. **Why this
+   stack**: it is the industry-standard DevOps toolchain, adopted so the project is
+   developed, deployed, and operated in an environment close to real-world practice, and so
+   it can absorb future service scaling. **AWS** (cloud platform / deploy target), **Docker**
+   (containerization — already landed, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.md)),
+   **Kubernetes** (container orchestration), **Helm** (release packaging/templating),
+   **GitHub Actions** (CI/CD — already landed, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.md)),
+   **Prometheus** (metrics collection), **Grafana** (metrics dashboards), and **Terraform**
+   (infrastructure as code). S3 (object storage) is this task's remaining storage
+   work: the `FileStorage` port-adapter itself (section 4) already landed 2026-08-07
+   ([ADR 0029](ADR/0029-storage-port-adapter.md)), so what's left here is switching
+   `STORAGE_DRIVER=s3` against a real bucket. Each not-yet-landed component takes its
+   own ADR.
+
+Then, finally — **deployment itself**. It carries **no execution number, deliberately**:
+deployment is not "step N" but the terminal act of the whole plan, performed once
+everything above is built and operable. A number here only re-invites the Stage 4/Stage 5
+ordering confusion this section already had to untangle, so it is labelled simply *the
+last work*.
+
+**Why #2 and #3 were pulled ahead of their nominal stage position** — three separate
+arguments, layered:
+
+- **Stage 5 as a whole precedes Stage 4** (2026-07-31): a deployed system whose privilege
+  hierarchy can only be operated through Swagger is hard to run in production, so the
+  operational surface goes before deployment rather than after it.
+- **`GET /user` pagination (#2) was pulled out ahead of the rest of Stage 5**, not just
+  ahead of Stage 4, for three independent reasons: it is a standing Never Do Group 2 debt
+  owed regardless of whether the admin console work ever happens (not entangled with it);
+  it is a small, self-contained early quick win; and it pre-builds the read-layer pattern
+  (`GetUsersDto`, mirroring `GetFilesDto`/[ADR 0021](ADR/0021-list-query-search-filter-sort.md))
+  the console's user list will eventually draw on.
+- **The role-delivery decision (#3) is not a "pulled forward" item at all** — it is Stage
+  5's own first row and its hard blocker: the imported console decodes
+  `jwtDecode<{ sub, role }>(accessToken)`, so console adaptation (Stage 5's next row)
+  cannot start until this is settled. It only *looks* pulled forward because #2 delayed
+  reaching it.
+
+This resolves Stage 5's "numbering is not dependency order" note in favor of Stage 5
+before Stage 4, and pulls the one independent debt item (#2) ahead of both. Within a
+stage, the internal dependency order in its table still holds.
+
+### Stage F — Frontend preparation (decided 2026-07-23, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md))
+
+The pre-frontend backend pipeline — everything a browser client will depend on,
+settled while zero consumers exist.
+
+| Task | Rationale / dependencies |
+|---|---|
+| Route cleanup & API contract freeze | Canonicalize `POST /file`, `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh`; freeze the surface while breaking changes are still free (plural rename and auth action-route changes considered and rejected — ADR 0010). |
+| Error-code system (global exception filter) | A machine-readable error contract before the frontend hardcodes message strings or status-only branching. |
+| Refresh-token httpOnly-cookie move + rotation / reuse detection | **Pulled forward from Stage 2 (2026-07-23)** — a browser frontend makes token storage a real XSS surface. Requires its own ADR amending [ADR 0002](ADR/0002-dual-secret-token-pair.md)'s "no server-side token storage" stance, plus a reviewed schema migration. |
+
+### Stage 0 — decided architecture work (RBAC) — ✅ complete 2026-07-25
+
+| Task | Rationale / dependencies |
+|---|---|
+| ~~**RBAC** — `role` column + role-aware guard~~ | **Landed 2026-07-25** ([ADR 0013](ADR/0013-rbac-and-audit-log.md)): three tiers (`user`/`admin`/`superadmin`), `PATCH /user/:id/role` superadmin-only, ownership extended to "self **or** admin", plus an audit log. Shipped as a reviewed migration. |
+
+### Stage 1 — Foundation (reproducibility · observability · test reliability) — ✅ complete 2026-07-25
+
+| Task | Rationale / dependencies |
+|---|---|
+| ~~Pin Node/pnpm (`engines` + `.nvmrc`)~~ | **Landed 2026-07-25** ([ADR 0014](ADR/0014-node-pnpm-version-pinning.md)): `.nvmrc` `24.8.0`, `engines` floor (`node >=24`, `pnpm >=10`, advisory), `packageManager` `pnpm@10.14.0`. The single source the Docker base-image tag and CI toolchain now derive from. |
+| ~~Docker / docker-compose (app + local PostgreSQL)~~ | **Landed 2026-07-25** ([ADR 0015](ADR/0015-docker-and-compose.md)): multi-stage `Dockerfile` (build `node:24.8.0` → `slim` runtime, migrations-on-boot) + `docker-compose.yml` (`db` postgres:16 + `api`). Supersedes the manual `upload-board-pg`; removes the e2e's manual-DB dependency. Precondition of the AWS stage met. |
+| ~~CI — GitHub Actions (lint + test)~~ | **Landed 2026-07-25** ([ADR 0016](ADR/0016-github-actions-ci.md)): `.github/workflows/ci.yml` on push/PR to main/dev — a `lint-and-unit` job (`lint:ci` without `--fix` + unit tests) and an `e2e` job against a `postgres:16` service. Toolchain from the ADR 0014 pin (Corepack + `.nvmrc`). The 0-error baseline is now machine-checked. |
+| ~~Logging conventions (Nest Logger first)~~ | **Landed 2026-07-25** ([ADR 0017](ADR/0017-logging-conventions.md)): Nest's built-in `Logger` in `AllExceptionsFilter` — 5xx at `error` with the withheld stack, 4xx at `debug`; level convention + no-PII rule documented. Structured/JSON output and external error tracking (Sentry) deferred to Stage 4. |
+| ~~E2E rewrite~~ | **Landed 2026-07-25**: 18-case suite (`test/app.e2e-spec.ts` + a new `test/e2e-utils.ts` harness) over real HTTP+DB — auth flow, refresh rotation/reuse, ownership 403s, pagination, `temp_` → `granted_` promotion. Isolation: a throwaway `upload_board_e2e` DB built by the real migrations and truncated per test. Still needs the manual local Postgres (5435) until the Docker-compose task removes that dependency. |
+
+### Stage 2 — Mechanism hardening
+
+| Task | Rationale / dependencies |
+|---|---|
+| ~~Orphan temp-file cleanup~~ — ✅ landed 2026-07-26 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)) | `temp_` files accumulated forever when `POST /file` was never called — the only unmanaged resource leak. A scheduled `@nestjs/schedule` sweep (new `TempCleanupModule`) deletes `temp_` files in `file/temp` past a TTL (default 24h, hourly). |
+| ~~Deletion policy design (soft delete + FK)~~ — ✅ landed 2026-07-30 ([ADR 0020](ADR/0020-account-deletion-cascade.md)) | Soft delete **not** adopted; deletion stays hard. `DELETE /user/:id?deleteFiles=true` cascades into the account's file rows and stored files, while an unconfirmed request against an account that owns files is refused with 409 `USER_HAS_FILES` (count in the message) instead of the old FK-violation 500. `DELETE /file/:id` now also unlinks the stored `granted_` file — a leak found during this task. Unlink runs post-commit (irreversible step last); no schema change. |
+| ~~Upload idempotency / duplicate policy~~ — ✅ landed 2026-07-27 ([ADR 0019](ADR/0019-upload-claim-idempotency.md)) | The attach-issued `temp_{uuid}_{ts}` filename is a one-shot claim token: resubmitting it replays the existing file (200) for its claimant, conflicts (409 `FILE_ALREADY_CLAIMED`) for anyone else, and a concurrent double-submit resolves through the unique constraint instead of a 500. `filePath` is pinned to the issued shape at the DTO boundary, which also closes a path-traversal gap. No schema change. |
+
+### Stage 3 — Domain expansion
+
+| Task | Rationale / dependencies |
+|---|---|
+| ~~List search / filter / sort~~ — ✅ landed 2026-07-30 ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) | `GET /file` gained `search` (escaped `ILIKE '%term%'` on the title), `creatorId`, and `sortBy`/`order` resolved through a total-`Record` whitelist — plus the `ORDER BY` the endpoint never had, so offset paging is deterministic. No schema change; the three candidate indexes are deferred with their triggers recorded. This is the read-layer pattern the post listing extends. |
+| ~~Board domain — schema design gate~~ — ✅ landed 2026-07-30 ([ADR 0023](ADR/0023-board-domain-schema.md)) | The plain-text schema description Scope Discipline requires before any migration, covering both entities at once so the comment task cannot force a post-schema rollback: post ↔ file is 1:1, optional, same-creator (the unique FK doubles as `POST /post`'s idempotency key); comments are flat and cascade with their post at the FK; `DELETE /file/:id` on an attached file becomes 409 `FILE_IN_USE`; the ADR 0020 account cascade takes posts and comments unconfirmed while the flag still guards files only; `canManage` and the ADR 0021 read layer are reused unchanged. Design only — no code, no migration. |
+| ~~Board domain — post module~~ — ✅ landed 2026-07-31 ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) | The first half of ADR 0023, split out because comment depends on post and not the reverse: `PostModule` (5 routes behind `JwtAuthGuard`), `post_entity` with 2 FKs and `UQ_post_entity_fileId` (reviewed migration — generate's four spurious constraint-rename statements stripped), 3 new error codes, the `DELETE /file/:id` `23503` → 409 `FILE_IN_USE` translation, and posts joining the ADR 0020 account cascade (`posts=N` in the audit detail). The ADR 0021 read layer and `canManage` were reused rather than restated. |
+| ~~Board domain — comment module~~ — ✅ landed 2026-07-31 ([ADR 0023](ADR/0023-board-domain-schema.md) > Implementation notes) | The second half of ADR 0023, and with it **Stage 3 is complete**. `CommentModule` ships the ADR's four routes behind `JwtAuthGuard` across two controllers (a thread hangs off its post, an existing comment is addressed by its own id), over a `comment_entity` carrying the schema's only `ON DELETE CASCADE` FK plus `IDX_comment_entity_postId_createdAt` (reviewed migration — generate's six spurious constraint-rename statements stripped). `COMMENT_NOT_FOUND` and the `COMMENT_DELETE` audit action arrived with their consumers. Comments join the account cascade **ahead of posts**, because the account's comments on *other people's* posts are unreachable through the post FK cascade. Two design decisions were kept rather than softened: no `comments=N` in the audit detail (the cascaded half is uncountable, so a partial count would read as a total), and no idempotency key (a repeat creates a second comment, as for a post with no `fileId`). Its gate was cleared first by [ADR 0024](ADR/0024-account-cascade-fk-refusal.md). |
+
+### Stage 4 — Production transition — the final work (deliberately unnumbered)
+
+Deployment is the terminal act of the whole plan — done once everything else is built and
+operable — so it carries **no execution number**; a number here only re-invites the Stage
+4/Stage 5 ordering confusion the plan already had to untangle. The task **immediately before**
+the deploy act is the production DevOps stack introduction (AWS · Docker · Kubernetes · Helm ·
+GitHub Actions · Prometheus · Grafana · Terraform). The rows below keep their internal
+dependency order, and the deploy act is deliberately the last row.
+
+| Task | Rationale / dependencies |
+|---|---|
+| **Production DevOps stack introduction — immediate pre-deployment task** | **Why this stack:** it is the industry-standard DevOps toolchain, adopted so the project is developed, deployed, and operated in an environment close to real-world practice, and so it can absorb future service scaling. The components and their roles: **AWS** (cloud platform / deploy target), **Docker** (containerization — *already landed*, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.md)), **Kubernetes** (container orchestration), **Helm** (release packaging/templating), **GitHub Actions** (CI/CD — *already landed*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.md)), **Prometheus** (metrics collection), **Grafana** (metrics dashboards), and **Terraform** (infrastructure as code). **S3** (object storage) is the concrete backend this task switches to: the `FileStorage` port-adapter (section 4) that isolates physical-file operations from the host disk already landed 2026-08-07 ([ADR 0029](ADR/0029-storage-port-adapter.md), `S3Storage` implementation included, unit-tested only), so this row's remaining storage work is `STORAGE_DRIVER=s3` against a real bucket, not building the abstraction itself. This task also carries the container/deploy hardening the Stage 1 image deferred, surfaced by [ADR 0015](ADR/0015-docker-and-compose.md) — ~~non-root `USER`, a health/readiness endpoint, migrations as a separate deploy step~~ **landed 2026-08-08** ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)–[ADR 0034](ADR/0034-https-termination-stance.md)): the image now runs as a dedicated non-root user with a `HEALTHCHECK` against the new `GET /health/live`/`GET /health/ready` (ADR 0030/0031); `docker-compose.yml`'s `migrate` one-shot service models the eventual Kubernetes Job so a scaled `api` can never race `migration:run` (ADR 0032); the secrets-delivery target (native Kubernetes `Secret`, AWS Secrets Manager deferred to Terraform) and the HTTPS-termination stance (ingress/ALB, never in-process) are recorded as design-only ADRs with no code yet (ADR 0033/0034). A distroless runtime base and a target-arch (ARM/Graviton) build were both considered on 2026-08-08 (ADR 0030) and initially deferred on the premise that `bcrypt` was x64-only — that premise was retracted four days later ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.md), 2026-08-12): `bcrypt@6.0.0` bundles a working `linux-arm64` prebuild, verified under QEMU emulation. Multi-arch (ARM/Graviton) is therefore **not deferred** — CI has built and published real `linux/amd64,linux/arm64` images from `main` since 2026-08-13, `cluster/main.tf`'s `graviton`/`t4g.medium` node group has been the EKS cluster's primary capacity (not a reserve) since 2026-08-18, and the app pod ran on it in the live 2026-08-27 deployment, which the developer confirmed as the permanent architecture choice. Distroless alone stays deferred — see the Unscheduled row below for why. Each landed component has its own ADR, as planned; depends on Stage 1 Docker + CI. |
+| ~~File visibility & access-controlled serving~~ **(landed 2026-08-01, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6 + [ADR 0026](ADR/0026-file-visibility-implementation.md); generalizes the former "VOD playback access control" row)** | Uploaded files used to be plain public URLs — anyone with the link could watch. `FileEntity` now carries a 3-state `visibility` (public/private/**unlisted** via a rotatable share token + optional TTL); `GET /file/:id/content` is the sole access-controlled read path (Range-aware), and `ServeStaticModule` no longer exposes `file/upload`. Partially revises [ADR 0005](ADR/0005-local-disk-storage.md) (serving). Frontend adoption of the new `fileUrl`/`visibility` shape landed 2026-08-03 — see Unscheduled below. |
+| ~~Media-type expansion (images/audio, type-specific upload fields)~~ **(landed 2026-08-01, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md) D4/D5 + [ADR 0027](ADR/0027-media-type-expansion-implementation.md) — split from the row above 2026-08-01)** | `POST /upload/attach` now accepts `image` (jpg/jpeg/png/webp), `audio` (mp3), or `video` (mp4/mov/webm, unchanged) as three type-specific fields, each with its own allowlist, replacing the single `video` field. Revises [ADR 0003](ADR/0003-two-phase-upload-contract.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) (upload field, a breaking change against the live frontend). No schema change. Frontend adoption of the new upload fields landed 2026-08-03 — see Unscheduled below. |
+| ~~Performance / capacity criteria~~ — ✅ landed 2026-08-31 ([ADR 0049](ADR/0049-performance-capacity-criteria.md)) | Response-time targets set per endpoint tier (p50/p95); ADR 0021's three deferred `file_entity` indexes adopted for **both** `file_entity` and `post_entity` after measuring at a 10,000-row seed (EXPLAIN showed up to 70x on this table's own query shapes; every endpoint already met the new targets even without them, so the win is cheap-and-real rather than urgently needed). Disk ceiling: usage-rate monitoring via the already-deployed `node-exporter` (ADR 0047), not an absolute cap — nothing measured argued for one. New `perf/` tooling (`autocannon` + raw `EXPLAIN`) is reusable for re-measuring this baseline later. |
+| **Deployment — the final work** (no execution number, deliberately) | AWS, container-based, onto the DevOps stack introduced above (Kubernetes · Helm · Terraform · Prometheus/Grafana · S3). Not "step N" but the terminal act of the whole plan, performed once everything above is built and operable — hence unnumbered. New deployment ADR; depends on the DevOps-stack-introduction row plus Stage 1 Docker + CI. (The former standalone "storage port-adapter" row landed separately and ahead of this one, 2026-08-07 — [ADR 0029](ADR/0029-storage-port-adapter.md) — so this row inherits only the S3 cutover, not the abstraction itself.) |
+
+#### Production DevOps stack — component status
+
+The single "Production DevOps stack introduction" row above expands here per component, so
+the status of each is scannable rather than buried in prose (as of 2026-08-18). Legend:
+✅ landed · 🔶 partially landed · 📝 design-only ADR · 🆕 not started.
+
+| Component | Role | Status | What is done / what remains | ADR / source |
+|---|---|---|---|---|
+| **Docker** | Containerization | ✅ + hardened, multi-arch landed | Multi-stage image (Stage 1); now runs as a dedicated **non-root** user with a `HEALTHCHECK`. **Multi-arch (ARM/Graviton) is landed and live**, not deferred: `bcrypt`'s "x64-only" premise was retracted 2026-08-12 ([0035](ADR/0035-arm64-bcrypt-source-rebuild.md)), CI publishes real `linux/amd64,linux/arm64` images from `main`, and the graviton node group ran the app in production as of 2026-08-27. A **distroless** base was considered and stays **deferred** (accepted residual — no verified Node 24 distroless tag, and it removes the only debug path (`docker exec`) with no K8s-native replacement yet). | [0015](ADR/0015-docker-and-compose.md), [0030](ADR/0030-container-non-root-and-arch-stance.md), [0035](ADR/0035-arm64-bcrypt-source-rebuild.md) |
+| **GitHub Actions** | CI (/CD) | 🔶 CI + image publish | `lint`+unit+e2e workflow on push/PR, now including `frontend-e2e`/`admin-e2e` and lint/unit jobs for `frontend/`/`admin/` (both previously unverified in CI). A **deploy pipeline (CD) to AWS is still not built** — added when AWS is the target. **Exception, recorded 2026-08-13**: a `docker-publish` job was added on explicit request that buildx-builds `linux/amd64,linux/arm64` and pushes `bluecode1775/sharenpo` to Docker Hub on every push to `main` — this is image-publish CD, not app deployment, and its own commit (`1b72ec9`) flags that it runs ahead of this row's stated plan (CD only once AWS is the target) rather than superseding that plan. | [0016](ADR/0016-github-actions-ci.md) |
+| **S3** | Object storage | 🔶 adapter ✅ / redirect ✅ / bucket code ✅ / cutover ✅ currently running, Range-behavior still unverified | The `FileStorage` port + `S3Storage` implementation landed (unit-tested only). The proxy-streaming path was bandwidth-heavy on the app tier, so `GET /file/:id/content` now redirects (`302`) to a short-lived presigned S3 URL under `STORAGE_DRIVER=s3` (all three visibility tiers, gated by the existing `resolveContentAccess` check) — `local` keeps streaming unchanged. Terraform ([0043](ADR/0043-terraform-project-adaptation.md) D8, 2026-08-18) provisions the private bucket + a dedicated app IRSA role. The live Helm release ran with `STORAGE_DRIVER=s3` and the app's IRSA role wired (2026-08-27, §9), cutover switched on — the bucket and cluster were destroyed 2026-08-28 (§9) once proven. **Re-applied 2026-08-29/30** for [ADR 0047](ADR/0047-observability-prometheus-grafana.md) D4's live verification, `values-prod.yaml` still carrying `STORAGE_DRIVER=s3`; an actual upload/read round-trip against the live bucket, and the redirect's Range-request behavior across `frontend`/`admin` media players, both remain unverified — this session's checks covered the metrics path only. | [0029](ADR/0029-storage-port-adapter.md), [0036](ADR/0036-s3-presigned-content-redirect.md), [0043](ADR/0043-terraform-project-adaptation.md) |
+| **Health / readiness** | Probes | ✅ | `GET /health/live` + `GET /health/ready` for LB/orchestrator probes. | [0031](ADR/0031-health-and-readiness-endpoints.md) |
+| **Migration as a separate step** | Deploy safety | 🔶 compose ✅ / K8s Job 🆕 | `docker-compose.yml`'s one-shot `migrate` service models the eventual **Kubernetes Job**, so a scaled `api` never races `migration:run`. The K8s Job itself is pending. | [0032](ADR/0032-migration-as-separate-deploy-step.md) |
+| **Kubernetes** | Orchestration | ✅ currently deployed | The standalone static manifests formerly under `k8s/pod/`, `k8s/deployment/`, `k8s/cluster/` were deleted 2026-08-17 ([0042](ADR/0042-k8s-helm-directory-consolidation.md)) — they duplicated a strict subset of what the Helm chart below already renders, with no consumer of their own (no CI job, no compose reference). The Kubernetes manifests now exist only as the Helm chart's `templates/` (`k8s/helm/`). The live cluster deploy (on AWS) landed 2026-08-27 (§9) — then the underlying cluster was destroyed 2026-08-28 (§9) once that was proven. **Re-applied 2026-08-29/30** for [ADR 0047](ADR/0047-observability-prometheus-grafana.md) D4's live verification — `kubectl get nodes` shows 2 `Ready` nodes, confirmed live at the time of this edit. `bash k8s/infra/terraform/deploy.sh all` reproduces it; treat this cell as a snapshot, re-verify with `kubectl get nodes` before trusting it. | commit `48a89f2`, [0041](ADR/0041-helm-chart-project-adaptation.md), [0042](ADR/0042-k8s-helm-directory-consolidation.md) |
+| **Secrets delivery** | Secrets | ✅ code + currently running | Target decided: native **Kubernetes `Secret`**, synced from **AWS Secrets Manager** by External Secrets Operator via IRSA. The Helm chart implements the consumption side (`existingSecret` reference + `envFrom.secretRef`, 2026-08-17); the Terraform side ([0043](ADR/0043-terraform-project-adaptation.md) D7, 2026-08-18) provisions the Secrets Manager entry and ESO's install + IRSA role (via `eks_blueprints_addons`'s `enable_external_secrets`). Confirmed working live 2026-08-27, then destroyed 2026-08-28 (§9). **Re-applied 2026-08-29/30**: `external-secrets` Helm release confirmed `deployed` (`helm list -A`), app pod running and authenticating against RDS/signing tokens as of this edit — the mechanism is standing again, not merely proven once. | [0033](ADR/0033-secrets-delivery-target.md), [0041](ADR/0041-helm-chart-project-adaptation.md), [0043](ADR/0043-terraform-project-adaptation.md) |
+| **HTTPS termination** | TLS | 🔶 code ready, deliberately not enabled | Terminate at **ingress / ALB**, never in-process (the `Secure` refresh cookie needs it when `ENV=prod`, which the live release already ran as — `values.yaml`'s default). The Helm chart's `Ingress` template exists but stays disabled by default (`ingress.enabled: false`); while the stack was live, the cluster, the registered domain, and the cert were all real (see next sentence), so the gap was a deliberate developer choice, not a missing dependency — the developer confirmed 2026-08-27 (§9) that `Ingress` stays off until an outside tester actually needs external access. The cert mechanism is decided and coded: **ACM**, DNS-validated against a Terraform-provisioned Route53 zone ([0043](ADR/0043-terraform-project-adaptation.md) D4/D5, 2026-08-18) for `sharenpo.cloud` — it reached `ISSUED` before the whole stack, cert included, was destroyed 2026-08-28 (§9). The ARN pattern is ready for the Ingress's `certificate-arn` annotation whenever a future cert is issued. | [0034](ADR/0034-https-termination-stance.md), [0041](ADR/0041-helm-chart-project-adaptation.md), [0043](ADR/0043-terraform-project-adaptation.md) |
+| **Helm** | Release packaging | ✅ chart ready / ✅ release currently installed | Lives at `k8s/helm/` (moved from a sibling `helm/upload-board-project/` directory and then flattened one level further 2026-08-17, [0042](ADR/0042-k8s-helm-directory-consolidation.md), so Kubernetes-related content has one top-level home with no redundant nesting). Project-adapted 2026-08-17 ([0041](ADR/0041-helm-chart-project-adaptation.md), lifting [0037](ADR/0037-helm-chart-scaffold.md)'s deferral): real image/port, `/health/live`+`/health/ready` probes, non-root `securityContext`, a `ConfigMap`, `existingSecret`-only `Secret` consumption, a migration `Job` mirroring `docker-compose.yml`'s `migrate` service, and a disabled-by-default `Ingress`. `replicaCount` defaults to 1 (`STORAGE_DRIVER=local` loses uploaded files across replicas above 1; the live release ran `s3` for exactly this reason). `helm install --wait` verified against a throwaway local `kind` cluster (2026-08-17 addendum to [0041](ADR/0041-helm-chart-project-adaptation.md)) — found and fixed 2 real bugs (hook ordering, empty-string env vars). Installed against the real target cluster 2026-08-27, then uninstalled with the rest of the stack 2026-08-28 (§9). **Re-applied 2026-08-29/30** (chart bumped to `0.3.0` for [ADR 0047](ADR/0047-observability-prometheus-grafana.md)'s `ServiceMonitor` template) — `helm list -A` shows `upload-board` release `deployed` as of this edit. Reproducible via `bash k8s/infra/terraform/deploy.sh all`. | [0037](ADR/0037-helm-chart-scaffold.md), [0041](ADR/0041-helm-chart-project-adaptation.md), [0042](ADR/0042-k8s-helm-directory-consolidation.md) |
+| **Prometheus** | Metrics collection | ✅ landed, live-verified | [ADR 0047](ADR/0047-observability-prometheus-grafana.md): self-hosted via `eks_blueprints_addons`'s `enable_kube_prometheus_stack` flag (kube-prometheus-stack chart), scraping the app through a `ServiceMonitor` targeting a new `prom-client`-based `/metrics` endpoint (`MetricsModule`). Live-verified 2026-08-29/30 (ADR 0047 D4 Addendum): `up{job="upload-board"}` → `1`, custom counters (`upload_claims_total`, `temp_cleanup_deleted_total`) and the global `http_request_duration_seconds` histogram all present in query results. | [0047](ADR/0047-observability-prometheus-grafana.md), on [0017](ADR/0017-logging-conventions.md) |
+| **Grafana** | Dashboards | ✅ landed, live-verified | [ADR 0047](ADR/0047-observability-prometheus-grafana.md): bundled with the same `kube-prometheus-stack` Helm release as Prometheus (D3 — one combined decision, one Helm release). No custom dashboards provisioned yet — the default `kube-prometheus-stack` dashboards ship as-is. Live-verified 2026-08-29/30: `GET /api/datasources` lists a working `Prometheus` datasource, auto-provisioned by the chart with no manual wiring. | [0047](ADR/0047-observability-prometheus-grafana.md) |
+| **Terraform** | Infrastructure as code | ✅ applied, currently live | Project-specific design finalized ([0043](ADR/0043-terraform-project-adaptation.md), lifting [0038](ADR/0038-terraform-iac-scaffold.md)'s deferral) and implemented 2026-08-18: this project's own EKS (two heterogeneous node groups), RDS PostgreSQL, an S3 bucket + app IRSA role, Secrets Manager + External Secrets Operator, and a Route53/ACM-backed ALB ingress path — the Istio example is gone, not commented out. Reorganized 2026-08-20 from that single root module into three independently-appliable states ([0044](ADR/0044-terraform-three-state-split.md)): `cluster/` (`module.vpc`+`module.eks`), `app-infra/` (RDS/S3+IRSA/Secrets Manager/Route53+ACM, reads `cluster/` via `terraform_remote_state`), `addons/` (`module.eks_blueprints_addons` — ALB Controller+ESO+kube-prometheus-stack as of [0047](ADR/0047-observability-prometheus-grafana.md), the only state reading both others) — the retired single `main.tf` no longer exists. `terraform validate`/`fmt -check` pass in all three directories. Applied 2026-08-25–27, then fully destroyed 2026-08-28 to stop the AWS bill once proven end-to-end (§9). **Re-applied 2026-08-29/30** for [ADR 0047](ADR/0047-observability-prometheus-grafana.md) D4's live verification — `terraform output` in all three directories returns real values as of this edit (`cluster`'s EKS endpoint, `app-infra`'s ACM cert ARN, `addons`'s `kube_prometheus_stack` Helm release in `terraform state list`). Re-verify with `terraform plan`/`terraform output` before trusting this cell — it is still a snapshot, not live state, and the developer may tear it down again after this verification pass to stop the bill. | [0038](ADR/0038-terraform-iac-scaffold.md), [0043](ADR/0043-terraform-project-adaptation.md), [0044](ADR/0044-terraform-three-state-split.md), [0047](ADR/0047-observability-prometheus-grafana.md) |
+| **AWS** | Cloud / deploy target | ✅ proven, currently running | The container deploy target the rows above build toward — proven end-to-end 2026-08-25–27: account `074416822640` (`sharenpo-user`, Paid Plan since 2026-08-27), region `ap-northeast-2`, live EKS + RDS + S3 + Route53/ACM, with the app itself deployed and running (§9, 2026-08-27). Fully torn down 2026-08-28 once proven, to stop the bill (§9). **Re-applied 2026-08-29/30** for [ADR 0047](ADR/0047-observability-prometheus-grafana.md) D4's live verification via `deploy.sh all` — live again as of this edit; expect another teardown once the developer is done verifying, to stop the bill again. | deployment ADR (planned), [0047](ADR/0047-observability-prometheus-grafana.md) |
+
+### Stage 5 — Operational surface (admin console) — added 2026-07-30
+
+**Why a new stage rather than a row in an existing one.** An admin console is neither board
+domain (Stage 3) nor infrastructure (Stage 4), and until now **no stage owned it at all** —
+[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) decided admin's *placement* in
+2026-07-23 but never scheduled the work, so it sat outside the plan while every other decided
+item had a row. Adding the stage closes that gap; the import that prompted it is
+[ADR 0022](ADR/0022-admin-console-import-from-chat-project.md).
+
+**Numbering is not dependency order here** — the one exception to this section's rule. Stage 5
+does **not** depend on Stage 4: its only hard prerequisite is Stage 0 (RBAC, complete
+2026-07-25) plus the role-delivery decision in the first row below. It can run before, after, or
+alongside Stage 4. It is numbered last because it was added last, not because it must come last.
+There is a soft argument for pulling it *ahead* of Stage 4: a deployed system whose privilege
+hierarchy can only be operated through Swagger is hard to run in production.
+
+**Resolved 2026-07-31 — Stage 5 runs before Stage 4** (see Execution order above). The soft
+argument won: the operational surface precedes deployment. Stage 5's internal order is
+role-delivery → adapt console → moderation decision → resolve duplicate surface; its
+`GET /user` pagination row was pulled out to execution #2 as an early quick win — **done
+2026-08-05**, see the row below. **Stage 5 is now complete (2026-08-06)** — all four rows
+below are done; the remaining work is Stage 4 (infrastructure introduction, then deployment).
+
+| Task | Rationale / dependencies |
+|---|---|
+| ~~**How the client learns a user's role**~~ (backend decision — **done 2026-08-05**, [ADR 0028](ADR/0028-access-token-role-claim.md)) | Chose the access-token `role` claim over a request-based lookup (`GET /user/:id` or a new `GET /auth/me`): matches the frontend's existing client-side JWT-decode pattern (no new round trip), and the one real cost — a demoted user's *decoded* role can lag up to the access-token TTL — never becomes a live privilege, since `RolesGuard`/`AuthUser` still source `role` from `JwtStrategy.validate`'s per-request DB read, never from the token. `Payload` gains `role?: UserRole` (access tokens only); `issueToken`/`issueTokenPair` widen to `Pick<UserEntity, 'id' \| 'role'>`. Amends [ADR 0002](ADR/0002-dual-secret-token-pair.md). **Unblocks the row below.** |
+| ~~Adapt the imported `admin/` console~~ (**done 2026-08-06**) | Rewrote the [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md) import from the Chat Project's API to this one, using that ADR's verified backlog as the brief. Landed the role-management slice: string `UserRole` (was numeric), role read from the access-token claim (ADR 0028), a 3-option role `<select>` (was a binary toggle — chosen over keeping the toggle so the console can operate all three tiers, per ADR 0022's own stated purpose), `AUTH_LAST_SUPERADMIN`/`USER_HAS_FILES`/`FORBIDDEN` handled by `{ code, message }` branching (ADR 0011), and `take`/`skip` + `[data, total]` tuple reads matching `GetUsersDto`/`AuditLogQueryDto` exactly (no search/sort/status/userId/export — none exist server-side at the time). The chat-domain pages (`rooms-page`, presence/nickname widgets) and the whole Apollo/`/graphql` layer were deleted, not rewritten. The per-user audit-log panel was dropped rather than approximated (`GET /audit-log` has no `userId` filter — see the follow-up in section 7). Full defect-by-defect mapping: `admin/README.md` > "What was adapted". No backend files touched. **Extended 2026-08-12**: once section 7's two follow-ups below materialized, `users-page.tsx` gained the search box, sortable headers, and the restored per-user "Recent activity" panel; `logs-page.tsx` gained `?userId=` URL filtering and a client-synthesized CSV export (still no `/export` endpoint); `dashboard-page.tsx` gained file/post stat cards. A `status` filter and a real `/audit-log/export` endpoint still don't exist server-side, so both remain out of scope. **Extended 2026-08-25** (commit `d38d9dc`): with [ADR 0045](ADR/0045-audit-log-target-type.md) shipping a `targetType` discriminator on every audit record, `src/lib/audit.ts` dropped its client-side action → target-kind map and reads the server field instead, the "Recent activity" panel began naming its target, and CSV export gained a `targetType` column — closing the optional cleanup ADR 0045 recorded and deliberately left out. |
+| ~~`GET /user` pagination~~ **(execution #2 — pulled forward from Stage 5, done 2026-08-05)** | Closed the standing Never Do Group 2 violation (`findAll()` bound no `@Query()` and returned `findAndCount()` over every user). New `GetUsersDto` (`take`/`skip`, mirroring `GetFilesDto`); `UserService.findAll` sorts `createdAt DESC, id DESC` for deterministic pages; response kept the existing `[rows, total]` tuple shape (`GET /file` parity, no new ADR). Search/sort were left out of this pass' scope — the console adaptation above did not need them either; the follow-up in section 7 stayed open until it was resolved 2026-08-12 (see section 7). |
+| ~~Resolve the duplicate admin surface~~ (**done 2026-08-06**) | The adaptation above answered which survives: the import was not "mostly deletable" (only the chat-domain remnant was), so `admin/` is the sole admin surface. Deleted `frontend/src/features/admin/AdminPage.tsx` (ADR 0010's stub route section, still a 17-line no-op) and its `/admin` route + import in `frontend/src/App.tsx`. Further amends [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md) — admin is no longer a route section inside `frontend/` at all. Resolved in [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s 2026-08-06 note; the section 7 open decision is closed. |
+| ~~Decide whether moderation actions exist at all~~ (**settled "no", 2026-08-06, as part of the console adaptation above**) | The import called `POST /user/:id/ban`, `/unban`, and `/force-logout`, and colored audit actions (`USER_BANNED`, `USER_MUTED`, `USER_UNBAN`, `FORCE_LOGOUT`) that **this project never emits** — `AUDIT_ACTIONS` is exactly `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`, `POST_DELETE`, `COMMENT_DELETE`. Took the default answer: deleted the three actions and the four nonexistent audit colors from `admin/`, since a video-upload board has no stated moderation requirement (YAGNI). No backend surface was built for them — that would be new scope needing its own ADR, not a side effect of adapting a UI. |
+
+## 7. Unscheduled / open decisions
+
+- ~~**`image.tag: "latest"` default silently deploys stale code**~~ — **option (b)
+  landed 2026-08-30**: `.github/workflows/ci.yml`'s `docker-publish` job now also
+  triggers on push to `dev` (previously `main`-only), so the branch this project
+  actually develops on gets an image built on every push, not only on the rare
+  merge to `main`. Tagging is branch-aware, not uniform: `main` keeps `:latest` +
+  `:<sha>` on the existing `linux/amd64,linux/arm64` multi-arch build; `dev` gets
+  `:<sha>` only (never `:latest`) on an `linux/amd64`-only build — dev publishes far
+  more often and has no `:latest` reader depending on it, so halving its QEMU cost
+  was judged worth the (already-negligible, see below) loss of an early arm64
+  build-failure signal. A `concurrency` block (`cancel-in-progress: true`) was added
+  at the same time so a rapid string of `dev` pushes doesn't run every superseded
+  workflow to completion. Before this, a smoke-test step was added ahead of the
+  actual push: the freshly built amd64 image is loaded locally (`--load`, GHA-cached
+  so the later push build doesn't repay the full compile cost), run against a
+  throwaway `postgres:16` service over `--network host`, and polled against the
+  Dockerfile's own `HEALTHCHECK` (`GET /health/live`) before anything is pushed —
+  this is genuinely new coverage, since neither `main` nor `dev` builds were ever
+  runtime-verified before (only "the build completed" was ever checked; arm64 still
+  isn't runtime-verified today, QEMU-emulated container execution being
+  impractical — so dropping dev's arm64 build loses only an early *build*-failure
+  signal, not any runtime signal, since none existed for arm64 either way).
+  **Live-verified 2026-08-30**: two pre-existing, unrelated defects surfaced and were
+  fixed along the way, since `dev` had genuinely never run this path before —
+  `test/app.e2e-spec.ts`'s `seedFile` helper predated [ADR
+  0040](ADR/0040-persisted-media-type-for-playback.md)'s `NOT NULL mediaType` column
+  and was inserting without it (18 tests failing); and `docker/login-action@v3` (a
+  `node20`-runtime action) started failing immediately with "malformed HTTP
+  Authorization header" once GitHub Actions began forcing `node20` actions onto a
+  `node24` runtime — confirmed unrelated to the Docker Hub credentials themselves
+  (identical failure persisted across two credential rotations) and to Node version
+  specifically (identical failure persisted after bumping to `v4`, a native `node24`
+  build) — the actual cause was a stray character in the `DOCKER_USERNAME`/
+  `DOCKER_PASSWORD` secret values themselves, from a web-UI paste; the `v3`→`v4` bump
+  was kept regardless as the correct fix for the Node-runtime mismatch it was
+  originally diagnosing (inputs verified byte-identical between the two versions).
+  Confirmed end-to-end on a real `dev` push after both fixes: all 6 verification jobs
+  passed, `docker-publish` logged in, ran the smoke test to a `healthy` container,
+  and pushed — `bluecode1775/sharenpo:<sha>` appeared on Docker Hub as a
+  **single-architecture (`amd64`) image**, and no `:latest` tag was touched (it does
+  not currently exist on Docker Hub at all — every prior image was pushed manually,
+  consistent with `docker-publish` never having reached a successful push before this).
+  Options (a) (drop `values.yaml`'s `image.tag` default) and (c) (merge `dev` into
+  `main` on a cadence) were not pursued — (b) alone closes the "an image never gets
+  built from `dev`" gap this row exists for; the original write-up's mention of them is
+  kept for context, not as still-open follow-ups.
+- ~~**`image.tag: "latest"` default silently deploys stale code**~~ (found 2026-08-28,
+  reproducing an earlier deploy step by hand) — `k8s/helm/values.yaml`'s default
+  `image.tag` is `"latest"`, but `.github/workflows/ci.yml`'s `docker-publish` job only
+  rebuilds that tag on push to `main`; this project's actual work happens on `dev`, which
+  has never been merged back. Reproduced live: re-running the original bare `helm install`
+  (no `-f values-prod.yaml`, no explicit `image.tag`) pulled `bluecode1775/sharenpo:latest`
+  — an image built before the `DB_SSL` fix (commit `cf0cbfe`) existed — even though the
+  Helm values correctly carried `DB_SSL: true`. The failure this produces is actively
+  misleading: `helm get values` shows the right config, but the migration Job still fails
+  with the pre-fix `no pg_hba.conf entry ... no encryption` error, because the *running
+  code* predates the option the value is supposed to control — nothing points a developer
+  at "the image is stale" as the cause. `k8s/helm/values-prod.yaml` (added 2026-08-27,
+  ADR-less follow-up of the first live deploy) already pins `image.tag: ssl-fix` and is
+  unaffected — this gap only bites a bare `helm install`/`upgrade` that skips it, exactly
+  the shape of command a developer reaches for when following `k8s/helm/README.md`'s
+  generic instructions or reproducing a past step by hand.
+  Three fixes were plausible and needed the developer's input rather than a unilateral pick:
+  (a) drop `values.yaml`'s `image.tag` default entirely so a bare `helm install` fails fast
+  on a missing required value instead of silently resolving to a stale tag; (b) change
+  `docker-publish`'s trigger (or add a second job) to also build on push to `dev`, so
+  `:latest` actually tracks the branch this project develops on; (c) merge `dev` into `main`
+  on a regular cadence so `:latest`'s existing `main`-only trigger stops being the mismatch.
+  **Recurred 2026-08-29/30** during [ADR 0047](ADR/0047-observability-prometheus-grafana.md)
+  D4's live verification, in a variant the original write-up didn't cover: even
+  `values-prod.yaml`'s *pinned* tag (`ssl-fix` at the time, `db-ssl-ca` by this point) went
+  stale — `MetricsModule` landed on `dev` (`f17cc9e`) but was never built into any pushed
+  image, so the live pod kept serving 404 on `/metrics` after a full redeploy. This shows
+  the root cause is broader than "the `latest` default resolves to a stale image on a bare
+  install": *no* tag, pinned or default, updates itself when `dev` moves, because
+  `docker-publish` never builds from `dev` at all. Unblocking the ADR 0047 verification
+  itself only needed a one-off manual `build-and-push.sh`-style build+push +
+  `values-prod.yaml` tag bump — deliberately not a fix for this row at the time.
+  **Resolved 2026-09-03** with a fourth option none of (a)/(b)/(c) covered: `deploy.sh`'s
+  `deploy_helm()` now resolves the tag itself at deploy time instead of trusting whatever is
+  pinned in `values-prod.yaml`. When `IMAGE_TAG` is unset (the default), it fetches
+  `origin/dev`, reads its HEAD sha, and checks Docker Hub's public Hub API
+  (`GET /v2/repositories/bluecode1775/sharenpo/tags/<sha>/`, unauthenticated — the same
+  endpoint shape `docker-tag-cleanup.yml` already uses) for a `200` before proceeding; a
+  `404` aborts with a clear message instead of silently deploying a stale tag. Live-verified
+  against the real repo: `origin/dev`'s HEAD (`38b370f...`, 28 commits behind local `dev`
+  since nothing in this session had been pushed yet) resolved to `200`, matching exactly the
+  one tag Docker Hub's own listing showed. (a) and (c) were set aside rather than chosen: (a)
+  would only make a bare `helm install` fail loudly, not keep a real deploy fresh; (c) is a
+  branching-policy change the developer explicitly does not want, since merging `dev` into
+  `main` late is a deliberate choice, not an oversight. (b) stays landed separately, unchanged
+  — this row's fix is what closes the gap (b) left open. The design mirrors
+  [ADR 0046](ADR/0046-deploy-sequence-automation.md)'s own human/machine split: the machine
+  only *resolves* what currently exists, the human still approves every `helm upgrade` via
+  the existing `y`/N gate — no new automated-CD surface.
+  **Addendum, same day**: the branch was hardcoded to `dev` at first, with `IMAGE_TAG` as the
+  only way to reach `main`'s image. The developer clarified the actual intent: `dev` is where
+  direct test deploys happen during development, but the same capability needs to work for
+  `main` too — not `dev` as the sole source with `main` as a raw-tag escape hatch. Generalized
+  to a `DEPLOY_BRANCH` env var (default `dev`, matching every real deploy this project has
+  ever done — `origin/main` last moved 2026-08-13, 123 commits behind `origin/dev`) that
+  drives the *same* resolve-and-verify logic for either branch, rather than special-casing
+  `main` through the raw-override path. `IMAGE_TAG` still exists, now purely as a bypass for
+  anything neither branch's HEAD represents (e.g. an arbitrary older sha). Live-verified both
+  paths against the real repo: `DEPLOY_BRANCH=dev` resolves `origin/dev`'s HEAD to `200`;
+  `DEPLOY_BRANCH=main` resolves `origin/main`'s HEAD (`72b1289`) to `404` — correctly, since
+  no image has ever been successfully published from `main` (its `docker-publish` job existed
+  as of that commit but never completed a push; `:latest` itself is also `404` right now) —
+  proving the fail-loud path works for `main` exactly as it does for `dev`, not just in theory.
+  **Second same-day addendum**: typing `DEPLOY_BRANCH=main` before every command was
+  friction the developer flagged directly. `deploy_helm()` now also takes the branch as its
+  first positional argument — reusing the exact slot `plan`/`apply` already use for a target
+  state name — so `deploy.sh helm main` (or `deploy.sh all main`) is the short form, and
+  `DEPLOY_BRANCH` remains for anyone who'd rather set it once and never type a branch name
+  per invocation. Both are first-class, not one a workaround for the other. Live-verified via
+  the real script's actual code path (not a reimplemented snippet), piping empty stdin so the
+  final `y`/N approval aborts safely before touching any cluster: `deploy.sh helm main`
+  correctly walks through `main`'s resolve step and hits the same `404` as above; `deploy.sh
+  helm` (no argument) correctly falls back to `dev`, resolves `200`, and prints the full
+  planned `helm upgrade` command before the abort.
+- ~~**Automate the `cluster` → `app-infra` → `addons` → Helm deploy sequence**~~ — **landed
+  2026-08-27** ([ADR 0046](ADR/0046-deploy-sequence-automation.md)). Tool: a plain bash
+  script (`k8s/infra/terraform/deploy.sh`), matching the existing `build-and-push.sh`
+  precedent and keeping "no automated deploy pipeline (CD)" true — a GitHub Actions
+  workflow was rejected for reversing that stance on its own. Scope: Terraform 3-state
+  sequencing + `helm upgrade --install` (reusing `values-prod.yaml`, no `--set`
+  enumeration); domain purchase/NS delegation, the ESO secret sync, and enabling
+  `Ingress` stay manual, matching what `k8s/infra/terraform/README.md` already
+  documented as one-time/interactive. (The `default` ServiceAccount IRSA annotation
+  listed here as manual too, as of this 2026-08-27 landing, was folded into
+  `values-prod.yaml`'s `serviceAccount.create` on 2026-09-03 — see the dedicated
+  ServiceAccount item further down this section — so it is no longer a separate
+  manual step on top of `deploy.sh helm`/`deploy.sh all`.) Covers:
+  fixed apply order via subcommands, region/cluster_name consistency checked against
+  `cluster/`'s live `terraform output`, the ACM two-phase `-target` apply, and a
+  plan-then-confirm gate on every apply (`terraform plan -out=<tmpfile>` → human `y`/N →
+  `terraform apply <tmpfile>` — no `-auto-approve` anywhere). Live-verified against the
+  real AWS account: `deploy.sh cluster` ran an actual plan ("No changes...") and
+  correctly aborted with nothing applied when given no confirmation; `terraform
+  fmt -check`/`validate` pass unchanged in all three state directories. The eight
+  originally-recorded failure modes below are kept for the historical record — the first
+  real end-to-end `apply` of this stack (ADR 0043/0044) surfaced how
+  many hand-run, order-dependent steps the current README asks a developer to carry in their
+  head, each with its own failure mode actually hit during that run: an EKS `cluster_version`
+  pinned to an already-EOL Kubernetes minor (no new node-group AMI existed for it); the
+  `graviton` node group needing an explicit `ami_type` the module does not infer from
+  `instance_types`; the AWS account's Free-Tier instance-type restriction rejecting
+  `m6g.large`/`m5.large` launches outright; the ACM `for_each`-over-`domain_validation_options`
+  pattern requiring a two-phase `apply` (`-target` then full); Route53 NS-delegation
+  propagation being an unbounded external wait with no scriptable "done" signal; a pre-existing
+  S3 bucket living in the wrong region for a fresh cross-region import; a Helm install race
+  between `aws-load-balancer-controller`'s admission webhook and `external-secrets`' own
+  `Service` creation, which left a `failed` Helm release that had to be `helm uninstall`'d by
+  hand before retrying; and `eks-managed-node-group`'s `lifecycle { ignore_changes =
+  [scaling_config[0].desired_size] }` silently making `-var` scaling changes no-ops after
+  creation, forcing `aws eks update-nodegroup-config` as a separate out-of-band scaling path.
+  None of these is a single bug to fix — together they are the case for wrapping this sequence
+  (and its order-of-operations, retry, and wait-for-propagation logic) in a script or CI
+  pipeline rather than a human re-deriving the same order and the same failure recoveries from
+  README prose every time — which is exactly what ADR 0046 above now does.
+- ~~**Dedicated `ServiceAccount` template in the Helm chart, to replace the manual `default`
+  ServiceAccount IRSA annotation**~~ — **chart half landed 2026-09-02** (recorded
+  2026-08-28) — `k8s/helm/templates/serviceaccount.yaml` (disabled by default,
+  `serviceAccount.create: false`, mirroring `ingress.yaml`'s pattern, ADR 0041) now exists;
+  `deployment.yml` wires `serviceAccountName` to it via a new `sharenpo.serviceAccountName`
+  helper, defaulting to `"default"` when disabled so existing releases are unaffected.
+  `migration-job.yml` deliberately keeps running as `default` even when the flag is on — it
+  only reads DB credentials, never touches S3, so giving it the app's IRSA identity would
+  widen its permissions for nothing (see `k8s/helm/README.md` > "Dedicated ServiceAccount for
+  IRSA" for the full usage). **Not** landed: `app-infra/`'s `aws_iam_role.app` trust policy
+  still hardcodes `system:serviceaccount:default:default` (`app-infra/main.tf`) — turning on
+  `serviceAccount.create` today creates a ServiceAccount the role does not yet trust, so IRSA
+  auth still fails until that policy is updated to match the ServiceAccount's actual name. That
+  Terraform-side half is the next unscheduled item, immediately below.
+- ~~**Update `aws_iam_role.app`'s IRSA trust policy to match the Helm chart's dedicated
+  ServiceAccount**~~ — **code-complete 2026-09-03, not applied** (recorded 2026-09-02,
+  follows directly from the item above). Four pieces now consistently name-match
+  `sharenpo`: `app-infra/main.tf`'s `local.app_service_account_name` (changed from
+  `"default"`, ADR 0043 D8 — `aws_iam_role.app`'s `assume_role_policy` condition-matches
+  `system:serviceaccount:default:sharenpo` once applied), `k8s/helm/`'s
+  `serviceaccount.yaml` template, `values-prod.yaml`'s `serviceAccount.create: true` +
+  the role's ARN hardcoded in `annotations` (added 2026-09-03, same treatment as
+  `DB_HOST`/`S3_BUCKET`), and `deploy.sh`'s `HELM_RELEASE` default (changed from
+  `"upload-board"` to `"sharenpo"`, its `--help` text updated to match). This last piece
+  closes a real bug this session found before it shipped: without it, the documented
+  `bash deploy.sh all` reproduction path would have applied a trust policy trusting
+  `sharenpo` while still installing the Helm release as `upload-board` with
+  `serviceAccount.create` unset — a silent IRSA break on the very next full redeploy,
+  landing `STORAGE_DRIVER=s3` uploads broken. Because nothing is currently live to
+  migrate away from, this also completes the release-rename half of the earlier
+  decision for free: the *next* `deploy.sh all` simply installs fresh under the name
+  `sharenpo` from the start, no `helm uninstall upload-board` dance needed — that dance
+  only becomes necessary if a cluster is ever redeployed under the *old* code first.
+  `terraform fmt -check`/`validate` pass in `app-infra/`; `helm lint`/`helm template`
+  render correctly with `values-prod.yaml`. **Not applied**: `terraform plan` needs
+  `S3_BUCKET_NAME`/`DOMAIN_NAME` (developer-local, not in the repo, per `deploy.sh`), and
+  more importantly there is currently **no live infrastructure to apply this against** —
+  verified 2026-09-03 via `aws eks list-clusters` (empty), `aws rds describe-db-instances`
+  (empty), and no `sharenpo`/`upload-board`-named S3 bucket in the account; the local
+  `cluster/terraform.tfstate` is stale relative to that. Applying it was deliberately not
+  attempted standalone — spinning up EKS/RDS/etc. from scratch just to land a naming
+  change is a real, hourly-billed action this session did not take without it being
+  separately asked for; it happens naturally on the next full `deploy.sh all`. Until that
+  apply happens, the old manual `kubectl annotate serviceaccount default ...` step in
+  `k8s/infra/terraform/README.md` ("Known gap") is moot either way, with nothing live to
+  annotate — and once the apply does happen, that manual step stops working for good,
+  since the trust policy will no longer accept `default` at all. No new ADR needed — the
+  trust-policy shape simply has to match whatever the chart and `deploy.sh` create, same
+  reasoning as the chart half above. Note this `deploy.sh`/`values-prod.yaml` fix does not
+  introduce a new naming decision — it restores one already made in "Unify the product name
+  on Sharenpo" below (2026-08-25): that entry explicitly renamed the Helm release name in
+  both runbooks to `sharenpo` (safe, unlike an AWS resource rename), and
+  `k8s/infra/terraform/README.md`'s `helm install`/`upgrade` examples reflected that from the
+  start — `deploy.sh`/`values-prod.yaml` just hadn't existed yet when that decision was made,
+  and drifted to `upload-board` (matching the actual first live deploy two days later)
+  instead of picking it up. See [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Fixed` for the
+  full account.
+- ~~**Replace or drop the login page's mark, and delete the unused icon sprite**~~
+  (recorded 2026-08-25) — **landed 2026-09-07**. The Sharenpo unification (`0a14039`) gave
+  the login card a lockup of `<img src="/favicon.svg">` beside the wordmark, reusing what
+  already existed rather than inventing a mark mid-rename — but the file it reused was
+  starter-template artwork (`#863bff`, a third purple against `--brand`'s `#8a2be2`/
+  `#c084fc`), and the sibling `icons.svg` had zero references anywhere. Decided via a
+  comparison-table Q&A that grew into an artifact preview page as the developer kept asking
+  for more candidates — 19 marks explored in total (A–S): free MIT/ISC icons (Lucide,
+  D–P), fully original hand-drawn shapes (B, Q–S), a sharp/angular "growing" direction
+  (T–V), and a faceted-gem direction tying `--brand` to a literal sapphire cut (W–Y). Badge
+  treatment was settled first — no badge, a bare `--brand`-colored line icon. **Confirmed:
+  mark S**, two overlapping circles (stroke only, no fill) — read as both the connection
+  between an uploader and a viewer and, softened, the app's own initial. `LoginPage.tsx`
+  now inlines the SVG (so its stroke tracks the light/dark `--brand` swap) instead of
+  `<img src="/favicon.svg">`; `favicon.svg` carries the same shape with a hardcoded color
+  (plus a `prefers-color-scheme` `<style>` block for browsers that honor it in a favicon)
+  since the browser tab can't read page CSS custom properties. `icons.svg` is deleted. Full
+  decision trail: [frontend/docs/STYLE-PLAN.md](../frontend/docs/STYLE-PLAN.md) > item 5.
+- ~~Responsive layout across every screen~~ — **landed 2026-08-24** (commit `d746257`,
+  [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Changed`). Worth recording *because the
+  measurement contradicted the plan*: the work was scoped on the assumption that every
+  `*.module.css` without an `@media` block breaks on a phone, and at a 390px viewport only
+  the post board actually overflowed (by 265px) — `#root` is already `max-width: 100%` and
+  every page is `max-width`-based, so the rest collapsed on its own. The single real break
+  was a creator email under `flex: none` whose min-content pinned the whole page at 591px.
+  Fixed by wrapping rather than truncating on mobile — a readability call, since a phone has
+  the vertical room to show a title and an email in full — while the desktop row keeps its
+  one-line ellipsis. Breakpoints reuse the 1024px and 640px values already in the codebase;
+  no third value was added. Frames stay large at every step (346×196 / 368×208 / 589×332).
+  Verified across 5 screens × 5 widths at zero overflow, 22/22 e2e passing. Touch-target
+  sizing was explicitly excluded — next row.
+- ~~Touch-target sizing on mobile~~ (recorded 2026-08-24) — **landed 2026-09-07, scope
+  narrowed on purpose**. This row originally argued for pairing touch-target sizing with the
+  focus-visible gap below it (raising every button while leaving keyboard focus undone would
+  read as half-finished) — asked directly, the developer chose touch targets only, so the
+  focus-visible half **stays exactly as this row measured it** (only the file-grid buttons in
+  `FilePreviewTile`/`FileBoard` carry `:focus-visible`; `PostBoard`'s clear/creator/pager,
+  `PostDetailPage`'s delete/primary, `CommentThread`'s delete/load-more, `FileDetailPage`'s
+  copy/rotate/delete still don't) and is unstarted. What landed: every bordered/background
+  "chrome" button across `NavBar`, `SettingsPage`, `LoginPage`, `CommentForm`,
+  `CommentThread`, `FileBoard`, `FileDetailPage`, `FilePreviewTile`'s `.loadButton`,
+  `PostBoard`, `UploadForm`, `PostForm`, and `PostDetailPage` had its padding raised to clear
+  a 44px CSS-px minimum (`NavBar`'s icon-only `.themeToggle` went from a fixed 36×36 to
+  44×44); Playwright-measured on `LoginPage` post-change at 47.17px. **Update (2026-09-08)**:
+  `NavBar`'s `.themeToggle`/`.signOut` were reduced again, to 40×40px / a smaller padding —
+  a deliberate, explicit user request (not a regression), landing them back below this row's
+  own 44px WCAG 2.5.8 floor for these two controls specifically. Every other button this row
+  raised is unaffected. Plain-text-styled
+  controls (`FilePreviewTile`'s `.title`/`.creatorButton`, `PostBoard`'s `.creatorButton`,
+  every `.backLink`) were deliberately left alone under WCAG 2.5.8's inline-target exception,
+  not overlooked. **Update (2026-09-08)**: the focus-visible half this row left unstarted is
+  now closed too — see the next row.
+- ~~Keyboard focus indicator gap~~ (measured 2026-08-24 in the row above, closed 2026-09-08)
+  — every bordered/background button the row above listed as missing `:focus-visible` now
+  carries the exact pattern already proven on `FilePreviewTile`/`FileBoard`
+  (`outline: 2px solid var(--brand); outline-offset: 2px;`), copied verbatim rather than
+  reinvented: `NavBar` (`.themeToggle`, `.signOut`), `PostBoard` (`.clearButton`,
+  `.creatorButton`, `.pageButton`), `PostDetailPage` (`.primaryButton`, `.button`,
+  `.deleteButton`), `CommentThread` (`.button`, `.deleteButton`, `.loadMoreButton`),
+  `FileDetailPage` (`.copyButton`, `.rotateButton`, `.deleteButton`), `SettingsPage`
+  (`.deleteButton`), and `PostForm`/`CommentForm`/`UploadForm` (`.submit`) — 20 selectors
+  across 9 files, pure CSS, no logic or markup change. Verified live, not just by grep:
+  registered a throwaway account, tabbed with real `Tab` keypresses (not `.focus()`, which
+  Chromium's `:focus-visible` heuristic ignores) through `NavBar`, `PostBoard`,
+  `PostDetailPage`, `CommentThread`, `CommentForm`, `SettingsPage`, and `UploadForm`,
+  reading each focused element's computed `outline*` — every listed selector rendered the
+  2px `--brand` ring, and `FileBoard`'s `.clearButton` (deliberately **not** in this list)
+  rendered the browser's plain default outline instead, a live negative control that the
+  scope was followed exactly. `FileBoard`'s `.loadMoreButton`/pagination and
+  `FileDetailPage` itself weren't independently re-verified live (no uploaded file existed
+  in the throwaway account to reach them) — not a gap in the change, since the identical
+  rule was already confirmed working 8 times over; the test account was deleted via the
+  app's own `DELETE /user/:id` afterward, so nothing artificial was left in the dev DB.
+- ~~File board as a preview grid (`/files`)~~ — **landed 2026-08-24** (commit `e567277`,
+  [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Changed`). The board listed one text row per
+  file, so nothing identified a file short of opening its detail page. It is now a
+  3-column 16:9 preview grid that extends into 3xN on scroll, with the existing ADR 0021
+  title search given the filter row's spare width. The stated reasoning: today's device
+  performance makes fetching the files themselves unproblematic and scrolling reads faster
+  than a text list, but accumulated previews must not become a performance loss — so the
+  grid fetches eagerly *and* bounds what one session can pile up (images load on viewport
+  entry, video only on an explicit click, audio never, auto-loading stops at 180 tiles).
+  No ADR: `frontend/` keeps its decisions in CHANGELOG and `frontend/docs/`, not
+  `docs/ADR/`. Two follow-ups this work exposed are the next two rows.
+- ~~**Unify the product name on `Sharenpo`**~~ — **landed 2026-08-25**
+  ([CHANGELOG.md](CHANGELOG.md) `[Unreleased] > Changed`). Decided 2026-08-25 with scope
+  confirmed as all of it, Helm included. What landed: the Helm chart (`Chart.yaml` `name:`
+  plus **27** `upload-board-project.*` helper references — the file-by-file count recorded
+  here originally said 26 and had missed `NOTES.txt` (2) and `values.yaml`'s header comment
+  (1)), user-facing names (`frontend/index.html` `<title>`, `admin/index.html`,
+  `admin/public/favicon.svg`'s `UB` → `S`, and a new login wordmark lockup reusing the
+  existing favicon mark), documentation (`README.md`(+ko) H1, `frontend/README`(+ko),
+  `frontend/docs/API-CONTRACT`(+ko)), and the mechanical identifiers (three `package.json`
+  names — `admin`'s was nameless too, outside the original scope — `docker-compose.yml`'s
+  image tags, `backend/main.ts`'s Swagger title, the e2e database name, and a mock bucket).
+  The one genuinely new decision resolved as expected: `_helpers.tpl`'s `fullname` is
+  `.Release.Name`, **not** the chart name, so the chart rename alone would not have changed
+  what `helm install upload-board .` produces — the release name in both runbooks was changed
+  as its own decision and the distinction written down. Left alone on purpose: ADR prose,
+  existing CHANGELOG entries, `bluecode1775/sharenpo`, and the legacy `upload-board-pg`
+  container references (naming a real hand-created container — renaming would make the
+  instruction false). **One premise turned out to be false**: this row said "Terraform
+  unapplied", and it is applied — see the next row.
+- ~~**Rename the Terraform/AWS infrastructure identifiers to `sharenpo`**~~ (recorded
+  2026-08-25, deferred deliberately) — **done 2026-09-07, exactly at the free window this row
+  itself named.** Re-verified live before touching anything: `aws eks list-clusters`/
+  `aws rds describe-db-instances`/`aws s3 ls` all empty, and all three local `.tfstate` files
+  hold 0 resources — nothing to replace, so this was a pure code edit, not a live `apply`.
+  Renamed: `cluster/variables.tf` and `app-infra/variables.tf`'s `cluster_name` default,
+  `app-infra/variables.tf`'s `db_name` (`upload_board` → `sharenpo`) and `db_username`
+  (`upload_board_admin` → `sharenpo_admin`), `addons/variables.tf`'s `cluster_name`,
+  `deploy.sh`'s `CLUSTER_NAME` default (+ its own `--help` text), and both
+  `k8s/infra/terraform/README.md`(+ko) titles. `terraform validate`/`fmt -check` pass in all
+  three directories; `terraform plan` in `cluster/` confirms **70 to add, 0 to change, 0 to
+  destroy** — a from-scratch plan, not a replacement, proving the "free" framing held.
+  Nothing applied — the new names take effect on the next real `deploy.sh all`/
+  `terraform apply`. The `Blueprint` tag's *value* (`local.name`/`var.cluster_name` in both
+  `cluster/main.tf` and `addons/main.tf`) now correctly follows the rename; only the tag's
+  *key* ("Blueprint") is the fixed upstream `terraform-aws-eks-blueprints` convention this
+  row already noted can't be renamed. Discovered while doing the row
+  above: `CLAUDE.md` and ADR 0043/0044's addenda both still claim Terraform has never been
+  applied against real AWS, but `cluster/` and `app-infra/` hold state at serial 235 and 23
+  with 108 resource instances between them — a live EKS cluster, an RDS instance, an S3
+  bucket, a Route53 zone, and an ACM certificate. A `terraform plan` run with the defaults
+  renamed measured the cost: `app-infra` **10 add / 2 change / 8 destroy** with
+  `aws_db_instance.db must be replaced` (`db_name` and `username` are both ForceNew, and the
+  instance carries `skip_final_snapshot = true` with `deletion_protection = false` — the
+  replacement destroys the data with no final snapshot), and `cluster` **34 add / 20 change /
+  34 destroy** including `aws_eks_cluster.this[0] must be replaced`. Nothing was applied and
+  the defaults were reverted. **Why deferred rather than scheduled**: AWS resource names are
+  not product branding — every user-visible surface is already `Sharenpo`, and the domain
+  layer specifically was already `sharenpo.com` (Route53 + ACM) with an IAM user
+  `sharenpo-user`, so nothing a user touches depends on this. The cost also does not grow by
+  waiting: renaming costs a cluster rebuild plus a database migration whenever it is done, and
+  it becomes **free** if the infrastructure is ever rebuilt for another reason (a region move,
+  a fresh environment, a remote-state migration) — which is the moment to do it. **When it is
+  done**, the database half must be a logical migration (create the renamed database and role
+  inside the existing instance, `pg_dump`/restore, then re-point Terraform), never a
+  Terraform-driven replacement. Note that `Blueprint = upload-board-project` tags come from the
+  upstream `terraform-aws-eks-blueprints` module, so a complete rename was never achievable
+  here anyway. The "never applied" claim was corrected in `CLAUDE.md`(+ko) and
+  `k8s/infra/terraform/README.md`(+ko) on 2026-08-25; **ADR 0043's and 0044's addenda still
+  carry it and are deliberately left as written** — an ADR records what was true when written,
+  so this row is the correction of record. **Update (2026-08-28)**: the infrastructure this
+  row measured was applied 2026-08-25–27, then fully destroyed 2026-08-28 (proven-deploy,
+  stop-the-bill teardown — see `k8s/infra/terraform/README.md`(+ko) Status). Nothing named
+  `upload-board-project` currently exists in AWS, so the rebuild-driven "free" window this
+  row already names is open right now — the next `apply` from scratch is exactly the moment
+  to rename the identifiers before this row's own logic closes the window again.
+- ~~**Explore and implement a display typeface**~~ (recorded 2026-08-25) — **landed
+  2026-09-07**. Ran as a comparison-table Q&A followed by an artifact preview page rendering
+  6 heading-font candidates (a system serif fallback plus 5 web fonts — Fraunces, Bricolage
+  Grotesque, Instrument Serif, Unbounded, Manrope) against the real `LoginPage` card in both
+  themes. **Confirmed: the system serif fallback** —
+  `--heading: ui-serif, Georgia, 'Times New Roman', serif` (was byte-identical to `--sans`,
+  which stays untouched). Zero new dependency, so `frontend/CLAUDE.md`'s dependency-proposal
+  gate never triggered — the lowest-risk candidate on the table won over the 5 web-font
+  options. The "related but separate" motion/shadow note in this same row (`transition`/
+  `animation`/`@keyframes` at zero uses, `--shadow` used exactly once) was **not** folded in
+  — asked, the developer scoped this task to mark + heading font only, so motion stayed open
+  at the time. **Resolved 2026-09-08** as its own pass — see
+  [frontend/docs/STYLE-PLAN.md](../frontend/docs/STYLE-PLAN.md) > item 4.
+  Full decision trail: [frontend/docs/STYLE-PLAN.md](../frontend/docs/STYLE-PLAN.md) > item 3.
+- ~~A small-screen layout for `admin/`~~ (recorded 2026-08-24) — **decided 2026-09-08: keep
+  horizontal scroll, don't build cards.** The console has no deploy target and is operated on
+  a desktop, so exposure is nil; a comparison table (column-hiding vs. card conversion vs.
+  status quo) put the trade-off in front of the developer directly — card conversion's
+  maintenance cost (conditional rendering/CSS across all three tables) wasn't worth it for a
+  desktop-only tool. The prior `overflow-x-auto` minimum fix already restores access (no
+  page-level clipping); the one gap raised in review — the wrappers had no `tabindex`, so a
+  keyboard-only user couldn't scroll one unless focus happened to land on a control inside —
+  is now closed: `users-page.tsx`, `logs-page.tsx`, and `dashboard-page.tsx`'s recent-logs
+  table all carry `tabIndex={0}` on the wrapper div. Live-verified at a 375px viewport across
+  all three pages (Playwright): each wrapper's `scrollWidth` exceeds its `clientWidth`
+  (genuinely scrollable, not silently clipped) and `tabIndex === 0`. Correcting this row's
+  earlier count in the same pass: the console carries **one** responsive (`sm:`/`md:`-prefixed)
+  utility, not two — `dashboard-page.tsx`'s `md:grid-cols-3` stat-card grid; grep found no
+  second one at the time of this edit.
+- `admin/` diverging from `frontend/`'s design system (recorded 2026-08-24) — **not started
+  because** this is the state [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)
+  deliberately chose: the Chat Project console was imported with its colors and layout
+  untouched, and only its API/domain layer was adapted. The divergence is therefore a
+  standing decision, not a defect: no dark-mode support at all (`dark:` appears zero times,
+  while `frontend/` ships an explicit light/dark toggle), a blue accent against
+  `frontend/`'s brand purple, and login fields labelled by placeholder only. Reversing any
+  of it is a design decision first and a code change second. **Update (2026-09-08): the
+  dark-mode clause is resolved, on direct developer request** — every page (login,
+  dashboard, users, logs) now has a light/dark toggle (`admin/src/components/theme-toggle.tsx`,
+  `admin/src/store/theme.store.ts`), following the OS `prefers-color-scheme` until toggled,
+  then pinned via `localStorage`. Independent of and structurally different from
+  `frontend/`'s toggle — Tailwind v4's `dark:` variant repointed at a `.dark` class
+  (`@custom-variant dark` in `index.css`) rather than `frontend/`'s CSS-custom-property
+  `ThemeProvider`. The other two divergences named in this row — the blue accent and the
+  placeholder-only login labels — are untouched and still open. Verified: `pnpm lint`/`pnpm
+  test` clean (22/22, including a new `theme.store.spec.ts`), live Playwright check confirms
+  the toggle, its `localStorage` persistence, and no flash of the wrong theme on reload.
+- Server-side thumbnail endpoint (recorded 2026-08-24) — **not started because** it is a
+  backend change (a new derived artifact per file, plus where to store and when to
+  generate it) that the grid above does not strictly need. **Current mechanism, precisely
+  (2026-09-07 addition — no thumbnail is generated anywhere; this describes conditional
+  *rendering of the original*, not thumbnail generation)**: `frontend/src/features/files/
+  FilePreviewTile.tsx` picks a load strategy per `mediaType`, gated separately from
+  visibility —
+  - `image`: loads automatically once the tile enters the viewport
+    (`IntersectionObserver`, latched so re-scrolling doesn't refetch).
+  - `video`: does not auto-load at all — shows a 🎬 placeholder + "Load preview" button;
+    bytes are only requested after an explicit click (`videoRequested` state).
+  - `audio`: never loads preview bytes — a fixed 🎵 placeholder only, since there is no
+    visual frame to fill.
+  Independently of the above, `public`/`unlisted` files stream directly via `<img
+  src>`/`<video src>` pointed at `fileUrl`/`shareUrl` (`directSrc()`), while `private`
+  files can't — `<img>`/`<video>` can't carry a Bearer header — so those go through
+  `api.getBlob('/file/:id/content')` into an `objectURL`, revoked on unmount/file change.
+  This is why that grid's sharpest compromise exists: with no thumbnail, a `private`
+  file's preview means downloading the *entire* object — up to the 100MB upload ceiling
+  ([ADR 0027](ADR/0027-media-type-expansion-implementation.md)) — through that same
+  authenticated blob path (ADR 0025/0026). The video click-gate above exists solely to
+  bound that cost for the one media type large enough for it to matter.
+  A thumbnail endpoint would remove the gate and let every tile preview instantly.
+  Revisit alongside the Stage 4 S3 cutover, since where thumbnails live is a storage
+  decision (ADR 0029's `FileStorage` port would need a new operation).
+  **Confirmed 2026-09-07: implement only if actually needed, not proactively.** The
+  current click-gate/lazy-load workaround has no reported problem to fix — this stays
+  a documented gap (now precisely described above) rather than a scheduled task. Revisit
+  only if the video click-gate or the private-file full-download cost actually becomes a
+  real complaint, or naturally alongside a future S3 cutover that touches the same
+  `FileStorage` port anyway.
+- ~~Dev-database rows whose stored bytes are gone~~ (recorded 2026-08-24) — **moot as of
+  2026-09-07, nothing to decide.** Measured 2026-08-24: of the **25** public files then
+  visible in the shared dev DB, **23 returned `404 FILE_NOT_FOUND`** — metadata rows left
+  behind by e2e runs whose files no longer existed on disk. Re-checked live 2026-09-07 while
+  investigating this same row: the persistent dev DB volume (`uploadboardproject_db-data`)
+  now holds **zero** rows in `file_entity`/`user_entity`/`post_entity`, and `file/upload`/
+  `file/temp` are both empty on disk. The volume's creation timestamp (2026-09-05) matches
+  [ADR 0051](ADR/0051-orphaned-granted-file-reclaim.md)'s Addendum incident date (the live
+  sweep test that deleted 44 real files) — whatever data this row measured no longer exists
+  in the reachable dev DB, so there is nothing left to prune and no decision left to make.
+  Note this was always the *dev* database only; nothing here indicated a production data
+  path.
+- Terraform remote state backend (recorded 2026-08-19,
+  [ADR 0044](ADR/0044-terraform-three-state-split.md) D3) — **not started
+  because** the three-state split's `terraform_remote_state` reads use
+  `backend = "local"` deliberately, scoped to a single developer's own
+  `apply`/`destroy` cycles; introducing an S3+DynamoDB-lock (or Terraform
+  Cloud) remote backend now would be a second, unrequested scope expansion on
+  a config that has not yet been `apply`d against real AWS at all (ADR 0043
+  D1). Revisit once a second developer or a CI pipeline needs to `apply`
+  this configuration.
+- Distroless runtime base (recorded 2026-08-08, [ADR 0030](ADR/0030-container-non-root-and-arch-stance.md))
+  — **not started because** whether an exact Node 24 distroless tag
+  (`gcr.io/distroless/nodejs24-debian12` or similar) even exists was never verified
+  against a live registry, and distroless removes the only debugging path
+  (`docker exec`) this project has today with no K8s-native replacement
+  (`kubectl debug`, ephemeral debug containers) yet in place. Revisit once the tag is
+  confirmed and the Kubernetes stage (this section, below) lands ephemeral-debug
+  tooling — not bundled with the non-root hardening that already landed, since that
+  part carried no such unverified dependency.
+- ~~ARM/Graviton (multi-arch) container build~~ (recorded 2026-08-08,
+  [ADR 0030](ADR/0030-container-non-root-and-arch-stance.md)) — **this entry was stale,
+  corrected 2026-09-07.** It said "not started because `bcrypt`'s prebuilt binaries are
+  x64-only, and no deploy target has chosen an instance architecture yet" — both halves
+  of that premise were already false by the time anyone next read this row.
+  [ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.md) retracted the bcrypt claim four days
+  later (2026-08-12): `bcrypt@6.0.0` bundles a working `linux-arm64` prebuild, verified
+  end to end (`docker run --platform linux/arm64 ...` + `require('bcrypt').hashSync(...)`
+  under QEMU emulation). CI has published real `linux/amd64,linux/arm64` images from
+  `main` since 2026-08-13; `cluster/main.tf`'s `graviton`/`t4g.medium` node group has been
+  the EKS cluster's *primary* capacity group (not a reserve — `x64`/`m5.large` sits at
+  `desired_size = 0`) since Terraform landed 2026-08-18, citing ADR 0035 by name in its own
+  comment. The live 2026-08-27 deployment's app pod actually ran on that graviton node
+  group, and the developer confirmed `t4g.medium` as the **permanent** node-type choice
+  the same day. This row, `ROADMAP.md`'s own Stage 4 table (§6) and DevOps-stack prose
+  (§6), and `CLAUDE.md`'s CI/CD section all still described this as "deferred" as of
+  2026-09-07 — none had been revisited since the 2026-08-08 premise was corrected;
+  all four are fixed in this same pass. Nothing left to do here: ARM/Graviton is landed,
+  live-verified, and the confirmed architecture, not an open item.
+- ~~AWS Secrets Manager + External Secrets Operator (ESO) wiring~~ (recorded 2026-08-08,
+  [ADR 0033](ADR/0033-secrets-delivery-target.md)) — **this entry was stale, corrected
+  2026-09-08.** It said "not started because it needs a live AWS account... none of which
+  exist yet" — that stopped being true once Terraform ([ADR 0043](ADR/0043-terraform-project-adaptation.md)
+  D7, 2026-08-18) provisioned exactly this: the Secrets Manager entry, ESO's install, and
+  its IRSA role. Live-verified twice (2026-08-27, then again 2026-08-29/30 after a
+  teardown/re-apply cycle) — see §6's Stage 4 table, "Secrets delivery" row, for the
+  authoritative status of whether it's currently applied (that cell is a snapshot,
+  re-verify with `helm list -A`/`terraform output` rather than trusting either this row
+  or that one on sight). What was actually still open when this row was last touched has
+  long since landed; nothing left to schedule here.
+- ~~Kubernetes `Ingress`/ALB + TLS certificate provisioning~~ (recorded 2026-08-08,
+  [ADR 0034](ADR/0034-https-termination-stance.md)) — **this entry was stale, corrected
+  2026-09-08.** It said "depends on... a chosen certificate source, neither decided yet"
+  — the cert source *was* decided (ACM, DNS-validated via a Terraform-provisioned Route53
+  zone, ADR 0043 D4/D5) and a real cert reached `ISSUED` during the 2026-08-25–27 live
+  deploy. The Helm chart's `Ingress` template exists and is wired for the ACM ARN
+  annotation. The reason it's off is not a missing dependency, it's a **deliberate
+  developer choice** confirmed 2026-08-27: `ingress.enabled` stays `false` until an
+  outside tester actually needs external access — see §6's Stage 4 table, "HTTPS
+  termination" row, for the full record. Revisit only when that condition changes, not
+  because anything here is still unbuilt.
+- Istio (service mesh over the Kubernetes cluster) — **pulled from the Production DevOps
+  stack introduction row and the Stage 4 component-status table** (moved 2026-08-31,
+  developer decision after a scale-fit review run this session, independent of the
+  ROADMAP's own sequencing plan) — **not started because**, at this project's actual
+  current shape, none of the problems it solves exist yet. The Helm chart deploys exactly
+  one workload (`k8s/helm/templates/deployment.yml` + `service.yaml`, single backend
+  monolith, `replicaCount: 1`) with nothing else running in-cluster, so there is no
+  east-west traffic for a mesh to route, split, or encrypt. Pod-to-pod mTLS was already
+  weighed and explicitly rejected as premature by
+  [ADR 0034](ADR/0034-https-termination-stance.md) (Alternatives rejected — a per-pod
+  sidecar proxy "solving a problem \[pod-to-pod encryption\] this project doesn't have
+  yet"). Mesh-level telemetry would duplicate the app-level metrics
+  [ADR 0047](ADR/0047-observability-prometheus-grafana.md) already ships and
+  live-verified (Prometheus/Grafana via `kube-prometheus-stack` + the `prom-client`-based
+  `MetricsModule`). Istio's presence in this plan traces to
+  [ADR 0038](ADR/0038-terraform-iac-scaffold.md)'s finding that the original Terraform
+  scaffold was AWS's own "EKS Cluster w/ Istio" example — its Istio-specific resources
+  were already dropped during project adaptation
+  ([ADR 0043](ADR/0043-terraform-project-adaptation.md)) while this ROADMAP's plan row
+  survived that cut. Revisit only if the architecture actually grows multiple in-cluster
+  services that need traffic management, mTLS, or canary routing between them — a
+  scenario not on this project's roadmap today.
+- ADR 0026 content-endpoint follow-ups (recorded 2026-08-01, from a post-implementation
+  review of `GET /file/:id/content`,
+  [file-content.controller.ts](../backend/file/file-content.controller.ts)), severity-ordered:
+  1. ~~**[medium] Missing stream error handling**~~ — **resolved 2026-09-07**:
+     `createReadStream(...).pipe(res)` (200 and 206 paths) attached no `'error'` listener, so a
+     read failure after headers are sent (a `DELETE /file/:id` racing an in-progress stream, or
+     a disk fault) became an unhandled `'error'` event and crashed the process (Never Do Group
+     1). Both call sites now go through a private `pipeContentStream` helper that attaches
+     `stream.on('error', …)`, destroys the response, and logs at `warn` — no unit spec (this
+     controller carries none, per the coverage exclusion), verified by the existing e2e Range
+     coverage still passing unchanged.
+  2. ~~**[low] Suffix `Range: bytes=-N` mishandled**~~ — **resolved 2026-09-07**: a last-N-bytes
+     request was served as the first N+1 bytes instead. Fixed by detecting the suffix form
+     (empty start, non-empty end) and computing `start = max(0, size - N)` / `end = size - 1`
+     for it specifically, leaving the `N-`/`N-M` forms untouched. New e2e case: `supports a
+     suffix Range request (last N bytes)`, 76/76 green under `STORAGE_DRIVER=local`.
+  Non-code observations (no fix, still open): the `416` reply omits an `ErrorBody` code
+  (protocol-level); a rejected multi-field upload leaves temp orphans the ADR 0018 sweep
+  reclaims; `file/temp` stays statically served (pre-existing, outside the visibility scope).
+  Full write-up in [ADR 0026](ADR/0026-file-visibility-implementation.md) > Known limitations.
+- Testcontainers for e2e (recorded 2026-07-26): the e2e suite uses a throwaway DB
+  plus a jest `setupFiles` env override ([ADR 0016](ADR/0016-github-actions-ci.md),
+  `test/e2e-env.ts`) — valid, but it relies on env-before-import timing and a
+  pre-provisioned Postgres. Testcontainers (an ephemeral per-run container injected via
+  a Nest provider override) would remove both. **Deferral reconfirmed 2026-09-07**: the
+  original trigger ("revisit when the deploy environment, Stage 4, is set") has actually
+  already passed — Stage 4's AWS deploy was proven end-to-end and the current
+  manual-Postgres approach never caused a problem getting there, so that trigger alone
+  isn't a reason to act. Restated as an implement-when-actually-needed item: introduce it
+  only if the current approach starts causing real friction (a second developer's local
+  setup, CI flakiness tied to the pre-provisioned DB) — not proactively. New dev
+  dependency plus a CI change either way, so it still needs the same approval this row
+  always required.
+- ~~License~~ — **decided 2026-09-07: MIT.** `package.json` had said `UNLICENSED` since
+  the first commit; the pre-rewrite README's `License / MIT` section was silently dropped
+  (not decided) during the 2026-07-22 doc rewrite, leaving the project with no license
+  file at all. Re-investigated before deciding: the repo is already **public** on GitHub
+  (not "before publishing" — already live), no runtime dependency is copyleft (all
+  MIT/BSD-3-Clause, so either choice was compatible), and MIT is the de facto convention
+  for a public portfolio-style repo. Landed: root `LICENSE` file (MIT text), `package.json`
+  (root + `frontend/` + `admin/`, the latter two previously had no `license` field at all)
+  → `"MIT"`, and a restored `## License` section in `README.md`(+ko) linking to it.
+- ~~Chat-project remnant handling~~ ([plan](CHAT-REMNANT-REMOVAL-PLAN.md)): git-history
+  decision **made 2026-09-07 — leave as-is**, matching the plan's own recommended option
+  (rewriting is destructive and would break every commit hash `CHANGELOG.md`/`ROADMAP.md`
+  already cite; the only case for rewriting — content that must not be publishable — never
+  applied here, it's design docs, not secrets). Re-verification trigger stays a standing
+  habit (already fired three times, see the plan's own log), not a one-time task to close.
+- Dev-transitive `pnpm audit` findings (handlebars via ts-jest;
+  glob/minimatch/webpack via jest and @nestjs/cli) — build/test-time only;
+  waiting on upstream releases; same "nothing actionable" status, now 58
+  findings incl. 1 critical (was a handful in 2026-07-24). (`pnpm audit --prod`
+  is clean as of 2026-09-10 — a re-run over a separate `qs` report turned up 14
+  findings beyond this dev-only set, all closed the same day: `qs`/
+  `brace-expansion` pinned, `multer`/`js-yaml` overrides raised, `joi` patched,
+  and the unused legacy `aws-sdk` v2 dependency removed outright rather than
+  overridden — see CLAUDE.md > Known Gaps and CHANGELOG.md for detail.)
+  **Reconfirmed 2026-09-07**: nothing actionable from this codebase — there's no fix to
+  apply here, only upstream releases to wait for, so "implement when needed" collapses to
+  "re-run `pnpm audit` occasionally and act only once an upstream release actually lands."
+- API versioning timing — the consumer is now decided; versioning activates
+  when a post-freeze breaking change actually needs it (see Design criteria).
+- Frontend stack — **decided 2026-07-24: React + Vite** (SPA consuming this
+  REST API; Next.js rejected as SSR/API-route overlap with this backend, Vue as
+  runner-up). Lives as the in-repo `frontend/` subfolder (ADR 0010, structure
+  amended 2026-07-24); created and E2E-verified 2026-07-24; hosting is a
+  later deployment decision.
+- ~~Canonical signin path~~ — **decided 2026-07-24: `POST /auth/signin` (Basic)**,
+  chosen for lowest risk / lightest maintenance (reuses `parseBasicToken` that
+  `register` needs anyway; RFC 7617 protocol standard; backed by ADR 0001).
+  `POST /auth/signin/local` was accordingly a **removal candidate**, and the
+  removal itself is **done as of 2026-09-07**: `LocalStrategy`, `LocalAuthGuard`,
+  the controller handler, and the now-unused `passport-local`/
+  `@types/passport-local` dependencies are all deleted. `AuthService.validateUser`
+  (the credential check the two paths shared) stays — `signIn` is its sole caller
+  now. Confirmed zero live callers before deleting: `frontend/` only ever built
+  against `/auth/signin` and explicitly flagged the local path as off-limits
+  (`frontend/CLAUDE.md`), `admin/` had no reference at all. 263 unit + 76 e2e
+  green after removal; no dedicated test existed for the deleted endpoint itself
+  (neither Passport strategy ever carried a spec file, a pre-existing gap this
+  removal doesn't need to backfill).
+- ~~Frontend adoption of the upload claim contract~~ (recorded 2026-07-27,
+  [ADR 0019](ADR/0019-upload-claim-idempotency.md)) — **landed 2026-09-07** (ADR 0019
+  Addendum). The 409 half was already done: `frontend/src/api/errorCodes.ts` lists
+  `FILE_ALREADY_CLAIMED` and `UploadForm.tsx`'s `messageForError()` branches on it. The
+  genuinely missing half — `client.ts` discarding `response.status` so a 200 replay and a
+  201 fresh promotion ran the identical success path — is closed: `client.ts` gained
+  `fetchWithAuthRetry()` (the shared 401-refresh-retry core, extracted so it wasn't
+  duplicated) and `requestWithStatus()`/`api.postWithStatus()` on top of it, used only by
+  `UploadForm.tsx`'s `POST /file` call — `api.post()`'s signature is unchanged everywhere
+  else. A 200 now shows "This file was already uploaded — reusing the existing entry."
+  First verified against a mocked backend, then **re-verified against the real backend +
+  a real Postgres DB (2026-09-07)**: a real account attached and promoted a file (fresh
+  `POST /file`, real `201`, real row), then resubmitted the same claimed temp filename —
+  the real backend answered `200`, the resubmitted title was ignored exactly as designed
+  (a direct `psql` read confirmed a single row, still carrying the original title), and
+  the notice rendered in the real running form.
+- ~~Frontend adoption of the deletion contract~~ (recorded 2026-07-30,
+  [ADR 0020](ADR/0020-account-deletion-cascade.md)) — **landed 2026-09-07** (ADR 0020
+  Addendum), after being re-confirmed fully open the same day (no account-deletion UI
+  anywhere in `frontend/`, `USER_HAS_FILES` an unused catalog entry). New
+  `frontend/src/features/account/SettingsPage.tsx`, routed at `/settings` and linked from
+  `NavBar`, calls `DELETE /user/:id`; on 409 `USER_HAS_FILES` it shows the backend's
+  message (already names the file count) behind a second confirm, then retries with
+  `?deleteFiles=true`; on success it signs out and redirects to `/login`.
+  `frontend/docs/API-CONTRACT.md` gained the `?deleteFiles=`/`USER_HAS_FILES` row it was
+  missing. First verified against a mocked backend, then **re-verified against the real
+  backend + a real Postgres DB (2026-09-07)**: a real account owning one real file hit the
+  real `409 USER_HAS_FILES` (message correctly named the count), the confirmed retry with
+  `deleteFiles=true` actually cascaded, and a direct `psql`/filesystem check confirmed the
+  user row, the file row, and the stored bytes were all really gone — not just a 200
+  response ([CLAUDE.md](../CLAUDE.md) > Project Overview).
+- ~~Reclaiming orphaned `granted_` files~~ (recorded 2026-07-30,
+  [ADR 0020](ADR/0020-account-deletion-cascade.md)) — **design landed 2026-09-05**
+  ([ADR 0051](ADR/0051-orphaned-granted-file-reclaim.md)): the DB-joined reconciliation
+  this entry called for, not a copy of ADR 0018's filename-only sweep. `FileStorage`
+  gains `listGranted()`; `FileModule` gains an unexported `GrantedCleanupService`
+  provider (not a new module — its whole job is reconciling `FileModule`'s own entity
+  against disk) that diffs `file/upload` against `file_entity.filePath` on a schedule. **Ships report-only** — `GRANTED_SWEEP_DRY_RUN`
+  defaults `true`, so this lands observability (log + `granted_cleanup_sweep_total{outcome="candidate"}`
+  metric), not a new deletion path. Actually reclaiming disk space still requires an
+  operator to review that signal and explicitly flip the flag — unscheduled, and
+  deliberately left to a human decision rather than an automatic cutover.
+- ~~File ownership reassignment can break the post↔file same-creator invariant~~ — ✅
+  **settled 2026-07-31** ([ADR 0024](ADR/0024-account-cascade-fk-refusal.md)), the gate the
+  comment module waited on. Of the three candidates, *translate the `23503` into a typed
+  refusal* was chosen: `FileService.deleteFilesOfCreator` now answers 409
+  `USER_FILES_IN_USE`, matching what its sibling `deleteFile` already did for
+  `FILE_IN_USE`. Rejecting the other two mattered as much as choosing this one — widening
+  the cascade would have destroyed third-party posts *and* rewritten the delete order the
+  comment task extends, and a composite FK enforcing the rule in the database is recorded
+  in that ADR as the shape to adopt if the property is ever needed as a guarantee rather
+  than merely handled. What remains is deliberate, not residual: the same-creator rule is
+  now a **creation-time rule**, so an account whose file sits in a stranger's post cannot be
+  deleted until that post is (409, and any admin can clear it). **The feature underneath it
+  is still undecided** — see the next entry.
+- ~~**Whether `PATCH /file/:id { userId }` should exist at all**~~ (recorded 2026-07-31,
+  [ADR 0024](ADR/0024-account-cascade-fk-refusal.md)) — **resolved 2026-09-04**
+  ([ADR 0050](ADR/0050-consent-based-file-ownership-transfer.md), amends ADR 0024): kept, but
+  the unconsented immediate reassignment is replaced with a propose/accept/reject/cancel flow
+  — only the target user can accept, admin included. Investigation surfaced two facts not
+  previously recorded: the field predates any stated purpose (present since this project's
+  first commit) and zero live clients ever sent it (grep across `frontend/`/`admin/`). The
+  developer supplied the actual purpose during this ADR's drafting: let a user hand off owned
+  files before deleting/leaving their account, instead of losing them to the deletion cascade.
+  ADR 0024's `23503` → `USER_FILES_IN_USE` translation and `PostService.resolveAttachment`'s
+  author check both stay reachable and necessary — consent gates *who* can trigger a
+  reassignment, not whether an accepted one still produces the same downstream invariant
+  break, which is why ADR 0050 amends ADR 0024 rather than superseding it (only the rejected
+  "drop the field entirely" alternative would have superseded it). Backend implementation
+  only; frontend/admin UI (propose/accept/reject actions, status badges) tracked separately
+  under those directories' own scope.
+- Deferred list-query indexes (recorded 2026-07-30,
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — the search/filter/sort task
+  deliberately shipped **no index**: at this table's size all three candidates are
+  unmeasured speculation. Each is a plain-text description awaiting a measurement, and each
+  needs approval plus line-by-line review of `migration:generate` output before it lands:
+  `("createdAt" DESC, "id" DESC)` for the default sort and page boundary (justified around
+  ~10⁴+ rows); `pg_trgm` GIN on `lower(title)`, which is the *precondition* for
+  `ILIKE '%term%'` to use an index at all and therefore a two-part migration (extension +
+  index); and `("creatorId")`, which Postgres does not create automatically and which would
+  serve both the new filter and the account cascade
+  ([ADR 0020](ADR/0020-account-deletion-cascade.md)). Until then `search`/`creatorId` are
+  sequential scans and the sort is a full sort — the accepted trade at this scale. Reverse it
+  on measurement, not intuition.
+- ~~Frontend adoption of the list-query parameters~~ (recorded 2026-07-30,
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.md)) — **found already resolved,
+  2026-09-07** (stale row — this item was done at some point without ever being struck
+  through here). `frontend/src/features/files/FileBoard.tsx` fully wires all four params
+  against `GET /file`: a debounced `search` input, a `sortBy` `<select>` driven by
+  `FILE_SORT_FIELDS`, an `order` ASC/DESC `<select>`, and a validated `creatorId` filter
+  (plus a "filter by this creator" affordance from `FilePreviewTile` and a "Clear filters"
+  button) — confirmed live in `DashboardPage`, not dead code.
+  `frontend/docs/API-CONTRACT.md` already documents the full param/validation shape too.
+  Nothing left to do here.
+- ~~Frontend adoption of the post/comment API~~ — ✅ **resolved 2026-08-11** (recorded
+  2026-08-11, [ADR 0023](ADR/0023-board-domain-schema.md)) — **owned by a frontend-scoped
+  task, not by backend work**, like the item above. Routing groundwork landed first: `/` is
+  now the app's home (`PostBoard`), the file board moved to `/files`, `/posts/:id` is
+  reserved (`PostDetailPage`), and `PostResponse`/`CommentResponse` mirror the backend DTOs
+  in `src/api/types.ts` — `frontend/docs/API-CONTRACT.md` documents the routes. **Post
+  list/create landed the same day**: `PostBoard` hosts `PostForm` (title/body + an optional
+  `FilePicker`-selected file, `POST /post`, a 200 replay and a 201 fresh post handled
+  identically) and the post list itself (search/sort/creator filter/pagination mirroring
+  `FileBoard`, an attachment icon per row, ADR 0021), covered by a new `posts.spec.ts` e2e
+  spec. **Post detail + the comment thread landed last, closing this item out**:
+  `PostDetailPage` loads the post and its file (the same visibility-gated playback pattern
+  `FileDetailPage` uses), with inline edit/delete for the creator/admin; `CommentThread`
+  lists the fixed-order (`createdAt ASC`) thread with a "load more" pager and per-comment
+  inline edit/delete for that comment's own author/admin; `CommentForm` posts a new comment
+  and triggers a refetch (no realtime/polling infrastructure exists in this app). Full
+  Playwright suite: 22/22 green.
+- ~~Frontend adoption of file visibility + media expansion~~ — ✅ **resolved 2026-08-03**
+  (recorded 2026-07-31, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.md); both
+  backend halves landed 2026-08-01 — visibility via
+  [ADR 0026](ADR/0026-file-visibility-implementation.md), media-type expansion via
+  [ADR 0027](ADR/0027-media-type-expansion-implementation.md)). All four pieces this item
+  called out are now live in `frontend/`: the file board (search/sort/filter/pagination/
+  visibility badges, `FileBoard.tsx`), the file detail page (visibility-gated playback — a
+  direct `<video src>` for public/unlisted, an authenticated blob+objectURL fetch for
+  private), file management actions (visibility toggle, share-link rotation, delete, all via
+  `PATCH`/`DELETE /file/:id`), and the upload form (`image`/`audio`/`video` fields mirroring
+  ADR 0027's per-field allowlist, plus XHR-based upload-progress reporting, added in the same
+  task, since `fetch` has no upload-progress event). `frontend/docs/API-CONTRACT.md` documents
+  the content-endpoint `fileUrl`/`visibility`/`shareUrl` shape and the three-field upload
+  contract.
+- ~~Documentation rot in `ARCHITECTURE.md` (+ko)~~ (recorded 2026-07-30) — **resolved
+  2026-09-01**: rewritten end to end against current code as its own dedicated doc-audit
+  task. Added the seven modules missing from the Module Map (Post, Comment, Storage,
+  AuditLog, TempCleanup, Health, Metrics), RBAC (roles, `RolesGuard`, the access-token
+  `role` claim), the `FileController`/`FileContentController` split with
+  visibility/`mediaType`/the storage port/the S3 presigned redirect, the real env var set,
+  corrected Jest `roots` from `["src"]` to `["backend"]`, documented the e2e suite, and
+  replaced the false "Non-Existent Infrastructure" section with an accurate summary pointing
+  at README.md/ROADMAP.md.
+- ~~`CLAUDE.md`'s own Never Do Group 2 pagination example still cites `getFiles(take, skip)`~~
+  — **resolved 2026-09-02**: the example now reads `getFiles(query: GetFilesDto)`, matching
+  the real signature since [ADR 0021](ADR/0021-list-query-search-filter-sort.md). This was
+  bundled into the `ARCHITECTURE.md` item above as "same task" when both were first recorded
+  (2026-07-30), stayed outside that item's 2026-09-01 fix since `CLAUDE.md` is outside the
+  Documentation Authoring Protocol's document set, and was closed separately as its own
+  one-line fix rather than folded into a larger pass.
+- ~~Adapting the imported `admin/` console~~ — **scheduled 2026-07-30 as
+  [Stage 5](#stage-5--operational-surface-admin-console--added-2026-07-30)**, no longer
+  unscheduled. Recorded here for one turn because the entry started life in this section: the
+  Chat Project's console was imported to `admin/` unmodified as a declared modification base
+  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) for two purposes — supplying
+  the **privilege-hierarchy operator surface** [ADR 0013](ADR/0013-rbac-and-audit-log.md) shipped
+  without, and doing it at a fraction of the LLM token cost of regenerating a console already
+  built for the same three-tier hierarchy. The verified modification backlog lives in ADR 0022;
+  the task rows, their ordering, and the backend decisions they depend on are now Stage 5's.
+- ~~Which admin surface survives~~ (recorded 2026-07-30,
+  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)) — **resolved 2026-08-06**.
+  The console adaptation ([Stage 5](#stage-5--operational-surface-admin-console--added-2026-07-30)'s
+  third row) showed the import was *not* mostly deletable — only its chat-domain remnant was —
+  so `admin/` is the sole admin surface. `frontend/src/features/admin/AdminPage.tsx` (the
+  `/admin` route section [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)
+  specified) was deleted along with its route in `frontend/src/App.tsx`, further amending
+  ADR 0010's admin-placement clause: admin is no longer a route section inside `frontend/` at
+  all. Recorded in ADR 0022's 2026-08-06 note.
+- Doc-wording sync (deferred 2026-07-23; completed 2026-07-29): pre-plan
+  "candidate" phrasings reconciled with this plan. ADR 0003 ("candidate
+  roadmap item") now points at the landed [ADR 0018](ADR/0018-orphan-temp-file-cleanup.md);
+  ADR 0006 Consequences ("top roadmap item") carries a dated landed note; and
+  `CHAT-REMNANT-REMOVAL-PLAN` ("ROADMAP's CI candidate") now points at the landed
+  Stage 1 CI ([ADR 0016](ADR/0016-github-actions-ci.md)). **Done.**
+- In-code trade-off documentation gap for pre-mandate services (recorded 2026-08-02) —
+  a full-codebase survey found trade-off reasoning is dense but **tiered**: the ADRs carry
+  every decision-level trade-off (a `## Consequences` section plus rejected alternatives,
+  5–39 markers each), while the call-site layer — the `이유` line of the mandatory
+  목적/이유/방법 block ([CLAUDE.md](../CLAUDE.md) > File Creation Convention) — is dense in the
+  board/visibility-era services (`file.service` 17 blocks, `post.service` 12, `comment.service`
+  8) but **absent in the oldest service, `auth.service.ts` (0 blocks)**, whose trade-offs live
+  only in [ADR 0001](ADR/0001-basic-token-authentication.md) /
+  [0002](ADR/0002-dual-secret-token-pair.md) / [0012](ADR/0012-refresh-cookie-rotation.md).
+  This is **not a rule violation** — the block mandate (commit `995df5e`) binds only *new or
+  modified* functions, and auth.service predates it and has not been touched since — so it is a
+  documentation-density gap between the decision layer (dense) and the call-site layer (thin),
+  not a defect. **Scheduled as a follow-up to run after all Stages complete**, deliberately not
+  now: it is a documentation-only pass with no behavior change, and running it before the stages
+  finish would churn functions a later stage (any auth-touching work) may modify anyway — which
+  would add the blocks as a side effect and shrink the gap for free. The dedicated task
+  retro-adds 목적/이유/방법 blocks to the pre-mandate services (auth.service the clearest case),
+  each `이유` line pointing at its governing ADR. Not a drive-by: a repo-wide comment sweep is
+  exactly the kind of change Scope Discipline keeps out of feature commits, so it lands as its
+  own task once the staged work is done.
+  **Landed 2026-09-03** (all Stages complete, per plan above): retro-added blocks across every
+  pre-mandate function, wider than originally scoped — not just `auth.service.ts` but the rest
+  of the service layer (`user.service.ts`, `superadmin-seed.service.ts`,
+  `temp-cleanup.service.ts`, `metrics.service.ts`) and the storage adapter
+  (`local-disk.storage.ts`), then extended past services into controllers/guards/strategies/
+  filter/decorators once the same density gap turned up there too (`auth.controller.ts`'s
+  cookie-handling helpers, `all-exceptions.filter.ts`, `roles.guard.ts`, both Passport
+  strategies, the three param decorators). Four commits: `6f52f66`, `ad995a5`, `f04b366`, and
+  `9e9434e` — the last for a dead-code finding surfaced while writing the strategy blocks
+  (`JwtStrategy`/`LocalStrategy` each carried an `if (!user)` guard that was already
+  unreachable; removed, documented in [CLAUDE.md](../CLAUDE.md) > Known gaps). **Done.**
+- ~~`GET /user` search/sort~~ (recorded 2026-08-05, as a follow-up from execution #2's
+  `GET /user` pagination task, deferred to
+  [Stage 5](#stage-5--operational-surface-admin-console--added-2026-07-30)) —
+  the pagination task deliberately shipped **take/skip only**: the ROADMAP item named
+  pagination specifically, and `GetFilesDto`'s `search`/`sortBy`/`order` surface
+  ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) was not mirrored onto
+  `GetUsersDto`. **Trigger for revisiting**: Stage 5's "adapt the imported `admin/` console"
+  row — the imported user-list page (`ADR 0022` backlog: `GET /user?page&take&sort&sortBy&search&status`)
+  will want to filter/sort the account list by email or role, and today's `GetUsersDto` has no
+  field for it. If that need materializes, extend `GetUsersDto` with the same
+  `search`/`sortBy`/`order` shape `GetFilesDto` already uses (email `ILIKE`, a
+  `USER_SORT_FIELDS` tuple keyed the same way `FILE_SORT_FIELDS` is) rather than inventing a
+  second read-layer pattern — no new ADR needed, same as the pagination task. Not scheduled
+  as its own task: it is a plausible extension of Stage 5's console-adaptation row, not an
+  independent debt like pagination was. Trigger reached, need did not materialize on
+  2026-08-06 — the console adaptation landed without it, matching `GetUsersDto` exactly rather
+  than sending fields that would 400. **Resolved 2026-08-12**: the need did materialize after
+  all — `GetUsersDto` gained `search` (email `ILIKE`) and `sortBy`/`order`
+  (`id`/`email`/`createdAt`, no `role`), and `users-page.tsx` gained the search box and
+  sortable ID/Email/Created headers in the same change (`admin/README.md` > "What was
+  adapted"). No `status` filter exists server-side, so that half of the original imported
+  page's surface stays out of scope
+- ~~`GET /audit-log` has no `userId` filter~~ (found 2026-08-06, during the Stage 5 console
+  adaptation row above) — the imported users-page detail panel called
+  `GET /audit-log?userId=…` for a per-user "recent activity" slice, but
+  `AuditLogQueryDto` filters on `action` only. Resolution for the console itself at the time:
+  the panel section was **dropped, not approximated** — filtering an unfiltered page
+  client-side would silently miss a user's older entries once they fall off that page, which
+  is worse than not showing the slice at all (`admin/README.md` > "Two decisions made for
+  this adaptation"). **Resolved 2026-08-12**: `AuditLogQueryDto` gained `userId` (matches
+  actor or target), mirroring the existing `action` filter shape as planned, no new ADR. The
+  same change restored the dropped panel as an exact `GET /audit-log?userId={id}&take=5`
+  fetch and wired `logs-page.tsx` to read `?userId=` from its own URL for the "View all" link
+  (`admin/README.md` > "Two decisions made for this adaptation" and "Open items").
+  **Corrected 2026-08-24** ([ADR 0045](ADR/0045-audit-log-target-type.md)): "matches actor or
+  target" was too broad — `targetId` is polymorphic, so matching it without a discriminator
+  returned file/post/comment records whose id collided with a user id (62 of 114 rows in the
+  development database). The filter now means "actor, or the target of a user-targeting
+  action", enforced by the new `targetType` column
+- ~~Post detail/comment UI hardcoded in Korean~~ (found 2026-08-13, during a manual QA
+  walkthrough of the post/comment board — full record in CHANGELOG > Known issue /
+  Fixed) — **resolved 2026-08-15**: every Korean user-facing string in
+  `PostDetailPage.tsx`, `CommentThread.tsx`, `CommentForm.tsx`, and (found mid-fix,
+  same defect class) `PostForm.tsx` swapped to English, matching
+  `UploadForm.tsx`/`FileDetailPage.tsx`'s existing phrasing; two `frontend/e2e/*`
+  assertions matching the old Korean text updated to match. Pure string swap — no
+  design decision, no ADR, no backend change.
+- ~~Frontend style overhaul (CSS Modules + brand palette + explicit dark/light toggle)~~ —
+  decided **and fully landed 2026-08-14**. A live UI/UX walkthrough (headless Playwright
+  screenshots plus a headed pass) surfaced that every screen styled itself with inline
+  `style={{}}` and no design system; a comparison-table Q&A pass locked in CSS Modules (zero
+  new dependency — Vite's native `*.module.css` support avoids frontend/CLAUDE.md's
+  "propose a CSS framework first" gate), a brand-forward direction with an explicit toggle
+  (beyond the prior OS-only `prefers-color-scheme` split), and all 5 route pages + `NavBar`
+  in scope. Full decision record, the confirmed brand-purple token table, and the
+  page-by-page task breakdown live in `frontend/docs/STYLE-PLAN.md` (+ `.ko.md`). All 7
+  items landed the same day: token foundation + `ThemeProvider`/toggle + `NavBar`;
+  `LoginPage`; file board (`DashboardPage`+`FileBoard`+`UploadForm`);
+  `FileDetailPage`+`VisibilityBadge` (bundled with the long-standing file-detail
+  title-overlap bug fix, root-caused to the global `h1` rule's missing `line-height`); post
+  board (`PostBoard`+`PostForm`+`FilePicker`); and last, `PostDetailPage`+`CommentThread`+
+  `CommentForm` (which also removed the scoped inline `lineHeight` workaround the title fix
+  superseded). Two items the same walkthrough surfaced were deliberately **not** folded in
+  and remain open: the S3 CORS gap blocking video playback (AWS bucket config, not source)
+  and the Korean/English UI-text split above — the style pass left every hardcoded string,
+  Korean or English, exactly as it found it in all three converted files. Every conversion
+  is markup/style-only — no API, DB, or logic change. Full per-page detail across all 7
+  items: `CHANGELOG.md`'s `[Unreleased] > Added` entries.
+- **S3-redirect private-file playback failure, root-caused (found 2026-08-15)** — the "S3
+  CORS gap" bullet above and ADR 0036's own "unverified by `pnpm test:e2e`" residual turned
+  out to be the same defect, not two: running `pnpm test:e2e` against a local
+  `STORAGE_DRIVER=s3` environment (21/22 pass) failed exactly one test,
+  `frontend/e2e/detail.spec.ts:73`, because `FileDetailPage.tsx`'s **private**-tier
+  playback path fetches content via `fetch()`+Blob (a `<video>` tag can't carry a `Bearer`
+  header) — and once that fetch follows ADR 0036's `302` to a cross-origin S3 URL, reading
+  the response body needs bucket CORS headers that don't exist. `public`/`unlisted`
+  playback (plain `<video src>`, no JS body read) is unaffected and passes. Full trace:
+  ADR 0036 > "Addendum (2026-08-15)". Two undecided candidate fixes recorded there, not
+  resolved here — configure bucket CORS, and/or update `detail.spec.ts:73`'s assertion
+  (which checks the wrong leg of the redirect chain regardless of CORS).
+  **Both candidate fixes landed 2026-08-16.** Fix 1: the bucket had zero CORS rules
+  configured; applied one (`GET` only, scoped to this backend's own two local
+  `CORS_ORIGIN` dev origins) and re-verified live via Playwright that a private video
+  genuinely plays for its owner now (`readyState: 4`, real dimensions, no CORS console
+  error) — not just an HTTP-status check. Fix 2, same day: `detail.spec.ts:73`'s
+  assertion checked the wrong leg of the redirect chain (the first `302` hop, not the
+  final response), so it could never pass under `STORAGE_DRIVER=s3` regardless of
+  whether playback worked — relaxed to accept either `200` (local) or `302` (s3) and let
+  the existing `video[src^="blob:"]` assertion carry the real proof of success; verified
+  5/5 green under both drivers. Full record: ADR 0036 > "Addendum (2026-08-16)". Nothing
+  from this item remains open.
+- **Resumable/chunked upload (recorded 2026-09-06, no design work done)** — surfaced while
+  explaining [ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)'s `TEMP_SWEEP_TTL_HOURS`: the
+  24h TTL only covers the gap between a successfully-completed `POST /upload/attach` and a
+  not-yet-called `POST /file` (an abandoned or slow *second step*) — it does nothing for a
+  byte-level transfer that is itself interrupted mid-upload (a dropped connection during
+  `POST /upload/attach`). Today that case has no resume path at all: the client must
+  re-send the entire file from scratch, since Multer's `memoryStorage` (ADR 0029 D4)
+  receives a request as one atomic buffer with no chunking or range support. CLAUDE.md's
+  Architecture Decisions > File Storage already lists "streaming/chunked upload" under
+  **Never suggest** — that stance is unchanged and this entry does not reopen it now; it
+  exists so the *next* time app scale or a slow-network user base makes large-file
+  re-upload-from-scratch genuinely costly, there is a named starting point instead of a
+  fresh investigation. No comparison table, no ADR, no design decided — purely a marker
+  for a future task to pick up if and when it becomes worth prioritizing.
+- **Superadmin bootstrap identity verification (found 2026-09-09, resolved by removing
+  the automatic trigger — [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.md), amends
+  ADR 0013)** — the boot-time auto-promotion this replaced trusted whoever registered
+  `SUPERADMIN_EMAIL` first, with no proof of ownership. Two stronger options were
+  weighed and declined for this project's current stage (no live users, no mail
+  infrastructure) rather than closed off permanently:
+  - **Email verification before promotion** — the actual fix for the identity gap, but a
+    real feature addition (SMTP account, new dependency, a verification-token schema
+    change, new endpoints/env vars) disproportionate to a project with no live users yet.
+  - **Gate promotion on "zero superadmins currently exist"** — cheap, but does not close
+    the race it would be proposed for: at the moment of the original race (fresh deploy,
+    before the owner's first registration), the superadmin count is already zero.
+  Revisit if this project ever carries real, adversarial-facing traffic.
+- **No request-rate limiting anywhere in the backend (found 2026-09-09, resolved 2026-09-10
+  — [ADR 0053](ADR/0053-global-rate-limiting.md))** — a security review found
+  `POST /auth/register`/`POST /auth/signin` unconstrained beyond `HASH_ROUNDS`' per-attempt
+  cost. A global `ThrottlerGuard` (`@nestjs/throttler`) now runs via `APP_GUARD` — this
+  repo's first global guard — at a conservative default of 100 requests/minute, tracked
+  independently per route rather than one app-wide pool, with `HealthController`/
+  `MetricsController` exempted (`@SkipThrottle()`) so kubelet/Prometheus traffic is never
+  mistaken for abuse. e2e-verified against a live Postgres (76/76, no 429s), and a live 429
+  fired against a running dev server confirmed both the limit and the per-route isolation
+  (`GET /file` hitting its own ceiling left `POST /auth/signin` unaffected in the same
+  window). **Still open, left for a follow-up task**: per-route tuning (e.g. a tighter bound
+  specifically on `POST /auth/signin`) — this ADR deliberately settled only the global
+  default. Also open: Redis-backed `ThrottlerStorage`, needed only once this app actually
+  runs more than one replica (today's default storage counts per-instance).
+
+## 8. Advisory notes
+
+Recorded criteria that inform but do not schedule work: privacy/compliance
+(deletion policy, retention), release/change management (semver + migration
+ordering), docs-as-code enforcement (automated README/endpoint consistency — a
+candidate under the CI task).
+
+## 9. Completed
+
+### 2026-08-29
+
+| Item | Notes |
+|---|---|
+| Redeploy after the 2026-08-28 teardown reached a stable state again | Re-ran the three-state Terraform apply (`cluster` → `app-infra` → `addons`) plus the Helm app install, confirming the 2026-08-28 entry's "same order, same `deploy.sh all`" prediction held. Two interrupted-apply artifacts surfaced, both invisible to `terraform plan` because they are cluster-side state Terraform doesn't track: (1) the newly-added `kube-prometheus-stack` addon ([ADR 0047](ADR/0047-observability-prometheus-grafana.md)) had its Helm release stuck at `pending-install` — the underlying pods were already `Running`, but a mid-install interruption left Helm's own release record unmarked and Terraform's state with no record of the resource at all; fixed with `helm uninstall kube-prometheus-stack -n kube-prometheus-stack` then a clean `terraform apply` in `addons/`, which recreated it as `deployed` (revision 1). (2) The app's Helm release (`upload-board`) failed its pre-install migration Job (`CreateContainerConfigError: secret "upload-board-project-app-secrets" not found`, revision 1) because the ESO `SecretStore`/`ExternalSecret` one-time manual apply and the `default` ServiceAccount's IRSA annotation (`k8s/infra/terraform/README.md`'s "After all three apply" steps) hadn't been redone since the teardown — both are cluster-side manual steps a Terraform re-apply does not replay. Fixed from `app-infra/`: `terraform output -raw external_secrets_manifest \| kubectl apply -f -` (confirmed `externalsecret/upload-board-project-app-secrets` `SecretSynced`/`True`), then `kubectl annotate serviceaccount default eks.amazonaws.com/role-arn=$(terraform output -raw app_iam_role_arn)`; retrying the release reached revision 2, `deployed`. Verified live: migration Job `Complete 1/1`, app pod `1/1 Running`, and both `GET /health/live` and `GET /health/ready` (the latter a real DB round-trip) returned `200 {"status":"ok"}`. |
+
+### 2026-08-28
+
+| Item | Notes |
+|---|---|
+| Full AWS teardown after end-to-end proof | With the deploy confirmed stable (see the 2026-08-27 row below) and a TLS-verification defect found and fixed against the live RDS the same window (ADR 0039 Addendum — `rejectUnauthorized: false` swapped for `ssl: { ca: DB_SSL_CA }`, re-deployed and confirmed passing real certificate verification), the developer chose to stop the AWS bill rather than keep the stack running with no active tester. Order: Helm release uninstalled first, then `addons/` → `app-infra/` → `cluster/` `terraform destroy`, matching `k8s/infra/terraform/README.md`'s documented reverse-of-apply order (no ALB/Ingress had ever been enabled, so the ADR-recorded `DependencyViolation` timeout risk didn't apply). Verified empty afterward via direct `aws` describe calls across every resource type this stack created — EKS cluster, node group EC2 instances, RDS instance, S3 bucket, Route53 hosted zone, NAT gateway, Elastic IPs, EBS volumes, Secrets Manager, ACM certificates, CloudWatch log groups, load balancers — all empty or not-found; no RDS snapshot was taken (`skip_final_snapshot = true` was already the design, and no data existed worth keeping). `CLAUDE.md`(+ko), `k8s/infra/terraform/README.md`(+ko), and this file's Stage 4 status table updated the same day to say "not applied" again rather than leaving the 2026-08-25 "applied" correction stale — each is explicit that this is a point-in-time snapshot to be re-verified with `terraform plan`, not a standing fact. Redeploying later needs no new decisions: same order, same `deploy.sh all`, documented in the Terraform README's Deploy section (cross-referenced from Destroy). |
+
+### 2026-08-27
+
+| Item | Notes |
+|---|---|
+| First live AWS deployment reached a stable state | The Helm release `upload-board` (`k8s/helm/`) is `STATUS: deployed` (revision 5) on the real EKS cluster provisioned by `cluster/`'s Terraform state (§7's "not applied" claim was already corrected 2026-08-25; this is the app landing *onto* that infrastructure, not the infrastructure itself). Revisions 1–4 all failed: rev 1–3 on pod-slot/architecture mismatches while the account was still on the Free Plan (resolved by the Paid Plan upgrade and a manual multi-arch `docker buildx build --platform linux/amd64,linux/arm64` push, since `docker-publish` in CI only triggers on `main`, not `dev`); rev 4 failed the migration Job against the live RDS instance with `no pg_hba.conf entry ... no encryption` (`rds.force_ssl` requires TLS the app wasn't requesting). `helm upgrade upload-board . --reuse-values --set env.DB_SSL=true` (rev 5) fixed it using the `DB_SSL` env var added for exactly this (commit `cf0cbfe`, Joi schema + `.env.example` + `data-source.ts`) — the migration Job now completes and the app pod reaches `Running`/ready. S3 access was then wired: the `default` ServiceAccount was annotated with `app-infra`'s Terraform-output IAM role ARN (`eks.amazonaws.com/role-arn=arn:aws:iam::074416822640:role/upload-board-project-app`) and the deployment restarted to pick it up, confirmed by the injected `AWS_ROLE_ARN`/`AWS_WEB_IDENTITY_TOKEN_FILE` env vars and the projected `aws-iam-token` volume in the running pod — the release's `STORAGE_DRIVER=s3` value can now actually authenticate, though an end-to-end upload against the live bucket is still unverified. Reachable only inside the cluster for now (`ingress.enabled: false`, chart default) — the developer confirmed this stays as-is until an outside tester actually needs external access, rather than enabling `Ingress` speculatively. Two other open items were resolved the same day: `cluster/main.tf`'s graviton `t4g.medium` node type, originally a temporary workaround for the account's pre-upgrade pod-slot limit, is now the developer's **confirmed permanent choice** (cost-efficiency over `m6g.large`'s larger pod-slot headroom — comment updated in place, no `terraform apply` needed since the value itself doesn't change); and `k8s/helm/values-prod.yaml` was added, collecting this deployment's `--set env.DB_SSL/STORAGE_DRIVER/S3_BUCKET/...` flags into one overlay (`helm upgrade upload-board . -f values-prod.yaml`), verified by `helm template` to render an identical `ConfigMap` to the live release. |
+
+### 2026-08-06
+
+| Item | Notes |
+|---|---|
+| Admin console adaptation (role-management slice) | Rewrote `admin/`'s imported Chat Project UI against this backend's real routes: string `UserRole` throughout (was numeric), role read from the access-token claim ([ADR 0028](ADR/0028-access-token-role-claim.md)), a 3-option role `<select>` replacing the binary promote/demote toggle, `AUTH_LAST_SUPERADMIN`/`USER_HAS_FILES`/`USER_FILES_IN_USE`/`FORBIDDEN` branched by `{ code, message }` ([ADR 0011](ADR/0011-error-code-contract.md)), and `take`/`skip` + `[data, total]` tuple reads matching `GetUsersDto`/`AuditLogQueryDto` exactly. Chat-domain pages (`rooms-page`, Apollo/`/graphql` layer, ban/unban/force-logout) deleted, settling Stage 5's moderation-existence row "no" in the same change. Per-user audit-log panel dropped (not approximated) at the time — `GET /audit-log` had no `userId` filter, tracked as a follow-up in section 7. No backend files touched — fourth Stage 5 task (full defect list: `admin/README.md` > "What was adapted"). **Extended 2026-08-12** once section 7's follow-ups landed: search box, sortable headers, the restored per-user "Recent activity" panel, `logs-page.tsx`'s `?userId=` filtering, and a client-synthesized CSV export — see the Stage 5 table's own row above for the full list |
+| Resolve the duplicate admin surface — **Stage 5 complete** | The adaptation above answered the open question ADR 0022 deferred: the import was *not* "mostly deletable" (only the chat-domain remnant was; the role-management substance adapted cleanly), so `admin/` is now the sole admin surface. Deleted `frontend/src/features/admin/AdminPage.tsx` (a 17-line stub with no backend calls, unchanged since ADR 0010 reserved it) and its `/admin` route + import in `frontend/src/App.tsx`. Further amends [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)'s admin-placement clause — admin is no longer a route section inside `frontend/` at all. Resolution recorded in [ADR 0022](ADR/0022-admin-console-import-from-chat-project.md)'s 2026-08-06 note. **All four Stage 5 rows are now done — the remaining work is Stage 4 (infrastructure introduction, then deployment).** |
+
+### 2026-07-30
+
+| Item | Notes |
+|---|---|
+| List search / filter / sort | `GET /file` gained four optional parameters — `search` (title `ILIKE '%term%'`, LIKE metacharacters escaped, ≤100 chars), `creatorId` (through the existing creator join), and `sortBy`/`order` mapped to columns by a total `Record<FileSortField, string>` so a client string never becomes a column name. Default `createdAt DESC` with `file.id` as a tiebreaker — the endpoint previously had **no `ORDER BY` at all**, making offset paging non-deterministic. Response shape unchanged, no new error codes (the boundary pipe rejects bad values as `VALIDATION_FAILED`), no schema change; the `createdAt`/`pg_trgm`/`creatorId` indexes are deferred with their triggers recorded — **first Stage 3 task** ([ADR 0021](ADR/0021-list-query-search-filter-sort.md)) |
+| Board domain schema design | Design gate only — plain-text schema for **both** board entities at once, no code and no migration. post ↔ file is 1:1, optional, and same-creator (the unique nullable FK doubles as `POST /post`'s idempotency key: identical resubmit replays 200, differing payload 409 `POST_FILE_TAKEN`); comments are flat, with threading deferred as an additive migration; `comment.postId` carries the schema's **only** `ON DELETE CASCADE`, argued against ADR 0020's service-cascade rule rather than assumed; `DELETE /file/:id` on an attached file becomes 409 `FILE_IN_USE` by translating `23503` (a pre-check would have created a `File ↔ Post` module cycle **and** left a race); the ADR 0020 account cascade absorbs posts and comments while `deleteFiles=true` keeps guarding files only; ownership stays `canManage` with no third axis, and the post listing inherits the ADR 0021 read layer — **second Stage 3 task** ([ADR 0023](ADR/0023-board-domain-schema.md)) |
+| Deletion policy design | Soft delete rejected with reasons recorded; deletion stays hard. `DELETE /user/:id?deleteFiles=true` cascades (file rows → account row → stored files, unlink post-commit), an unconfirmed delete of an account owning files returns the new 409 `USER_HAS_FILES` with the count, and `deleteFiles` is a validated string literal because implicit Boolean conversion measurably turns `"false"` into `true`. `DELETE /file/:id` now unlinks the stored `granted_` file — a leak found during this task. No schema change — **third Stage 2 task, Stage 2 complete** ([ADR 0020](ADR/0020-account-deletion-cascade.md)) |
+
+### 2026-07-27
+
+| Item | Notes |
+|---|---|
+| Upload duplicate-submission policy | The attach-issued filename is a one-shot claim token: a resubmit replays the existing file (200) for its claimant, 409 `FILE_ALREADY_CLAIMED` for anyone else, 400 `FILE_INVALID_PATH` when no temp file backs it, and a concurrent double-submit is resolved by the unique constraint instead of a 500. `filePath` pinned to the issued shape on `UploadFileDto` (closes a path-traversal gap); no schema change — **second Stage 2 task** ([ADR 0019](ADR/0019-upload-claim-idempotency.md)) |
+
+### 2026-07-26
+
+| Item | Notes |
+|---|---|
+| Orphan temp-file cleanup | Scheduled `@nestjs/schedule` sweep in a new operational `TempCleanupModule` deletes `temp_` files left in `file/temp` past a TTL (`TEMP_SWEEP_TTL_HOURS`, default 24h; hourly cron); `granted_`/`file/upload` never touched, dry-run + enable toggles, `cron` promoted to a direct dep — **first Stage 2 task** ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)) |
+
+### 2026-07-25
+
+| Item | Notes |
+|---|---|
+| RBAC + audit log | `user`/`admin`/`superadmin` roles, RolesGuard/@Roles, ownership "self or admin", superadmin-only `PATCH /user/:id/role` (last-superadmin guard + session invalidation), append-only audit log with `GET /audit-log`, `SUPERADMIN_EMAIL` seed — **Stage 0 complete** ([ADR 0013](ADR/0013-rbac-and-audit-log.md)) |
+
+### 2026-07-23
+
+| Item | Notes |
+|---|---|
+| Full roadmap plan established | 11-axis decision review; this document is its record |
+| Frontend split decision + Stage F pipeline | In-repo `frontend/` subfolder (structure amended 2026-07-24), admin as `/admin` route, contract freeze; RBAC re-sequenced after Stage F ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.md)) |
+| Route cleanup & API contract freeze | `POST /file`, `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` — surface frozen with zero consumers (Stage F task 1) |
+| Error-code contract | Frozen `ErrorBody` shape + 18-code catalog + global `AllExceptionsFilter` via `APP_FILTER` (Stage F task 2, [ADR 0011](ADR/0011-error-code-contract.md)) |
+
+### 2026-07-24
+
+| Item | Notes |
+|---|---|
+| Refresh-token httpOnly cookie + rotation/reuse detection | `refreshTokenHash` anchor column, `SameSite=Strict` cookie, `POST /auth/signout`; Stage F task 3 — **Stage F complete** ([ADR 0012](ADR/0012-refresh-cookie-rotation.md)) |
+
+### 2026-07-22
+
+| Item | Notes |
+|---|---|
+| Ownership checks | User writes self-only; file writes creator-only (`0549ca4`) |
+| `GET /file` pagination | `GetFilesDto`: `take` 1–100 (default 20), `skip` (default 0) |
+| `getFiles` creator join | List responses now include `creator`, matching `GET /file/:id` |
+| Opt-in CORS | `CORS_ORIGIN` env var; unset = disabled |
+| Upload type allowlist | mp4/mov/webm mimetype + extension filter on `POST /upload/attach` |
+| Runtime CVE pins | `jws ^3.2.3`, `validator ^13.15.22` via `pnpm.overrides` |
+| Lint restored & clean | `typescript-eslint` added; 45 pre-existing errors fixed; 0 errors baseline |
+| Doc sync | README endpoints/limitations, CLAUDE.md gaps, `.env.example` (`BASE_URL`, `CORS_ORIGIN`) |
+| `@nestjs/jwt` to `dependencies` | Was in devDependencies despite runtime use — `--prod` installs no longer break |
+| `saved!`/`updated!` removed | `FileService` post-commit re-reads moved outside the `try` with a null guard |
+| TypeORM migration adoption | `migration:*` scripts, `backend/data-source.ts`, baseline `InitialSchema`; pre-existing DBs: `pnpm migration:run -- --fake` once ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)) |

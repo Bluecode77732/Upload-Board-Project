@@ -1,0 +1,47 @@
+{{- /* migration.enabled이 false면 이 Job 자체를 렌더링하지 않는다. */}}
+{{- if .Values.migration.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # 릴리스 revision을 이름 뒤에 붙인다 — Job spec은 불변이라, 업그레이드할
+  # 때마다 기존 오브젝트를 고치는 게 아니라 매번 새 오브젝트를 만들어야 한다.
+  name: {{ include "sharenpo.fullname" . }}-migrate-{{ .Release.Revision }}
+  labels:
+    {{- include "sharenpo.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        {{- include "sharenpo.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      {{- /* serviceAccountName을 일부러 안 붙임 — 마이그레이션은 DB(Secret)만 쓰고
+      S3 IRSA가 필요 없으므로, 전용 ServiceAccount(serviceaccount.yaml)를 붙이면
+      오히려 이 작업(권한 범위 축소)의 취지에 반한다. default로 그대로 둔다. */}}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # docker-compose.yml의 한 번만 도는 `migrate` 서비스를 그대로 본떴다(ADR 0032).
+          command: ["node", "node_modules/typeorm/cli.js", "migration:run", "-d", "dist/data-source.js"]
+          # Deployment와 동일하게 ConfigMap+existingSecret에서 env를 가져온다 —
+          # 앱과 마이그레이션이 같은 DB 접속 정보를 보도록 보장한다.
+          envFrom:
+            - configMapRef:
+                name: {{ include "sharenpo.fullname" . }}
+            - secretRef:
+                name: {{ required "secrets.existingSecret is required — create the Secret first, see k8s/helm/README.md" .Values.secrets.existingSecret }}
+{{- end }}

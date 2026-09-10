@@ -1,0 +1,93 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.nav {
+  display: flex;
+  gap: 16px;
+}
+
+.navLink {
+  color: var(--text-muted);
+  font-weight: 400;
+  text-decoration: none;
+}
+
+.navLink:hover {
+  color: var(--text);
+}
+
+.navLinkActive {
+  color: var(--brand);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.themeToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.themeToggle:hover {
+  border-color: var(--brand);
+}
+
+.themeToggle:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.signOut {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--text);
+  padding: 9px 12px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.signOut:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.signOut:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* 바의 네 컨트롤은 폰 너비에 들어맞긴 하지만, 그 사이 간격이 데스크톱 크기 공간을
+   더 이상 차지하지 않을 때만 그렇다. */
+@media (max-width: 640px) {
+  .header {
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .nav {
+    gap: 12px;
+  }
+}

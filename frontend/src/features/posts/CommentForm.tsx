@@ -1,24 +1,25 @@
-// Purpose: creates a new comment on a post.
-// Usage: rendered inside PostDetailPage below CommentThread; calls onCreated() so the thread
-//   refetches after a successful submit.
-// Rationale: a comment has no natural idempotency key (ADR 0023 D1) — an identical resubmit
-//   creates a second comment by design, so this form only guards the common double-click case
-//   by disabling the button while a submit is in flight; anything stronger is a backend decision.
+// 목적: 게시글에 새 댓글을 생성한다.
+// 사용처: PostDetailPage 내부 CommentThread 아래에 렌더링된다; 제출 성공 시 onCreated()를 호출해
+//   스레드를 다시 불러온다.
+// 근거: 댓글은 자연스러운 idempotency 키가 없다(ADR 0023 D1) — 동일한 재제출은 설계상 두 번째
+//   댓글을 만든다. 그래서 이 폼은 흔한 더블클릭 케이스만 제출 중 버튼을 비활성화해 막아둘 뿐,
+//   그보다 강한 방지는 백엔드가 결정할 일이다.
 
 import { useState, type FormEvent } from 'react'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { CommentResponse, CreateCommentRequest } from '../../api/types'
+import styles from './CommentForm.module.css'
 
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.POST_NOT_FOUND:
-        return '게시글을 찾을 수 없습니다.'
+        return 'Post not found.'
       case ErrorCode.VALIDATION_FAILED:
         return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
       default:
-        return '댓글을 작성하지 못했습니다.'
+        return 'Failed to post the comment.'
     }
   }
   return 'Network error. Is the backend running?'
@@ -46,19 +47,20 @@ export function CommentForm({ postId, onCreated }: { postId: number; onCreated: 
   }
 
   return (
-    <form onSubmit={onSubmit} style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+    <form onSubmit={onSubmit} className={styles.form}>
       <textarea
+        className={styles.textarea}
         value={body}
         onChange={(e) => setBody(e.target.value)}
         maxLength={1000}
         rows={3}
         required
         disabled={busy}
-        placeholder="댓글을 입력하세요…"
+        placeholder="Write a comment…"
       />
-      {error && <p style={{ color: 'crimson', margin: 0 }}>{error}</p>}
-      <button type="submit" disabled={busy} style={{ justifySelf: 'start' }}>
-        {busy ? '작성 중…' : '댓글 작성'}
+      {error && <p className={styles.error}>{error}</p>}
+      <button type="submit" className={styles.submit} disabled={busy}>
+        {busy ? 'Posting…' : 'Post comment'}
       </button>
     </form>
   )

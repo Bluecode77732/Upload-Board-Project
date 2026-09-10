@@ -1,12 +1,12 @@
 # Backend API Consumption Contract
 
-The frontend consumes the Upload Board backend (at the repository root, above
+The frontend consumes the Sharenpo backend (at the repository root, above
 this `frontend/` folder) over HTTP. This document is the frozen slice of that
 contract the app depends on. When the backend changes it, update this file
 **and** the mirrored types in `src/api/` in the same change.
 
 Backend decisions referenced here live in the repo-root `ADR/` (0001, 0010,
-0011, 0012, 0021, 0023, 0024) — this file restates only what a client must obey.
+0011, 0012, 0020, 0021, 0023, 0024, 0050) — this file restates only what a client must obey.
 
 ## Base URL & transport
 
@@ -87,6 +87,10 @@ Every error is the frozen `ErrorBody` shape:
   `message` (human-readable, free to change).
 - Validation failures use `code: VALIDATION_FAILED` with a `message` **array**.
 - `ApiError` (`src/api/client.ts`) carries `status` and `code` for UI branching.
+- **Every route can return `429 RATE_LIMITED`** (backend ADR 0053) — a global
+  100 requests/minute default, not tied to any one resource. Not yet handled with a
+  dedicated UI message anywhere in this app; it currently falls through to whatever
+  generic error display a caller already has.
 
 ## Resource routes (canonical, frozen — backend ADR 0010)
 
@@ -99,9 +103,15 @@ Every error is the frozen `ErrorBody` shape:
 | `POST` | `/file` | promote a temp upload to permanent (new rows default `visibility: private`) |
 | `PATCH` | `/file/:id` | creator/admin; toggles visibility + rotates share token here |
 | `DELETE` | `/file/:id` | creator/admin; 409 `FILE_IN_USE` if a post references it |
+| `POST` | `/file/:id/transfer` | `{ userId }`; creator/admin proposes a transfer — ownership does not move until the target accepts (ADR 0050) |
+| `POST` | `/file/:id/transfer/accept` | target only; moves ownership |
+| `POST` | `/file/:id/transfer/reject` | target only; declines, ownership unchanged |
+| `DELETE` | `/file/:id/transfer` | creator **only** (unlike propose, admin cannot cancel another user's proposal, 2026-09-05 addendum); cancels a not-yet-answered proposal |
 | `POST` | `/upload/attach` | multipart — exactly one of `image`/`audio`/`video`, 100 MB (ADR 0027) |
-| `GET` | `/user`, `/user/:id` | |
-| `PATCH`/`DELETE` | `/user/:id` | self/admin |
+| `GET` | `/user`, `/user/:id` | `/user` (list) is **admin-only**; `/user/:id` is any authenticated user |
+| `GET` | `/user/lookup?email=` | any authenticated user; exact-email match, `404 USER_NOT_FOUND` otherwise — resolves an email to the numeric id `POST /file/:id/transfer` needs (ADR 0050) |
+| `PATCH` | `/user/:id` | self/admin |
+| `DELETE` | `/user/:id?deleteFiles=true\|false` | self/admin; owns files without `deleteFiles=true` → `409 USER_HAS_FILES` (message names the count); `deleteFiles=true` cascades comments→posts→files→the account, then unlinks the stored files (ADR 0020) |
 | `GET` | `/post?take=&skip=&search=&sortBy=&order=&creatorId=` | tuple `[rows, total]`; same query shape as `/file` (ADR 0021 read layer reused), `sortBy` one of `createdAt`\|`title`\|`id` |
 | `GET` | `/post/:id` | post + creator + attached `file` (`FileResponseDto`, absent for a text-only post); 404 `POST_NOT_FOUND` |
 | `POST` | `/post` | `{ title, body, fileId? }`; `fileId` must be the requester's own file, unclaimed by another post — identical resubmit for the same `fileId` replays `200`, a differing title/body is `409 POST_FILE_TAKEN` (ADR 0023 D1) |
@@ -125,6 +135,35 @@ without a token, `private` needs the creator/admin bearer, `unlisted` needs a ma
 `?share=<token>`. New files default to `private`. `shareUrl` is returned only to a
 manager of an unlisted file.
 
+`FileResponseDto` also carries `mediaType` (`image`\|`audio`\|`video`, ADR 0040) —
+server-derived from the upload's extension, never client-supplied. Use it to pick a
+playback tag; do not infer media type from `fileUrl`'s extension or from which
+`POST /upload/attach` field was used.
+
+### Consent-based file transfer (ADR 0050)
+
+Propose/cancel are **not** symmetric on who may call them: an admin may propose a transfer on
+anyone's file (matching this API's usual creator-or-admin write pattern), but only the file's
+**creator** may cancel one — an admin has no moderation interest in a two-party negotiation
+it isn't part of, so that branch was narrowed rather than left as an unexamined inheritance
+from the same permission check (2026-09-05 addendum). An admin who needs to stop an unwanted
+pending transfer still can, via `DELETE /file/:id` (removes the file, and with it the pending
+state) — just not via a targeted, non-destructive cancel.
+
+`FileResponseDto` carries an optional `pendingTransferTo: { id, email }` — present only
+when a transfer is pending **and** the requester is either a manager (creator/admin) or
+the pending target themself; the backend already hides it from unrelated third parties,
+so the frontend never needs to. `GET /file` (list) does not join it, only `GET /file/:id`
+does. Propose/accept/reject/cancel all return the updated `FileResponseDto`, same as
+`PATCH /file/:id`. New error codes: `FILE_TRANSFER_INVALID_TARGET` (400, proposing to the
+file's own current creator), `FILE_NO_PENDING_TRANSFER` (400, accept/reject/cancel with
+nothing pending), `FORBIDDEN_NOT_TRANSFER_TARGET` (403, accept/reject by anyone but the
+target), `FILE_TRANSFER_PENDING` (409, proposing while one is already pending — cancel
+first, it is never silently overwritten).
+
+The old `PATCH /file/:id { userId }` immediate/unconsented reassignment field is removed;
+sending it now is `400 VALIDATION_FAILED` (the global pipe's `forbidNonWhitelisted`).
+
 A comment's `postId` in its response is the bare id, never an embedded post — a
 20-comment thread would otherwise repeat the same post body and file on every
 row. Comment routes span two prefixes: listing/creating hang off the post
@@ -142,4 +181,9 @@ found the hard way — an earlier version called `response.json()` unconditional
 non-204 2xx response, which threw a `SyntaxError` on every successful delete and made
 `FileDetailPage`'s delete look like a network failure even though the backend had already
 deleted the row. Do not add a caller that expects a parsed body from `api.delete()`.
+
+**Exception**: `DELETE /file/:id/transfer` (ADR 0050's cancel action) does **not** follow
+this rule — it resolves to the updated `FileResponseDto` as real JSON, since cancelling a
+proposal is a state update on the file row, not a resource deletion. `FileDetailPage`'s
+`handleCancelTransfer` calls `api.delete<FileResponse>(...)` and reads the parsed body.
 

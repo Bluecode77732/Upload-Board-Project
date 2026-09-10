@@ -1,44 +1,44 @@
-# Build artifacts and deps (reinstalled/recompiled inside the image)
+# 빌드 산출물과 의존성(이미지 안에서 재설치/재컴파일됨)
 node_modules
 dist
 coverage
 .nyc_output
 
-# VCS / editor
+# VCS / 에디터
 .git
 .gitignore
 .vscode
 .idea
 
-# Not part of the backend image
+# 백엔드 이미지에 포함되지 않음
 frontend
 admin
 test
 
-# Local Terraform provider/module cache (k8s/infra/terraform/.terraform) — gigabytes of
-# provider binaries and module git clones, none of it backend image content
+# 로컬 Terraform provider/module 캐시(k8s/infra/terraform/.terraform) — 기가바이트 단위의
+# provider 바이너리와 module git clone, 전부 백엔드 이미지와 무관
 k8s
 
-# README/demo sample media — not read by the Dockerfile or backend
+# README/데모 샘플 미디어 — Dockerfile이나 백엔드가 읽지 않음
 assets
 
-# Docs and Kubernetes/CI config — not read by the Dockerfile or backend
+# 문서와 Kubernetes/CI 설정 — Dockerfile이나 백엔드가 읽지 않음
 *.md
 ADR
 helm
 .github
 
-# Secrets never get baked into the image (compose injects env at runtime)
+# 시크릿은 절대 이미지에 굽지 않는다(compose가 런타임에 env를 주입)
 .env
 .env.*
 
-# Uploaded files are a runtime volume, not image content
+# 업로드된 파일은 이미지 콘텐츠가 아니라 런타임 볼륨
 file
 
-# Docker/meta
+# Docker/메타
 Dockerfile
 docker-compose.yml
 .dockerignore
 
-# Logs
+# 로그
 *.log

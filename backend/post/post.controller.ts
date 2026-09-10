@@ -1,6 +1,6 @@
-// Purpose: exposes the board post REST surface (/post) behind JwtAuthGuard and documents it for Swagger.
-// Usage: routed by PostModule; delegates every decision to PostService and derives identity from the JWT only.
-// Rationale: ADR 0023 fixes these five routes; FileController could not host them without merging file metadata with board content.
+// 목적: JwtAuthGuard 뒤에서 게시판 게시글 REST 표면(/post)을 노출하고 Swagger로 문서화한다.
+// 사용처: PostModule이 라우팅하며, 모든 판단은 PostService에 위임하고 신원은 오직 JWT에서만 얻는다.
+// 근거: ADR 0023이 이 다섯 개 라우트를 확정했다 — 파일 메타데이터와 게시판 내용을 섞지 않고서는 FileController가 이들을 담을 수 없었다.
 
 import {
   Body,

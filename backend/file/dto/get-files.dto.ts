@@ -1,6 +1,6 @@
-// Purpose: bounds the GET /file list query (take/skip) so the endpoint can never scan the full table.
-// Usage: bound via @Query() in FileController.getFiles(); values forwarded to FileService.getFiles().
-// Rationale: getFiles() was unpaginated (a documented Known Gap); list inputs need DTO validation at the boundary.
+// 목적: GET /file 목록 조회(take/skip)를 제한해 엔드포인트가 전체 테이블을 스캔할 수 없게 한다.
+// 사용처: FileController.getFiles()에서 @Query()로 바인딩되고, 값은 FileService.getFiles()로 전달된다.
+// 근거: getFiles()가 페이지네이션 없이 동작하던 시절이 있었다(문서화된 Known Gap) — 목록 입력도 경계에서 DTO 검증이 필요하다.
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
@@ -13,13 +13,13 @@ import {
   Min,
 } from 'class-validator';
 
-// The only sort keys a client may name. Kept as a literal tuple so FileService can key a
-// total Record off it: adding a key here without a column mapping is a compile error, and
-// no client string ever reaches the query as a column name (ADR 0021).
+// 클라이언트가 지정할 수 있는 정렬 키는 이것뿐이다. 리터럴 튜플로 둬야 FileService가 이걸 기준으로
+// total Record를 만들 수 있다 — 컬럼 매핑 없이 여기 키만 추가하면 컴파일 에러가 나고,
+// 클라이언트 문자열이 컬럼명으로 그대로 쿼리에 도달하는 일도 없다(ADR 0021).
 export const FILE_SORT_FIELDS = ['createdAt', 'title', 'id'] as const;
 export type FileSortField = (typeof FILE_SORT_FIELDS)[number];
 
-// 'ASC' | 'DESC' matches TypeORM's orderBy direction argument exactly.
+// 'ASC' | 'DESC'는 TypeORM의 orderBy 방향 인자와 정확히 일치한다.
 export const SORT_ORDERS = ['DESC', 'ASC'] as const;
 export type SortOrder = (typeof SORT_ORDERS)[number];
 
@@ -46,8 +46,8 @@ export class GetFilesDto {
   })
   skip: number = 0;
 
-  // Bounded length: the term becomes an ILIKE pattern, and an unbounded one is a
-  // free pattern-matching cost with no legitimate use (no title is that long).
+  // 길이 제한: 검색어가 ILIKE 패턴이 되므로, 제한이 없으면 아무 쓸모도 없이 패턴 매칭
+  // 비용만 무한정 늘어난다(그렇게 긴 제목은 없다).
   @IsOptional()
   @IsString()
   @MaxLength(100)

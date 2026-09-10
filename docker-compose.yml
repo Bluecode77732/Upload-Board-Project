@@ -1,7 +1,7 @@
-# Local dev/build stack (ADR 0015; migration/hardening updates ADR 0030/0032). Supersedes
-# the manually-created `upload-board-pg` container: stop that one first (it holds host
-# port 5435) before `docker compose up`. DB credentials, port, and secrets are read from
-# .env — the same values the app uses.
+# 로컬 dev/build 스택(ADR 0015; 마이그레이션/하드닝 업데이트는 ADR 0030/0032). 수동으로
+# 만든 `upload-board-pg` 컨테이너를 대체한다 — `docker compose up` 전에 그 컨테이너부터
+# 먼저 멈춰야 한다(호스트 포트 5435를 물고 있다). DB 자격증명·포트·시크릿은 .env에서
+# 읽는다 — 앱이 쓰는 것과 같은 값이다.
 
 services:
   db:
@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_DATABASE:-postgres}
     ports:
-      # Same host port the app's .env expects (DB_PORT), so host-run e2e/migrations hit it too.
+      # 앱의 .env가 기대하는 것과 같은 호스트 포트(DB_PORT) — 호스트에서 직접 도는 e2e/마이그레이션도 이 포트로 붙는다.
       - "${DB_PORT:-5435}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
@@ -21,20 +21,20 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    # Default json-file driver has no size cap; bound it so a long-running
-    # local dev container doesn't fill the host disk.
+    # 기본 json-file 드라이버는 크기 상한이 없다; 오래 도는 로컬 dev 컨테이너가
+    # 호스트 디스크를 채워버리지 않도록 제한을 둔다.
     logging:
       driver: json-file
       options:
         max-size: '10m'
         max-file: '3'
 
-  # One-shot: applies committed migrations, then exits. Separated from `api`'s
-  # boot so a scaled `api` never races `migration:run` against the same DB
-  # (ADR 0032) — the local model for the eventual Kubernetes Job.
+  # 1회성: 커밋된 마이그레이션을 적용하고 종료한다. `api`의 부팅과 분리해서,
+  # `api`를 여러 개 띄워도 같은 DB에 `migration:run`이 서로 레이스하지 않는다
+  # (ADR 0032) — 나중에 Kubernetes Job으로 갈 것의 로컬 버전이다.
   migrate:
     build: .
-    image: upload-board-project-api:local
+    image: sharenpo-api:local
     depends_on:
       db:
         condition: service_healthy
@@ -47,7 +47,7 @@ services:
 
   api:
     build: .
-    image: upload-board-project-api:local
+    image: sharenpo-api:local
     depends_on:
       db:
         condition: service_healthy
@@ -55,15 +55,15 @@ services:
         condition: service_completed_successfully
     env_file: .env
     environment:
-      # Inside the compose network the DB is reachable as `db:5432`, not localhost:5435.
+      # compose 네트워크 안에서 DB는 localhost:5435가 아니라 `db:5432`로 접근한다.
       DB_HOST: db
       DB_PORT: 5432
     ports:
       - '3000:3000'
     volumes:
-      # Persist uploaded files (temp_/granted_) across container restarts.
-      # Linux hosts: the image runs as uid 1001 (ADR 0030) — chown this
-      # directory once (`sudo chown -R 1001:1001 file/`) if writes fail.
+      # 업로드된 파일(temp_/granted_)을 컨테이너 재시작 사이에도 보존한다.
+      # Linux 호스트: 이미지는 uid 1001로 돈다(ADR 0030) — 쓰기가 실패하면
+      # 이 디렉터리를 한 번 chown한다(`sudo chown -R 1001:1001 file/`).
       - ./file:/app/file
     logging:
       driver: json-file

@@ -1,6 +1,6 @@
-// Purpose: exposes GET /audit-log for admins to review the privileged-action trail.
-// Usage: mounted by AuditLogModule; behind JwtAuthGuard + RolesGuard(@Roles admin).
-// Rationale: RBAC (ADR 0013) makes admin actions consequential; admins need read access to the audit trail.
+// 목적: 관리자가 권한 필요 작업 이력을 조회하는 GET /audit-log를 노출한다.
+// 사용처: AuditLogModule에서 마운트; JwtAuthGuard + RolesGuard(@Roles admin) 뒤에 위치.
+// 근거: RBAC(ADR 0013)로 관리자 작업이 중대해졌으므로, 관리자에게 감사 로그 읽기 권한이 필요하다.
 
 import {
   ClassSerializerInterceptor,
@@ -32,10 +32,15 @@ export class AuditLogController {
     status: 200,
     description:
       'Paginated audit records, newest first. action filters by the action type; ' +
-      'userId returns only records where that user was the actor or the target ' +
-      '(the two filters AND together when both are given).',
+      'userId returns only records where that user was the actor, or was the ' +
+      "target of a user-targeting action (targetType='user') — a record whose " +
+      'target is a file, post, or comment matches only via the actor side ' +
+      '(ADR 0045). The two filters AND together when both are given.',
   })
   @ApiResponse({ status: 403, description: 'Admin role required.' })
+  // 목적: 감사 로그 목록 조회 조건을 서비스로 넘긴다.
+  // 이유: action/userId 필터 조합과 페이지네이션 해석은 AuditLogService의 책임이다.
+  // 방법: 검증된 AuditLogQueryDto를 그대로 전달한다.
   findAll(@Query() query: AuditLogQueryDto) {
     return this.auditLogService.findAll(query);
   }

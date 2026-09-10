@@ -1,23 +1,23 @@
-// Purpose: seeds/updates a superadmin account for admin e2e tests — no in-app flow can
-// create one (the real mechanism is SUPERADMIN_EMAIL + superadmin-seed.service.ts,
-// backend ADR 0013 — there is no "Role Population Invariants" section anywhere in this repo).
-// Usage: run from the repo root as `pnpm --filter admin e2e:seed` before `pnpm --filter
-// admin e2e`, both locally (reads e2e/.env) and in CI (reads job-level env directly).
-// Rationale: shared by local dev and CI so the seeding logic exists exactly once.
+// 목적: admin e2e 테스트용 superadmin 계정을 생성/갱신한다 — in-app 플로우로는 만들 수
+// 없다 (실제 생성 메커니즘은 SUPERADMIN_EMAIL + `pnpm promote-superadmin`, backend
+// ADR 0013/ADR 0052 — 이 저장소 어디에도 "Role Population Invariants" 같은 절은 없다).
+// 사용처: 저장소 루트에서 `pnpm --filter admin e2e` 실행 전에 `pnpm --filter admin
+// e2e:seed`로 실행한다. 로컬(e2e/.env 읽음)과 CI(job 레벨 env를 직접 읽음) 모두 해당.
+// 근거: 로컬 개발과 CI가 공유하므로 시딩 로직이 정확히 한 곳에만 존재한다.
 
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-// Both files are only present for local runs — CI supplies DB_* and
-// E2E_SUPERADMIN_* directly as job env vars, so these are no-ops there.
-// The root .env (not backend/.env — there is no such file) holds the backend's DB_*
-// vars when running this from the repo root.
+// 두 파일 모두 로컬 실행에서만 존재한다 — CI는 DB_*와 E2E_SUPERADMIN_*을 job env
+// 변수로 직접 제공하므로 CI에서는 이 루프가 아무 일도 하지 않는다.
+// 루트 .env(backend/.env가 아니다 — 그런 파일은 없다)는 저장소 루트에서 이 스크립트를
+// 실행할 때 백엔드의 DB_* 변수를 담고 있다.
 for (const envFile of ['../.env', './e2e/.env']) {
     try {
         process.loadEnvFile(envFile);
     } catch {
-        // missing file — fine, see above
+        // 파일이 없는 것 — 위 설명대로 정상이다
     }
 }
 
@@ -30,8 +30,8 @@ if (!email || !password) {
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// Resolve bcrypt/pg as backend's own dependency tree would — this script has no
-// dependencies of its own, it reuses the ones the running backend already needs.
+// backend 자체 의존성 트리가 하는 방식 그대로 bcrypt/pg를 resolve한다 — 이 스크립트는
+// 자체 의존성이 없고, 실행 중인 backend가 이미 필요로 하는 것들을 그대로 재사용한다.
 const backendRequire = createRequire(join(__dirname, '../../backend/'));
 const bcrypt = backendRequire('bcrypt');
 const { Client } = backendRequire('pg');

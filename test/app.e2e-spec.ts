@@ -6,6 +6,7 @@ import { existsSync } from 'fs';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { FileEntity } from '../backend/file/entity/file.entity';
+import { FileMediaType } from '../backend/file/entity/file-media-type.enum';
 import { UserEntity } from '../backend/user/entity/user.entity';
 import { CommentEntity } from '../backend/comment/entity/comment.entity';
 import { UserRole } from '../backend/auth/role/role';
@@ -17,15 +18,14 @@ import {
   refreshCookieFrom,
 } from './e2e-utils';
 
-// End-to-end coverage of the paths unit tests cannot reach: the auth flow over real
-// HTTP+DB, refresh rotation/reuse (ADR 0012), RBAC ownership 403s, list pagination,
-// the temp_ → granted_ physical promotion, and the deletion policy — confirmed account
-// cascade, its 409 refusal, and stored-file removal (ADR 0020). Requires the local
-// Postgres on 5435 (docker compose up -d db); the suite owns a throwaway DB (see e2e-utils).
-describe('Upload Board API (e2e)', () => {
+// 유닛 테스트가 닿을 수 없는 경로들을 엔드투엔드로 커버한다: 실제 HTTP+DB를 거치는 인증 흐름,
+// 리프레시 회전/재사용(ADR 0012), RBAC 소유권 403, 목록 페이지네이션, temp_ → granted_ 실제
+// 승격, 그리고 삭제 정책 — 계정 캐스케이드, 그 409 거부, 저장 파일 제거까지 확인한다(ADR 0020).
+// 로컬 5435 포트의 Postgres가 필요하고(docker compose up -d db), 스위트는 임시 DB를 소유한다(e2e-utils 참고).
+describe('Sharenpo API (e2e)', () => {
   let app: INestApplication;
   let server: App;
-  // Physical files a test created; unlinked after each test so disk stays clean.
+  // 테스트가 만든 실제 파일들; 디스크를 깨끗하게 유지하려고 각 테스트 후 unlink한다.
   let createdFiles: string[] = [];
 
   const PW = 'pw12345678';
@@ -51,8 +51,8 @@ describe('Upload Board API (e2e)', () => {
 
   const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
-  // Seed a file row directly (no physical file) — for list/ownership tests that
-  // exercise metadata paths, not the promotion path.
+  // 파일 행을 실제 파일 없이 직접 시드한다 — 승격 경로가 아니라 메타데이터 경로를
+  // 검증하는 목록/소유권 테스트용.
   async function seedFile(title: string, creatorId: number): Promise<number> {
     const result = await app
       .get(DataSource)
@@ -60,14 +60,15 @@ describe('Upload Board API (e2e)', () => {
       .insert({
         title,
         filePath: `file/upload/granted_${title}.mp4`,
+        mediaType: FileMediaType.video,
         creator: { id: creatorId },
       });
     return result.identifiers[0].id as number;
   }
 
-  // Promote directly in the DB: PATCH /user/:id/role is superadmin-only, and every
-  // request re-reads the role via JwtStrategy.validate, so the existing token picks
-  // the new rank up immediately (no re-sign-in needed).
+  // DB에서 직접 승격한다: PATCH /user/:id/role은 superadmin 전용이고, 모든 요청이
+  // JwtStrategy.validate로 role을 매번 다시 읽으므로, 기존 토큰이 재로그인 없이도
+  // 새 랭크를 즉시 반영한다.
   async function promoteToAdmin(id: number): Promise<void> {
     await app
       .get(DataSource)
@@ -178,14 +179,14 @@ describe('Upload Board API (e2e)', () => {
         .expect(201);
       const newCookie = refreshCookieFrom(rotated);
 
-      // Replaying the original (now rotated-out) cookie is reuse.
+      // 원본(이제 회전으로 무효화된) 쿠키를 다시 쓰면 재사용이 된다.
       const reuse = await request(server)
         .post('/auth/token/refresh')
         .set('Cookie', user.refreshCookie)
         .expect(401);
       expect(reuse.body.code).toBe('AUTH_REFRESH_REUSED');
 
-      // The whole session is now dead — even the rotated-in cookie is refused.
+      // 세션 전체가 이제 죽었다 — 새로 회전된 쿠키조차 거부된다.
       const after = await request(server)
         .post('/auth/token/refresh')
         .set('Cookie', newCookie)
@@ -244,7 +245,7 @@ describe('Upload Board API (e2e)', () => {
         .expect(403);
       expect(del.body.code).toBe('FORBIDDEN_NOT_OWNER');
 
-      // The creator can delete their own file.
+      // 작성자는 자기 파일을 삭제할 수 있다.
       await request(server)
         .delete(`/file/${fileId}`)
         .set(auth(a.accessToken))
@@ -293,8 +294,8 @@ describe('Upload Board API (e2e)', () => {
   });
 
   describe('Search / filter / sort (GET /file)', () => {
-    // supertest types the body as `any`; the [files, count] tuple shape is asserted once
-    // here so each expectation reads titles off a typed value.
+    // supertest는 body를 `any`로 타입 지정한다; [files, count] 튜플 형태를 여기서 한 번만
+    // 단언해두면 이후 각 expectation은 타입 있는 값에서 title을 읽을 수 있다.
     const titlesOf = (body: unknown): string[] =>
       (body as [{ title: string }[], number])[0].map((f) => f.title);
 
@@ -328,7 +329,7 @@ describe('Upload Board API (e2e)', () => {
 
     it('rejects a sort field outside the whitelist with VALIDATION_FAILED', async () => {
       const user = await createUser('sort-bad@e.com');
-      // A column that exists but is not offered — the whitelist, not the schema, decides.
+      // 존재하지만 제공되지 않는 컬럼이다 — 결정하는 건 스키마가 아니라 화이트리스트다.
       const res = await request(server)
         .get('/file?sortBy=filePath')
         .set(auth(user.accessToken))
@@ -364,7 +365,7 @@ describe('Upload Board API (e2e)', () => {
       await seedFile('100% wool', user.id);
       await seedFile('plain cotton', user.id);
 
-      // Unescaped, '%' would match every row instead of the one containing it.
+      // 이스케이프하지 않으면 '%'가 그 문자를 포함한 행이 아니라 모든 행에 매칭된다.
       const res = await request(server)
         .get('/file?search=%25')
         .set(auth(user.accessToken))
@@ -419,7 +420,7 @@ describe('Upload Board API (e2e)', () => {
         .set(auth(owner.accessToken))
         .expect(200);
 
-      // Count is the filtered total, not the page length.
+      // count는 필터링된 전체 개수이지 페이지 길이가 아니다.
       expect(res.body[1]).toBe(3);
       expect(titlesOf(res.body)).toEqual(['trip bravo', 'trip charlie']);
     });
@@ -461,8 +462,8 @@ describe('Upload Board API (e2e)', () => {
         .send({ title: 'promoted-clip', filePath: filename })
         .expect(201);
 
-      // file/upload is no longer statically served (ADR 0025 D2) — fileUrl now
-      // points at the access-controlled content endpoint, not a static path.
+      // file/upload는 더 이상 정적으로 서빙되지 않는다(ADR 0025 D2) — fileUrl은 이제
+      // 정적 경로가 아니라 접근 제어되는 콘텐츠 엔드포인트를 가리킨다.
       expect(promote.body.fileUrl).toBe(
         `http://localhost:3000/file/${promote.body.id}/content`,
       );
@@ -470,8 +471,8 @@ describe('Upload Board API (e2e)', () => {
       expect(existsSync(tempPath)).toBe(false);
     });
 
-    // Duplicate-submission contract (ADR 0019): the attach-issued filename is a
-    // one-shot claim token, so resubmitting it replays instead of erroring.
+    // 중복 제출 계약(ADR 0019): attach가 발급한 filename은 일회성 클레임 토큰이라,
+    // 재제출하면 에러가 아니라 replay된다.
     it('replays the same file when the identical claim is submitted twice', async () => {
       const user = await createUser('idem@e.com');
 
@@ -502,7 +503,7 @@ describe('Upload Board API (e2e)', () => {
         .send(body)
         .expect(201);
 
-      // The retry answers 200 (nothing new was created) with the same resource.
+      // 재시도는 (새로 만들어진 것 없이) 같은 리소스로 200을 응답한다.
       const retry = await request(server)
         .post('/file')
         .set(auth(user.accessToken))
@@ -512,7 +513,7 @@ describe('Upload Board API (e2e)', () => {
       expect(retry.body.id).toBe(first.body.id);
       expect(retry.body.fileUrl).toBe(first.body.fileUrl);
 
-      // Exactly one row exists — the retry created nothing.
+      // 행이 정확히 하나만 존재한다 — 재시도는 아무것도 만들지 않았다.
       const list = await request(server)
         .get('/file')
         .set(auth(user.accessToken))
@@ -597,8 +598,8 @@ describe('Upload Board API (e2e)', () => {
       expect(res.body.code).toBe('UPLOAD_INVALID_TYPE');
     });
 
-    // Media-type expansion (ADR 0025 D4/D5): image/audio/video are now three
-    // type-specific fields, each with its own class allowlist.
+    // 미디어 타입 확장(ADR 0025 D4/D5): image/audio/video는 이제 각자 고유한 클래스
+    // 화이트리스트를 가진 세 개의 타입별 필드다.
     it('attaches an image under the image field, promotes it, and serves it with the right content-type', async () => {
       const user = await createUser('upload-image@e.com');
 
@@ -708,9 +709,9 @@ describe('Upload Board API (e2e)', () => {
     });
   });
 
-  // File visibility + access-controlled content (ADR 0025 D1/D2/D3/D6): every granted
-  // read now goes through GET /file/:id/content, gated by the public/private/unlisted
-  // state — file/upload is no longer statically served.
+  // 파일 visibility + 접근 제어 콘텐츠(ADR 0025 D1/D2/D3/D6): granted 읽기는 이제 전부
+  // GET /file/:id/content를 거치고, public/private/unlisted 상태로 게이트된다 —
+  // file/upload는 더 이상 정적으로 서빙되지 않는다.
   describe('File visibility & access-controlled content (ADR 0025)', () => {
     const BYTES = 'fake-mp4-bytes';
 
@@ -838,6 +839,28 @@ describe('Upload Board API (e2e)', () => {
       expect(res.body.toString()).toBe(BYTES.slice(0, 4));
     });
 
+    it('supports a suffix Range request (last N bytes)', async () => {
+      const owner = await createUser('vis-suffix-range-owner@e.com');
+      const file = await promoteFile(owner.accessToken, 'vis-suffix-range');
+      await request(server)
+        .patch(`/file/${file.id}`)
+        .set(auth(owner.accessToken))
+        .send({ visibility: 'public' })
+        .expect(200);
+
+      const size = Buffer.byteLength(BYTES);
+      const res = await request(server)
+        .get(`/file/${file.id}/content`)
+        .set('Range', 'bytes=-4')
+        .buffer(true)
+        .expect(206);
+
+      expect(res.headers['content-range']).toBe(
+        `bytes ${size - 4}-${size - 1}/${size}`,
+      );
+      expect(res.body.toString()).toBe(BYTES.slice(-4));
+    });
+
     it('switches to unlisted, hands the owner a shareUrl, and rotation invalidates the old token', async () => {
       const owner = await createUser('vis-unlisted-owner@e.com');
       const file = await promoteFile(owner.accessToken, 'vis-unlisted-content');
@@ -855,20 +878,20 @@ describe('Upload Board API (e2e)', () => {
         unlisted.body.shareUrl as string,
       ).searchParams.get('share');
 
-      // Anonymous, no token: refused.
+      // 익명, 토큰 없음: 거부됨.
       const noToken = await request(server)
         .get(`/file/${file.id}/content`)
         .expect(403);
       expect(noToken.body.code).toBe('FILE_SHARE_INVALID');
 
-      // Anonymous, correct token: served.
+      // 익명, 올바른 토큰: 서빙됨.
       const withToken = await request(server)
         .get(`/file/${file.id}/content?share=${firstToken}`)
         .buffer(true)
         .expect(200);
       expect(withToken.body.toString()).toBe(BYTES);
 
-      // Rotate: the old link stops working immediately.
+      // 회전시키면: 기존 링크가 즉시 작동을 멈춘다.
       const rotated = await request(server)
         .patch(`/file/${file.id}`)
         .set(auth(owner.accessToken))
@@ -909,11 +932,11 @@ describe('Upload Board API (e2e)', () => {
     });
   });
 
-  // Deletion policy (ADR 0020): an account that owns files cannot be deleted by
-  // accident — the cascade needs an explicit confirmation and takes the stored
-  // files with it. Before this, the FK constraint surfaced as an opaque 500.
+  // 삭제 정책(ADR 0020): 파일을 소유한 계정은 실수로 삭제될 수 없다 — 캐스케이드는
+  // 명시적 확인이 필요하고, 저장된 파일까지 함께 가져간다. 이전에는 FK 제약이
+  // 불투명한 500으로 드러났다.
   describe('Deletion policy (ADR 0020)', () => {
-    // Promote a real upload so the assertions can look at the actual file on disk.
+    // 실제 업로드를 승격시켜, 검증이 디스크상의 실제 파일을 확인할 수 있게 한다.
     async function promoteFile(accessToken: string, title: string) {
       const attach = await request(server)
         .post('/upload/attach')
@@ -965,10 +988,10 @@ describe('Upload Board API (e2e)', () => {
         .expect(409);
 
       expect(res.body.code).toBe('USER_HAS_FILES');
-      // The count is what the client's warning dialog quotes back to the user.
+      // 이 개수는 클라이언트의 경고 대화상자가 사용자에게 그대로 인용해 보여주는 값이다.
       expect(res.body.message).toContain('2 file(s)');
 
-      // Nothing was destroyed by the refused attempt.
+      // 거부된 시도로는 아무것도 파괴되지 않았다.
       await request(server)
         .get('/user/' + user.id)
         .set(auth(user.accessToken))
@@ -1009,8 +1032,8 @@ describe('Upload Board API (e2e)', () => {
 
       expect(existsSync(file.grantedPath)).toBe(false);
 
-      // Both rows are gone: the account can no longer sign in (credentials for a
-      // deleted account are simply invalid — 400, the same as a wrong password).
+      // 두 행 모두 사라졌다: 이제 이 계정으로 로그인할 수 없다(삭제된 계정의 자격
+      // 증명은 그냥 무효다 — 틀린 비밀번호와 마찬가지로 400).
       const signin = await request(server)
         .post('/auth/signin')
         .set('Authorization', basic('cascade@e.com', PW))
@@ -1037,9 +1060,9 @@ describe('Upload Board API (e2e)', () => {
     });
   });
 
-  // The board post domain (ADR 0023): CRUD, the fileId claim/replay rules, the
-  // creator-OR-admin ownership shape, and the two cross-module consequences —
-  // DELETE /file/:id on an attached file, and the account cascade taking posts.
+  // 게시판 게시글 도메인(ADR 0023): CRUD, fileId claim/replay 규칙,
+  // creator-OR-admin 소유권 형태, 그리고 두 모듈 간 파급 효과 —
+  // 첨부된 파일에 대한 DELETE /file/:id, 그리고 계정 캐스케이드가 게시글까지 가져가는 것.
   describe('Post module (ADR 0023)', () => {
     const createPost = (
       token: string,
@@ -1122,12 +1145,12 @@ describe('Upload Board API (e2e)', () => {
       const payload = { title: 'Once', body: 'Only once.', fileId };
 
       const first = await createPost(user.accessToken, payload).expect(201);
-      // A network retry must return the same post, not a second one.
+      // 네트워크 재시도는 두 번째 게시글이 아니라 같은 게시글을 반환해야 한다.
       const retry = await createPost(user.accessToken, payload).expect(200);
       expect(retry.body.id).toBe(first.body.id);
 
-      // Different author-written text is a new submission, not a retry — and the
-      // file is spent, so it is a typed conflict rather than a 500.
+      // 작성자가 다른 텍스트를 썼다면 그건 재시도가 아니라 새 제출이다 — 그리고
+      // 파일은 이미 소진됐으므로, 500이 아니라 타입 있는 conflict가 된다.
       const conflict = await createPost(user.accessToken, {
         ...payload,
         body: 'Rewritten.',
@@ -1204,7 +1227,7 @@ describe('Upload Board API (e2e)', () => {
         .expect(403);
       expect(forbidden.body.code).toBe('FORBIDDEN_NOT_OWNER');
 
-      // RBAC extends ownership to admin+ (ADR 0013) — the same shape as files.
+      // RBAC는 소유권을 admin 이상으로 확장한다(ADR 0013) — 파일과 같은 형태다.
       await promoteToAdmin(stranger.id);
       await request(server)
         .patch(`/post/${id}`)
@@ -1253,7 +1276,7 @@ describe('Upload Board API (e2e)', () => {
         .set(auth(user.accessToken))
         .expect(200);
 
-      // A post references a file; it never owns it.
+      // 게시글은 파일을 참조할 뿐 절대 소유하지 않는다.
       await request(server)
         .get(`/file/${fileId}`)
         .set(auth(user.accessToken))
@@ -1269,14 +1292,14 @@ describe('Upload Board API (e2e)', () => {
         fileId,
       }).expect(201);
 
-      // The FK is the authority — no pre-check, and never an opaque 500 (D4).
+      // FK가 판정의 근거다 — 사전 검사 없이, 불투명한 500도 절대 없다(D4).
       const res = await request(server)
         .delete(`/file/${fileId}`)
         .set(auth(user.accessToken))
         .expect(409);
       expect(res.body.code).toBe('FILE_IN_USE');
 
-      // Deleting the post first releases the file.
+      // 게시글을 먼저 삭제하면 파일이 풀려난다.
       await request(server)
         .delete(`/post/${created.body.id}`)
         .set(auth(user.accessToken))
@@ -1300,7 +1323,7 @@ describe('Upload Board API (e2e)', () => {
         201,
       );
 
-      // The confirmation flag guards files only; posts go unconfirmed (D5).
+      // 확인 플래그는 파일만 보호한다; 게시글은 확인 없이 진행된다(D5).
       await request(server)
         .delete(`/user/${victim.id}`)
         .set(auth(adminToken))
@@ -1320,12 +1343,12 @@ describe('Upload Board API (e2e)', () => {
     });
   });
 
-  // The board comment domain (ADR 0023): thread CRUD, the ownership shape (author or
-  // admin, and deliberately *not* the post's author), and the two delete consequences —
-  // the FK cascade from a deleted post, and comments joining the account cascade.
+  // 게시판 댓글 도메인(ADR 0023): 스레드 CRUD, 소유권 형태(작성자 또는 admin이며,
+  // 의도적으로 게시글 작성자는 *포함하지 않는다*), 그리고 두 가지 삭제 파급 효과 —
+  // 게시글 삭제에 따른 FK 캐스케이드, 그리고 계정 캐스케이드에 댓글이 합류하는 것.
   describe('Comment module (ADR 0023)', () => {
-    // Returns the id rather than the response: every caller here threads it into a
-    // route or a helper, and res.body is `any`.
+    // 응답이 아니라 id를 반환한다: 여기서 호출하는 모든 곳이 이 값을 라우트나
+    // 헬퍼에 그대로 꿰어 넣는데, res.body는 `any`이기 때문이다.
     async function newPost(token: string, title: string): Promise<number> {
       const res = await request(server)
         .post('/post')
@@ -1368,7 +1391,7 @@ describe('Upload Board API (e2e)', () => {
     it('404s when commenting on a post that does not exist', async () => {
       const user = await createUser('c-nopost@e.com');
 
-      // The FK would raise 23503; the service refuses before the insert instead.
+      // FK라면 23503을 일으킬 것이다; 대신 서비스가 insert 전에 미리 거부한다.
       const res = await createComment(user.accessToken, 999999, {
         body: 'into the void',
       }).expect(404);
@@ -1414,7 +1437,7 @@ describe('Upload Board API (e2e)', () => {
         .set(auth(user.accessToken))
         .expect(200);
 
-      // Oldest-first, unlike the newest-first file and post listings (ADR 0023).
+      // 오래된 순 — 최신순인 파일/게시글 목록과는 반대다(ADR 0023).
       expect(page.body[0].map((c: { body: string }) => c.body)).toEqual([
         'one',
         'two',
@@ -1426,8 +1449,8 @@ describe('Upload Board API (e2e)', () => {
       const user = await createUser('c-dup@e.com');
       const post = await newPost(user.accessToken, 'Dup');
 
-      // No unique column means no natural idempotency key — the repeat is a new
-      // comment, documented and accepted exactly as for a post with no fileId.
+      // 유니크 컬럼이 없으니 자연스러운 idempotency key도 없다 — 재제출은
+      // fileId 없는 게시글과 정확히 같은 방식으로, 새 댓글이 되는 게 문서화된 정상 동작이다.
       const first = await createComment(user.accessToken, post, {
         body: 'same text',
       }).expect(201);
@@ -1479,8 +1502,8 @@ describe('Upload Board API (e2e)', () => {
         body: 'someone else wrote this',
       }).expect(201);
 
-      // The third authorization axis was rejected by ADR 0023 — it would need a
-      // comment.post.creator reach-through, and admin moderation covers the case.
+      // 세 번째 권한 축은 ADR 0023에서 기각됐다 — comment.post.creator로
+      // reach-through해야 하는데, admin 관리 권한이 이미 그 경우를 커버한다.
       const res = await request(server)
         .delete(`/comment/${comment.body.id}`)
         .set(auth(postAuthor.accessToken))
@@ -1531,7 +1554,7 @@ describe('Upload Board API (e2e)', () => {
         .set(auth(author.accessToken))
         .expect(200);
 
-      // ON DELETE CASCADE — the schema's only database-level cascade (ADR 0023 D3).
+      // ON DELETE CASCADE — 이 스키마의 유일한 DB 레벨 캐스케이드다(ADR 0023 D3).
       const remaining = await app
         .get(DataSource)
         .getRepository(CommentEntity)
@@ -1546,8 +1569,8 @@ describe('Upload Board API (e2e)', () => {
       const victim = await createUser('c-victim@e.com');
 
       const hostPost = await newPost(host.accessToken, 'Host post');
-      // The victim's comment on somebody else's post — unreachable through the post
-      // FK cascade, which is why the account cascade deletes comments explicitly first.
+      // 피해자가 다른 사람의 게시글에 단 댓글 — 게시글 FK 캐스케이드로는 닿지 않으므로,
+      // 계정 캐스케이드가 댓글을 먼저 명시적으로 삭제하는 이유가 바로 이것이다.
       await createComment(victim.accessToken, hostPost, {
         body: 'visiting',
       }).expect(201);
@@ -1569,15 +1592,19 @@ describe('Upload Board API (e2e)', () => {
     });
   });
 
-  // ADR 0024: PATCH /file/:id { userId } can move a file out from under a post, so the
-  // account cascade can meet a post it does not own. That was an opaque 500; it is now a
-  // typed 409. This is the only path that reproduces it end to end.
+  // ADR 0024: 동의 기반 파일 소유권 이전(ADR 0050)은 파일을 게시글 아래에서 빼낼 수
+  // 있어서, 계정 캐스케이드가 자신이 소유하지 않은 게시글과 마주칠 수 있다. 예전에는
+  // 불투명한 500이었지만 이제는 타입 있는 409다. 이것이 그 상황을 엔드투엔드로
+  // 재현하는 유일한 경로다. (원래는 ADR 0050이 제거한, 즉시 반영되는 비동의
+  // PATCH /file/:id { userId } 필드로 재현했다 — propose/accept 흐름도 수락되고 나면
+  // 같은 불변식을 여전히 깨뜨린다. 동의는 누가 재배정을 트리거할 수 있는지만 통제할
+  // 뿐, 수락된 재배정이 무엇을 하는지는 통제하지 않기 때문이다; ADR 0050의 Consequences 참고.)
   describe('Account cascade FK refusal (ADR 0024)', () => {
     it("refuses the cascade when another user's post holds the account's file", async () => {
       const author = await createUser('adr24-author@e.com');
       const newOwner = await createUser('adr24-owner@e.com');
 
-      // The invariant holds here: the author attaches a file they created.
+      // 여기서는 불변식이 성립한다: 작성자가 자신이 만든 파일을 첨부한다.
       const fileId = await seedFile('reassigned-clip', author.id);
       const post = await request(server)
         .post('/post')
@@ -1589,11 +1616,16 @@ describe('Upload Board API (e2e)', () => {
         })
         .expect(201);
 
-      // ...and is broken here, after creation — assertAttachableBy never runs again.
+      // ...그리고 여기, 생성 이후에 깨진다 — assertAttachableBy는 다시 실행되지 않는다.
+      // 제안 후 수락(ADR 0050): 소유권은 newOwner가 동의해야만 이동한다.
       await request(server)
-        .patch(`/file/${fileId}`)
+        .post(`/file/${fileId}/transfer`)
         .set(auth(author.accessToken))
         .send({ userId: newOwner.id })
+        .expect(200);
+      await request(server)
+        .post(`/file/${fileId}/transfer/accept`)
+        .set(auth(newOwner.accessToken))
         .expect(200);
 
       const refused = await request(server)
@@ -1602,7 +1634,7 @@ describe('Upload Board API (e2e)', () => {
         .expect(409);
       expect(refused.body.code).toBe('USER_FILES_IN_USE');
 
-      // The whole transaction rolled back — the account and the post both survive.
+      // 트랜잭션 전체가 롤백됐다 — 계정과 게시글 둘 다 살아남는다.
       await request(server)
         .get(`/user/${newOwner.id}`)
         .set(auth(newOwner.accessToken))
@@ -1612,7 +1644,7 @@ describe('Upload Board API (e2e)', () => {
         .set(auth(author.accessToken))
         .expect(200);
 
-      // Actionable, not a dead end: clearing the blocking post unblocks the delete.
+      // 막다른 길이 아니라 대응 가능하다: 막고 있는 게시글을 치우면 삭제가 풀린다.
       await request(server)
         .delete(`/post/${post.body.id}`)
         .set(auth(author.accessToken))

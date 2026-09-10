@@ -1,12 +1,12 @@
-// Purpose: pins how the cascade confirmation flag survives the real global ValidationPipe options.
-// Usage: unit test; run by pnpm test alongside the user service specs.
-// Rationale: the flag guards an irreversible cascade — a boolean-typed field measurably turns "false" into `true` here, so the coercion itself is asserted (ADR 0020).
+// 목적: cascade 확인 플래그가 실제 전역 ValidationPipe 옵션을 거치고도 그대로 살아남는지 고정해 둔다.
+// 사용처: 단위 테스트 — pnpm test에서 user service 스펙들과 함께 실행된다.
+// 근거: 이 플래그는 되돌릴 수 없는 cascade를 지키는데, boolean 타입 필드였다면 "false"가 여기서 측정 가능하게 `true`로 바뀐다 — 그래서 이 강제 변환 자체를 검증한다 (ADR 0020).
 
 import { ArgumentMetadata, ValidationPipe } from '@nestjs/common';
 import { DeleteUserQueryDto } from './delete-user-query.dto';
 
-// The exact options main.ts installs globally — the point is to test that pipeline,
-// not a locally convenient one.
+// main.ts가 전역에 설치하는 옵션과 정확히 같다 — 로컬에서 편의상 만든 파이프라인이 아니라
+// 실제 파이프라인을 테스트하는 게 이 테스트의 목적이다.
 const pipe = new ValidationPipe({
   transform: true,
   whitelist: true,
@@ -27,8 +27,8 @@ describe('DeleteUserQueryDto', () => {
     ).resolves.toEqual({ deleteFiles: 'true' });
   });
 
-  // The regression this DTO exists for: as a boolean field, implicit conversion
-  // truthiness-casts "false" to true and the cascade fires against the caller's intent.
+  // 이 DTO가 존재하는 이유가 되는 회귀 케이스다: boolean 필드였다면 implicit conversion이
+  // "false"를 truthiness로 true로 캐스팅해, 호출자의 의도와 반대로 cascade가 실행된다.
   it('keeps "false" as "false" — never a truthiness cast', async () => {
     await expect(
       pipe.transform({ deleteFiles: 'false' }, metadata),

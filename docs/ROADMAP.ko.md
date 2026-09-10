@@ -1,0 +1,1443 @@
+# 로드맵
+
+> English version: [ROADMAP.md](ROADMAP.md)
+
+Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → 설계
+기준 → 아키텍처 → 모듈 → 도메인 → 메커니즘 → 자료 처리 → 플랫폼 → 인프라 →
+배포 환경) 순서의 결정 검토를 거쳐 수립했다. 같은 날 프론트엔드 분리
+결정([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md))으로
+개정되어, Stage 0 앞에 Stage F(프론트엔드 준비)가 삽입되었다. 2026-07-30에
+[ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)로 다시 개정되어
+**Stage 5(운영 화면 — admin 콘솔)가 추가되었다**: 11축 검토는 admin 화면에 어떤
+단계도 배정하지 않았는데, ADR 0010이 그 배치는 이미 결정해 뒀던 탓에 그 작업은
+"결정은 있으나 계획에는 자리가 없는" 상태로 남아 있었다. 2026-07-31에
+[ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)로 한 번 더 개정되어
+**Stage 4의 "VOD 재생 접근 제어" 행을 일반화**했다 — 파일 가시성(공개/비공개/
+링크공유), 전체 미디어의 접근 제어 서빙, 미디어 타입 확장으로, 프로젝트 창립 목표를
+다시 정리하며 드러난 공백이다. 아래 모든 항목은 각각 독립된 설계·검토를 거치는
+전용 작업으로 진행한다 ([CLAUDE.md](../CLAUDE.md) > Scope Discipline).
+
+> **정합성 안내**: 이 계획의 항목 중 CLAUDE.md가 "명시적 요청 없이는 제안 금지"로
+> 표시한 것들(CI, Docker, 클라우드 스토리지/배포)은 **2026-07-23 명시적 결정**으로
+> 이 계획에 편입되었다. 각 전용 작업이 실제로 완료되기 전까지는(각자의 ADR 포함)
+> 현행 Architecture Decisions가 그대로 유효하다.
+
+## 현재 위치 (2026-08-31 기준)
+
+> **요약 — 로드맵이 완료되었다.** 아래 모든 단계(F, 0–5, 4)가 랜딩했으며, Stage 4의
+> DevOps 스택도 포함된다: Helm([ADR 0041](ADR/0041-helm-chart-project-adaptation.ko.md)/
+> [0042](ADR/0042-k8s-helm-directory-consolidation.ko.md)), Terraform
+> ([ADR 0043](ADR/0043-terraform-project-adaptation.ko.md)/
+> [0044](ADR/0044-terraform-three-state-split.ko.md)), Prometheus/Grafana
+> ([ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md)), 그리고 성능/용량 기준
+> ([ADR 0049](ADR/0049-performance-capacity-criteria.ko.md)) — 표의 마지막 미결 행이었다.
+> **배포 행위 자체가 실제 AWS/EKS에서 라이브로 증명**되었고(2026-08-27, §9), 이어서
+> AWS 요금을 멈추기 위해 **2026-08-28 전면 철거**, ADR 0047 관측성 스택의 라이브 검증을
+> 위해 **2026-08-29/30 재적용**되었다 — §9의 각 항목대로, 인프라 상태는 매번 시점
+> 스냅샷일 뿐 고정된 사실이 아니므로, 어느 쪽 상태든 가정하기 전에 `terraform plan`으로
+> 재검증할 것. 한 항목은 미완이 아니라 **범위에서 의도적으로 제외**되었다: 2026-08-31에
+> **Istio(서비스 메시)를 DevOps 스택에서 빼고 보류**로 옮겼다(§7) — 이 프로젝트는 단일
+> 백엔드 워크로드만 돌아가 메시가 관리할 east-west 트래픽이 없으므로, 지금 도입하면 이
+> 프로젝트에 없는 문제를 푸는 셈이다; 아키텍처가 실제로 클러스터 내 다중 서비스로
+> 커질 때만 재검토한다. 이제 남은 것은 빌드 과제가 아니라 **운영 판단**(AWS 스택을
+> 계속 적용해 비용을 낼지, 다음에 필요할 때까지 철거 상태로 둘지)과 일상적 문서
+> 정리뿐 — 신규 기능도, 예정된 ADR도 아니다. 아래 서술은 각 단계가 어떻게 랜딩했는지의
+> 역사 기록으로 유지한다; 배포·철거·재배포의 날짜별 기록은 §9(완료)를, Istio 보류의
+> 전체 근거는 §7을 참조.
+
+- 2026-07-22 하드닝 런은 모두 반영 완료됐다: 보안 quick-win, lint 0 오류
+  베이스라인, 문서 재작성, TypeORM 마이그레이션 도입(`79603ad`,
+  [ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)), 이어서
+  `.ko.md` 문서 전반의 한국어 유창성 패스(`dc1ad72`)까지.
+- 이 계획서 자체는 2026-07-23의 11축 결정 검토로 수립되었다.
+- 2026-07-23 프론트엔드 분리 결정([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)):
+  프론트엔드는 이 저장소 안의 `frontend/` 하위 폴더로 두어(백엔드는 루트에
+  그대로) HTTP로 이 API를 소비하며, admin은 그 안의 `/admin` 라우트 구역으로
+  시작한다. RBAC은 Stage F 뒤로 재배치 — RBAC은 API 표면을 바꾸지 않고 권한만
+  더하므로 미뤄도 프론트엔드 재작업이 없고, 표면 동결을 먼저 하면 실제 재작업을
+  아낀다. (구조는 2026-07-24 개정: 별도 저장소 → 저장소 내 하위 폴더.)
+- 라우트 정리·계약 동결은 2026-07-23 반영 완료: `POST /file`, `PATCH /file/:id`,
+  `DELETE /file/:id`, `POST /auth/token/refresh`가 정식 라우트이며, API 표면은
+  이제 동결 상태다(ADR 0010).
+- 에러 코드 계약은 2026-07-23에 완료되었다
+  ([ADR 0011](ADR/0011-error-code-contract.ko.md)): 모든 에러 응답이 전역 예외
+  필터를 거쳐 안정적인 기계 판독 가능 `code`를 싣는다.
+- refresh 토큰 httpOnly 쿠키 전환 + 회전/재사용 감지는 2026-07-24 반영
+  완료([ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md)) — **Stage F 완결**:
+  프론트엔드가 의존할 API 표면·에러 계약·인증 전송이 모두 확정되었다.
+  `frontend/` 하위 폴더는 2026-07-24 생성됨(React + Vite, 인증 수직 슬라이스
+  E2E 검증). RBAC은 API 표면을 바꾸지 않으므로 병행 가능하다.
+- RBAC + 감사 로그는 2026-07-25 반영 완료
+  ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)) — **Stage 0 완결**:
+  `user`/`admin`/`superadmin` 역할, RolesGuard, 소유권을 "본인 또는 admin"으로
+  확장, superadmin 전용 역할 부여, append-only 감사 로그. 역할 체계가 프론트엔드
+  `/admin` 구역을 받친다.
+- **Stage 1 기반은 완결됐다** (2026-07-25): Node/pnpm 고정, Docker/compose, CI,
+  로깅 규약, E2E 재작성이 모두 반영됐다 (ADR 0014–0017).
+- **Stage 2가 진행 중이다**: 고아 temp 파일 정리가 2026-07-26 반영됐고
+  ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)) — 신규 운영 모듈
+  `TempCleanupModule`의 스케줄 `@nestjs/schedule` 스윕 — 업로드 중복 제출 정책이
+  2026-07-27 반영됐다 ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)): attach가
+  발급한 파일명이 1회용 청구 토큰이라, 재시도는 에러 대신 replay(200)로 응답한다.
+  삭제 정책은 2026-07-30 반영됐다 ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)):
+  soft delete는 채택하지 않고, 계정은 명시적인 `deleteFiles=true`가 있을 때만 자기 파일까지
+  연쇄 삭제하며, 기존 FK 위반 500은 타입 있는 409가 됐다 — **Stage 2가 완결됐다**.
+- **Stage 3이 완결됐다 (2026-07-31)**: 목록 검색/필터/정렬이 2026-07-30 반영됐다
+  ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) — `GET /file`이 `search`,
+  `creatorId`, `sortBy`, `order`를 받고, 정렬 키는 코드 내 화이트리스트로만 해석되며,
+  이 엔드포인트에 없던 결정적 기본 정렬이 생겼다. 이어서 2026-07-30에 게시판 도메인의
+  **스키마 설계 게이트**가 반영됐고 ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) —
+  post와 comment를 코드 없이 평문으로 함께 확정했다 — 그 구현 두 절반이 2026-07-31에
+  착지했다: comment가 post에 의존하므로 post 모듈이 먼저, 그다음 comment 모듈, 그 사이에
+  [ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)가 post↔file 불변식 gap을 정리했다.
+  **이 프로젝트 이름이 가리키는 게시판이 이제 실제로 존재한다**: 영상을 선택적으로 첨부한
+  게시글과 그 아래 스레드.
+- **Stage 5(운영 화면 — admin 콘솔)가 2026-07-30 추가됐다**
+  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)). 원래 계획의 공백을
+  닫은 것이다: ADR 0010은 2026-07-23에 admin이 어디에 살지 결정했지만, 그것을 만드는
+  작업을 어느 단계도 맡지 않았다. 같은 변경에서 Chat Project의 admin 콘솔을 미적응
+  수정 기반으로 `admin/`에 가져왔다. Stage 5는 아직 아무것도 시작하지 않았고, 첫 행
+  — 클라이언트가 자기 역할을 어떻게 아는가 — 이 나머지를 막는 백엔드 결정이다.
+  Stage 4에 의존하지 **않으며** 그보다 먼저 진행될 수도 있다.
+- **남은 작업의 실행 순번을 2026-07-31에 고정했다**(6절 > 실행 순번 참조):
+  ~~#1 게시판 comment 모듈~~(✅ 2026-07-31 완료) → ~~#2 `GET /user` 페이지네이션~~(✅
+  2026-08-05 완료, Stage 5에서 앞당김) →
+  ~~#3 Stage 5 admin 화면~~(✅ **2026-08-06 완료** — role 전달[ADR 0028], `admin/`의
+  역할 관리 조각을 이 백엔드의 실제 라우트에 맞게 적응, 모더레이션 존재 여부 "아니오"로
+  결론, 중복 admin 화면을 `admin/` 쪽으로 정리하며
+  `frontend/src/features/admin/AdminPage.tsx` 삭제까지 네 행 모두 완료) →
+  **남은 작업은 Stage 4(프로덕션 전환), 이제 다음**. 마지막 두 작업은 **프로덕션 DevOps 스택
+  도입(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform)**,
+  그다음 **배포 자체**다 — 배포는 "N번째 단계"가 아니라 전체
+  계획의 종착 행위이므로 **의도적으로 번호를 붙이지 않는다**(번호는 Stage 4/Stage 5 순서
+  혼동을 다시 부를 뿐이다). 이로써 Stage 5의 부동 위치가 Stage 4 앞으로 확정되고, 독립적인
+  페이지네이션 부채가 둘보다 앞으로 당겨진다.
+- **파일 가시성 + 미디어 타입 확장을 2026-07-31에 결정했다**(설계 게이트,
+  [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)): 프로젝트 창립 목표를
+  다시 정리하니 공백 둘이 드러났다 — 저장된 모든 파일이 공개로만 서빙되어 비공개/링크공유
+  선택지가 없고, 업로드 허용 목록이 영상 전용이다. 결정은 3-상태 `visibility`(공개/비공개/
+  **링크공유**, 회전 가능한 공유 토큰 + 선택적 TTL), 접근 제어 `GET /file/:id/content`
+  엔드포인트(그래서 `ServeStaticModule`이 `file/upload` 노출을 중단), 이미지+오디오+영상
+  타입별 업로드 필드를 더한다. **Stage 4의 "VOD 재생 접근 제어" 행을 일반화하며 대체**하고,
+  배포 대상과 독립적이므로 배포보다 앞에 둘 수 있다.
+- ~~**가시성 + 접근 제어 서빙을 2026-08-01에 구현했다**~~ ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)
+  D1/D2/D3/D6 + [ADR 0026](ADR/0026-file-visibility-implementation.ko.md)): 마이그레이션이
+  적용됐고(라인 단위로 검토), `GET /file/:id/content`가 Range 지원과 함께 살아 있으며,
+  `GET /file`·`GET /file/:id`는 비소유자에게 private/unlisted 메타데이터를 필터링한다.
+- ~~**미디어 타입 확장을 2026-08-01에 구현했다**~~ ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)
+  D4/D5 + [ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md)): `POST
+  /upload/attach`는 이제 단일 `video` 필드 대신 `image`/`audio`/`video` 타입별 필드 세 개를
+  받으며, 각각 자신만의 클래스 허용 목록을 가진다. 스키마 변경은 없다. ~~새
+  `fileUrl`/`visibility` 응답 형태와 분리된 업로드 필드 모두에 대한 프론트엔드 반영~~ — ✅
+  **2026-08-03 완료** (아래 미배정 참고).
+- ~~**스토리지 포트-어댑터를 2026-08-07에 구현했다**~~ ([ADR 0029](ADR/0029-storage-port-adapter.ko.md)):
+  Stage 4 클라우드 네이티브 인프라 과제의 코드 선행 조각으로, 아래 K8s/Helm 작업보다
+  먼저 랜딩했다 — 자세한 내용은 4절(아키텍처 방향) 참고. `local`이 여전히 기본값이며,
+  실제 S3 전환만 Stage 4 인프라 도입 행에 남는다.
+- ~~**컨테이너/배포 하드닝을 2026-08-08에 구현했다**~~
+  ([ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)–[ADR 0034](ADR/0034-https-termination-stance.ko.md)):
+  ADR 0015가 미뤘던 컨테이너/배포 하드닝 — non-root 이미지 사용자, `HEALTHCHECK` +
+  liveness/readiness 엔드포인트, 별도 배포 단계로 분리한 마이그레이션은 코드와 함께
+  반영됐고, 시크릿 전달 목표와 HTTPS 종단 방침은 설계만 담은 ADR로 반영됐다.
+  distroless는 명시적으로 계속 보류한다(7절 미일정) — **멀티아치는 보류가 아니다**,
+  아래 정정 참고. 자세한 내용은 6절 Stage 4 참고.
+
+## 1. 비전과 본질
+
+- **현재**: 포트폴리오/학습용 백엔드 — 작지만 완결된 API 위에서 엔지니어링
+  규율(설계·문서·테스트)을 증명하는 것이 목적이다.
+- **목표**: 브라우저 프론트엔드(저장소 내 `frontend/` 하위 폴더,
+  [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md))를 결정된
+  소비자로 두는 실서비스 지향 백엔드. 후반 단계(기반 인프라, AWS 배포, 재생
+  접근 제어)는 이 전환을 구호가 아닌 실체로 만들기 위해 존재한다.
+- **우선순위 축** (기존 "보안 → 결정된 아키텍처 작업 → 위생 → 문서/테스트"를
+  대체): 보안 → 프론트엔드 준비(API 표면 동결) → 결정된 아키텍처 작업(RBAC) →
+  기반(재현성 · 관측성 · 테스트 신뢰성) → 메커니즘 보강 → 도메인 확장 →
+  실서비스 전환.
+
+## 2. 방법론
+
+- **전용 작업 단위.** 모든 로드맵 항목은 자체 설계·검토·문서화를 갖춘 독립
+  작업이다 — [CLAUDE.md](../CLAUDE.md) > Scope Discipline의 로드맵 차원 재서술이다.
+  묶음 처리도, 부수 작업도 없다.
+- 6절의 단계(Stage)는 **의존 순서에 따른 묶음일 뿐 마일스톤이 아니다**: 진행은
+  항목 단위로 이뤄지며, 단계 경계를 넘는 데 별도의 의식은 없다.
+
+## 3. 설계 기준
+
+**동결 (변경 없음)** — 기존 3축, [CLAUDE.md](../CLAUDE.md)의 Never Do 그룹 1–3:
+런타임 안전, 데이터 무결성, 보안. 모든 로드맵 작업은 이 기준을 통과해야 하며,
+기준 자체는 로드맵의 대상이 아니다.
+
+**2026-07-23 채택** — 이 계획을 지배하는 신규 5축:
+
+| 축 | 근거 |
+|---|---|
+| 관측성 | 현재 로깅 인프라가 전무하다. 진단할 수 없는 백엔드는 운영할 수 없다 — 실서비스 목표의 첫 번째 선행 조건. |
+| 재현성/이식성 | Node/pnpm 버전 미고정, DB 수동 구성. 배포 대상이 생기는 순간 환경 편차는 곧바로 장애 원인이 된다. |
+| API 계약 안정성 | 소비자가 결정되었다(프론트엔드, 2026-07-23) — Stage F가 이 축의 발동이다: 소비자가 0명인 동안 라우트를 정리·동결하고, 에러 코드는 Stage F 작업으로 전달한다. URI 버저닝은 동결 이후 실제 breaking 변경이 필요해질 때까지 계속 유예. |
+| 테스트 신뢰성 | e2e 스위트가 Nest 템플릿 그대로다. 단위 테스트만으로는 인증 흐름과 `temp_` → `granted_` 경로 전체를 보장할 수 없다. |
+| 성능/용량 | 게시판 도메인 확장은 목록 쿼리 복잡도를 올리고, 비디오 서빙은 디스크·대역폭 부하가 크다. 응답시간 목표, 인덱스 정책, 디스크 상한이 명시적 기준이 된다. |
+
+**Advisory (기록만, 지배 기준 아님)**:
+
+- 개인정보/컴플라이언스 — PII 로그 금지는 이미 강제(Never Do G3); 삭제 정책은
+  Stage 2의 삭제 설계 작업과 연결된다.
+- 릴리스/변경 관리 — semver 태깅 + 마이그레이션 순서 규약; 배포와 함께 활성화.
+- 문서 최신성(Docs-as-Code) 강제 — README/엔드포인트 일치의 기계 검증; CI 작업
+  아래의 후보.
+
+## 4. 아키텍처 방향
+
+- **현재**: 계층형 모듈러 모놀리스 유지 — Controller → Service → Repository,
+  단일 책임의 4모듈. 패턴 변경은 로드맵 범위에 없다.
+- ~~**향후 목표 (2026-07-23 결정)**: 스토리지 포트-어댑터~~ — **2026-08-07 완료**
+  ([ADR 0029](ADR/0029-storage-port-adapter.ko.md), Stage 4 인프라 과제의 코드 선행
+  조각): `FileStorage` 인터페이스(`backend/storage/`)가 물리 파일 조작을
+  `LocalDiskStorage`([ADR 0005](ADR/0005-local-disk-storage.ko.md)의 동작을 그대로
+  이식)와 `S3Storage`(ISP가 요구하는 두 번째 구현체, 단위 테스트만 거침 — SDK
+  모킹, 실제 버킷 미검증) 뒤로 분리한다. 선택은 `STORAGE_DRIVER`(`local` 기본값 |
+  `s3`)로 한다. Multer가 `diskStorage`에서 `memoryStorage`로 바뀌어 temp 쓰기
+  자체도 포트를 거치게 됐다(`UploadService.stageTemp`) — ADR 0005가 기록해 둔
+  다중 인스턴스 격차를 승격 이후 절반만이 아니라 실제로 해소하는 전제조건이다.
+  `local`이 여전히 기본값이며, 실제 배포를 S3로 전환하는 작업은 아래 Stage 4에
+  남아 있다.
+- **프론트엔드 분리 (2026-07-23 결정, 구조 2026-07-24 개정, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md))**:
+  프론트엔드는 이 저장소 안의 `frontend/` 하위 폴더(백엔드는 루트에 그대로)로
+  두어 HTTP로 이 API를 소비한다. admin은 그 프론트엔드 안의 `/admin` 라우트
+  구역으로 시작하며, RBAC이 랜딩하고 실제 admin 요구사항이 쌓인 뒤에만 별도
+  앱으로 승격한다. pnpm workspace 모노레포(백엔드를 `apps/backend`로 재배치)와
+  즉시 3분리(frontend/backend/admin)는 검토 후 기각.
+- ~~**알려진 제약**: 정적 파일 서빙은 무인증이다~~ — **2026-08-01 백엔드에서 해소**
+  ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D1/D2/D3/D6 +
+  [ADR 0026](ADR/0026-file-visibility-implementation.ko.md)): `ServeStaticModule`은 더 이상
+  `file/upload`를 노출하지 않고, 접근은 `GET /file/:id/content`(공개/비공개/링크공유,
+  Range 지원)가 강제한다. 프론트엔드는 2026-08-03에 이를 반영했다(아래 미배정 참고) —
+  이제 `fileUrl`을 콘텐츠 엔드포인트로 읽고 visibility를 토글할 수 있다.
+- 검토 후 보류한 대안: 이벤트 기반 보강(분리할 부수효과가 rename 하나뿐이며,
+  rename을 트랜잭션 밖으로 빼면 `temp_`/`granted_` 원자성이 깨진다), CQRS-lite
+  (읽기 모델이 분리할 만큼 복잡하지 않다; YAGNI).
+- **모듈 방침**: 4모듈 유지, 예정 작업은 기존 모듈에 수용(RBAC → auth/user).
+  신규 모듈은 새 도메인이 생길 때만 — 게시판 확장(Stage 3)이 그 승인된 사례다.
+
+## 5. 도메인 계획
+
+- **현재**: 인증된 비디오 파일 업로드/관리뿐. 프로젝트명의 "board"(게시판)는
+  미구현이다.
+- **결정**: 실제 업로드 게시판으로 확장 — 게시글이 업로드 파일을 참조하는
+  post/comment 도메인. 엔티티 관계(post ↔ `FileEntity`, comment ↔ post/user)는
+  ([CLAUDE.md](../CLAUDE.md) > Scope Discipline의 스키마 변경 규약에 따라) 먼저 평문으로
+  기술했고, 검토된 마이그레이션은 후속 구현 과제에서 반영한다.
+- **스키마는 2026-07-30 확정됐다** ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) —
+  구현에 앞선 설계 게이트이며 코드는 없다. 글은 자기 작성자가 올린 파일 하나만
+  참조하고(unique·nullable FK), 그 제약이 곧 idempotency 키가 된다. 댓글은 평면
+  구조이고 이 스키마의 유일한 `ON DELETE CASCADE`로 글과 함께 사라진다. 글이 참조 중인
+  파일 삭제는 사전 검사가 아니라 FK를 통해 409 `FILE_IN_USE`로 거부한다. 계정 연쇄
+  삭제([ADR 0020](ADR/0020-account-deletion-cascade.ko.md))는 글과 댓글까지 흡수하되
+  `deleteFiles=true`는 여전히 파일만 확인받는다. 소유권은 "작성자 또는 admin"
+  그대로이며 새로운 인가 축을 만들지 않는다.
+- 목록 검색/필터/정렬(Stage 3)이 게시판 목록의 데이터 계층 선행 조건이며, 2026-07-30
+  반영됐다 ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)). post 목록은 이
+  조회 계층을 새로 정의하지 않고 확장한다.
+
+## 6. 단계별 작업 목록
+
+순서는 의존 관계 기준이다. 각 행이 하나의 전용 작업이다.
+
+### 순서가 의존 관계를 벗어나는 경우 (일반 기준)
+
+이 계획에서 원래의 의존 순서보다 앞당겨진 항목은 넷이다: RBAC이 Stage F 뒤로
+재배치된 것(현재 위치, 2026-07-23), 파일 가시성 + 미디어 타입 확장이 Stage 4
+배포보다 앞에 놓일 수 있게 된 것(현재 위치, 2026-07-31), Stage 5가 Stage 4보다
+먼저 배치된 것(아래 참조), 그리고 `GET /user` 페이지네이션이 Stage 5 나머지보다
+앞으로 당겨진 것(아래 실행 순번 참조). 각각은 그 자리에서 개별적으로 논거를
+댔다. 넷을 관통하는 공통 기준은 미리 계획된 것이 아니라 사후에 추출한 것이며,
+이 넷뿐 아니라 앞으로 등장할 어떤 항목에도 적용되도록 일반형으로 적는다:
+
+1. **역방향 하드 의존성이 없을 것.** 앞당겨지는 항목이 자신이 앞지르는 항목으로부터
+   아무것도 필요로 하지 않아야 한다. 필요조건일 뿐 충분조건은 아니다 — 이것만으로는
+   두 항목이 독립적이라는 사실만 보여줄 뿐, 재배치가 정당하다는 근거는 되지 않는다.
+2. **뒤로 밀리는 쪽에 추가 비용이 없을 것.** 항목을 앞당겨도 그것이 앞지르는
+   항목(들)에 재작업이 생기지 않아야 한다. 재배치 때문에 뒤로 밀린 항목이 나중에
+   작업을 다시 해야 한다면, 순서는 원래대로 둔다.
+3. **실제로 앞당길 만한 구체적 이유가 있을 것** — 단지 앞당겨도 된다는 것과는 다르다.
+   예를 들면: 앞지르는 대상과 얽혀 있지 않은 상시 부채 해소, 순서를 반대로 뒀을 때
+   생겼을 재작업의 회피, 또는 앞당기는 항목이 미룰 수 없는 이유(운영 필요성 등)다.
+
+셋 다 성립해야 한다. (1)만으로는 두 항목의 독립성만 증명할 뿐이며, (2)나 (3) 없이는
+기본값인 의존 순서를 유지한다.
+
+### 남은 작업의 실행 순번 (2026-07-31 결정)
+
+아래 단계들은 의존 관계로 묶여 있지만, 준비된 항목 몇 개가 단계를 가로질러 있어
+실제 착수 순서를 여기서 고정한다(완결된 단계는 생략). 각 미완 항목은 자기 행에
+실행 번호를 함께 표기한다.
+
+1. ~~**게시판 도메인 — comment 모듈** (Stage 3)~~ — ✅ 2026-07-31 완료, **Stage 3 완결**.
+   게이트였던 post↔file 불변식 gap을 [ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)로
+   먼저 정리했고 계정 연쇄의 삭제 순서를 건드리지 않았으므로, 댓글 삭제가 게시글 앞에
+   그대로 끼워 넣어졌다. **이제 실행 #2가 다음 전용 작업이다.**
+2. ~~**`GET /user` 페이지네이션**~~ (Stage 5에서 앞당김) — ✅ 2026-08-05 완료.
+   새 `GetUsersDto`(`take` 1–100 기본 20, `skip` ≥0 기본 0)가 `GetFilesDto`를 그대로
+   미러하고, `UserService.findAll`은 `createdAt DESC, id DESC`로 정렬해 페이지 경계를
+   결정적으로 만든다. 응답은 기존 `[rows, total]` 튜플 형태를 유지(`GET /file`과 형태
+   일치, 별도 ADR 불필요). 검색/정렬은 이번 범위에서 의도적으로 제외 — ROADMAP 항목명이
+   페이지네이션만 지칭했고, admin 콘솔 작업에서 필요해지면 그때 연다(실제로는 필요치
+   않았다).
+3. ~~**Stage 5 — 운영 화면 (admin 콘솔)**~~ — ✅ **2026-08-06 완료**, 네 행 모두 끝남:
+   역할 전달 결정([ADR 0028](ADR/0028-access-token-role-claim.ko.md), 액세스 토큰에 `role`
+   클레임 추가) → 이식 콘솔 적응(역할 관리 조각을 실제 라우트에 맞게) → 모더레이션 존재
+   여부 결정("아니오"로 결론 — ban/unban/force-logout 삭제, 백엔드 쪽 대체 구현 없음) →
+   중복 admin 화면 정리(`admin/` 유지,
+   `frontend/src/features/admin/AdminPage.tsx` 삭제 — [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의
+   2026-08-06 추가 기록 참조). 계획대로 Stage 4보다 먼저 진행됐다: 권한 계층을 Swagger로만
+   운영할 수 있는 배포 시스템은 운영이 어렵기 때문. **이제 남은 작업은 Stage 4** — 프로덕션
+   DevOps 스택 도입(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus ·
+   Grafana · Terraform), 그다음 마지막으로 배포 자체이며, 배포는
+   의도적으로 번호를 붙이지 않는다(아래 참조).
+4. **프로덕션 DevOps 스택 도입** — 배포 직전 작업. **이 스택을 도입하는 이유**: 업계에서
+   널리 쓰이는 표준 DevOps 툴체인으로, 이를 기반으로 실무와 유사한 개발·배포·운영 환경을
+   경험하고 향후 서비스 확장에도 대응하기 위함이다. **AWS**(클라우드 플랫폼 / 배포 대상),
+   **Docker**(컨테이너화 — *이미 반영됨*, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.ko.md)),
+   **Kubernetes**(컨테이너 오케스트레이션), **Helm**(릴리스 패키징/템플릿),
+   **GitHub Actions**(CI/CD — *이미 반영됨*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.ko.md)),
+   **Prometheus**(메트릭 수집), **Grafana**(메트릭 대시보드), **Terraform**(코드형
+   인프라, IaC)까지다. S3(오브젝트 스토리지)는 이 작업에 남은 스토리지 몫이다 — `FileStorage`
+   포트-어댑터 자체(4절)는 이미 2026-08-07에 랜딩했으므로([ADR 0029](ADR/0029-storage-port-adapter.ko.md)),
+   여기 남은 일은 실제 버킷을 대상으로 `STORAGE_DRIVER=s3`를 켜는 것뿐이다. 아직
+   반영되지 않은 각 구성요소는 자체 ADR을 갖는다.
+
+그다음, 마지막으로 — **배포 자체**. **의도적으로 실행 번호를 붙이지 않는다**: 배포는
+"N번째 단계"가 아니라 위의 모든 것이 만들어지고 운영 가능해진 뒤 수행하는 전체 계획의
+종착 행위다. 여기에 번호를 붙이면 이 절이 이미 정리한 Stage 4/Stage 5 순서 혼동을 다시
+부를 뿐이라, 그냥 *마지막 작업*으로 표기한다.
+
+**#2와 #3이 원래 소속 단계보다 앞당겨진 이유** — 층을 이루는 세 가지 별개 논거:
+
+- **Stage 5 전체가 Stage 4보다 앞선다**(2026-07-31): 권한 계층을 Swagger로만 조작할 수 있는
+  시스템은 실서비스로 운영하기 어렵다 — 그래서 운영 화면이 배포 이후가 아니라 이전에 온다.
+- **`GET /user` 페이지네이션(#2)은 Stage 4뿐 아니라 Stage 5 나머지보다도 앞으로 빠졌다**,
+  독립된 세 가지 이유로: admin 콘솔 작업이 실제로 일어나든 아니든 갚아야 할 상시 Never Do
+  Group 2 부채라 콘솔과 얽혀 있지 않고; 범위가 작고 자기완결적인 빠른 승리이며; 콘솔의
+  사용자 목록이 결국 끌어다 쓸 조회 계층 패턴(`GetUsersDto`, `GetFilesDto`/
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md) 미러)을 미리 갖춰 둔다.
+- **role 전달 결정(#3)은 애초에 "앞당겨진" 항목이 아니다** — Stage 5 자체의 첫 행이자 강한
+  선결 조건이다: 이식된 콘솔이 `jwtDecode<{ sub, role }>(accessToken)`을 디코드하므로, 이
+  결정 없이는 콘솔 적응(Stage 5의 다음 행)이 시작될 수 없다. #2가 여기 도달하는 시점을
+  늦췄을 뿐이라 "앞당겨진 것처럼" 보일 뿐이다.
+
+이로써 Stage 5의 "번호는 의존 순서가 아니다" 노트가 Stage 5-먼저(Stage 4 앞)로
+확정되고, 독립 부채 항목(#2)이 둘보다 앞으로 당겨진다. 단계 내부에서는 각 표의
+의존 순서가 그대로 유효하다.
+
+### Stage F — 프론트엔드 준비 (2026-07-23 결정, [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md))
+
+프론트엔드 착수 전 백엔드 파이프라인 — 브라우저 클라이언트가 의존하게 될
+모든 것을 소비자가 0명인 동안 확정한다.
+
+| 작업 | 근거 / 의존성 |
+|---|---|
+| 라우트 정리 및 API 계약 동결 | `POST /file`, `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh`로 정규화하고, breaking 변경이 아직 공짜인 동안 표면을 동결한다 (복수형 리네임과 auth 액션 라우트 변경은 검토 후 기각 — ADR 0010). |
+| 에러 코드 체계 (전역 exception filter) | 프론트엔드가 메시지 문자열이나 status 단독 분기에 의존하기 전에 기계 판독 가능한 에러 계약을 마련한다. |
+| Refresh 토큰 httpOnly cookie 전환 + 회전/재사용 감지 | **Stage 2에서 앞당김 (2026-07-23)** — 브라우저 프론트엔드가 생기면 토큰 저장이 실제 XSS 표면이 된다. [ADR 0002](ADR/0002-dual-secret-token-pair.ko.md)의 "토큰 서버 미저장" 스탠스를 개정하는 자체 ADR과 검토된 스키마 마이그레이션이 필요하다. |
+
+### Stage 0 — 결정된 아키텍처 작업 (RBAC) — ✅ 2026-07-25 완결
+
+| 작업 | 근거 / 의존성 |
+|---|---|
+| ~~**RBAC** — `role` 컬럼 + role 인식 가드~~ | **2026-07-25 반영** ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)): 3단계(`user`/`admin`/`superadmin`), `PATCH /user/:id/role`은 superadmin 전용, 소유권을 "본인 **또는** admin"으로 확장, 감사 로그 포함. 검토된 마이그레이션으로 배포. |
+
+### Stage 1 — 기반 (재현성 · 관측성 · 테스트 신뢰성) — ✅ 2026-07-25 완결
+
+| 작업 | 근거 / 의존성 |
+|---|---|
+| ~~Node/pnpm 버전 고정 (`engines` + `.nvmrc`)~~ | **2026-07-25 반영** ([ADR 0014](ADR/0014-node-pnpm-version-pinning.ko.md)): `.nvmrc` `24.8.0`, `engines` 하한(`node >=24`, `pnpm >=10`, 권고적), `packageManager` `pnpm@10.14.0`. Docker 베이스 이미지 태그와 CI 툴체인이 파생될 단일 출처가 된다. |
+| ~~Docker / docker-compose (앱 + 로컬 PostgreSQL)~~ | **2026-07-25 반영** ([ADR 0015](ADR/0015-docker-and-compose.ko.md)): 멀티 스테이지 `Dockerfile`(빌드 `node:24.8.0` → `slim` 런타임, 부팅 시 마이그레이션) + `docker-compose.yml`(`db` postgres:16 + `api`). 수동 `upload-board-pg`를 대체하고 e2e의 수동 DB 의존을 제거한다. AWS 단계의 선행 조건 충족. |
+| ~~CI — GitHub Actions (lint + test)~~ | **2026-07-25 반영** ([ADR 0016](ADR/0016-github-actions-ci.ko.md)): main/dev의 push·PR에서 도는 `.github/workflows/ci.yml` — `lint-and-unit` 잡(`--fix` 없는 `lint:ci` + 단위 테스트)과 `postgres:16` 서비스 대상 `e2e` 잡. 툴체인은 ADR 0014 고정값(Corepack + `.nvmrc`)에서. 0-오류 베이스라인이 이제 기계로 검증된다. |
+| ~~로깅 규약 (Nest Logger부터)~~ | **2026-07-25 반영** ([ADR 0017](ADR/0017-logging-conventions.ko.md)): `AllExceptionsFilter`에 Nest 내장 `Logger` — 5xx는 빼낸 스택과 함께 `error`, 4xx는 `debug`; 레벨 규약과 PII 금지 규칙 문서화. 구조적/JSON 출력과 외부 에러 추적(Sentry)은 Stage 4로 유예. |
+| ~~E2E 재작성~~ | **2026-07-25 반영**: 실제 HTTP+DB 위에서 도는 18개 케이스 스위트(`test/app.e2e-spec.ts` + 신규 `test/e2e-utils.ts` 하네스) — 인증 흐름, refresh 회전/재사용, 소유권 403, 페이지네이션, `temp_` → `granted_` 승격. 격리는 실제 마이그레이션으로 생성한 일회용 `upload_board_e2e` DB를 테스트마다 truncate하는 방식. Docker-compose 작업이 이 의존을 없앨 때까지는 로컬 Postgres(5435) 수동 기동이 여전히 필요하다. |
+
+### Stage 2 — 메커니즘 보강
+
+| 작업 | 근거 / 의존성 |
+|---|---|
+| ~~고아 temp 파일 정리~~ — ✅ 2026-07-26 반영 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)) | `POST /file`이 끝내 호출되지 않으면 `temp_` 파일이 영구 누적됐다 — 유일한 무관리 리소스 누수. 스케줄 `@nestjs/schedule` 스윕(신규 `TempCleanupModule`)이 TTL(기본 24시간, 매시간)을 넘은 `file/temp`의 `temp_` 파일을 삭제한다. |
+| ~~삭제 정책 설계 (soft delete + FK)~~ — ✅ 2026-07-30 반영 ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) | soft delete는 **채택하지 않고** 삭제는 hard delete로 유지한다. `DELETE /user/:id?deleteFiles=true`는 계정의 파일 행과 물리 파일까지 연쇄 삭제하고, 확인 없는 요청이 파일 보유 계정에 들어오면 기존 FK 위반 500 대신 409 `USER_HAS_FILES`(메시지에 개수 포함)로 거절한다. 이번 과제에서 발견한 누수를 닫아 `DELETE /file/:id`도 이제 저장된 `granted_` 파일을 unlink한다. unlink는 커밋 이후에 수행하며(비가역 단계를 마지막에), 스키마 변경은 없다. |
+| ~~업로드 멱등성/중복 정책 명문화~~ — ✅ 2026-07-27 반영 ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)) | attach가 발급한 `temp_{uuid}_{ts}` 파일명이 1회용 청구 토큰이다. 재제출 시 청구자 본인에게는 기존 파일을 replay(200)하고, 타인에게는 409 `FILE_ALREADY_CLAIMED`를 내며, 동시 제출 경합은 500이 아니라 unique 제약으로 정리된다. `filePath`를 DTO 경계에서 발급 형식으로 고정해 경로 탈출 공백도 함께 닫았다. 스키마 변경 없음. |
+
+### Stage 3 — 도메인 확장
+
+| 작업 | 근거 / 의존성 |
+|---|---|
+| ~~목록 검색/필터/정렬~~ — ✅ 2026-07-30 반영 ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) | `GET /file`에 `search`(제목에 이스케이프된 `ILIKE '%term%'`), `creatorId`, 그리고 완전한 `Record` 화이트리스트로 해석되는 `sortBy`/`order`가 추가됐다. 이 엔드포인트에 없던 `ORDER BY`도 함께 들어가 offset 페이징이 결정적이 됐다. 스키마 변경은 없고, 후보 인덱스 세 개는 도입 계기를 기록한 채 유보했다. post 목록이 확장해 쓸 조회 계층 패턴이다. |
+| ~~게시판 도메인 — 스키마 설계 게이트~~ — ✅ 2026-07-30 반영 ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) | 마이그레이션에 앞서 Scope Discipline이 요구하는 평문 스키마 기술이며, comment 작업이 post 스키마를 되돌리게 만들 수 없도록 두 엔티티를 한 번에 다뤘다. post ↔ file은 1:1·선택적·동일 작성자이고(unique FK가 `POST /post`의 idempotency 키를 겸한다), 댓글은 평면 구조로 FK에서 글과 함께 연쇄 삭제된다. 첨부된 파일에 대한 `DELETE /file/:id`는 409 `FILE_IN_USE`가 된다. ADR 0020 계정 연쇄 삭제는 글과 댓글을 확인 없이 가져가되 플래그는 여전히 파일만 지킨다. `canManage`와 ADR 0021 조회 계층은 그대로 재사용한다. 설계 전용 — 코드도 마이그레이션도 없다. |
+| ~~게시판 도메인 — post 모듈~~ — ✅ 2026-07-31 완료 ([ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) | ADR 0023의 전반부. comment가 post에 의존하지 그 반대가 아니어서 분리했다: `PostModule`(`JwtAuthGuard` 뒤 5개 라우트), FK 2개와 `UQ_post_entity_fileId`를 가진 `post_entity`(검토된 마이그레이션 — generate가 뱉은 제약 이름 변경 4문장은 걷어냄), 신규 에러 코드 3개, `DELETE /file/:id`의 `23503` → 409 `FILE_IN_USE` 번역, 그리고 ADR 0020 계정 연쇄에 게시글 합류(감사 detail의 `posts=N`). ADR 0021 조회 계층과 `canManage`는 다시 만들지 않고 재사용했다. |
+| ~~게시판 도메인 — comment 모듈~~ — ✅ 2026-07-31 완료 ([ADR 0023](ADR/0023-board-domain-schema.ko.md) > 구현 노트) | ADR 0023의 후반부이며, 이로써 **Stage 3이 완결됐다**. `CommentModule`이 ADR의 네 라우트를 `JwtAuthGuard` 뒤에 컨트롤러 두 개로 나눠 제공한다(스레드는 글에 매달리고, 이미 존재하는 댓글은 자기 id로 지목된다). 그 아래 `comment_entity`는 이 스키마의 유일한 `ON DELETE CASCADE` FK와 `IDX_comment_entity_postId_createdAt`을 갖는다(검토된 마이그레이션 — generate가 뱉은 제약 이름 변경 6문장은 걷어냄). `COMMENT_NOT_FOUND`와 `COMMENT_DELETE` 감사 액션은 소비자와 함께 들어왔다. 댓글은 계정 연쇄에서 **게시글보다 먼저** 삭제된다 — 그 계정이 *남의* 글에 단 댓글은 게시글 FK 연쇄로 닿지 않기 때문이다. 완화하지 않고 그대로 지킨 결정 둘: 감사 detail에 `comments=N` 없음(연쇄분을 셀 수 없어 반쪽 집계는 총계처럼 읽힌다), 멱등 키 없음(재제출은 `fileId` 없는 글과 마찬가지로 두 번째 댓글이 된다). 게이트는 [ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)가 먼저 풀었다. |
+
+### Stage 4 — 실서비스 전환 — 마지막 작업 (의도적으로 번호 없음)
+
+배포는 전체 계획의 종착 행위다 — 나머지가 모두 만들어지고 운영 가능해진 뒤 수행하므로
+**실행 번호를 붙이지 않는다**; 여기에 번호를 붙이면 이 계획이 이미 정리한 Stage 4/Stage 5
+순서 혼동을 다시 부를 뿐이다. 배포 **직전** 작업은 프로덕션 DevOps 스택 도입
+(AWS · Docker · Kubernetes · Helm · GitHub Actions · Prometheus · Grafana · Terraform)이다.
+아래 행들은 각자의 내부 의존 순서를 유지하며, 배포 행은
+의도적으로 맨 마지막이다.
+
+| 작업 | 근거 / 의존성 |
+|---|---|
+| **프로덕션 DevOps 스택 도입 — 배포 직전 작업** | **이 스택을 도입하는 이유:** 업계에서 널리 쓰이는 표준 DevOps 툴체인으로, 이를 기반으로 실무와 유사한 개발·배포·운영 환경을 경험하고 향후 서비스 확장에도 대응하기 위함이다. 구성요소와 역할: **AWS**(클라우드 플랫폼 / 배포 대상), **Docker**(컨테이너화 — *이미 반영됨*, Stage 1, [ADR 0015](ADR/0015-docker-and-compose.ko.md)), **Kubernetes**(컨테이너 오케스트레이션), **Helm**(릴리스 패키징/템플릿), **GitHub Actions**(CI/CD — *이미 반영됨*, Stage 1, [ADR 0016](ADR/0016-github-actions-ci.ko.md)), **Prometheus**(메트릭 수집), **Grafana**(메트릭 대시보드), **Terraform**(코드형 인프라, IaC). **S3**(오브젝트 스토리지)는 이 작업이 실제로 전환하는 구체적 백엔드다 — 호스트 디스크에서 물리 파일 조작을 분리하는 `FileStorage` 포트-어댑터(4절) 자체는 이미 2026-08-07에 랜딩했으므로([ADR 0029](ADR/0029-storage-port-adapter.ko.md), `S3Storage` 구현 포함, 단위 테스트만 거침), 이 행에 남은 스토리지 작업은 추상화를 만드는 것이 아니라 실제 버킷을 대상으로 `STORAGE_DRIVER=s3`를 켜는 것이다. 이 작업은 또한 Stage 1 이미지가 미룬 컨테이너·배포 하드닝을 담는다([ADR 0015](ADR/0015-docker-and-compose.ko.md)에서 드러남) — ~~비루트 `USER`, 헬스/레디니스 엔드포인트, 별도 배포 단계로 분리한 마이그레이션~~ **2026-08-08 반영**([ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)–[ADR 0034](ADR/0034-https-termination-stance.ko.md)): 이미지는 이제 전용 non-root 사용자로 실행되며 새 `GET /health/live`/`GET /health/ready`를 호출하는 `HEALTHCHECK`를 갖는다(ADR 0030/0031); `docker-compose.yml`의 one-shot `migrate` 서비스가 향후 Kubernetes Job을 모델링해 스케일된 `api`가 `migration:run`을 경합하는 일이 구조적으로 없어졌다(ADR 0032); 시크릿 전달 목표(네이티브 Kubernetes `Secret`, AWS Secrets Manager는 Terraform으로 보류)와 HTTPS 종단 방침(ingress/ALB, 앱 안에서는 하지 않음)은 코드 없이 설계만 담은 ADR로 기록됐다(ADR 0033/0034). distroless 런타임 베이스와 타깃 아키텍처(ARM/Graviton) 빌드는 둘 다 2026-08-08(ADR 0030)에 검토됐고, bcrypt가 x64 전용이라는 전제로 일단 보류했다 — 그 전제는 나흘 뒤 정정됐다([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md), 2026-08-12): `bcrypt@6.0.0`은 QEMU 에뮬레이션 하에서 검증된, 실제로 동작하는 `linux-arm64` prebuild를 번들한다. 그래서 멀티아치(ARM/Graviton)는 **보류가 아니다** — CI는 2026-08-13부터 `main`에서 실제 `linux/amd64,linux/arm64` 이미지를 빌드·발행했고, `cluster/main.tf`의 `graviton`/`t4g.medium` 노드그룹은 Terraform이 반영된 2026-08-18부터 EKS 클러스터의 예비가 아닌 **주력** 용량이었으며, 2026-08-27 라이브 배포에서 앱 pod가 실제로 그 위에서 동작해 개발자가 영구 아키텍처로 확정했다. distroless만 계속 보류 대상이다 — 이유는 아래 미일정 항목 참고. 반영된 각 구성요소는 계획대로 자체 ADR을 갖는다; Stage 1의 Docker + CI에 의존. |
+| ~~파일 가시성·접근 제어 서빙~~ **(2026-08-01 구현, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D1/D2/D3/D6 + [ADR 0026](ADR/0026-file-visibility-implementation.ko.md); 기존 "VOD 재생 접근 제어" 행을 일반화)** | 업로드된 파일은 예전엔 단순 공개 URL이었다 — 링크만 알면 누구나 봤다. `FileEntity`는 이제 3-상태 `visibility`(공개/비공개/**링크공유**, 회전 가능한 공유 토큰 + 선택적 TTL)를 가지며, `GET /file/:id/content`가 유일한 접근 제어 읽기 경로(Range 지원)이고, `ServeStaticModule`은 더 이상 `file/upload`를 노출하지 않는다. [ADR 0005](ADR/0005-local-disk-storage.ko.md)(서빙)를 부분 개정한다. 새 `fileUrl`/`visibility` 형태에 대한 프론트엔드 반영은 2026-08-03에 착지했다 — 아래 미배정 참고. |
+| ~~미디어 타입 확장 (이미지/오디오, 타입별 업로드 필드)~~ **(2026-08-01 구현, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md) D4/D5 + [ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md) — 2026-08-01에 위 행에서 분리)** | `POST /upload/attach`는 이제 `image`(jpg/jpeg/png/webp), `audio`(mp3), `video`(mp4/mov/webm, 변경 없음) 세 타입별 필드를 받으며 각각 자신만의 허용 목록을 가진다 — 단일 `video` 필드를 대체했다. [ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)/[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)(업로드 필드, 살아 있는 프론트엔드에 대한 breaking 변경)을 개정한다. 스키마 변경은 없다. 새 업로드 필드에 대한 프론트엔드 반영은 2026-08-03에 착지했다 — 아래 미배정 참고. |
+| ~~성능/용량 기준 적용~~ — ✅ 2026-08-31 랜딩 ([ADR 0049](ADR/0049-performance-capacity-criteria.ko.md)) | 엔드포인트 유형별 응답시간 목표(p50/p95) 확정; ADR 0021이 유예해 둔 `file_entity` 인덱스 3종을 1만 행 시드로 측정한 뒤 `file_entity`와 `post_entity` **양쪽 모두**에 채택(EXPLAIN 결과 이 테이블 실제 쿼리 모양에서 최대 70배 — 이 인덱스가 없어도 모든 엔드포인트가 이미 새 목표를 통과했으므로, 급하게 필요해서가 아니라 저렴하고 실측된 이득이라 채택). 디스크 상한: 절대치가 아니라 이미 배포된 `node-exporter`(ADR 0047)를 통한 사용률 모니터링 — 측정 결과 중 절대 상한을 요구하는 근거는 없었다. 새 `perf/` 도구(`autocannon` + 원시 `EXPLAIN`)는 이 기준선을 나중에 재측정할 때 재사용 가능하다. |
+| **배포 — 마지막 작업** (의도적으로 실행 번호 없음) | AWS, 컨테이너 기반, 위에서 도입한 DevOps 스택(Kubernetes · Helm · Terraform · Prometheus/Grafana · S3) 위에. "N번째 단계"가 아니라 위의 모든 것이 만들어지고 운영 가능해진 뒤 수행하는 전체 계획의 종착 행위이므로 번호를 붙이지 않는다. 신규 배포 ADR; DevOps 스택 도입 행 + Stage 1의 Docker + CI에 의존. (기존 독립 "스토리지 포트-어댑터" 행은 이 행보다 먼저, 2026-08-07에 별도로 랜딩했다 — [ADR 0029](ADR/0029-storage-port-adapter.ko.md) — 그래서 이 행이 물려받는 것은 추상화 자체가 아니라 S3 전환뿐이다.) |
+
+#### 프로덕션 DevOps 스택 — 구성요소 상태
+
+위 "프로덕션 DevOps 스택 도입" 단일 행을 여기서 구성요소별로 펼쳐, 각 상태를 산문에 묻지
+않고 한눈에 볼 수 있게 한다(2026-08-18 기준). 범례: ✅ 완료 · 🔶 부분 완료 · 📝 설계만(ADR) ·
+🆕 미착수.
+
+| 구성요소 | 역할 | 상태 | 완료/잔여 | ADR / 출처 |
+|---|---|---|---|---|
+| **Docker** | 컨테이너화 | ✅ + 하드닝, 멀티아치 완료 | 멀티스테이지 이미지(Stage 1); 이제 전용 **비루트** 사용자로 실행 + `HEALTHCHECK`. **멀티아치(ARM/Graviton)는 완료돼 라이브로 검증됨** — 유예가 아니다: bcrypt "x64 전용" 전제는 2026-08-12 정정됐고([0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md)), CI는 `main`에서 실제 `linux/amd64,linux/arm64` 이미지를 발행하며, graviton 노드그룹이 2026-08-27 실서비스를 운영했다. **distroless** 베이스는 검토 후 계속 **유예**(감수 — 검증된 Node 24 distroless 태그도 없고, 대체 디버그 수단 없이 유일한 디버그 경로(`docker exec`)를 잃는다). | [0015](ADR/0015-docker-and-compose.ko.md), [0030](ADR/0030-container-non-root-and-arch-stance.ko.md), [0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md) |
+| **GitHub Actions** | CI(/CD) | 🔶 CI + 이미지 게시 | push/PR에서 `lint`+unit+e2e 워크플로 — 이제 `frontend-e2e`/`admin-e2e`와 `frontend/`/`admin/`의 lint/unit 잡도 포함(둘 다 이전엔 CI에서 검증되지 않았다). **AWS로의 배포 파이프라인(CD)은 여전히 없음** — AWS가 대상이 될 때 추가. **예외, 2026-08-13 기록**: 명시적 요청으로 `docker-publish` 잡이 추가됐다 — main 푸시마다 `linux/amd64,linux/arm64`를 buildx로 빌드해 `bluecode1775/sharenpo`를 Docker Hub에 푸시한다. 이것은 이미지 게시 CD이지 앱 배포가 아니며, 해당 커밋(`1b72ec9`) 자체가 이 행이 정한 계획(AWS가 대상이 될 때만 CD)을 대체하는 게 아니라 그보다 앞서 진행하는 것이라고 명시하고 있다. | [0016](ADR/0016-github-actions-ci.ko.md) |
+| **S3** | 오브젝트 스토리지 | 🔶 어댑터 ✅ / 리다이렉트 ✅ / 버킷 코드 ✅ / 전환 ✅ 현재 가동 중, Range 동작은 여전히 미검증 | `FileStorage` 포트 + `S3Storage` 구현 랜딩(단위테스트만). 프록시 스트리밍 경로가 앱 계층에 대역폭 부담을 지우고 있어, `STORAGE_DRIVER=s3`에서는 `GET /file/:id/content`가 이제 수명이 짧은 presigned S3 URL로 `302` 리다이렉트한다(세 가시성 등급 전부, 기존 `resolveContentAccess` 검사로 게이트) — `local`은 기존 스트리밍 그대로. Terraform([0043](ADR/0043-terraform-project-adaptation.ko.md) D8, 2026-08-18)이 private 버킷 + 앱 전용 IRSA 역할을 프로비저닝한다. 실제 Helm 릴리스가 `STORAGE_DRIVER=s3`와 앱의 IRSA 역할이 연결된 채로 동작했었고(2026-08-27, §9) 전환도 켜져 있었지만, 검증이 끝난 뒤 2026-08-28에 버킷과 클러스터가 destroy됐다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 2026-08-29/30에 재적용** — `values-prod.yaml`은 여전히 `STORAGE_DRIVER=s3`를 담고 있다. 실제 버킷을 상대로 한 업로드/읽기 왕복과 `frontend`/`admin` 미디어 플레이어의 리다이렉트-경유 Range 요청 동작은 여전히 미검증이다 — 이번 세션의 확인은 메트릭 경로만 다뤘다. | [0029](ADR/0029-storage-port-adapter.ko.md), [0036](ADR/0036-s3-presigned-content-redirect.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md) |
+| **헬스/레디니스** | 프로브 | ✅ | LB·오케스트레이터 프로브용 `GET /health/live` + `GET /health/ready`. | [0031](ADR/0031-health-and-readiness-endpoints.ko.md) |
+| **마이그레이션 분리 단계** | 배포 안전 | 🔶 compose ✅ / K8s Job 🆕 | `docker-compose.yml`의 원샷 `migrate` 서비스가 향후 **Kubernetes Job**을 모델링 — 스케일된 `api`가 `migration:run`을 경합하지 않도록. K8s Job 자체는 예정. | [0032](ADR/0032-migration-as-separate-deploy-step.ko.md) |
+| **Kubernetes** | 오케스트레이션 | ✅ 현재 배포됨 | 예전 `k8s/pod/`, `k8s/deployment/`, `k8s/cluster/` 아래 있던 독립 정적 매니페스트는 2026-08-17 삭제됐다([0042](ADR/0042-k8s-helm-directory-consolidation.ko.md)) — 아래 Helm 차트가 이미 렌더링하는 것의 엄격한 부분집합을 중복했을 뿐, 소비하는 곳도 없었다(CI 잡도, compose 참조도 없음). Kubernetes 매니페스트는 이제 Helm 차트의 `templates/`(`k8s/helm/`)로만 존재한다. 실제 클러스터 배포(AWS)가 2026-08-27 반영됐고(§9), 검증이 끝난 2026-08-28에 밑단 클러스터를 destroy했다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 2026-08-29/30에 재적용** — 이 수정 시점 기준 `kubectl get nodes`가 `Ready` 노드 2개를 보여준다. `bash k8s/infra/terraform/deploy.sh all`로 재현 가능하며, 믿기 전에 `kubectl get nodes`로 재확인할 것 — 이 칸도 스냅샷이다. | 커밋 `48a89f2`, [0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0042](ADR/0042-k8s-helm-directory-consolidation.ko.md) |
+| **시크릿 전달** | 시크릿 | ✅ 코드 + 현재 가동 중 | 대상 결정: 네이티브 **Kubernetes `Secret`**, External Secrets Operator가 IRSA를 통해 **AWS Secrets Manager**에서 동기화. Helm 차트는 소비 측을 구현한다(`existingSecret` 참조 + `envFrom.secretRef`, 2026-08-17); Terraform 측([0043](ADR/0043-terraform-project-adaptation.ko.md) D7, 2026-08-18)은 Secrets Manager 항목과 ESO 설치+IRSA 역할(`eks_blueprints_addons`의 `enable_external_secrets`)을 프로비저닝한다. 2026-08-27 라이브로 정상 동작 확인했고, 2026-08-28에 나머지 스택과 함께 destroy됐다(§9). **2026-08-29/30에 재적용**: `external-secrets` Helm 릴리스가 `deployed`로 확인됐고(`helm list -A`), 이 수정 시점 기준 앱 파드가 RDS 인증·토큰 서명을 정상 수행 중이다 — 메커니즘이 한 번 검증된 게 아니라 다시 상시 가동 중이다. | [0033](ADR/0033-secrets-delivery-target.ko.md), [0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md) |
+| **HTTPS 종단** | TLS | 🔶 코드 준비됨, 의도적으로 비활성 | **ingress / ALB**에서 종단, 인프로세스 금지(`ENV=prod`에서 `Secure` refresh 쿠키에 필요하며, 실제 릴리스는 이미 `ENV=prod`로 동작했다 — `values.yaml` 기본값). Helm 차트의 `Ingress` 템플릿은 존재하지만 기본값은 여전히 비활성(`ingress.enabled: false`); 스택이 살아있던 동안엔 클러스터·등록된 도메인·인증서가 모두 실제로 존재했으므로(다음 문장 참고), 그 공백은 누락된 의존성이 아니라 개발자의 의도적 선택이었다 — 개발자는 2026-08-27(§9) 외부 테스터가 실제로 필요해지기 전까지 `Ingress`를 켜지 않기로 확정했다. 인증서 메커니즘은 결정되고 코드로도 있다: **ACM**, Terraform이 프로비저닝한 Route53 영역을 대상으로 DNS 검증([0043](ADR/0043-terraform-project-adaptation.ko.md) D4/D5, 2026-08-18), `sharenpo.cloud` 대상 — 인증서까지 포함한 스택 전체가 2026-08-28에 destroy되기(§9) 전에 `ISSUED` 상태까지 도달했다. ARN 패턴은 나중에 새 인증서가 발급되면 Ingress의 `certificate-arn` 주석에 바로 쓸 수 있게 준비돼 있다. | [0034](ADR/0034-https-termination-stance.ko.md), [0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md) |
+| **Helm** | 릴리스 패키징 | ✅ 차트 준비됨 / ✅ 릴리스 가동 중 | `k8s/helm/`에 위치(2026-08-17 형제 디렉터리였던 `helm/upload-board-project/`에서 이동 후 한 단계 더 평탄화, [0042](ADR/0042-k8s-helm-directory-consolidation.ko.md) — Kubernetes 관련 콘텐츠가 최상위에 하나만, 불필요한 중첩 없이 남도록). 2026-08-17 프로젝트 전용으로 적응([0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0037](ADR/0037-helm-chart-scaffold.ko.md)의 유예 해제): 실제 이미지/포트, `/health/live`+`/health/ready` probe, non-root `securityContext`, `ConfigMap`, `existingSecret` 전용 `Secret` 소비, `docker-compose.yml`의 `migrate` 서비스를 본뜬 migration `Job`, 기본 비활성 `Ingress`. `replicaCount` 기본값은 1(`STORAGE_DRIVER=local`에서 1보다 크면 replica 간 업로드 파일이 사라짐 — 실제 릴리스가 정확히 이 이유로 `s3`를 썼다). 임시 로컬 `kind` 클러스터에 대해 `helm install --wait` 검증 완료(2026-08-17, [0041](ADR/0041-helm-chart-project-adaptation.ko.md)의 추가 기록) — 실제 버그 2개(hook 순서, 빈 문자열 env var) 발견해 수정. 2026-08-27 실제 대상 클러스터에 설치 완료했다가 2026-08-28에 나머지 스택과 함께 제거됐다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md)의 `ServiceMonitor` 템플릿을 위해 차트를 `0.3.0`으로 올리고 2026-08-29/30에 재적용** — 이 수정 시점 기준 `helm list -A`가 `upload-board` 릴리스를 `deployed`로 보여준다. `bash k8s/infra/terraform/deploy.sh all`로 재현 가능. | [0037](ADR/0037-helm-chart-scaffold.ko.md), [0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0042](ADR/0042-k8s-helm-directory-consolidation.ko.md) |
+| **Prometheus** | 메트릭 수집 | ✅ 랜딩, 라이브 검증 완료 | [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md): `eks_blueprints_addons`의 `enable_kube_prometheus_stack` 플래그(kube-prometheus-stack 차트)를 통한 자체호스팅, 새 `prom-client` 기반 `/metrics` 엔드포인트(`MetricsModule`)를 `ServiceMonitor`로 스크레이프. 2026-08-29/30 라이브 검증 완료(ADR 0047 D4 Addendum): `up{job="upload-board"}` → `1`, 커스텀 카운터(`upload_claims_total`, `temp_cleanup_deleted_total`)와 전역 `http_request_duration_seconds` 히스토그램 모두 쿼리 결과에 존재. | [0047](ADR/0047-observability-prometheus-grafana.ko.md), [0017](ADR/0017-logging-conventions.ko.md) 위 |
+| **Grafana** | 대시보드 | ✅ 랜딩, 라이브 검증 완료 | [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md): Prometheus와 같은 `kube-prometheus-stack` Helm 릴리스에 함께 묶임(D3 — 결정 단위 하나, Helm 릴리스 하나). 아직 커스텀 대시보드는 없다 — `kube-prometheus-stack` 기본 대시보드를 그대로 사용. 2026-08-29/30 라이브 검증 완료: `GET /api/datasources`가 정상 동작하는 `Prometheus` 데이터소스를 보여준다 — 차트가 별도 수동 설정 없이 자동 프로비저닝했다. | [0047](ADR/0047-observability-prometheus-grafana.ko.md) |
+| **Terraform** | 코드형 인프라 | ✅ 적용됨, 현재 라이브 | 프로젝트 전용 설계 확정([0043](ADR/0043-terraform-project-adaptation.ko.md), [0038](ADR/0038-terraform-iac-scaffold.ko.md)의 유예 해제) 및 2026-08-18 구현: 이 프로젝트 고유의 EKS(이기종 노드 그룹 2개), RDS PostgreSQL, S3 버킷 + 앱 IRSA 역할, Secrets Manager + External Secrets Operator, Route53/ACM 기반 ALB ingress 경로를 프로비저닝한다 — Istio 예제는 주석 처리가 아니라 완전히 사라졌다. 2026-08-20에 그 단일 루트 모듈을 독립적으로 apply 가능한 세 state로 재구성([0044](ADR/0044-terraform-three-state-split.ko.md)): `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM, `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) 기준 ALB Controller+ESO+kube-prometheus-stack, 다른 둘을 모두 읽는 유일한 state) — 퇴역한 단일 `main.tf`는 더 이상 존재하지 않는다. 세 디렉터리 모두 `terraform validate`/`fmt -check` 통과. 2026-08-25~27에 실제 AWS 계정에 apply됐고, 2026-08-28에 배포가 end-to-end로 검증된 후 과금을 멈추려고 전부 destroy됐다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 2026-08-29/30에 재적용** — 이 수정 시점 기준 세 디렉터리 모두에서 `terraform output`이 실제 값을 반환한다(`cluster`의 EKS 엔드포인트, `app-infra`의 ACM 인증서 ARN, `addons`의 `terraform state list`에 잡히는 `kube_prometheus_stack` Helm 릴리스). 믿기 전에 `terraform plan`/`terraform output`으로 재확인할 것 — 이 칸은 여전히 스냅샷일 뿐 실시간 상태가 아니고, 검증이 끝나면 개발자가 과금을 멈추려 다시 destroy할 수도 있다. | [0038](ADR/0038-terraform-iac-scaffold.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md), [0044](ADR/0044-terraform-three-state-split.ko.md), [0047](ADR/0047-observability-prometheus-grafana.ko.md) |
+| **AWS** | 클라우드 / 배포 대상 | ✅ 검증됨, 현재 가동 중 | 위 행들이 향하는 컨테이너 배포 대상 — 2026-08-25~27에 end-to-end로 검증됨: 계정 `074416822640`(`sharenpo-user`, 2026-08-27부로 Paid Plan), 리전 `ap-northeast-2`, 실제 EKS + RDS + S3 + Route53/ACM, 그리고 앱 자체가 배포되어 동작함(§9, 2026-08-27). 검증이 끝난 뒤 2026-08-28에 과금을 멈추려고 전부 destroy됐다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 `deploy.sh all`로 2026-08-29/30에 재적용** — 이 수정 시점 기준 다시 살아있다. 검증이 끝나면 개발자가 과금을 멈추려 다시 destroy할 것으로 예상. | 배포 ADR(예정), [0047](ADR/0047-observability-prometheus-grafana.ko.md) |
+
+### Stage 5 — 운영 화면 (admin 콘솔) — 2026-07-30 추가
+
+**기존 단계의 한 행이 아니라 새 단계로 만든 이유.** admin 콘솔은 게시판 도메인(Stage 3)도,
+인프라(Stage 4)도 아니다. 그리고 지금까지 **어느 단계도 이것을 맡지 않았다** —
+[ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)이 2026-07-23에 admin의
+*배치*는 결정했지만 작업을 스케줄한 적은 없어서, 다른 모든 결정 항목이 행을 가진 동안 이것만
+계획 밖에 있었다. 단계를 추가해 그 공백을 닫는다. 계기가 된 이식은
+[ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)다.
+
+**여기서 번호는 의존 순서가 아니다** — 이 절의 규칙에 대한 유일한 예외다. Stage 5는 Stage 4에
+의존하지 **않는다**. 확실한 선행 조건은 Stage 0(RBAC, 2026-07-25 완결)과 아래 첫 행의 역할 전달
+결정뿐이다. Stage 4보다 먼저, 나중에, 또는 병행해서 진행할 수 있다. 마지막 번호인 것은 마지막에
+추가됐기 때문이며, 마지막에 해야 하기 때문이 아니다. 오히려 Stage 4보다 **앞으로 당길** 근거도
+있다: 권한 계층을 Swagger로만 운영할 수 있는 시스템은 배포된 뒤에 운영하기가 어렵다.
+
+**2026-07-31 확정 — Stage 5를 Stage 4보다 먼저 진행한다**(위 실행 순번 참조). 그 "앞으로
+당길 근거"가 채택됐다: 운영 화면을 배포보다 앞세운다. Stage 5 내부 순서는 역할 전달 →
+콘솔 적응 → 모더레이션 결정 → 중복 화면 정리이며, `GET /user` 페이지네이션 행은 조기
+빠른수정으로 실행 #2에 빼냈다 — **2026-08-05 완료**, 아래 행 참조. **Stage 5는 이제
+2026-08-06에 완료됐다** — 아래 네 행 모두 끝났고, 남은 작업은 Stage 4(인프라 도입 후 배포)다.
+
+| 작업 | 근거 / 의존성 |
+|---|---|
+| ~~**클라이언트가 사용자 역할을 어떻게 아는가**~~ (백엔드 결정 — **2026-08-05 완료**, [ADR 0028](ADR/0028-access-token-role-claim.ko.md)) | 요청 기반 조회(`GET /user/:id` 또는 신규 `GET /auth/me`) 대신 액세스 토큰 `role` 클레임을 선택 — 프론트엔드가 이미 쓰는 클라이언트 측 JWT 디코드 패턴과 일치하고(추가 왕복 없음), 유일한 실질 비용 — 강등된 사용자의 *디코드된* role이 액세스 토큰 TTL만큼 지연될 수 있다는 점 — 은 실제 권한으로 이어지지 않는다. `RolesGuard`/`AuthUser`는 여전히 `JwtStrategy.validate`의 매 요청 DB 조회에서 role을 얻지, 토큰에서 얻지 않기 때문이다. `Payload`는 `role?: UserRole`을 얻고(액세스 토큰만); `issueToken`/`issueTokenPair`는 `Pick<UserEntity, 'id' \| 'role'>`로 넓어졌다. [ADR 0002](ADR/0002-dual-secret-token-pair.ko.md)를 개정한다. **아래 행의 걸림돌을 해소한다.** |
+| ~~이식된 `admin/` 콘솔 적응~~ (**2026-08-06 완료**) | [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의 이식본을 Chat Project API에서 이 API로 다시 썼다. 그 ADR의 검증된 백로그를 작업 지시서로 삼았다. 역할 관리 조각을 착륙시켰다: 문자열 `UserRole`(기존 숫자였음), 액세스 토큰 클레임에서 역할을 읽음(ADR 0028), 3단계 역할 `<select>`(기존 이진 토글이었음 — 토글을 유지하는 대신 이 선택을 한 이유는 ADR 0022 자체가 명시한 목적대로 콘솔이 3단계를 모두 조작할 수 있게 하기 위해서다), `{ code, message }` 분기로 처리되는 `AUTH_LAST_SUPERADMIN`/`USER_HAS_FILES`/`FORBIDDEN`(ADR 0011), `GetUsersDto`/`AuditLogQueryDto`와 정확히 일치하는 `take`/`skip` + `[data, total]` 튜플 읽기(당시엔 검색/정렬/상태/userId/내보내기가 서버 쪽에 없어서 전부 없앴다). 채팅 도메인 페이지(`rooms-page`, 접속/닉네임 위젯)와 Apollo/`/graphql` 계층 전체는 재작성이 아니라 삭제했다. 사용자별 감사 로그 패널은 근사하지 않고 제거했다(`GET /audit-log`에 `userId` 필터가 없다 — 7절 후속 항목 참조). 백엔드 파일은 건드리지 않았다. 결함별 전체 대응표: `admin/README.md` > "무엇을 적응시켰는가". **2026-08-12 확장**: 7절의 두 후속 항목이 해소되면서 검색창, 정렬 가능한 헤더, 복원된 사용자별 "Recent activity" 패널, `logs-page.tsx`의 `?userId=` 필터링, 클라이언트 합성 CSV 내보내기가 추가됐다. `status` 필터와 실제 `/audit-log/export` 엔드포인트는 여전히 서버에 없어 범위 밖이다. **2026-08-25 확장**(커밋 `d38d9dc`): [ADR 0045](ADR/0045-audit-log-target-type.ko.md)가 모든 감사 기록에 `targetType` 판별자를 실어 보내게 되면서, `src/lib/audit.ts`는 클라이언트 쪽 action → 대상 종류 매핑을 버리고 서버 필드를 읽는다. "Recent activity" 패널도 대상을 이름으로 표시하기 시작했고, CSV 내보내기에 `targetType` 열이 추가됐다 — ADR 0045가 선택적 정리로 남겨 둔 항목이 닫혔다 |
+| ~~`GET /user` 페이지네이션~~ **(실행 #2 — Stage 5에서 앞당김, 2026-08-05 완료)** | 상시 위반 상태였던 Never Do Group 2 문제를 해소했다(`findAll()`이 `@Query()` 없이 전체 사용자 `findAndCount()`를 반환하던 상태). 새 `GetUsersDto`(`take`/`skip`, `GetFilesDto` 미러); `UserService.findAll`은 `createdAt DESC, id DESC`로 정렬해 페이지 경계를 결정적으로 만든다; 응답은 기존 `[rows, total]` 튜플 형태 유지(`GET /file`과 일치, 별도 ADR 불필요). 검색/정렬은 이번 범위에서 제외했고, 위 콘솔 적응에서도 필요하지 않았다 — 7절 후속 항목은 2026-08-12에 해소될 때까지 열린 채로 남아 있었다(7절 참고). |
+| ~~중복된 admin 화면 정리~~ (**2026-08-06 완료**) | 위 적응 작업이 어느 쪽이 살아남을지 답했다: 이식본은 "대부분 삭제 가능"한 게 아니었다(삭제 가능했던 건 채팅 도메인 잔재뿐) — 그래서 `admin/`이 유일한 admin 화면이다. `frontend/src/features/admin/AdminPage.tsx`(ADR 0010의 라우트 구역, 여전히 17줄짜리 no-op)와 `frontend/src/App.tsx`의 `/admin` 라우트+import를 삭제했다. [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)을 한 번 더 개정한다 — admin은 이제 `frontend/` 안의 라우트 구역조차 아니다. [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의 2026-08-06 추가 기록에 남겼다; 7절의 미결 사항도 닫혔다. |
+| ~~모더레이션 기능을 둘 것인지 결정~~ (**"두지 않는다"로 결론, 2026-08-06, 위 콘솔 적응의 일부**) | 이식본은 `POST /user/:id/ban`, `/unban`, `/force-logout`을 호출했고, 이 프로젝트가 **절대 기록하지 않는** 감사 액션(`USER_BANNED`, `USER_MUTED`, `USER_UNBAN`, `FORCE_LOGOUT`)에 색을 지정했다 — `AUDIT_ACTIONS`는 정확히 `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`, `POST_DELETE`, `COMMENT_DELETE`다. 기본 답을 택했다: 영상 업로드 게시판에 명시된 모더레이션 요구사항이 없으므로(YAGNI) 세 액션과 존재하지 않는 감사 색 4개를 `admin/`에서 삭제했다. 그중 하나도 백엔드에 만들지 않았다 — 그것은 자체 ADR이 필요한 신규 범위이며, UI 적응의 부수 효과가 아니다. |
+
+## 7. 미일정 / 미결 사항
+
+- ~~**`image.tag: "latest"` 기본값이 조용히 옛날 코드를 배포함**~~ — **(b)안으로
+  2026-08-30 해결**: `.github/workflows/ci.yml`의 `docker-publish` 잡이 이제
+  `dev` push에도 반응한다(기존엔 `main` 전용) — 실제로 개발이 이뤄지는 브랜치가
+  드문 `main` 병합 때만이 아니라 매 push마다 이미지를 빌드받게 됐다. 태깅은
+  브랜치별로 다르게 처리한다: `main`은 기존 `linux/amd64,linux/arm64` 멀티아치
+  빌드에 `:latest` + `:<sha>`를 그대로 유지하고, `dev`는 `linux/amd64` 단일
+  아키텍처 빌드에 `:<sha>`만 받는다(`:latest`는 절대 안 건드림) — dev는 훨씬
+  자주 발행되고 `:latest`에 의존하는 소비자가 없으므로, QEMU 비용을 절반으로
+  줄이는 대가로 잃는 게 (아래에서 보듯 이미 미미한) arm64 빌드 실패 조기 발견
+  신호뿐이라고 판단했다. 연속 push 시 낡은 실행이 끝까지 도는 낭비를 막기 위해
+  워크플로 레벨 `concurrency`(`cancel-in-progress: true`)도 같이 추가했다.
+  실제 push보다 앞서 스모크 테스트 스텝도 새로 추가했다: 방금 빌드한 amd64
+  이미지를 로컬로 올려(`--load`, GHA 캐시로 이후 push 빌드가 컴파일 비용을
+  다시 치르지 않게 함) 일회용 `postgres:16` 서비스와 함께 `--network host`로
+  기동시키고, 아무것도 push하기 전에 Dockerfile 자체의 `HEALTHCHECK`
+  (`GET /health/live`)가 healthy가 될 때까지 확인한다 — 이건 정말 새로 생긴
+  검증이다, `main`이든 `dev`든 지금까지 런타임 검증이 존재한 적이 없었기
+  때문("빌드가 끝났다"만 확인됐음). arm64는 여전히 런타임 검증이 안 된다
+  (QEMU 에뮬레이션 위에서 컨테이너를 실제로 실행하는 건 비현실적) — 그래서
+  dev의 arm64 빌드를 뺀다고 잃는 건 애초에 존재한 적 없는 런타임 신호가
+  아니라 *빌드* 실패 조기 발견 신호뿐이다.
+  **2026-08-30 라이브 검증 완료**: `dev`가 이 경로를 실제로 실행한 적이
+  없었던 탓에, 무관한 기존 결함 두 개가 검증 도중 드러나 함께 고쳐졌다 —
+  `test/app.e2e-spec.ts`의 `seedFile` 헬퍼가 [ADR
+  0040](ADR/0040-persisted-media-type-for-playback.ko.md)의 `NOT NULL
+  mediaType` 컬럼 추가 이전 코드 그대로라 그 값 없이 insert하고 있었고(테스트
+  18개 실패); GitHub Actions가 `node20` 대상 액션을 `node24` 런타임으로
+  강제 실행시키기 시작하면서 `docker/login-action@v3`(`node20` 런타임 액션)가
+  "malformed HTTP Authorization header"로 즉시 실패하기 시작했다 — Docker Hub
+  자격증명 자체 문제가 아니었고(자격증명을 두 번 교체해도 동일한 실패가
+  반복됨) Node 버전 자체도 원인이 아니었다(네이티브 `node24` 빌드인 `v4`로
+  올려도 동일한 실패가 반복됨) — 실제 원인은 웹 UI로 붙여넣는 과정에서
+  `DOCKER_USERNAME`/`DOCKER_PASSWORD` 시크릿 값 자체에 섞여 들어간 이물
+  문자였다. `v3`→`v4` 버전 업 자체는 애초에 진단하려던 Node 런타임 불일치의
+  올바른 수정이므로 그대로 유지했다(두 버전 간 입력값이 바이트 단위로
+  동일함을 확인). 두 수정 이후 실제 `dev` push로 엔드투엔드 확인: 6개 검증
+  잡 전부 통과, `docker-publish`가 로그인 성공 → 스모크 테스트 컨테이너
+  healthy 확인 → push까지 완료 — `bluecode1775/sharenpo:<sha>`가 Docker
+  Hub에 **단일 아키텍처(`amd64`) 이미지**로 올라갔고, `:latest` 태그는
+  전혀 건드리지 않았다(애초에 Docker Hub에 `:latest` 태그가 존재하지
+  않는다 — 지금까지 모든 이미지가 수동 push였다는 뜻이고, `docker-publish`가
+  이번이 처음으로 성공적인 push에 도달했다는 것과 일치한다).
+  (a)안(`values.yaml`의 `image.tag` 기본값 제거)과 (c)안(`dev`를 주기적으로
+  `main`에 병합)은 진행하지 않았다 — 이 항목이 존재하는 이유인 "`dev`에서는
+  이미지가 전혀 빌드되지 않는다"는 격차는 (b)만으로 닫힌다; 원래 글의 두
+  안에 대한 언급은 아직 열려 있는 후속 과제가 아니라 맥락 기록으로 남겨둔다.
+- ~~**`image.tag: "latest"` 기본값이 조용히 옛날 코드를 배포함**~~ (2026-08-28 발견, 예전
+  배포 단계를 손으로 재현하다가 확인) — `k8s/helm/values.yaml`의 `image.tag` 기본값은
+  `"latest"`인데, `.github/workflows/ci.yml`의 `docker-publish` 잡은 `main` push에만
+  반응해 그 태그를 다시 빌드한다. 이 프로젝트의 실제 작업은 전부 `dev`에서 이뤄지고
+  `main`으로 병합된 적이 없다. 실제로 재현됨: `-f values-prod.yaml` 없이, `image.tag`
+  명시도 없이 예전 최초 `helm install` 명령을 그대로 다시 실행했더니
+  `bluecode1775/sharenpo:latest`를 받아왔는데, 이건 `DB_SSL` 수정(커밋 `cf0cbfe`)이
+  있기 전에 빌드된 이미지였다 — Helm 값에는 `DB_SSL: true`가 정확히 들어가 있었는데도.
+  이때 발생하는 실패는 적극적으로 헷갈린다: `helm get values`는 설정이 맞다고 보여주는데
+  마이그레이션 Job은 여전히 수정 전의 `no pg_hba.conf entry ... no encryption` 에러로
+  실패한다 — 그 값을 제어해야 할 코드 자체가 실행 중인 이미지엔 없기 때문인데, "이미지가
+  낡았다"는 걸 가리키는 신호가 아무 데도 없다. `k8s/helm/values-prod.yaml`(2026-08-27
+  첫 실배포의 후속으로 추가, 별도 ADR 없음)은 이미 `image.tag: ssl-fix`를 고정해둬서
+  이 문제에 안 걸린다 — 이 문제는 그걸 건너뛴 맨 `helm install`/`upgrade`에서만
+  터진다. 정확히 `k8s/helm/README.md`의 일반 안내를 따르거나, 예전 단계를 손으로
+  재현할 때 쓰게 되는 명령 형태다.
+  그럴듯한 해법이 세 가지 있었고, 그 트레이드오프는 개발자가 직접 골라야지
+  일방적으로 정할 사안이 아니었다: (a) `values.yaml`의 `image.tag` 기본값을 아예 없애서,
+  맨 `helm install`이 낡은 태그로 조용히 풀리는 대신 필수값 누락으로 바로 실패하게 함;
+  (b) `docker-publish`의 트리거(또는 별도 잡)를 `dev` push에도 반응하게 바꿔서
+  `:latest`가 실제로 이 프로젝트가 개발하는 브랜치를 따라가게 함; (c) `dev`를 `main`에
+  주기적으로 병합해서 `:latest`의 기존 `main` 전용 트리거 자체가 더 이상 어긋나지 않게 함.
+  **2026-08-29/30에 재발** — [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md)
+  D4의 라이브 검증 중, 처음 기록할 때는 다루지 않았던 변형으로 다시 터졌다:
+  `values-prod.yaml`의 *고정* 태그(당시 `ssl-fix`, 이 시점엔 `db-ssl-ca`)조차 낡은
+  상태였다 — `MetricsModule`이 `dev`(`f17cc9e`)에 랜딩됐지만 어떤 푸시된 이미지에도
+  빌드된 적이 없어서, 완전히 재배포한 뒤에도 살아있는 pod가 `/metrics`에 계속 404를
+  냈다. 이는 근본 원인이 "맨 install에서 `latest` 기본값이 낡은 이미지로 풀린다"보다
+  더 넓다는 것을 보여준다 — `dev`가 움직여도 고정 태그든 기본 태그든 그 무엇도 스스로
+  갱신되지 않는다, `docker-publish`가 애초에 `dev`에서는 전혀 빌드하지 않기 때문이다.
+  ADR 0047 자체의 검증을 막힌 데서 풀기 위해서는 `build-and-push.sh` 방식의 1회성
+  수동 빌드+푸시 + `values-prod.yaml` 태그 갱신이면 충분했다 — 이 항목 자체를 고치는
+  건 그 시점엔 의도적으로 하지 않았다.
+  **2026-09-03 해결** — (a)/(b)/(c) 어느 것도 다루지 않았던 네 번째 방안으로 마무리됨:
+  `deploy.sh`의 `deploy_helm()`이 이제 `values-prod.yaml`에 고정된 값을 그대로 믿는
+  대신, 배포 시점마다 태그를 직접 조회한다. `IMAGE_TAG`를 안 주면(기본값) `origin/dev`를
+  fetch해 그 HEAD sha를 얻고, Docker Hub의 공개 Hub API
+  (`GET /v2/repositories/bluecode1775/sharenpo/tags/<sha>/`, 인증 불필요 —
+  `docker-tag-cleanup.yml`이 이미 쓰는 것과 같은 엔드포인트 형태)로 `200`이 오는지
+  확인한 뒤 진행한다. `404`면 낡은 태그로 조용히 진행하는 대신 명확한 에러로
+  중단한다. 실제 저장소로 라이브 검증함: `origin/dev`의 HEAD(`38b370f...`, 이번 세션
+  작업이 아직 push 안 돼 로컬 `dev`보다 28커밋 뒤처진 지점)가 `200`으로 확인됐고,
+  이는 Docker Hub 태그 목록 조회 결과가 보여준 유일한 태그와 정확히 일치했다.
+  (a)와 (c)는 선택되지 않고 제외됨: (a)는 맨 `helm install`을 시끄럽게 실패시킬 뿐 실제 배포를
+  최신으로 유지해주진 못하고, (c)는 개발자가 명시적으로 원하지 않는 브랜치 정책
+  변경이다 — `dev`를 `main`에 늦게 병합하는 건 실수가 아니라 의도된 선택이기
+  때문이다. (b)는 별도로 이미 랜딩된 채 그대로 유지되고, 이 항목의 수정이 (b)가
+  남겨둔 틈을 마저 메운다. 이 설계는 [ADR 0046](ADR/0046-deploy-sequence-automation.ko.md)의
+  사람/기계 역할 분리를 그대로 따른다 — 기계는 지금 뭐가 존재하는지 "조회"만 하고,
+  모든 `helm upgrade`는 기존 `y`/N 게이트로 여전히 사람이 승인한다. 새로운 자동 CD
+  경로가 아니다.
+  **같은 날 추가 보완**: 처음엔 브랜치가 `dev`로 고정돼 있었고, `main`의 이미지를
+  쓰려면 `IMAGE_TAG`로 raw 태그를 직접 넣는 방법뿐이었다. 개발자가 실제 의도를
+  분명히 함: `dev`는 개발 중 직접 테스트 삼아 배포하는 곳이 맞지만, 같은 배포
+  기능이 `main`에서도 똑같이 되어야 한다 — `dev`가 유일한 소스고 `main`은 raw
+  태그로만 겨우 접근하는 탈출구 취급을 받아서는 안 된다. `DEPLOY_BRANCH`
+  환경변수(기본값 `dev` — 지금까지 이 프로젝트의 모든 실제 배포가 실제로 `dev`
+  기준이었다는 사실과 일치. `origin/main`은 2026-08-13 이후 한 번도 안 움직여
+  `origin/dev`보다 123커밋 뒤처져 있음)로 일반화해, `dev`든 `main`이든 **같은**
+  조회+검증 로직을 그대로 태우도록 바꿨다 — `main`을 raw override 경로로 특수
+  취급하지 않는다. `IMAGE_TAG`는 그대로 남아있지만 이제 두 브랜치의 HEAD가
+  아닌 것(예: 임의의 예전 sha)을 쓸 때만의 순수 우회 수단이 됐다. 실제 저장소로
+  두 경로 모두 라이브 검증함: `DEPLOY_BRANCH=dev`는 `origin/dev`의 HEAD를 `200`으로
+  확인하고, `DEPLOY_BRANCH=main`은 `origin/main`의 HEAD(`72b1289`)를 `404`로
+  확인한다 — 정확한 결과다, `main`에서 성공적으로 발행된 이미지가 지금껏 하나도
+  없기 때문이다(그 커밋 시점에 `docker-publish` 잡 자체는 있었지만 push까지
+  완료된 적이 없음; `:latest`도 지금 당장 `404`). 이는 실패-시-시끄럽게 경로가
+  이론상으로만이 아니라 `main`에서도 `dev`와 똑같이 실제로 작동함을 증명한다.
+  **같은 날 두 번째 보완**: 매번 명령 앞에 `DEPLOY_BRANCH=main`을 타이핑해야 하는 게
+  번거롭다고 개발자가 직접 지적함. `deploy_helm()`이 이제 브랜치를 첫 번째 위치
+  인자로도 받는다 — `plan`/`apply`가 이미 쓰는 대상 state 이름 자리를 그대로
+  재사용한 것으로, `deploy.sh helm main`(또는 `deploy.sh all main`)이 짧은 형태다.
+  `DEPLOY_BRANCH`는 매번 브랜치명을 타이핑하기보다 한 번 설정해두고 싶은 사람을
+  위해 그대로 남는다 — 어느 한쪽이 다른 쪽의 우회책이 아니라 둘 다 정식 방식이다.
+  실제 스크립트의 진짜 코드 경로로(재구현한 스니펫이 아니라) 라이브 검증함, 빈
+  stdin을 넘겨 마지막 `y`/N 승인 단계에서 클러스터를 건드리기 전에 안전하게
+  중단시킴: `deploy.sh helm main`은 `main`의 조회 단계를 정확히 거쳐 위와 같은
+  `404`를 그대로 재현하고, `deploy.sh helm`(인자 없음)은 `dev`로 정확히
+  폴백해 `200`을 확인한 뒤 실제 실행될 `helm upgrade` 명령까지 출력하고
+  중단한다.
+- ~~**`cluster` → `app-infra` → `addons` → Helm 배포 순서 자동화**~~ — **2026-08-27 완료**
+  ([ADR 0046](ADR/0046-deploy-sequence-automation.ko.md)). 도구: 순수 bash 스크립트
+  (`k8s/infra/terraform/deploy.sh`) — 기존 `build-and-push.sh` 선례와 같은 형태이며
+  "자동 배포 파이프라인(CD) 없음"을 그대로 유지한다. GitHub Actions 워크플로는 그 자체가
+  이 상태를 뒤집는 결정이 될 것이라 기각했다. 범위: Terraform 3-state 순서화 +
+  `helm upgrade --install`(`values-prod.yaml` 재사용, `--set` 나열 없음) — 도메인
+  구매/NS 위임, ESO 시크릿 동기화, `Ingress` 활성화는 `k8s/infra/terraform/README.md`가
+  이미 1회성/인터랙티브라고 문서화한 그대로 수동으로 남는다. (이 2026-08-27 완료 시점엔
+  여기 수동 항목으로 같이 적혀 있던 `default` ServiceAccount IRSA 어노테이션은
+  2026-09-03에 `values-prod.yaml`의 `serviceAccount.create`로 흡수됐다 — 이 절 아래
+  전용 ServiceAccount 항목 참고 — 그래서 이제 `deploy.sh helm`/`deploy.sh all` 위에
+  따로 얹히는 수동 단계가 아니다.) 구현 내용: 서브커맨드로 강제되는 고정 apply 순서, `cluster/`의 실제
+  `terraform output`과 대조하는 region/cluster_name 일치 검증, ACM `-target` 2단계
+  apply, 그리고 모든 apply에 걸린 plan-then-confirm 게이트(`terraform plan
+  -out=<tmpfile>` → 사람의 y/N → `terraform apply <tmpfile>` — `-auto-approve` 없음).
+  실제 AWS 계정을 대상으로 실측 검증: `deploy.sh cluster`가 실제 plan을
+  실행했고("No changes..."), 확인 입력이 없을 때는 실제로 아무것도 적용하지 않고
+  중단했다; 세 state 디렉터리 모두에서 `terraform fmt -check`/`validate`가 변경 전과
+  동일하게 통과한다. 원래 기록됐던 8가지 실패 양상은 그 역사적 기록으로 아래에 남긴다 —
+  이 스택(ADR 0043/0044)을 처음으로 실제 AWS에 end-to-end로 apply해보니, 지금 README가
+  개발자에게 머릿속으로 순서를 기억하며 손으로 하나하나 실행하게 하는 단계가 얼마나 많은지,
+  그리고 그 각각이 이번 실행에서 실제로 겪은 고유한 실패 양상을 갖고 있다는 게 드러났다:
+  EKS `cluster_version`이 이미 지원 종료(EOL)된 Kubernetes 마이너 버전으로 고정돼 있어 그
+  버전용 새 노드그룹 AMI 자체가 없었던 문제; `graviton` 노드그룹에 `ami_type`을 명시하지
+  않으면 모듈이 `instance_types`로부터 이를 추론해주지 않는 문제; AWS 계정의 Free Tier
+  인스턴스 타입 제한이 `m6g.large`/`m5.large` 실행 자체를 거부한 문제; ACM의
+  `domain_validation_options`에 대한 `for_each` 패턴이 2단계 apply(`-target` 후 전체)를
+  강제하는 문제; Route53 NS 위임 전파가 스크립트로 "완료" 신호를 잡을 수 없는 외부
+  대기라는 문제; 기존에 있던 S3 버킷이 새로 import하려는 리전과 다른 곳에 있던 문제;
+  `aws-load-balancer-controller`의 admission webhook과 `external-secrets`의 `Service`
+  생성 사이의 경합으로 Helm 릴리스가 `failed`로 남아 수동으로 `helm uninstall` 후
+  재시도해야 했던 문제; 그리고 `eks-managed-node-group`의 `lifecycle { ignore_changes =
+  [scaling_config[0].desired_size] }`가 생성 이후 `-var`를 통한 스케일 변경을 조용히
+  무시해서 별도로 `aws eks update-nodegroup-config`를 써야 했던 문제. 이 중 어느 하나도
+  단순히 고쳐야 할 버그 하나가 아니다 — 이것들을 합쳐보면, 매번 사람이 README 산문에서
+  같은 순서와 같은 장애 복구 절차를 다시 떠올리게 하는 대신, 이 순서(와 그 안의
+  순서 의존성·재시도·전파 대기 로직)를 스크립트나 CI 파이프라인으로 감싸야 한다는
+  근거가 된다 — 그리고 그것이 바로 위 ADR 0046이 지금 한 일이다.
+- ~~**Helm 차트에 전용 `ServiceAccount` 템플릿 추가 — `default` ServiceAccount 수동 IRSA
+  어노테이션을 대체**~~ — **차트 쪽 절반은 2026-09-02에 landing** (2026-08-28 기록) —
+  `k8s/helm/templates/serviceaccount.yaml`(기본 비활성, `serviceAccount.create: false`,
+  `ingress.yaml`과 같은 패턴, ADR 0041)이 이제 존재한다. `deployment.yml`은 새 헬퍼
+  `sharenpo.serviceAccountName`을 통해 `serviceAccountName`을 여기 연결하며, 비활성일 땐
+  `"default"`로 떨어져 기존 릴리스에 영향이 없다. `migration-job.yml`은 플래그가 켜져 있어도
+  일부러 계속 `default`로 돈다 — DB 자격증명만 읽을 뿐 S3를 건드리지 않으므로, 앱의 IRSA
+  신원을 붙이면 이유 없이 권한만 넓어진다(전체 사용법은 `k8s/helm/README.ko.md`의 "IRSA용
+  전용 ServiceAccount" 참고). **아직 landing 안 됨**: `app-infra/`의 `aws_iam_role.app` 신뢰
+  정책은 여전히 `app-infra/main.tf`에 `system:serviceaccount:default:default`로 하드코딩돼
+  있다 — 오늘 `serviceAccount.create`를 켜면 이 역할이 아직 신뢰하지 않는 ServiceAccount를
+  만들 뿐이라, 그 정책을 갱신하기 전까진 IRSA 인증이 여전히 실패한다. 그 Terraform 쪽 절반이
+  바로 아래 다음 미정 항목이다.
+- ~~**`aws_iam_role.app`의 IRSA 신뢰 정책을 Helm 차트의 전용 ServiceAccount에 맞춰 갱신**~~ —
+  **코드는 2026-09-03에 완성, 적용은 아직 안 함** (2026-09-02 기록, 바로 위 항목에서
+  이어짐). 네 조각이 이제 전부 `sharenpo`라는 이름으로 일관되게 맞아떨어진다:
+  `app-infra/main.tf`의 `local.app_service_account_name`(`"default"`에서 변경, ADR 0043
+  D8 — `aws_iam_role.app`의 `assume_role_policy`가 적용되면
+  `system:serviceaccount:default:sharenpo`를 조건 매칭), `k8s/helm/`의
+  `serviceaccount.yaml` 템플릿, `values-prod.yaml`의 `serviceAccount.create: true` +
+  이 역할 ARN을 `annotations`에 하드코딩(2026-09-03 추가, `DB_HOST`/`S3_BUCKET`과 같은
+  방식), 그리고 `deploy.sh`의 `HELM_RELEASE` 기본값(`"upload-board"`에서 `"sharenpo"`로
+  변경, `--help` 문구도 맞춰 갱신). 이 마지막 조각은 이번 세션이 배포 전에 발견한 실제
+  버그를 막는다: 이게 없었다면, 문서화된 `bash deploy.sh all` 재현 경로가 `sharenpo`를
+  신뢰하는 trust policy는 적용하면서 Helm 릴리스는 `serviceAccount.create` 미설정 상태로
+  여전히 `upload-board`로 설치했을 것이고 — 다음 전체 재배포에서 곧바로 IRSA가 조용히
+  깨지고, `STORAGE_DRIVER=s3` 업로드가 막히는 결과로 이어졌을 것이다. 지금은 인프라가
+  아예 안 살아 있어서 마이그레이션할 기존 릴리스가 없으므로, 이 변경은 앞서 결정한 릴리스
+  rename의 나머지 절반도 공짜로 완성한다 — *다음* `deploy.sh all`이 처음부터 그냥
+  `sharenpo`라는 이름으로 새로 설치되므로 `helm uninstall upload-board` 같은 과정이
+  필요 없다(그 과정은 클러스터가 *예전* 코드로 먼저 재배포된 경우에만 필요해진다).
+  `app-infra/`에서 `terraform fmt -check`/`validate` 통과; `values-prod.yaml`을 얹은
+  `helm lint`/`helm template`도 정상 렌더링. **아직 적용은 안 함**: `terraform plan`엔
+  `S3_BUCKET_NAME`/`DOMAIN_NAME`(개발자 로컬 값, 레포에 없음, `deploy.sh` 참고)이
+  필요하고, 그보다 더 근본적으로 지금은 **적용할 라이브 인프라 자체가 없다** —
+  2026-09-03에 `aws eks list-clusters`(빈 목록), `aws rds describe-db-instances`(빈
+  목록), `sharenpo`/`upload-board` 이름의 S3 버킷 부재로 확인했다. 로컬
+  `cluster/terraform.tfstate`는 이 상태에 비해 오래된 값이다. 적용은 일부러 단독으로
+  실행하지 않았다 — 이름 하나 바꾸자고 EKS/RDS 등을 처음부터 다시 세우는 건 실제
+  시간당 과금이 발생하는 별도 결정이라, 따로 요청받지 않은 이상 이번 세션에서 실행하지
+  않았다. 다음 전체 `deploy.sh all`에서 자연스럽게 일어난다. 그 적용이 있기 전까지는
+  `k8s/infra/terraform/README.md`("Known gap")의 예전 수동
+  `kubectl annotate serviceaccount default ...` 단계가 어차피 annotate할 대상도 없어서
+  의미가 없고 — 막상 그 적용이 일어나고 나면 그 수동 단계는 아예 영구히 안 통하게
+  된다(trust policy가 더는 `default`를 전혀 신뢰하지 않으므로). 새 ADR 필요 없음 — 신뢰
+  정책 모양은 차트와 `deploy.sh`가 실제로 만드는 것과 맞아야 할 뿐, 위 차트 쪽 절반과
+  같은 이유다. 참고로 이 `deploy.sh`/`values-prod.yaml` 수정은 새 naming 결정이 아니다 —
+  아래 "Sharenpo로 제품명 통일"(2026-08-25) 항목이 이미 내린 결정을 되돌린 것뿐이다:
+  그 항목이 두 runbook의 Helm 릴리스 이름을 명시적으로 `sharenpo`로 바꿨고(AWS 리소스
+  rename과 달리 안전해서), `k8s/infra/terraform/README.md`의 `helm install`/`upgrade`
+  예시는 처음부터 그 결정을 반영하고 있었다 — 그 결정이 내려질 당시 `deploy.sh`/
+  `values-prod.yaml`은 아직 존재하지도 않았고, 이틀 뒤 만들어지면서 그 결정을 따라가는
+  대신 실제 첫 라이브 배포를 따라 `upload-board`로 드리프트했을 뿐이다. 전체 경위는
+  [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > 수정` 참고.
+- ~~**로그인 화면의 마크를 교체하거나 걷어내고, 쓰이지 않는 아이콘 스프라이트를 삭제**~~
+  (2026-08-25 기록) — **2026-09-07 완료**. Sharenpo 통일 작업(`0a14039`)이 로그인 카드에
+  워드마크와 나란히 `<img src="/favicon.svg">` 락업을 넣어 이름 변경 도중 마크를 새로 만드는
+  대신 있는 것을 재사용했지만, 재사용한 파일은 스타터 템플릿 아트워크였다(`#863bff`, `--brand`의
+  `#8a2be2`/`#c084fc` 옆에 놓인 세 번째 보라색). 형제 파일 `icons.svg`는 참조가 0건이었다.
+  비교표 기반 Q&A로 시작했다가 개발자가 계속 더 많은 후보를 요청하면서 아티팩트 프리뷰
+  페이지로 커진 결정 과정을 거쳤다 — 총 19개 마크(A–S) 탐색: 무료 MIT/ISC 아이콘(Lucide,
+  D–P), 완전 오리지널 손그림 도형(B, Q–S), 각지고 "성장하는" 방향(T–V), `--brand`를 실제
+  사파이어 커팅과 연결하는 보석 방향(W–Y). 배지 처리를 먼저 정했다 — 배지 없음, `--brand`
+  색 선 아이콘 하나만. **확정: 마크 S**, 겹친 원 두 개(채우기 없이 선만) — 업로더와 열람자
+  사이의 연결이자, 부드럽게 보면 이 앱 이름의 이니셜로도 읽힌다. `LoginPage.tsx`는 이제
+  `<img src="/favicon.svg">` 대신 SVG를 직접 인라인해(라이트/다크 `--brand` 전환에 선 색이
+  따라가도록) 렌더링하며, `favicon.svg`는 같은 형태를 고정 색상으로 담는다(파비콘에서도
+  `prefers-color-scheme`를 지원하는 브라우저를 위한 `<style>` 블록 포함) — 브라우저 탭은
+  페이지 CSS 커스텀 프로퍼티를 볼 수 없기 때문이다. `icons.svg`는 삭제됐다. 전체 결정 경위:
+  [frontend/docs/STYLE-PLAN.ko.md](../frontend/docs/STYLE-PLAN.ko.md) > 5번 항목.
+- ~~전 화면 반응형 레이아웃~~ — **2026-08-24 완료**(커밋 `d746257`,
+  [CHANGELOG.ko.md](CHANGELOG.ko.md) `[Unreleased] > 변경`). *측정이 계획을 반박했다는 점*
+  때문에 기록해 둔다: 이 작업은 "`@media` 블록이 없는 `*.module.css`는 휴대폰에서 다 깨진다"는
+  가정 위에 범위를 잡았지만, 390px 뷰포트에서 실제로 넘친 화면은 게시글 보드 하나뿐이었다
+  (265px 초과). `#root`가 이미 `max-width: 100%`이고 모든 페이지가 `max-width` 기반이라
+  나머지는 스스로 접혔다. 유일한 실제 붕괴는 `flex: none`이 걸린 작성자 이메일이었고, 그
+  min-content가 페이지 전체를 591px로 고정하고 있었다. 모바일에서는 잘라내지 않고 줄바꿈하는
+  쪽으로 고쳤다 — 휴대폰은 세로 공간이 넉넉해 제목과 이메일을 전문으로 보여줄 수 있다는
+  가독성 판단이다 — 데스크톱 행은 한 줄 말줄임을 그대로 유지한다. breakpoint는 코드베이스에
+  이미 있던 1024px와 640px을 재사용했고 세 번째 값은 만들지 않았다. 프레임은 모든 단계에서
+  충분히 크다(346×196 / 368×208 / 589×332). 화면 5개 × 폭 5종에서 오버플로 0, e2e 22/22 통과를
+  확인했다. 터치 타겟 크기는 명시적으로 제외했다 — 다음 행 참고.
+- ~~모바일 터치 타겟 크기~~ (2026-08-24 기록) — **2026-09-07 완료, 범위는 의도적으로
+  좁혔다**. 이 행은 원래 아래쪽 focus-visible 공백과 함께 처리하자고 주장했다(터치 타겟만
+  키우고 키보드 포커스는 그대로 두면 절반만 끝난 것처럼 보인다는 이유) — 직접 물어본 결과
+  개발자는 터치 타겟만 선택했고, 그래서 focus-visible 쪽은 **이 행이 실측한 그대로** 남아
+  있다(파일 그리드 `FilePreviewTile`/`FileBoard`만 `:focus-visible`을 가지고 있고,
+  `PostBoard`의 clear/creator/페이저, `PostDetailPage`의 delete/primary, `CommentThread`의
+  delete/load-more, `FileDetailPage`의 copy/rotate/delete는 여전히 없다) — 미착수. 실제로
+  반영된 것: `NavBar`, `SettingsPage`, `LoginPage`, `CommentForm`, `CommentThread`,
+  `FileBoard`, `FileDetailPage`, `FilePreviewTile`의 `.loadButton`, `PostBoard`,
+  `UploadForm`, `PostForm`, `PostDetailPage`에 걸친 테두리/배경이 있는 "버튼형" 컨트롤 전부가
+  44px CSS px 최소 기준을 넘도록 패딩을 올렸다(`NavBar`의 아이콘 전용 `.themeToggle`은 고정
+  36×36에서 44×44로). 변경 후 Playwright로 `LoginPage`에서 실측하니 47.17px. **갱신
+  (2026-09-08)**: `NavBar`의 `.themeToggle`/`.signOut`은 이후 다시 40×40px / 더 작은
+  padding으로 축소됐다 — 회귀가 아니라 사용자의 명시적 요청에 따른 의도적 결정이며, 이
+  두 컨트롤에 한해 이 행이 세운 44px WCAG 2.5.8 기준 아래로 다시 내려갔다. 이 행이 키운
+  다른 버튼들은 영향받지 않는다. 순수 텍스트
+  링크 스타일 컨트롤(`FilePreviewTile`의 `.title`/`.creatorButton`, `PostBoard`의
+  `.creatorButton`, 모든 `.backLink`)은 WCAG 2.5.8의 인라인 타겟 예외에 따라 의도적으로
+  손대지 않았다 — 빠뜨린 게 아니다. **갱신 (2026-09-08)**: 이 행이 미착수로 남겨둔
+  focus-visible 쪽도 이제 마무리됐다 — 다음 행 참고.
+- ~~키보드 포커스 표시 공백~~ (위 행에서 2026-08-24에 측정, 2026-09-08에 해결) — 위 행이
+  `:focus-visible`이 없다고 나열했던 테두리/배경이 있는 버튼 전부가 이제
+  `FilePreviewTile`/`FileBoard`에서 이미 검증된 패턴(`outline: 2px solid var(--brand);
+  outline-offset: 2px;`)을 그대로 복붙해 갖췄다 — 새로 고안하지 않았다: `NavBar`
+  (`.themeToggle`, `.signOut`), `PostBoard`(`.clearButton`, `.creatorButton`,
+  `.pageButton`), `PostDetailPage`(`.primaryButton`, `.button`, `.deleteButton`),
+  `CommentThread`(`.button`, `.deleteButton`, `.loadMoreButton`),
+  `FileDetailPage`(`.copyButton`, `.rotateButton`, `.deleteButton`),
+  `SettingsPage`(`.deleteButton`), `PostForm`/`CommentForm`/`UploadForm`(`.submit`) — 파일
+  9개에 걸쳐 셀렉터 20개, 순수 CSS만 추가하고 로직·마크업은 건드리지 않았다. grep이
+  아니라 실제로 검증했다: 임시 계정을 등록하고 실제 `Tab` 키 입력(Chromium의
+  `:focus-visible` 휴리스틱이 무시하는 `.focus()` 호출이 아니라)으로 `NavBar`,
+  `PostBoard`, `PostDetailPage`, `CommentThread`, `CommentForm`, `SettingsPage`,
+  `UploadForm`을 순회하며 포커스된 요소의 계산된 `outline*` 값을 읽었다 — 나열된 모든
+  셀렉터가 2px `--brand` 링을 그렸고, 이 목록에 **일부러 넣지 않은** `FileBoard`의
+  `.clearButton`은 브라우저 기본 아웃라인만 그렸다 — 범위를 정확히 지켰다는 것을 보여주는
+  실측 음성 대조군이다. `FileBoard`의 `.loadMoreButton`/페이지네이션과 `FileDetailPage`
+  자체는 (임시 계정에 업로드된 파일이 없어) 실측으로 별도 확인하지 못했다 — 동일한 규칙이
+  이미 8번 확인된 뒤라 변경의 공백은 아니다. 테스트 계정은 앱 자체의
+  `DELETE /user/:id`로 삭제해, 개발 DB에 인위적인 데이터를 남기지 않았다.
+- ~~파일 보드 프리뷰 그리드화 (`/files`)~~ — **2026-08-24 완료**(커밋 `e567277`,
+  [CHANGELOG.ko.md](CHANGELOG.ko.md) `[Unreleased] > 변경`). 보드가 파일당 텍스트 한
+  줄만 보여줬기 때문에, 상세 페이지를 열지 않고서는 어떤 파일인지 알 방법이 없었다.
+  이제 3열 16:9 프리뷰 그리드가 되어 스크롤하면 3xN으로 펼쳐지고, 기존 ADR 0021 제목
+  검색은 필터 행의 남는 폭을 갖게 됐다. 밝혀진 근거: 요즘 기기 성능이면 파일을 받아
+  오는 것 자체는 무리가 없고 스크롤이 텍스트 목록보다 빠르게 읽히지만, 프리뷰가 쌓여
+  성능 저하로 이어져서는 안 된다 — 그래서 그리드는 적극적으로 받아오면서도 한 세션이
+  쌓을 수 있는 양에 상한을 둔다(이미지는 뷰포트 진입 시, 영상은 명시적 클릭 시에만,
+  오디오는 아예 받지 않으며 자동 로드는 180개에서 멈춘다). ADR은 없다: `frontend/`는
+  결정을 `docs/ADR/`가 아니라 CHANGELOG와 `frontend/docs/`에 남기는 관례다. 이 작업이
+  드러낸 후속 과제 2건이 바로 다음 두 행이다.
+- ~~**제품명을 `Sharenpo`로 통일**~~ — **2026-08-25 반영**
+  ([CHANGELOG.ko.md](CHANGELOG.ko.md) `[Unreleased] > 변경`). 2026-08-25에 결정했고 범위는
+  Helm을 포함한 전면 통일로 확정했다. 반영된 것: Helm 차트(`Chart.yaml`의 `name:`과
+  `upload-board-project.*` 헬퍼 참조 **27곳** — 원래 이 행에 26곳으로 적혀 있던 파일별 집계는
+  `NOTES.txt`(2)와 `values.yaml` 헤더 주석(1)을 빠뜨리고 있었다), 화면에 보이는 이름
+  (`frontend/index.html`의 `<title>`, `admin/index.html`, `admin/public/favicon.svg`의 `UB` →
+  `S`, 그리고 기존 favicon 마크를 재사용한 새 로그인 워드마크 락업), 문서(`README.md`(+ko)
+  H1, `frontend/README`(+ko), `frontend/docs/API-CONTRACT`(+ko)), 기계적 식별자
+  (`package.json` 3개 — `admin`도 `frontend`처럼 이름이 없었고 이건 원래 범위 밖이었다 —
+  `docker-compose.yml` 이미지 태그, `backend/main.ts`의 Swagger 제목, e2e 데이터베이스 이름,
+  모크 버킷명). 진짜로 새로 판단해야 했던 한 가지는 예상대로였다: `_helpers.tpl`의 `fullname`은
+  차트 이름이 아니라 `.Release.Name`이라, 차트 이름만 바꿔서는 `helm install upload-board .`의
+  결과가 달라지지 않는다 — 그래서 두 런북의 릴리스명을 별개의 판단으로 바꾸고 그 구분을 문서에
+  적어 뒀다. 일부러 손대지 않은 것: ADR 본문, 기존 CHANGELOG 항목, `bluecode1775/sharenpo`,
+  그리고 레거시 `upload-board-pg` 컨테이너 참조(실제로 존재하는 수동 생성 컨테이너를 가리키므로
+  이름을 바꾸면 안내문이 거짓이 된다). **전제 하나가 틀린 것으로 드러났다** — 이 행은
+  "Terraform 미적용"이라고 적고 있었지만 실제로는 적용되어 있다. 다음 행 참고.
+- ~~**Terraform/AWS 인프라 식별자를 `sharenpo`로 개명**~~ (2026-08-25 기록, 의도적 보류) —
+  **2026-09-07 완료, 이 행이 직접 예고했던 그 무료 타이밍에 정확히 맞춰서.** 손대기 전에
+  라이브 상태를 다시 확인했다: `aws eks list-clusters`/`aws rds describe-db-instances`/
+  `aws s3 ls` 전부 비어 있고, 로컬 `.tfstate` 3개 다 리소스 0개 — 교체할 게 없으니 이건
+  순수 코드 수정이지 실제 `apply`가 아니다. 바꾼 것: `cluster/variables.tf`와
+  `app-infra/variables.tf`의 `cluster_name` 기본값, `app-infra/variables.tf`의 `db_name`
+  (`upload_board` → `sharenpo`)과 `db_username`(`upload_board_admin` → `sharenpo_admin`),
+  `addons/variables.tf`의 `cluster_name`, `deploy.sh`의 `CLUSTER_NAME` 기본값(+ 자체
+  `--help` 문구), `k8s/infra/terraform/README.md`(+ko) 제목 둘 다. `terraform validate`/
+  `fmt -check`가 세 디렉터리 모두 통과했고, `cluster/`에서 돌린 `terraform plan`은 **70
+  add, 0 change, 0 destroy**를 보여준다 — 교체가 아니라 처음부터 새로 만드는 계획이라는
+  뜻이고, "공짜" 프레이밍이 실제로 맞았음을 증명한다. 아무것도 apply하지 않았다 — 새
+  이름은 다음 실제 `deploy.sh all`/`terraform apply`에서 반영된다. `Blueprint` 태그의
+  *값*(`cluster/main.tf`와 `addons/main.tf` 양쪽의 `local.name`/`var.cluster_name`)은
+  이제 개명을 정확히 따라가고, 태그의 *키*("Blueprint")만 이 행이 이미 지적한 대로
+  upstream `terraform-aws-eks-blueprints` 관례라 바꿀 수 없다. 위 행을 작업하다 발견했다:
+  `CLAUDE.md`와 ADR 0043·0044의 추가
+  기록은 아직도 Terraform이 실제 AWS에 적용된 적 없다고 말하지만, `cluster/`와 `app-infra/`의
+  상태 파일이 각각 serial 235·23이고 둘을 합쳐 리소스 인스턴스 108개를 담고 있다 — 살아 있는
+  EKS 클러스터, RDS 인스턴스, S3 버킷, Route53 존, ACM 인증서. 기본값을 바꾼 뒤 돌린
+  `terraform plan`이 비용을 측정해 줬다: `app-infra`는 **10 add / 2 change / 8 destroy**이고
+  `aws_db_instance.db must be replaced`인데, `db_name`과 `username`이 둘 다 ForceNew이고
+  인스턴스가 `skip_final_snapshot = true`, `deletion_protection = false`라 교체가 곧 최종
+  스냅샷 없는 데이터 소멸을 뜻한다. `cluster`는 **34 add / 20 change / 34 destroy**이며
+  `aws_eks_cluster.this[0] must be replaced`가 포함된다. 아무것도 apply하지 않았고 기본값은
+  되돌렸다. **일정에 넣지 않고 보류한 이유**: AWS 리소스 이름은 브랜딩이 아니다. 사용자에게
+  보이는 표면은 이미 전부 `Sharenpo`이고, 특히 도메인 계층은 이미 `sharenpo.com`(Route53 +
+  ACM)에 IAM 사용자도 `sharenpo-user`라, 사용자가 만지는 것 중 이 항목에 걸리는 게 없다.
+  미룬다고 비용이 커지지도 않는다 — 언제 하든 클러스터 재구축과 데이터베이스 마이그레이션이
+  들고, 다른 이유로 인프라를 새로 세우는 시점(리전 이동, 환경 재구축, remote state 전환)에는
+  **공짜**가 된다. 그때가 할 때다. **실제로 할 때**, 데이터베이스 쪽은 반드시 논리 마이그레이션
+  이어야 한다 — 기존 인스턴스 안에 새 이름의 데이터베이스와 롤을 만들고 `pg_dump`/복원한 뒤
+  Terraform이 그쪽을 가리키게 하는 방식이며, Terraform이 주도하는 교체는 안 된다. 참고로
+  `Blueprint = upload-board-project` 태그는 upstream `terraform-aws-eks-blueprints` 모듈이
+  붙이는 값이라 완전한 통일은 애초에 불가능하다. "적용된 적 없음"이라는 서술은 2026-08-25에
+  `CLAUDE.md`(+ko)와 `k8s/infra/terraform/README.md`(+ko)에서 정정했다. **ADR 0043·0044의
+  Addendum에는 아직 그대로 남아 있으며, 이는 의도적이다** — ADR은 작성 시점의 사실을 기록하므로
+  고치지 않고, 정정의 기준은 이 행이다. **갱신(2026-08-28)**: 이 행이 측정했던 인프라는
+  2026-08-25~27에 apply됐다가 2026-08-28에 전부 destroy됐다(배포 검증 완료 후 과금 중단
+  목적 — `k8s/infra/terraform/README.md`(+ko)의 상태 참고). 지금 AWS엔 `upload-board-project`
+  라는 이름을 가진 게 아무것도 없어서, 이 행이 이미 언급했던 "재구축 시 공짜"인 순간이 바로
+  지금 열려 있다 — 다음에 처음부터 다시 apply할 때가, 이 행의 논리가 다시 그 창을 닫기 전에
+  식별자를 개명할 정확한 타이밍이다.
+- ~~**디스플레이 서체 탐구 후 구현**~~ (2026-08-25 기록) — **2026-09-07 완료**. 비교표 기반
+  Q&A에 이어, 헤딩 서체 후보 6개(시스템 세리프 폴백 + 웹폰트 5개 — Fraunces·Bricolage
+  Grotesque·Instrument Serif·Unbounded·Manrope)를 실제 `LoginPage` 카드 위에 라이트/다크
+  두 테마로 렌더링한 아티팩트 프리뷰 페이지로 진행했다. **확정: 시스템 세리프 폴백** —
+  `--heading: ui-serif, Georgia, 'Times New Roman', serif`(기존에는 `--sans`와 바이트 단위로
+  동일했고, `--sans`는 그대로 유지). 신규 의존성 0건이라 `frontend/CLAUDE.md`의 의존성 사전
+  제안 게이트가 아예 걸리지 않았다 — 웹폰트 후보 5개보다 위험이 가장 낮은 안이 선택됐다.
+  같은 행의 "별개지만 함께 묶기 충분히 저렴한" 모션/그림자 사항(`transition`·`animation`·
+  `@keyframes` 0회, `--shadow` 정확히 한 곳)은 **함께 처리하지 않았다** — 물어본 결과
+  개발자는 이번 작업 범위를 마크 + 헤딩 서체로만 한정했고, 그 시점 기준 모션은 열려 있었다.
+  **2026-09-08 별도 작업으로 해결** —
+  [frontend/docs/STYLE-PLAN.ko.md](../frontend/docs/STYLE-PLAN.ko.md) > 4번 항목 참고.
+  전체 결정 경위: [frontend/docs/STYLE-PLAN.ko.md](../frontend/docs/STYLE-PLAN.ko.md) > 3번 항목.
+- ~~`admin/`의 작은 화면 전용 레이아웃~~ (2026-08-24 기록) — **2026-09-08 결정: 가로 스크롤
+  유지, 카드 전환은 하지 않음.** 이 콘솔은 배포 대상이 없고 데스크톱에서 운영되므로 노출이
+  사실상 없다. 비교표(컬럼 숨기기 vs. 카드 전환 vs. 현행 유지)로 트레이드오프를 그대로
+  개발자에게 제시했고, 카드 전환의 유지보수 비용(테이블 3곳 조건부 렌더링/CSS)이
+  데스크톱 전용 도구에는 맞지 않는다는 결론이었다. 기존 `overflow-x-auto` 최소 조치가 이미
+  접근성을 복구해 두었고(페이지 레벨 잘림 없음), 검토 중 나온 유일한 빈틈 — 래퍼에
+  `tabindex`가 없어 내부 컨트롤에 우연히 포커스가 가지 않는 한 키보드만으로는 스크롤할 수
+  없었던 점 — 도 함께 닫았다: `users-page.tsx`, `logs-page.tsx`,
+  `dashboard-page.tsx`의 최근 로그 테이블 모두 래퍼 div에 `tabIndex={0}`을 추가했다.
+  375px 뷰포트로 세 페이지 모두 Playwright로 실검증했다 — 각 래퍼의 `scrollWidth`가
+  `clientWidth`보다 커서(진짜로 스크롤 가능하며 조용히 잘리지 않음) `tabIndex === 0`임을
+  확인. 이 행의 기존 수치도 같은 변경에서 바로잡는다: 콘솔 전체의 반응형(`sm:`/`md:` 접두)
+  유틸리티는 2개가 아니라 **1개**다 — `dashboard-page.tsx`의 `md:grid-cols-3` 통계 카드
+  그리드. 이 수정 시점 기준 grep으로는 두 번째 항목을 찾지 못했다.
+- `admin/`과 `frontend/`의 디자인 체계 분리 (2026-08-24 기록) — **미착수 이유**:
+  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)가 의도적으로 선택한
+  상태다. Chat Project 콘솔을 색과 레이아웃은 손대지 않은 채 가져오고 API·도메인 계층만
+  적응시켰다. 따라서 이 분리는 결함이 아니라 유효한 결정이다: 다크 모드 지원이 전무하고
+  (`dark:`가 0회 등장하는 반면 `frontend/`에는 명시적 라이트/다크 토글이 있다), 강조색이
+  `frontend/`의 브랜드 보라와 달리 파랑이며, 로그인 필드에 라벨 없이 placeholder만 있다.
+  되돌리려면 코드 변경 이전에 디자인 결정이 선행돼야 한다. **갱신(2026-09-08): 다크 모드
+  항목은 개발자의 직접 요청으로 해소됐다** — 모든 페이지(로그인, 대시보드, 사용자, 로그)에
+  라이트/다크 토글이 생겼다(`admin/src/components/theme-toggle.tsx`,
+  `admin/src/store/theme.store.ts`). 토글 전까지는 OS의 `prefers-color-scheme`를 따르고,
+  한 번 토글하면 `localStorage`에 고정된다. `frontend/`의 토글과는 독립적이고 구조도 다르다 —
+  `frontend/`의 CSS 커스텀 프로퍼티 기반 `ThemeProvider` 대신, Tailwind v4의 `dark:` 변형을
+  `.dark` 클래스로 재설정하는 방식(`index.css`의 `@custom-variant dark`)을 썼다. 이 행이
+  언급한 나머지 두 가지 분리 — 파랑 강조색과 placeholder만 있는 로그인 라벨 — 는 그대로이며
+  여전히 미해결이다. 검증: `pnpm lint`/`pnpm test` 클린(22/22, 신규 `theme.store.spec.ts`
+  포함), 실제 Playwright 점검으로 토글 동작·`localStorage` 지속·새로고침 시 잘못된 테마가
+  잠깐 보이는 깜빡임 없음을 확인.
+- 서버측 썸네일 엔드포인트 (2026-08-24 기록) — **미착수 이유**: 파일마다 파생 산출물을
+  하나 더 만들고 그것을 어디에 저장할지·언제 생성할지까지 정해야 하는 백엔드 변경이며,
+  위 그리드가 반드시 필요로 하는 것은 아니다. **현재 동작 방식, 정확히
+  (2026-09-07 추가 — 어디서도 실제 썸네일은 생성되지 않는다; 아래는 썸네일 생성이
+  아니라 원본을 조건부로 렌더링하는 방식에 대한 설명이다)**: `frontend/src/features/
+  files/FilePreviewTile.tsx`가 `mediaType`별로 로드 전략을 고르며, 이건 visibility
+  판단과는 별개다 —
+  - `image`: 타일이 뷰포트에 들어오는 순간 자동 로드(`IntersectionObserver`, 한 번
+    본 뒤엔 다시 스크롤해도 재요청 안 함).
+  - `video`: 아예 자동 로드 안 함 — 🎬 플레이스홀더 + "Load preview" 버튼만 표시,
+    명시적으로 클릭해야만(`videoRequested` 상태) 바이트를 요청.
+  - `audio`: 프리뷰 바이트를 절대 로드하지 않음 — 채울 화면 프레임이 없으니
+    고정 🎵 플레이스홀더만.
+  이와 별개로 `public`/`unlisted` 파일은 `fileUrl`/`shareUrl`을 가리키는 `<img
+  src>`/`<video src>`로 직접 스트리밍하지만(`directSrc()`), `private` 파일은
+  그럴 수 없다 — `<img>`/`<video>`는 Bearer 헤더를 못 실으므로 —
+  `api.getBlob('/file/:id/content')`로 받아 `objectURL`을 만들고 언마운트/파일
+  변경 시 revoke한다. 그 그리드가 감수한 가장 큰 타협의 근본 원인이 바로 이거다:
+  썸네일이 없으면 `private` 파일의 프리뷰는 곧 객체 전체를 — 업로드 상한인
+  100MB까지([ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md)) —
+  같은 인증된 blob 경로로 내려받는 일이 된다(ADR 0025/0026). 위 영상 클릭 게이트는
+  이 비용이 실제로 의미 있는 유일한 미디어 타입을 위해서만 존재한다. 썸네일
+  엔드포인트가 생기면 게이트를 없애고 모든 타일을 즉시 미리 보여줄 수 있다.
+  썸네일을 어디에 둘지는 스토리지 결정이므로(ADR 0029의 `FileStorage` 포트에 새
+  연산이 필요하다) Stage 4의 S3 전환과 함께 재검토한다.
+  **2026-09-07 확정: 실제로 필요해질 때만 구현, 선제적으로는 안 함.** 지금의
+  클릭 게이트/지연 로드 방식이 실제로 문제를 일으킨 적이 없다 — 이건 예정된
+  작업이 아니라 (지금 위에서 정확히 서술한) 문서화된 공백으로 남는다. 영상
+  클릭 게이트나 private 파일 전체 다운로드 비용이 실제 불만으로 이어지거나,
+  같은 `FileStorage` 포트를 어차피 건드리는 미래의 S3 전환 작업과 자연스럽게
+  묶일 때만 재검토.
+- ~~저장 바이트가 사라진 개발 DB 행~~ (2026-08-24 기록) — **2026-09-07 기준 소멸,
+  결정할 게 없어짐.** 2026-08-24 실측: 당시 공유 개발 DB에 보이던 공개 파일 **25건 중
+  23건**이 `404 FILE_NOT_FOUND`를 돌려줬다 — 실물 파일은 사라졌는데 메타데이터 행만
+  남은 e2e 잔여물. 이 항목을 재조사하며 2026-09-07에 다시 라이브로 확인한 결과: 영속
+  개발 DB 볼륨(`uploadboardproject_db-data`)이 지금은 `file_entity`/`user_entity`/
+  `post_entity` 전부 **0행**이고, `file/upload`·`file/temp`도 디스크에서 전부 비어
+  있다. 이 볼륨의 생성 시각(2026-09-05)은 [ADR 0051](ADR/0051-orphaned-granted-file-reclaim.ko.md)의
+  Addendum이 기록한 사고 날짜(실제 파일 44개가 지워진 라이브 스윕 테스트)와 일치한다 —
+  이 항목이 측정했던 데이터가 지금 접근 가능한 개발 DB엔 더 이상 존재하지 않으므로,
+  정리할 것도 결정할 것도 남지 않았다. 이는 원래부터 *개발* DB에만 해당하는 이야기였고,
+  운영 데이터 경로를 가리킨 적은 없다.
+- Terraform 원격 state backend (2026-08-19 기록,
+  [ADR 0044](ADR/0044-terraform-three-state-split.ko.md) D3) — **미착수
+  이유**: 3-state 분할의 `terraform_remote_state`는 의도적으로 `backend =
+  "local"`을 쓰며, 개발자 1인의 `apply`/`destroy` 사이클에만 범위를 한정한
+  선택이다. 아직 실제 AWS에 한 번도 `apply`하지 않은 설정(ADR 0043 D1)에
+  S3+DynamoDB 락(또는 Terraform Cloud) 원격 backend를 지금 도입하는 건
+  요청받지 않은 추가 범위 확장이다. 두 번째 개발자나 CI 파이프라인이 이
+  설정을 apply해야 할 때 재검토한다.
+- Distroless 런타임 베이스 (2026-08-08 기록, [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md))
+  — **미착수 이유**: Node 24용 distroless 태그(`gcr.io/distroless/nodejs24-debian12`
+  등)가 실제로 존재하는지 실물 레지스트리로 검증하지 않았고, distroless는 이
+  프로젝트가 지금 가진 유일한 디버깅 경로(`docker exec`)를 없애는데 이를 대체할
+  K8s 네이티브 수단(`kubectl debug`, ephemeral debug container)이 아직 없다.
+  태그가 확인되고 Kubernetes 단계(아래)가 ephemeral-debug 도구를 갖춘 뒤
+  재검토한다 — 이미 반영된 non-root 하드닝과는 별개다. 그쪽은 이런 미검증
+  의존성이 없었기 때문이다.
+- ~~ARM/Graviton(멀티아치) 컨테이너 빌드~~ (2026-08-08 기록,
+  [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)) — **이 항목은
+  낡은 기록이었고, 2026-09-07에 정정했다.** 원래는 "`bcrypt`의 프리빌드 바이너리가
+  x64 전용이고, 아직 어떤 배포 타깃도 인스턴스 아키텍처를 선택하지 않았다"가
+  미착수 이유였는데, 다음에 이 행을 누가 다시 읽었을 때쯤엔 이미 둘 다 사실이
+  아니었다. [ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md)가 나흘 뒤
+  (2026-08-12) bcrypt 주장을 정정했다: `bcrypt@6.0.0`은 QEMU 에뮬레이션 하에서
+  끝까지 검증된(`docker run --platform linux/arm64 ...` + `require('bcrypt').hashSync(...)`)
+  실제로 동작하는 `linux-arm64` prebuild를 번들한다. CI는 2026-08-13부터 `main`에서
+  실제 `linux/amd64,linux/arm64` 이미지를 발행했고; `cluster/main.tf`의
+  `graviton`/`t4g.medium` 노드그룹은 Terraform이 반영된 2026-08-18부터 EKS
+  클러스터의 예비가 아닌 **주력** 용량이었다(`x64`/`m5.large`는 `desired_size = 0`) —
+  그 코드 주석 자체가 ADR 0035를 근거로 명시한다. 2026-08-27 라이브 배포에서 앱
+  pod가 실제로 그 graviton 노드그룹 위에서 동작했고, 같은 날 개발자가 `t4g.medium`을
+  **영구** 노드 타입으로 확정했다. 이 항목, `ROADMAP.md` 자체의 Stage 4 표(6절)와
+  DevOps 스택 서술(6절), `CLAUDE.md`의 CI/CD 섹션까지 2026-09-07 시점까지 전부
+  "보류"라고 계속 적혀 있었다 — 2026-08-08 전제가 정정된 뒤로 아무도 다시 손대지
+  않았던 것이고, 넷 다 이번에 같이 고쳤다. 여기 더 할 일은 없다: ARM/Graviton은
+  반영됐고, 라이브로 검증됐고, 확정된 아키텍처다 — 열린 항목이 아니다.
+- ~~AWS Secrets Manager + External Secrets Operator(ESO) 연동~~ (2026-08-08 기록,
+  [ADR 0033](ADR/0033-secrets-delivery-target.ko.md)) — **이 항목은 낡은 기록이었고,
+  2026-09-08에 정정했다.** "실제 AWS 계정... 지금은 그중 아무것도 존재하지 않는다"는
+  서술이 원래 이유였는데, Terraform([ADR 0043](ADR/0043-terraform-project-adaptation.ko.md)
+  D7, 2026-08-18)이 정확히 이걸 프로비저닝하면서 더 이상 사실이 아니게 됐다: Secrets
+  Manager 항목, ESO 설치, IRSA 롤까지. 두 번 라이브 검증됨(2026-08-27, 그리고
+  철거·재적용 사이클을 거친 2026-08-29/30) — 지금 실제로 적용돼 있는지는 §6 Stage 4
+  표의 "Secrets delivery" 행을 참고할 것(그 셀도 스냅샷이니 이 행이든 그 행이든 그냥
+  믿지 말고 `helm list -A`/`terraform output`으로 재확인). 이 행이 마지막으로 손질됐을
+  때 실제로 열려 있던 건 이미 오래전에 다 반영됐다 — 더 이상 스케줄링할 게 없다.
+- ~~Kubernetes `Ingress`/ALB + TLS 인증서 프로비저닝~~ (2026-08-08 기록,
+  [ADR 0034](ADR/0034-https-termination-stance.ko.md)) — **이 항목도 낡은 기록이었고,
+  2026-09-08에 정정했다.** "확정된 인증서 소스가... 아직 정해지지 않았다"고 적혀
+  있었는데, 인증서 소스는 *이미 정해졌었다*(ACM, Terraform이 프로비저닝한 Route53
+  존을 통한 DNS 검증, ADR 0043 D4/D5) — 2026-08-25~27 라이브 배포 중 실제 인증서가
+  `ISSUED`까지 도달했다. Helm 차트의 `Ingress` 템플릿도 이미 존재하고 ACM ARN 주석을
+  받을 수 있게 연결돼 있다. 꺼져 있는 이유는 빠진 의존성이 아니라 **개발자의 의도적
+  선택**이다 — 2026-08-27에 확정된 대로, 외부 테스터가 실제로 필요해지기 전까지는
+  `ingress.enabled`를 `false`로 둔다. 전체 기록은 §6 Stage 4 표의 "HTTPS termination"
+  행 참고. 여기 뭔가 아직 안 만들어져서가 아니라, 그 조건이 바뀔 때만 재검토한다.
+- Istio(Kubernetes 클러스터 위 서비스 메시) — **프로덕션 DevOps 스택 도입 행과 Stage 4
+  구성요소 상태 표에서 제외**(2026-08-31 이동, 이번 세션에서 진행한 규모 적합성 검토 뒤
+  개발자가 내린 결정 — ROADMAP 자체의 순서 계획과는 별개). **미착수 이유**: 이 프로젝트의
+  실제 현재 규모에서는 Istio가 풀어야 할 문제 자체가 아직 존재하지 않는다. Helm 차트는
+  워크로드를 정확히 하나만 배포한다(`k8s/helm/templates/deployment.yml` +
+  `service.yaml`, 백엔드 단일 모놀리스, `replicaCount: 1`) — 클러스터 안에 이것 말고 도는
+  것이 없어, 메시가 라우팅·분산·암호화할 East-West 트래픽 자체가 없다. 파드 간 mTLS는
+  이미 검토됐고 [ADR 0034](ADR/0034-https-termination-stance.ko.md)가 시기상조로
+  명시적으로 기각했다(Alternatives rejected — 파드별 사이드카 프록시는 "이 프로젝트에
+  아직 없는 문제[파드 간 암호화]를 푸는 것"). 메시 레벨 텔레메트리도
+  [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md)이 이미 랜딩·라이브 검증한
+  앱 레벨 메트릭(kube-prometheus-stack 기반 Prometheus/Grafana + `prom-client` 기반
+  `MetricsModule`)과 중복될 뿐이다. 애초에 Istio가 이 계획에 오른 배경은
+  [ADR 0038](ADR/0038-terraform-iac-scaffold.ko.md)이 밝히듯 원래 Terraform 스캐폴드가
+  AWS 공식 "EKS Cluster w/ Istio" 예제였기 때문이다 — 프로젝트 전용 적응
+  ([ADR 0043](ADR/0043-terraform-project-adaptation.ko.md)) 과정에서 Istio 관련 리소스는
+  이미 삭제됐지만, 이 ROADMAP의 계획 행만 그 정리에서 살아남아 있었다. 클러스터 안에
+  실제로 여러 서비스가 생겨 그들 사이의 트래픽 관리·mTLS·카나리 라우팅이 필요해지는
+  경우에만 재검토한다 — 오늘 이 프로젝트의 로드맵에는 그런 시나리오가 없다.
+- ADR 0026 콘텐츠 엔드포인트 후속 (2026-08-01 기록, `GET /file/:id/content`
+  [file-content.controller.ts](../backend/file/file-content.controller.ts) 구현 후 검토), 심각도 순:
+  1. ~~**[중간] 스트림 에러 미처리**~~ — **2026-09-07 해결**: 200·206 경로의
+     `createReadStream(...).pipe(res)`에 `'error'` 리스너가 없어, 헤더가 나간 뒤 읽기
+     실패(스트리밍 중 `DELETE /file/:id` 경합, 디스크 오류)가 미처리 `'error'` 이벤트로
+     프로세스를 크래시시켰다(Never Do Group 1). 두 호출부 모두 이제 private
+     `pipeContentStream` 헬퍼를 거치며, 여기서 `stream.on('error', …)`를 걸어 응답을
+     destroy하고 `warn`으로 로그한다 — 이 컨트롤러는 unit spec이 없어서(커버리지 제외
+     대상) 기존 e2e Range 커버리지가 그대로 통과하는 것으로 검증했다.
+  2. ~~**[낮음] Suffix `Range: bytes=-N` 오처리**~~ — **2026-09-07 해결**: 마지막 N바이트
+     요청을 앞 N+1바이트로 서빙하던 문제. suffix 형태(start 비어있고 end만 있음)를 따로
+     감지해 `start = max(0, size - N)` / `end = size - 1`로 계산하도록 고쳤고, `N-`/`N-M`
+     형태는 그대로 뒀다. 새 e2e 케이스 `supports a suffix Range request (last N bytes)`
+     추가, `STORAGE_DRIVER=local`에서 76/76 통과.
+  코드 불요 관찰(수정 없음, 여전히 열림): `416` 응답에 `ErrorBody` code 없음(프로토콜 레벨);
+  다중 필드 첨부 거부 시 남는 temp orphan은 ADR 0018 스윕이 회수; `file/temp`는 여전히
+  정적 서빙(기존 동작, 가시성 범위 밖). 전체 서술은
+  [ADR 0026](ADR/0026-file-visibility-implementation.ko.md) > 알려진 한계.
+- e2e용 Testcontainers (2026-07-26 기록): e2e 스위트는 throwaway DB와 jest
+  `setupFiles` env 오버라이드([ADR 0016](ADR/0016-github-actions-ci.ko.md),
+  `test/e2e-env.ts`)를 쓴다 — 유효하지만 env-before-import 타이밍과 사전 프로비저닝된
+  Postgres에 의존한다. Testcontainers(실행마다 격리 컨테이너를 Nest provider
+  override로 주입)는 둘 다 제거한다. **2026-09-07 유예 재확인**: 원래 트리거("배포
+  환경, Stage 4, 확정 시 재검토")는 이미 지나갔다 — Stage 4 AWS 배포가 실제로
+  end-to-end 증명됐는데, 그 과정에서 지금의 수동 Postgres 방식이 문제를 일으킨 적이
+  없었다. 그래서 그 트리거 하나만으로는 착수 이유가 안 됨. "필요할 때만 구현"으로
+  다시 정리: 지금 방식이 실제로 마찰을 일으킬 때만(두 번째 개발자의 로컬 세팅,
+  사전 프로비저닝 DB에 얽힌 CI 불안정) 도입 — 선제적으로는 안 함. 어느 쪽이든 새
+  dev 의존성 + CI 변경이라 이 항목이 원래 요구하던 승인은 그대로 필요.
+- ~~라이선스~~ — **2026-09-07 결정: MIT.** `package.json`은 첫 커밋 때부터 계속
+  `UNLICENSED`였고, 재작성 전 README의 `License / MIT` 섹션은 2026-07-22 문서 재작성 때
+  결정이 아니라 그냥 삭제되면서 라이선스 파일 자체가 하나도 없는 상태가 됐다. 결정 전
+  재조사한 내용: 이 저장소는 이미 GitHub에 **Public**으로 공개돼 있음("공개 전"이 아니라
+  이미 라이브 상태), 실제 런타임 의존성 중 카피레프트는 하나도 없어(전부 MIT/BSD-3-Clause)
+  어느 쪽을 골라도 무방했음, Public 포트폴리오형 저장소에 사실상 관례인 건 MIT. 반영:
+  루트 `LICENSE` 파일(MIT 본문), `package.json`(루트 + `frontend/` + `admin/` — 뒤 둘은
+  원래 `license` 필드 자체가 없었음) → `"MIT"`, `README.md`(+ko)에 `LICENSE`를 가리키는
+  `## License`(`## 라이선스`) 섹션 복원.
+- ~~Chat 프로젝트 잔재 처리~~ ([계획서](CHAT-REMNANT-REMOVAL-PLAN.ko.md)): git 히스토리
+  결정 **2026-09-07 내림 — 현상 유지.** 계획서 자체가 권장하던 옵션 그대로다(재작성은
+  파괴적이고 `CHANGELOG.md`/`ROADMAP.md`가 이미 인용 중인 커밋 해시를 전부 깨뜨림 —
+  재작성이 정당화되는 유일한 경우인 "공개되면 안 될 내용"도 여기엔 해당 안 됨, 설계
+  문서·코드일 뿐 비밀·개인정보가 아님). 재검증 트리거는 계속 상시 습관으로 유지(이미
+  세 번 발동, 계획서 자체 기록 참고) — 한 번 닫고 끝낼 과제가 아님.
+- dev 전이 의존성 `pnpm audit` 지적(handlebars — ts-jest 경유;
+  glob/minimatch/webpack — jest·@nestjs/cli 경유) — 빌드/테스트 시점 전용;
+  업스트림 릴리스 대기. "할 수 있는 조치 없음" 상태는 그대로지만 건수는
+  58건(critical 1건 포함)으로 늘었다(2026-07-24 당시엔 몇 건 수준).
+  (`pnpm audit --prod`는 2026-09-10 기준 클린 — 별개의 `qs` 보고를 계기로
+  재실행한 결과 이 dev 전용 집합 밖에서 14건이 추가로 나왔고 같은 날 전부
+  해결했다: `qs`·`brace-expansion` 고정, `multer`·`js-yaml` override 상향,
+  `joi` 패치, 그리고 안 쓰는 구형 `aws-sdk` v2 의존성은 override 대신 아예
+  삭제 — 자세한 내용은 CLAUDE.md > Known Gaps와 CHANGELOG.md 참고.)
+  **2026-09-07 재확인**: 이 코드베이스에서 할 수 있는 조치가 없다 — 적용할 수정
+  자체가 없고 업스트림 릴리스를 기다리는 것뿐이라, "필요할 때 구현"은 결국 "가끔
+  `pnpm audit`을 다시 돌려보고 업스트림 릴리스가 실제로 나오면 그때 반영"으로 귀결된다.
+- API 버저닝 시점 — 소비자는 이제 결정되었다; 버저닝은 동결 이후 실제 breaking
+  변경이 필요해질 때 활성화한다(설계 기준 참조).
+- 프론트엔드 스택 — **2026-07-24 결정: React + Vite** (이 REST API를 소비하는
+  SPA; Next.js는 SSR/API 라우트가 이 백엔드와 역할 중복이라 기각, Vue는 차순위).
+  저장소 내 `frontend/` 하위 폴더(ADR 0010, 구조 2026-07-24 개정)로 존재하며
+  2026-07-24 생성·E2E 검증 완료; 호스팅은 이후 배포 결정.
+- ~~공식 로그인 경로~~ — **2026-07-24 결정: `POST /auth/signin` (Basic)**. 리스크·
+  유지보수 최소 기준으로 선택(`register`가 어차피 쓰는 `parseBasicToken`을
+  재사용; RFC 7617 프로토콜 표준; ADR 0001로 뒷받침). 그래서 `POST /auth/signin/local`은
+  **제거 후보**였고, 제거 자체는 **2026-09-07 완료**: `LocalStrategy`, `LocalAuthGuard`,
+  컨트롤러 핸들러, 이제 쓸모없어진 `passport-local`/`@types/passport-local` 의존성까지
+  전부 지웠다. 두 경로가 공유하던 자격 증명 검증 `AuthService.validateUser`는 그대로
+  남고 이제 `signIn`이 유일한 호출자다. 삭제 전 실사용 호출자 0건을 확인함:
+  `frontend/`는 애초에 `/auth/signin`만 호출했고 local 경로는 명시적으로 사용 금지로
+  표시돼 있었으며(`frontend/CLAUDE.md`), `admin/`은 참조 자체가 없었다. 제거 후
+  unit 263개·e2e 76개 전부 통과 — 삭제된 엔드포인트 자체를 위한 전용 테스트는
+  원래 없었다(두 Passport 전략 모두 spec 파일을 가진 적이 없었던 기존 공백이라,
+  이번 제거가 새로 메울 필요는 없다).
+- ~~업로드 청구 계약의 프론트엔드 반영~~ (2026-07-27 기록,
+  [ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)) — **2026-09-07 랜딩** (ADR 0019
+  추가 기록). 409 쪽은 이미 돼 있었다: `frontend/src/api/errorCodes.ts`에
+  `FILE_ALREADY_CLAIMED`가 등록돼 있고 `UploadForm.tsx`의 `messageForError()`가 이를
+  분기한다. 진짜 남아 있던 공백 — `client.ts`가 `response.status`를 버려서 200 replay와
+  201 신규 승격이 동일한 성공 경로를 탔던 문제 — 는 해소됐다: `client.ts`에 공유
+  401-refresh-retry 로직을 뽑아낸 `fetchWithAuthRetry()`(중복을 피하려고 분리)와 그
+  위의 `requestWithStatus()`/`api.postWithStatus()`를 추가하고, `UploadForm.tsx`의
+  `POST /file` 호출부에서만 사용한다 — `api.post()` 시그니처는 다른 모든 호출부에서
+  그대로다. 200이면 "This file was already uploaded — reusing the existing entry."를
+  보여준다. mock 백엔드로 먼저 검증한 뒤, **실제 백엔드 + 실제 Postgres DB로
+  재검증(2026-09-07)**: 실제 계정으로 파일을 첨부·승격(신규 `POST /file`, 실제 `201`,
+  실제 행 생성)한 뒤 같은 청구 임시 파일명을 재제출 — 실제 백엔드가 `200`을 응답했고,
+  재제출한 title은 설계대로 무시됐으며(`psql` 직접 조회로 행이 하나뿐이고 원래
+  title을 그대로 갖고 있음을 확인), 실제 실행 중인 폼에서 안내 문구가 렌더링됐다.
+- ~~삭제 계약의 프론트엔드 반영~~ (2026-07-30 기록,
+  [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — **2026-09-07 랜딩** (ADR 0020
+  추가 기록), 같은 날 재확인에서 여전히 완전히 미착수(계정 삭제 UI 자체가 없고
+  `USER_HAS_FILES`는 미사용 카탈로그 항목뿐)임을 다시 확인한 직후. 신설된
+  `frontend/src/features/account/SettingsPage.tsx`(`/settings`에 라우팅,
+  `NavBar`에서 링크)가 `DELETE /user/:id`를 호출한다 — 409 `USER_HAS_FILES`면
+  백엔드 메시지(이미 파일 개수 포함)를 2차 확인 뒤에 보여주고 `?deleteFiles=true`로
+  재요청하며, 성공하면 로그아웃 후 `/login`으로 이동한다. `frontend/docs/
+  API-CONTRACT.md`에도 빠져 있던 `?deleteFiles=`/`USER_HAS_FILES` 행을 추가했다.
+  mock 백엔드로 먼저 검증한 뒤, **실제 백엔드 + 실제 Postgres DB로 재검증
+  (2026-09-07)**: 실제 파일 1개를 보유한 실제 계정이 실제 `409 USER_HAS_FILES`를
+  받았고(메시지의 개수도 정확), `deleteFiles=true` 재확인 요청이 실제로 연쇄
+  삭제됐으며, `psql`/파일시스템 직접 확인으로 유저 행·파일 행·저장된 실물 파일이
+  전부 실제로 사라졌음을 확인했다 — 200 응답만 본 것이 아니다
+  ([CLAUDE.md](../CLAUDE.md) > Project Overview).
+- ~~고아 `granted_` 파일 회수~~ (2026-07-30 기록,
+  [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — **설계 랜딩 2026-09-05**
+  ([ADR 0051](ADR/0051-orphaned-granted-file-reclaim.ko.md)): 이 항목이 요구했던
+  DB 조인 정합 작업이지, ADR 0018처럼 파일명만 보고 훑는 방식을 복사한 게 아니다.
+  `FileStorage`에 `listGranted()`가 추가되고, `FileModule`이 export하지 않는
+  `GrantedCleanupService` provider를 얻는다(새 모듈이 아니다 — 하는 일 전부가
+  `FileModule` 자신의 엔티티를 디스크와 대조하는 것이다). 이 provider가
+  `file/upload`를 `file_entity.filePath`와 일정에 따라 대조한다. **리포트만
+  하고 출시된다** — `GRANTED_SWEEP_DRY_RUN`이 기본값 `true`라, 이번에 착륙한 건
+  새 삭제 경로가 아니라 관측성(로그 + `granted_cleanup_sweep_total{outcome="candidate"}`
+  메트릭)뿐이다. 실제로 디스크 공간을 회수하려면 여전히 운영자가 그 신호를
+  살펴본 뒤 명시적으로 플래그를 뒤집어야 한다 — 일정 미배정이며, 자동 전환이
+  아니라 사람의 결정에 의도적으로 맡겨 둔다.
+- ~~파일 소유권 이전이 post↔file 같은-작성자 불변식을 깰 수 있음~~ — ✅ **2026-07-31 확정**
+  ([ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)). comment 모듈이 기다리던 게이트였다.
+  세 후보 중 *`23503`을 타입 있는 거절로 번역*을 택했다 — `FileService.deleteFilesOfCreator`가
+  409 `USER_FILES_IN_USE`로 답하며, 이는 형제 메서드 `deleteFile`이 `FILE_IN_USE`에 대해 이미
+  하던 것과 같다. 나머지 둘을 기각한 이유도 선택만큼 중요하다. 연쇄 확대는 제3자의 게시글을
+  파괴하는 데다 comment 과제가 확장할 삭제 순서까지 다시 쓰게 만들고, 규칙을 DB에서 강제하는
+  복합 FK는 이 성질이 "처리"가 아니라 *보장*으로 필요해질 때 채택할 형태로 그 ADR에 기록해 두었다.
+  남은 것은 잔여물이 아니라 의도된 결과다: 같은-작성자 규칙은 이제 **생성 시점 규칙**이므로,
+  자기 파일이 남의 게시글에 걸린 계정은 그 게시글이 사라질 때까지 삭제되지 않는다(409이며 admin이
+  치울 수 있다). **그 아래에 깔린 기능 자체는 여전히 미결정이다** — 다음 항목 참조.
+- ~~**`PATCH /file/:id { userId }`가 애초에 존재해야 하는가**~~ (2026-07-31 기록,
+  [ADR 0024](ADR/0024-account-cascade-fk-refusal.ko.md)) — **2026-09-04 해결**
+  ([ADR 0050](ADR/0050-consent-based-file-ownership-transfer.ko.md), ADR 0024를 amend):
+  유지하되, 무동의 즉시 강제 이전을 제안/수락/거절/취소 흐름으로 교체 — 관리자를 포함해
+  오직 대상 유저만 수락할 수 있다. 조사 과정에서 이전에 기록된 적 없던 두 사실을 확인했다:
+  이 필드는 어떤 목적이 진술되기 전부터(이 프로젝트 첫 커밋 때부터) 존재했고, 실제로 이걸
+  보내는 살아있는 클라이언트가 하나도 없었다(`frontend/`/`admin/` grep). 개발자가 이 ADR을
+  작성하는 과정에서 실제 목적을 밝혔다: 계정을 삭제·탈퇴하기 전에 소유 파일을 다른 사람에게
+  넘겨, 삭제 캐스케이드로 잃지 않게 하려는 것. ADR 0024의 `23503` → `USER_FILES_IN_USE`
+  번역과 `PostService.resolveAttachment`의 작성자 검사는 둘 다 여전히 도달 가능하고
+  필요하다 — 동의는 *누가* 이전을 트리거할 수 있는지만 게이트할 뿐, 수락된 이전이 여전히
+  같은 하위 invariant 붕괴를 일으키는 건 그대로다. 그래서 ADR 0050은 0024를 대체가 아니라
+  amend한다(기각된 "필드 완전 제거" 대안만이 실제로 0024를 대체했을 것). 백엔드 구현만
+  해당하며, 프론트엔드/admin UI(제안/수락/거절 액션, 상태 배지)는 해당 디렉터리 각자의
+  범위에서 별도로 추적한다.
+- 유보한 목록 조회 인덱스 (2026-07-30 기록,
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) — 검색/필터/정렬 과제는
+  의도적으로 **인덱스를 하나도 추가하지 않고** 마무리했다. 이 테이블 규모에서 후보 셋 다
+  측정 없는 추측이기 때문이다. 각각은 측정을 기다리는 평문 기술 상태이며, 도입할 때는 승인과
+  `migration:generate` 출력의 라인단위 검토를 거쳐야 한다. `("createdAt" DESC, "id" DESC)`는
+  기본 정렬과 페이지 경계용(대략 10⁴행 이상에서 정당화된다), `pg_trgm` GIN on `lower(title)`은
+  `ILIKE '%term%'`가 인덱스를 쓸 수 있게 되는 *전제 조건*이라 확장 + 인덱스의 2단계
+  마이그레이션이 되고, `("creatorId")`는 Postgres가 자동 생성하지 않는 인덱스로 새 필터와 계정
+  연쇄 삭제([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) 양쪽에 쓰인다. 그때까지
+  `search`/`creatorId`는 순차 스캔이고 정렬은 전체 정렬이다 — 이 규모에서 감수하는 트레이드다.
+  뒤집는 근거는 직관이 아니라 측정이어야 한다.
+- ~~목록 조회 파라미터의 프론트엔드 반영~~ (2026-07-30 기록,
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) — **2026-09-07, 이미 끝나 있던
+  걸 뒤늦게 발견**(취소선 없이 방치된 낡은 항목). `frontend/src/features/files/FileBoard.tsx`가
+  `GET /file`의 네 파라미터를 전부 연결해뒀다: `FILE_SORT_FIELDS`로 구동되는 `sortBy`
+  `<select>`, ASC/DESC `order` `<select>`, 디바운스된 `search` 입력, 검증된 `creatorId`
+  필터(`FilePreviewTile`에서 오는 "이 작성자로 필터" 연동과 "필터 초기화" 버튼까지) —
+  `DashboardPage`에서 실제로 라이브 상태임을 확인했고 죽은 코드가 아니다.
+  `frontend/docs/API-CONTRACT.md`도 이미 전체 파라미터/검증 규칙을 문서화해뒀다. 여기 더
+  할 일 없음.
+- ~~게시글/댓글 API의 프론트엔드 반영~~ — ✅ **2026-08-11 해소** (2026-08-11 기록,
+  [ADR 0023](ADR/0023-board-domain-schema.ko.md)) — 위 항목과 마찬가지로 **백엔드 작업이
+  아니라 프론트엔드 전용 과제가 담당한다.** 라우팅 기반 작업이 먼저 착지했다: `/`가
+  이제 앱의 홈(`PostBoard`)이고, 파일 보드는 `/files`로 옮겼으며, `/posts/:id`를
+  예약해 뒀다(`PostDetailPage`). `PostResponse`/`CommentResponse`는 `src/api/types.ts`에서
+  백엔드 DTO를 미러링하고 있고, `frontend/docs/API-CONTRACT.md`가 해당 라우트를 문서화한다.
+  **게시글 목록/작성은 같은 날 착지했다**: `PostBoard`가 `PostForm`(title/body + 선택적으로
+  `FilePicker`가 고른 파일, `POST /post` — 200 재생(replay)과 201 신규 생성을 동일하게
+  처리)과 게시글 목록 자체(`FileBoard`를 그대로 본뜬 검색/정렬/작성자 필터/페이지네이션,
+  행마다 첨부파일 아이콘, ADR 0021)를 함께 호스팅하며, 새 `posts.spec.ts` e2e 스펙이
+  이를 검증한다. **게시글 상세 + 댓글 스레드가 마지막으로 착지하며 이 항목을 마무리했다**:
+  `PostDetailPage`는 게시글과 첨부파일을 불러오고(`FileDetailPage`와 동일한 visibility
+  기반 재생 패턴), 작성자/admin에게 인라인 수정/삭제를 제공한다. `CommentThread`는 순서가
+  고정된(`createdAt ASC`) 스레드를 "더 보기" 페이저와 함께 표시하고, 각 댓글은 그 댓글의
+  작성자 본인/admin만 인라인 수정/삭제할 수 있다. `CommentForm`은 새 댓글을 작성하고
+  재fetch를 트리거한다 — 이 앱에는 실시간/폴링 인프라가 없기 때문이다. 전체 Playwright
+  스위트: 22/22 통과.
+- ~~파일 가시성 + 미디어 확장의 프론트엔드 반영~~ — ✅ **2026-08-03 해소**
+  (2026-07-31 기록, [ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md); 두 절반
+  모두 2026-08-01 백엔드에서 착지 — 가시성은
+  [ADR 0026](ADR/0026-file-visibility-implementation.ko.md), 미디어 타입 확장은
+  [ADR 0027](ADR/0027-media-type-expansion-implementation.ko.md)). 이 항목이 요구하던 네
+  가지가 모두 `frontend/`에 반영됐다: 파일 보드(검색/정렬/필터/페이지네이션/visibility
+  배지, `FileBoard.tsx`), 파일 상세 페이지(visibility별 재생 — public/unlisted은
+  `<video src>` 직접 재생, private은 인증된 blob+objectURL 페치), 파일 관리 액션(visibility
+  토글, 공유 링크 회전, 삭제 — 모두 `PATCH`/`DELETE /file/:id`로 처리), 그리고 업로드
+  폼(ADR 0027의 필드별 허용목록을 미러링하는 `image`/`audio`/`video` 필드, 그리고 같은
+  과제에서 함께 추가된 XHR 기반 업로드 진행률 표시 — `fetch`는 업로드 진행률 이벤트를
+  제공하지 않기 때문). `frontend/docs/API-CONTRACT.md`는 콘텐츠 엔드포인트
+  `fileUrl`/`visibility`/`shareUrl` 형태와 3필드 업로드 계약을 이미 문서화하고 있다.
+- ~~`ARCHITECTURE.md`(+ko)의 문서 부패~~ (2026-07-30 기록) — **2026-09-01 해결**: 코드를
+  기준으로 처음부터 다시 쓰는 전용 문서 감사 작업으로 마무리했다. 모듈 맵에서 빠져
+  있던 모듈 일곱 개(Post, Comment, Storage, AuditLog, TempCleanup, Health, Metrics)를
+  추가했고, RBAC(역할, `RolesGuard`, 액세스 토큰 `role` 클레임), `FileController`/
+  `FileContentController` 분리와 가시성·`mediaType`·Storage 포트·S3 서명 리다이렉트,
+  실제 환경변수 목록을 반영했고, Jest `roots`를 `["src"]`에서 `["backend"]`로
+  바로잡았고, e2e 스위트를 문서화했고, 사실이 아니게 된 "존재하지 않는 인프라" 절을
+  README.md/ROADMAP.md로 연결되는 정확한 요약으로 교체했다.
+- ~~`CLAUDE.md`의 Never Do Group 2 페이지네이션 예시는 여전히 현재 시그니처를
+  `getFiles(take, skip)`로 적고 있었다~~ — **2026-09-02 해결**: 예시가 이제
+  [ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md) 이후 실제 시그니처인
+  `getFiles(query: GetFilesDto)`를 반영한다. 이건 처음 기록될 때(2026-07-30) 위
+  `ARCHITECTURE.md` 항목에 "같은 과제"로 묶여 있었지만, `CLAUDE.md`가 문서 작성
+  프로토콜이 다루는 문서 목록 밖이라 그 항목의 2026-09-01 수정 범위 밖에 남았고,
+  더 큰 작업에 묶이지 않고 한 줄짜리 별도 수정으로 마무리됐다.
+- ~~이식된 `admin/` 콘솔의 적응~~ — **2026-07-30에
+  [Stage 5](#stage-5--운영-화면-admin-콘솔--2026-07-30-추가)로 스케줄됐으므로** 더 이상 미예정이
+  아니다. 이 항목이 원래 이 절에서 시작했기에 한 번만 남겨 둔다: Chat Project의 콘솔을
+  수정하지 않은 선언된 수정 기반으로 `admin/`에 가져왔고
+  ([ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)), 목적은 둘이었다 —
+  [ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)이 만들지 않고 남긴 **권한 계층 운영 화면**을
+  공급하는 것, 그리고 같은 3단계 계층용으로 이미 만들어진 콘솔을 다시 생성하는 LLM 토큰의 극히
+  일부로 그것을 해내는 것. 검증된 수정 백로그는 ADR 0022에 있고, 작업 행과 순서, 그것이 의존하는
+  백엔드 결정은 이제 Stage 5의 것이다.
+- ~~어느 admin 화면이 살아남는가~~ (2026-07-30 기록,
+  [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)) — **2026-08-06 해소**.
+  콘솔 적응([Stage 5](#stage-5--운영-화면-admin-콘솔--2026-07-30-추가)의 세 번째 행)이 이식본이
+  "대부분 삭제 가능"하지 않았음을 보여줬다 — 삭제 가능했던 건 채팅 도메인 잔재뿐이었다 — 그래서
+  `admin/`이 유일한 admin 화면이다. `frontend/src/features/admin/AdminPage.tsx`
+  ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)이 명세했던 `/admin` 라우트
+  구역)을 `frontend/src/App.tsx`의 라우트와 함께 삭제했다. ADR 0010의 admin 배치 조항을 한 번
+  더 개정한다 — admin은 이제 `frontend/` 안의 라우트 구역조차 아니다. ADR 0022의 2026-08-06
+  추가 기록에 남겼다.
+- 문서 문구 동기화 (2026-07-23 유예 결정; 2026-07-29 완료): 계획 수립 이전의
+  "후보(candidate)" 표현을 이 계획에 맞춰 정리. ADR 0003("candidate roadmap
+  item")은 이제 반영된 [ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)을 가리키고,
+  ADR 0006 Consequences("top roadmap item")에는 날짜 병기 완료 주석이 붙었으며,
+  `CHAT-REMNANT-REMOVAL-PLAN`("ROADMAP's CI candidate")은 이제 착지된 Stage 1
+  CI([ADR 0016](ADR/0016-github-actions-ci.ko.md))를 가리킴. **완료.**
+- 사전-의무화 서비스의 코드 내 트레이드오프 문서화 공백 (2026-08-02 기록) — 코드베이스
+  전수 조사 결과, 트레이드오프 서술은 촘촘하되 **계층화**되어 있다: ADR은 결정 수준
+  트레이드오프를 빠짐없이 담고(`## Consequences` 절 + 기각안, ADR당 마커 5~39개), 호출
+  지점 수준 — 의무 목적/이유/방법 블록의 `이유` 라인([CLAUDE.md](../CLAUDE.md) > File Creation
+  Convention) — 은 게시판/가시성 세대 서비스에서는 촘촘하지만(`file.service` 17블록,
+  `post.service` 12, `comment.service` 8), **가장 오래된 `auth.service.ts`에는 0블록으로
+  부재**하며 그 트레이드오프는 [ADR 0001](ADR/0001-basic-token-authentication.ko.md) /
+  [0002](ADR/0002-dual-secret-token-pair.ko.md) /
+  [0012](ADR/0012-refresh-cookie-rotation.ko.md)에만 있다. 이는 **규칙 위반이 아니다** —
+  블록 의무화(커밋 `995df5e`)는 *새로 만들거나 수정한* 함수에만 적용되는데, auth.service는
+  그보다 앞서 만들어졌고 이후 수정되지 않았다 — 따라서 결함이 아니라 결정 계층(촘촘)과
+  호출 지점 계층(희박) 사이의 문서화 밀도 공백이다. **전 Stage 완료 후 진행할 후속 작업으로
+  일정 배정**하며, 지금 하지 않는 것은 의도다: 동작 변경이 없는 문서 전용 패스이고, 단계가
+  끝나기 전에 하면 이후 단계(auth를 건드리는 작업)가 어차피 수정할 함수를 헛되이 흔드는
+  꼴이 된다 — 그 수정이 블록을 부수 효과로 추가해 공백을 공짜로 줄여 줄 수 있다. 전용
+  작업은 사전-의무화 서비스(auth.service가 가장 명확한 사례)에 목적/이유/방법 블록을
+  소급 추가하고, 각 `이유` 라인이 자기 지배 ADR을 가리키게 한다. 드라이브바이가 아니다:
+  저장소 전역 주석 스윕이야말로 Scope Discipline이 기능 커밋에서 배제하는 종류의 변경이므로,
+  단계별 작업이 끝난 뒤 자체 작업으로 착지한다.
+  **2026-09-03 착지**(위 계획대로 전 Stage 완료 후): 사전-의무화 함수 전체에 블록을
+  소급 추가했고, 원래 잡았던 범위보다 넓어졌다 — `auth.service.ts`뿐 아니라 서비스 계층
+  나머지(`user.service.ts`, `superadmin-seed.service.ts`, `temp-cleanup.service.ts`,
+  `metrics.service.ts`)와 storage 어댑터(`local-disk.storage.ts`)까지, 그리고 같은 밀도
+  공백이 그쪽에서도 드러나면서 서비스를 넘어 컨트롤러/가드/전략/필터/데코레이터까지 확장
+  (`auth.controller.ts`의 쿠키 처리 헬퍼들, `all-exceptions.filter.ts`, `roles.guard.ts`,
+  두 Passport 전략, param 데코레이터 3종). 커밋 4건: `6f52f66`, `ad995a5`, `f04b366`,
+  그리고 전략 블록을 작성하던 중 드러난 죽은 코드 발견 건을 다룬 `9e9434e`(`JwtStrategy`/
+  `LocalStrategy`가 각각 갖고 있던 `if (!user)` 가드가 이미 도달 불가능했음 — 제거하고
+  [CLAUDE.md](../CLAUDE.ko.md) > 알려진 격차에 기록). **완료.**
+- ~~`GET /user` 검색/정렬~~ (2026-08-05 기록, 실행 #2 `GET /user` 페이지네이션 작업의 후속으로
+  [Stage 5](#stage-5--운영-화면-admin-콘솔--2026-07-30-추가)로 미룸) — 페이지네이션 작업은
+  의도적으로 **take/skip만** 배포했다: ROADMAP 항목명이 페이지네이션만 지칭했고,
+  `GetFilesDto`의 `search`/`sortBy`/`order` 표면([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md))을
+  `GetUsersDto`에 미러링하지 않았다. **재검토 트리거**: Stage 5의 "이식된 `admin/` 콘솔 적응"
+  행 — 이식된 사용자 목록 화면(`ADR 0022` 백로그: `GET /user?page&take&sort&sortBy&search&status`)이
+  email이나 역할로 필터/정렬하길 원할 텐데, 오늘의 `GetUsersDto`에는 그 필드가 없다. 그 필요가
+  실제로 드러나면 두 번째 조회 계층 패턴을 새로 만들지 말고 `GetFilesDto`가 이미 쓰는
+  `search`/`sortBy`/`order` 형태(email `ILIKE`, `FILE_SORT_FIELDS`와 같은 방식으로 키를 둔
+  `USER_SORT_FIELDS` 튜플)로 `GetUsersDto`를 확장한다 — 페이지네이션 작업과 마찬가지로 별도
+  ADR 불필요. 자체 작업으로 일정 배정하지 않는다: 페이지네이션처럼 독립된 부채가 아니라
+  Stage 5의 콘솔-적응 행에서 나올 법한 확장 항목이다. 트리거는 도달했지만 필요는
+  2026-08-06 시점엔 드러나지 않았다 — 콘솔 적응이 이것 없이 착지했고, `GetUsersDto`와
+  정확히 일치시켰다. **2026-08-12 해소**: 결국 필요가 드러났다 — `GetUsersDto`가
+  `search`(email `ILIKE`)와 `sortBy`/`order`(`id`/`email`/`createdAt`, `role`은 제외)를
+  얻었고, 같은 변경에서 `users-page.tsx`도 검색창과 정렬 가능한 ID/Email/Created 헤더를
+  얻었다(`admin/README.md` > "무엇을 적응시켰는가"). `status` 필터는 서버에 여전히 없어서
+  이식본 원래 화면의 그 부분은 여전히 범위 밖이다
+- ~~`GET /audit-log`에 `userId` 필터가 없다~~ (2026-08-06 발견, 위 Stage 5 콘솔 적응 행 도중) —
+  이식된 사용자 페이지 상세 패널이 사용자별 "최근 활동" 조각을 위해
+  `GET /audit-log?userId=…`를 호출했지만, `AuditLogQueryDto`는 `action`만 필터한다.
+  그 시점 콘솔 자체에 대한 해결책: 패널 절을 **근사하지 않고 제거했다** — 필터 없는
+  페이지를 가져와 클라이언트에서 걸러내면 사용자의 오래된 항목이 그 페이지 밖으로 밀려날
+  때 조용히 빠지는데, 이는 조각을 아예 보여주지 않는 것보다 나쁘다
+  (`admin/README.md` > "이번 적응에서 내린 두 가지 결정"). **2026-08-12 해소**:
+  `AuditLogQueryDto`가 계획대로 기존 `action` 필터 형태를 그대로 따라 `userId`를
+  얻었다(별도 ADR 불필요). 같은 변경이 제거됐던 패널을 정확한
+  `GET /audit-log?userId={id}&take=5` 호출로 복원했고, `logs-page.tsx`도 "View all" 링크를
+  위해 자신의 URL에서 `?userId=`를 읽도록 연결했다(`admin/README.md` > "이번 적응에서 내린
+  두 가지 결정" 및 "열린 사항").
+  **2026-08-24 정정**([ADR 0045](ADR/0045-audit-log-target-type.ko.md)): "actor 또는 target과
+  일치"는 지나치게 넓은 서술이었다 — `targetId`는 다형이라 판별자 없이 매칭하면 id가 유저
+  id와 충돌하는 파일·게시글·댓글 기록까지 반환됐다(개발 DB 114행 중 62행). 이제 이 필터의
+  의미는 "행위자이거나, 유저를 대상으로 하는 action의 대상"이며, 새 `targetType` 컬럼이
+  이를 강제한다
+- ~~게시글 상세/댓글 UI가 한국어로 하드코딩됨~~(2026-08-13, 게시글/댓글 보드를
+  브라우저로 직접 조작하는 QA 도중 발견 — 전체 기록은 CHANGELOG > 알려진 문제/수정) —
+  **2026-08-15 해소**: `PostDetailPage.tsx`, `CommentThread.tsx`, `CommentForm.tsx`,
+  그리고 수정 도중 같은 결함 종류로 추가 발견한 `PostForm.tsx`의 한국어 사용자 노출
+  문구를 전부 영어로 교체 — `UploadForm.tsx`/`FileDetailPage.tsx`가 이미 쓰던 표현을
+  따랐다. 옛 한국어 문구를 assertion으로 쓰던 `frontend/e2e/*` 두 곳도 갱신. 순수
+  문자열 교체 — 설계 판단도, ADR도, 백엔드 변경도 없음.
+- 프론트엔드 스타일 전면 개편(CSS Modules + 브랜드 팔레트 + 명시적 다크/라이트 토글) —
+  **2026-08-14 결정과 동시에 전부 랜딩**. 헤드리스 Playwright 스크린샷 + 헤드풀 점검으로
+  구성된 라이브 UI/UX 점검에서 모든 화면이 디자인 시스템 없이 인라인 `style={{}}`로만
+  스타일링돼 있다는 사실이 드러났다. 비교표 기반 Q&A 패스로 CSS Modules(신규 의존성
+  없음 — Vite가 `*.module.css`를 기본 내장 지원해 frontend/CLAUDE.md의 "CSS 프레임워크
+  도입 전 제안 필요" 조건에 걸리지 않음), 브랜드 지향 방향 + 명시적 토글(기존
+  `prefers-color-scheme` OS 전용 방식을 넘어섬), 전체 5개 라우트 페이지 + `NavBar`
+  적용 범위를 확정했다. 결정 전체 기록, 확정된 브랜드 퍼플 토큰 표, 페이지별 작업
+  목록은 `frontend/docs/STYLE-PLAN.md`(+ `.ko.md`)에 있다. 7개 항목 전부 같은 날
+  랜딩: 토큰 기반 + `ThemeProvider`/토글 + `NavBar`; `LoginPage`; 파일 게시판
+  (`DashboardPage`+`FileBoard`+`UploadForm`); `FileDetailPage`+`VisibilityBadge`(오래된
+  파일 상세 제목 겹침 버그 수정과 함께 처리 — 근본 원인은 전역 `h1` 규칙에
+  `line-height`가 없던 것); 게시글 게시판(`PostBoard`+`PostForm`+`FilePicker`); 마지막으로
+  `PostDetailPage`+`CommentThread`+`CommentForm`(제목 버그 수정으로 불필요해진 스코프
+  인라인 `lineHeight` 임시 조치도 이때 함께 제거). 같은 점검에서 드러났지만 의도적으로
+  포함하지 않아 여전히 열려 있는 항목 2건: 영상 재생을 막는 S3 CORS 문제(AWS 버킷 설정,
+  소스 코드 문제 아님)와 위의 한글/영어 UI 문구 혼용 — 이번 스타일 작업은 전환한 세 파일
+  전부에서 한글이든 영어든 하드코딩된 문자열을 발견한 그대로 두었다. 모든 전환은
+  마크업/스타일 변경만 — API·DB·로직 변경 없음. 7개 항목 전체의 페이지별 상세는
+  `CHANGELOG.md`의 `[Unreleased] > Added` 항목 참고.
+- **S3 리다이렉트 private 파일 재생 실패, 원인 규명 (2026-08-15 발견)** — 위의 "S3
+  CORS 문제" 항목과 ADR 0036 자체의 "`pnpm test:e2e`로 미검증" 잔여 사항은 별개가
+  아니라 같은 결함이었다: 로컬 `STORAGE_DRIVER=s3` 환경에서 `pnpm test:e2e`를
+  돌려보니(22개 중 21개 통과) 정확히 `frontend/e2e/detail.spec.ts:73` 한 건이
+  실패했다 — `FileDetailPage.tsx`의 **private** 티어 재생 경로가 `fetch()`+Blob으로
+  콘텐츠를 직접 가져오는데(`<video>` 태그는 `Bearer` 헤더를 실을 수 없음), 이 fetch가
+  ADR 0036의 `302`를 따라 교차 출처 S3 URL로 리다이렉트되면 응답 본문을 읽는 데
+  버킷에 없는 CORS 헤더가 필요하기 때문이다. `public`/`unlisted` 재생(평범한
+  `<video src>`, JS가 본문을 읽지 않음)은 영향받지 않고 통과한다. 전체 추적 내용은
+  ADR 0036 > "추가 기록 (2026-08-15)" 참고. 후보 해결책 두 가지를 기록만 해두고
+  이 문서에서 확정하지 않는다 — 버킷 CORS 설정, 그리고/또는
+  `detail.spec.ts:73`의 단언 갱신(CORS 여부와 무관하게 리다이렉트 체인의 잘못된
+  구간을 검사하고 있음).
+  **두 후보 해결책 모두 2026-08-16에 처리됐다.** 해결책 1: 버킷에는 CORS 규칙이
+  하나도 설정돼 있지 않았다. 규칙 하나를 적용했고(`GET`만 허용, 이 백엔드 자체
+  `CORS_ORIGIN`의 로컬 개발 origin 두 개로 한정) Playwright로 실제 재검증한
+  결과 private 영상이 이제 소유자에게 진짜로 재생된다(`readyState: 4`, 실제
+  크기, CORS 콘솔 에러 없음) — 단순 HTTP 상태 확인이 아니다. 해결책 2는 같은 날:
+  `detail.spec.ts:73`의 단언이 리다이렉트 체인의 잘못된 구간(최종 응답이 아니라
+  첫 번째 `302` 홉)을 검사하고 있어서, `STORAGE_DRIVER=s3`에서는 재생이 실제로
+  되는지와 무관하게 절대 통과할 수 없었다 — `200`(local) 또는 `302`(s3) 둘 다
+  허용하도록 완화하고, 실제 성공의 진짜 증거는 이미 있던
+  `video[src^="blob:"]` 단언이 맡도록 했다. 두 드라이버 모두에서 5/5 통과를
+  확인했다. 전체 기록: ADR 0036 > "추가 기록 (2026-08-16)". 이 항목에서 남은 것은
+  없다.
+- **재개 가능한(resumable/chunked) 업로드 (2026-09-06 기록, 설계 작업 없음)** —
+  [ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)의 `TEMP_SWEEP_TTL_HOURS`를
+  설명하다가 드러났다: 24시간 TTL은 `POST /upload/attach`가 성공적으로 끝난
+  뒤 `POST /file`을 아직 안 부른(방치되거나 느린 **2단계**) 공백만 다룰 뿐,
+  바이트 전송 자체가 도중에 끊기는 경우(`POST /upload/attach` 중 연결 끊김)엔
+  아무것도 해주지 않는다. 지금은 그 경우 재개할 방법이 전혀 없다 — 클라이언트가
+  파일 전체를 처음부터 다시 보내야 한다, Multer의 `memoryStorage`(ADR 0029 D4)가
+  요청 하나를 청크나 range 없이 통째로 버퍼 하나로 받기 때문이다. CLAUDE.md의
+  Architecture Decisions > File Storage는 이미 "스트리밍/청크 업로드"를
+  **절대 제안 금지** 목록에 올려뒀다 — 그 입장은 그대로고 이 항목이 지금 그걸
+  다시 여는 게 아니다; 나중에 앱 규모가 커지거나 느린 네트워크 사용자층 때문에
+  "처음부터 재업로드"의 비용이 실제로 커지는 시점이 왔을 때, 새로 조사하는 대신
+  이름 붙은 출발점을 남겨두려는 것뿐이다. 비교표도, ADR도, 확정된 설계도 없다 —
+  순전히 우선순위가 생기면 집어들 수 있는 표식이다.
+- **Superadmin 부팅 시딩 신원 검증 (2026-09-09 발견, 자동 트리거 제거로 해결 —
+  [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.ko.md), ADR 0013 amend)** —
+  이번에 대체된 부팅 시 자동 승격은 `SUPERADMIN_EMAIL`을 먼저 등록한 사람을
+  소유권 증명 없이 그대로 신뢰했다. 더 강력한 두 대안을 검토했지만 이 프로젝트의
+  현재 단계(실사용자 없음, 메일 인프라 없음)엔 맞지 않아 영구 폐기가 아니라
+  보류했다:
+  - **승격 전 이메일 인증** — 신원 문제의 실질적 해결책이지만, 아직 실사용자가
+    없는 프로젝트엔 과분한 규모의 신규 기능(SMTP 계정, 신규 의존성, 인증
+    토큰용 스키마 변경, 신규 엔드포인트/env var)이다.
+  - **"현재 superadmin이 0명일 때만" 게이트** — 저렴하지만, 애초에 막으려던
+    레이스를 막지 못한다: 원래 레이스가 발생하는 시점(새 배포 직후, 소유자의
+    첫 가입 이전)엔 이미 superadmin이 0명이기 때문이다.
+  이 프로젝트가 실제 공격 표면에 노출되는 트래픽을 다루게 되면 재검토한다.
+- **backend 어디에도 요청 횟수 제한이 없음 (2026-09-09 발견, 2026-09-10 해결 —
+  [ADR 0053](ADR/0053-global-rate-limiting.ko.md))** — 보안 점검에서
+  `POST /auth/register`/`POST /auth/signin`이 `HASH_ROUNDS`가 주는 시도당 비용
+  말고는 아무 제약도 없다는 게 드러났다. 이제 전역 `ThrottlerGuard`
+  (`@nestjs/throttler`)가 `APP_GUARD`로 돈다 — 이 저장소 최초의 전역 가드 —
+  우선 보수적인 기본값 분당 100회로, 앱 전체가 나눠 쓰는 풀 하나가 아니라
+  라우트별로 독립적으로 추적되며, `HealthController`/`MetricsController`는
+  예외 처리해(`@SkipThrottle()`) kubelet/Prometheus 트래픽이 남용으로
+  오인되지 않게 했다. 실제 Postgres 대상 e2e로 검증 완료(76/76, 429 없음), 실행
+  중인 dev 서버에 실제 429를 발생시켜 한도 자체와 라우트별 독립성을 둘 다
+  확인했다(`GET /file`이 자신의 한도에 걸려도 같은 창의 `POST /auth/signin`은
+  영향받지 않음). **아직 열려 있어 후속 작업으로 남김**: 라우트별 세분화(예:
+  `POST /auth/signin`만 더 빡빡하게) — 이 ADR은 의도적으로 전역 기본값만
+  확정했다. Redis 기반 `ThrottlerStorage`도 열려 있음 — 이 앱이 실제로
+  replica 2개 이상으로 돌기 전까지는 필요 없다(현재 기본 storage는 인스턴스별로
+  카운트한다).
+
+## 8. Advisory 노트
+
+작업 일정에는 반영하지 않되 판단에 참고할 기준: 개인정보/컴플라이언스(삭제 정책,
+보관 기간), 릴리스/변경 관리(semver + 마이그레이션 순서), 문서 최신성 강제
+(README/엔드포인트 일치의 자동 검증 — CI 작업 아래의 후보).
+
+## 9. 완료
+
+### 2026-08-29
+
+| 항목 | 비고 |
+|---|---|
+| 2026-08-28 철거 이후 재배포로 다시 안정 상태에 도달 | 3-state Terraform(`cluster` → `app-infra` → `addons`) apply와 Helm 앱 설치를 다시 실행해, 2026-08-28 항목이 예고한 "같은 순서, 같은 `deploy.sh all`"이 실제로 그대로 통한다는 걸 확인했다. `terraform plan`으로는 보이지 않는 apply 잔재 두 가지를 겪었다 — 둘 다 Terraform이 추적하지 못하는 클러스터 쪽 상태다. (1) 새로 추가된 `kube-prometheus-stack` 애드온([ADR 0047](ADR/0047-observability-prometheus-grafana.md))의 Helm 릴리스가 `pending-install`에 고착됨 — 실제 파드는 이미 `Running` 상태였지만, install 도중 끊기는 바람에 Helm 자체의 릴리스 레코드도 Terraform state도 이 리소스가 생성됐다는 걸 전혀 모르는 상태였다. `helm uninstall kube-prometheus-stack -n kube-prometheus-stack` 실행 후 `addons/`에서 깨끗하게 `terraform apply`를 다시 돌려 `deployed`(revision 1)로 재생성했다. (2) 앱 Helm 릴리스(`upload-board`)가 pre-install 마이그레이션 Job에서 실패함(`CreateContainerConfigError: secret "upload-board-project-app-secrets" not found`, revision 1) — 원인은 ESO `SecretStore`/`ExternalSecret` 일회성 수동 적용과 `default` ServiceAccount의 IRSA 어노테이션(`k8s/infra/terraform/README.md`의 "After all three apply" 단계)이 철거 이후 다시 수행되지 않았기 때문이었다. 둘 다 Terraform 재적용으로는 재현되지 않는 클러스터 쪽 수동 단계다. `app-infra/`에서 `terraform output -raw external_secrets_manifest \| kubectl apply -f -`로 고쳤고(`externalsecret/upload-board-project-app-secrets`가 `SecretSynced`/`True`인 것까지 확인), 이어서 `kubectl annotate serviceaccount default eks.amazonaws.com/role-arn=$(terraform output -raw app_iam_role_arn)`를 실행했다 — 릴리스를 재시도하니 revision 2로 `deployed`에 도달했다. 실제로 확인한 결과: 마이그레이션 Job `Complete 1/1`, 앱 파드 `1/1 Running`, `GET /health/live`와 `GET /health/ready`(후자는 실제 DB 왕복 포함) 모두 `200 {"status":"ok"}` 응답. |
+
+### 2026-08-28
+
+| 항목 | 비고 |
+|---|---|
+| end-to-end 검증 후 AWS 전체 destroy | 배포가 안정 상태로 확인됐고(아래 2026-08-27 행 참고), 같은 기간 실제 RDS를 상대로 TLS 검증 결함까지 발견·수정한 뒤(ADR 0039 Addendum — `rejectUnauthorized: false`를 `ssl: { ca: DB_SSL_CA }`로 교체, 재배포해 실제 인증서 검증 통과까지 확인), 개발자는 활성 테스터가 없는 상태로 스택을 계속 띄워두는 대신 AWS 과금을 멈추기로 했다. 순서: Helm 릴리스 먼저 제거, 그다음 `addons/` → `app-infra/` → `cluster/` 순으로 `terraform destroy` — `k8s/infra/terraform/README.md`가 명시한 역순 그대로다(ALB/Ingress를 한 번도 켠 적이 없어서 ADR이 기록한 `DependencyViolation` 타임아웃 위험도 해당 없었다). 이후 이 스택이 만든 모든 리소스 종류(EKS 클러스터, 노드그룹 EC2 인스턴스, RDS 인스턴스, S3 버킷, Route53 호스팅 존, NAT 게이트웨이, Elastic IP, EBS 볼륨, Secrets Manager, ACM 인증서, CloudWatch 로그그룹, 로드밸런서)를 `aws` describe 호출로 직접 확인했고 전부 빈 값/not-found였다. RDS 스냅샷은 안 남겼다(`skip_final_snapshot = true`가 원래 설계였고, 남길 데이터도 없었다). `CLAUDE.md`(+ko), `k8s/infra/terraform/README.md`(+ko), 이 문서의 Stage 4 상태 표를 같은 날 갱신해서 2026-08-25에 했던 "적용됨" 정정을 낡은 채로 두지 않고 다시 "미적용"으로 되돌렸다 — 각각 이게 특정 시점의 스냅샷이며 `terraform plan`으로 재확인해야 한다고 명시했다. 나중에 재배포할 때 새로 결정할 건 없다 — 같은 순서, 같은 `deploy.sh all`이 Terraform README의 Deploy 섹션(Destroy 섹션에서 상호참조)에 그대로 문서화돼 있다. |
+
+### 2026-08-27
+
+| 항목 | 비고 |
+|---|---|
+| AWS 첫 실제 배포가 안정 상태에 도달함 | Helm 릴리스 `upload-board`(`k8s/helm/`)가 `cluster/`의 Terraform 상태로 프로비저닝된 실제 EKS 클러스터에서 `STATUS: deployed`(revision 5)에 도달했다(§7의 "적용 안 됨" 주장은 이미 2026-08-25에 정정됨 — 이번 건은 그 인프라 *위에* 앱이 올라간 것이지, 인프라 자체가 아니다). revision 1–4는 모두 실패했다: rev 1–3은 계정이 아직 Free Plan이던 동안의 파드 슬롯/아키텍처 불일치(Paid Plan 업그레이드와, `docker-publish` CI가 `dev`가 아닌 `main` push에만 반응하므로 수동으로 진행한 멀티아치 `docker buildx build --platform linux/amd64,linux/arm64` 푸시로 해결); rev 4는 실제 RDS 인스턴스를 상대로 마이그레이션 Job이 `no pg_hba.conf entry ... no encryption`로 실패했다(`rds.force_ssl`이 TLS를 요구하는데 앱이 요청하지 않고 있었음). `helm upgrade upload-board . --reuse-values --set env.DB_SSL=true`(rev 5)가 바로 이 문제를 위해 추가해둔 `DB_SSL` env var(커밋 `cf0cbfe`, Joi 스키마 + `.env.example` + `data-source.ts`)로 이를 해결했다 — 이제 마이그레이션 Job이 완료되고 앱 파드가 `Running`/ready 상태에 도달한다. 이어서 S3 접근을 연결했다: `default` ServiceAccount에 `app-infra`의 Terraform 출력 IAM 역할 ARN(`eks.amazonaws.com/role-arn=arn:aws:iam::074416822640:role/upload-board-project-app`)을 주석 처리하고 Deployment를 재시작해 반영했으며, 실행 중인 파드에 주입된 `AWS_ROLE_ARN`/`AWS_WEB_IDENTITY_TOKEN_FILE` env var와 projected `aws-iam-token` 볼륨으로 확인했다 — 릴리스의 `STORAGE_DRIVER=s3` 값이 이제 실제로 인증할 수 있지만, 실제 버킷을 상대로 한 엔드투엔드 업로드는 아직 검증되지 않았다. 아직은 클러스터 내부에서만 접근 가능하다(`ingress.enabled: false`, 차트 기본값) — 개발자는 외부 테스터가 실제로 필요해지기 전까지는 미리 `Ingress`를 켜지 않고 이 상태를 유지하기로 확정했다. 그 외 열려 있던 두 항목은 같은 날 해결됐다: `cluster/main.tf`의 graviton `t4g.medium` 노드 타입은 원래 계정이 업그레이드되기 전 파드 슬롯 제약을 우회하기 위한 임시값이었으나, 이제 개발자가 비용 효율(`m6g.large`의 더 넉넉한 파드 슬롯보다 우선)을 이유로 **영구 선택값**으로 확정했다(값 자체는 안 바뀌므로 `terraform apply` 불필요 — 주석만 현행화); `k8s/helm/values-prod.yaml`을 추가해 이번 배포의 `--set env.DB_SSL/STORAGE_DRIVER/S3_BUCKET/...` 플래그를 하나의 오버레이로 정리했다(`helm upgrade upload-board . -f values-prod.yaml`), `helm template`으로 실제 릴리스와 동일한 `ConfigMap`을 렌더링하는지 검증함. |
+
+### 2026-08-06
+
+| 항목 | 비고 |
+|---|---|
+| admin 콘솔 적응 (역할 관리 조각) | `admin/`의 이식된 Chat Project UI를 이 백엔드의 실제 라우트에 맞게 다시 썼다: 문자열 `UserRole`(기존 숫자였음), 액세스 토큰 클레임에서 역할을 읽음([ADR 0028](ADR/0028-access-token-role-claim.ko.md)), 이진 승격/강등 토글을 대체하는 3단계 역할 `<select>`, `{ code, message }`로 분기되는 `AUTH_LAST_SUPERADMIN`/`USER_HAS_FILES`/`USER_FILES_IN_USE`/`FORBIDDEN`([ADR 0011](ADR/0011-error-code-contract.ko.md)), `GetUsersDto`/`AuditLogQueryDto`와 정확히 일치하는 `take`/`skip` + `[data, total]` 튜플 읽기. 채팅 도메인 페이지(`rooms-page`, Apollo/`/graphql` 계층, ban/unban/force-logout)를 삭제하며 같은 변경에서 Stage 5의 모더레이션 존재 여부 행도 "아니오"로 결론지었다. 사용자별 감사 로그 패널은 당시엔 근사하지 않고 제거했다 — `GET /audit-log`에 `userId` 필터가 없다, 7절에 후속 항목으로 추적. 백엔드 파일은 건드리지 않았다 — Stage 5 네 번째 작업(전체 결함 목록: `admin/README.md` > "무엇을 적응시켰는가"). **2026-08-12 확장**: 7절 후속 항목이 착륙하면서 검색창, 정렬 가능한 헤더, 복원된 사용자별 "Recent activity" 패널, `logs-page.tsx`의 `?userId=` 필터링, 클라이언트 합성 CSV 내보내기가 추가됐다 — 전체 목록은 위 Stage 5 표의 해당 행 참고 |
+| 중복 admin 화면 정리 — **Stage 5 완료** | 위 적응 작업이 ADR 0022가 미뤄뒀던 질문에 답했다: 이식본은 "대부분 삭제 가능"하지 않았다(삭제 가능했던 건 채팅 도메인 잔재뿐, 역할 관리 본체는 깔끔하게 적응됐다) — 그래서 `admin/`이 유일한 admin 화면이다. `frontend/src/features/admin/AdminPage.tsx`(백엔드 호출이 전혀 없는 17줄짜리 stub, ADR 0010이 예약해 둘 때와 동일한 상태)와 `frontend/src/App.tsx`의 `/admin` 라우트+import를 삭제했다. [ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)의 admin 배치 조항을 한 번 더 개정한다 — admin은 이제 `frontend/` 안의 라우트 구역조차 아니다. [ADR 0022](ADR/0022-admin-console-import-from-chat-project.ko.md)의 2026-08-06 추가 기록에 남겼다. **Stage 5의 네 행이 모두 끝났다 — 남은 작업은 Stage 4(인프라 도입 후 배포)다.** |
+
+### 2026-07-30
+
+| 항목 | 비고 |
+|---|---|
+| 목록 검색/필터/정렬 | `GET /file`에 선택적 파라미터 네 개가 추가됐다 — `search`(제목 `ILIKE '%term%'`, LIKE 메타문자 이스케이프, 100자 이하), `creatorId`(이미 있는 creator join 활용), 그리고 완전한 `Record<FileSortField, string>`로 컬럼에 매핑되는 `sortBy`/`order` — 덕분에 클라이언트 문자열이 컬럼명이 되는 일이 없다. 기본 정렬은 `createdAt DESC` + `file.id` tiebreaker다. 이 엔드포인트에는 **`ORDER BY`가 아예 없어** offset 페이징이 비결정적이었다. 응답 형태 불변, 신규 에러 코드 없음(잘못된 값은 경계 파이프가 `VALIDATION_FAILED`로 거절), 스키마 변경 없음. `createdAt`/`pg_trgm`/`creatorId` 인덱스는 도입 계기를 기록한 채 유보 — **Stage 3 첫 작업** ([ADR 0021](ADR/0021-list-query-search-filter-sort.ko.md)) |
+| 게시판 도메인 스키마 설계 | 설계 게이트 전용 — 게시판 엔티티 **둘**을 한 번에 평문으로 기술했고, 코드도 마이그레이션도 없다. post ↔ file은 1:1·선택적·동일 작성자이며 unique·nullable FK가 `POST /post`의 idempotency 키를 겸한다(동일 재전송은 200 replay, 내용이 다르면 409 `POST_FILE_TAKEN`). 댓글은 평면 구조이고 대댓글은 가산적 마이그레이션으로 유보했다. `comment.postId`가 이 스키마의 **유일한** `ON DELETE CASCADE`이며, ADR 0020의 서비스 연쇄 규칙에 대해 당연시하지 않고 근거를 밝혔다. 첨부된 파일에 대한 `DELETE /file/:id`는 `23503`을 번역해 409 `FILE_IN_USE`가 된다(사전 검사는 `File ↔ Post` 모듈 순환을 만들고 경합도 남긴다). ADR 0020 계정 연쇄 삭제는 글과 댓글을 흡수하되 `deleteFiles=true`는 계속 파일만 지킨다. 소유권은 세 번째 축 없이 `canManage` 그대로이고, post 목록은 ADR 0021 조회 계층을 물려받는다 — **Stage 3 두 번째 작업** ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) |
+| 삭제 정책 설계 | soft delete는 근거를 남기고 기각했으며 삭제는 hard delete로 유지한다. `DELETE /user/:id?deleteFiles=true`는 파일 행 → 계정 행 → 물리 파일 순으로 연쇄 삭제하고(unlink는 커밋 이후), 확인 없이 파일 보유 계정을 지우려 하면 개수를 담은 신규 409 `USER_HAS_FILES`로 거절한다. `deleteFiles`를 boolean이 아닌 검증된 문자열 리터럴로 받은 이유는 암묵 Boolean 변환이 `"false"`를 `true`로 바꾸는 것이 실측으로 확인됐기 때문이다. 이번 과제에서 발견한 누수를 닫아 `DELETE /file/:id`도 저장된 `granted_` 파일을 unlink한다. 스키마 변경 없음 — **Stage 2 세 번째 작업이자 Stage 2 완결** ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) |
+
+### 2026-07-27
+
+| 항목 | 비고 |
+|---|---|
+| 업로드 중복 제출 정책 | attach가 발급한 파일명이 1회용 청구 토큰이다. 재제출 시 청구자 본인에게는 기존 파일을 replay(200)하고, 타인에게는 409 `FILE_ALREADY_CLAIMED`, 뒤를 받쳐 줄 temp 파일이 없으면 400 `FILE_INVALID_PATH`를 낸다. 동시 제출 경합은 500이 아니라 unique 제약으로 정리된다. `UploadFileDto.filePath`를 발급 형식으로 고정해 경로 탈출 공백도 닫았고, 스키마 변경은 없다 — **Stage 2 두 번째 작업** ([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)) |
+
+### 2026-07-26
+
+| 항목 | 비고 |
+|---|---|
+| 고아 temp 파일 정리 | 신규 운영 모듈 `TempCleanupModule`의 스케줄 `@nestjs/schedule` 스윕이 TTL(`TEMP_SWEEP_TTL_HOURS`, 기본 24시간; 매시간 cron)을 넘어 `file/temp`에 남은 `temp_` 파일을 삭제한다. `granted_`/`file/upload`는 건드리지 않으며, dry-run·활성 토글 제공, `cron`은 direct 의존성으로 승격 — **Stage 2 첫 작업** ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)) |
+
+### 2026-07-25
+
+| 항목 | 비고 |
+|---|---|
+| RBAC + 감사 로그 | `user`/`admin`/`superadmin` 역할, RolesGuard/@Roles, 소유권 "본인 또는 admin", superadmin 전용 `PATCH /user/:id/role`(마지막 superadmin 방지 + 세션 무효화), append-only 감사 로그와 `GET /audit-log`, `SUPERADMIN_EMAIL` 시드 — **Stage 0 완결** ([ADR 0013](ADR/0013-rbac-and-audit-log.ko.md)) |
+
+### 2026-07-23
+
+| 항목 | 비고 |
+|---|---|
+| 전체 로드맵 계획 수립 | 11축 결정 검토; 이 문서가 그 기록 |
+| 프론트엔드 분리 결정 + Stage F 파이프라인 | 저장소 내 `frontend/` 하위 폴더(구조 2026-07-24 개정), admin은 `/admin` 라우트, 계약 동결; RBAC은 Stage F 뒤로 재배치 ([ADR 0010](ADR/0010-frontend-split-and-api-surface-freeze.ko.md)) |
+| 라우트 정리 및 API 계약 동결 | `POST /file`, `PATCH /file/:id`, `DELETE /file/:id`, `POST /auth/token/refresh` — 소비자 0명 상태에서 표면 동결 (Stage F 작업 1) |
+| 에러 코드 계약 | 동결된 `ErrorBody` 형태 + 18개 코드 카탈로그 + `APP_FILTER`로 등록한 전역 `AllExceptionsFilter` (Stage F 작업 2, [ADR 0011](ADR/0011-error-code-contract.ko.md)) |
+
+### 2026-07-24
+
+| 항목 | 비고 |
+|---|---|
+| Refresh 토큰 httpOnly 쿠키 + 회전/재사용 감지 | `refreshTokenHash` 앵커 컬럼, `SameSite=Strict` 쿠키, `POST /auth/signout` 신설; Stage F 작업 3 — **Stage F 완결** ([ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md)) |
+
+### 2026-07-22
+
+| 항목 | 비고 |
+|---|---|
+| 소유권 검사 | user 쓰기는 본인만, file 쓰기는 creator만 (`0549ca4`) |
+| `GET /file` 페이지네이션 | `GetFilesDto`: `take` 1–100 (기본 20), `skip` (기본 0) |
+| `getFiles` creator join | 목록 응답에 `creator` 포함, `GET /file/:id`와 일치 |
+| Opt-in CORS | `CORS_ORIGIN` 환경변수, 미설정 시 비활성 |
+| 업로드 타입 allowlist | `POST /upload/attach`에 mp4/mov/webm mimetype + 확장자 필터 |
+| 런타임 CVE 핀 고정 | `pnpm.overrides`로 `jws ^3.2.3`, `validator ^13.15.22` |
+| lint 복구 및 클린 | `typescript-eslint` 추가, 기존 오류 45건 수정, 0 오류 베이스라인 |
+| 문서 동기화 | README 엔드포인트/제약, CLAUDE.md gaps, `.env.example` (`BASE_URL`, `CORS_ORIGIN`) |
+| `@nestjs/jwt` dependencies 이동 | 런타임 사용인데 devDependencies에 있던 문제 — `--prod` 설치가 더는 깨지지 않음 |
+| `saved!`/`updated!` 제거 | `FileService` 커밋 후 재조회를 `try` 밖으로 이동 + null 가드 |
+| TypeORM 마이그레이션 도입 | `migration:*` 스크립트, `backend/data-source.ts`, 베이스라인 `InitialSchema`; 기존 DB는 `pnpm migration:run -- --fake` 1회 ([ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)) |

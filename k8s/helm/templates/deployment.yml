@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sharenpo.fullname" . }}
+  labels:
+    {{- include "sharenpo.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "sharenpo.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "sharenpo.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- /* serviceAccount.create=false면 "default"를 그대로 지정 — 동작은 이전과 동일. */}}
+      serviceAccountName: {{ include "sharenpo.serviceAccountName" . }}
+      {{- /* Pod 레벨 보안 컨텍스트 — Dockerfile의 non-root uid/gid와 맞춤(ADR 0030). */}}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          {{- /* 컨테이너 레벨 보안 컨텍스트 — capabilities drop 등 세부 강화. */}}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          {{- /* 비밀 아닌 값은 ConfigMap, 비밀값은 existingSecret에서 온다 — 이 차트는 Secret을 직접 만들지 않는다(ADR 0033/0041). */}}
+          envFrom:
+            - configMapRef:
+                name: {{ include "sharenpo.fullname" . }}
+            - secretRef:
+                name: {{ required "secrets.existingSecret is required — create the Secret first, see k8s/helm/README.md" .Values.secrets.existingSecret }}
+          {{- /* liveness: DB 상태와 무관 — 프로세스 자체만 확인(ADR 0031). */}}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- /* readiness: DB 연결까지 확인 — DB가 죽었을 때 트래픽만 빼고 재시작은 하지 않음(ADR 0031). */}}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.volumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

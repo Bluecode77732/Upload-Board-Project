@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+/* Tailwind v4는 `dark:`를 기본적으로 `prefers-color-scheme`에만 반응하도록 되어 있다.
+   documentElement 조상에 걸린 `.dark` 클래스를 보도록 재지정해서, OS 설정만 따르는 대신
+   theme.store.ts가 수동으로 토글할 수 있게 한다. */
+@custom-variant dark (&:where(.dark, .dark *));

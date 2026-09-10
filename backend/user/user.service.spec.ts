@@ -13,7 +13,9 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { ConfigService } from '@nestjs/config';
 import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { UserRole } from 'backend/auth/role/role';
+import { ErrorCode } from 'backend/common/error-code';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
+import { AuditTargetType } from 'backend/audit-log/audit-target-type.enum';
 import { FileService } from 'backend/file/file.service';
 import { PostService } from 'backend/post/post.service';
 import { CommentService } from 'backend/comment/comment.service';
@@ -41,8 +43,8 @@ describe('UserService', () => {
     getOrThrow: jest.fn(),
   };
 
-  // transaction(cb) and transaction(level, cb) both run the callback with a mocked
-  // EntityManager — remove() uses the first form, updateRole() the second.
+  // transaction(cb)와 transaction(level, cb) 둘 다 mock EntityManager로 콜백을 실행한다 —
+  // remove()는 첫 번째 형태를, updateRole()은 두 번째 형태를 쓴다.
   const mockManager = {
     findOne: jest.fn(),
     count: jest.fn(),
@@ -65,20 +67,20 @@ describe('UserService', () => {
     log: jest.fn(),
   };
 
-  // Only the two methods UserService.remove reaches into (module boundary: file rows
-  // stay FileService's business even during an account cascade).
+  // UserService.remove가 손을 뻗는 건 이 두 메서드뿐이다 (모듈 경계: 계정 cascade 중에도
+  // 파일 행은 여전히 FileService의 일이다).
   const mockFileService = {
     findStoredPathsOfCreator: jest.fn(),
     deleteFilesOfCreator: jest.fn(),
   };
 
-  // Same boundary for post rows during the cascade (ADR 0023 D5).
+  // cascade 동안 게시글 행에도 같은 경계가 적용된다 (ADR 0023 D5).
   const mockPostService = {
     deletePostsOfCreator: jest.fn().mockResolvedValue(0),
   };
 
-  // ...and for comment rows, which go first: the account's comments on *other people's*
-  // posts are unreachable through the post FK cascade (ADR 0023 D5).
+  // ...그리고 댓글 행에도 — 댓글은 먼저 지워진다: 계정이 *다른 사람의* 게시글에 단 댓글은
+  // 게시글 FK cascade로는 닿을 수 없다 (ADR 0023 D5).
   const mockCommentService = {
     deleteCommentsOfCreator: jest.fn(),
   };
@@ -143,7 +145,7 @@ describe('UserService', () => {
   });
 
   describe('findAll', () => {
-    // The DTO instance the global pipe would hand the controller for a bare `GET /user`.
+    // 단순 `GET /user` 요청에 대해 전역 파이프가 컨트롤러에 넘겨줄 DTO 인스턴스.
     const listQuery = (overrides: Record<string, unknown> = {}) => ({
       take: 20,
       skip: 0,
@@ -240,6 +242,28 @@ describe('UserService', () => {
     });
   });
 
+  describe('findByEmail', () => {
+    it('should return the user with an exact email match', async () => {
+      const user = { id: 2, email: 'b@c.com' };
+      jest.spyOn(mockUserRepository, 'findOne').mockResolvedValue(user);
+
+      const result = await userService.findByEmail('b@c.com');
+
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+        where: { email: 'b@c.com' },
+      });
+      expect(result).toEqual(user);
+    });
+
+    it('should throw NotFoundException when no user has that email', async () => {
+      jest.spyOn(mockUserRepository, 'findOne').mockResolvedValue(null);
+
+      await expect(userService.findByEmail('nobody@c.com')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('update', () => {
     it('should update a user.', async () => {
       const updateUserDto: UpdateUserDto = {
@@ -316,6 +340,18 @@ describe('UserService', () => {
       ).rejects.toThrow(ForbiddenException);
       expect(mockUserRepository.update).not.toHaveBeenCalled();
     });
+
+    it('should reject a plain user (non-admin, non-owner) with FORBIDDEN_NOT_OWNER', async () => {
+      const target = { id: 2, email: 'b@c.com', role: UserRole.user };
+      jest.spyOn(mockUserRepository, 'findOne').mockResolvedValue(target);
+
+      await expect(
+        userService.update(1, UserRole.user, 2, { email: 'x@y.com' }),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCode.FORBIDDEN_NOT_OWNER },
+      });
+      expect(mockUserRepository.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateRole', () => {
@@ -332,6 +368,7 @@ describe('UserService', () => {
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
+        AuditTargetType.user,
         'ROLE_CHANGE',
         'user→admin',
       );
@@ -375,6 +412,7 @@ describe('UserService', () => {
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
+        AuditTargetType.user,
         'ROLE_CHANGE',
         'superadmin→admin',
       );
@@ -407,6 +445,7 @@ describe('UserService', () => {
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
+        AuditTargetType.user,
         'USER_DELETE',
         'files=0 posts=0',
       );
@@ -419,8 +458,8 @@ describe('UserService', () => {
 
       await userService.remove(1, UserRole.admin, 2, true);
 
-      // Comments go first: the account's comments on *other people's* posts are reachable
-      // no other way, since the FK cascade only fires when the owning post goes.
+      // 댓글이 먼저다: 계정이 *다른 사람의* 게시글에 단 댓글은, 게시글이 지워질 때만
+      // FK cascade가 발동하므로 다른 방법으로는 닿을 수 없다.
       expect(
         mockCommentService.deleteCommentsOfCreator.mock.invocationCallOrder[0],
       ).toBeLessThan(
@@ -430,8 +469,8 @@ describe('UserService', () => {
         mockManager,
         2,
       );
-      // Posts next: FK_post_entity_file/creator are ON DELETE NO ACTION, so a
-      // remaining post row would block both the file rows and the user row (ADR 0023 D5).
+      // 다음은 게시글이다: FK_post_entity_file/creator가 ON DELETE NO ACTION이라,
+      // 게시글 행이 남아 있으면 파일 행과 유저 행 둘 다 막힌다 (ADR 0023 D5).
       expect(
         mockPostService.deletePostsOfCreator.mock.invocationCallOrder[0],
       ).toBeLessThan(
@@ -444,6 +483,7 @@ describe('UserService', () => {
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
+        AuditTargetType.user,
         'USER_DELETE',
         'files=2 posts=4',
       );
@@ -471,11 +511,12 @@ describe('UserService', () => {
         2,
       );
       expect(mockManager.delete).toHaveBeenCalledWith(UserEntity, 2);
-      // Stored files go only after the transaction returns (post-commit unlink).
+      // 저장된 파일은 트랜잭션이 끝난 뒤에만 지워진다 (커밋 후 unlink).
       expect(mockStorage.unlink).toHaveBeenCalledWith(storedPaths);
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
+        AuditTargetType.user,
         'USER_DELETE',
         'files=2 posts=0',
       );
@@ -491,11 +532,12 @@ describe('UserService', () => {
 
       const result = await userService.remove(1, UserRole.admin, 2, true);
 
-      // The DB deletion is already committed — a failed unlink must not undo it.
+      // DB 삭제는 이미 커밋됐다 — unlink 실패가 그걸 되돌려서는 안 된다.
       expect(result).toBe('User 2 deleted.');
       expect(mockAuditLogService.log).toHaveBeenCalledWith(
         1,
         2,
+        AuditTargetType.user,
         'USER_DELETE',
         'files=2 posts=0',
       );
@@ -521,6 +563,23 @@ describe('UserService', () => {
       await expect(userService.remove(1, UserRole.admin, 2)).rejects.toThrow(
         ForbiddenException,
       );
+      expect(mockFileService.findStoredPathsOfCreator).not.toHaveBeenCalled();
+      expect(mockManager.delete).not.toHaveBeenCalled();
+      expect(mockAuditLogService.log).not.toHaveBeenCalled();
+    });
+
+    it('should reject a plain user (non-admin, non-owner) with FORBIDDEN_NOT_OWNER', async () => {
+      mockManager.findOne.mockResolvedValue({
+        id: 2,
+        email: 'b@c.com',
+        role: UserRole.user,
+      });
+
+      await expect(
+        userService.remove(1, UserRole.user, 2),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCode.FORBIDDEN_NOT_OWNER },
+      });
       expect(mockFileService.findStoredPathsOfCreator).not.toHaveBeenCalled();
       expect(mockManager.delete).not.toHaveBeenCalled();
       expect(mockAuditLogService.log).not.toHaveBeenCalled();

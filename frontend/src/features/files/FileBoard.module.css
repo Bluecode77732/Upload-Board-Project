@@ -1,0 +1,166 @@
+.board {
+  margin-top: 24px;
+}
+
+.filters {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* 보드가 이제 훑어보기 좋은 텍스트 목록 대신 미리보기를 그리므로, 제목 검색이 여러
+   파일 중 하나를 찾는 주된 수단이 됐다 — 행에서 남는 너비를 검색창에 준다. */
+.searchField {
+  flex: 1 1 240px;
+  min-width: 180px;
+}
+
+.input,
+.select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.input:focus-visible,
+.select:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.creatorInput {
+  width: 80px;
+}
+
+.clearButton {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  align-self: center;
+  transition: var(--transition);
+}
+
+.clearButton:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.error {
+  color: var(--danger);
+}
+
+/* 고정 3열 — 한 페이지(TAKE = 9)가 정확히 3x3 화면 하나이고, 다음 페이지들은 같은
+   3열을 아래로 이어 3xN이 된다. minmax(0, 1fr)는 긴 제목이 자기 몫 이상으로 컬럼을
+   넓히는 걸 막는다. */
+.grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+/* 새 값을 하나 더 도입하는 대신, 이 앱이 이미 쓰고 있는 두 브레이크포인트에서 컬럼
+   수가 단계적으로 줄어든다(index.css가 타입 스케일을 바꾸는 1024px, 그리고 그리드가
+   더 이상 의미가 없어지는 640px). 각 단계에서 프레임은 읽을 수 있을 만큼 크게 유지된다:
+   1024px 이상은 3열, 태블릿 구간은 2열, 폰은 1열. */
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .filters {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .field {
+    width: 100%;
+  }
+
+  /* `100%`가 아니라 `width: auto`인 이유: 이 입력 요소들은 content-box라서 퍼센트 너비를
+     주면 padding과 border가 그 위에 더해져 패널 밖으로 밀려난다. .field 그리드는 이미
+     auto 너비 자식을 행 전체로 늘려주고 있다. */
+  .creatorInput {
+    width: auto;
+  }
+
+  .searchField {
+    flex-basis: 100%;
+  }
+}
+
+/* 그리드 아래의 높이 0짜리 감지용 요소: observer가 마지막 타일이 아니라 이걸 지켜보므로,
+   타일 크기가 바뀌어도 트리거 지점이 움직이지 않는다. */
+.sentinel {
+  height: 1px;
+}
+
+.footer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.loadMoreButton {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  transition: var(--transition);
+}
+
+.loadMoreButton:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.loadMoreButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.loadMoreButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.autoPausedNote {
+  font-size: 0.8rem;
+}

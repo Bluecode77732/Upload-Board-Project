@@ -1,6 +1,6 @@
-// Purpose: makes LIKE/ILIKE metacharacters in a user-supplied search term match literally.
-// Usage: imported by FileService.getFiles and PostService.getPosts before building an ILIKE pattern.
-// Rationale: the post listing extends the ADR 0021 read layer rather than restating it (ADR 0023), and a second copy of this escaping is exactly the kind of drift that silently widens one endpoint's matches.
+// 목적: 사용자가 입력한 검색어 안의 LIKE/ILIKE 메타문자를 리터럴로 매칭되게 만든다.
+// 사용처: ILIKE 패턴을 만들기 전 FileService.getFiles와 PostService.getPosts가 임포트한다.
+// 근거: 게시글 목록은 ADR 0021의 조회 계층을 다시 쓰지 않고 확장한다(ADR 0023) — 이 이스케이프 로직을 한 벌 더 두면, 한쪽 엔드포인트의 매칭 범위가 조용히 넓어지는 정확히 그런 종류의 드리프트가 생긴다.
 
 // 목적: 검색어에 든 LIKE 메타문자를 리터럴로 만든다.
 // 이유: 값은 파라미터로 바인딩되어 주입 위험은 없지만, 이스케이프하지 않은 %나 _는 사용자가 입력한

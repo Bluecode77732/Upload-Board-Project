@@ -1,10 +1,9 @@
-// Purpose: authenticates a bearer token when present without rejecting the request when absent.
-// Usage: @UseGuards(OptionalJwtAuthGuard) on GET /file/:id/content — public/unlisted content must
-// reach unauthenticated visitors (ADR 0025 D1/D2), but an owner/admin bearer token still resolves
-// request.user for the private/owner-bypass branch.
-// Rationale: JwtAuthGuard's default handleRequest throws 401 on a missing/invalid token, which
-// would gate the whole route; this is the smallest override that keeps token verification while
-// dropping the "must be present" requirement.
+// 목적: 베어러 토큰이 있으면 인증하고, 없어도 요청을 거부하지 않는다.
+// 사용처: GET /file/:id/content에 @UseGuards(OptionalJwtAuthGuard)로 적용 — public/unlisted
+// 콘텐츠는 미인증 방문자에게도 도달해야 하지만(ADR 0025 D1/D2), owner/admin 베어러 토큰이 있으면
+// private/owner-bypass 분기를 위해 request.user는 여전히 채워져야 한다.
+// 근거: JwtAuthGuard의 기본 handleRequest는 토큰이 없거나 무효하면 401을 던져 라우트 전체를
+// 막는다; 이 가드는 토큰 검증은 유지하면서 "반드시 있어야 한다"는 요구만 뺀 최소 오버라이드다.
 
 import { Injectable } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';

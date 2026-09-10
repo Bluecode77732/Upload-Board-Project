@@ -1,0 +1,22 @@
+{{ include "sharenpo.fullname" . }} 배포가 완료됐습니다.
+
+Service: {{ include "sharenpo.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+{{- if not .Values.secrets.existingSecret }}
+
+경고: secrets.existingSecret이 설정되지 않았습니다 — envFrom이 해석에 실패해
+파드(와 마이그레이션 Job)가 뜨지 않습니다. Secret을 먼저 만드세요; k8s/helm/README.md
+참고.
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+
+Ingress 호스트:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+
+Ingress는 비활성화돼 있습니다(values.yaml ingress.enabled: false) — 클러스터
+내부에서 접근하거나 `kubectl port-forward`를 쓰세요.
+{{- end }}

@@ -1,21 +1,29 @@
-// Purpose: shows one file's metadata and plays its content according to visibility (ADR 0025/0026).
-// Usage: rendered at /view/:id behind RequireAuth; linked from FileBoard rows. (Not "/file/:id" —
-//   that prefix is claimed by the dev proxy to the backend API, see App.tsx.)
-// Rationale: GET /file/:id/content is the only byte-serving path and is visibility-gated — a plain
-//   <video src> can't carry a Bearer header, so a private file's bytes are fetched authenticated.
+// 목적: 파일 하나의 메타데이터를 보여주고 visibility에 따라 콘텐츠를 재생한다(ADR 0025/0026).
+// 사용처: RequireAuth 하위 /view/:id에 렌더링된다; FileBoard 행에서 링크로 연결된다. ("/file/:id"가
+//   아닌 이유는 그 접두사가 백엔드 API로 가는 dev 프록시가 차지하고 있기 때문이다 — App.tsx 참고.)
+// 근거: GET /file/:id/content가 유일한 바이트 서빙 경로이고 visibility로 게이트된다 — 일반
+//   <video src>는 Bearer 헤더를 실을 수 없으므로, private 파일의 바이트는 인증해서 받아온다.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
-import type { FileResponse, FileVisibility, UpdateFileVisibilityRequest } from '../../api/types'
+import type {
+  FileMediaType,
+  FileResponse,
+  FileVisibility,
+  ProposeFileTransferRequest,
+  UpdateFileVisibilityRequest,
+  User,
+} from '../../api/types'
 import { useAuth } from '../../auth/useAuth'
 import { NavBar } from '../../shared/NavBar'
 import { VisibilityBadge } from './VisibilityBadge'
+import styles from './FileDetailPage.module.css'
 
 const VISIBILITY_OPTIONS: FileVisibility[] = ['public', 'private', 'unlisted']
 
-// Branch on the stable code (backend ADR 0011), never on the human-readable message.
+// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
@@ -32,8 +40,8 @@ function messageForError(error: unknown): string {
   return 'Network error. Is the backend running?'
 }
 
-// Errors from the management actions (visibility toggle, share rotation, delete) branch on
-// a different set of codes than read/playback (409 FILE_IN_USE only applies to delete).
+// 관리 액션(visibility 토글, 공유 링크 회전, 삭제)의 에러는 읽기/재생과는 다른 코드 집합으로
+// 분기한다(409 FILE_IN_USE는 삭제에만 해당한다).
 function messageForManageError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
@@ -52,6 +60,59 @@ function messageForManageError(error: unknown): string {
   return 'Network error. Is the backend running?'
 }
 
+type TransferAction = 'propose' | 'cancel' | 'accept' | 'reject'
+
+// 이전 액션(propose/accept/reject/cancel)의 에러는 ADR 0050 코드에 더해 USER_NOT_FOUND(이메일→id
+// 조회 단계)와 VALIDATION_FAILED(propose 폼의 잘못된 형식 이메일은 백엔드에 다른 형태로 도달할
+// 일이 없다)로 분기한다. FORBIDDEN_NOT_OWNER는 호출한 액션에 맞춰 문구를 골라야 한다: propose는
+// creator-or-admin 그대로지만, cancel은 creator 전용으로 좁혀졌다(그러지 않으면 admin이 아무
+// 이유 없이 다른 두 사용자 사이의 대기 중인 이전을 취소할 수 있었을 것이다 — canManage()를
+// 재사용하다 딸려온 권한이지 의도한 결정이 아니다; propose의 admin 분기는 영향받지 않으며
+// 그 자체로 ADR 0050 D4 근거가 있다).
+function messageForTransferError(error: unknown, action: TransferAction): string {
+  if (error instanceof ApiError) {
+    switch (error.code) {
+      case ErrorCode.USER_NOT_FOUND:
+        return 'No user found with that email.'
+      case ErrorCode.FILE_TRANSFER_INVALID_TARGET:
+        return 'You already own this file.'
+      case ErrorCode.FILE_TRANSFER_PENDING:
+        return 'A transfer is already pending. Cancel it before proposing a new one.'
+      case ErrorCode.FILE_NO_PENDING_TRANSFER:
+        return 'No transfer is pending on this file.'
+      case ErrorCode.FORBIDDEN_NOT_OWNER:
+        return action === 'cancel'
+          ? 'Only the file creator can cancel a transfer.'
+          : 'Only the file creator or an admin can propose a transfer.'
+      case ErrorCode.FORBIDDEN_NOT_TRANSFER_TARGET:
+        return 'Only the proposed recipient can accept or reject this transfer.'
+      case ErrorCode.VALIDATION_FAILED:
+        return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
+      default:
+        return 'The transfer action failed.'
+    }
+  }
+  return 'Network error. Is the backend running?'
+}
+
+// 목적: mediaType(image/audio/video)에 맞는 재생 태그를 고른다.
+// 이유: 이전에는 항상 <video>만 렌더링해 이미지/오디오 파일이 재생되지 않았다(ADR 0040).
+// 방법: visibility 분기가 결정한 src/onError를 그대로 받아 태그 종류만 바꾼다 — 소스를
+//   가져오는 방식(blob objectURL vs 직접 src)은 두 호출부 모두 이 함수 밖에서 그대로 유지된다.
+function renderMediaElement(
+  mediaType: FileMediaType,
+  title: string,
+  props: { src: string; className: string; onError?: () => void },
+) {
+  if (mediaType === 'image') {
+    return <img src={props.src} alt={title} className={props.className} />
+  }
+  if (mediaType === 'audio') {
+    return <audio controls src={props.src} className={props.className} onError={props.onError} />
+  }
+  return <video controls src={props.src} className={props.className} onError={props.onError} />
+}
+
 export function FileDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -65,6 +126,9 @@ export function FileDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [transferEmail, setTransferEmail] = useState('')
+  const [transferError, setTransferError] = useState<string | null>(null)
+  const [transferBusy, setTransferBusy] = useState(false)
 
   useEffect(() => {
     setFile(null)
@@ -79,9 +143,9 @@ export function FileDetailPage() {
       .catch((err: unknown) => setMetaError(messageForError(err)))
   }, [fileId])
 
-  // A plain <video src> can't carry a Bearer header, so a private file's bytes are fetched
-  // authenticated as a Blob and played from an objectURL. The URL is revoked whenever the
-  // file changes or this page unmounts, so decoded bytes never linger in memory.
+  // 일반 <video src>는 Bearer 헤더를 실을 수 없으므로, private 파일의 바이트는 인증된
+  // Blob으로 받아 objectURL로 재생한다. 파일이 바뀌거나 이 페이지가 언마운트되면 URL을
+  // revoke하므로 디코딩된 바이트가 메모리에 남지 않는다.
   useEffect(() => {
     setObjectUrl(null)
     setPlaybackError(null)
@@ -106,8 +170,8 @@ export function FileDetailPage() {
     }
   }, [file])
 
-  // public/unlisted stream directly via <video src> (keeps Range-based seeking). On failure,
-  // one diagnostic call through the api wrapper reads the real ErrorCode for messaging.
+  // public/unlisted는 <video src>로 직접 스트리밍한다(Range 기반 탐색 유지). 실패하면
+  // api 래퍼를 통한 진단용 호출 1회로 실제 ErrorCode를 읽어 메시지를 만든다.
   function diagnosePlaybackError() {
     if (!file) return
     api
@@ -116,9 +180,11 @@ export function FileDetailPage() {
       .catch((err: unknown) => setPlaybackError(messageForError(err)))
   }
 
-  // A UI hint only (decoded token claim, not a server round trip) — every write below is
-  // re-checked server-side and a wrong guess here just surfaces as a 403, never a silent bypass.
+  // 단순 UI 힌트일 뿐이다(서버 왕복이 아니라 디코딩된 토큰 클레임) — 아래 모든 쓰기는
+  // 서버에서 다시 검증되므로 여기서 잘못 판단해도 403으로 드러날 뿐, 조용히 우회되지 않는다.
   const canManage = currentUserId !== null && file?.creator?.id === currentUserId
+  const isPendingTarget =
+    currentUserId !== null && file?.pendingTransferTo?.id === currentUserId
 
   // 목적: 소유자가 visibility를 전환한다(예: private → public/unlisted).
   // 이유: 백엔드는 별도 엔드포인트 없이 PATCH /file/:id 하나로 토글을 처리한다(ADR 0026).
@@ -178,19 +244,91 @@ export function FileDetailPage() {
       })
   }
 
+  // 목적: 이메일로 입력된 대상에게 소유권 이전을 제안한다.
+  // 이유: POST /file/:id/transfer는 숫자 userId만 받는데, 제안자는 상대방 이메일만 안다 —
+  //       GET /user/lookup(신규, ADR 0050 프론트 UI)으로 먼저 id를 구해야 한다.
+  // 방법: 이메일 조회 → 성공하면 그 id로 제안 POST, 응답(FileResponseDto)으로 file 상태 교체.
+  //       조회 실패(USER_NOT_FOUND)와 제안 실패(자기 자신 대상, 이미 대기중 등)를 한 catch로 묶는다 —
+  //       둘 다 messageForTransferError가 code로 분기하므로 별도 처리가 필요 없다.
+  function handleProposeTransfer(e: FormEvent) {
+    e.preventDefault()
+    if (!file) return
+    const email = transferEmail.trim()
+    if (!email) return
+    setTransferError(null)
+    setTransferBusy(true)
+    api
+      .get<User>(`/user/lookup?email=${encodeURIComponent(email)}`)
+      .then((target) => {
+        const body: ProposeFileTransferRequest = { userId: target.id }
+        return api.post<FileResponse>(`/file/${file.id}/transfer`, body)
+      })
+      .then((updated) => {
+        setFile(updated)
+        setTransferEmail('')
+      })
+      .catch((err: unknown) => setTransferError(messageForTransferError(err, 'propose')))
+      .finally(() => setTransferBusy(false))
+  }
+
+  // 목적: 아직 응답 없는 이전 제안을 제안자가 스스로 취소한다.
+  // 이유: 대상의 응답을 기다리지 않고 거둘 수 있어야 한다(ADR 0050 D3).
+  // 방법: DELETE /file/:id/transfer — 다른 파일 삭제 엔드포인트와 달리 이 라우트는 갱신된
+  //       FileResponseDto를 JSON으로 반환한다(순수 텍스트 200이 아님, cancelTransfer가 toResponse를 호출).
+  function handleCancelTransfer() {
+    if (!file) return
+    setTransferError(null)
+    setTransferBusy(true)
+    api
+      .delete<FileResponse>(`/file/${file.id}/transfer`)
+      .then((updated) => setFile(updated))
+      .catch((err: unknown) => setTransferError(messageForTransferError(err, 'cancel')))
+      .finally(() => setTransferBusy(false))
+  }
+
+  // 목적: 제안받은 이전을 대상 본인이 수락해 소유권을 옮긴다.
+  // 이유: 동의 없는 강제 이전이었던 옛 PATCH userId를 대체한다 — admin도 대신 수락 못 한다(ADR 0050 D4).
+  // 방법: POST /file/:id/transfer/accept, 응답으로 file 상태 교체.
+  function handleAcceptTransfer() {
+    if (!file) return
+    setTransferError(null)
+    setTransferBusy(true)
+    api
+      .post<FileResponse>(`/file/${file.id}/transfer/accept`)
+      .then((updated) => setFile(updated))
+      .catch((err: unknown) => setTransferError(messageForTransferError(err, 'accept')))
+      .finally(() => setTransferBusy(false))
+  }
+
+  // 목적: 제안받은 이전을 대상 본인이 거절한다(소유권 불변).
+  // 이유: acceptTransfer와 대칭 — 거절도 대상 본인의 동의 절차 중 하나다(ADR 0050).
+  // 방법: POST /file/:id/transfer/reject, 응답으로 file 상태 교체.
+  function handleRejectTransfer() {
+    if (!file) return
+    setTransferError(null)
+    setTransferBusy(true)
+    api
+      .post<FileResponse>(`/file/${file.id}/transfer/reject`)
+      .then((updated) => setFile(updated))
+      .catch((err: unknown) => setTransferError(messageForTransferError(err, 'reject')))
+      .finally(() => setTransferBusy(false))
+  }
+
   if (metaError) {
     return (
-      <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+      <main className={styles.page}>
         <NavBar />
-        <p style={{ color: 'crimson' }}>{metaError}</p>
-        <Link to="/files">Back to files</Link>
+        <p className={styles.error}>{metaError}</p>
+        <Link to="/files" className={styles.backLink}>
+          Back to files
+        </Link>
       </main>
     )
   }
 
   if (!file) {
     return (
-      <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+      <main className={styles.page}>
         <NavBar />
         <p>Loading…</p>
       </main>
@@ -198,52 +336,66 @@ export function FileDetailPage() {
   }
 
   return (
-    <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+    <main className={styles.page}>
       <NavBar />
-      <Link to="/files">Back to files</Link>
-      <header style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '16px 0' }}>
+      <Link to="/files" className={styles.backLink}>
+        Back to files
+      </Link>
+      <header className={styles.header}>
         <VisibilityBadge visibility={file.visibility} />
-        <h1 style={{ margin: 0 }}>{file.title}</h1>
+        {file.pendingTransferTo && (canManage || isPendingTarget) && (
+          <span className={styles.pendingBadge}>
+            {canManage ? `Transfer pending → ${file.pendingTransferTo.email}` : 'Transfer proposed to you'}
+          </span>
+        )}
+        <h1 className={styles.title} title={file.title}>
+          {file.title}
+        </h1>
       </header>
-      {file.creator && <p style={{ color: '#555' }}>Uploaded by {file.creator.email}</p>}
+      {file.creator && <p className={styles.meta}>Uploaded by {file.creator.email}</p>}
 
-      {playbackError && <p style={{ color: 'crimson' }}>{playbackError}</p>}
+      {playbackError && <p className={styles.error}>{playbackError}</p>}
 
-      {file.visibility === 'private' ? (
-        objectUrl ? (
-          <video controls src={objectUrl} style={{ width: '100%' }} />
+      <div className={styles.playerWrapper}>
+        {file.visibility === 'private' ? (
+          objectUrl ? (
+            renderMediaElement(file.mediaType, file.title, {
+              src: objectUrl,
+              className: styles.player,
+            })
+          ) : (
+            !playbackError && <p className={styles.loadingText}>Loading content…</p>
+          )
         ) : (
-          !playbackError && <p>Loading content…</p>
-        )
-      ) : (
-        <video
-          controls
-          src={file.visibility === 'unlisted' ? (file.shareUrl ?? file.fileUrl) : file.fileUrl}
-          onError={diagnosePlaybackError}
-          style={{ width: '100%' }}
-        />
-      )}
+          renderMediaElement(file.mediaType, file.title, {
+            src: file.visibility === 'unlisted' ? (file.shareUrl ?? file.fileUrl) : file.fileUrl,
+            className: styles.player,
+            onError: diagnosePlaybackError,
+          })
+        )}
+      </div>
 
       {file.visibility === 'unlisted' && file.shareUrl && (
-        <p style={{ marginTop: 12 }}>
-          Share link: <code>{file.shareUrl}</code>
+        <p className={styles.shareBox}>
+          Share link: <code className={styles.shareCode}>{file.shareUrl}</code>
           {canManage && (
-            <button type="button" onClick={handleCopyShareLink} style={{ marginLeft: 8 }}>
+            <button type="button" onClick={handleCopyShareLink} className={styles.copyButton}>
               Copy
             </button>
           )}
-          {copyFeedback && <span style={{ marginLeft: 8, color: '#1e7e34' }}>{copyFeedback}</span>}
+          {copyFeedback && <span className={styles.copyFeedback}>{copyFeedback}</span>}
         </p>
       )}
 
       {canManage && (
-        <section style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #ddd' }}>
-          <h2 style={{ fontSize: '1rem' }}>Manage</h2>
-          {actionError && <p style={{ color: 'crimson' }}>{actionError}</p>}
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <section className={styles.manage}>
+          <h2 className={styles.manageHeading}>Manage</h2>
+          {actionError && <p className={styles.error}>{actionError}</p>}
+          <div className={styles.controls}>
+            <label className={styles.visibilityLabel}>
               Visibility
               <select
+                className={styles.select}
                 value={file.visibility}
                 disabled={busy}
                 onChange={(e) => handleVisibilityChange(e.target.value as FileVisibility)}
@@ -256,17 +408,82 @@ export function FileDetailPage() {
               </select>
             </label>
             {file.visibility === 'unlisted' && (
-              <button type="button" disabled={busy} onClick={handleRotateShareToken}>
+              <button type="button" disabled={busy} onClick={handleRotateShareToken} className={styles.rotateButton}>
                 Rotate share link
               </button>
             )}
+            <button type="button" disabled={busy} onClick={handleDelete} className={styles.deleteButton}>
+              Delete file
+            </button>
+          </div>
+        </section>
+      )}
+
+      {canManage && (
+        <section className={styles.manage}>
+          <h2 className={styles.manageHeading}>Transfer ownership</h2>
+          {transferError && <p className={styles.error}>{transferError}</p>}
+          {file.pendingTransferTo ? (
+            <div className={styles.controls}>
+              <p className={styles.meta}>
+                Pending transfer to <strong>{file.pendingTransferTo.email}</strong> — not moved
+                until they accept.
+              </p>
+              <button
+                type="button"
+                disabled={transferBusy}
+                onClick={handleCancelTransfer}
+                className={styles.deleteButton}
+              >
+                Cancel transfer
+              </button>
+            </div>
+          ) : (
+            <form className={styles.controls} onSubmit={handleProposeTransfer}>
+              <label className={styles.visibilityLabel}>
+                Recipient email
+                <input
+                  type="email"
+                  required
+                  value={transferEmail}
+                  disabled={transferBusy}
+                  onChange={(e) => setTransferEmail(e.target.value)}
+                  className={styles.select}
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={transferBusy || !transferEmail.trim()}
+                className={styles.rotateButton}
+              >
+                Propose transfer
+              </button>
+            </form>
+          )}
+        </section>
+      )}
+
+      {isPendingTarget && file.pendingTransferTo && (
+        <section className={styles.manage}>
+          <h2 className={styles.manageHeading}>Transfer proposed to you</h2>
+          {transferError && <p className={styles.error}>{transferError}</p>}
+          <p className={styles.meta}>The current owner wants to transfer this file to you.</p>
+          <div className={styles.controls}>
             <button
               type="button"
-              disabled={busy}
-              onClick={handleDelete}
-              style={{ color: 'crimson', marginLeft: 'auto' }}
+              disabled={transferBusy}
+              onClick={handleAcceptTransfer}
+              className={styles.rotateButton}
             >
-              Delete file
+              Accept
+            </button>
+            <button
+              type="button"
+              disabled={transferBusy}
+              onClick={handleRejectTransfer}
+              className={styles.deleteButton}
+            >
+              Reject
             </button>
           </div>
         </section>

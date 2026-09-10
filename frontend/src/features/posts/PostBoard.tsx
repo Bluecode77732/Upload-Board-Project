@@ -1,8 +1,8 @@
-// Purpose: the home screen — hosts the new-post form and the searchable/sortable/paginated post list.
-// Usage: rendered at "/" behind RequireAuth; a successful PostForm submit bumps refreshSignal so the
-//   list re-runs its current query, mirroring DashboardPage's UploadForm+FileBoard pairing.
-// Rationale: Posts is the app's home (backend Stage 3 board complete); the list reuses FileBoard's
-//   search/sort/creator-filter/pagination pattern verbatim, swapped onto GET /post (ADR 0021/0023).
+// 목적: 홈 화면 — 새 게시글 폼과 검색/정렬/페이지네이션 가능한 게시글 목록을 담는다.
+// 사용처: RequireAuth 하위 "/"에 렌더링된다; PostForm 제출이 성공하면 refreshSignal을 올려
+//   목록이 현재 쿼리를 다시 실행한다 — DashboardPage의 UploadForm+FileBoard 조합과 같은 패턴.
+// 근거: Posts가 앱의 홈이다(backend Stage 3 board 완료); 목록은 FileBoard의 검색/정렬/
+//   creator-필터/페이지네이션 패턴을 그대로 재사용해 GET /post에 갈아 끼웠다(ADR 0021/0023).
 
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -12,10 +12,11 @@ import { POST_SORT_FIELDS, SORT_ORDERS } from '../../api/types'
 import type { PostListResponse, PostResponse, PostSortField, SortOrder } from '../../api/types'
 import { NavBar } from '../../shared/NavBar'
 import { PostForm } from './PostForm'
+import styles from './PostBoard.module.css'
 
 const TAKE = 20
 
-// Branch on the stable code (backend ADR 0011), never on the human-readable message.
+// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
@@ -29,8 +30,8 @@ function messageForError(error: unknown): string {
 }
 
 export function PostBoard() {
-  // Has no meaning of its own — bumping it only re-triggers the current query below
-  // (e.g. PostForm bumps it after a successful post).
+  // 값 자체에는 의미가 없다 — 값을 올리면 아래의 현재 쿼리만 다시 트리거된다
+  // (예: PostForm이 게시 성공 후 이 값을 올린다).
   const [refreshSignal, setRefreshSignal] = useState(0)
 
   const [search, setSearch] = useState('')
@@ -43,21 +44,21 @@ export function PostBoard() {
   const [total, setTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
-  // Debounce the free-text search so every keystroke doesn't fire a request.
+  // 자유 텍스트 검색을 디바운스해 키 입력마다 요청이 나가지 않게 한다.
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedSearch(search.trim()), 400)
     return () => clearTimeout(handle)
   }, [search])
 
-  // Any filter change invalidates the current page — jump back to the first page.
+  // 필터가 바뀌면 현재 페이지는 무효가 된다 — 첫 페이지로 되돌아간다.
   useEffect(() => {
     setSkip(0)
   }, [debouncedSearch, sortBy, order, creatorIdInput])
 
   const creatorIdTrimmed = creatorIdInput.trim()
   const creatorId = creatorIdTrimmed === '' ? undefined : Number(creatorIdTrimmed)
-  // Mirrors GetPostsDto's @IsInt @Min(1) — an invalid value is held back client-side
-  // instead of being sent as a guaranteed 400 VALIDATION_FAILED.
+  // GetPostsDto의 @IsInt @Min(1)을 그대로 반영한다 — 잘못된 값은 무조건 400
+  // VALIDATION_FAILED로 보내는 대신 클라이언트에서 미리 막아둔다.
   const creatorIdValid = creatorId === undefined || (Number.isInteger(creatorId) && creatorId >= 1)
 
   const loadPosts = useCallback(() => {
@@ -81,7 +82,7 @@ export function PostBoard() {
   }, [skip, debouncedSearch, sortBy, order, creatorId, creatorIdValid])
 
   useEffect(() => {
-    // refreshSignal has no meaning of its own — it only re-triggers this same query.
+    // refreshSignal 값 자체에는 의미가 없다 — 이 동일한 쿼리를 다시 트리거할 뿐이다.
     loadPosts()
   }, [loadPosts, refreshSignal])
 
@@ -90,25 +91,26 @@ export function PostBoard() {
   const filtersActive = search !== '' || sortBy !== 'createdAt' || order !== 'DESC' || creatorIdInput !== ''
 
   return (
-    <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+    <main className={styles.page}>
       <NavBar />
       <h1>Posts</h1>
       <PostForm onCreated={() => setRefreshSignal((n) => n + 1)} />
 
-      <section style={{ marginTop: 24 }}>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12 }}>
-          <label style={{ display: 'grid', gap: 4 }}>
+      <section className={styles.board}>
+        <div className={styles.filters}>
+          <label className={styles.field}>
             Search
             <input
+              className={styles.input}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               maxLength={100}
               placeholder="Title contains…"
             />
           </label>
-          <label style={{ display: 'grid', gap: 4 }}>
+          <label className={styles.field}>
             Sort by
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as PostSortField)}>
+            <select className={styles.select} value={sortBy} onChange={(e) => setSortBy(e.target.value as PostSortField)}>
               {POST_SORT_FIELDS.map((field) => (
                 <option key={field} value={field}>
                   {field}
@@ -116,9 +118,9 @@ export function PostBoard() {
               ))}
             </select>
           </label>
-          <label style={{ display: 'grid', gap: 4 }}>
+          <label className={styles.field}>
             Order
-            <select value={order} onChange={(e) => setOrder(e.target.value as SortOrder)}>
+            <select className={styles.select} value={order} onChange={(e) => setOrder(e.target.value as SortOrder)}>
               {SORT_ORDERS.map((direction) => (
                 <option key={direction} value={direction}>
                   {direction === 'ASC' ? 'Ascending' : 'Descending'}
@@ -126,19 +128,20 @@ export function PostBoard() {
               ))}
             </select>
           </label>
-          <label style={{ display: 'grid', gap: 4 }}>
+          <label className={styles.field}>
             Creator ID
             <input
+              className={`${styles.input} ${styles.creatorInput}`}
               value={creatorIdInput}
               onChange={(e) => setCreatorIdInput(e.target.value)}
               inputMode="numeric"
               placeholder="Any"
-              style={{ width: 80 }}
             />
           </label>
           {filtersActive && (
             <button
               type="button"
+              className={styles.clearButton}
               onClick={() => {
                 setSearch('')
                 setSortBy('createdAt')
@@ -151,27 +154,17 @@ export function PostBoard() {
           )}
         </div>
 
-        {!creatorIdValid && <p style={{ color: 'crimson' }}>Creator ID must be a positive whole number.</p>}
-        {error && <p style={{ color: 'crimson' }}>{error}</p>}
+        {!creatorIdValid && <p className={styles.error}>Creator ID must be a positive whole number.</p>}
+        {error && <p className={styles.error}>{error}</p>}
         {posts === null && !error && <p>Loading posts…</p>}
         {posts && posts.length === 0 && <p>No posts match the current filters.</p>}
         {posts && posts.length > 0 && (
-          <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 8 }}>
+          <ul className={styles.list}>
             {posts.map((post) => {
               const creator = post.creator
               return (
-                <li
-                  key={post.id}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '8px 12px',
-                    border: '1px solid #ddd',
-                    borderRadius: 6,
-                  }}
-                >
-                  <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <li key={post.id} className={styles.row}>
+                  <span className={styles.rowInfo}>
                     {post.file && <span title="Has an attached file">📎</span>}
                     <Link to={`/posts/${post.id}`}>{post.title}</Link>
                   </span>
@@ -179,8 +172,8 @@ export function PostBoard() {
                     <button
                       type="button"
                       title="Filter the list to this creator"
+                      className={styles.creatorButton}
                       onClick={() => setCreatorIdInput(String(creator.id))}
-                      style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer' }}
                     >
                       {creator.email}
                     </button>
@@ -192,14 +185,24 @@ export function PostBoard() {
         )}
 
         {posts && total > 0 && (
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12 }}>
-            <button type="button" disabled={!canGoPrev} onClick={() => setSkip((s) => Math.max(0, s - TAKE))}>
+          <div className={styles.pagination}>
+            <button
+              type="button"
+              className={styles.pageButton}
+              disabled={!canGoPrev}
+              onClick={() => setSkip((s) => Math.max(0, s - TAKE))}
+            >
               Previous
             </button>
             <span>
               {Math.min(skip + 1, total)}–{Math.min(skip + TAKE, total)} of {total}
             </span>
-            <button type="button" disabled={!canGoNext} onClick={() => setSkip((s) => s + TAKE)}>
+            <button
+              type="button"
+              className={styles.pageButton}
+              disabled={!canGoNext}
+              onClick={() => setSkip((s) => s + TAKE)}
+            >
               Next
             </button>
           </div>

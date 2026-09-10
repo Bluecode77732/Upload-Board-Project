@@ -1,0 +1,22 @@
+# 패키지를 빌드할 때 제외할 패턴 목록.
+# 셸 glob 매칭, 상대 경로 매칭, 부정(! 접두사)을 지원한다. 한 줄에 패턴 하나씩.
+.DS_Store
+# 흔한 VCS 디렉터리
+.git/
+.gitignore
+.bzr/
+.bzrignore
+.hg/
+.hgignore
+.svn/
+# 흔한 백업 파일
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+# 각종 IDE 설정
+.project
+.idea/
+*.tmproj
+.vscode/

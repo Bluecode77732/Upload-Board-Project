@@ -1,10 +1,10 @@
-# compiled output
+# 컴파일 결과물
 /dist
 /node_modules
 # .node_modules
 /build
 
-# Logs
+# 로그
 logs
 *.log
 npm-debug.log*
@@ -16,11 +16,11 @@ lerna-debug.log*
 # OS
 .DS_Store
 
-# Tests
+# 테스트
 /coverage
 /.nyc_output
 
-# IDEs and editors
+# IDE·에디터
 /.idea
 .project
 .classpath
@@ -36,34 +36,56 @@ lerna-debug.log*
 !.vscode/launch.json
 !.vscode/extensions.json
 
-# dotenv environment variable files
+# dotenv 환경변수 파일
 .env
 .env.development.local
 .env.test.local
 .env.production.local
 .env.local
 
-# temp directory
+# temp 디렉터리
 .temp
 .tmp
 
-# Uploaded media — runtime artifacts under file/temp and file/upload, never committed
+# 업로드된 미디어 — file/temp, file/upload 아래의 런타임 산출물, 절대 커밋하지 않음
 /file/
 
-# Runtime data
+# 세션 로그 — .claude/hooks/log-session-start.js와 log-session-title.js가 매
+# SessionStart/UserPromptSubmit마다 로컬에서 자동으로 이어 붙인다; 개발자 머신마다
+# 늘어나고 계속 바뀌므로 로컬 전용이고, git으로 공유하지 않는다
+/docs/SESSION-LOG.md
+/docs/SESSION-LOG.ko.md
+
+# Playwright MCP 스크래치 출력 — 브라우저 MCP 서버가 실사용 UI 검증 중에(CLAUDE.md >
+# Development Tooling > MCP Servers) 남기는 페이지/콘솔 덤프. 위 세션 로그와 마찬가지로
+# 세션·머신별로 다름; 슬래시 접두사가 없어서 frontend/.playwright-mcp/,
+# admin/.playwright-mcp/도 함께 커버한다
+.playwright-mcp/
+
+# 같은 브라우저 툴링이 저장소 루트에 떨어뜨리는 임시 검증 스크린샷.
+# 루트로만 범위를 좁힌다 — 이 저장소는 현재 이미지 에셋을 추적하지 않고, 앞으로
+# 추가될 것도 여기가 아니라 그걸 쓰는 코드 옆에 둬야 한다
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+
+# 런타임 데이터
 pids
 *.pid
 *.seed
 *.pid.lock
 
-# Diagnostic reports (https://nodejs.org/api/report.html)
+# 진단 리포트 (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-# Terraform — local provider/module cache and state; .terraform.lock.hcl is
-# deliberately NOT ignored (committed for reproducibility, like pnpm-lock.yaml, ADR 0014)
+# Terraform — 로컬 provider/module 캐시와 상태; .terraform.lock.hcl은 의도적으로
+# ignore하지 않는다(pnpm-lock.yaml처럼 재현성을 위해 커밋, ADR 0014)
 **/.terraform/*
 *.tfstate
 *.tfstate.*
+# deploy.sh의 plan/apply 분리 서브커맨드가 저장하는 plan 파일(ADR 0046 addendum)
+.deploy-plan*.tfplan
 crash.log
 crash.*.log
 *.tfvars

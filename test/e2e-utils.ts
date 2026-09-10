@@ -1,6 +1,10 @@
-// Purpose: boots a real HTTP+DB Nest app against a throwaway, migration-built database so e2e specs verify full request→response paths in isolation.
-// Usage: imported by *.e2e-spec.ts — setupE2E() in beforeAll, teardownE2E() in afterAll, truncateAll() in beforeEach; plus Basic-auth/cookie helpers.
-// Rationale: main.ts (global ValidationPipe + cookie-parser) is not applied by Test.createTestingModule, and the dev DB must not be polluted — this centralizes both, and the isolation strategy (dedicated DB + per-test truncate), in one place.
+// 목적: 실제 HTTP+DB Nest 앱을 마이그레이션으로 만든 일회용 DB 위에 띄워, e2e 스펙이
+// 요청→응답 전체 경로를 격리된 환경에서 검증할 수 있게 한다.
+// 사용처: *.e2e-spec.ts가 임포트한다 — beforeAll에서 setupE2E(), afterAll에서 teardownE2E(),
+// beforeEach에서 truncateAll(); 그리고 Basic-auth/쿠키 헬퍼들.
+// 근거: main.ts의 (전역 ValidationPipe + cookie-parser)는 Test.createTestingModule에는 적용되지
+// 않고, dev DB를 오염시켜서도 안 된다 — 이 파일이 둘 다와 격리 전략(전용 DB + 테스트별 truncate)을
+// 한 곳에 모은다.
 
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -13,12 +17,17 @@ import { AddUserRoleAndAuditLog1784912790431 } from '../backend/migrations/17849
 import { AddPostEntity1785428640007 } from '../backend/migrations/1785428640007-AddPostEntity';
 import { AddCommentEntity1785476002527 } from '../backend/migrations/1785476002527-AddCommentEntity';
 import { AddFileVisibility1785571437643 } from '../backend/migrations/1785571437643-AddFileVisibility';
+import { AddFileMediaType1786818802632 } from '../backend/migrations/1786818802632-AddFileMediaType';
+import { AddAuditLogTargetType1787578451680 } from '../backend/migrations/1787578451680-AddAuditLogTargetType';
+import { AddPerformanceIndexes1788180660994 } from '../backend/migrations/1788180660994-AddPerformanceIndexes';
+import { AddFileTransferPending1788517947527 } from '../backend/migrations/1788517947527-AddFileTransferPending';
 
-// A dedicated database, never the dev one — dropped and recreated every run so the
-// suite owns its data. New migrations must be appended here or boot fails loudly.
-// The name is set by test/e2e-env.ts before AppModule is imported (so ConfigModule
-// captures it); reading it back here keeps a single source of truth.
-const TEST_DB_NAME = process.env.DB_DATABASE ?? 'upload_board_e2e';
+// dev DB가 아닌 전용 데이터베이스다 — 스위트가 자기 데이터를 소유하도록 실행마다
+// drop 후 재생성한다. 새 마이그레이션은 반드시 여기에도 추가해야 하며, 안 그러면
+// 부팅이 요란하게 실패한다. 이름은 AppModule이 임포트되기 전에 test/e2e-env.ts가
+// 설정한다(ConfigModule이 그 값을 캡처하도록); 여기서 그 값을 다시 읽어 단일 진실
+// 소스를 유지한다.
+const TEST_DB_NAME = process.env.DB_DATABASE ?? 'sharenpo_e2e';
 const MIGRATIONS = [
   InitialSchema1784678400000,
   AddUserRefreshTokenHash1784851200000,
@@ -26,9 +35,13 @@ const MIGRATIONS = [
   AddPostEntity1785428640007,
   AddCommentEntity1785476002527,
   AddFileVisibility1785571437643,
+  AddFileMediaType1786818802632,
+  AddAuditLogTargetType1787578451680,
+  AddPerformanceIndexes1788180660994,
+  AddFileTransferPending1788517947527,
 ];
 
-// Every table the app writes; truncated between tests for per-test isolation.
+// 앱이 쓰는 모든 테이블; 테스트별 격리를 위해 테스트 사이마다 truncate된다.
 const TABLES = [
   'user_entity',
   'file_entity',
@@ -48,8 +61,8 @@ function connectionBase() {
   };
 }
 
-// Drop + create the throwaway DB via a maintenance connection to the default
-// `postgres` database. WITH (FORCE) evicts any lingering connection (PostgreSQL 16+).
+// 기본 `postgres` 데이터베이스에 대한 관리용 연결로 일회용 DB를 drop한 뒤 다시
+// create한다. WITH (FORCE)는 남아 있는 연결을 강제로 끊어낸다(PostgreSQL 16+).
 async function recreateTestDatabase(): Promise<void> {
   const admin = new DataSource({ ...connectionBase(), database: 'postgres' });
   await admin.initialize();
@@ -61,8 +74,8 @@ async function recreateTestDatabase(): Promise<void> {
   }
 }
 
-// Build the schema by running the real migrations — the faithful path (validates
-// the migrations too), never synchronize:true (Never Do Group 2).
+// 실제 마이그레이션을 실행해 스키마를 만든다 — 마이그레이션 자체도 검증하는 충실한
+// 경로이며, synchronize:true는 절대 쓰지 않는다(Never Do Group 2).
 async function runMigrations(): Promise<void> {
   const migrator = new DataSource({
     ...connectionBase(),
@@ -77,8 +90,8 @@ async function runMigrations(): Promise<void> {
   }
 }
 
-// Replicates main.ts bootstrap (cookie-parser + the global ValidationPipe) — neither
-// is applied by Test.createTestingModule, but both are load-bearing for the e2e paths.
+// main.ts의 부트스트랩(cookie-parser + 전역 ValidationPipe)을 재현한다 — 둘 다
+// Test.createTestingModule에는 적용되지 않지만, e2e 경로에는 둘 다 필수적이다.
 async function bootstrapTestApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
@@ -99,8 +112,8 @@ async function bootstrapTestApp(): Promise<INestApplication> {
 }
 
 export async function setupE2E(): Promise<INestApplication> {
-  // Env (incl. the DB_DATABASE override) is set by test/e2e-env.ts before AppModule
-  // is imported — see that file's rationale.
+  // env(DB_DATABASE 오버라이드 포함)는 AppModule이 임포트되기 전에
+  // test/e2e-env.ts가 설정한다 — 그 파일의 근거 참고.
   await recreateTestDatabase();
   await runMigrations();
   return bootstrapTestApp();
@@ -123,14 +136,14 @@ export async function truncateAll(app: INestApplication): Promise<void> {
   await dataSource.query(`TRUNCATE ${quoted} RESTART IDENTITY CASCADE`);
 }
 
-// Basic-token auth header value for /auth/register and /auth/signin.
+// /auth/register와 /auth/signin에 쓰이는 Basic 토큰 인증 헤더 값.
 export function basic(email: string, password: string): string {
   const encoded = Buffer.from(`${email}:${password}`).toString('base64');
   return `Basic ${encoded}`;
 }
 
-// Pull the refreshToken cookie (name=value only) out of a Set-Cookie response so it
-// can be replayed via .set('Cookie', ...) — supertest keeps no cookie jar across calls.
+// Set-Cookie 응답에서 refreshToken 쿠키(name=value만)를 뽑아내, .set('Cookie', ...)로
+// 다시 재생할 수 있게 한다 — supertest는 호출 간 쿠키 저장소를 유지하지 않는다.
 export function refreshCookieFrom(res: {
   headers: Record<string, string | string[] | undefined>;
 }): string {

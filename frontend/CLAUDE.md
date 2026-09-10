@@ -46,8 +46,8 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   All calls send `credentials: 'include'` (centralized in `client.ts`).
 - The **canonical signin path is `POST /auth/signin` (Basic header)**. The
   `btoa` header assembly lives in `client.ts` only — components never build auth
-  headers. (`POST /auth/signin/local` exists on the backend but is a removal
-  candidate; do not build against it.)
+  headers. (`POST /auth/signin/local`, the Passport-local alternative, was removed
+  from the backend 2026-09-07 — it never had a live caller here.)
 - On refresh failure (including `AUTH_REFRESH_REUSED`), the session is over:
   clear the token and route to `/login`.
 
@@ -75,8 +75,10 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
 - **Fast-refresh**: a file that exports a component must not also export a
   context object or hook — keep context/provider/hook in separate files (see
   `src/auth/`).
-- **File header comment** (new files only): three lines — Purpose / Usage /
-  Rationale — above the imports, matching the existing files.
+- **File header comment** (new files only): three lines — 목적 (Purpose) / 사용처
+  (Usage) / 근거 (Rationale) — above the imports, matching the existing files.
+  (Switched from English labels to Korean 2026-09-09, matching the root
+  CLAUDE.md's File Creation Convention.)
 - **Admin**: there is no `/admin` route in this app. ADR 0010 originally reserved one
   as a stub; ADR 0022 imported a standalone Chat Project console to `admin/` instead as
   the operator surface, and once that console's role-management slice was adapted to
@@ -115,3 +117,10 @@ pnpm preview  # serve the production build
 ```
 
 The dev server needs the backend running on `:3000` for API calls to succeed.
+
+**Stopping a backgrounded `pnpm dev`/`pnpm preview` does not free its port on Windows.**
+`pnpm` runs vite as a child process and Windows has no POSIX process-group signalling, so
+killing the task leaves an orphaned `node` holding the socket — the next `--strictPort`
+run then fails with a misleading "port in use". Always check `netstat -ano | grep ":<port>"`
+after stopping one, and kill the listener by PID if it is still there. Full procedure:
+root [CLAUDE.md](../CLAUDE.md) > Commands > "Background servers: kill by port, not by task".

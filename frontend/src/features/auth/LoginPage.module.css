@@ -1,0 +1,131 @@
+.page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  padding: 24px;
+}
+
+.card {
+  width: 100%;
+  max-width: 360px;
+  padding: 32px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+/* 폼 제목 위의 브랜드 락업. 마크를 <img src="/favicon.svg">가 아니라 인라인으로 넣은 이유는
+   stroke가 라이트/다크 전환에 따라 --brand를 따라가야 하기 때문이다. public/favicon.svg는
+   페이지 CSS 커스텀 프로퍼티를 볼 수 없는 브라우저 탭을 위해 같은 두 원 모양을 색상
+   하드코딩된 정적 폴백으로 따로 갖고 있다. */
+.lockup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 0 0 8px;
+}
+
+.mark {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 2;
+}
+
+.lockup span {
+  font-family: var(--heading);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--brand);
+}
+
+.heading {
+  margin: 0 0 20px;
+  text-align: center;
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.input {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.submit {
+  padding: 12px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--brand);
+  color: var(--brand-contrast);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--brand-hover);
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.switchButton {
+  display: block;
+  margin: 16px auto 0;
+  padding: 12px 4px;
+  background: none;
+  border: none;
+  color: var(--brand);
+  cursor: pointer;
+  font: inherit;
+  transition: var(--transition);
+}
+
+.switchButton:hover {
+  color: var(--brand-hover);
+  text-decoration: underline;
+}
+
+/* 카드는 이미 360px로 상한이 걸려 있다. 폰 화면에서 필드를 압박하는 건 바깥 여백과
+   안쪽 padding이므로, 카드 대신 이 둘을 줄인다. */
+@media (max-width: 640px) {
+  .page {
+    padding: 16px;
+  }
+
+  .card {
+    padding: 24px;
+  }
+}

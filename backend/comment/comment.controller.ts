@@ -1,6 +1,6 @@
-// Purpose: exposes the per-comment routes (/comment/:id) behind JwtAuthGuard and documents them for Swagger.
-// Usage: routed by CommentModule; delegates every decision to CommentService and derives identity from the JWT only.
-// Rationale: ADR 0023 addresses an existing comment by its own id, not through its post — editing and deleting need no postId, and requiring one would let a client name a post the comment does not belong to.
+// 목적: 댓글 단건 라우트(/comment/:id)를 JwtAuthGuard 뒤에 노출하고 Swagger 문서를 붙인다.
+// 사용처: CommentModule이 라우팅; 모든 판단은 CommentService에 위임하고 신원은 JWT에서만 가져온다.
+// 근거: ADR 0023은 기존 댓글을 post 경유가 아니라 자기 id로 지칭한다 — 수정/삭제에 postId가 필요 없고, 요구하면 클라이언트가 댓글이 속하지 않은 post를 임의로 지정할 여지가 생긴다.
 
 import {
   Body,

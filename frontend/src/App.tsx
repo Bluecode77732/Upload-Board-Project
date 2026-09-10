@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { SettingsPage } from './features/account/SettingsPage'
 import { LoginPage } from './features/auth/LoginPage'
 import { DashboardPage } from './features/files/DashboardPage'
 import { FileDetailPage } from './features/files/FileDetailPage'
@@ -43,6 +44,16 @@ function App() {
         element={
           <RequireAuth>
             <FileDetailPage />
+          </RequireAuth>
+        }
+      />
+      {/* Not "/user/..." or "/account" — the dev proxy forwards /user to the backend
+          (vite.config.ts), same shadowing concern as "/view/:id" above. */}
+      <Route
+        path="/settings"
+        element={
+          <RequireAuth>
+            <SettingsPage />
           </RequireAuth>
         }
       />

@@ -1,0 +1,117 @@
+/* 이 폼을 감싸는 페이지는 미리보기 그리드를 위해 1126px로 넓어졌다(DashboardPage.module.css).
+   폼까지 그만큼 늘어나면 산만해 보이므로, 원래 너비를 유지하고 가운데 정렬한다. */
+.form {
+  display: grid;
+  gap: 14px;
+  max-width: 720px;
+  margin: 16px auto;
+  padding: 20px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.heading {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.input {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.fileInput {
+  color: var(--text-muted);
+}
+
+.radioGroup {
+  display: flex;
+  gap: 16px;
+}
+
+.radioLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.progress {
+  display: grid;
+  gap: 4px;
+}
+
+.progressBar {
+  width: 100%;
+  accent-color: var(--brand);
+}
+
+.progressText {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.notice {
+  margin: 0;
+  color: var(--success);
+  font-size: 0.9rem;
+}
+
+.submit {
+  justify-self: start;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 6px;
+  background: var(--brand);
+  color: var(--brand-contrast);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--brand-hover);
+}
+
+.submit:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .form {
+    padding: 16px;
+  }
+}

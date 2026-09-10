@@ -1,6 +1,6 @@
-// Purpose: creates post_entity — the board post table, its two foreign keys, and the unique fileId constraint (ADR 0023).
-// Usage: applied by pnpm migration:run after AddUserRoleAndAuditLog; also run by the e2e suite to build its throwaway database.
-// Rationale: generate emitted four spurious statements (dropping and re-adding FK_file_entity_creator and IDX_audit_log_entity_action_createdAt purely to rename them to TypeORM hashes) — stripped per ADR 0006; the new constraints follow the baseline's readable naming instead.
+// 목적: post_entity를 만든다 — 게시글 테이블, 두 개의 외래키, fileId unique 제약이다 (ADR 0023).
+// 사용처: AddUserRoleAndAuditLog 다음에 pnpm migration:run으로 적용되며, e2e 스위트가 일회용 DB를 만들 때도 실행된다.
+// 근거: generate는 불필요한 문 네 개를 함께 뽑아냈다(FK_file_entity_creator와 IDX_audit_log_entity_action_createdAt을 오직 TypeORM 해시로 이름 바꾸려고 drop 후 재생성) — ADR 0006에 따라 이를 걷어냈고, 새 제약들은 대신 베이스라인의 읽기 쉬운 이름 규칙을 따른다.
 
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
@@ -27,8 +27,8 @@ export class AddPostEntity1785428640007 implements MigrationInterface {
         FOREIGN KEY ("creatorId") REFERENCES "user_entity"("id")
         ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-    // NO ACTION on purpose: deleting a file that a post references must be refused
-    // (409 FILE_IN_USE), never silently strip the video out of a published post.
+    // 의도적으로 NO ACTION이다: 게시글이 참조하는 파일을 삭제하려면 거부되어야 한다
+    // (409 FILE_IN_USE) — 이미 게시된 글에서 조용히 동영상만 빠지는 일은 없어야 한다.
     await queryRunner.query(
       `ALTER TABLE "post_entity"
         ADD CONSTRAINT "FK_post_entity_file"

@@ -1,6 +1,6 @@
-// Purpose: verifies the error contract — code passthrough, status fallbacks, validation arrays, dev-only stack.
-// Usage: run by pnpm test; filter.ts is coverage-measured (not in coveragePathIgnorePatterns).
-// Rationale: the frozen ErrorBody shape is a Stage F contract — regressions here break frontend branching.
+// 목적: 에러 계약 — code 전달, 상태 코드 폴백, validation 배열, dev 전용 stack을 검증한다.
+// 사용처: pnpm test로 실행됨; filter.ts는 커버리지 측정 대상이다(coveragePathIgnorePatterns에 없음).
+// 근거: 고정된 ErrorBody 형태는 Stage F 계약이다 — 여기서 회귀가 생기면 프론트엔드 분기가 깨진다.
 
 import {
   ArgumentsHost,
@@ -11,6 +11,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ThrottlerException } from '@nestjs/throttler';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 import { ErrorCode } from '../error-code';
 
@@ -33,7 +34,7 @@ describe('AllExceptionsFilter', () => {
       }),
     } as unknown as ArgumentsHost;
 
-    // Silence the filter's own logging and let the tests assert on it.
+    // 필터 자체의 로깅은 잠재우고, 테스트에서 그 호출을 직접 검증한다.
     errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
     debugSpy = jest.spyOn(Logger.prototype, 'debug').mockImplementation();
 
@@ -101,6 +102,18 @@ describe('AllExceptionsFilter', () => {
     );
   });
 
+  it('should map 429 (ThrottlerException) to RATE_LIMITED, not INTERNAL_ERROR', () => {
+    filter.catch(new ThrottlerException(), mockHost);
+
+    expect(mockStatus).toHaveBeenCalledWith(429);
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 429,
+        code: ErrorCode.RATE_LIMITED,
+      }),
+    );
+  });
+
   it('should label ValidationPipe message arrays as VALIDATION_FAILED', () => {
     filter.catch(
       new BadRequestException({
@@ -149,7 +162,7 @@ describe('AllExceptionsFilter', () => {
 
     expect(errorSpy).toHaveBeenCalledTimes(1);
     expect(debugSpy).not.toHaveBeenCalled();
-    // The withheld stack is the second arg to logger.error — logged server-side only.
+    // 응답에서 뺀 stack은 logger.error의 두 번째 인자로 넘어간다 — 서버 쪽에만 기록된다.
     const stackArg = (errorSpy.mock.calls[0] as unknown[])[1];
     expect(typeof stackArg).toBe('string');
   });

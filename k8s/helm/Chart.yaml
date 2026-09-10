@@ -1,0 +1,10 @@
+apiVersion: v2
+name: sharenpo
+description: NestJS REST API backend for Sharenpo — authenticated file upload and board management (ADR 0041)
+type: application
+
+# 차트 버전 — 템플릿/values를 바꿀 때마다 올린다(SemVer).
+version: 0.3.0
+
+# 이 차트 자체의 버전이 아니라 backend/package.json의 버전을 따라간다.
+appVersion: "0.0.1"

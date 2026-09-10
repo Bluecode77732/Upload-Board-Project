@@ -1,0 +1,132 @@
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  text-align: left;
+}
+
+.tile:hover {
+  border-color: var(--brand);
+}
+
+/* 비율을 고정해서 바이트가 도착하기 전에도 타일이 미리 자기 공간을 차지하게 한다 —
+   미리보기가 하나씩 로드돼도 그리드가 다시 흐트러지지 않는다. */
+.frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: #000;
+}
+
+.placeholder {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 8px;
+  text-align: center;
+}
+
+.icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.loadButton {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  transition: var(--transition);
+}
+
+.loadButton:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.loadButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  min-width: 0;
+}
+
+.title {
+  color: var(--brand);
+  text-decoration: none;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title:hover {
+  color: var(--brand-hover);
+  text-decoration: underline;
+}
+
+.title:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.creatorButton {
+  align-self: flex-start;
+  max-width: calc(100% - 24px);
+  margin: 0 12px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: var(--transition);
+}
+
+.creatorButton:hover {
+  color: var(--brand);
+}
+
+.creatorButton:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}

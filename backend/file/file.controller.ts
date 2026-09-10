@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   Query,
   ClassSerializerInterceptor,
+  HttpCode,
   HttpStatus,
   Res,
   UseGuards,
@@ -18,6 +19,7 @@ import { FileService } from './file.service';
 import { UploadFileDto } from './dto/create-uploadFile.dto';
 import { UpdateFileDto } from './dto/update-uploadFile.dto';
 import { GetFilesDto } from './dto/get-files.dto';
+import { ProposeFileTransferDto } from './dto/propose-file-transfer.dto';
 import { UserId } from 'backend/user/decorator/userId.decorator';
 import { AuthUser } from 'backend/auth/decorator/auth-user.decorator';
 import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -97,6 +99,10 @@ export class FileController {
   }
 
   @Patch(':id')
+  // 목적: 파일 메타데이터(제목/가시성/소유자 등) 수정 요청을 서비스로 넘긴다.
+  // 이유: 소유자/admin 판정과 visibility·shareToken 상태 전이는 모두 FileService의 책임이다
+  //       (Boundary Validation & Response Shaping).
+  // 방법: 검증된 UpdateFileDto와 요청자를 그대로 전달한다 — 컨트롤러는 아무것도 해석하지 않는다.
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateFileDto: UpdateFileDto,
@@ -106,7 +112,126 @@ export class FileController {
   }
 
   @Delete(':id')
+  // 목적: 파일 삭제 요청을 서비스로 넘긴다.
+  // 이유: FK_file_entity 위반(게시글이 참조 중) 판정과 물리 파일 unlink는 FileService의
+  //       책임이다(ADR 0023 D4).
+  // 방법: 요청자를 그대로 전달 — 소유자/admin 판정은 서비스가 한다.
   delete(@Param('id', ParseIntPipe) id: number, @AuthUser() actor: AuthUser) {
     return this.fileService.deleteFile(id, actor);
+  }
+
+  @Post(':id/transfer')
+  @HttpCode(HttpStatus.OK)
+  @ApiResponse({
+    status: 200,
+    description:
+      'The transfer was proposed. Ownership has not moved yet — only the target user accepting it moves ownership (ADR 0050).',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      "FILE_TRANSFER_INVALID_TARGET — the target is the file's current owner.",
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'FORBIDDEN_NOT_OWNER — only the creator or an admin may propose a transfer.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'FILE_NOT_FOUND, or USER_NOT_FOUND for the target.',
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      'FILE_TRANSFER_PENDING — a transfer is already pending; cancel it first.',
+  })
+  // 목적: 소유권 이전 제안 요청을 서비스로 넘긴다.
+  // 이유: 동의 없는 즉시 강제 이전이었던 옛 PATCH userId 필드를 대체한다(ADR 0050).
+  // 방법: 대상 userId와 요청자를 그대로 전달 — 권한·중복 제안 판정은 서비스의 몫이다.
+  proposeTransfer(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() proposeFileTransferDto: ProposeFileTransferDto,
+    @AuthUser() actor: AuthUser,
+  ) {
+    return this.fileService.proposeTransfer(
+      id,
+      proposeFileTransferDto.userId,
+      actor,
+    );
+  }
+
+  @Post(':id/transfer/accept')
+  @HttpCode(HttpStatus.OK)
+  @ApiResponse({
+    status: 200,
+    description: 'Accepted — ownership has moved to the caller.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'FILE_NO_PENDING_TRANSFER — nothing is pending on this file.',
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'FORBIDDEN_NOT_TRANSFER_TARGET — only the proposed recipient may accept.',
+  })
+  // 목적: 대기중인 이전 제안 수락 요청을 서비스로 넘긴다.
+  // 이유: 오직 대상 본인만 수락할 수 있다 — admin도 대신 수락 못 한다(ADR 0050 D4).
+  // 방법: 요청자를 그대로 전달 — 대상 일치 판정은 서비스의 몫이다.
+  acceptTransfer(
+    @Param('id', ParseIntPipe) id: number,
+    @AuthUser() actor: AuthUser,
+  ) {
+    return this.fileService.acceptTransfer(id, actor);
+  }
+
+  @Post(':id/transfer/reject')
+  @HttpCode(HttpStatus.OK)
+  @ApiResponse({
+    status: 200,
+    description: 'Rejected — ownership is unchanged.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'FILE_NO_PENDING_TRANSFER — nothing is pending on this file.',
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'FORBIDDEN_NOT_TRANSFER_TARGET — only the proposed recipient may reject.',
+  })
+  // 목적: 대기중인 이전 제안 거절 요청을 서비스로 넘긴다.
+  // 이유: acceptTransfer와 대칭 — 거절도 대상 본인의 동의 절차 중 하나다(ADR 0050).
+  // 방법: 요청자를 그대로 전달 — 대상 일치 판정은 서비스의 몫이다.
+  rejectTransfer(
+    @Param('id', ParseIntPipe) id: number,
+    @AuthUser() actor: AuthUser,
+  ) {
+    return this.fileService.rejectTransfer(id, actor);
+  }
+
+  @Delete(':id/transfer')
+  @ApiResponse({
+    status: 200,
+    description: 'Cancelled — ownership is unchanged.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'FILE_NO_PENDING_TRANSFER — nothing is pending on this file.',
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      "FORBIDDEN_NOT_OWNER — only the file creator may cancel (admin cannot cancel another user's proposal — a narrower rule than propose's creator-or-admin, see file.service.ts cancelTransfer).",
+  })
+  // 목적: 아직 응답 없는 이전 제안 취소 요청을 서비스로 넘긴다.
+  // 이유: 제안자가 대상 응답을 기다리지 않고 스스로 제안을 거둘 수 있어야 한다(ADR 0050 D3).
+  // 방법: 요청자를 그대로 전달 — creator 본인 여부 판정은 서비스의 몫이다(admin 예외 없음).
+  cancelTransfer(
+    @Param('id', ParseIntPipe) id: number,
+    @AuthUser() actor: AuthUser,
+  ) {
+    return this.fileService.cancelTransfer(id, actor);
   }
 }

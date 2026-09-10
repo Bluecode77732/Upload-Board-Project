@@ -1,6 +1,6 @@
-// Purpose: isolates the readiness dependency check so it is unit-testable without booting Nest.
-// Usage: injected by HealthController only.
-// Rationale: services are what this project's coverage measures; keeping the DB ping out of the controller follows that split (ADR 0031).
+// 목적: readiness 의존성 검사를 분리해 Nest를 부팅하지 않고도 단위 테스트할 수 있게 한다.
+// 사용처: HealthController에서만 주입한다.
+// 근거: 이 프로젝트의 커버리지는 서비스만 측정한다 — DB ping을 컨트롤러 밖에 두는 것이 그 분리 원칙을 따른다 (ADR 0031).
 
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';

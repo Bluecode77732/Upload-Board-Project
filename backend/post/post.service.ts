@@ -1,6 +1,6 @@
-// Purpose: owns board post business logic — CRUD, attachment claim resolution, ownership checks, and the account-cascade delete.
-// Usage: injected by PostController; deletePostsOfCreator is called by UserService inside its deletion transaction.
-// Rationale: ADR 0023 puts post as its own domain module; folding it into FileModule would merge board content with file metadata, the split the module policy exists to keep.
+// 목적: 게시판 게시글의 비즈니스 로직 — CRUD, 첨부 claim 판정, 소유권 검사, 계정 cascade 삭제를 담당한다.
+// 사용처: PostController가 주입해 쓰며, deletePostsOfCreator는 UserService가 자신의 삭제 트랜잭션 안에서 호출한다.
+// 근거: ADR 0023이 게시글을 자기 도메인 모듈로 둔다 — FileModule에 접으면 게시판 내용과 파일 메타데이터가 섞여, 모듈 분리 정책이 지키려는 경계가 무너진다.
 
 import {
   ConflictException,
@@ -23,30 +23,31 @@ import { GetPostsDto, PostSortField } from './dto/get-posts.dto';
 import { PostResponseDto } from './dto/post-response.dto';
 import { FileService } from 'backend/file/file.service';
 import { AuditLogService } from 'backend/audit-log/audit-log.service';
+import { AuditTargetType } from 'backend/audit-log/audit-target-type.enum';
 import { ErrorCode } from 'backend/common/error-code';
 import { escapeLikePattern } from 'backend/common/escape-like-pattern';
 import { ROLE_RANK, UserRole } from 'backend/auth/role/role';
 
-// The acting user's identity + role (from the JWT), enough for creator-OR-admin checks.
+// 요청을 수행하는 유저의 신원 + 역할(JWT에서 온다) — creator-OR-admin 검사에 충분하다.
 interface Requester {
   id: number;
   role: UserRole;
 }
 
-// Outcome of a create attempt: `replayed` marks a retry that found its own earlier
-// success, so the controller can answer 200 instead of a second 201 (ADR 0023 D1).
+// 생성 시도의 결과: `replayed`는 이전의 자기 성공을 발견한 재시도를 표시해,
+// 컨트롤러가 두 번째 201 대신 200으로 응답할 수 있게 한다 (ADR 0023 D1).
 export interface PostClaimResult {
   replayed: boolean;
   post: PostResponseDto;
 }
 
-// Postgres unique_violation on UQ_post_entity_fileId — a concurrent double-submit
-// lost the race, which is a client duplicate rather than a server fault.
+// UQ_post_entity_fileId에서 발생한 Postgres unique_violation — 동시 이중 제출이
+// 경합에서 진 것이며, 서버 결함이 아니라 클라이언트 중복이다.
 const UNIQUE_VIOLATION = '23505';
 
-// The sole bridge from a client sort key to a column (ADR 0021). Typed as a total Record
-// over PostSortField, so a key added to POST_SORT_FIELDS without a column here fails to
-// compile — the whitelist cannot silently drift out of sync with the query.
+// 클라이언트 정렬 키를 컬럼으로 잇는 유일한 다리다 (ADR 0021). PostSortField에 대한
+// total Record로 타입을 잡아서, POST_SORT_FIELDS에 컬럼 매핑 없이 키를 추가하면
+// 컴파일이 실패한다 — 화이트리스트가 쿼리와 조용히 어긋날 수 없다.
 const SORT_COLUMN: Record<PostSortField, string> = {
   createdAt: 'post.createdAt',
   title: 'post.title',
@@ -63,9 +64,9 @@ export class PostService {
     private readonly auditLogService: AuditLogService,
   ) {}
 
-  // A post is manageable by its author, or by an admin/superadmin (RBAC, ADR 0013).
-  // Deliberately the same shape as FileService.canManage — the board introduces no
-  // new authorization axis, and notably not "post author moderates its comments".
+  // 게시글은 작성자 본인이거나 admin/superadmin이면 관리할 수 있다 (RBAC, ADR 0013).
+  // FileService.canManage와 의도적으로 같은 모양이다 — 게시판은 새로운 권한 축을 도입하지
+  // 않으며, 특히 "게시글 작성자가 자기 댓글을 모더레이션한다"는 규칙도 아니다.
   private canManage(creatorId: number, requester: Requester): boolean {
     return (
       creatorId === requester.id ||
@@ -115,14 +116,14 @@ export class PostService {
       });
     }
 
-    // The creator join already exists, so the filter costs one predicate and no extra query.
+    // creator join은 이미 존재하므로, 이 필터는 predicate 하나만 더할 뿐 추가 쿼리가 없다.
     if (creatorId !== undefined) {
       queryBuilder.andWhere('creator.id = :creatorId', { creatorId });
     }
 
     queryBuilder.orderBy(SORT_COLUMN[sortBy], order);
-    // A unique tiebreaker makes the page boundary deterministic when the sort column ties;
-    // sorting by id already is one, so adding it twice would only duplicate the clause.
+    // 고유한 tiebreaker는 정렬 컬럼 값이 같을 때 페이지 경계를 결정적으로 만든다;
+    // id로 정렬하는 경우는 이미 그 자체가 tiebreaker이므로, 다시 추가하면 절만 중복될 뿐이다.
     if (sortBy !== 'id') {
       queryBuilder.addOrderBy('post.id', order);
     }
@@ -181,13 +182,13 @@ export class PostService {
     dto: CreatePostDto,
     userId: number,
   ): PostClaimResult {
-    // Normally implied by the same-creator attach rule, but file ownership is
-    // reassignable (PATCH /file/:id userId), so the new owner can legitimately reach a
-    // post that is not theirs. Replay belongs to the original author only.
+    // 평소에는 same-creator 첨부 규칙이 이를 함축하지만, 파일 소유권은 재할당될 수 있어서
+    // (PATCH /file/:id userId) 새 소유자가 자기 것이 아닌 게시글에 정당하게 닿을 수 있다.
+    // replay는 오직 원 작성자에게만 해당한다.
     const sameAuthor = existing.creator.id === userId;
-    // Replay only on an identical payload — unlike ADR 0019's unconditional replay. A
-    // file promotion carries no author-written text; a post does, so replaying a
-    // different title/body would answer a genuinely new submission with an older post.
+    // 페이로드가 완전히 같을 때만 replay — ADR 0019의 무조건적 replay와 다르다. 파일
+    // promotion에는 작성자가 쓴 텍스트가 없지만 게시글에는 있으므로, title/body가 다른데도
+    // replay로 처리하면 실제로는 새로운 제출을 예전 게시글로 응답하는 셈이 된다.
     if (
       !sameAuthor ||
       existing.title !== dto.title ||
@@ -226,8 +227,8 @@ export class PostService {
     const { fileId } = dto;
 
     if (fileId !== undefined) {
-      // The ownership decision lives in the layer that owns file state; this service
-      // never reads file.creator itself (Law of Demeter / Tell Don't Ask).
+      // 소유권 판단은 파일 상태를 소유한 계층의 몫이다; 이 서비스는 file.creator를
+      // 스스로 읽지 않는다 (Law of Demeter / Tell Don't Ask).
       await this.fileService.assertAttachableBy(fileId, userId);
 
       const existing = await this.findByFileId(fileId);
@@ -246,8 +247,8 @@ export class PostService {
           title: dto.title,
           body: dto.body,
           creator: { id: userId },
-          // Omitted rather than set to null when absent — the column defaults to null,
-          // and this keeps the values object free of a nullable-relation cast.
+          // 값이 없을 때 null로 설정하지 않고 아예 생략한다 — 컬럼 기본값이 이미 null이고,
+          // 이렇게 하면 values 객체에 nullable-relation 캐스팅이 끼어들지 않는다.
           ...(fileId !== undefined && { file: { id: fileId } }),
         })
         .execute();
@@ -261,9 +262,9 @@ export class PostService {
       }
       insertedId = identifier;
     } catch (error) {
-      // The lookup above is an unlocked read, so simultaneous submits can both pass it
-      // and let the unique constraint pick the winner. Re-resolve through the same path
-      // so the loser gets a replay or a typed 409, never a 500.
+      // 위의 조회는 락 없는 읽기라서, 동시 제출이 둘 다 통과한 뒤 unique 제약이
+      // 승자를 가릴 수 있다. 진 쪽이 500이 아니라 replay나 타입 있는 409를 받도록
+      // 같은 경로로 다시 판정한다.
       if (fileId !== undefined && this.isUniqueViolation(error)) {
         const winner = await this.findByFileId(fileId);
         if (winner) {
@@ -273,8 +274,8 @@ export class PostService {
       throw error;
     }
 
-    // Re-read through the shared path: the insert result carries no relations, so
-    // composing a response from it would omit the author email and the file URL.
+    // 공유 경로로 다시 읽는다: insert 결과에는 관계가 없어서, 그걸로 바로 응답을
+    // 조립하면 작성자 이메일과 파일 URL이 빠진다.
     return { replayed: false, post: await this.getPostById(insertedId) };
   }
 
@@ -309,7 +310,7 @@ export class PostService {
     if (dto.title !== undefined) updateFields.title = dto.title;
     if (dto.body !== undefined) updateFields.body = dto.body;
 
-    // An empty PATCH is a no-op, not an error — TypeORM rejects an empty update set.
+    // 빈 PATCH는 에러가 아니라 no-op이다 — TypeORM은 빈 업데이트 집합을 거부한다.
     if (Object.keys(updateFields).length > 0) {
       await this.postRepository.update({ id }, updateFields);
     }
@@ -344,7 +345,12 @@ export class PostService {
 
     await this.postRepository.delete(id);
 
-    await this.auditLogService.log(requester.id, id, 'POST_DELETE');
+    await this.auditLogService.log(
+      requester.id,
+      id,
+      AuditTargetType.post,
+      'POST_DELETE',
+    );
 
     return `Post ${id} deleted.`;
   }

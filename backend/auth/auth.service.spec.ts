@@ -244,9 +244,9 @@ describe('AuthService', () => {
       const result = await authService.issueToken(user, true);
 
       expect(jwtService.signAsync).toHaveBeenCalledWith(
-        // jti: every refresh token is unique so reuse detection can tell
-        // rotated-out tokens apart (ADR 0012). No role — refresh payloads
-        // stay minimal (ADR 0028).
+        // jti: 모든 리프레시 토큰이 유일해야 재사용 탐지가 회전으로 무효화된
+        // 토큰을 구별할 수 있다(ADR 0012). role은 없다 — 리프레시 페이로드는
+        // 최소한으로 유지한다(ADR 0028).
         { sub: user.id, type: 'refresh', jti: expect.any(String) as string },
         { secret: 'refresh_secret', expiresIn: 3600 },
       );

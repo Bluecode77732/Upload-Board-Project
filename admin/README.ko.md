@@ -15,11 +15,14 @@ REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" �
 
 ## 왜 여기 있는가 — 두 가지 목적
 
-1. **사용자 권한 계층 관리.** RBAC은 [ADR 0013](../ADR/0013-rbac-and-audit-log.ko.md)에서
+1. **사용자 권한 계층 관리.** RBAC은 [ADR 0013](../docs/ADR/0013-rbac-and-audit-log.ko.md)에서
    도입됐다 — `ROLE_RANK` 순위를 가진 3단계(`user`/`admin`/`superadmin`), superadmin 전용
    `PATCH /user/:id/role`, `ROLE_CHANGE` 감사 기록 — 그런데 **그것을 운영할 수단은 함께 나오지
-   않았다.** 지금 첫 superadmin은 `SUPERADMIN_EMAIL` 부팅 시딩으로 생기고, 그 이후의 모든
-   승격·강등은 직접 HTTP 요청이거나 Swagger 폼이다. 더 문제는 계층을 보호하는 두 불변식이
+   않았다.** 지금 첫 superadmin은 `SUPERADMIN_EMAIL` 계정이며, 부팅 시 자동이 아니라
+   의도적인 수동 단계(`pnpm promote-superadmin` —
+   [ADR 0052](../docs/ADR/0052-superadmin-seed-manual-trigger.ko.md))로 승격된다. 그
+   이후의 모든 승격·강등은 직접 HTTP 요청이거나 Swagger 폼이다. 더 문제는 계층을 보호하는
+   두 불변식이
    그것을 쓰는 사람에게 보이지 않는다는 점이다: **마지막** superadmin 강등은 거부되고
    (400 `AUTH_LAST_SUPERADMIN`), **모든** 역할 변경은 대상의 `refreshTokenHash`를 null로 만들어
    세션을 즉시 끊는다. 이 콘솔이 바로 그 운영 화면이다.
@@ -33,9 +36,9 @@ REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" �
 사본으로 도착한 이유이자, 아래 적응이 처음부터 다시 쓰는 게 아니라 표적 교정인 이유다.
 
 - 이식 결정 전문, 기각한 대안, 결과:
-  [ADR 0022](../ADR/0022-admin-console-import-from-chat-project.ko.md)
+  [ADR 0022](../docs/ADR/0022-admin-console-import-from-chat-project.ko.md)
 - 이번 적응은 **ROADMAP Stage 5의 두 번째 행**("이식된 `admin/` 콘솔 적응")이며, 첫 행이 이를
-  막고 있었다 — 액세스 토큰이 [ADR 0028](../ADR/0028-access-token-role-claim.ko.md)(실행순서
+  막고 있었다 — 액세스 토큰이 [ADR 0028](../docs/ADR/0028-access-token-role-claim.ko.md)(실행순서
   #3)에서 `role` 클레임을 얻었고, 이 콘솔의 라우트 가드가 `/dashboard`, `/users`, `/logs`를
   게이팅하는 데 그것을 쓴다.
 
@@ -52,13 +55,52 @@ REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" �
 루트의 `pnpm lint`, `pnpm test`, `pnpm test:e2e`는 이 폴더에 닿을 수 없으므로, 여기 있는 어떤
 것도 백엔드 파이프라인을 깨뜨릴 수 없다.
 
+## 라이브 UI/UX 점검에서 찾은 결함 (2026-08-24)
+
+둘 다 실제 브라우저로 콘솔을 직접 조작하다 발견했고, 여기서 함께 고쳤다. 수정은 `admin/`
+안에서만 이뤄졌으며 백엔드·계약·스키마 변경은 없다.
+
+- **감사 로그가 대상의 종류를 잘못 표기했다.** `logs-page.tsx`가 모든 행에
+  `User {targetId}`를 찍었지만 `targetId`는 액션마다 가리키는 대상이 다르다.
+  `auditLogService.log()` 호출부 5곳을 전수 확인한 결과 `ROLE_CHANGE`/`USER_DELETE`는
+  사용자 id를, `FILE_DELETE`/`POST_DELETE`/`COMMENT_DELETE`는 각각 파일·게시글·댓글 id를
+  넘긴다. "FILE_DELETE … Target: User 313"이라 적힌 행은 사실 파일 313번에 관한 것이라,
+  그대로 따라가면 무관한 사용자에게 닿았다. `src/lib/audit.ts`에 `targetLabel(action,
+  targetId)`을 추가해(`actionColor` 옆) 액션을 그에 맞는 명사로 매핑하고, 모르는 액션은
+  추측하지 않고 `#id`로 표기한다. `dashboard-page.tsx`는 `actorId`만 그리고 actor는 항상
+  사용자이므로 그대로 뒀다. **이번 수정은 표시 계층에 한정된다.** 백엔드가 대상의 타입을
+  명시적으로 실어야 하는지는 별개의 열린 문제로 남겨 뒀는데, **2026-08-24
+  [ADR 0045](../docs/ADR/0045-audit-log-target-type.ko.md)가 `targetType` 판별자 칼럼을
+  추가하며 결론이 났다.** 이제 `targetLabel`은 action을 매핑하지 않고 그 필드를 읽으며,
+  클라이언트 쪽 action → 명사 매핑은 삭제했다. 위의 표시 수정 자체는 그대로다.
+- **모든 테이블이 좁은 화면에서 자기 조작 컨트롤을 가렸다.** 세 래퍼가 전부
+  `overflow-hidden`이었고 `src/` 어디에도 `overflow-x-auto`가 없었다(당시 이 절은 콘솔
+  전체의 반응형 유틸리티가 2개라고 봤다 — 아래에서 정정). 375px 뷰포트에서 users 테이블은
+  272px가 잘리며 Created·Role·Actions 열을 함께 가져갔다 — 즉 역할 `<select>`와 Delete
+  버튼, 운영자가 이 화면에 오는 이유인 두 가지에 손이 닿지 않았다 — logs 테이블은 233px가
+  잘려 Detail이 사라졌다. 정작 페이지는 오버플로가 없다고 보고해 그런 열이 있다는 힌트조차
+  없었고, 끌어볼 스크롤바도 없었다. 세 래퍼를 `overflow-x-auto`로 바꿨다. 이는 접근을
+  되살릴 뿐 그 이상은 아니다. 휴대폰에서도 여전히 넓은 테이블이다. **2026-09-08 결정**:
+  카드 레이아웃 대신 가로 스크롤 래퍼를 유지한다 — 비교표(컬럼 숨기기 vs. 카드 전환 vs.
+  현행 유지)로 트레이드오프를 개발자에게 직접 제시했고, 카드 전환의 유지보수 비용(테이블
+  3곳 조건부 렌더링/CSS)이 데스크톱 전용 도구에는 맞지 않는다는 결론이었다. 같은 검토에서
+  나온 유일한 빈틈 — 래퍼에 `tabindex`가 없어 내부 컨트롤에 우연히 포커스가 가지 않는 한
+  키보드만으로는 스크롤할 수 없었던 점 — 도 닫혔다: 세 래퍼 모두 `tabIndex={0}`을 갖는다.
+  같은 작업에서 바로잡은 것: 콘솔의 `sm:`/`md:` 접두 반응형 유틸리티는 2개가 아니라
+  **1개**다(`dashboard-page.tsx`의 `md:grid-cols-3` 통계 카드 그리드) — grep으로
+  재검증했고 두 번째 항목은 찾지 못했다. 전체 결정 경위: [ROADMAP.ko.md](../docs/ROADMAP.ko.md)
+  > 7.
+
+375px와 1280px에서 라이브로 확인했고 `pnpm build`, `pnpm lint`(0 errors),
+`pnpm test`(19/19), `pnpm e2e`(11/11) 모두 통과한다.
+
 ## 출처 정리 (2026-08-13)
 
 Chat Project 이식의 흔적 중 남아있던, 아래 기능 적응과는 무관한 두 가지 — 겉모습/죽은
 설정 문제를 정리했다. 색상과 레이아웃은 그대로 뒀다.
 
-- `index.html`의 `<title>`이 제네릭한 `"Admin Panel"`이었다 — `"Upload Board Admin"`으로
-  바꾸고, `<head>`에 연결한 `admin/public/favicon.svg`(단순한 "UB" 이니셜 마크)를 추가했다.
+- `index.html`의 `<title>`이 제네릭한 `"Admin Panel"`이었다 — `"Sharenpo Admin"`으로
+  바꾸고, `<head>`에 연결한 `admin/public/favicon.svg`(단순한 "S" 이니셜 마크)를 추가했다.
 - `vercel.json`의 CSP `connect-src`가 여전히 Chat Project의 실제 Railway 배포 주소
   (`https://chat-project-production-3b22.up.railway.app`)를 가리키고 있었다 — 닿을 수 없는
   죽은 설정이지만, 누군가 템플릿으로 참고하면 틀린 값이 된다. `http://localhost:3000`(이
@@ -78,24 +120,24 @@ Chat Project 이식의 흔적 중 남아있던, 아래 기능 적응과는 무�
 | 영역 | 이식 코드가 기대하던 것 | 이 프로젝트의 실제 | 해결 방법 |
 |---|---|---|---|
 | 역할 인코딩 | `{ role: 1 }`(숫자), 라벨은 `Record<number, string>` | `UserRole` **문자열 enum**(`'user' \| 'admin' \| 'superadmin'`) | `auth.store.ts`의 `role`을 `UserRole`로 바꿨다; `ROLE_RANK`/`ROLE_LABEL` 조회표(`src/auth/role.ts`, 신규)가 모든 숫자 비교를 대체한다 |
-| 역할 출처 | `jwtDecode<{ sub, role }>(accessToken)` | 액세스 토큰 페이로드가 이제 `role`을 담는다([ADR 0028](../ADR/0028-access-token-role-claim.ko.md)) | `session-guard.ts`, `login-page.tsx`, `protected-route.tsx`가 `role`을 `UserRole \| undefined`로 디코드하고 `ROLE_RANK[role] >= ROLE_RANK.admin`으로 게이팅한다 |
+| 역할 출처 | `jwtDecode<{ sub, role }>(accessToken)` | 액세스 토큰 페이로드가 이제 `role`을 담는다([ADR 0028](../docs/ADR/0028-access-token-role-claim.ko.md)) | `session-guard.ts`, `login-page.tsx`, `protected-route.tsx`가 `role`을 `UserRole \| undefined`로 디코드하고 `ROLE_RANK[role] >= ROLE_RANK.admin`으로 게이팅한다 |
 | 누가 역할을 배정하는가 | admin이면 누구나 역할 컨트롤을 본다 | `PATCH /user/:id/role`은 **superadmin 전용**이며, `updateRole`은 대상 등급에 상한이 없다(마지막 superadmin 강등만 거부) | `users-page.tsx`는 `myRole === 'superadmin'`일 때만 역할 `<select>`를 렌더링하되, 본인 행과 다른 superadmin 행을 포함해 모든 행에 렌더링한다 — 엔드포인트가 실제로 허용하는 범위와 일치시켰다 |
 | 계층 불변식 | 어느 쪽도 분기가 없다 | 마지막 superadmin 강등 거부(400 `AUTH_LAST_SUPERADMIN`), 모든 역할 변경이 대상 세션을 종료(`refreshTokenHash` null) | `users-page.tsx`의 `updateRole()`이 `AUTH_LAST_SUPERADMIN` 코드를 분기해 별도 메시지를 보여준다; 세션 종료 부수효과는 클라이언트 처리가 필요 없다(그대로가 맞다) |
 | 역할 라벨 | `role === 1 ? 'admin' : 'user'`(이진) | 3단계 | 승격/강등 토글을 3단계 `<select>`(user/admin/superadmin)로 교체했다 — 아래 "역할 변경 UI" 결정 참고 |
 | 권한 역전 방지 가드 *(이번 작업 중 발견 — 2026-07-30 조사에는 없었다)* | 이런 검사가 어디에도 없었다 | `PATCH`/`DELETE /user/:id`가 이제 동급/상위 등급 대상에 대한 admin의 조작을 403 `FORBIDDEN`으로 거부한다 — 이번 적응과 같은 날 닫힌 결함 | `users-page.tsx`는 `ROLE_RANK[myRole] > ROLE_RANK[target.role]`일 때만 삭제 버튼을 렌더링하고, `deleteUser()`는 여전히 `FORBIDDEN`을 방어적으로 분기한다(화면 로드와 클릭 사이에 역할이 바뀔 수 있으므로) |
 | 감사 액션 | `FORCE_LOGOUT`, `USER_BANNED`, `USER_MUTED`, `USER_UNBAN`을 포함한 6개에 색 지정 | `AUDIT_ACTIONS`는 정확히 `ROLE_CHANGE`, `USER_DELETE`, `FILE_DELETE`, `POST_DELETE`, `COMMENT_DELETE` | `logs-page.tsx`의 `ACTIONS` 목록과 두 페이지의 `actionColor()`를 정확히 맞췄다 |
 | superadmin 부트스트랩 문서 | `e2e/.env.example`과 `e2e/seed-superadmin.mjs`가 "CLAUDE.md의 Role Population Invariants"를 인용 | 이 저장소 어디에도 그런 절이 없다 — 실제 메커니즘은 `SUPERADMIN_EMAIL` + `superadmin-seed.service.ts` | 두 파일의 인용을 고쳤다; `seed-superadmin.mjs`의 SQL은 이제 문자열 `'superadmin'`을 넣는다(`role=2, "isAI"=false`가 아니다 — `isAI`는 `UserEntity`에 없다), `.env` 탐색 경로도 실제 루트 `.env`로 고쳤다(`backend/.env`는 존재하지 않는다) |
-| 전송 계층 | `/graphql`을 향한 Apollo Client(`src/api/apollo.ts`, `src/api/graphql-operations.ts`, `dashboard-page`/`rooms-page`/`logs-page`의 Apollo 훅) | **REST 전용 — `/graphql` 라우트가 없다**([ADR 0009](../ADR/0009-rest-only-api-with-swagger.ko.md)) | 두 파일 삭제; `main.tsx`의 `ApolloProvider` 제거; `package.json`에서 `@apollo/client`/`graphql` 제거 |
-| 갱신 라우트 | `POST /auth/token/refreshaccess` | `POST /auth/token/refresh` ([ADR 0012](../ADR/0012-refresh-cookie-rotation.ko.md)) | `session-guard.ts`에서 수정 |
+| 전송 계층 | `/graphql`을 향한 Apollo Client(`src/api/apollo.ts`, `src/api/graphql-operations.ts`, `dashboard-page`/`rooms-page`/`logs-page`의 Apollo 훅) | **REST 전용 — `/graphql` 라우트가 없다**([ADR 0009](../docs/ADR/0009-rest-only-api-with-swagger.ko.md)) | 두 파일 삭제; `main.tsx`의 `ApolloProvider` 제거; `package.json`에서 `@apollo/client`/`graphql` 제거 |
+| 갱신 라우트 | `POST /auth/token/refreshaccess` | `POST /auth/token/refresh` ([ADR 0012](../docs/ADR/0012-refresh-cookie-rotation.ko.md)) | `session-guard.ts`에서 수정 |
 | 로그아웃 라우트 | `POST /auth/signOut` | `POST /auth/signout` (소문자) | 로그아웃하는 모든 페이지에서 수정 |
 | 도메인 페이지 | `rooms-page.tsx`, `getOnlineUser`, `getUserNicknames` | 채팅방·접속 상태·닉네임이 없다 — 이 도메인은 **업로드된 영상 파일**이다 | `rooms-page.tsx`와 `graphql-operations.ts` 삭제; `App.tsx`에서 `/rooms` 라우트 제거; 삭제된 Apollo 계층에서만 쓰던 `rxjs`를 `package.json`에서 제거 |
 | 사용자 조작 | `POST /user/:id/ban` \| `/unban` \| `/force-logout` | **하나도 없다** — ROADMAP의 기본값은 여전히 "모더레이션 액션 없음" | `users-page.tsx`에서 세 가지 모두 삭제, 백엔드 쪽 대체 구현은 만들지 않았다(그것은 적응이 아니라 새 범위가 된다) |
-| 사용자 목록 조회 | `GET /user?page&take&sort&sortBy&search&status` | `take`/`skip`만, 고정 `createdAt DESC` 순서, 검색·정렬·상태 없음([ROADMAP 실행순서 #2](../ROADMAP.ko.md)) | `users-page.tsx`는 `take`/`skip`으로 페이지네이션한다; 검색창·정렬 토글 헤더·상태 필터는 제거했다(지금 보내면 400 `VALIDATION_FAILED` — `forbidNonWhitelisted`). ~~제거~~ **2026-08-12 재도입**: `GetUsersDto`에 `search`(이메일 `ILIKE`)와 `sortBy`/`order`(`id`/`email`/`createdAt`, `role`은 제외)가 추가됐다; 검색창과 클릭 가능한 ID/Email/Created 헤더가 다시 생겼고, 서버에 존재하지 않는 `status` 필터는 여전히 없다 |
-| 감사 로그 | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip`만; 고정 `createdAt DESC`; **`/export` 없음**, **`userId` 필터 없음**(이식 당시 기준) | `logs-page.tsx`는 처음엔 액션 필터 + 페이지네이션만 남겼다; CSV 내보내기 버튼, 날짜 범위 필터, 사용자 필터는 제거했다. `userId` ~~없음~~ **2026-08-12 추가**: `AuditLogQueryDto`가 이제 `userId`를 받고(actor 또는 target과 매칭), 같은 커밋에서 `logs-page.tsx`도 자신의 URL(`?userId=`)에서 이를 읽는다 — `users-page.tsx`의 "View all" 링크(`/logs?userId=…`)는 죽은 필터가 아니라 실제로 동작하는 필터다. CSV 내보내기는 ~~제거~~ **2026-08-12 클라이언트 쪽으로 재도입**: `/audit-log/export`는 여전히 없으므로, `exportCsv()`가 DTO의 `take` 상한(페이지당 100)만큼 `GET /audit-log`를 순회해 최대 1000건까지 모은 뒤 다운로드한다 |
-| 페이징 모델 | `page` + `take` | `take` + `skip`(오프셋) ([ADR 0021](../ADR/0021-list-query-search-filter-sort.ko.md)) | 두 목록 페이지 모두 `skip = (page - 1) * take`를 계산하고, `{ data, total, page, take }`가 아니라 `[data, total]` 튜플 응답을 읽는다 |
-| 사용자별 감사 조각 | 사용자 페이지 상세 패널이 `GET /audit-log?userId=…`를 호출 | `userId` 필터가 존재하지 않는다 | **근사하지 않고 제거했다** — 아래 "열린 사항" 참고. ~~제거~~ **2026-08-12 복원**: `AuditLogQueryDto`에 `userId`가 생기면서, 상세 패널이 `GET /audit-log?userId={id}&take=5`(actor 또는 target)를 호출해 "Recent activity" 절을 보여준다 |
-| 사용자 삭제 | 확인 없는 `DELETE /user/:id` | 계정이 파일을 가진 경우 `?deleteFiles=true` 필수, 없으면 409 `USER_HAS_FILES` ([ADR 0020](../ADR/0020-account-deletion-cascade.ko.md)) | `deleteUser()`가 `USER_HAS_FILES`를 잡아 응답 `message`의 파일 개수를 보여주고, 재확인 후 `?deleteFiles=true`로 재시도한다 |
-| 에러 처리 | 그때그때의 상태 코드·메시지 검사 | 동결된 `{ code, message }` 계약 — `code`로 분기 ([ADR 0011](../ADR/0011-error-code-contract.ko.md)) | `users-page.tsx`는 모든 분기(`AUTH_LAST_SUPERADMIN`, `USER_HAS_FILES`, `USER_FILES_IN_USE`, `FORBIDDEN`)에서 `axios.isAxiosError`로 `err.response.data.code`를 읽는다 |
+| 사용자 목록 조회 | `GET /user?page&take&sort&sortBy&search&status` | `take`/`skip`만, 고정 `createdAt DESC` 순서, 검색·정렬·상태 없음([ROADMAP 실행순서 #2](../docs/ROADMAP.ko.md)) | `users-page.tsx`는 `take`/`skip`으로 페이지네이션한다; 검색창·정렬 토글 헤더·상태 필터는 제거했다(지금 보내면 400 `VALIDATION_FAILED` — `forbidNonWhitelisted`). ~~제거~~ **2026-08-12 재도입**: `GetUsersDto`에 `search`(이메일 `ILIKE`)와 `sortBy`/`order`(`id`/`email`/`createdAt`, `role`은 제외)가 추가됐다; 검색창과 클릭 가능한 ID/Email/Created 헤더가 다시 생겼고, 서버에 존재하지 않는 `status` 필터는 여전히 없다 |
+| 감사 로그 | `?action&page&sort&userId&from&to` + `GET /audit-log/export` | `action`, `take`, `skip`만; 고정 `createdAt DESC`; **`/export` 없음**, **`userId` 필터 없음**(이식 당시 기준) | `logs-page.tsx`는 처음엔 액션 필터 + 페이지네이션만 남겼다; CSV 내보내기 버튼, 날짜 범위 필터, 사용자 필터는 제거했다. `userId` ~~없음~~ **2026-08-12 추가**: `AuditLogQueryDto`가 이제 `userId`를 받고, 같은 커밋에서 `logs-page.tsx`도 자신의 URL(`?userId=`)에서 이를 읽는다 — `users-page.tsx`의 "View all" 링크(`/logs?userId=…`)는 죽은 필터가 아니라 실제로 동작하는 필터다. `userId`가 매칭하는 것은 actor, 그리고 사용자를 대상으로 하는 action(`targetType = 'user'`)의 target이다 — 2026-08-24 [ADR 0045](../docs/ADR/0045-audit-log-target-type.ko.md)가 `targetType` 판별자를 추가하며 이렇게 좁혔다. 그 전에는 다형적인 `targetId`를 전부 사용자 id로 읽었기 때문에, 파일·게시글·댓글의 id가 어떤 사용자 id와 우연히 같으면 그 사용자의 활동인 것처럼 끼어들었다. 이제 파일·게시글·댓글을 대상으로 하는 기록은 actor 쪽으로만 매칭된다. CSV 내보내기는 ~~제거~~ **2026-08-12 클라이언트 쪽으로 재도입**: `/audit-log/export`는 여전히 없으므로, `exportCsv()`가 DTO의 `take` 상한(페이지당 100)만큼 `GET /audit-log`를 순회해 최대 1000건까지 모은 뒤 다운로드한다 |
+| 페이징 모델 | `page` + `take` | `take` + `skip`(오프셋) ([ADR 0021](../docs/ADR/0021-list-query-search-filter-sort.ko.md)) | 두 목록 페이지 모두 `skip = (page - 1) * take`를 계산하고, `{ data, total, page, take }`가 아니라 `[data, total]` 튜플 응답을 읽는다 |
+| 사용자별 감사 조각 | 사용자 페이지 상세 패널이 `GET /audit-log?userId=…`를 호출 | `userId` 필터가 존재하지 않는다 | **근사하지 않고 제거했다** — 아래 "열린 사항" 참고. ~~제거~~ **2026-08-12 복원**: `AuditLogQueryDto`에 `userId`가 생기면서, 상세 패널이 `GET /audit-log?userId={id}&take=5`를 호출해 "Recent activity" 절을 보여준다 — 매칭 대상은 actor, 그리고 사용자를 대상으로 하는 action(`targetType = 'user'`, [ADR 0045](../docs/ADR/0045-audit-log-target-type.ko.md))의 target이므로, 이 사용자의 id와 값이 같은 파일·게시글·댓글 기록은 더 이상 여기 나타나지 않는다 |
+| 사용자 삭제 | 확인 없는 `DELETE /user/:id` | 계정이 파일을 가진 경우 `?deleteFiles=true` 필수, 없으면 409 `USER_HAS_FILES` ([ADR 0020](../docs/ADR/0020-account-deletion-cascade.ko.md)) | `deleteUser()`가 `USER_HAS_FILES`를 잡아 응답 `message`의 파일 개수를 보여주고, 재확인 후 `?deleteFiles=true`로 재시도한다 |
+| 에러 처리 | 그때그때의 상태 코드·메시지 검사 | 동결된 `{ code, message }` 계약 — `code`로 분기 ([ADR 0011](../docs/ADR/0011-error-code-contract.ko.md)) | `users-page.tsx`는 모든 분기(`AUTH_LAST_SUPERADMIN`, `USER_HAS_FILES`, `USER_FILES_IN_USE`, `FORBIDDEN`)에서 `axios.isAxiosError`로 `err.response.data.code`를 읽는다 |
 | 배포 설정 | CSP가 Chat Project의 Railway 호스트로 고정된 `vercel.json` | **배포 대상이 없다**; AWS는 Stage 4 로드맵 항목 | 이전처럼 손대지 않았다 — 이번 작업 범위 밖 |
 
 위 표는 2026-08-06 기능 적응 작업만을 반영한다; `vercel.json`의 죽은 CSP 호스트는 별도로
@@ -109,12 +151,17 @@ Chat Project 이식의 흔적 중 남아있던, 아래 기능 적응과는 무�
    방식은 사용자의 실제 활동이 그 페이지 밖으로 밀려나면 오래된 항목을 조용히 빠뜨린다.
    절을 제거하는 쪽이 정확했고, 흉내 내는 쪽은 그렇지 않았다. 백엔드가
    `AuditLogQueryDto.userId`를 얻으면서(2026-08-12, 이 결정이 기록해 둔
-   [ROADMAP.md](../ROADMAP.ko.md) > 미예정 항목의 후속 작업이 닫혔다) 패널의 "Recent
+   [ROADMAP.md](../docs/ROADMAP.ko.md) > 미예정 항목의 후속 작업이 닫혔다) 패널의 "Recent
    activity" 절이 클라이언트 쪽 필터링 없이 정확한 `GET /audit-log?userId={id}&take=5`
-   호출로 돌아왔다.
+   호출로 돌아왔다. 이 필터의 의미는 2026-08-24
+   [ADR 0045](../docs/ADR/0045-audit-log-target-type.ko.md)로 바로잡혔다. 그전까지는 모든
+   `targetId`를 사용자 id로 읽었는데 `targetId`는 다형적이라, 이 사용자의 id와 값이 같을
+   뿐인 파일·게시글·댓글 기록이 패널에 섞여 나왔다. 지금은 "actor이거나, 사용자를 대상으로
+   하는 action(`targetType = 'user'`)의 target"을 뜻한다 — 패널이 보여주는 행 수는 줄었고,
+   빠진 행들은 애초에 틀린 것이었다.
 2. **역할 변경 UI: 이식된 이진 토글이 아니라 3단계 `<select>`.** 이식된 승격/강등 토글은
    행을 두 상태 사이로만 옮길 수 있고 `superadmin`을 전혀 표현하지 못한다 —
-   [ADR 0022](../ADR/0022-admin-console-import-from-chat-project.ko.md)가 이 콘솔이
+   [ADR 0022](../docs/ADR/0022-admin-console-import-from-chat-project.ko.md)가 이 콘솔이
    존재하는 이유로 정확히 지목한 그 빈틈이다. 드롭다운은 여전히 actor가 superadmin일
    때만 렌더링되며(서버 쪽 `RolesGuard` 검사를 클라이언트에서 거울처럼 반영), 여전히
    `AUTH_LAST_SUPERADMIN`을 자체 메시지로 분기한다.
@@ -147,7 +194,11 @@ pnpm e2e:seed    # superadmin 시딩. e2e/.env 필요(git 무시 대상)
 ## 열린 사항 (이번 작업으로 해결되지 않음)
 
 - ~~`GET /audit-log`에 `userId` 필터가 없다~~ — **2026-08-12 해소**: `AuditLogQueryDto`가
-  이제 `userId`를 받는다; 위 "두 가지 결정" 참고.
+  이제 `userId`를 받는다; 위 "두 가지 결정" 참고. **2026-08-24 정정**
+  ([ADR 0045](../docs/ADR/0045-audit-log-target-type.ko.md)): 이 필터는 `targetId`가 그 id와
+  같은 행을 모두 매칭했지만 `targetId`는 다형적이다 — 이제 actor이거나, 사용자를 대상으로
+  하는 action(`targetType = 'user'`)의 target인 행만 매칭한다. 파일·게시글·댓글을 대상으로
+  하는 기록은 actor 쪽으로만 잡힌다.
 - ~~`logs-page.tsx`는 아직 자신의 URL에서 `userId` 쿼리 파라미터를 읽지 않는다~~ —
   **2026-08-12, 같은 커밋에서 해소**: `useSearchParams`로 `?userId=`를 읽어 `GET /audit-log`
   쿼리에 적용한다; `users-page.tsx`의 "View all" 링크(`/logs?userId={id}`)는 실제로 동작하는
@@ -164,18 +215,29 @@ pnpm e2e:seed    # superadmin 시딩. e2e/.env 필요(git 무시 대상)
 - ~~두 admin 화면 중 무엇이 살아남을지~~ — **2026-08-06 해소**: 이 콘솔의 적응이 성공하면서
   이식본이 "대부분 삭제 가능"하지 않았음이 드러났다(삭제 가능했던 건 채팅 도메인 잔재뿐) —
   그래서 이 콘솔이 유일한 admin 화면이다. `frontend/src/features/admin/AdminPage.tsx`는
-  삭제됐다. [ROADMAP.md](../ROADMAP.ko.md) > Stage 5 참고.
+  삭제됐다. [ROADMAP.md](../docs/ROADMAP.ko.md) > Stage 5 참고.
+
+## 야간 모드(다크 모드) (2026-09-08 추가)
+
+모든 페이지(로그인, 대시보드, 사용자, 로그)에 라이트/다크 토글이 붙었다
+(`components/theme-toggle.tsx`), 상태는 `store/theme.store.ts`가 관리한다. 채팅 프로젝트 이식이나
+그 적응 작업의 일부가 아니라 순수 신규 기능이다 — 결함 수정이 아니다. 처음 로드할 때는 OS의
+`prefers-color-scheme`를 따르고, 한 번이라도 토글하면 그 선택을 `localStorage`(`admin-theme`)에
+저장해 이후 모든 로드에서 OS 설정보다 우선한다. Tailwind v4의 `dark:` 변형을 프레임워크 기본값인
+`prefers-color-scheme` 단독 판단 대신 `<html>`의 `.dark` 클래스를 보도록 재설정해서 적용했다
+(`index.css`의 `@custom-variant dark`) — 이 클래스는 React의 첫 렌더보다 먼저, 모듈 로드 시점에
+설정되므로 잘못된 테마가 잠깐 보이는 깜빡임이 없다.
 
 ## 관련 결정
 
-- [ADR 0022](../ADR/0022-admin-console-import-from-chat-project.ko.md) — 이번 이식. ADR 0010의
+- [ADR 0022](../docs/ADR/0022-admin-console-import-from-chat-project.ko.md) — 이번 이식. ADR 0010의
   admin 배치 조항을 개정한다
-- [ADR 0028](../ADR/0028-access-token-role-claim.ko.md) — 이 콘솔의 라우트 가드가 의존하는
+- [ADR 0028](../docs/ADR/0028-access-token-role-claim.ko.md) — 이 콘솔의 라우트 가드가 의존하는
   액세스 토큰 `role` 클레임을 추가했다
-- [ADR 0010](../ADR/0010-frontend-split-and-api-surface-freeze.ko.md) — 원래 admin을
+- [ADR 0010](../docs/ADR/0010-frontend-split-and-api-surface-freeze.ko.md) — 원래 admin을
   `frontend/` 안의 `/admin` 라우트 구역으로 배치했다. 그 구역
   (`frontend/src/features/admin/AdminPage.tsx`)은 이 콘솔이 살아남는 화면으로 확정된
   2026-08-06에 삭제됐다 — 그 ADR의 두 번째 개정 노트 참고
-- [CHAT-REMNANT-REMOVAL-PLAN.ko.md](../CHAT-REMNANT-REMOVAL-PLAN.ko.md) — 이 폴더는 *선언된*
+- [CHAT-REMNANT-REMOVAL-PLAN.ko.md](../docs/CHAT-REMNANT-REMOVAL-PLAN.ko.md) — 이 폴더는 *선언된*
   설계 이식(버킷 4)이며, 표시 없는 잔재가 아니다. 이 분류는 이번 적응과 무관하게 유효하다 —
   남은 코드는 여전히 출처가 있는 사본이고, 이제는 원본 그대로가 아니라 교정된 상태일 뿐이다

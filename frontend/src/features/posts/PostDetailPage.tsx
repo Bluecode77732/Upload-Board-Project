@@ -1,47 +1,47 @@
-// Purpose: shows one post's body, its attached file (if any), and its comment thread.
-// Usage: rendered at "/posts/:id" behind RequireAuth; links from PostBoard.
-// Rationale: comment order is fixed createdAt ASC with no realtime infrastructure (ADR 0023,
-//   no WebSocket in this project), so the thread refetches only on an explicit user action —
-//   no polling. File playback follows FileDetailPage's visibility-gated access pattern
-//   (FileDetailPage.tsx:81-116): a private file's bytes are fetched authenticated as a Blob,
-//   public/unlisted stream directly via <video src>.
+// 목적: 게시글 하나의 본문, 첨부 파일(있다면), 댓글 스레드를 보여준다.
+// 사용처: RequireAuth 하위 "/posts/:id"에 렌더링된다; PostBoard에서 링크로 연결된다.
+// 근거: 댓글 순서는 실시간 인프라 없이 createdAt ASC로 고정돼 있어(ADR 0023, 이 프로젝트에는
+//   WebSocket이 없다) 스레드는 명시적인 사용자 액션에서만 다시 불러온다 — 폴링은 하지 않는다.
+//   파일 재생은 FileDetailPage의 visibility 기반 접근 제어 패턴을 따른다
+//   (FileDetailPage.tsx:81-116): private 파일의 바이트는 인증된 Blob으로 받아오고,
+//   public/unlisted는 <video src>로 직접 스트리밍한다.
 
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
-import type { PostResponse, UpdatePostRequest } from '../../api/types'
+import type { FileMediaType, PostResponse, UpdatePostRequest } from '../../api/types'
 import { useAuth } from '../../auth/useAuth'
 import { NavBar } from '../../shared/NavBar'
 import { CommentForm } from './CommentForm'
 import { CommentThread } from './CommentThread'
+import styles from './PostDetailPage.module.css'
 
-// Branch on the stable code (backend ADR 0011), never on the human-readable message.
+// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.POST_NOT_FOUND:
-        return '게시글을 찾을 수 없습니다.'
+        return 'Post not found.'
       default:
-        return '게시글을 불러오지 못했습니다.'
+        return 'Failed to load the post.'
     }
   }
   return 'Network error. Is the backend running?'
 }
 
-// Errors from the management actions (edit, delete) branch on a different set of codes
-// than the read.
+// 관리 액션(수정, 삭제)의 에러는 읽기와는 다른 코드 집합으로 분기한다.
 function messageForManageError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return '작성자 또는 관리자만 가능합니다.'
+        return 'Only the author or an admin can do this.'
       case ErrorCode.POST_NOT_FOUND:
-        return '게시글을 찾을 수 없습니다.'
+        return 'Post not found.'
       case ErrorCode.VALIDATION_FAILED:
         return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
       default:
-        return '작업에 실패했습니다.'
+        return 'The action failed.'
     }
   }
   return 'Network error. Is the backend running?'
@@ -51,16 +51,34 @@ function messageForPlaybackError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.FILE_NOT_FOUND:
-        return '파일을 찾을 수 없습니다.'
+        return 'File not found.'
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return '이 파일을 볼 권한이 없습니다.'
+        return 'You do not have permission to view this file.'
       case ErrorCode.FILE_SHARE_INVALID:
-        return '공유 링크가 없거나 유효하지 않습니다.'
+        return 'This share link is missing, invalid, or expired.'
       default:
-        return '파일을 불러오지 못했습니다.'
+        return 'Failed to load the file.'
     }
   }
   return 'Network error. Is the backend running?'
+}
+
+// 목적: mediaType(image/audio/video)에 맞는 재생 태그를 고른다.
+// 이유: 이전에는 항상 <video>만 렌더링해 이미지/오디오 첨부 파일이 재생되지 않았다(ADR 0040).
+// 방법: visibility 분기가 결정한 src/onError를 그대로 받아 태그 종류만 바꾼다 — FileDetailPage.tsx의
+//   동일한 헬퍼와 같은 패턴이다(이 파일의 messageForError류 헬퍼들처럼 페이지별로 각자 둔다).
+function renderMediaElement(
+  mediaType: FileMediaType,
+  title: string,
+  props: { src: string; className: string; onError?: () => void },
+) {
+  if (mediaType === 'image') {
+    return <img src={props.src} alt={title} className={props.className} />
+  }
+  if (mediaType === 'audio') {
+    return <audio controls src={props.src} className={props.className} onError={props.onError} />
+  }
+  return <video controls src={props.src} className={props.className} onError={props.onError} />
 }
 
 export function PostDetailPage() {
@@ -80,8 +98,8 @@ export function PostDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  // Has no meaning of its own — bumping it only re-triggers CommentThread's current query
-  // (mirrors PostBoard's refreshSignal for PostForm).
+  // 값 자체에는 의미가 없다 — 값을 올리면 CommentThread의 현재 쿼리만 다시 트리거된다
+  // (PostForm에 대한 PostBoard의 refreshSignal과 같은 패턴).
   const [commentRefreshSignal, setCommentRefreshSignal] = useState(0)
 
   useEffect(() => {
@@ -97,8 +115,8 @@ export function PostDetailPage() {
       .catch((err: unknown) => setMetaError(messageForError(err)))
   }, [postId])
 
-  // A plain <video src> can't carry a Bearer header, so a private file's bytes are fetched
-  // authenticated as a Blob and played from an objectURL. Revoked on file change/unmount.
+  // 일반 <video src>는 Bearer 헤더를 실을 수 없으므로, private 파일의 바이트는 인증된
+  // Blob으로 받아 objectURL로 재생한다. 파일이 바뀌거나 언마운트되면 revoke한다.
   useEffect(() => {
     setObjectUrl(null)
     setPlaybackError(null)
@@ -129,12 +147,12 @@ export function PostDetailPage() {
     if (!file) return
     api
       .getBlob(`/file/${file.id}/content`)
-      .then(() => setPlaybackError('재생에 실패했습니다 — 브라우저가 이 파일을 재생할 수 없습니다.'))
+      .then(() => setPlaybackError('Playback failed — the browser could not play this file.'))
       .catch((err: unknown) => setPlaybackError(messageForPlaybackError(err)))
   }
 
-  // A UI hint only (decoded token claim, not a server round trip) — every write below is
-  // re-checked server-side and a wrong guess here just surfaces as a 403, never a silent bypass.
+  // 단순 UI 힌트일 뿐이다(서버 왕복이 아니라 디코딩된 토큰 클레임) — 아래 모든 쓰기는
+  // 서버에서 다시 검증되므로 여기서 잘못 판단해도 403으로 드러날 뿐, 조용히 우회되지 않는다.
   const canManage = currentUserId !== null && post?.creator?.id === currentUserId
 
   function startEdit() {
@@ -173,7 +191,7 @@ export function PostDetailPage() {
   // 방법: 확인 대화상자 → DELETE /post/:id → 성공 시 홈으로 이동.
   function handleDelete() {
     if (!post) return
-    if (!window.confirm(`"${post.title}" 게시글을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return
+    if (!window.confirm(`Delete "${post.title}"? This cannot be undone.`)) return
     setActionError(null)
     setBusy(true)
     api
@@ -187,17 +205,19 @@ export function PostDetailPage() {
 
   if (metaError) {
     return (
-      <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+      <main className={styles.page}>
         <NavBar />
-        <p style={{ color: 'crimson' }}>{metaError}</p>
-        <Link to="/">Back to posts</Link>
+        <p className={styles.error}>{metaError}</p>
+        <Link to="/" className={styles.backLink}>
+          Back to posts
+        </Link>
       </main>
     )
   }
 
   if (!post) {
     return (
-      <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+      <main className={styles.page}>
         <NavBar />
         <p>Loading…</p>
       </main>
@@ -205,15 +225,18 @@ export function PostDetailPage() {
   }
 
   return (
-    <main style={{ maxWidth: 720, margin: '5vh auto', padding: 24 }}>
+    <main className={styles.page}>
       <NavBar />
-      <Link to="/">Back to posts</Link>
+      <Link to="/" className={styles.backLink}>
+        Back to posts
+      </Link>
 
       {editing ? (
-        <div style={{ display: 'grid', gap: 8, margin: '16px 0' }}>
-          <label style={{ display: 'grid', gap: 4 }}>
+        <div className={styles.editForm}>
+          <label className={styles.field}>
             Title
             <input
+              className={styles.input}
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               maxLength={100}
@@ -221,9 +244,10 @@ export function PostDetailPage() {
               disabled={busy}
             />
           </label>
-          <label style={{ display: 'grid', gap: 4 }}>
+          <label className={styles.field}>
             Body
             <textarea
+              className={styles.textarea}
               value={editBody}
               onChange={(e) => setEditBody(e.target.value)}
               maxLength={10000}
@@ -232,58 +256,57 @@ export function PostDetailPage() {
               disabled={busy}
             />
           </label>
-          {actionError && <p style={{ color: 'crimson', margin: 0 }}>{actionError}</p>}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" disabled={busy} onClick={submitEdit}>
-              저장
+          {actionError && <p className={styles.error}>{actionError}</p>}
+          <div className={styles.actions}>
+            <button type="button" className={styles.primaryButton} disabled={busy} onClick={submitEdit}>
+              Save
             </button>
-            <button type="button" disabled={busy} onClick={cancelEdit}>
-              취소
+            <button type="button" className={styles.button} disabled={busy} onClick={cancelEdit}>
+              Cancel
             </button>
           </div>
         </div>
       ) : (
         <>
-          <header style={{ margin: '16px 0' }}>
-            {/* Global h1 is 56px with no line-height set (index.css) — long post titles wrap to
-                2+ lines and, without an explicit line-height, the box collapses to one line's
-                height, so the wrapped line visually overlaps the byline below it. */}
-            <h1 style={{ margin: '0 0 8px', lineHeight: 1.25 }}>{post.title}</h1>
-            {post.creator && <p style={{ color: '#555' }}>{post.creator.email}</p>}
+          <header className={styles.header}>
+            <h1 className={styles.title}>{post.title}</h1>
+            {post.creator && <p className={styles.meta}>{post.creator.email}</p>}
           </header>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{post.body}</p>
+          <p className={styles.body}>{post.body}</p>
 
           {post.file && (
-            <div style={{ margin: '16px 0' }}>
-              {playbackError && <p style={{ color: 'crimson' }}>{playbackError}</p>}
+            <div className={styles.playerWrapper}>
+              {playbackError && <p className={styles.error}>{playbackError}</p>}
               {post.file.visibility === 'private' ? (
                 objectUrl ? (
-                  <video controls src={objectUrl} style={{ width: '100%' }} />
+                  renderMediaElement(post.file.mediaType, post.file.title, {
+                    src: objectUrl,
+                    className: styles.player,
+                  })
                 ) : (
-                  !playbackError && <p>파일을 불러오는 중…</p>
+                  !playbackError && <p className={styles.loadingText}>Loading content…</p>
                 )
               ) : (
-                <video
-                  controls
-                  src={post.file.visibility === 'unlisted' ? (post.file.shareUrl ?? post.file.fileUrl) : post.file.fileUrl}
-                  onError={diagnosePlaybackError}
-                  style={{ width: '100%' }}
-                />
+                renderMediaElement(post.file.mediaType, post.file.title, {
+                  src: post.file.visibility === 'unlisted' ? (post.file.shareUrl ?? post.file.fileUrl) : post.file.fileUrl,
+                  className: styles.player,
+                  onError: diagnosePlaybackError,
+                })
               )}
             </div>
           )}
 
           {canManage && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button type="button" disabled={busy} onClick={startEdit}>
-                수정
+            <div className={styles.actions}>
+              <button type="button" className={styles.button} disabled={busy} onClick={startEdit}>
+                Edit
               </button>
-              <button type="button" disabled={busy} onClick={handleDelete} style={{ color: 'crimson' }}>
-                삭제
+              <button type="button" className={styles.deleteButton} disabled={busy} onClick={handleDelete}>
+                Delete
               </button>
             </div>
           )}
-          {actionError && <p style={{ color: 'crimson' }}>{actionError}</p>}
+          {actionError && <p className={styles.error}>{actionError}</p>}
         </>
       )}
 

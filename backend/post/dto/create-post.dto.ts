@@ -1,6 +1,6 @@
-// Purpose: validates the POST /post body — post text plus the optional id of a file to attach.
-// Usage: bound via @Body() in PostController.create(); forwarded whole to PostService.create().
-// Rationale: the global pipe only strips what a DTO declares, and the entity bounds no length — the ADR 0023 limits (title ≤100, body ≤10,000) have to live here.
+// 목적: POST /post 요청 본문을 검증한다 — 게시글 내용과, 첨부할 파일 id(선택).
+// 사용처: PostController.create()에서 @Body()로 바인딩되어 PostService.create()에 그대로 전달된다.
+// 근거: 전역 파이프는 DTO가 선언한 필드만 남기고, 엔티티에는 길이 제한이 없다 — ADR 0023의 제한(title ≤100, body ≤10,000)은 여기서 강제해야 한다.
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
@@ -33,8 +33,8 @@ export class CreatePostDto {
   })
   body!: string;
 
-  // Fixed at creation on purpose: PATCH cannot move an attachment, which would open a
-  // second claim/replay surface on a route that has no requirement for one (ADR 0023 D1).
+  // 생성 시점에 고정하는 것이 의도된 설계다: PATCH로 첨부를 옮길 수 있게 하면
+  // 그럴 필요가 없는 라우트에 claim/replay 표면이 하나 더 생긴다 (ADR 0023 D1).
   @IsOptional()
   @IsInt()
   @Min(1)

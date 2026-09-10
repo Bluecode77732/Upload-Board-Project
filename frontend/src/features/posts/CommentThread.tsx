@@ -1,43 +1,44 @@
-// Purpose: shows one post's comment thread and lets the author of a comment (or an admin,
-//   server-enforced) edit or delete it.
-// Usage: rendered inside PostDetailPage; refreshSignal bumps trigger a fresh first page (e.g.
-//   after CommentForm creates a comment) the same way PostBoard's refreshSignal does for posts.
-// Rationale: the backend fixes thread order at createdAt ASC with no sort params (ADR 0023) and
-//   there is no realtime/polling infrastructure, so paging is a manual "load more" that appends
-//   rather than a prev/next pager like PostBoard/FileBoard use for their newest-first lists.
+// 목적: 게시글 하나의 댓글 스레드를 보여주고, 댓글 작성자(또는 서버가 판정하는 admin)가
+//   수정/삭제할 수 있게 한다.
+// 사용처: PostDetailPage 내부에 렌더링된다; refreshSignal이 올라가면(예: CommentForm이 댓글을
+//   생성한 뒤) 첫 페이지를 새로 불러온다 — 게시글에 대한 PostBoard의 refreshSignal과 같은 패턴.
+// 근거: 백엔드가 스레드 순서를 정렬 파라미터 없이 createdAt ASC로 고정하고(ADR 0023) 실시간/
+//   폴링 인프라도 없어서, 페이징은 PostBoard/FileBoard가 최신순 목록에 쓰는 이전/다음 페이저가
+//   아니라 이어붙이는 수동 "더 보기" 방식이다.
 
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { CommentListResponse, CommentResponse, UpdateCommentRequest } from '../../api/types'
+import styles from './CommentThread.module.css'
 
 const TAKE = 20
 
-// Branch on the stable code (backend ADR 0011), never on the human-readable message.
+// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.POST_NOT_FOUND:
-        return '게시글을 찾을 수 없습니다.'
+        return 'Post not found.'
       default:
-        return '댓글을 불러오지 못했습니다.'
+        return 'Failed to load comments.'
     }
   }
   return 'Network error. Is the backend running?'
 }
 
-// Errors from edit/delete branch on a different set of codes than the list load.
+// 수정/삭제의 에러는 목록 조회와는 다른 코드 집합으로 분기한다.
 function messageForActionError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.COMMENT_NOT_FOUND:
-        return '댓글을 찾을 수 없습니다.'
+        return 'Comment not found.'
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return '작성자 또는 관리자만 가능합니다.'
+        return 'Only the author or an admin can do this.'
       case ErrorCode.VALIDATION_FAILED:
         return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
       default:
-        return '작업에 실패했습니다.'
+        return 'The action failed.'
     }
   }
   return 'Network error. Is the backend running?'
@@ -78,7 +79,7 @@ export function CommentThread({
     [postId],
   )
 
-  // A fresh postId, or a bump from CommentForm after a successful submit, reloads the first page.
+  // postId가 바뀌거나 CommentForm 제출 성공 후 값이 올라가면 첫 페이지를 다시 불러온다.
   useEffect(() => {
     setComments(null)
     void fetchPage(0, true)
@@ -123,7 +124,7 @@ export function CommentThread({
   // 이유: 하드 삭제는 비가역이므로(ADR 0020) 확인 대화상자를 거친다.
   // 방법: DELETE /comment/:id → 성공 시 로컬 목록에서 제거하고 총 개수를 1 줄인다.
   function deleteComment(id: number) {
-    if (!window.confirm('댓글을 삭제하시겠습니까? 되돌릴 수 없습니다.')) return
+    if (!window.confirm('Delete this comment? This cannot be undone.')) return
     setActionError(null)
     setBusyId(id)
     api
@@ -139,56 +140,57 @@ export function CommentThread({
   const canLoadMore = comments !== null && comments.length < total
 
   return (
-    <section style={{ marginTop: 24 }}>
-      <h2 style={{ fontSize: '1.1rem' }}>댓글 {total > 0 ? `(${total})` : ''}</h2>
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
-      {actionError && <p style={{ color: 'crimson' }}>{actionError}</p>}
-      {comments === null && !error && <p>댓글을 불러오는 중…</p>}
-      {comments && comments.length === 0 && <p style={{ color: '#555' }}>아직 댓글이 없습니다.</p>}
+    <section className={styles.section}>
+      <h2 className={styles.heading}>Comments {total > 0 ? `(${total})` : ''}</h2>
+      {error && <p className={styles.error}>{error}</p>}
+      {actionError && <p className={styles.error}>{actionError}</p>}
+      {comments === null && !error && <p>Loading comments…</p>}
+      {comments && comments.length === 0 && <p className={styles.empty}>No comments yet.</p>}
       {comments && comments.length > 0 && (
-        <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 8 }}>
+        <ul className={styles.list}>
           {comments.map((comment) => {
             const canManage = currentUserId !== null && comment.creator?.id === currentUserId
             const busy = busyId === comment.id
             return (
-              <li key={comment.id} style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#555', fontSize: '0.85rem' }}>
+              <li key={comment.id} className={styles.item}>
+                <div className={styles.itemHeader}>
                   <span>{comment.creator?.email ?? 'unknown'}</span>
                   <span>{new Date(comment.createdAt).toLocaleString()}</span>
                 </div>
                 {editingId === comment.id ? (
-                  <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                  <div className={styles.editBox}>
                     <textarea
+                      className={styles.textarea}
                       value={editBody}
                       onChange={(e) => setEditBody(e.target.value)}
                       maxLength={1000}
                       rows={3}
                       disabled={busy}
                     />
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" disabled={busy} onClick={() => submitEdit(comment.id)}>
-                        저장
+                    <div className={styles.actions}>
+                      <button type="button" className={styles.button} disabled={busy} onClick={() => submitEdit(comment.id)}>
+                        Save
                       </button>
-                      <button type="button" disabled={busy} onClick={cancelEdit}>
-                        취소
+                      <button type="button" className={styles.button} disabled={busy} onClick={cancelEdit}>
+                        Cancel
                       </button>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <p style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>{comment.body}</p>
+                    <p className={styles.commentBody}>{comment.body}</p>
                     {canManage && (
-                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                        <button type="button" disabled={busy} onClick={() => startEdit(comment)}>
-                          수정
+                      <div className={styles.actions}>
+                        <button type="button" className={styles.button} disabled={busy} onClick={() => startEdit(comment)}>
+                          Edit
                         </button>
                         <button
                           type="button"
+                          className={styles.deleteButton}
                           disabled={busy}
                           onClick={() => deleteComment(comment.id)}
-                          style={{ color: 'crimson' }}
                         >
-                          삭제
+                          Delete
                         </button>
                       </div>
                     )}
@@ -200,8 +202,8 @@ export function CommentThread({
         </ul>
       )}
       {canLoadMore && (
-        <button type="button" disabled={loadingMore} onClick={loadMore} style={{ marginTop: 12 }}>
-          {loadingMore ? '불러오는 중…' : '더 보기'}
+        <button type="button" className={styles.loadMoreButton} disabled={loadingMore} onClick={loadMore}>
+          {loadingMore ? 'Loading…' : 'Load more'}
         </button>
       )}
     </section>

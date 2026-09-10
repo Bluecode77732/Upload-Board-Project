@@ -1,17 +1,18 @@
-// Purpose: the email/password login form — signs in (or registers then signs in) via the Basic-token flow.
-// Usage: rendered at /login; redirects to / on success.
-// Rationale: the canonical signin path is POST /auth/signin (Basic) — the client's btoa header assembly is
-//   hidden inside api/client.ts, so this component just collects credentials and branches on error `code`.
+// 목적: 이메일/비밀번호 로그인 폼 — Basic-token 흐름으로 signin(또는 register 후 signin)한다.
+// 사용처: /login에 렌더링된다; 성공하면 /로 리다이렉트한다.
+// 근거: 정식 signin 경로는 POST /auth/signin(Basic)이다 — 클라이언트의 btoa 헤더 조립은
+//   api/client.ts 안에 숨어 있으므로, 이 컴포넌트는 자격 증명을 모으고 에러 `code`로 분기만 한다.
 
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
+import styles from './LoginPage.module.css'
 
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
-    // Branch on the stable code, not the human-readable message (backend ADR 0011).
+    // 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
     switch (error.code) {
       case ErrorCode.AUTH_INVALID_CREDENTIALS:
         return 'Incorrect email or password.'
@@ -53,44 +54,55 @@ export function LoginPage() {
   }
 
   return (
-    <main style={{ maxWidth: 360, margin: '10vh auto', padding: 24 }}>
-      <h1>{mode === 'signin' ? 'Sign in' : 'Register'}</h1>
-      <form onSubmit={onSubmit} style={{ display: 'grid', gap: 12 }}>
-        <label style={{ display: 'grid', gap: 4 }}>
-          Email
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-          />
-        </label>
-        <label style={{ display: 'grid', gap: 4 }}>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-          />
-        </label>
-        {error && <p style={{ color: 'crimson', margin: 0 }}>{error}</p>}
-        <button type="submit" disabled={busy}>
-          {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Register & sign in'}
+    <main className={styles.page}>
+      <div className={styles.card}>
+        <div className={styles.lockup}>
+          <svg className={styles.mark} width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="9" cy="12" r="6" />
+            <circle cx="15" cy="12" r="6" />
+          </svg>
+          <span>Sharenpo</span>
+        </div>
+        <h1 className={styles.heading}>{mode === 'signin' ? 'Sign in' : 'Register'}</h1>
+        <form onSubmit={onSubmit} className={styles.form}>
+          <label className={styles.field}>
+            Email
+            <input
+              type="email"
+              className={styles.input}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+          </label>
+          <label className={styles.field}>
+            Password
+            <input
+              type="password"
+              className={styles.input}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+            />
+          </label>
+          {error && <p className={styles.error}>{error}</p>}
+          <button type="submit" className={styles.submit} disabled={busy}>
+            {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Register & sign in'}
+          </button>
+        </form>
+        <button
+          type="button"
+          className={styles.switchButton}
+          onClick={() => {
+            setMode(mode === 'signin' ? 'register' : 'signin')
+            setError(null)
+          }}
+        >
+          {mode === 'signin' ? 'Need an account? Register' : 'Have an account? Sign in'}
         </button>
-      </form>
-      <button
-        type="button"
-        onClick={() => {
-          setMode(mode === 'signin' ? 'register' : 'signin')
-          setError(null)
-        }}
-        style={{ marginTop: 12, background: 'none', border: 'none', color: '#646cff', cursor: 'pointer' }}
-      >
-        {mode === 'signin' ? 'Need an account? Register' : 'Have an account? Sign in'}
-      </button>
+      </div>
     </main>
   )
 }

@@ -1,10 +1,10 @@
-// Purpose: single entry point for silent token refresh and multi-tab session-conflict
-// detection in the admin app, playing the role frontend/src/auth/AuthProvider.tsx's silent
-// refresh plays there (that file, not a same-named session-guard.ts, is the real counterpart).
-// Usage: imported by api/axios.ts (response interceptor) and components/protected-route.tsx —
-// no other call site should hit /auth/token/refresh.
-// Rationale: axios previously called the refresh endpoint with no shared in-flight guard and
-// no cross-tab account-conflict check, unlike the main frontend.
+// 목적: admin 앱에서 무음(silent) 토큰 갱신과 다중 탭 세션 충돌 감지를 담당하는 단일 진입점 —
+// frontend/src/auth/AuthProvider.tsx의 무음 갱신과 같은 역할을 한다 (동명의 session-guard.ts가
+// 아니라 그 파일이 실제 대응 파일이다).
+// 사용처: api/axios.ts(response interceptor)와 components/protected-route.tsx에서 import한다 —
+// 그 외 어떤 호출부도 /auth/token/refresh를 직접 호출해서는 안 된다.
+// 근거: 기존 axios는 refresh 엔드포인트를 호출할 때 공유 in-flight 가드도, 메인 프론트엔드에
+// 있는 탭 간 계정 충돌 검사도 없었다.
 
 import { jwtDecode } from 'jwt-decode';
 import { useAuthStore, type UserRole } from '../store/auth.store';
@@ -19,9 +19,9 @@ export const clearSessionUser = () => {
     sessionStorage.removeItem(SESSION_USER_KEY);
 };
 
-// A tab's first token refresh adopts whichever account the shared refreshToken
-// cookie currently belongs to. Any refresh after that must match, otherwise a
-// sibling tab logging in as a different admin would silently take this tab over.
+// 탭에서 처음 발생하는 토큰 갱신은 그 시점에 공유 refreshToken 쿠키가 속한 계정을 그대로
+// 받아들인다. 이후의 갱신은 반드시 그 계정과 일치해야 한다 — 그렇지 않으면 다른 관리자로
+// 로그인한 형제 탭이 이 탭을 조용히 가로챌 수 있다.
 const assertSessionUser = (userId: number): boolean => {
     const recorded = sessionStorage.getItem(SESSION_USER_KEY);
     if (recorded === null) {
@@ -39,9 +39,9 @@ const rejectSession = () => {
 
 const doRefresh = async (): Promise<string | null> => {
     try {
-        // refreshToken cookie is sent automatically via credentials: 'include'.
-        // Uses fetch directly (not the axios instance in api/axios.ts) to avoid a
-        // circular import, since axios.ts itself calls refreshAccessTokenSafely().
+        // refreshToken 쿠키는 credentials: 'include'를 통해 자동으로 전송된다.
+        // axios.ts가 refreshAccessTokenSafely()를 호출하는 구조라 순환 참조를 피하기 위해
+        // api/axios.ts의 axios 인스턴스 대신 fetch를 직접 사용한다.
         const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/token/refresh`, {
             method: 'POST',
             credentials: 'include',
@@ -49,8 +49,8 @@ const doRefresh = async (): Promise<string | null> => {
         if (!res.ok) throw new Error('Refresh failed');
 
         const data = await res.json();
-        // role is an access-token-only claim (ADR 0028) — absent would mean a token this
-        // console cannot use, so treat it as a rejection rather than storing `null`.
+        // role은 access token에만 담기는 claim이다 (ADR 0028) — 없다면 이 콘솔이 쓸 수 없는
+        // 토큰이라는 뜻이므로 `null`을 저장하지 않고 세션 거부로 처리한다.
         const { sub, role } = jwtDecode<{ sub: number; role?: UserRole }>(data.accessToken);
         if (!role) {
             rejectSession();
@@ -72,9 +72,8 @@ const doRefresh = async (): Promise<string | null> => {
 
 let pendingRefresh: Promise<string | null> | null = null;
 
-// Concurrent callers (e.g. an axios 401 and an Apollo UNAUTHENTICATED error firing at
-// the same time) share one in-flight request instead of each independently calling the
-// refresh endpoint.
+// 동시에 발생하는 호출들(예: axios 401과 Apollo UNAUTHENTICATED 에러가 같은 시점에 발생하는
+// 경우)은 각자 refresh 엔드포인트를 따로 호출하지 않고 하나의 in-flight 요청을 공유한다.
 export const refreshAccessTokenSafely = (): Promise<string | null> => {
     if (!pendingRefresh) {
         pendingRefresh = doRefresh().finally(() => {
