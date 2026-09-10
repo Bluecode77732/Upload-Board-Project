@@ -34,7 +34,7 @@ Before making any change:
    - Env var change        → read the Joi schema in `backend/app.module.ts` AND `.env.example` — both must stay in sync
    - Entity/relation change→ read both `backend/file/entity/file.entity.ts` and `backend/user/entity/user.entity.ts` together — the `creator` relation is declared on both sides. `backend/post/entity/post.entity.ts` and `backend/comment/entity/comment.entity.ts` are deliberately **unidirectional** (no inverse property on User/File/Post) — do not "fix" that (ADR 0023). A new entity is registered in **`backend/entities.ts` and nowhere else** — `app.module.ts` and `backend/data-source.ts` both import that one `ENTITIES` array, so an entity cannot be live in the app but invisible to `migration:generate` (it was two hand-maintained lists until 2026-07-31, and that divergence made `generate` report success while omitting a whole table). The e2e suite still needs its own line: `test/e2e-utils.ts` (`MIGRATIONS` + `TABLES`) — but omitting it fails loudly on the next run
    - Static file serving   → read the `ServeStaticModule` block in `app.module.ts` (`rootPath: file/temp`, `serveRoot: 'file/temp'` — `file/upload` is deliberately not mounted; granted reads go through `GET /file/:id/content` instead, ADR 0025/0026)
-   - Rate limiting change  → read the `ThrottlerModule.forRootAsync` block in `app.module.ts` (global default + `THROTTLE_ENABLED` bypass) together with the `APP_GUARD` provider, and the `@SkipThrottle()` exemptions in `backend/health/health.controller.ts` / `backend/metrics/metrics.controller.ts` (ADR 0053)
+   - Rate limiting change  → read the `ThrottlerModule.forRootAsync` block in `app.module.ts` (global default + `skipIf`-based `THROTTLE_ENABLED` bypass, ADR 0054 D2) together with the `APP_GUARD` provider, the `@SkipThrottle()` exemptions in `backend/health/health.controller.ts` / `backend/metrics/metrics.controller.ts`, and the `@Throttle({ default: {...} })` overrides in `backend/auth/auth.controller.ts` (register/signIn/rotateAccessToken, 5/min) and `backend/upload/upload.controller.ts` (uploadMedia, 15/min) (ADR 0053, ADR 0054)
 2. Never invent APIs, files, functions, or types that you have not confirmed exist in the codebase.
 3. Reuse existing patterns only; do not introduce new abstractions unless explicitly asked.
 4. Verify every assumption with actual code, search results, or test output — not memory or inference alone.
@@ -106,6 +106,119 @@ Before implementing anything non-trivial, ask the one question that applies:
 | Architecturally significant decision (schema change, new module, an alternative weighed and rejected) | Describe the alternatives and the trade-off in plain text first, and confirm whether this needs its own ADR — do not settle the decision in code before it is written down. |
 
 Ask one focused question rather than a list. Do not proceed on assumptions when intent is ambiguous.
+
+## AI Development Workflow (AI 개발 워크플로우)
+
+This section is a process scaffold, not a technical rule set. Where following it would mean
+skipping something Hallucination Prevention, Scope Discipline, Never Do, or Architecture
+Decisions requires, those rules win — use this section to decide *how much process* a task
+needs, not *what the code should do*.
+
+### Development Lifecycle (개발 생명주기)
+
+The full lifecycle a task can move through, in order. Most tasks use a subset — see
+Task-Scale Protocol below.
+
+1. **Requirement** — pin down what is actually being asked; resolve ambiguity via
+   Clarification Protocol rather than assuming it.
+2. **Impact** — identify what the change touches (Scope Discipline's high-blast-radius
+   files, affected modules, cross-module contracts).
+3. **Research** — read the real code, tests, and docs before deciding anything
+   (Hallucination Prevention #1's concern-to-entrypoint map).
+4. **Design** — plan the structure end to end (Analysis Protocol > Structure Analysis).
+5. **Implementation** — write the change per the plan, following Never Do, File Creation
+   Convention, and Project-Specific Principles.
+6. **Testing** — run `pnpm lint`/`pnpm test` (or the relevant subset) (Hallucination
+   Prevention #5, Key Conventions > Testing).
+7. **Review** — check the diff independently against Never Do and Architecture Decisions
+   (Analysis Protocol > Result Review); see Session Separation below for who does this.
+8. **Fix** — address what Review found.
+9. **Regression** — confirm existing behavior the change didn't intend to touch still holds.
+10. **Release** — this repo has no automated CD (CI/CD) — when a task actually reaches
+    deployment, this stage is the human-run `helm upgrade`/`deploy.sh` step, not something
+    CI triggers.
+11. **Production Verification** — confirm real behavior in a live environment when the task
+    actually reaches one (a real DB, a deployed cluster) — see Commands > Live-testing a
+    sweep/reclaim service for the sandboxing rule that applies whenever this step is
+    destructive.
+12. **Retrospective** — briefly note what worked and what didn't.
+13. **Knowledge Capture** — record the decision and its reasoning (Change Summary; an ADR
+    for anything architecturally significant; Known Gaps & Roadmap for anything deferred).
+
+### Task-Scale Protocol (작업 규모별 프로토콜)
+
+Not every task needs the full lifecycle. Classify the task before starting, state the
+classification in one line, and apply only that subset — when in doubt, size up rather than
+down:
+
+| Scale | Examples | Stages |
+|---|---|---|
+| **Small** | Typo, a small bug fix, a one-line config tweak | Implementation → Testing |
+| **Medium** | A typical feature add or change | Requirement → Research → Design → Implementation → Testing → Review → Regression |
+| **Large** | Architectural change, DB migration, a core-flow rewrite | Requirement → Impact → Research → Design (+ Security/Performance Review where relevant) → Implementation → Testing → Review → Fix → Regression → Release → Production Verification → Retrospective → Knowledge Capture |
+
+A Large task that touches a high-blast-radius file or a schema change already requires
+explicit approval under Scope Discipline — that approval gate applies regardless of which
+stage it falls under here.
+
+### Session Separation (세션 분리 원칙)
+
+For Medium/Large work, default order:
+
+Research/Design → Implementation → Testing → Independent Review → Fix → Regression
+
+Implementation and Review should not be the same pass: Review re-derives its findings from
+the actual diff and current code, never from the implementer's own explanation of why the
+change is correct (Hallucination Prevention #4, applied to reviewing rather than
+implementing) — in practice, a separate session for Review on Large work, or at minimum a
+review pass that deliberately does not reuse the implementation session's reasoning. This
+repo already sees parallel sessions on occasion (Hallucination Prevention #10); role sessions
+for a complex task may run in parallel the same way.
+
+### Roles (역할)
+
+One line each — what the role does, not how:
+
+- **Requirement Validation** — confirms what is actually being asked, resolves ambiguity.
+- **Architect** — designs overall structure and module boundaries.
+- **Research** — reads code/docs/history to establish the facts a decision rests on.
+- **Impact Analysis** — identifies which files/modules/contracts a change reaches.
+- **Design** — turns a requirement into a concrete implementation plan.
+- **Implementation** — writes the change per the plan.
+- **Testing** — runs lint/unit/e2e to verify behavior.
+- **Security Review** — checks the diff against Never Do Group 3 and Architecture
+  Decisions > Auth/Config.
+- **Performance Review** — checks for N+1, missing pagination, missing indexes (Never Do
+  Group 2, ADR 0049).
+- **Compatibility Review** — checks the change against existing API contracts and
+  consumers (`frontend/`, `admin/`).
+- **Migration Review** — reviews a `migration:generate` diff line by line (Scope
+  Discipline > Schema changes; `migration-review` skill).
+- **Observability Review** — checks whether logs/metrics would actually surface a
+  failure (Engineering Principles > Observability).
+- **Code Review** — judges correctness and convention adherence from the diff itself,
+  not the implementer's account of it.
+- **Debugging** — reproduces a failure and narrows it to a root cause before fixing it.
+- **Release Planning** — decides deploy order and the rollback path.
+- **Production Verification** — confirms real post-release behavior.
+- **Retrospective** — briefly reviews what worked and what didn't.
+- **Knowledge Capture** — records the decision and its reasoning (Change Summary/ADR).
+
+### Additional Working Principles (추가 작업 원칙)
+
+Most of what a workflow like this would state — investigate before implementing, verify
+assumptions instead of guessing, run tests, keep changes minimal, summarize on completion —
+is already this file's baseline (Hallucination Prevention, Scope Discipline, Change
+Summary). Two things worth stating that aren't covered elsewhere:
+
+- **Root cause before fix**: when a test or a report surfaces a problem, identify why it
+  happens before changing code — a fix aimed at the symptom tends to leave the actual cause
+  in place.
+- **Review judges the diff, not the intent**: a reviewer (a separate session, or a
+  deliberately independent pass) works from the actual code and diff, never from the
+  implementer's stated reasoning for why it's correct — restated here because it is the one
+  place in this workflow where reusing another session's conclusion defeats the point of
+  doing it separately.
 
 ## Analysis Protocol (분석)
 
@@ -1004,26 +1117,34 @@ Do not suggest alternatives to these decisions without explicit request.
   (`APP_FILTER` in `app.module.ts`). New throw sites must attach a code — the
   status-based fallbacks cover framework-originated throws only. Renaming or
   removing a code is a breaking change; adding one is free
-- **Rate limiting (landed 2026-09-10, [ADR 0053](docs/ADR/0053-global-rate-limiting.md))**:
+- **Rate limiting (landed 2026-09-10, [ADR 0053](docs/ADR/0053-global-rate-limiting.md),
+  per-route tuning [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))**:
   a global `ThrottlerGuard` (`@nestjs/throttler`) runs on every route via `APP_GUARD` —
   this repository's first global guard — at a conservative default of 100 requests/minute
-  (`ThrottlerModule.forRootAsync` in `app.module.ts`); per-route tuning (e.g. a tighter
-  bound on `POST /auth/signin`) is deferred to a follow-up task, not settled by this ADR.
-  The 100/minute ceiling is **per route, not shared app-wide**: the library's default
-  `generateKey` hashes controller class + handler method + client IP, so `GET /file` and
-  `POST /auth/signin` from the same client track independently — live-verified by hammering
-  `GET /file` past its own limit (429) and immediately confirming `POST /auth/signin` from
-  the same client was unaffected.
+  (`ThrottlerModule.forRootAsync` in `app.module.ts`). ADR 0054 then tightened two surfaces
+  via a route-level `@Throttle({ default: { limit, ttl } })` override: `POST /auth/register`,
+  `POST /auth/signin`, and `POST /auth/token/refresh` (5/minute — the credential-check
+  surface a brute-force attempt would target) and `POST /upload/attach` (15/minute — writes
+  to disk before any ownership check). `POST /auth/signout` deliberately stays at the
+  100/minute default — it requires an already-valid access token, so it isn't a
+  credential-guessing surface. The 100/minute ceiling (and the tighter overrides) are **per
+  route, not shared app-wide**: the library's default `generateKey` hashes controller class +
+  handler method + client IP, so `GET /file` and `POST /auth/signin` from the same client
+  track independently — live-verified by hammering `GET /file` past its own limit (429) and
+  immediately confirming `POST /auth/signin` from the same client was unaffected.
   `HealthController`/`MetricsController` carry a class-level `@SkipThrottle()` — kubelet's
   probes and Prometheus' scrapes repeat on a fixed interval for a pod's whole lifetime, and
   because the limit is per-route, that repetition can run *that one route's own* ceiling dry
   by itself (a tight probe interval, or several replicas sharing an egress IP) — not a
   matter of competing with unrelated app traffic. `THROTTLE_ENABLED` (Joi,
   default `true`) exists only to isolate `test/app.e2e-spec.ts` (`test/e2e-env.ts` sets it
-  `false`) — dev/prod always run `true`; it is not a dev/prod axis. Known limitation: the
-  default storage is single-instance in-memory, so a future multi-replica deployment would
-  need Redis-backed storage to keep one true global ceiling — out of scope until this app
-  actually runs more than one replica
+  `false`) — dev/prod always run `true`; it is not a dev/prod axis. It is implemented as a
+  module-level `skipIf` in `ThrottlerModule.forRootAsync` (ADR 0054 D2, replacing an earlier
+  `limit: MAX_SAFE_INTEGER` inflation that would not have covered route-level overrides),
+  so it bypasses the default throttler and any `@Throttle()` override uniformly. Known
+  limitation: the default storage is single-instance in-memory, so a future multi-replica
+  deployment would need Redis-backed storage to keep one true global ceiling — out of scope
+  until this app actually runs more than one replica
 - **Never suggest**: GraphQL, WebSocket, gRPC — the small request/response CRUD surface
   does not justify the schema layer, client story, or operational overhead each would add
   (full reasoning: ADR 0009)

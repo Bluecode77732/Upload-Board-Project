@@ -34,7 +34,7 @@
    - 환경 변수 변경        → `backend/app.module.ts`의 Joi 스키마와 `.env.example`을 함께 읽는다 — 둘은 항상 동기화되어야 한다
    - 엔티티/관계 변경      → `backend/file/entity/file.entity.ts`와 `backend/user/entity/user.entity.ts`를 함께 읽는다 — `creator` 관계는 양쪽에 모두 선언되어 있다. `backend/post/entity/post.entity.ts`와 `backend/comment/entity/comment.entity.ts`는 의도적으로 **단방향**이다(User/File/Post에 역방향 프로퍼티 없음) — 이를 "고치려" 하지 않는다(ADR 0023). 새 엔티티는 **`backend/entities.ts` 한 곳에만** 등록한다 — `app.module.ts`와 `backend/data-source.ts`가 모두 그 `ENTITIES` 배열 하나를 import하므로, 엔티티가 앱에는 살아 있지만 `migration:generate`에는 보이지 않는 상황이 생길 수 없다(2026-07-31 이전에는 수동 관리 목록이 두 개였고, 그 불일치 때문에 `generate`가 테이블 하나를 통째로 빠뜨리고도 성공했다고 보고한 적이 있다). e2e 스위트는 별도로 자기 줄이 필요하다: `test/e2e-utils.ts`(`MIGRATIONS` + `TABLES`) — 다만 이를 빠뜨리면 다음 실행에서 요란하게 실패한다
    - 정적 파일 서빙 변경   → `app.module.ts`의 `ServeStaticModule` 블록(`rootPath: file/temp`, `serveRoot: 'file/temp'` — `file/upload`는 의도적으로 마운트하지 않는다; granted 읽기는 대신 `GET /file/:id/content`를 거친다, ADR 0025/0026)을 읽는다
-   - 요청 횟수 제한 변경   → `app.module.ts`의 `ThrottlerModule.forRootAsync` 블록(전역 기본값 + `THROTTLE_ENABLED` 우회)과 `APP_GUARD` 프로바이더, 그리고 `backend/health/health.controller.ts` / `backend/metrics/metrics.controller.ts`의 `@SkipThrottle()` 예외(ADR 0053)를 함께 읽는다
+   - 요청 횟수 제한 변경   → `app.module.ts`의 `ThrottlerModule.forRootAsync` 블록(전역 기본값 + `skipIf` 기반 `THROTTLE_ENABLED` 우회, ADR 0054 D2)과 `APP_GUARD` 프로바이더, `backend/health/health.controller.ts` / `backend/metrics/metrics.controller.ts`의 `@SkipThrottle()` 예외, 그리고 `backend/auth/auth.controller.ts`(register/signIn/rotateAccessToken, 분당 5회) / `backend/upload/upload.controller.ts`(uploadMedia, 분당 15회)의 `@Throttle({ default: {...} })` 오버라이드(ADR 0053, ADR 0054)를 함께 읽는다
 2. 코드베이스에 존재함을 확인하지 않은 API, 파일, 함수, 타입을 절대 지어내지 않는다.
 3. 기존 패턴만 재사용한다; 명시적으로 요청받지 않는 한 새 추상화를 도입하지 않는다.
 4. 모든 가정을 실제 코드, 검색 결과, 테스트 출력으로 검증한다 — 기억이나 추론만으로 판단하지 않는다.
@@ -104,6 +104,113 @@
 | 아키텍처적으로 유의미한 결정(스키마 변경, 새 모듈, 검토 후 기각된 대안) | 대안과 트레이드오프를 먼저 평문으로 설명하고, 별도 ADR이 필요한지 확인한다 — 문서화되기 전에 코드로 결정을 확정하지 않는다. |
 
 목록이 아니라 초점을 맞춘 질문 하나를 한다. 의도가 모호할 때 가정만으로 진행하지 않는다.
+
+## AI 개발 워크플로우
+
+이 섹션은 기술 규칙이 아니라 프로세스 뼈대다. 이 섹션을 따르는 것이 환각 방지, 범위 준수,
+Never Do, 아키텍처 결정이 요구하는 것을 건너뛰는 결과로 이어진다면 그 규칙들이 이긴다 —
+이 섹션은 "코드가 어때야 하는가"가 아니라 "이 작업에 얼마만큼의 프로세스가 필요한가"를
+판단하는 데 쓴다.
+
+### 개발 생명주기
+
+작업이 거쳐갈 수 있는 전체 생명주기를 순서대로 나열한다. 대부분의 작업은 이 중 일부만
+쓴다 — 아래 작업 규모별 프로토콜을 참고한다.
+
+1. **Requirement** — 실제로 무엇이 요구되는지 확정한다. 모호하면 짐작하지 말고 확인
+   프로토콜로 묻는다.
+2. **Impact** — 변경이 닿는 범위를 파악한다(범위 준수의 고위험 파일 목록, 영향받는 모듈,
+   모듈 간 계약).
+3. **Research** — 어떤 판단을 내리기 전에 실제 코드·테스트·문서를 읽는다(환각 방지 1번의
+   관심사→진입점 매핑).
+4. **Design** — 구조를 끝까지 계획한다(분석 프로토콜 > 구조 분석).
+5. **Implementation** — 계획대로 변경을 작성한다. Never Do, 파일 생성 규약, 프로젝트 고유
+   원칙을 따른다.
+6. **Testing** — `pnpm lint`/`pnpm test`(또는 관련 부분집합)를 실행한다(환각 방지 5번,
+   핵심 관례 > 테스트).
+7. **Review** — diff를 Never Do와 아키텍처 결정에 대조해 독립적으로 검토한다(분석
+   프로토콜 > 결과 검토). 누가 검토하는지는 아래 세션 분리 원칙을 참고한다.
+8. **Fix** — Review에서 발견된 것을 고친다.
+9. **Regression** — 이번 변경이 건드릴 의도가 없던 기존 동작이 그대로인지 확인한다.
+10. **Release** — 이 저장소엔 자동화된 CD가 없다(CI/CD 참고) — 작업이 실제로 배포까지
+    간다면, 이 단계는 CI가 자동으로 트리거하는 무언가가 아니라 사람이 직접 실행하는
+    `helm upgrade`/`deploy.sh` 단계다.
+11. **Production Verification** — 작업이 실제 환경(실 DB, 배포된 클러스터)에 실제로
+    도달했을 때 그 환경에서의 동작을 확인한다 — 이 단계가 파괴적인 작업이라면 명령어 >
+    스윕/회수 서비스를 라이브로 테스트할 때의 샌드박스 규칙을 참고한다.
+12. **Retrospective** — 무엇이 잘 됐고 무엇이 안 됐는지 짧게 되짚는다.
+13. **Knowledge Capture** — 판단과 그 근거를 기록한다(변경 요약; 아키텍처적으로 유의미한
+    결정이면 ADR; 미룬 것이 있으면 알려진 미해결 지점 및 로드맵).
+
+### 작업 규모별 프로토콜
+
+모든 작업에 전체 생명주기가 필요한 것은 아니다. 시작하기 전에 작업 규모를 판단해 한
+줄로 밝히고, 그 규모에 해당하는 단계만 적용한다 — 애매하면 작은 쪽이 아니라 큰 쪽으로
+판단한다:
+
+| 규모 | 예시 | 단계 |
+|---|---|---|
+| **Small** | 오타, 작은 버그 수정, 한 줄짜리 설정 조정 | Implementation → Testing |
+| **Medium** | 일반적인 기능 추가/수정 | Requirement → Research → Design → Implementation → Testing → Review → Regression |
+| **Large** | 아키텍처 변경, DB 마이그레이션, 핵심 흐름 재작성 | Requirement → Impact → Research → Design(해당 시 Security/Performance Review 포함) → Implementation → Testing → Review → Fix → Regression → Release → Production Verification → Retrospective → Knowledge Capture |
+
+고위험 파일이나 스키마 변경을 건드리는 Large 작업은 이미 범위 준수에서 명시적 승인을
+요구한다 — 그 승인 절차는 여기서 어느 단계에 속하든 상관없이 그대로 적용된다.
+
+### 세션 분리 원칙
+
+Medium/Large 작업의 기본 순서:
+
+Research/Design → Implementation → Testing → 독립적인 Review → Fix → Regression
+
+Implementation과 Review는 같은 패스여서는 안 된다: Review는 구현자 본인이 왜 이 변경이
+맞다고 설명하는지가 아니라 실제 diff와 현재 코드에서 직접 결론을 다시 이끌어낸다(환각
+방지 4번을 구현이 아니라 검토에 적용한 것) — 실무적으로는 Large 작업에서 Review를 별도
+세션으로 분리하거나, 최소한 구현 세션의 추론을 그대로 재사용하지 않는 독립적인 검토
+패스를 거친다. 이 저장소는 이미 이따금 병행 세션이 돌아간다(환각 방지 10번) — 복잡한
+작업의 역할별 세션도 같은 방식으로 병렬 운영할 수 있다.
+
+### 역할
+
+한 줄씩 — 무엇을 하는가만 밝힌다:
+
+- **Requirement Validation** — 실제로 무엇이 요구되는지 확인하고 모호함을 없앤다.
+- **Architect** — 전체 구조와 모듈 경계를 설계한다.
+- **Research** — 코드·문서·이력을 읽어 판단의 근거가 될 사실관계를 확정한다.
+- **Impact Analysis** — 변경이 닿는 파일/모듈/계약을 식별한다.
+- **Design** — 요구사항을 구체적인 구현 계획으로 옮긴다.
+- **Implementation** — 계획대로 코드를 작성한다.
+- **Testing** — lint/유닛/e2e로 동작을 검증한다.
+- **Security Review** — diff를 Never Do Group 3과 아키텍처 결정 > Auth/Config 기준으로
+  점검한다.
+- **Performance Review** — N+1, 페이지네이션 누락, 인덱스 누락을 점검한다(Never Do
+  Group 2, ADR 0049).
+- **Compatibility Review** — 기존 API 계약과 소비자(`frontend/`, `admin/`)를 기준으로
+  변경을 점검한다.
+- **Migration Review** — `migration:generate` diff를 한 줄씩 검토한다(범위 준수 > 스키마
+  변경; `migration-review` 스킬).
+- **Observability Review** — 로그/메트릭이 실제로 장애를 드러낼 수 있는지 점검한다
+  (엔지니어링 원칙 > 협업 & 품질의 Observability).
+- **Code Review** — 구현자의 설명이 아니라 diff 자체를 근거로 정합성과 컨벤션 준수를
+  판단한다.
+- **Debugging** — 실패를 재현하고 근본 원인을 좁혀낸 뒤에 고친다.
+- **Release Planning** — 배포 순서와 rollback 경로를 정한다.
+- **Production Verification** — 실제 배포 이후 동작을 확인한다.
+- **Retrospective** — 무엇이 잘 됐고 무엇이 안 됐는지 짧게 되짚는다.
+- **Knowledge Capture** — 판단과 그 근거를 기록한다(변경 요약/ADR).
+
+### 추가 작업 원칙
+
+이런 워크플로우가 흔히 담는 내용 — 구현 전에 조사하기, 추측 대신 근거 확인하기, 테스트
+실행하기, 변경 범위 최소화하기, 완료 후 요약하기 — 는 이미 이 문서의 기본값이다(환각
+방지, 범위 준수, 변경 요약). 다른 곳에 없는 것 두 가지만 덧붙인다:
+
+- **고치기 전에 원인부터**: 테스트나 보고로 문제가 드러나면, 코드를 고치기 전에 왜
+  일어나는지부터 파악한다 — 증상만 겨냥한 수정은 실제 원인을 그대로 남겨두기 쉽다.
+- **Review는 의도가 아니라 diff를 판단한다**: 검토자(별도 세션이거나 의도적으로 독립된
+  패스)는 실제 코드와 diff에서 판단하지, 구현자가 왜 맞다고 말하는지에서 판단하지
+  않는다 — 이 워크플로우에서 다른 세션의 결론을 그대로 가져다 쓰면 분리한 의미가
+  없어지는 유일한 지점이라 다시 한번 명시해둔다.
 
 ## 분석 프로토콜
 
@@ -1030,16 +1137,22 @@ Conflict Protocol을 따른다.
   throw 지점은 반드시 코드를 붙여야 한다 — 상태 코드 기반 폴백은 프레임워크가
   발생시키는 throw만을 위한 것이다. 코드의 이름 변경이나 제거는 breaking
   change이며, 추가는 자유롭다
-- **요청 횟수 제한(landed 2026-09-10, [ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md))**:
+- **요청 횟수 제한(landed 2026-09-10, [ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md),
+  라우트별 세분화는 [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md))**:
   전역 `ThrottlerGuard`(`@nestjs/throttler`)가 `APP_GUARD`로 모든 라우트에서 돈다 —
   이 저장소 최초의 전역 가드다 — 우선 보수적인 기본값 분당 100회(`app.module.ts`의
-  `ThrottlerModule.forRootAsync`)만 걸었다; 라우트별 세분화(예: `POST /auth/signin`을
-  더 빡빡하게)는 후속 작업으로 미뤘고 이 ADR이 확정한 범위가 아니다.
-  분당 100회 한도는 **앱 전체가 공유하는 게 아니라 라우트별로 독립적**이다 — 라이브러리
-  기본 `generateKey`가 컨트롤러 클래스+핸들러 메서드+클라이언트 IP를 해시하므로, 같은
-  클라이언트라도 `GET /file`과 `POST /auth/signin`은 서로 다른 카운터로 추적된다 —
-  `GET /file`을 한도 이상으로 두드려 429를 받은 직후 같은 클라이언트로 `POST /auth/signin`을
-  호출해 전혀 영향받지 않음을 실측으로 확인했다.
+  `ThrottlerModule.forRootAsync`)를 걸었다. 이후 ADR 0054가 라우트 레벨
+  `@Throttle({ default: { limit, ttl } })` 오버라이드로 두 경로를 더 좁혔다:
+  `POST /auth/register`, `POST /auth/signin`, `POST /auth/token/refresh`(분당 5회 —
+  무차별 대입 공격이 노릴 자격 증명 확인 지점)와 `POST /upload/attach`(분당 15회 —
+  소유권 확인보다 먼저 디스크에 쓴다). `POST /auth/signout`은 의도적으로 분당 100회
+  기본값을 그대로 유지한다 — 이미 유효한 액세스 토큰이 있어야 호출 가능해 자격 증명
+  추측 경로가 아니기 때문이다.
+  분당 100회 한도(및 강화된 오버라이드들)는 **앱 전체가 공유하는 게 아니라 라우트별로
+  독립적**이다 — 라이브러리 기본 `generateKey`가 컨트롤러 클래스+핸들러 메서드+클라이언트
+  IP를 해시하므로, 같은 클라이언트라도 `GET /file`과 `POST /auth/signin`은 서로 다른
+  카운터로 추적된다 — `GET /file`을 한도 이상으로 두드려 429를 받은 직후 같은
+  클라이언트로 `POST /auth/signin`을 호출해 전혀 영향받지 않음을 실측으로 확인했다.
   `HealthController`/`MetricsController`는 클래스 레벨 `@SkipThrottle()`을 단다 —
   kubelet의 probe와 Prometheus의 스크레이프는 파드가 떠 있는 내내 고정 간격으로
   반복되는데, 한도가 라우트별이기 때문에 그 반복만으로 **그 라우트 자신의** 한도가
@@ -1047,9 +1160,13 @@ Conflict Protocol을 따른다.
   무관한 다른 앱 트래픽과 경쟁하는 문제가 아니다.
   `THROTTLE_ENABLED`(Joi, 기본값 `true`)는 `test/app.e2e-spec.ts`를 격리하기 위한
   용도로만 존재한다(`test/e2e-env.ts`가 `false`로 설정) — dev/prod는 항상 `true`이며
-  dev/prod를 가르는 축이 아니다. 알려진 한계: 기본 storage가 단일 인스턴스
-  in-memory라서, 향후 다중 replica 배포 시 진짜 하나의 전역 한도를 유지하려면
-  Redis 기반 storage가 필요하다 — 이 앱이 실제로 replica 2개 이상으로 돌기 전까지는
+  dev/prod를 가르는 축이 아니다. `ThrottlerModule.forRootAsync`의 모듈 레벨 `skipIf`로
+  구현되어 있어(ADR 0054 D2 — 라우트별 오버라이드까지는 커버하지 못했을 이전의
+  `limit: MAX_SAFE_INTEGER` 부풀리기 방식을 대체), 기본 쓰로틀러와 모든
+  `@Throttle()` 오버라이드를 한 곳에서 일괄 우회한다. 알려진 한계: 기본 storage가
+  단일 인스턴스 in-memory라서, 향후 다중 replica 배포 시 진짜 하나의 전역 한도를
+  유지하려면 Redis 기반 storage가 필요하다 — 이 앱이 실제로 replica 2개 이상으로
+  돌기 전까지는
   범위 밖이다
 - **절대 제안 금지**: GraphQL, WebSocket, gRPC — 작은 요청/응답 CRUD 표면은
   이들 각각이 더할 스키마 레이어, 클라이언트 구현, 운영 오버헤드를 정당화하지
