@@ -1007,7 +1007,13 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   세 번 발동, 계획서 자체 기록 참고) — 한 번 닫고 끝낼 과제가 아님.
 - dev 전이 의존성 `pnpm audit` 지적(handlebars — ts-jest 경유;
   glob/minimatch/webpack — jest·@nestjs/cli 경유) — 빌드/테스트 시점 전용;
-  업스트림 릴리스 대기. (`pnpm audit --prod`는 2026-07-24 기준 클린.)
+  업스트림 릴리스 대기. "할 수 있는 조치 없음" 상태는 그대로지만 건수는
+  58건(critical 1건 포함)으로 늘었다(2026-07-24 당시엔 몇 건 수준).
+  (`pnpm audit --prod`는 2026-09-10 기준 클린 — 별개의 `qs` 보고를 계기로
+  재실행한 결과 이 dev 전용 집합 밖에서 14건이 추가로 나왔고 같은 날 전부
+  해결했다: `qs`·`brace-expansion` 고정, `multer`·`js-yaml` override 상향,
+  `joi` 패치, 그리고 안 쓰는 구형 `aws-sdk` v2 의존성은 override 대신 아예
+  삭제 — 자세한 내용은 CLAUDE.md > Known Gaps와 CHANGELOG.md 참고.)
   **2026-09-07 재확인**: 이 코드베이스에서 할 수 있는 조치가 없다 — 적용할 수정
   자체가 없고 업스트림 릴리스를 기다리는 것뿐이라, "필요할 때 구현"은 결국 "가끔
   `pnpm audit`을 다시 돌려보고 업스트림 릴리스가 실제로 나오면 그때 반영"으로 귀결된다.

@@ -1062,7 +1062,13 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   habit (already fired three times, see the plan's own log), not a one-time task to close.
 - Dev-transitive `pnpm audit` findings (handlebars via ts-jest;
   glob/minimatch/webpack via jest and @nestjs/cli) — build/test-time only;
-  waiting on upstream releases. (`pnpm audit --prod` is clean as of 2026-07-24.)
+  waiting on upstream releases; same "nothing actionable" status, now 58
+  findings incl. 1 critical (was a handful in 2026-07-24). (`pnpm audit --prod`
+  is clean as of 2026-09-10 — a re-run over a separate `qs` report turned up 14
+  findings beyond this dev-only set, all closed the same day: `qs`/
+  `brace-expansion` pinned, `multer`/`js-yaml` overrides raised, `joi` patched,
+  and the unused legacy `aws-sdk` v2 dependency removed outright rather than
+  overridden — see CLAUDE.md > Known Gaps and CHANGELOG.md for detail.)
   **Reconfirmed 2026-09-07**: nothing actionable from this codebase — there's no fix to
   apply here, only upstream releases to wait for, so "implement when needed" collapses to
   "re-run `pnpm audit` occasionally and act only once an upstream release actually lands."

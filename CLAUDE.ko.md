@@ -1335,15 +1335,22 @@ GitHub Actions · Prometheus · Grafana · Terraform · Istio[Terraform 이후 �
 Architecture Decisions가 계속 유효하다.
 
 **알려진 격차**(문서화되었으나 아직 일정에 없음):
-- `pnpm audit --prod`는 **2026-07-24 기준 깨끗함**: multer는 직접 의존성으로
-  승격되었고(upload.module.ts가 이를 직접 import한다 — `node dist/main`을
-  크래시시키던 유령 전이 의존성이었다), 런타임에서 도달 가능한 취약점은
-  `pnpm.overrides`로 고정되었으며(multer, body-parser, path-to-regexp,
-  file-type, lodash, diff, 스코프된 `@nestjs/swagger>js-yaml`; jws/validator는
-  2026-07-22부터), Nest/typeorm/joi/uuid는 범위 내에서 갱신되었다. 개발
-  전이 의존성 발견 사항은 남아 있다(ts-jest를 통한 handlebars;
-  jest/@nestjs/cli/eslint를 통한 glob/minimatch/webpack) — 빌드/테스트
-  시점에만 관련되며 업스트림 릴리스를 기다리는 중이다
+- `pnpm audit --prod`는 **2026-09-10 기준 깨끗함**: qs(DoS + array-limit
+  우회, `>=6.16.0`)와 brace-expansion(DoS, `>=2.1.4`,
+  `typeorm>glob>minimatch` 경로)을 `pnpm.overrides`에 신규 항목 두 개로
+  고정했고, 기존 multer(`^2.3.0`)와 `@nestjs/swagger>js-yaml`(`^4.3.2`)
+  override는 새로 공개된 DoS·CPU 소모 취약점을 덮도록 기존 하한선보다
+  올렸다. joi는 기존 `^18.2.3` 범위 안에서 `pnpm update joi`로 `18.2.8`
+  (프로토타입 오염 수정)까지 올라갔다 — override는 필요 없었다. 안 쓰는
+  구형 `aws-sdk` v2 의존성(2026-08-13 설치, `git log`로 확인한 결과 어떤
+  `.ts` 파일도 이를 import한 적이 없다 — 같은 날 저녁 프로젝트는 이미
+  `@aws-sdk/client-s3`/`s3-request-presigner` v3로 정착했다, ADR 0036)은
+  override 대신 아예 제거했고, 그 안에 번들된 취약한 `uuid`와 패치가
+  없는 region 검증 발견 사항도 함께 사라졌다. 개발 전이 의존성 발견
+  사항은 이번 범위 밖으로 남겨뒀다 — `--prod`를 뺀 일반 `pnpm audit`는
+  이제 58건(2026-07-24 당시엔 몇 건 수준)을 보고하며, critical 1건(`ts-jest`를
+  통한 `handlebars`)도 포함돼 있다 — 여전히 빌드/테스트 시점에만 관련되며
+  jest/@nestjs/cli/eslint 툴체인의 업스트림 릴리스를 기다리는 중이다
 - `test/app.e2e-spec.ts`는 손대지 않은 Nest 템플릿이다: 이 앱에 존재하지
   않는 `GET /`를 대상으로 하고, AppModule을 부팅하려면 실제 DB가 필요하다
   — e2e 스위트는 무언가를 검증하기 전에 실제로 다시 작성되어야 한다

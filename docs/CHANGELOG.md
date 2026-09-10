@@ -13,6 +13,26 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Security
+- **`pnpm audit --prod` re-clean: qs/brace-expansion pinned, multer/js-yaml
+  bumped, unused `aws-sdk` v2 removed (2026-09-10)** — re-running the audit
+  surfaced 14 findings (7 high) beyond the 2 moderate `qs` DoS/array-limit-bypass
+  CVEs that prompted the check. `multer` (3 high/low: crafted-field DoS, fd
+  leak on aborted uploads, size-limit bypass via a `fileFilter` race) and
+  `@nestjs/swagger>js-yaml` (2 high, CPU-exhaustion) needed their existing
+  `pnpm.overrides` floors raised (`^2.3.0`/`^4.3.2`); `brace-expansion` (2 high,
+  DoS via `typeorm>glob>minimatch`) got a new override; `qs` got a new override
+  (`^6.16.0`); `joi` moved to `18.2.8` inside its existing `^18.2.3` range via
+  `pnpm update joi`, no override needed. The remaining `uuid` (moderate) and
+  `aws-sdk` (low, no patch published) findings both traced to a legacy
+  `aws-sdk` v2 dependency — `git log` confirmed no `.ts` file ever imported it;
+  it was installed 2026-08-13, the same evening the project committed to
+  `@aws-sdk/client-s3`/`s3-request-presigner` v3 (ADR 0036) instead, and the
+  v2 install was simply never removed — so it was deleted outright rather than
+  overridden. `pnpm audit --prod`: 14 findings → 0. Verified: `pnpm lint:ci`
+  clean, `pnpm test` 264/264, `pnpm test:e2e` 76/76 against a live Postgres.
+  Dev-transitive findings (plain `pnpm audit`, now 58 including 1 critical —
+  `handlebars` via `ts-jest`) are unchanged in kind from the prior baseline and
+  stay out of scope, waiting on upstream jest/@nestjs/cli/eslint releases.
 - **Global rate limiting via `@nestjs/throttler` (2026-09-10, [ADR
   0053](ADR/0053-global-rate-limiting.md))** — a security review found no request-rate
   limiting anywhere in the backend, `POST /auth/register`/`POST /auth/signin` included,

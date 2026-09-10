@@ -13,6 +13,27 @@
 ## [Unreleased]
 
 ### 보안
+- **`pnpm audit --prod` 재정화: qs·brace-expansion 고정, multer·js-yaml 상향,
+  안 쓰는 `aws-sdk` v2 제거 (2026-09-10)** — 점검을 다시 돌린 계기였던 moderate
+  `qs` DoS·array-limit 우회 취약점 2건 외에, 재실행 결과 14건(high 7건)이
+  잡혔다. `multer`(high·low 3건: 조작된 필드명 DoS, 업로드 중단 시 fd 누수,
+  `fileFilter` 경쟁 조건을 통한 크기 제한 우회)와
+  `@nestjs/swagger>js-yaml`(high 2건, CPU 소모)은 기존 `pnpm.overrides`
+  하한선을 올려야 했고(`^2.3.0`/`^4.3.2`), `brace-expansion`(high 2건,
+  `typeorm>glob>minimatch` 경유 DoS)은 override를 신규 추가했다. `qs`도 신규
+  override(`^6.16.0`)로 고정했고, `joi`는 기존 `^18.2.3` 범위 안에서
+  `pnpm update joi`로 `18.2.8`까지 올라갔다 — override는 필요 없었다. 남은
+  `uuid`(moderate)와 `aws-sdk`(low, 패치 미발행) 두 건은 둘 다 안 쓰는 구형
+  `aws-sdk` v2 의존성에서 나온 것이었다 — `git log`로 확인한 결과 어떤 `.ts`
+  파일도 이를 import한 적이 없었고, 2026-08-13 설치된 그날 저녁 프로젝트는
+  이미 `@aws-sdk/client-s3`/`s3-request-presigner` v3로 정착했으며(ADR 0036)
+  v2 설치분은 그대로 정리되지 않고 남아 있었을 뿐이다 — 그래서 override
+  대신 아예 삭제했다. `pnpm audit --prod`: 14건 → 0건. 확인: `pnpm lint:ci`
+  깨끗함, `pnpm test` 264/264, 실제 Postgres 대상 `pnpm test:e2e` 76/76.
+  개발 전이 의존성 발견 사항(`--prod` 뺀 일반 `pnpm audit`, critical 1건 —
+  `ts-jest`를 통한 `handlebars` — 포함 58건)은 기존 기준선과 성격이 같아
+  이번 범위 밖으로 남겨뒀고, jest/@nestjs/cli/eslint 툴체인의 업스트림
+  릴리스를 기다리는 중이다.
 - **`@nestjs/throttler`를 통한 전역 요청 횟수 제한 (2026-09-10, [ADR
   0053](ADR/0053-global-rate-limiting.ko.md))** — 보안 점검에서 backend 어디에도
   요청 횟수 제한이 없다는 게 발견됨, `POST /auth/register`/`POST /auth/signin`도

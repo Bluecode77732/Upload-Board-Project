@@ -1307,14 +1307,22 @@ still lands only as its own dedicated task with its own ADR — until then, the
 Architecture Decisions above remain operative.
 
 **Known gaps** (documented, not yet scheduled):
-- `pnpm audit --prod` is **clean as of 2026-07-24**: multer was promoted to a
-  direct dependency (upload.module.ts imports it directly — was a phantom
-  transitive dep that crashed `node dist/main`), runtime-reachable advisories
-  pinned via `pnpm.overrides` (multer, body-parser, path-to-regexp, file-type,
-  lodash, diff, scoped `@nestjs/swagger>js-yaml`; jws/validator since
-  2026-07-22), and Nest/typeorm/joi/uuid updated in-range. Dev-transitive
-  findings remain (handlebars via ts-jest; glob/minimatch/webpack via
-  jest/@nestjs/cli/eslint) — build/test-time only, waiting on upstream releases
+- `pnpm audit --prod` is **clean as of 2026-09-10**: qs (DoS + array-limit
+  bypass, `>=6.16.0`) and brace-expansion (DoS, `>=2.1.4`, via
+  `typeorm>glob>minimatch`) pinned via two new `pnpm.overrides` entries; the
+  existing multer (`^2.3.0`) and `@nestjs/swagger>js-yaml` (`^4.3.2`) overrides
+  bumped past their prior floors to cover newly-disclosed DoS/CPU-exhaustion
+  advisories; joi moved to `18.2.8` (prototype-pollution fixes) inside its
+  existing `^18.2.3` range via `pnpm update joi` — no override needed. The
+  unused legacy `aws-sdk` v2 dependency (installed 2026-08-13, `git log`
+  confirms no `.ts` file ever imported it — the project had already settled on
+  `@aws-sdk/client-s3`/`s3-request-presigner` v3 that same evening, ADR 0036)
+  was removed outright rather than overridden, taking its bundled vulnerable
+  `uuid` and its own unpatched region-validation finding with it. Dev-transitive
+  findings stay out of scope — plain `pnpm audit` (not `--prod`) now reports 58
+  (a handful in 2026-07-24), including one critical (`handlebars` via
+  `ts-jest`) — still build/test-time only, waiting on upstream releases in the
+  jest/@nestjs/cli/eslint toolchains
 - `test/app.e2e-spec.ts` is the untouched Nest template: it targets `GET /`, which
   does not exist in this app, and booting AppModule needs a live DB — the e2e suite
   needs a real rewrite before it verifies anything
