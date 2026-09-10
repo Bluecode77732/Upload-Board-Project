@@ -1405,10 +1405,13 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   — [ADR 0053](ADR/0053-global-rate-limiting.md))** — a security review found
   `POST /auth/register`/`POST /auth/signin` unconstrained beyond `HASH_ROUNDS`' per-attempt
   cost. A global `ThrottlerGuard` (`@nestjs/throttler`) now runs via `APP_GUARD` — this
-  repo's first global guard — at a conservative default of 100 requests/minute, with
-  `HealthController`/`MetricsController` exempted (`@SkipThrottle()`) so kubelet/Prometheus
-  traffic is never mistaken for abuse. e2e-verified against a live Postgres (76/76, no
-  429s). **Still open, left for a follow-up task**: per-route tuning (e.g. a tighter bound
+  repo's first global guard — at a conservative default of 100 requests/minute, tracked
+  independently per route rather than one app-wide pool, with `HealthController`/
+  `MetricsController` exempted (`@SkipThrottle()`) so kubelet/Prometheus traffic is never
+  mistaken for abuse. e2e-verified against a live Postgres (76/76, no 429s), and a live 429
+  fired against a running dev server confirmed both the limit and the per-route isolation
+  (`GET /file` hitting its own ceiling left `POST /auth/signin` unaffected in the same
+  window). **Still open, left for a follow-up task**: per-route tuning (e.g. a tighter bound
   specifically on `POST /auth/signin`) — this ADR deliberately settled only the global
   default. Also open: Redis-backed `ThrottlerStorage`, needed only once this app actually
   runs more than one replica (today's default storage counts per-instance).

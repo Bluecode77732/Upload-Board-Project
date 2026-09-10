@@ -1035,9 +1035,16 @@ Conflict Protocol을 따른다.
   이 저장소 최초의 전역 가드다 — 우선 보수적인 기본값 분당 100회(`app.module.ts`의
   `ThrottlerModule.forRootAsync`)만 걸었다; 라우트별 세분화(예: `POST /auth/signin`을
   더 빡빡하게)는 후속 작업으로 미뤘고 이 ADR이 확정한 범위가 아니다.
+  분당 100회 한도는 **앱 전체가 공유하는 게 아니라 라우트별로 독립적**이다 — 라이브러리
+  기본 `generateKey`가 컨트롤러 클래스+핸들러 메서드+클라이언트 IP를 해시하므로, 같은
+  클라이언트라도 `GET /file`과 `POST /auth/signin`은 서로 다른 카운터로 추적된다 —
+  `GET /file`을 한도 이상으로 두드려 429를 받은 직후 같은 클라이언트로 `POST /auth/signin`을
+  호출해 전혀 영향받지 않음을 실측으로 확인했다.
   `HealthController`/`MetricsController`는 클래스 레벨 `@SkipThrottle()`을 단다 —
   kubelet의 probe와 Prometheus의 스크레이프는 파드가 떠 있는 내내 고정 간격으로
-  반복되는데, 같은 IP 기준 카운터를 공유하면 이 트래픽을 남용으로 오인하게 된다.
+  반복되는데, 한도가 라우트별이기 때문에 그 반복만으로 **그 라우트 자신의** 한도가
+  소진될 수 있다(짧은 probe 주기, 또는 여러 replica가 같은 egress IP를 공유하는 경우) —
+  무관한 다른 앱 트래픽과 경쟁하는 문제가 아니다.
   `THROTTLE_ENABLED`(Joi, 기본값 `true`)는 `test/app.e2e-spec.ts`를 격리하기 위한
   용도로만 존재한다(`test/e2e-env.ts`가 `false`로 설정) — dev/prod는 항상 `true`이며
   dev/prod를 가르는 축이 아니다. 알려진 한계: 기본 storage가 단일 인스턴스

@@ -43,8 +43,10 @@ JWT 인증(Passport), TypeORM 기반 PostgreSQL, Multer 디스크 저장, 트랜
   [ADR 0007](docs/ADR/0007-ownership-checks-without-rbac.ko.md) 위에 얹힘)
 - **경계 검증** — 전역 `ValidationPipe`(`whitelist` + `forbidNonWhitelisted`);
   직렬화된 엔티티는 `password`를 유출하지 않음
-- **요청 횟수 제한** — 모든 라우트가 기본 분당 100회 제한을 받음(`@nestjs/throttler`);
-  health/metrics 프로브는 예외라 오케스트레이터/Prometheus 트래픽이 남용으로
+- **요청 횟수 제한** — 모든 라우트가 기본 분당 100회 제한을 받되 라우트별로 독립적으로
+  추적됨(앱 전체가 나눠 쓰는 풀 하나가 아님 — `@nestjs/throttler`가 컨트롤러+핸들러+
+  클라이언트 IP로 키잉); health/metrics 프로브는 예외라 오케스트레이터/Prometheus
+  트래픽이 남용으로
   오인되지 않음([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md))
 - **Swagger** — `/doc`에서 전체 API 문서 열람과 수동 테스트 가능
 
@@ -305,7 +307,7 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
   ([ADR 0004](docs/ADR/0004-transaction-pattern-selection.ko.md))
 - **Passport** — `JwtAuthGuard` 뒤의 `jwt` 전략
 - **Multer** — 서버가 생성한 파일명(`temp_{uuid}_{timestamp}`)으로 디스크에 저장
-- **`@nestjs/throttler`** — 전역 `APP_GUARD` 요청 횟수 제한, 기본값 분당 100회
+- **`@nestjs/throttler`** — 전역 `APP_GUARD` 요청 횟수 제한, 라우트별 기본값 분당 100회
   ([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md))
 - **Jest** — 소스 파일 옆에 `*.spec.ts`로 배치한 단위 테스트; 리포지토리/QueryRunner 모킹, DB 접근 없음
 - **Swagger** — `/doc`, `persistAuthorization`으로 Bearer 세션 유지

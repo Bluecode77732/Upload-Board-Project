@@ -258,11 +258,16 @@ Before any of the auth chain below, a global `ThrottlerGuard` (`APP_GUARD`) runs
 request and rate-limits it — 100 requests/minute by default. It is a separate, orthogonal
 layer from authentication: it runs whether or not the request carries a token, and a request
 that fails it never reaches `JwtAuthGuard` ([ADR 0053](ADR/0053-global-rate-limiting.md)).
+The 100/minute ceiling is **per route, not one pool shared by the whole app**: the
+library's default key is a hash of controller class + handler method + client IP, so
+`GET /file` and `POST /auth/signin` from the same client are two independent counters —
+live-verified by driving `GET /file` past its own limit (429) and immediately confirming
+`POST /auth/signin` from the same client was unaffected.
 
 Most controllers are class-level guarded:
 
 ```
-Request → ThrottlerGuard (APP_GUARD, global — 100 req/min default, ADR 0053)
+Request → ThrottlerGuard (APP_GUARD, global — 100 req/min default per route, ADR 0053)
         → JwtAuthGuard (Passport "jwt-auth-guard")
         → JwtStrategy.validate (loads the user via UserService.findOne, strips password)
         → request.user
@@ -275,9 +280,10 @@ Three routes deliberately sit outside the *auth* chain: `GET /file/:id/content` 
 file, and `GET /health/*` / `GET /metrics` carry no auth guard at all, since neither a probe
 nor a Prometheus scrape can present a bearer token. `GET /health/*` and `GET /metrics` are
 also the only routes exempt from `ThrottlerGuard` itself (`@SkipThrottle()`) — a probe or
-scrape is designed to repeat on a fixed interval for a pod's whole lifetime, unlike ordinary
-user traffic, so sharing a rate-limit budget with other callers risks a false liveness
-failure or a gap in the metrics time series (ADR 0053).
+scrape is designed to repeat on a fixed interval for a pod's whole lifetime, and because the
+limit is per-route, that repetition alone can run *that one route's own* ceiling dry (a tight
+probe interval, or several replicas sharing an egress IP) — not a matter of competing with
+unrelated app traffic, since no other route's calls count against it (ADR 0053).
 
 Write authorization is ownership-based by default (self-only / creator-only), with RBAC
 layered on top for the handful of routes that need more than that — a strictly higher role

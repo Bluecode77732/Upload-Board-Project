@@ -43,8 +43,10 @@ Each document has a Korean sibling (`*.ko.md`).
   [ADR 0007](docs/ADR/0007-ownership-checks-without-rbac.md))
 - **Boundary validation** — global `ValidationPipe` (`whitelist` +
   `forbidNonWhitelisted`); serialized entities never leak `password`
-- **Rate limiting** — every route defaults to 100 requests/minute
-  (`@nestjs/throttler`); health/metrics probes are exempt so orchestrator/Prometheus
+- **Rate limiting** — every route defaults to 100 requests/minute, tracked
+  independently per route (not one pool shared app-wide — `@nestjs/throttler`
+  keys on controller + handler + client IP); health/metrics probes are exempt so
+  orchestrator/Prometheus
   traffic is never mistaken for abuse ([ADR 0053](docs/ADR/0053-global-rate-limiting.md))
 - **Swagger** — full API documentation and manual test bench at `/doc`
 
@@ -311,7 +313,7 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full request and data flow.
   ([ADR 0004](docs/ADR/0004-transaction-pattern-selection.md))
 - **Passport** — `jwt` strategy behind `JwtAuthGuard`
 - **Multer** — disk storage with server-generated filenames (`temp_{uuid}_{timestamp}`)
-- **`@nestjs/throttler`** — global `APP_GUARD` rate limiting, 100 req/min default
+- **`@nestjs/throttler`** — global `APP_GUARD` rate limiting, 100 req/min default per route
   ([ADR 0053](docs/ADR/0053-global-rate-limiting.md))
 - **Jest** — unit tests colocated as `*.spec.ts`; repository/QueryRunner mocks, no DB access
 - **Swagger** — `/doc`, with `persistAuthorization` for a persistent Bearer session

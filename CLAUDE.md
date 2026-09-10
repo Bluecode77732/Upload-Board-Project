@@ -1009,9 +1009,16 @@ Do not suggest alternatives to these decisions without explicit request.
   this repository's first global guard — at a conservative default of 100 requests/minute
   (`ThrottlerModule.forRootAsync` in `app.module.ts`); per-route tuning (e.g. a tighter
   bound on `POST /auth/signin`) is deferred to a follow-up task, not settled by this ADR.
+  The 100/minute ceiling is **per route, not shared app-wide**: the library's default
+  `generateKey` hashes controller class + handler method + client IP, so `GET /file` and
+  `POST /auth/signin` from the same client track independently — live-verified by hammering
+  `GET /file` past its own limit (429) and immediately confirming `POST /auth/signin` from
+  the same client was unaffected.
   `HealthController`/`MetricsController` carry a class-level `@SkipThrottle()` — kubelet's
-  probes and Prometheus' scrapes repeat on a fixed interval for a pod's whole lifetime, a
-  traffic shape a shared per-IP counter would misread as abuse. `THROTTLE_ENABLED` (Joi,
+  probes and Prometheus' scrapes repeat on a fixed interval for a pod's whole lifetime, and
+  because the limit is per-route, that repetition can run *that one route's own* ceiling dry
+  by itself (a tight probe interval, or several replicas sharing an egress IP) — not a
+  matter of competing with unrelated app traffic. `THROTTLE_ENABLED` (Joi,
   default `true`) exists only to isolate `test/app.e2e-spec.ts` (`test/e2e-env.ts` sets it
   `false`) — dev/prod always run `true`; it is not a dev/prod axis. Known limitation: the
   default storage is single-instance in-memory, so a future multi-replica deployment would

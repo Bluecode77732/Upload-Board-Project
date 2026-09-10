@@ -19,14 +19,24 @@ development line (package.json version).
   leaving credential brute-forcing unconstrained beyond `HASH_ROUNDS`' per-attempt cost. A
   global `ThrottlerGuard` now runs via `APP_GUARD` (this repo's first global guard) at a
   conservative default of 100 requests/minute; per-route tuning is a deferred follow-up.
-  `HealthController`/`MetricsController` carry `@SkipThrottle()` since kubelet's probes and
-  Prometheus' scrapes repeat on a fixed interval for a pod's whole lifetime and would
-  otherwise share a rate budget with other traffic. A new `THROTTLE_ENABLED` env var (Joi,
-  default `true`) exists solely to let `test/e2e-env.ts` bypass the limit for
-  `test/app.e2e-spec.ts`'s several-hundred-request run — verified against a live Postgres:
-  `pnpm lint` clean, `pnpm test` 263/263, `pnpm test:e2e` 76/76, no 429s. Known accepted
-  limitation: default storage is single-instance in-memory, so a future multi-replica
-  deployment would need Redis-backed storage for one true global ceiling.
+  The 100/minute ceiling is per route, not one pool shared app-wide (the library's default
+  key hashes controller class + handler + client IP) — live-verified by driving `GET /file`
+  to `429` and confirming `POST /auth/signin` from the same client was unaffected in the
+  same window. `HealthController`/`MetricsController` carry `@SkipThrottle()` since
+  kubelet's probes and Prometheus' scrapes repeat on a fixed interval for a pod's whole
+  lifetime, and because the limit is per-route, that repetition alone can exhaust that one
+  route's own ceiling (not a matter of competing with unrelated traffic). A new
+  `THROTTLE_ENABLED` env var (Joi, default `true`) exists solely to let `test/e2e-env.ts`
+  bypass the limit for `test/app.e2e-spec.ts`'s several-hundred-request run. Implementing
+  this surfaced a real defect: `ThrottlerException` (429) had no `FALLBACK_CODES` entry in
+  `AllExceptionsFilter`, so every rate-limit rejection was miscoded `INTERNAL_ERROR` —
+  fixed by adding `ErrorCode.RATE_LIMITED` and its mapping, pinned by a new spec case, and
+  mirrored into `frontend/src/api/errorCodes.ts` + `API-CONTRACT.md` per that project's own
+  sync requirement. Verified: `pnpm lint` clean, `pnpm test` 264/264, `pnpm test:e2e`
+  76/76 against a live Postgres, a live 429 fired against a running dev server, and
+  `frontend/`'s `pnpm build`/`pnpm lint` clean. Known accepted limitation: default storage
+  is single-instance in-memory, so a future multi-replica deployment would need
+  Redis-backed storage for one true per-route ceiling across replicas.
 
 ### Fixed
 - **`ROADMAP.md`(+ko): two more stale "not started" §7 entries corrected (2026-09-08)**

@@ -19,15 +19,26 @@
   예외가 아니었고 자격 증명 무차별 대입이 `HASH_ROUNDS`가 주는 시도당 비용 말고는
   아무 제약도 없었음. 이제 전역 `ThrottlerGuard`가 `APP_GUARD`로 돈다(이 저장소
   최초의 전역 가드) — 우선 보수적인 기본값 분당 100회만; 라우트별 세분화는 후속
-  작업. `HealthController`/`MetricsController`는 `@SkipThrottle()`을 단다 —
+  작업. 분당 100회 한도는 앱 전체가 나눠 쓰는 풀 하나가 아니라 라우트별로
+  독립적이다(라이브러리 기본 키가 컨트롤러 클래스+핸들러+클라이언트 IP를 해시) —
+  `GET /file`을 429까지 몰아붙인 뒤 같은 창 안에서 같은 클라이언트로
+  `POST /auth/signin`이 영향받지 않음을 실측으로 확인했다.
+  `HealthController`/`MetricsController`는 `@SkipThrottle()`을 단다 —
   kubelet의 probe와 Prometheus의 스크레이프는 파드가 떠 있는 내내 고정 간격으로
-  반복돼서 다른 트래픽과 예산을 나누면 안 되기 때문. 새 `THROTTLE_ENABLED`
+  반복되는데, 한도가 라우트별이라 그 반복만으로 그 라우트 자신의 한도가 소진될
+  수 있기 때문(무관한 트래픽과 경쟁하는 문제가 아니다). 새 `THROTTLE_ENABLED`
   env var(Joi, 기본값 `true`)는 `test/e2e-env.ts`가 `test/app.e2e-spec.ts`의
-  수백 건짜리 실행에서 제한을 우회하기 위한 용도로만 존재 — 실제 Postgres
-  대상으로 검증 완료: `pnpm lint` clean, `pnpm test` 263/263, `pnpm test:e2e`
-  76/76, 429 없음. 알려진 한계로 수용: 기본 storage가 단일 인스턴스
-  in-memory라 향후 다중 replica 배포 시 진짜 하나의 전역 한도를 유지하려면
-  Redis 기반 storage가 필요함.
+  수백 건짜리 실행에서 제한을 우회하기 위한 용도로만 존재. 구현 중 실제 결함을
+  발견했다: `ThrottlerException`(429)이 `AllExceptionsFilter`의 `FALLBACK_CODES`에
+  없어 모든 rate-limit 거부가 `INTERNAL_ERROR`로 잘못 표시되고 있었다 —
+  `ErrorCode.RATE_LIMITED`와 매핑을 추가하고 새 스펙 케이스로 고정했으며,
+  `frontend/src/api/errorCodes.ts` + `API-CONTRACT.md`에도 그 프로젝트 자체
+  규약에 따라 동기화했다. 검증: `pnpm lint` clean, `pnpm test` 264/264,
+  실제 Postgres 대상 `pnpm test:e2e` 76/76, 실행 중인 dev 서버에 실제 429를
+  발생시켜 확인, `frontend/`의 `pnpm build`/`pnpm lint` clean. 알려진 한계로
+  수용: 기본 storage가 단일 인스턴스 in-memory라 향후 다중 replica 배포 시
+  replica 전체에서 진짜 하나의 라우트별 한도를 유지하려면 Redis 기반 storage가
+  필요함.
 
 ### 수정
 - **`ROADMAP.md`(+ko): §7의 낡은 "미착수" 항목 2건 추가 정정 (2026-09-08)** — 앞서

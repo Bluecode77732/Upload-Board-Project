@@ -54,13 +54,25 @@ Per-route tuning (e.g. a tighter limit on `POST /auth/signin` specifically) is d
 out of scope for this ADR — the developer asked for a single conservative global default
 now, with route-specific limits deferred to a follow-up task.
 
+The 100/minute ceiling is **per route, not one pool shared across the whole app**:
+`ThrottlerGuard`'s default `generateKey` hashes controller class + handler method + client
+IP, so a given client's `GET /file` calls and `POST /auth/signin` calls track two entirely
+independent counters. Live-verified: driving `GET /file` past its own limit with 105 rapid
+unauthenticated requests returned `429 RATE_LIMITED` starting at request 101, and an
+immediate `POST /auth/signin` from the same client in the same window returned its normal
+`400 AUTH_INVALID_CREDENTIALS` — completely unaffected by the exhausted `GET /file` counter.
+
 ### D2 — `HealthController`/`MetricsController` are exempted via `@SkipThrottle()`
 
 Both controllers carry a class-level `@SkipThrottle()`. Unlike ordinary user-driven
 traffic, kubelet's liveness/readiness probes and Prometheus' scrape requests are designed
 to repeat on a fixed short interval for the entire lifetime of a running pod — a
-fundamentally different traffic shape from a human calling the API occasionally. Sharing a
-per-IP counter with other traffic risks two concrete failures: a 429 on a liveness probe
+fundamentally different traffic shape from a human calling the API occasionally. Because
+the limit is per-route (D1), this was never about competing with unrelated app traffic for
+a shared budget — no other route's calls count against `GET /health/live`'s counter. The
+risk is narrower but real: that route's *own* repetition (a tight probe interval, or
+several replicas whose traffic reaches the app through the same egress IP) can run its own
+100/minute ceiling dry by itself. Two concrete failures follow: a 429 on a liveness probe
 misreads as "process unresponsive" and triggers an unnecessary pod restart; a 429 on a
 scrape produces a gap in the metrics time series. Both endpoints already go unauthenticated
 for the identical reason (`GET /health/*` — ADR 0031; `GET /metrics` — ADR 0047) — this
@@ -91,8 +103,9 @@ same reason `DB_DATABASE` is set there rather than in `beforeAll`), mirroring th
   not settled by this ADR.
 - **Known limitation, accepted for now**: `@nestjs/throttler`'s default storage is
   single-instance in-memory. If this app is ever deployed with more than one replica, each
-  pod counts independently, so the effective global ceiling loosens by a factor of the
-  replica count. A Redis-backed `ThrottlerStorage` implementation removes this, but adds a
+  pod counts independently, so each route's effective ceiling loosens by a factor of the
+  replica count (already true per-instance today; this compounds it per-replica too). A
+  Redis-backed `ThrottlerStorage` implementation removes this, but adds a
   new infrastructure dependency and is out of this task's scope — revisit if/when this app
   actually runs multiple replicas (it currently does not; the AWS/EKS stack described in
   ROADMAP.md §9 is torn down as of 2026-08-28).
@@ -108,6 +121,32 @@ same reason `DB_DATABASE` is set there rather than in `beforeAll`), mirroring th
   states intent more clearly and matches the existing `*_ENABLED` naming convention).
 - **Verified**: `pnpm lint` (clean), `pnpm test` (263/263), and `pnpm test:e2e` (76/76,
   against `docker compose up -d db` on port 5435) all pass — see the Addendum below.
+
+### Addendum (2026-09-10) — live-fired 429 against the running dev server; corrected a wrong mental model of the limit's scope
+
+Earlier verification (unit test, e2e with `THROTTLE_ENABLED=false`) never actually
+triggered a real 429 over HTTP with the limit turned on. Prompted to close that gap: booted
+`pnpm run start:dev` against the same `docker compose db`, with the real (non-e2e) env —
+`THROTTLE_ENABLED` unset, so the true `true` default applied — and fired 105 rapid
+unauthenticated `GET /file` requests. Requests 1–100 returned `401 AUTH_UNAUTHORIZED` (no
+token; `ThrottlerGuard` passed them through to `JwtAuthGuard`), and 101–105 returned
+`429 RATE_LIMITED`, confirming both the limit itself and the earlier `FALLBACK_CODES` fix
+against a live request/response cycle, not just a constructed exception object.
+
+While explaining this, this ADR's own text (and its CLAUDE.md/ARCHITECTURE.md copies) turned
+out to describe the wrong mechanism: several passages framed the health/metrics exemption as
+avoiding a *shared* per-IP budget with *other* app traffic. Immediately calling
+`POST /auth/signin` from the same client, in the same throttle window that had just 429'd
+`GET /file`, returned its ordinary `400 AUTH_INVALID_CREDENTIALS` — not a 429 — which
+contradicted that framing and prompted reading `ThrottlerGuard`'s actual `generateKey`
+(`node_modules/@nestjs/throttler/dist/throttler.guard.js`): the key is
+`sha256(ControllerClass-handlerMethod-throttlerName-clientIP)`, so every route/handler pair
+tracks an **independent** counter per client — never one app-wide pool. D1 and D2 above, and
+the CLAUDE.md/ARCHITECTURE.md copies of this material, are corrected to state that the
+health/metrics exemption exists because a route's *own* repetition can exhaust *its own*
+counter, not because it was ever competing with unrelated traffic for a shared one. This
+does not change the guard registration itself or the 100/minute value, only the accuracy of
+why the exemption matters.
 
 ### Addendum (2026-09-10) — 429 responses were miscoded as `INTERNAL_ERROR`, fixed
 

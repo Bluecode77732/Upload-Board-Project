@@ -263,12 +263,17 @@ URL 접두사가 둘이라 컨트롤러도 둘입니다 — 스레드는 게시�
 아래 인증 체인보다 먼저, 전역 `ThrottlerGuard`(`APP_GUARD`)가 모든 요청에 대해 돌면서
 요청 횟수를 제한합니다 — 기본값 분당 100회. 이건 인증과는 별개의, 직교하는 레이어입니다 —
 토큰이 있든 없든 돌고, 여기서 막히면 `JwtAuthGuard`까지 아예 가지도 못합니다
-([ADR 0053](ADR/0053-global-rate-limiting.ko.md)).
+([ADR 0053](ADR/0053-global-rate-limiting.ko.md)). 분당 100회 한도는 **앱 전체가 나눠
+쓰는 하나의 풀이 아니라 라우트별로 독립적**입니다 — 라이브러리 기본 키는 컨트롤러
+클래스+핸들러 메서드+클라이언트 IP를 해시한 값이라, 같은 클라이언트라도 `GET /file`과
+`POST /auth/signin`은 서로 다른 두 카운터로 추적됩니다 — `GET /file`을 한도 이상으로
+두드려 429를 받은 직후 같은 클라이언트로 `POST /auth/signin`을 호출해 전혀 영향받지
+않음을 실측으로 확인했습니다.
 
 대부분의 컨트롤러는 클래스 레벨로 가드됩니다:
 
 ```
-요청 → ThrottlerGuard (APP_GUARD, 전역 — 기본값 분당 100회, ADR 0053)
+요청 → ThrottlerGuard (APP_GUARD, 전역 — 라우트별 기본값 분당 100회, ADR 0053)
      → JwtAuthGuard (Passport "jwt-auth-guard")
      → JwtStrategy.validate (UserService.findOne으로 사용자 로드, password 제거)
      → request.user
@@ -282,8 +287,10 @@ URL 접두사가 둘이라 컨트롤러도 둘입니다 — 스레드는 게시�
 Prometheus 스크레이프도 Bearer 토큰을 제시할 방법이 없기 때문입니다. `GET /health/*`와
 `GET /metrics`는 `ThrottlerGuard` 자체에서도 유일하게 예외 처리된 라우트입니다
 (`@SkipThrottle()`) — 프로브나 스크레이프는 일반 사용자 트래픽과 달리 파드가 떠 있는
-내내 고정 간격으로 반복되도록 설계돼 있어서, 다른 호출자와 같은 제한 예산을 공유하면
-liveness 오탐이나 메트릭 시계열 공백으로 이어질 수 있습니다(ADR 0053).
+내내 고정 간격으로 반복되도록 설계돼 있고, 한도가 라우트별이기 때문에 그 반복만으로
+**그 라우트 자신의** 한도가 소진될 수 있습니다(짧은 probe 주기, 또는 여러 replica가
+같은 egress IP를 공유하는 경우) — 무관한 다른 앱 트래픽과 경쟁하는 문제가 아니라,
+다른 라우트의 호출은 애초에 이 카운터에 전혀 반영되지 않습니다(ADR 0053).
 
 쓰기 권한은 기본적으로 소유권 기반입니다(본인만 / 작성자만). 그것만으로 부족한 소수의
 라우트에는 RBAC이 그 위에 얹힙니다 — 대상보다 확실히 높은 등급이 필요하거나, admin
