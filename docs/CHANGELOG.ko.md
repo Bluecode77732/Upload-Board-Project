@@ -12,6 +12,23 @@
 
 ## [Unreleased]
 
+### 보안
+- **`@nestjs/throttler`를 통한 전역 요청 횟수 제한 (2026-09-10, [ADR
+  0053](ADR/0053-global-rate-limiting.ko.md))** — 보안 점검에서 backend 어디에도
+  요청 횟수 제한이 없다는 게 발견됨, `POST /auth/register`/`POST /auth/signin`도
+  예외가 아니었고 자격 증명 무차별 대입이 `HASH_ROUNDS`가 주는 시도당 비용 말고는
+  아무 제약도 없었음. 이제 전역 `ThrottlerGuard`가 `APP_GUARD`로 돈다(이 저장소
+  최초의 전역 가드) — 우선 보수적인 기본값 분당 100회만; 라우트별 세분화는 후속
+  작업. `HealthController`/`MetricsController`는 `@SkipThrottle()`을 단다 —
+  kubelet의 probe와 Prometheus의 스크레이프는 파드가 떠 있는 내내 고정 간격으로
+  반복돼서 다른 트래픽과 예산을 나누면 안 되기 때문. 새 `THROTTLE_ENABLED`
+  env var(Joi, 기본값 `true`)는 `test/e2e-env.ts`가 `test/app.e2e-spec.ts`의
+  수백 건짜리 실행에서 제한을 우회하기 위한 용도로만 존재 — 실제 Postgres
+  대상으로 검증 완료: `pnpm lint` clean, `pnpm test` 263/263, `pnpm test:e2e`
+  76/76, 429 없음. 알려진 한계로 수용: 기본 storage가 단일 인스턴스
+  in-memory라 향후 다중 replica 배포 시 진짜 하나의 전역 한도를 유지하려면
+  Redis 기반 storage가 필요함.
+
 ### 수정
 - **`ROADMAP.md`(+ko): §7의 낡은 "미착수" 항목 2건 추가 정정 (2026-09-08)** — 앞서
   고친 ARM/Graviton 건과 같은 유형의 버그. "AWS Secrets Manager+ESO 연동"과

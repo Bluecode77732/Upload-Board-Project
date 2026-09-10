@@ -22,6 +22,7 @@ AppModule
 ├── TypeOrmModule        — PostgreSQL, synchronize: false. DB_SSL을 켜면 DB 접속에 TLS를 씁니다(ADR 0039)
 ├── ServeStaticModule    — file/temp만 /file/temp로 정적 서빙. granted 파일은 정적 URL이 없습니다(ADR 0025/0026)
 ├── ScheduleModule       — TempCleanupModule의 크론 작업을 돌리는 기반
+├── ThrottlerModule      — 전역 요청 횟수 제한, 기본값 분당 100회; THROTTLE_ENABLED가 e2e에서만 우회(ADR 0053)
 ├── AuthModule           — 토큰 + RBAC: Basic 파싱, JWT 발급/검증, Passport 전략, 역할 가드(ADR 0013)
 ├── UserModule           — 사용자 CRUD, 역할 부여
 ├── FileModule           — 파일 메타데이터: 행, 가시성, 매체 종류, temp 승격 트랜잭션
@@ -32,7 +33,8 @@ AppModule
 ├── TempCleanupModule    — 방치된 temp 업로드를 크론으로 청소(ADR 0018)
 ├── HealthModule         — 프로브용 /health/live, /health/ready(ADR 0031)
 ├── MetricsModule        — Prometheus용 /metrics(ADR 0047)
-└── APP_FILTER           — AllExceptionsFilter가 모든 에러를 ErrorBody 계약 형태로 성형(ADR 0011)
+├── APP_FILTER           — AllExceptionsFilter가 모든 에러를 ErrorBody 계약 형태로 성형(ADR 0011)
+└── APP_GUARD            — ThrottlerGuard가 health/metrics를 제외한 모든 라우트를 제한; 이 앱 최초의 전역 가드(ADR 0053)
 ```
 
 이 트리에 안 보이는 모듈이 하나 있는데, `AppModule`에 직접 연결되지 않기 때문입니다.
@@ -258,20 +260,30 @@ URL 접두사가 둘이라 컨트롤러도 둘입니다 — 스레드는 게시�
 
 ### 가드 체인
 
+아래 인증 체인보다 먼저, 전역 `ThrottlerGuard`(`APP_GUARD`)가 모든 요청에 대해 돌면서
+요청 횟수를 제한합니다 — 기본값 분당 100회. 이건 인증과는 별개의, 직교하는 레이어입니다 —
+토큰이 있든 없든 돌고, 여기서 막히면 `JwtAuthGuard`까지 아예 가지도 못합니다
+([ADR 0053](ADR/0053-global-rate-limiting.ko.md)).
+
 대부분의 컨트롤러는 클래스 레벨로 가드됩니다:
 
 ```
-요청 → JwtAuthGuard (Passport "jwt-auth-guard")
+요청 → ThrottlerGuard (APP_GUARD, 전역 — 기본값 분당 100회, ADR 0053)
+     → JwtAuthGuard (Passport "jwt-auth-guard")
      → JwtStrategy.validate (UserService.findOne으로 사용자 로드, password 제거)
      → request.user
      → [RolesGuard + @Roles(min), 이걸 선언한 핸들러에서만]
      → 핸들러 (@AuthUser()는 { id, role }을, @UserId()는 id만 읽음)
 ```
 
-이 체인 밖에 있는 라우트가 셋 있습니다. `GET /file/:id/content`는 `OptionalJwtAuthGuard`를
-써서 로그인 안 한 방문자도 public/unlisted 파일에 닿을 수 있고, `GET /health/*`와
-`GET /metrics`는 아예 가드가 없습니다 — 프로브도 Prometheus 스크레이프도 Bearer 토큰을
-제시할 방법이 없기 때문입니다.
+이 *인증* 체인 밖에 있는 라우트가 셋 있습니다. `GET /file/:id/content`는
+`OptionalJwtAuthGuard`를 써서 로그인 안 한 방문자도 public/unlisted 파일에 닿을 수
+있고, `GET /health/*`와 `GET /metrics`는 아예 인증 가드가 없습니다 — 프로브도
+Prometheus 스크레이프도 Bearer 토큰을 제시할 방법이 없기 때문입니다. `GET /health/*`와
+`GET /metrics`는 `ThrottlerGuard` 자체에서도 유일하게 예외 처리된 라우트입니다
+(`@SkipThrottle()`) — 프로브나 스크레이프는 일반 사용자 트래픽과 달리 파드가 떠 있는
+내내 고정 간격으로 반복되도록 설계돼 있어서, 다른 호출자와 같은 제한 예산을 공유하면
+liveness 오탐이나 메트릭 시계열 공백으로 이어질 수 있습니다(ADR 0053).
 
 쓰기 권한은 기본적으로 소유권 기반입니다(본인만 / 작성자만). 그것만으로 부족한 소수의
 라우트에는 RBAC이 그 위에 얹힙니다 — 대상보다 확실히 높은 등급이 필요하거나, admin
@@ -386,6 +398,9 @@ DB/JWT/해싱 같은 기본값 말고도, 특정 기능을 위한 그룹이 몇 
 - **RBAC 시드**: `SUPERADMIN_EMAIL` — 선택 사항이며, `pnpm promote-superadmin`이
   superadmin으로 승격시킬 대상 계정을 지정합니다(부팅 시 자동이 아니라 수동 단계 —
   [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.ko.md)).
+- **요청 횟수 제한**: `THROTTLE_ENABLED`(기본 켜짐) — dev/prod를 가르는 스위치가
+  아니라, `test/e2e-env.ts`가 e2e 스위트의 수백 건짜리 실행에서 전역 제한을 우회하기
+  위한 용도로만 존재합니다([ADR 0053](ADR/0053-global-rate-limiting.ko.md)).
 - **선택 사항**: `BASE_URL`(기본 `http://localhost:3000`), `CORS_ORIGIN`(미설정 =
   CORS 꺼짐; 브라우저 프론트엔드가 필요할 때 콤마로 구분한 허용 목록 — ADR 0008).
 

@@ -12,6 +12,22 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Security
+- **Global rate limiting via `@nestjs/throttler` (2026-09-10, [ADR
+  0053](ADR/0053-global-rate-limiting.md))** — a security review found no request-rate
+  limiting anywhere in the backend, `POST /auth/register`/`POST /auth/signin` included,
+  leaving credential brute-forcing unconstrained beyond `HASH_ROUNDS`' per-attempt cost. A
+  global `ThrottlerGuard` now runs via `APP_GUARD` (this repo's first global guard) at a
+  conservative default of 100 requests/minute; per-route tuning is a deferred follow-up.
+  `HealthController`/`MetricsController` carry `@SkipThrottle()` since kubelet's probes and
+  Prometheus' scrapes repeat on a fixed interval for a pod's whole lifetime and would
+  otherwise share a rate budget with other traffic. A new `THROTTLE_ENABLED` env var (Joi,
+  default `true`) exists solely to let `test/e2e-env.ts` bypass the limit for
+  `test/app.e2e-spec.ts`'s several-hundred-request run — verified against a live Postgres:
+  `pnpm lint` clean, `pnpm test` 263/263, `pnpm test:e2e` 76/76, no 429s. Known accepted
+  limitation: default storage is single-instance in-memory, so a future multi-replica
+  deployment would need Redis-backed storage for one true global ceiling.
+
 ### Fixed
 - **`ROADMAP.md`(+ko): two more stale "not started" §7 entries corrected (2026-09-08)**
   — same class of bug as the earlier ARM/Graviton fix. "AWS Secrets Manager + ESO wiring"

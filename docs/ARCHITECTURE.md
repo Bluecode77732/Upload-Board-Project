@@ -22,6 +22,7 @@ AppModule
 ├── TypeOrmModule        — PostgreSQL, synchronize: false; DB_SSL turns on TLS to the DB (ADR 0039)
 ├── ServeStaticModule    — serves only file/temp at /file/temp; granted files have no static URL (ADR 0025/0026)
 ├── ScheduleModule       — powers TempCleanupModule's cron job
+├── ThrottlerModule      — global rate limiting, 100 req/min default; THROTTLE_ENABLED bypasses it for e2e (ADR 0053)
 ├── AuthModule           — tokens + RBAC: Basic parsing, JWT issue/verify, Passport strategies, role guard (ADR 0013)
 ├── UserModule           — user CRUD, role assignment
 ├── FileModule           — file metadata: rows, visibility, media type, the promote-from-temp transaction
@@ -32,7 +33,8 @@ AppModule
 ├── TempCleanupModule    — sweeps orphaned temp uploads on a cron (ADR 0018)
 ├── HealthModule         — /health/live and /health/ready for probes (ADR 0031)
 ├── MetricsModule        — /metrics for Prometheus (ADR 0047)
-└── APP_FILTER           — AllExceptionsFilter shapes every thrown error into the ErrorBody contract (ADR 0011)
+├── APP_FILTER           — AllExceptionsFilter shapes every thrown error into the ErrorBody contract (ADR 0011)
+└── APP_GUARD            — ThrottlerGuard rate-limits every route except health/metrics; the app's first global guard (ADR 0053)
 ```
 
 One module doesn't show up in that tree because it isn't wired into `AppModule` directly:
@@ -252,20 +254,30 @@ Also unauthenticated, mirroring `HealthModule` — Prometheus scrapes carry no b
 
 ### Guard chain
 
+Before any of the auth chain below, a global `ThrottlerGuard` (`APP_GUARD`) runs on every
+request and rate-limits it — 100 requests/minute by default. It is a separate, orthogonal
+layer from authentication: it runs whether or not the request carries a token, and a request
+that fails it never reaches `JwtAuthGuard` ([ADR 0053](ADR/0053-global-rate-limiting.md)).
+
 Most controllers are class-level guarded:
 
 ```
-Request → JwtAuthGuard (Passport "jwt-auth-guard")
+Request → ThrottlerGuard (APP_GUARD, global — 100 req/min default, ADR 0053)
+        → JwtAuthGuard (Passport "jwt-auth-guard")
         → JwtStrategy.validate (loads the user via UserService.findOne, strips password)
         → request.user
         → [RolesGuard + @Roles(min), only on handlers that declare one]
         → handler (@AuthUser() reads { id, role }; @UserId() reads id alone)
 ```
 
-Three routes deliberately sit outside this chain: `GET /file/:id/content` uses
+Three routes deliberately sit outside the *auth* chain: `GET /file/:id/content` uses
 `OptionalJwtAuthGuard` so an unauthenticated visitor can still reach a public or unlisted
-file, and `GET /health/*` / `GET /metrics` carry no guard at all, since neither a probe nor a
-Prometheus scrape can present a bearer token.
+file, and `GET /health/*` / `GET /metrics` carry no auth guard at all, since neither a probe
+nor a Prometheus scrape can present a bearer token. `GET /health/*` and `GET /metrics` are
+also the only routes exempt from `ThrottlerGuard` itself (`@SkipThrottle()`) — a probe or
+scrape is designed to repeat on a fixed interval for a pod's whole lifetime, unlike ordinary
+user traffic, so sharing a rate-limit budget with other callers risks a false liveness
+failure or a gap in the metrics time series (ADR 0053).
 
 Write authorization is ownership-based by default (self-only / creator-only), with RBAC
 layered on top for the handful of routes that need more than that — a strictly higher role
@@ -377,6 +389,9 @@ Beyond the DB/JWT/hashing basics, a few groups exist for specific features:
 - **RBAC seed**: `SUPERADMIN_EMAIL` — optional; names the account `pnpm
   promote-superadmin` promotes to superadmin (a manual step, not automatic on boot —
   [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.md)).
+- **Rate limiting**: `THROTTLE_ENABLED` (default on) — not a dev/prod switch, it exists only
+  so `test/e2e-env.ts` can bypass the global limit for the e2e suite's several-hundred-request
+  run ([ADR 0053](ADR/0053-global-rate-limiting.md)).
 - **Optional**: `BASE_URL` (default `http://localhost:3000`), `CORS_ORIGIN` (unset = CORS
   off; a comma-separated allowlist when a browser frontend needs it — ADR 0008).
 

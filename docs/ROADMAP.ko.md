@@ -1329,6 +1329,19 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
     레이스를 막지 못한다: 원래 레이스가 발생하는 시점(새 배포 직후, 소유자의
     첫 가입 이전)엔 이미 superadmin이 0명이기 때문이다.
   이 프로젝트가 실제 공격 표면에 노출되는 트래픽을 다루게 되면 재검토한다.
+- **backend 어디에도 요청 횟수 제한이 없음 (2026-09-09 발견, 2026-09-10 해결 —
+  [ADR 0053](ADR/0053-global-rate-limiting.ko.md))** — 보안 점검에서
+  `POST /auth/register`/`POST /auth/signin`이 `HASH_ROUNDS`가 주는 시도당 비용
+  말고는 아무 제약도 없다는 게 드러났다. 이제 전역 `ThrottlerGuard`
+  (`@nestjs/throttler`)가 `APP_GUARD`로 돈다 — 이 저장소 최초의 전역 가드 —
+  우선 보수적인 기본값 분당 100회로, `HealthController`/`MetricsController`는
+  예외 처리해(`@SkipThrottle()`) kubelet/Prometheus 트래픽이 남용으로
+  오인되지 않게 했다. 실제 Postgres 대상 e2e로 검증 완료(76/76, 429 없음).
+  **아직 열려 있어 후속 작업으로 남김**: 라우트별 세분화(예:
+  `POST /auth/signin`만 더 빡빡하게) — 이 ADR은 의도적으로 전역 기본값만
+  확정했다. Redis 기반 `ThrottlerStorage`도 열려 있음 — 이 앱이 실제로
+  replica 2개 이상으로 돌기 전까지는 필요 없다(현재 기본 storage는 인스턴스별로
+  카운트한다).
 
 ## 8. Advisory 노트
 
