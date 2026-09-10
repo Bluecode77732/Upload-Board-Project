@@ -22,7 +22,7 @@ AppModule
 ├── TypeOrmModule        — PostgreSQL, synchronize: false. DB_SSL을 켜면 DB 접속에 TLS를 씁니다(ADR 0039)
 ├── ServeStaticModule    — file/temp만 /file/temp로 정적 서빙. granted 파일은 정적 URL이 없습니다(ADR 0025/0026)
 ├── ScheduleModule       — TempCleanupModule의 크론 작업을 돌리는 기반
-├── ThrottlerModule      — 전역 요청 횟수 제한, 기본값 분당 100회; THROTTLE_ENABLED가 e2e에서만 우회(ADR 0053)
+├── ThrottlerModule      — 전역 요청 횟수 제한, 기본값 분당 100회(auth 분당 5회, upload 분당 15회); THROTTLE_ENABLED가 e2e에서만 우회(ADR 0053/0054)
 ├── AuthModule           — 토큰 + RBAC: Basic 파싱, JWT 발급/검증, Passport 전략, 역할 가드(ADR 0013)
 ├── UserModule           — 사용자 CRUD, 역할 부여
 ├── FileModule           — 파일 메타데이터: 행, 가시성, 매체 종류, temp 승격 트랜잭션
@@ -270,6 +270,17 @@ URL 접두사가 둘이라 컨트롤러도 둘입니다 — 스레드는 게시�
 두드려 429를 받은 직후 같은 클라이언트로 `POST /auth/signin`을 호출해 전혀 영향받지
 않음을 실측으로 확인했습니다.
 
+두 라우트 그룹은 핸들러에 `@Throttle({ default: { limit, ttl } })`를 붙여 이 기본값을
+더 낮게 오버라이드합니다([ADR 0054](ADR/0054-per-route-rate-limit-tuning.ko.md)):
+`POST /auth/register`, `POST /auth/signin`, `POST /auth/token/refresh`는 분당 5회까지만
+허용합니다(무차별 대입 공격의 대상이 될 자격 증명 확인 지점이기 때문). `POST
+/upload/attach`는 분당 15회까지만 허용합니다(소유권 확인보다 먼저 매 호출마다
+`file/temp`에 파일을 씁니다). `POST /auth/signout`은 분당 100회 기본값 그대로입니다 —
+이미 유효한 액세스 토큰이 있어야 호출 가능해서 자격 증명 추측 경로가 아닙니다.
+`THROTTLE_ENABLED=false`(e2e 전용 우회, 아래 Config 참고)는 `limit`을 부풀리는 대신
+모듈 수준 `skipIf`로 구현되어 있어, 기본값과 이 라우트별 오버라이드 모두를 한 번에
+끕니다.
+
 대부분의 컨트롤러는 클래스 레벨로 가드됩니다:
 
 ```
@@ -405,9 +416,10 @@ DB/JWT/해싱 같은 기본값 말고도, 특정 기능을 위한 그룹이 몇 
 - **RBAC 시드**: `SUPERADMIN_EMAIL` — 선택 사항이며, `pnpm promote-superadmin`이
   superadmin으로 승격시킬 대상 계정을 지정합니다(부팅 시 자동이 아니라 수동 단계 —
   [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.ko.md)).
-- **요청 횟수 제한**: `THROTTLE_ENABLED`(기본 켜짐) — dev/prod를 가르는 스위치가
-  아니라, `test/e2e-env.ts`가 e2e 스위트의 수백 건짜리 실행에서 전역 제한을 우회하기
-  위한 용도로만 존재합니다([ADR 0053](ADR/0053-global-rate-limiting.ko.md)).
+- **요청 횟수 제한**: `THROTTLE_ENABLED`(기본 켜짐) — dev/prod를 가르는 스위치가 아니라,
+  `test/e2e-env.ts`가 e2e 스위트의 수백 건 요청 동안 전역 한도와 라우트별 auth/upload
+  강화 한도를 모듈 수준 `skipIf`로 한 번에 우회하기 위한 용도로만 존재합니다
+  ([ADR 0053](ADR/0053-global-rate-limiting.ko.md), [ADR 0054](ADR/0054-per-route-rate-limit-tuning.ko.md)).
 - **선택 사항**: `BASE_URL`(기본 `http://localhost:3000`), `CORS_ORIGIN`(미설정 =
   CORS 꺼짐; 브라우저 프론트엔드가 필요할 때 콤마로 구분한 허용 목록 — ADR 0008).
 

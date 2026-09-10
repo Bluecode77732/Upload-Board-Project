@@ -1391,6 +1391,19 @@ Architecture Decisions above remain operative.
   an isolated throwaway DB (`sharenpo_promote_verify`, dropped after) — promote, re-run
   no-op, unknown-email error, and unset-env-var error all behaved as designed; see ADR
   0052's addendum
+- **Rate limiting keys on `req.ip`, and `trust proxy` is unset** ([ADR
+  0054](docs/ADR/0054-per-route-rate-limit-tuning.md) addendum, found 2026-09-10):
+  `ThrottlerGuard`'s default tracker reads Express's own client-socket resolution, not the
+  real originating client, once a reverse proxy sits in front of the app — confirmed
+  `backend/main.ts` has no `app.set('trust proxy', ...)` call. No live impact today (nothing
+  is deployed; `k8s/helm/`'s `Ingress` is disabled by default with no committed
+  ALB/nginx choice), but the moment `Ingress` is turned on, every external client's `req.ip`
+  resolves to the proxy's own address, collapsing the per-client 5/minute (`auth`) and
+  15/minute (`upload`) buckets ([ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
+  into one bucket shared by every visitor. Not fixed now — the correct `trust proxy` value
+  (a hop count or explicit proxy CIDR) depends on whichever ingress/load-balancer topology
+  is chosen when `Ingress` is actually enabled, which hasn't happened; revisit alongside
+  that task, not before
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for

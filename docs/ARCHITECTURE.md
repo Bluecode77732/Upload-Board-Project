@@ -22,7 +22,7 @@ AppModule
 ├── TypeOrmModule        — PostgreSQL, synchronize: false; DB_SSL turns on TLS to the DB (ADR 0039)
 ├── ServeStaticModule    — serves only file/temp at /file/temp; granted files have no static URL (ADR 0025/0026)
 ├── ScheduleModule       — powers TempCleanupModule's cron job
-├── ThrottlerModule      — global rate limiting, 100 req/min default; THROTTLE_ENABLED bypasses it for e2e (ADR 0053)
+├── ThrottlerModule      — global rate limiting, 100 req/min default (5/min auth, 15/min upload); THROTTLE_ENABLED bypasses it for e2e (ADR 0053/0054)
 ├── AuthModule           — tokens + RBAC: Basic parsing, JWT issue/verify, Passport strategies, role guard (ADR 0013)
 ├── UserModule           — user CRUD, role assignment
 ├── FileModule           — file metadata: rows, visibility, media type, the promote-from-temp transaction
@@ -264,6 +264,16 @@ library's default key is a hash of controller class + handler method + client IP
 live-verified by driving `GET /file` past its own limit (429) and immediately confirming
 `POST /auth/signin` from the same client was unaffected.
 
+Two route groups override that default down, via `@Throttle({ default: { limit, ttl } })`
+on the handler ([ADR 0054](ADR/0054-per-route-rate-limit-tuning.md)): `POST /auth/register`,
+`POST /auth/signin`, and `POST /auth/token/refresh` allow 5 requests/minute (the credential-
+check surface a brute-force attempt would target), and `POST /upload/attach` allows 15/minute
+(each call writes a file to `file/temp` before any ownership check). `POST /auth/signout`
+stays at the 100/minute default — it requires an already-valid access token, so it isn't a
+credential-guessing surface. `THROTTLE_ENABLED=false` (the e2e-only bypass, see Config below)
+is implemented as a module-level `skipIf` rather than inflating `limit`, so it disables both
+the default and these per-route overrides uniformly.
+
 Most controllers are class-level guarded:
 
 ```
@@ -396,8 +406,9 @@ Beyond the DB/JWT/hashing basics, a few groups exist for specific features:
   promote-superadmin` promotes to superadmin (a manual step, not automatic on boot —
   [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.md)).
 - **Rate limiting**: `THROTTLE_ENABLED` (default on) — not a dev/prod switch, it exists only
-  so `test/e2e-env.ts` can bypass the global limit for the e2e suite's several-hundred-request
-  run ([ADR 0053](ADR/0053-global-rate-limiting.md)).
+  so `test/e2e-env.ts` can bypass the global limit (and the tighter per-route auth/upload
+  limits) for the e2e suite's several-hundred-request run, via a module-level `skipIf`
+  ([ADR 0053](ADR/0053-global-rate-limiting.md), [ADR 0054](ADR/0054-per-route-rate-limit-tuning.md)).
 - **Optional**: `BASE_URL` (default `http://localhost:3000`), `CORS_ORIGIN` (unset = CORS
   off; a comma-separated allowlist when a browser frontend needs it — ADR 0008).
 

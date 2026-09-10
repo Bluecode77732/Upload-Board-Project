@@ -45,9 +45,12 @@ Each document has a Korean sibling (`*.ko.md`).
   `forbidNonWhitelisted`); serialized entities never leak `password`
 - **Rate limiting** — every route defaults to 100 requests/minute, tracked
   independently per route (not one pool shared app-wide — `@nestjs/throttler`
-  keys on controller + handler + client IP); health/metrics probes are exempt so
-  orchestrator/Prometheus
-  traffic is never mistaken for abuse ([ADR 0053](docs/ADR/0053-global-rate-limiting.md))
+  keys on controller + handler + client IP); `POST /auth/register`/`signin`/
+  `token/refresh` are tightened to 5/minute and `POST /upload/attach` to
+  15/minute; health/metrics probes are exempt so orchestrator/Prometheus
+  traffic is never mistaken for abuse
+  ([ADR 0053](docs/ADR/0053-global-rate-limiting.md),
+  [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
 - **Swagger** — full API documentation and manual test bench at `/doc`
 
 ## Quick Start
@@ -127,7 +130,9 @@ sweep — [ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.md)), `STORAGE_DRIVE
 [ADR 0029](docs/ADR/0029-storage-port-adapter.md)), `CONTENT_SIGNED_URL_TTL_SECONDS` (S3 presigned-redirect TTL, unused under `local` —
 [ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md)), and `THROTTLE_ENABLED`
 (default `true` — not a dev/prod switch; exists only so the e2e suite can bypass the
-global rate limit — [ADR 0053](docs/ADR/0053-global-rate-limiting.md)).
+global rate limit and the tighter per-route auth/upload limits —
+[ADR 0053](docs/ADR/0053-global-rate-limiting.md),
+[ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md)).
 
 ## API Endpoints
 
@@ -313,8 +318,10 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full request and data flow.
   ([ADR 0004](docs/ADR/0004-transaction-pattern-selection.md))
 - **Passport** — `jwt` strategy behind `JwtAuthGuard`
 - **Multer** — disk storage with server-generated filenames (`temp_{uuid}_{timestamp}`)
-- **`@nestjs/throttler`** — global `APP_GUARD` rate limiting, 100 req/min default per route
-  ([ADR 0053](docs/ADR/0053-global-rate-limiting.md))
+- **`@nestjs/throttler`** — global `APP_GUARD` rate limiting, 100 req/min default per route,
+  5/min on auth and 15/min on upload
+  ([ADR 0053](docs/ADR/0053-global-rate-limiting.md),
+  [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
 - **Jest** — unit tests colocated as `*.spec.ts`; repository/QueryRunner mocks, no DB access
 - **Swagger** — `/doc`, with `persistAuthorization` for a persistent Bearer session
 

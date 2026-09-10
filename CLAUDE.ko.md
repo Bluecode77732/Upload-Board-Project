@@ -1423,6 +1423,18 @@ Architecture Decisions가 계속 유효하다.
   DB(`sharenpo_promote_verify`, 검증 후 drop)에서 승격/재실행 no-op/미존재 이메일
   에러/env var 미설정 에러 네 가지가 모두 설계대로 동작함을 확인 — ADR 0052 addendum
   참고
+- **요청 횟수 제한이 `req.ip`로 키잉되는데 `trust proxy`가 미설정**([ADR
+  0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md) addendum, 2026-09-10 발견):
+  `ThrottlerGuard`의 기본 tracker는 앞단에 리버스 프록시가 있으면 실제 방문자가 아니라
+  Express 자신의 클라이언트-소켓 해석 결과를 읽는다 — `backend/main.ts`에
+  `app.set('trust proxy', ...)` 호출이 없음을 확인했다. 지금은 실제 영향이 없다(아무것도
+  배포돼 있지 않고, `k8s/helm/`의 `Ingress`도 기본 비활성에 ALB/nginx 선택이 확정돼
+  있지 않다). 하지만 `Ingress`가 켜지는 순간 외부 클라이언트 전원의 `req.ip`가 그
+  프록시 주소로 수렴해, 클라이언트당 분당 5회(`auth`)·15회(`upload`) 버킷
+  ([ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md))이 방문자 전원이 나눠
+  쓰는 버킷 하나로 무너진다. 지금 고치지 않는다 — 올바른 `trust proxy` 값(홉 수 또는
+  명시적 프록시 CIDR)은 `Ingress`를 실제로 켤 때 선택하는 인그레스/로드밸런서
+  토폴로지에 달려 있고, 그게 아직 정해지지 않았다 — 그 작업과 함께 다시 다룰 것
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

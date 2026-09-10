@@ -110,24 +110,22 @@ import { join } from 'node:path';
       }),
       inject: [ConfigService],
     }),
-    // 목적: 요청 횟수 제한의 기본 한도를 구성한다(ADR 0053).
+    // 목적: 요청 횟수 제한의 기본 한도를 구성한다(ADR 0053, 라우트별 차등은 ADR 0054).
     // 이유: backend 전체에 rate limiting이 전혀 없어 로그인/회원가입 등이 무차별 대입
-    //       공격에 노출돼 있었다 — 구체적 제한값 세분화는 후속 작업으로 미루고, 우선
-    //       관례적인 보수적 기본값(분당 100회)만 전역으로 건다.
-    // 방법: THROTTLE_ENABLED=false면 limit을 사실상 무제한으로 키워 우회한다 — 가드
-    //       프로바이더 자체를 조건부로 등록할 수는 없으므로(NestJS 모듈 그래프는
-    //       정적이다), e2e 스위트만 이 값을 꺼서 같은 IP로 잡히는 수백 건의 순차 요청이
-    //       429로 스위트를 깨뜨리지 않게 한다(test/e2e-env.ts).
+    //       공격에 노출돼 있었다 — 우선 관례적인 보수적 기본값(분당 100회)을 전역으로
+    //       걸고, auth/upload처럼 더 강한 제한이 필요한 라우트는 각 컨트롤러의
+    //       @Throttle({ default: {...} })로 이 'default' 쓰로틀러 값을 오버라이드한다
+    //       (ADR 0054).
+    // 방법: THROTTLE_ENABLED=false면 skipIf로 가드 자체를 건너뛴다 — 가드 프로바이더를
+    //       조건부로 등록할 수는 없으므로(NestJS 모듈 그래프는 정적이다), e2e 스위트만
+    //       이 값을 꺼서 같은 IP로 잡히는 수백 건의 순차 요청이 429로 스위트를 깨뜨리지
+    //       않게 한다(test/e2e-env.ts). skipIf는 라우트별 @Throttle() 오버라이드보다도
+    //       먼저 평가되므로(ThrottlerGuard.canActivate), limit 값 자체를 부풀리던 이전
+    //       방식과 달리 default든 라우트별 오버라이드든 모두 한 곳에서 우회된다.
     ThrottlerModule.forRootAsync({
       useFactory: (configService: ConfigService) => ({
-        throttlers: [
-          {
-            ttl: 60000,
-            limit: configService.get<boolean>('THROTTLE_ENABLED')
-              ? 100
-              : Number.MAX_SAFE_INTEGER,
-          },
-        ],
+        throttlers: [{ ttl: 60000, limit: 100 }],
+        skipIf: () => !configService.get<boolean>('THROTTLE_ENABLED'),
       }),
       inject: [ConfigService],
     }),

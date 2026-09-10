@@ -20,6 +20,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import { CreateUserDto } from 'backend/user/dto/create-user.dto';
 import { UserEntity } from 'backend/user/entity/user.entity';
 import { bearerTokenType } from './dto/token-types.auth.dto';
@@ -41,6 +42,7 @@ export class AuthController {
   ) {}
 
   @Post('register')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiBasicAuth()
   @ApiBody({ type: CreateUserDto })
   @ApiResponse({ status: 201, description: 'Created user.', type: UserEntity })
@@ -49,13 +51,15 @@ export class AuthController {
   })
   // 목적: Basic 토큰 헤더를 그대로 서비스에 전달해 계정을 생성한다.
   // 이유: 회원가입 자격 증명은 body DTO가 아니라 헤더로 받기로 한 결정(ADR 0001) — 컨트롤러는
-  //       파싱을 하지 않고 원문 헤더만 옮긴다.
+  //       파싱을 하지 않고 원문 헤더만 옮긴다. 계정 생성 시도를 자동화로 대량 반복할 수
+  //       있어 전역 기본값(분당 100회)보다 강한 분당 5회로 좁힌다(ADR 0054).
   // 방법: AuthService.register에 위임, 응답은 방금 생성된 UserEntity(직렬화 인터셉터가 password 등을 걸러냄).
   register(@Headers('authorization') rawToken: string) {
     return this.authService.register(rawToken);
   }
 
   @Post('signin')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiBasicAuth()
   @ApiResponse({
     status: 201,
@@ -68,7 +72,8 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
   // 목적: Basic 토큰 로그인 — 액세스 토큰은 본문으로, 리프레시 토큰은 httpOnly 쿠키로 내려준다.
   // 이유: 리프레시 토큰은 응답 본문에 절대 실리지 않는다(ADR 0012) — XSS로 JS가 읽을 수 있는
-  //       곳에 두지 않기 위함이다.
+  //       곳에 두지 않기 위함이다. 비밀번호 무차별 대입의 실제 진입점이라 전역 기본값보다
+  //       강한 분당 5회로 좁힌다(ADR 0054).
   // 방법: AuthService.signIn으로 토큰 쌍을 받아 setRefreshCookie로 쿠키만 굽고, 본문은
   //       accessToken만 반환한다.
   async signIn(
@@ -84,6 +89,7 @@ export class AuthController {
   }
 
   @Post('token/refresh')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiCookieAuth(REFRESH_TOKEN_COOKIE)
   @ApiResponse({
     status: 201,
@@ -100,6 +106,8 @@ export class AuthController {
   // 목적: 쿠키의 리프레시 토큰을 회전시켜 새 액세스 토큰을 발급한다.
   // 이유: 리프레시 토큰은 body/header가 아니라 쿠키로만 오가므로(ADR 0012), 컨트롤러가 직접
   //       쿠키 파싱을 서비스 밖에서 반복하지 않도록 extractRefreshCookie로 좁혀 넘긴다.
+  //       탈취된 쿠키를 자동화로 반복 재생 시도하는 경로이기도 해 전역 기본값보다 강한
+  //       분당 5회로 좁힌다(ADR 0054).
   // 방법: extractRefreshCookie로 쿠키값을 꺼내 AuthService.rotateRefreshToken에 위임 —
   //       미제출/재생 탐지 판정은 전부 서비스 책임이고, 컨트롤러는 성공 시 새 쿠키만 굽는다.
   async rotateAccessToken(
