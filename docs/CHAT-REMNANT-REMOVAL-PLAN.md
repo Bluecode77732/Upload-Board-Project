@@ -4,7 +4,7 @@
 
 **Status: Mostly closed** — audit executed 2026-07-22; the git-history decision (the
 plan's item 1) was made 2026-09-07. What's left is item 2, the re-verification trigger —
-fired three times manually so far but not yet automated, so not "closed" by the plan's
+fired four times manually so far but not yet automated, so not "closed" by the plan's
 own Completion Criteria — see [Remaining Work](#remaining-work-pending).
 
 ## Background
@@ -184,6 +184,44 @@ Set A and Set B, run verbatim against: root `*.md`, `docs/` (including `ADR/`),
 No bucket-1 hit anywhere. The repository is clean at full doc, `.env.example`, `frontend/`,
 and `backend/` scope as of this re-verification — the widest single pass this plan has run.
 
+## Re-verification — Developer-Requested Full Scope (2026-09-09)
+
+Triggered directly by the developer asking for a re-check ("현 앱 트리 구성 요소 중 잔재
+요소 조사 후 보고, 재진행") — not one of the three conditions Remaining Work item 2 lists
+(new doc file / pasted-in content / about-to-publish). Recorded as a fourth, ad-hoc firing
+rather than folded into item 2's list silently, since "developer asks directly" is a real
+trigger this plan hadn't named yet.
+
+Method: a blind full re-grep of Set A/B was skipped in favor of diffing against the last
+full-scope pass (`63ce1a9`, 2026-09-07) and running both sets against every file touched
+since — a blind re-grep is dominated by noise from `CLAUDE.md`'s own Concern-to-entrypoint
+map, which legitimately contains `backend/`/`admin/`/`frontend/` path terms in bucket-3
+context on nearly every line. This re-verification also swept the out-of-repo memory files
+(item 3), last checked 2026-07-22.
+
+62 files changed since `63ce1a9` (`git diff --name-only`), 5 newly added:
+`admin/src/components/theme-toggle.tsx`, `admin/src/store/theme.store.ts` (+`.spec.ts`),
+`frontend/src/features/account/SettingsPage.tsx` (+`.module.css`). Both sets run against
+the full changed-file list.
+
+**Remnants found: 0.** Every hit fell into the same buckets the 2026-08-13/2026-09-07
+tables above already established — no new pattern:
+
+| Hit | Location(s) | Bucket | Action |
+|---|---|---|---|
+| `superadmin`, `AuditLog`, `zustand` (code) | `CLAUDE.md`(.ko) entrypoint map/RBAC sections, `admin/src/store/theme.store.ts` import path only | Own feature | Keep |
+| "Chat Project" prose narrating the 2026-07-30 import and 2026-08-06 adaptation (`rooms-page`, Apollo/`/graphql`, ban/force-logout as *removed* items) | `admin/README.md`(.ko), `docs/CHANGELOG.md`(.ko), `docs/ROADMAP.md`(.ko) | Design reference | Keep — all past-tense, all describing what was deleted, none describing this repo's current stack |
+| `winston`/`Sentry` | `CLAUDE.md`(.ko) | Negation | Keep |
+| "chat-project git-history remnant handling", "chat response" | memory (`session-prompts.md`, `ask-with-comparison-tables.md`) | False positive / self-reference | Keep — the first *is* this plan's own item 1, already resolved; the second is unrelated prose |
+
+The 5 newly added files (theme toggle, theme store, Settings page) produced zero hits in
+either set — no remnant terms entered with them. `.env.example` was not in the changed-file
+list, so it carries forward the 2026-09-07 result (0 hits, both sets) unverified-but-
+unchanged. Memory files: clean, same as 2026-07-22.
+
+No bucket-1 hit. The repository stays clean at HEAD as of this pass — the fourth
+consecutive clean full-scope re-verification.
+
 ## Remaining Work (Pending)
 
 1. ~~**Git history decision**~~ — **decided 2026-09-07: leave as-is.** Commits up to
@@ -200,14 +238,18 @@ and `backend/` scope as of this re-verification — the widest single pass this 
 2. **Re-verification trigger** — re-run the Method grep sets whenever:
    - a new documentation file is added, or
    - content is pasted in from another project or an older branch, or
-   - the repo is about to be published/tagged.
+   - the repo is about to be published/tagged, or
+   - the developer directly asks for a re-check (added 2026-09-09 — the fourth firing
+     didn't fit any of the first three).
 
-   Fired three times so far — the `admin/` import (2026-07-30, doc scope), the code-scope
-   re-verification (2026-08-13, closing the doc-only gap the first pass left open), and the
+   Fired four times so far — the `admin/` import (2026-07-30, doc scope), the code-scope
+   re-verification (2026-08-13, closing the doc-only gap the first pass left open), the
    "about to be published" condition (2026-09-07, discovered already-fired rather than
    anticipated — the repo had been public for a while before anyone re-ran this Method
-   against it). Any future pass should keep widening scope rather than narrowing back to
-   docs-only or to a single subfolder.
+   against it), and a direct developer request (2026-09-09, diffed against the prior pass
+   rather than blind-re-running both sets — see that section above for why). Any future
+   pass should keep widening scope rather than narrowing back to docs-only or to a single
+   subfolder.
 3. **Memory hygiene** — out-of-repo memory files were clean on 2026-07-22; re-check
    whenever a memory entry is added that references project architecture.
 
