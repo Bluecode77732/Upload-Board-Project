@@ -119,3 +119,27 @@ ADR 0053은 전역 기본값(모든 라우트에 `APP_GUARD`로 분당 100회)�
 `Ingress`를 실제로 켤 때 선택하는 인그레스/로드밸런서 토폴로지에 달린 속성이라,
 아직 존재하지도 않는 토폴로지를 놓고 지금 숫자를 정하는 건 추측일 뿐이기 때문이다.
 `Ingress`를 켜는 작업이 있을 때 함께 다시 다룬다.
+
+### Addendum (2026-09-11) — `frontend-e2e`/`admin-e2e` CI job도 같은 `THROTTLE_ENABLED` 우회가 필요했다
+
+D1이 `POST /auth/register`/`POST /auth/signin`/`POST /auth/token/refresh`를 분당
+5회로 좁히면서 Playwright 기반 CI job 둘(`.github/workflows/ci.yml`의
+`frontend-e2e`, `admin-e2e`)이 깨졌다 — PR #2에서 실패하는 체크가 이 둘뿐이었다.
+두 스위트 모두 스펙마다 공유 헬퍼 `registerAndSignIn`(`frontend/e2e/helpers.ts:38`,
+`admin/e2e/helpers.ts`)으로 새 계정을 만드는데, 두 job 다 `test/e2e-env.ts`를
+임포트하지 않고 컴파일된 백엔드를 직접 기동한다(`node dist/main`) —
+`THROTTLE_ENABLED=false`가 연결돼 있던 유일한 지점이 바로 그 파일이었다. CI 러너의
+모든 요청이 IP 하나를 공유하므로 처음 몇 개 스펙 만에 분당 5회 한도가 소진됐고,
+job 로그를 보면 이후 모든 스펙이 동일한 `registerAndSignIn` 단언에서
+(`/`가 아니라 `/login`으로 되돌아가며) 실패했다 — 원인은 애플리케이션 결함이
+아니라 auth 라우트의 429였다.
+
+위 `trust proxy` addendum과 같은 종류의 허점이다: 이 ADR의 Consequences가 말한
+"e2e 스위트 검증됨"은 `pnpm test:e2e`(이미 `test/e2e-env.ts`를 거치는 Jest 스위트)만
+다뤘을 뿐, 그 setup 파일을 공유하지 않는 두 Playwright 기반 CI job은 다루지 않았다.
+
+`.github/workflows/ci.yml`의 두 job(`frontend-e2e`, `admin-e2e`) 자신의 `env:`
+블록에 `THROTTLE_ENABLED: 'false'`를 각각 한 줄 추가해 해결했다 — `test/e2e-env.ts`가
+이미 쓰던 것과 같은 우회를, 두 job 다 그 파일을 임포트하지 않으므로 CI job 레벨에서
+적용한 것이다. D1의 한도, D2의 메커니즘, `THROTTLE_ENABLED`의 dev/prod 기본값(`true`)
+어느 것도 바뀌지 않았다 — CI 전용 수정이다.

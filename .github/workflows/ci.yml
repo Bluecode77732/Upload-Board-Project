@@ -148,6 +148,7 @@ jobs:
       REFRESH_TOKEN_SECRET: Ci-Refresh-Secret-2026-For-E2E-Test!
       ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
       REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
+      THROTTLE_ENABLED: 'false'
       # frontend/vite.config.ts가 API 호출을 same-origin으로 :3000에 프록시하므로
       # frontend 쪽엔 VITE_API_* 변수가 필요 없다 — 백엔드만 어떤 브라우저
       # origin을 허용할지 알면 된다.
@@ -223,6 +224,7 @@ jobs:
       REFRESH_TOKEN_SECRET: Ci-Refresh-Secret-2026-For-E2E-Test!
       ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
       REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
+      THROTTLE_ENABLED: 'false'
       # Admin은 (frontend와 달리) dev 서버 프록시가 없다 — admin/src/api/axios.ts의
       # VITE_API_URL을 통해 백엔드를 직접 호출하고, frontend(:5173)와는 다른
       # origin(:5174)에서 돈다.

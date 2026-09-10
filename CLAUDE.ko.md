@@ -1158,9 +1158,15 @@ Conflict Protocol을 따른다.
   반복되는데, 한도가 라우트별이기 때문에 그 반복만으로 **그 라우트 자신의** 한도가
   소진될 수 있다(짧은 probe 주기, 또는 여러 replica가 같은 egress IP를 공유하는 경우) —
   무관한 다른 앱 트래픽과 경쟁하는 문제가 아니다.
-  `THROTTLE_ENABLED`(Joi, 기본값 `true`)는 `test/app.e2e-spec.ts`를 격리하기 위한
-  용도로만 존재한다(`test/e2e-env.ts`가 `false`로 설정) — dev/prod는 항상 `true`이며
-  dev/prod를 가르는 축이 아니다. `ThrottlerModule.forRootAsync`의 모듈 레벨 `skipIf`로
+  `THROTTLE_ENABLED`(Joi, 기본값 `true`)는 같은 클라이언트 IP로 잡히는 수백 건의
+  순차 요청이 하나의 카운터를 공유해버리는 e2e 스위트들을 격리하기 위한 용도로만
+  존재한다: Jest 기반 백엔드 e2e 스위트(`test/app.e2e-spec.ts`, `test/e2e-env.ts`가
+  `false`로 설정)와, 같은 이유로 `.github/workflows/ci.yml`의 `frontend-e2e`/
+  `admin-e2e`도 마찬가지다 — 둘 다 `test/e2e-env.ts`를 거치지 않고 컴파일된 백엔드를
+  직접 기동하므로(`node dist/main`), CI job 자신의 `env:` 블록에서 이 값을 꺼두지
+  않으면 Playwright 스펙마다 반복되는 register+signin 호출이 한 실행 안에서 분당 5회
+  auth 한도(ADR 0054)에 부딪힌다. dev/prod는 항상 `true`이며 dev/prod를 가르는 축이
+  아니다. `ThrottlerModule.forRootAsync`의 모듈 레벨 `skipIf`로
   구현되어 있어(ADR 0054 D2 — 라우트별 오버라이드까지는 커버하지 못했을 이전의
   `limit: MAX_SAFE_INTEGER` 부풀리기 방식을 대체), 기본 쓰로틀러와 모든
   `@Throttle()` 오버라이드를 한 곳에서 일괄 우회한다. 알려진 한계: 기본 storage가

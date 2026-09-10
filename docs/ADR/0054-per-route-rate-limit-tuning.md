@@ -125,3 +125,28 @@ row) — because the correct `trust proxy` value (a hop count or explicit proxy 
 property of whichever ingress/load-balancer topology is chosen when `Ingress` is actually
 enabled, which has not happened yet; setting a number now would be guessing at a topology
 that doesn't exist. Revisit alongside whichever task turns `Ingress` on.
+
+### Addendum (2026-09-11) — `frontend-e2e`/`admin-e2e` CI jobs needed the same `THROTTLE_ENABLED` bypass
+
+D1's tighter 5/minute limit on `POST /auth/register`/`POST /auth/signin`/
+`POST /auth/token/refresh` broke both Playwright-based CI jobs
+(`frontend-e2e`, `admin-e2e` in `.github/workflows/ci.yml`), surfaced as the only two
+failing checks on PR #2. Every spec in both suites calls a shared `registerAndSignIn`
+helper (`frontend/e2e/helpers.ts:38`, `admin/e2e/helpers.ts`) to create a fresh account,
+and both jobs boot the compiled backend directly (`node dist/main`) rather than
+importing `test/e2e-env.ts` — the only place `THROTTLE_ENABLED=false` had been wired.
+Every request from a CI runner shares one IP, so the 5/minute ceiling was exhausted
+within the first few specs; the job logs showed every subsequent spec failing at the
+same `registerAndSignIn` assertion (redirected back to `/login` instead of `/`), which
+traced to a 429 on the auth routes, not an application defect.
+
+This is the same category of gap as the `trust proxy` addendum above: this ADR's
+"e2e suite verified" claim in Consequences covered `pnpm test:e2e` (the Jest suite,
+which already goes through `test/e2e-env.ts`) but not the two Playwright-driven CI
+jobs, which don't share that setup file.
+
+Fixed by adding `THROTTLE_ENABLED: 'false'` to each job's own `env:` block in
+`.github/workflows/ci.yml` (`frontend-e2e`, `admin-e2e`) — the same bypass
+`test/e2e-env.ts` already used, applied at the CI-job level since neither job imports
+that file. No change to D1's limits, D2's mechanism, or `THROTTLE_ENABLED`'s dev/prod
+default (`true`) — CI-only.

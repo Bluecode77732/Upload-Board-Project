@@ -1137,8 +1137,14 @@ Do not suggest alternatives to these decisions without explicit request.
   because the limit is per-route, that repetition can run *that one route's own* ceiling dry
   by itself (a tight probe interval, or several replicas sharing an egress IP) — not a
   matter of competing with unrelated app traffic. `THROTTLE_ENABLED` (Joi,
-  default `true`) exists only to isolate `test/app.e2e-spec.ts` (`test/e2e-env.ts` sets it
-  `false`) — dev/prod always run `true`; it is not a dev/prod axis. It is implemented as a
+  default `true`) exists only to isolate e2e suites that would otherwise share one
+  counter across hundreds of sequential requests from the same client IP: the Jest-based
+  backend e2e suite (`test/app.e2e-spec.ts`, `test/e2e-env.ts` sets it `false`) and, for
+  the same reason, `frontend-e2e`/`admin-e2e` in `.github/workflows/ci.yml` — both boot
+  the compiled backend directly (`node dist/main`) rather than going through
+  `test/e2e-env.ts`, so each Playwright spec's repeated register+signin calls hit the
+  5/minute auth ceiling (ADR 0054) within a run unless the CI job's own `env:` block sets
+  it too. Dev/prod always run `true`; it is not a dev/prod axis. It is implemented as a
   module-level `skipIf` in `ThrottlerModule.forRootAsync` (ADR 0054 D2, replacing an earlier
   `limit: MAX_SAFE_INTEGER` inflation that would not have covered route-level overrides),
   so it bypasses the default throttler and any `@Throttle()` override uniformly. Known
