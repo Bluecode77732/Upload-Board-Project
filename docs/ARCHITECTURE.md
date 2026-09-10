@@ -395,6 +395,13 @@ default for optional) — never `process.env` directly.
 
 Beyond the DB/JWT/hashing basics, a few groups exist for specific features:
 
+- **Secret/hash strength** (added 2026-09-11): `HASH_ROUNDS` must be `>= 10`;
+  `ACCESS_TOKEN_SECRET`/`REFRESH_TOKEN_SECRET` must each be at least 32 characters and
+  contain a lowercase letter, an uppercase letter, a digit, and a symbol. Presence-only
+  validation would let a short or all-numeric value through, silently weakening JWT
+  signing or the bcrypt cost factor (Never Do Group 3) — a short/simple value now fails
+  at boot with a Joi error naming the field, before the app ever tries to connect to
+  the DB.
 - **DB TLS**: `DB_SSL` (default off), `DB_SSL_CA` — required together when the target Postgres
   instance enforces encrypted connections, e.g. RDS's default (ADR 0039).
 - **Storage adapter**: `STORAGE_DRIVER` (`local` default | `s3`), `S3_BUCKET`/`AWS_REGION`

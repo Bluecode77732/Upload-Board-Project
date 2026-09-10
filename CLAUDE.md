@@ -1412,6 +1412,20 @@ Architecture Decisions above remain operative.
   (a hop count or explicit proxy CIDR) depends on whichever ingress/load-balancer topology
   is chosen when `Ingress` is actually enabled, which hasn't happened; revisit alongside
   that task, not before
+- ~~Secret/hash-rounds Joi validation checked presence only, not strength~~ —
+  **resolved 2026-09-11**: a security review found `HASH_ROUNDS`/`ACCESS_TOKEN_SECRET`/
+  `REFRESH_TOKEN_SECRET` in `backend/app.module.ts`'s Joi schema validated only that a
+  value existed, never that it met any minimum strength. `HASH_ROUNDS` now requires
+  `Joi.number().min(10)`; the two secrets require `Joi.string().min(32)` plus a
+  `.pattern()` requiring a lowercase letter, an uppercase letter, a digit, and a symbol
+  — a short or low-entropy value now fails at boot with a named-field Joi error instead
+  of silently weakening JWT signing or the bcrypt cost factor (Never Do Group 3).
+  `.github/workflows/ci.yml`'s four dummy test-secret spots and `.env.example`'s
+  placeholder were updated to satisfy the new rule. **Live-verified 2026-09-11**: booted
+  the compiled app against five throwaway env combinations (too-short, missing-digit,
+  missing-symbol, low-hash-rounds, and a valid baseline) and confirmed each
+  failed/passed exactly as designed, without the real `.env` ever being read or its
+  values ever appearing in output
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for

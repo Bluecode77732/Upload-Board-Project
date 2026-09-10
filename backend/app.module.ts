@@ -42,9 +42,20 @@ import { join } from 'node:path';
           is: true,
           then: Joi.required(),
         }),
-        HASH_ROUNDS: Joi.number().required(),
-        REFRESH_TOKEN_SECRET: Joi.string().required(),
-        ACCESS_TOKEN_SECRET: Joi.string().required(),
+        // 시크릿/해시 강도 (2026-09-09 보안 점검, 2026-09-11 문자 종류 강제 추가): 값의
+        // 존재만이 아니라 최소 강도까지 검증한다 — 짧거나 문자 종류가 단순한 JWT 시크릿은
+        // 브루트포스로 알아내면 완전한 토큰 위조로 이어지고, 낮은 bcrypt 라운드는 비밀번호
+        // 해시를 브루트포스에 취약하게 만든다(Never Do Group 3). 길이(32자 이상)뿐 아니라
+        // 대문자·소문자·숫자·기호를 모두 포함하도록 강제해 같은 길이에서도 엔트로피를 높인다.
+        HASH_ROUNDS: Joi.number().min(10).required(),
+        REFRESH_TOKEN_SECRET: Joi.string()
+          .min(32)
+          .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/)
+          .required(),
+        ACCESS_TOKEN_SECRET: Joi.string()
+          .min(32)
+          .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/)
+          .required(),
         REFRESH_TOKEN_SECRET_EXPIRES_IN: Joi.number().required(),
         ACCESS_TOKEN_SECRET_EXPIRES_IN: Joi.number().required(),
         BASE_URL: Joi.string().default('http://localhost:3000'),

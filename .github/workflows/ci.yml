@@ -69,8 +69,8 @@ jobs:
       DB_PASSWORD: postgres
       DB_DATABASE: postgres
       HASH_ROUNDS: 10
-      ACCESS_TOKEN_SECRET: ci-access-secret
-      REFRESH_TOKEN_SECRET: ci-refresh-secret
+      ACCESS_TOKEN_SECRET: Ci-Access-Secret-2026-For-E2E-Test!
+      REFRESH_TOKEN_SECRET: Ci-Refresh-Secret-2026-For-E2E-Test!
       ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
       REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
     steps:
@@ -144,8 +144,8 @@ jobs:
       DB_PASSWORD: postgres
       DB_DATABASE: postgres
       HASH_ROUNDS: 10
-      ACCESS_TOKEN_SECRET: ci-access-secret
-      REFRESH_TOKEN_SECRET: ci-refresh-secret
+      ACCESS_TOKEN_SECRET: Ci-Access-Secret-2026-For-E2E-Test!
+      REFRESH_TOKEN_SECRET: Ci-Refresh-Secret-2026-For-E2E-Test!
       ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
       REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
       # frontend/vite.config.ts가 API 호출을 same-origin으로 :3000에 프록시하므로
@@ -219,8 +219,8 @@ jobs:
       DB_PASSWORD: postgres
       DB_DATABASE: postgres
       HASH_ROUNDS: 10
-      ACCESS_TOKEN_SECRET: ci-access-secret
-      REFRESH_TOKEN_SECRET: ci-refresh-secret
+      ACCESS_TOKEN_SECRET: Ci-Access-Secret-2026-For-E2E-Test!
+      REFRESH_TOKEN_SECRET: Ci-Refresh-Secret-2026-For-E2E-Test!
       ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
       REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
       # Admin은 (frontend와 달리) dev 서버 프록시가 없다 — admin/src/api/axios.ts의
@@ -380,8 +380,8 @@ jobs:
             -e ENV=dev -e DB_TYPE=postgres -e DB_HOST=127.0.0.1 -e DB_PORT=5432 \
             -e DB_USERNAME=postgres -e DB_PASSWORD=postgres -e DB_DATABASE=postgres \
             -e HASH_ROUNDS=10 \
-            -e ACCESS_TOKEN_SECRET=smoke-access-secret \
-            -e REFRESH_TOKEN_SECRET=smoke-refresh-secret \
+            -e ACCESS_TOKEN_SECRET=Smoke-Access-Secret-2026-Docker-Test! \
+            -e REFRESH_TOKEN_SECRET=Smoke-Refresh-Secret-2026-Docker-Test! \
             -e ACCESS_TOKEN_SECRET_EXPIRES_IN=180 \
             -e REFRESH_TOKEN_SECRET_EXPIRES_IN=43200 \
             sharenpo:smoke-test

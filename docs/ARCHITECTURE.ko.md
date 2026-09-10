@@ -406,6 +406,12 @@ PostEntity                          CommentEntity
 
 DB/JWT/해싱 같은 기본값 말고도, 특정 기능을 위한 그룹이 몇 개 더 있습니다:
 
+- **시크릿/해시 강도**(2026-09-11 추가): `HASH_ROUNDS`는 10 이상이어야 하고,
+  `ACCESS_TOKEN_SECRET`/`REFRESH_TOKEN_SECRET`은 각각 32자 이상이면서 대문자·소문자·
+  숫자·기호를 모두 포함해야 합니다. 존재 여부만 검증하면 짧거나 숫자로만 된 값도
+  통과해 JWT 서명이나 bcrypt 비용 계수를 조용히 약화시킬 수 있습니다(Never Do
+  Group 3) — 이제 짧거나 단순한 값은 앱이 DB에 연결을 시도하기도 전에 해당 필드명이
+  명시된 Joi 에러로 부팅이 막힙니다.
 - **DB TLS**: `DB_SSL`(기본 꺼짐), `DB_SSL_CA` — 대상 Postgres가 암호화 연결을
   강제할 때(예: RDS의 기본값) 둘 다 필요합니다(ADR 0039).
 - **저장소 어댑터**: `STORAGE_DRIVER`(`local` 기본 | `s3`), `S3_BUCKET`/`AWS_REGION`

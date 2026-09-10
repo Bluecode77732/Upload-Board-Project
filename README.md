@@ -114,7 +114,11 @@ the bind-mounted `./file` directory fails to write, `chown` it once:
 Required (Joi-validated at boot — missing vars fail fast): `ENV`, `DB_TYPE`
 (`postgres`), `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE`,
 `HASH_ROUNDS`, `ACCESS_TOKEN_SECRET`, `REFRESH_TOKEN_SECRET`,
-`ACCESS_TOKEN_SECRET_EXPIRES_IN`, `REFRESH_TOKEN_SECRET_EXPIRES_IN`.
+`ACCESS_TOKEN_SECRET_EXPIRES_IN`, `REFRESH_TOKEN_SECRET_EXPIRES_IN`. Since
+2026-09-11, validation goes beyond presence for three of these: `HASH_ROUNDS` must be
+`>= 10`, and `ACCESS_TOKEN_SECRET`/`REFRESH_TOKEN_SECRET` must each be at least 32
+characters and contain a lowercase letter, an uppercase letter, a digit, and a symbol —
+a weaker value fails at boot with a Joi error naming the field.
 
 Optional (all Joi-validated with a default, or gated by their own condition — see
 `.env.example` for the full list with examples): `BASE_URL` (default

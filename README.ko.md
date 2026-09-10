@@ -114,7 +114,10 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 필수 (부팅 시 Joi 검증 — 누락 시 즉시 실패): `ENV`, `DB_TYPE`(`postgres`),
 `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE`, `HASH_ROUNDS`,
 `ACCESS_TOKEN_SECRET`, `REFRESH_TOKEN_SECRET`, `ACCESS_TOKEN_SECRET_EXPIRES_IN`,
-`REFRESH_TOKEN_SECRET_EXPIRES_IN`.
+`REFRESH_TOKEN_SECRET_EXPIRES_IN`. 2026-09-11부터 이 중 세 개는 존재 여부를 넘어선
+검증도 받는다: `HASH_ROUNDS`는 10 이상이어야 하고, `ACCESS_TOKEN_SECRET`/
+`REFRESH_TOKEN_SECRET`은 각각 32자 이상이면서 대문자·소문자·숫자·기호를 모두
+포함해야 한다 — 기준에 못 미치면 부팅 시 해당 필드명이 명시된 Joi 에러로 막힌다.
 
 선택 (모두 Joi로 기본값이 검증되거나 각자의 조건으로 게이팅됨 — 예시를 포함한 전체
 목록은 `.env.example` 참고): `BASE_URL`(기본 `http://localhost:3000`; 공개 파일 URL
