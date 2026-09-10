@@ -64,6 +64,10 @@ export const ErrorCode = {
   // 413
   PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
 
+  // 429
+  // 전역 요청 횟수 제한에 걸렸다 — 잠시 후 재시도하면 된다(backend ADR 0053).
+  RATE_LIMITED: 'RATE_LIMITED',
+
   // 500
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const

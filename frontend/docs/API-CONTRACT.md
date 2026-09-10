@@ -87,6 +87,10 @@ Every error is the frozen `ErrorBody` shape:
   `message` (human-readable, free to change).
 - Validation failures use `code: VALIDATION_FAILED` with a `message` **array**.
 - `ApiError` (`src/api/client.ts`) carries `status` and `code` for UI branching.
+- **Every route can return `429 RATE_LIMITED`** (backend ADR 0053) — a global
+  100 requests/minute default, not tied to any one resource. Not yet handled with a
+  dedicated UI message anywhere in this app; it currently falls through to whatever
+  generic error display a caller already has.
 
 ## Resource routes (canonical, frozen — backend ADR 0010)
 
