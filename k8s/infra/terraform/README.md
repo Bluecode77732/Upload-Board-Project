@@ -355,6 +355,25 @@ current Helm chart/`values-prod.yaml` (which no longer annotates `default`,
 and instead creates+annotates a `sharenpo` ServiceAccount), IRSA breaks the
 other way — keep the Terraform and Helm sides deployed from the same commit.
 
+## Known gap: NetworkPolicy is not yet enforced (vpc-cni Network Policy agent off)
+
+`k8s/helm/`'s `templates/networkpolicy.yaml` ([ADR
+0056](../../../docs/ADR/0056-networkpolicy-east-west-restriction.md)) restricts the app
+pod's east-west traffic, and `values-prod.yaml` already sets `networkPolicy.enabled: true`.
+`cluster/main.tf`'s `vpc-cni` addon, though, uses its default configuration
+(`cluster_addons = { vpc-cni = {} }`) — the VPC CNI's Network Policy enforcement agent is
+not enabled, so applying this against the real EKS cluster today creates the
+`NetworkPolicy` object but doesn't enforce it.
+
+Turning enforcement on is a `cluster_addons.vpc-cni.configuration_values` change (setting
+`ENABLE_NETWORK_POLICY`) — not yet made, and not part of this ADR's scope. Before making
+that change against a real cluster, re-verify `/health/live`/`/health/ready` still pass
+under AWS's own Network Policy agent specifically: the kind+Calico verification ADR 0056
+already ran proves the policy's shape is correct, but Calico and AWS's agent are different
+enforcement engines, and a real AWS issue
+(`aws/amazon-vpc-cni-k8s#2571`) documents a case where NetworkPolicy blocked
+liveness/readiness probes on this CNI — do not assume the kind result transfers.
+
 ## Enabling the ALB ingress
 
 The Helm chart's `Ingress` template exists but is disabled by default

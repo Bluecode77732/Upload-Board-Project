@@ -24,7 +24,7 @@
    - 물리 업로드 변경      → `backend/upload/upload.module.ts`(Multer `memoryStorage`)와 `upload.controller.ts`(100MB 크기 제한)를 `backend/upload/upload.service.ts`(`stageTemp` — `temp_{uuid}_{timestamp}` 네이밍, `FileStorage` 포트 호출, ADR 0029 D4)와 함께 읽는다
    - 스토리지 어댑터 변경  → `backend/storage/file-storage.interface.ts`(`FileStorage` 포트 + `FILE_STORAGE` 토큰), `local-disk.storage.ts` / `s3.storage.ts`(두 구현체), `storage.module.ts`(`STORAGE_DRIVER` 기반 팩토리, ADR 0029)를 읽는다
    - 컨테이너/배포 변경    → `Dockerfile`(non-root `USER`, `HEALTHCHECK`, `CMD`에서 마이그레이션 제거 — ADR 0030/0032)과 `docker-compose.yml`(원샷 `migrate` 서비스)을 `backend/health/`(`GET /health/live`/`GET /health/ready` — ADR 0031)와 함께 읽는다
-   - Helm/K8s 배포 변경    → `k8s/helm/`(`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/기본 비활성 Ingress)과 그 `README.md`(Secret 생성 절차, `existingSecret` 전용 소비 방식)를 읽는다. `k8s/`엔 이 차트 밖의 매니페스트가 없다 — 예전 `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/`에 있던 독립 raw 매니페스트는 삭제됐다(ADR 0042); 차트 옆에 정적 매니페스트를 다시 추가하지 않는다(ADR 0037/0041/0042)
+   - Helm/K8s 배포 변경    → `k8s/helm/`(`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/기본 비활성 Ingress/기본 비활성 NetworkPolicy, ADR 0056)과 그 `README.md`(Secret 생성 절차, `existingSecret` 전용 소비 방식)를 읽는다. `k8s/`엔 이 차트 밖의 매니페스트가 없다 — 예전 `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/`에 있던 독립 raw 매니페스트는 삭제됐다(ADR 0042); 차트 옆에 정적 매니페스트를 다시 추가하지 않는다(ADR 0037/0041/0042)
    - Terraform/인프라 변경 → `k8s/infra/terraform/`은 하나가 아니라 독립된 3개의 root module이다 — `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM, `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — ALB Controller+ESO, 다른 두 state를 **모두** 읽는 유일한 state). 각 디렉토리는 `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`와 자신만의 로컬 state 파일을 가진다 — 변경이 실제로 건드리는 디렉토리만 읽는다. `README.md`(`cluster` → `app-infra` → `addons` 3단계 apply 순서와 그 역순 destroy, `SecretStore`/`ExternalSecret`을 한 번만 수동으로 `kubectl apply`하는 단계, 그리고 앱 전용 ServiceAccount IRSA 배선을 다루는 "Known gap" 절 — `app-infra/main.tf`의 trust policy, `k8s/helm/`의 `serviceaccount.yaml`+`values-prod.yaml`, `deploy.sh`의 `HELM_RELEASE` 기본값이 2026-09-03부로 모두 `sharenpo`라는 같은 이름으로 고정돼 있음. 코드는 완성되고 검증됐지만 실제 AWS엔 한 번도 적용된 적 없음 — 이걸로 대체된 예전 `default` ServiceAccount IRSA annotate 방식은 그 trust policy가 적용되는 순간 더 이상 동작하지 않음)를 읽는다. 설계 기록: ADR 0038(업스트림 스캐폴딩, 재작성 유예) → ADR 0043(프로젝트 적응 — 2026-08-18 구현됨) → ADR 0044(3-state 분리 — 2026-08-20 구현됨, 세 디렉토리 모두 `terraform validate`/`fmt -check` 통과). **두 ADR의 Addendum은 이 설정을 실제 AWS에 `apply`한 적이 없다고 말하는데, 그건 작성 시점엔 사실이었다가, 한동안 거짓이었다가, 다시 사실이 됐다.** 세 state 전부 2026-08-25~27에 실제 apply됐다(살아 있는 EKS 클러스터, RDS 인스턴스, S3 버킷, Route53 존, ACM 인증서, 그리고 Helm으로 앱 자체까지 배포됨 — 같은 기간 그 실제 RDS를 상대로 발견·수정된 TLS 검증 결함은 ADR 0039의 Addendum에 기록돼 있다). 그 뒤 **2026-08-28에 전체 destroy**해서, 배포가 end-to-end로 검증된 뒤 AWS 과금을 멈췄다 — 지금은 이 스택에서 실재하거나 과금되는 게 아무것도 없다(`aws eks/rds/ec2/elb` describe 호출이 전부 빈 값/not-found를 반환함으로 확인됨). 현재 상태: 미적용. 어느 쪽이든 가정하지 말고, 셋 다에서 `terraform plan`을 돌려 확인할 것 — ADR의 Addendum도 이 줄도 특정 시점의 스냅샷일 뿐 실시간 상태가 아니다. ADR의 Addendum은 작성 시점의 사실을 기록한 것이므로 일부러 그대로 두었고, 정정은 여기와 ROADMAP.md 7절에 있다
    - 삭제 경로 변경        → `backend/user/user.service.ts`(`remove` — 확인된 연쇄 삭제), `backend/file/file.service.ts`(`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts`(`deletePost`, `deletePostsOfCreator`), `LocalDiskStorage.unlink`/`S3Storage.unlink`(`FileStorage` 포트를 통한 커밋 후 unlink, ADR 0020/0023/0029)를 읽는다
    - 게시글/게시판 변경    → `backend/post/post.service.ts`(`fileId`에 대한 claim 해석, `canManage`, ADR 0021 읽기 레이어 재사용)를 `FileService.assertAttachableBy` / `toResponse` — PostModule이 FileModule에 묻는 두 가지 질문 — 와 함께 읽는다(ADR 0023)
@@ -1497,6 +1497,31 @@ Architecture Decisions가 계속 유효하다.
   재시도(400 `AUTH_EMAIL_TAKEN` — 강도 검사가 중복 검사보다 먼저 실행되지만 그걸로
   중복 검사를 건너뛰지는 않음을 확인)를 실제로 호출했다 — 5건 모두 실제 bcrypt 해싱과
   실제 DB 왕복까지 거쳐 통과
+- ~~`k8s/helm/templates/`에 `NetworkPolicy` 리소스가 없어 배포된 뒤 클러스터 내부
+  east-west(파드 간) 트래픽을 제한하는 장치가 전무했다~~ — **2026-09-11 해결**
+  ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.ko.md), ADR 0041 확장):
+  보안 점검 결과 앱이 배포된 뒤 파드 간 트래픽을 제한하는 장치가 전혀 없다는 사실이
+  드러났다. `templates/networkpolicy.yaml`(`networkPolicy.enabled`로 게이팅, 기본값
+  `false` — `ingress.yaml`/`servicemonitor.yaml`과 같은 패턴)이 앱 파드의 인바운드를
+  같은 네임스페이스의 파드로만 제한하고, 아웃바운드는 DNS(CoreDNS), DB
+  (`networkPolicy.egress.vpcCidr:dbPort`, 기본값 `10.0.0.0/16:5432` —
+  `cluster/main.tf`의 `var.vpc_cidr`과 동일), HTTPS/443(S3·AWS API — 이를 더 좁힐
+  VPC 엔드포인트가 없음)만 명시적으로 허용하고 나머지는 기본 거부한다.
+  `values-prod.yaml`에서 이미 켜뒀지만, 실제(현재는 철거된) EKS 대상에는 아직
+  무효하다 — `cluster/main.tf`의 `vpc-cni` 애드온이 VPC CNI Network Policy 강제
+  에이전트를 아직 켜지 않았다(별도의, 아직 일정이 잡히지 않은 Terraform 작업).
+  **2026-09-11 실제 검증**: Calico를 설치한 throwaway `kind` 클러스터(`kind`의
+  기본 CNI는 `NetworkPolicy`를 강제하지 않음)와 RDS를 대신하는 throwaway
+  `postgres:16`에 대해 검증했다 — `helm install --wait`가 성공했고(kubelet의
+  liveness/readiness 프로브가 — DB 연결까지 확인하는 readiness 포함, ADR 0031 —
+  인바운드 제한에도 불구하고 파드에 도달했다는 뜻), `/health/live`/`/health/ready`/
+  `/doc`이 같은 네임스페이스의 파드에서 모두 `200`을 응답했고, 다른 네임스페이스의
+  파드는 요청이 타임아웃됐으며(인바운드 제한이 실제로 동작함을 확인), 앱과 같은
+  라벨을 붙인 파드가 이미 허용된 호스트라도 허용되지 않은 포트로 요청하면 마찬가지로
+  타임아웃됐다(아웃바운드 기본 거부가 "허용된 세 경로가 우연히 동작"하는 게 아니라
+  실제로 동작함을 확인). 이건 AWS 자신의 Network Policy 에이전트(Calico와는 다른
+  강제 엔진)가 실제로 돌아갈 때도 똑같이 동작한다는 걸 증명하지 않는다 — 그 에이전트를
+  실제로 켜기 전엔 프로브를 다시 검증해야 한다(ADR 0056 D2/D4)
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

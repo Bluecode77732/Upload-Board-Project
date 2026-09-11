@@ -156,3 +156,17 @@ volumeMounts: []
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# 클러스터 내부 파드 간 트래픽 제한(2026-09-09 보안 점검 발견 항목, ADR 0056). 기본은
+# 비활성 — ingress/metrics.serviceMonitor와 같은 이유는 아니고, 지금
+# k8s/infra/terraform/cluster/main.tf의 vpc-cni가 Network Policy 강제 에이전트를 켜지
+# 않은 상태라 true로 바꿔도 실제 EKS에서는 아직 강제되지 않기 때문이다(별도 Terraform
+# 작업 필요, ADR 0056). templates/networkpolicy.yaml 파일 헤더에 인바운드/아웃바운드
+# 범위 설계 근거가 있다.
+networkPolicy:
+  enabled: false
+  egress:
+    # RDS가 있는 VPC CIDR — cluster/main.tf의 var.vpc_cidr 기본값과 같다. 다른
+    # CIDR로 apply했다면 이 값도 맞춰 오버라이드한다.
+    vpcCidr: "10.0.0.0/16"
+    dbPort: 5432

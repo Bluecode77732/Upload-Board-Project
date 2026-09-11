@@ -24,7 +24,7 @@ Before making any change:
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer `memoryStorage`) and `upload.controller.ts` (100MB size limit) together with `backend/upload/upload.service.ts` (`stageTemp` — `temp_{uuid}_{timestamp}` naming, calls the `FileStorage` port, ADR 0029 D4)
    - Storage adapter change→ read `backend/storage/file-storage.interface.ts` (the `FileStorage` port + `FILE_STORAGE` token), `local-disk.storage.ts` / `s3.storage.ts` (the two implementations), and `storage.module.ts` (the `STORAGE_DRIVER`-keyed factory, ADR 0029)
    - Container/deploy change→ read `Dockerfile` (non-root `USER`, `HEALTHCHECK`, migration removed from `CMD` — ADR 0030/0032) and `docker-compose.yml` (the one-shot `migrate` service) together with `backend/health/` (`GET /health/live`/`GET /health/ready` — ADR 0031)
-   - Helm/K8s deploy change→ read `k8s/helm/` (`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/disabled-by-default Ingress) and its `README.md` (Secret creation runbook, `existingSecret`-only consumption). `k8s/` holds no manifests outside this chart — the standalone raw manifests once at `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/` were deleted (ADR 0042); do not re-add static manifests alongside the chart (ADR 0037/0041/0042)
+   - Helm/K8s deploy change→ read `k8s/helm/` (`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/disabled-by-default Ingress/disabled-by-default NetworkPolicy, ADR 0056) and its `README.md` (Secret creation runbook, `existingSecret`-only consumption). `k8s/` holds no manifests outside this chart — the standalone raw manifests once at `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/` were deleted (ADR 0042); do not re-add static manifests alongside the chart (ADR 0037/0041/0042)
    - Terraform/infra change  → `k8s/infra/terraform/` is three independent root modules, not one — `cluster/` (`module.vpc`+`module.eks`), `app-infra/` (RDS/S3+IRSA/Secrets Manager/Route53+ACM, reads `cluster/` via `terraform_remote_state`), `addons/` (`module.eks_blueprints_addons` — ALB Controller+ESO, the only state reading **both** other states). Each is `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` with its own local state file; read the one(s) the change actually touches. Read `README.md` (the three-step `cluster` → `app-infra` → `addons` apply order and its destroy-order reversal, the `SecretStore`/`ExternalSecret` one-time manual `kubectl apply` step, and the "Known gap" section covering the app's dedicated-ServiceAccount IRSA wiring — `app-infra/main.tf`'s trust policy, `k8s/helm/`'s `serviceaccount.yaml`+`values-prod.yaml`, and `deploy.sh`'s `HELM_RELEASE` default all pinned to the name `sharenpo` as of 2026-09-03, code-complete and validated but never applied against real AWS; the old `default`-ServiceAccount IRSA annotation this superseded is now dead once that trust policy is ever applied). Design record: ADR 0038 (upstream scaffold, deferred rewrite) → ADR 0043 (project adaptation — implemented 2026-08-18) → ADR 0044 (three-state split — implemented 2026-08-20, `terraform validate`/`fmt -check` pass in all three directories). **Both ADRs' addenda say this config had never been `apply`d against real AWS — that was true when written, then briefly false, then true again.** All three states were applied 2026-08-25–27 (a live EKS cluster, RDS instance, S3 bucket, Route53 zone, ACM certificate, plus the app itself deployed via Helm — ADR 0039's Addendum records a same-window TLS-verification defect found and fixed against that live RDS), then **fully destroyed 2026-08-28** to stop the ongoing AWS bill once the deploy was proven end-to-end — nothing from this stack currently exists or costs money (verified via `aws eks/rds/ec2/elb` describe calls returning empty/not-found across the board). Currently: not applied. Before assuming either state, run `terraform plan` in each of the three directories — the ADR addenda and this line are both point-in-time snapshots, not live state. The ADR addenda are deliberately left as written — they record what was true when written; the correction lives here and in ROADMAP.md §7
    - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `LocalDiskStorage.unlink`/`S3Storage.unlink` (post-commit unlink through the `FileStorage` port, ADR 0020/0023/0029)
    - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
@@ -1469,6 +1469,29 @@ Architecture Decisions above remain operative.
   password (201, no `password` field in the response), and a same-email repeat (400
   `AUTH_EMAIL_TAKEN`, confirming the strength check runs before and doesn't short-circuit
   the uniqueness check) — all 5 passed against real bcrypt hashing and a real DB round-trip
+- ~~`k8s/helm/templates/` had no `NetworkPolicy` resource — nothing restricted
+  east-west (pod-to-pod) traffic inside the cluster~~ — **resolved 2026-09-11**
+  ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.md), extends ADR 0041): a
+  security review found no traffic-restriction mechanism between pods once the app is
+  deployed. `templates/networkpolicy.yaml` (gated by `networkPolicy.enabled`, default
+  `false`, mirroring `ingress.yaml`/`servicemonitor.yaml`'s pattern) restricts the app
+  pod's ingress to same-namespace pods only and default-denies egress except DNS
+  (CoreDNS), DB (`networkPolicy.egress.vpcCidr:dbPort`, default `10.0.0.0/16:5432`
+  matching `cluster/main.tf`'s `var.vpc_cidr`), and HTTPS/443 (S3/AWS API — no VPC
+  endpoint exists to scope this further). `values-prod.yaml` turns it on, but it's
+  currently inert against the real (torn-down) EKS target: `cluster/main.tf`'s `vpc-cni`
+  addon doesn't enable the VPC CNI Network Policy enforcement agent yet — a separate,
+  unscheduled Terraform task. **Live-verified 2026-09-11** against a throwaway `kind`
+  cluster with Calico installed (`kind`'s own CNI doesn't enforce `NetworkPolicy`) and a
+  throwaway `postgres:16` standing in for RDS: `helm install --wait` succeeded (kubelet's
+  liveness/readiness probes — which check DB connectivity, ADR 0031 — reached the pod
+  despite the ingress restriction), `/health/live`/`/health/ready`/`/doc` all answered
+  `200` from a same-namespace pod, a cross-namespace pod's request timed out (ingress
+  restriction confirmed real), and a same-labels pod's request to an already-allowed host
+  on a non-allowlisted port also timed out (egress default-deny confirmed real, not just
+  "the three allowed paths happen to work"). This does not prove identical behavior once
+  AWS's own Network Policy agent — a different enforcement engine than Calico — is what's
+  actually running; re-verify probes before ever enabling that agent for real (ADR 0056 D2/D4)
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for

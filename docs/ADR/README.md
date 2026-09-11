@@ -64,6 +64,7 @@ each ADR records the *why* behind those rules.
 | [0053](0053-global-rate-limiting.md) | Global rate limiting via `@nestjs/throttler` — first global `APP_GUARD`, health/metrics exempted | Accepted — implemented, e2e-verified | 2026-09-10 |
 | [0054](0054-per-route-rate-limit-tuning.md) | Per-route rate limit tuning — tighter auth/upload limits, `skipIf`-based bypass, amends 0053 | Accepted — implemented, e2e-verified | 2026-09-10 |
 | [0055](0055-helmet-security-headers.md) | Security response headers via `helmet` — global middleware, CSP `script-src` widened for Swagger UI | Accepted — implemented, live-verified | 2026-09-11 |
+| [0056](0056-networkpolicy-east-west-restriction.md) | NetworkPolicy for cluster east-west traffic restriction — egress-primary, gated off by default, extends 0041 | Accepted — implemented, kind+Calico-verified | 2026-09-11 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

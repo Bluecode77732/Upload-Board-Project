@@ -13,6 +13,32 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Security
+- **NetworkPolicy for cluster east-west traffic restriction (2026-09-11, [ADR
+  0056](ADR/0056-networkpolicy-east-west-restriction.md))** — a security review found
+  `k8s/helm/templates/` had no `NetworkPolicy` resource: nothing restricted pod-to-pod
+  traffic inside the cluster once the app is deployed. A new `templates/networkpolicy.yaml`
+  (gated by `networkPolicy.enabled`, default `false`, mirroring `ingress.yaml`/
+  `servicemonitor.yaml`'s pattern; `values-prod.yaml` turns it on) restricts the app pod's
+  ingress to same-namespace pods only and default-denies egress except DNS (CoreDNS), DB
+  (`networkPolicy.egress.vpcCidr:dbPort`, default `10.0.0.0/16:5432` matching
+  `cluster/main.tf`'s `var.vpc_cidr`), and HTTPS/443 (S3/AWS API — no VPC endpoint exists to
+  scope this further). Given this app is a single Deployment (DB/storage are external RDS/S3,
+  not in-cluster pods), egress carries the real security value; ingress restriction is
+  deliberately shallow because AWS VPC CNI assigns pod IPs from the same address space as
+  node IPs, so there's no `ipBlock` that can single out kubelet's health-check traffic from
+  another pod's — a documented AWS issue (`aws/amazon-vpc-cni-k8s#2571`) means over-restricting
+  ingress risks breaking probes in production, a worse outcome than the residual risk accepted
+  here. Live-verified 2026-09-11 against a throwaway `kind` cluster with Calico installed
+  (`kind`'s own CNI doesn't enforce `NetworkPolicy`) and a throwaway `postgres:16` standing in
+  for RDS: `helm install --wait` succeeded (kubelet's probes — readiness includes a DB check,
+  ADR 0031 — reached the pod despite the ingress restriction), `/health/live`/`/health/ready`/
+  `/doc` all answered `200` from a same-namespace pod, a cross-namespace pod's request timed
+  out (ingress restriction confirmed real), and a same-labels pod's request to an
+  already-allowed host on a non-allowlisted port also timed out (egress default-deny confirmed
+  real). Currently inert against the real (torn-down) EKS target — `cluster/main.tf`'s
+  `vpc-cni` addon doesn't enable the VPC CNI Network Policy enforcement agent yet, a separate
+  unscheduled Terraform task; re-verify probes against AWS's own agent (a different engine
+  than Calico) before ever relying on this in production.
 - **Security response headers via `helmet` (2026-09-11, [ADR
   0055](ADR/0055-helmet-security-headers.md))** — the backend sent no hardening response
   headers at all: no `Content-Security-Policy`, `X-Content-Type-Options`,

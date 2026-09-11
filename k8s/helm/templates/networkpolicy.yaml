@@ -1,0 +1,59 @@
+{{- /*
+networkPolicy.enabled이 false(기본값)면 아무것도 렌더링하지 않는다 — ingress.yaml/
+servicemonitor.yaml과 같은 게이팅 방식.
+
+인바운드는 "같은 네임스페이스의 파드만 허용"으로 최소화한다 — 타 네임스페이스의 파드가
+직접 이 앱 파드로 들어오는 경로만 막는다. kubelet의 liveness/readiness 프로브는 이
+규칙에 나열하지 않는다: VPC CNI에서는 파드 IP와 노드 IP가 같은 VPC CIDR 주소 공간을
+공유해 kubelet을 ipBlock으로 다른 파드와 구분할 방법이 없고, AWS 문서는 strict 모드에서
+노드발 kubelet 트래픽이 자동 예외 처리된다고 명시한다 — 다만 그 예외가 항상 보장되진
+않는다는 실제 사례도 있다(aws/amazon-vpc-cni-k8s#2571). 이 차트를 실제로 켜기 전에는
+반드시 대상 클러스터에서 프로브가 여전히 통과하는지 먼저 검증한다(README 참고).
+Ingress 컨트롤러/ALB(현재 ingress.enabled=false)가 실제로 켜지면 그쪽 트래픽을 허용하는
+규칙이 별도로 필요하다 — 지금은 다루지 않는다.
+
+아웃바운드는 이 앱이 실제로 나가는 곳만 허용한다: DNS(CoreDNS), DB(RDS — 파드가 아니라
+VPC 안 주소라 VPC CIDR로 좁힌다), 그 외 HTTPS(S3/AWS API 등 — S3 VPC 엔드포인트가 없어
+app-infra/main.tf, CIDR로 못 좁히고 포트만 제한).
+*/}}
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "sharenpo.fullname" . }}
+  labels:
+    {{- include "sharenpo.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "sharenpo.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+  egress:
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: {{ .Values.networkPolicy.egress.vpcCidr }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.egress.dbPort }}
+    - ports:
+        - protocol: TCP
+          port: 443
+{{- end }}

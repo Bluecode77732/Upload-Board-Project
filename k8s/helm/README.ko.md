@@ -104,6 +104,7 @@ helm upgrade sharenpo . -f values-prod.yaml --set image.tag=<태그>
 | `migration-job.yml` | Job (Helm hook) | pre-install/pre-upgrade 시점에 `migration:run` 실행, `docker-compose.yml`의 `migrate` 서비스를 본뜸(ADR 0032) |
 | `ingress.yaml` | Ingress | 기본 비활성(`ingress.enabled: false`) — TLS는 여기서 종료, 앱 내부에서는 안 함(ADR 0034) |
 | `serviceaccount.yaml` | ServiceAccount | 기본 비활성(`serviceAccount.create: false` — Deployment는 네임스페이스의 `default` ServiceAccount로 그대로 뜸). S3 IRSA 권한을 네임스페이스의 모든 pod가 아니라 이 앱에만 좁히려면 켠다 — 아래 "IRSA용 전용 ServiceAccount" 참고 |
+| `networkpolicy.yaml` | NetworkPolicy | 기본 비활성(`networkPolicy.enabled: false`) — 앱 파드의 인바운드/아웃바운드 트래픽을 제한한다. 아래 "NetworkPolicy" 참고(ADR 0056) |
 
 `values.yaml`엔 실제로 템플릿이 읽는 키만 남아 있습니다 — 어떤 템플릿도 소비하지
 않던 `autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride` 스캐폴딩
@@ -145,6 +146,91 @@ trust policy 적용 이후 왜 더 이상 안 통하는지는
 `serviceAccount.create`가 켜져 있어도 일부러 계속 `default`로 돕니다 — DB
 자격증명만 Secret에서 읽을 뿐 S3를 건드리지 않으므로, 앱의 IRSA 신원을
 붙이면 이유 없이 권한만 넓어집니다.
+
+## NetworkPolicy
+
+앱 파드의 트래픽을 제한한다([ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)).
+기본 비활성(`networkPolicy.enabled: false`) — `ingress.yaml`/`servicemonitor.yaml`과
+같은 이유(DNS/인증서 메커니즘 없음, CRD 없음)는 아니고,
+`k8s/infra/terraform/cluster/main.tf`의 `vpc-cni` 애드온이 아직 VPC CNI
+Network Policy 강제 에이전트를 켜지 않았기 때문이다 — 지금
+`networkPolicy.enabled`을 켜도 리소스는 생성되지만 실제 클러스터엔 강제되지
+않는다. `values-prod.yaml`은 이미 켜둬서, Terraform 쪽 강제가 켜지는 순간
+차트를 더 건드릴 필요 없이 바로 유효해진다.
+
+인바운드는 같은 네임스페이스의 파드로만 제한한다(다른 네임스페이스의 파드가
+이 파드에 직접 접근하는 걸 막는다) — kubelet의 헬스체크 트래픽을 위해 따로
+허용 규칙을 파지는 않는데, VPC CNI에서는 파드 IP와 노드 IP가 같은 주소
+공간을 공유해서 "노드"만 콕 집어내는 `ipBlock`을 쓸 방법이 없기 때문이다.
+AWS의 EKS 문서는 에이전트의 "strict" 모드에서 kubelet 프로브가 자동
+예외 처리된다고 하지만, 업스트림에 실제 반례도 등록돼 있다
+(`aws/amazon-vpc-cni-k8s#2571`) — 그래서 **실제 클러스터에 이걸 의존하기
+전엔 반드시 `/health/live`/`/health/ready`가 여전히 통과하는지 다시
+검증**해야 한다. 아래 레시피는 Calico(AWS 자신의 에이전트와는 다른 강제
+엔진) 아래에서 정책의 모양이 맞다는 것만 증명한다.
+
+이 단일 Deployment 앱에서 실제로 일을 하는 통제는 아웃바운드 쪽이다: 기본
+거부에 DNS(CoreDNS), DB(`networkPolicy.egress.vpcCidr:networkPolicy.egress.dbPort`
+— 기본값 `10.0.0.0/16:5432`, `cluster/main.tf`의 `var.vpc_cidr` 기본값과
+동일; Terraform을 다른 CIDR로 apply했다면 오버라이드), 그 외 HTTPS(443,
+목적지 제한 없음 — S3/AWS API용, S3 VPC 엔드포인트가 없어 CIDR로 좁힐
+방법이 없다. ADR 참고)만 명시적으로 허용한다.
+
+### throwaway kind + Calico 클러스터로 검증하기
+
+`kind`의 기본 CNI는 `NetworkPolicy`를 강제하지 않는다 — Calico가 필요하다:
+
+```bash
+kind create cluster --name netpol-verify --config - <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  podSubnet: "192.168.0.0/16"
+EOF
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml
+# 노드와 calico-node/calico-kube-controllers/coredns가 Ready가 될 때까지 기다린 뒤:
+docker build -t sharenpo-netpol-test:local -f Dockerfile .
+kind load docker-image sharenpo-netpol-test:local --name netpol-verify
+kubectl run postgres --image=postgres:16 --restart=Never \
+  --env=POSTGRES_USER=sharenpo --env=POSTGRES_PASSWORD=sharenpo_pw --env=POSTGRES_DB=sharenpo \
+  --port=5432 --overrides='{"apiVersion":"v1","metadata":{"labels":{"app":"postgres"}}}'
+kubectl expose pod postgres --port=5432 --target-port=5432
+kubectl create secret generic test-secrets \
+  --from-literal=DB_USERNAME=sharenpo --from-literal=DB_PASSWORD=sharenpo_pw \
+  --from-literal=ACCESS_TOKEN_SECRET=<32자 이상, 대소문자+숫자+기호 혼합> \
+  --from-literal=REFRESH_TOKEN_SECRET=<32자 이상, 대소문자+숫자+기호 혼합>
+
+helm install netpol-test . \
+  --set image.repository=sharenpo-netpol-test --set image.tag=local --set image.pullPolicy=Never \
+  --set secrets.existingSecret=test-secrets \
+  --set env.DB_HOST=postgres --set env.DB_DATABASE=sharenpo --set env.BASE_URL=http://localhost:3000 \
+  --set networkPolicy.enabled=true \
+  --set networkPolicy.egress.vpcCidr=$(kubectl get pod postgres -o jsonpath='{.status.podIP}')/32 \
+  --wait --timeout=180s
+```
+
+이게 성공하면 인바운드 규칙에도 불구하고 kubelet의 프로브가 파드에
+도달했다는 뜻이다 — readiness 프로브는 DB 연결까지 확인하므로(ADR 0031),
+`--wait` 성공은 DNS+DB 아웃바운드 규칙이 동작하고 migration Job의
+pre-install 훅도 끝났다는 것까지 함께 증명한다. 이 제한이 허울뿐이 아니라
+실제로 동작하는지 확인하려면:
+
+```bash
+# 다른 네임스페이스에서의 인바운드는 막혀야 한다
+kubectl create namespace other-ns
+kubectl run curl-other -n other-ns --image=curlimages/curl:8.10.1 --restart=Never --rm -i --command -- \
+  curl -sS -m 8 http://netpol-test.default.svc.cluster.local:3000/health/live
+# 기대 결과: "Connection timed out"
+
+# 이미 허용된 호스트라도 허용 목록에 없는 포트로의 아웃바운드는 막혀야 한다
+kubectl run curl-egress --image=curlimages/curl:8.10.1 --restart=Never --rm -i \
+  --labels="app.kubernetes.io/name=sharenpo,app.kubernetes.io/instance=netpol-test" --command -- \
+  curl -sS -m 8 telnet://$(kubectl get pod postgres -o jsonpath='{.status.podIP}'):9999
+# 기대 결과: "Connection timed out"
+```
+
+끝나면 정리: `helm uninstall netpol-test && kind delete cluster --name netpol-verify`.
 
 ## Env var
 

@@ -356,6 +356,26 @@ annotate하지 않고 대신 `sharenpo` ServiceAccount를 만들고 annotate함)
 같이 쓰면, 반대 방향으로 IRSA가 깨집니다 — Terraform 쪽과 Helm 쪽은 항상
 같은 커밋에서 함께 배포하세요.
 
+## 알려진 한계: NetworkPolicy가 아직 강제되지 않음(vpc-cni Network Policy 에이전트 꺼짐)
+
+`k8s/helm/`의 `templates/networkpolicy.yaml`([ADR
+0056](../../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md))은 앱 파드의
+east-west 트래픽을 제한하고, `values-prod.yaml`은 이미 `networkPolicy.enabled: true`로
+켜둔 상태입니다. 다만 `cluster/main.tf`의 `vpc-cni` 애드온은 기본 설정 그대로라
+(`cluster_addons = { vpc-cni = {} }`) VPC CNI의 Network Policy 강제 에이전트가 켜져
+있지 않습니다 — 지금 이대로 실제 EKS 클러스터에 적용해도 `NetworkPolicy` 오브젝트는
+생성되지만 강제되지는 않습니다.
+
+강제를 켜는 건 `cluster_addons.vpc-cni.configuration_values`를 바꿔
+`ENABLE_NETWORK_POLICY`를 설정하는 작업입니다 — 아직 하지 않았고, 이 ADR의 범위에도
+포함되지 않습니다. 실제 클러스터에 그 변경을 적용하기 전에는 AWS 자신의 Network
+Policy 에이전트 아래에서 `/health/live`/`/health/ready`가 여전히 통과하는지 반드시
+다시 검증하세요: ADR 0056이 이미 돌린 kind+Calico 검증은 정책의 모양이 맞다는 것만
+증명합니다 — Calico와 AWS 에이전트는 서로 다른 강제 엔진이고, 실제로 이 CNI에서
+NetworkPolicy가 liveness/readiness 프로브를 막은 사례
+(`aws/amazon-vpc-cni-k8s#2571`)가 보고돼 있습니다 — kind 결과를 그대로 가져다 쓰지
+마세요.
+
 ## ALB ingress 켜기
 
 Helm 차트의 `Ingress` 템플릿은 이미 만들어져 있지만 기본은 비활성입니다

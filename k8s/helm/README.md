@@ -102,6 +102,7 @@ under a different release name renames every object with it; only the
 | `migration-job.yml` | Job (Helm hook) | Runs `migration:run` pre-install/pre-upgrade, mirrors `docker-compose.yml`'s `migrate` service (ADR 0032) |
 | `ingress.yaml` | Ingress | Disabled by default (`ingress.enabled: false`) — TLS terminates here, never in-process (ADR 0034) |
 | `serviceaccount.yaml` | ServiceAccount | Disabled by default (`serviceAccount.create: false` — Deployment runs as the namespace's `default` ServiceAccount, unchanged). Enable it to scope the S3 IRSA role to this app instead of every pod in the namespace — see "Dedicated ServiceAccount for IRSA" below |
+| `networkpolicy.yaml` | NetworkPolicy | Disabled by default (`networkPolicy.enabled: false`) — restricts the app pod's inbound/outbound traffic. See "NetworkPolicy" below (ADR 0056) |
 
 `values.yaml` carries only keys a template actually reads — the unused
 `autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride` scaffold leftovers
@@ -144,6 +145,92 @@ longer works once `app-infra/`'s trust policy is applied. The migration Job
 deliberately keeps running as `default` even when `serviceAccount.create` is
 on — it only reads DB credentials from the Secret, never touches S3, so
 giving it the app's IRSA identity would widen its permissions for no reason.
+
+## NetworkPolicy
+
+Restricts the app pod's traffic ([ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md)).
+Disabled by default (`networkPolicy.enabled: false`) — not for the same reason
+as `ingress.yaml`/`servicemonitor.yaml` (missing DNS/cert mechanism, missing
+CRD), but because `k8s/infra/terraform/cluster/main.tf`'s `vpc-cni` addon
+doesn't enable the VPC CNI Network Policy enforcement agent yet — turning
+`networkPolicy.enabled` on today creates the resource but it isn't enforced
+against the real cluster. `values-prod.yaml` already turns it on so it takes
+effect the moment that Terraform-side enforcement is enabled, with no further
+chart change.
+
+Ingress is restricted to same-namespace pods only (blocks a pod in another
+namespace from reaching this one directly); it does not attempt to carve out
+an explicit allow for kubelet's health-check traffic, because on the VPC CNI a
+pod IP and a node IP share the same address space — there's no `ipBlock` that
+picks out "the node" and not "another pod." AWS's EKS docs say kubelet probes
+are auto-exempted under the agent's "strict" mode, but a real counterexample
+is filed upstream (`aws/amazon-vpc-cni-k8s#2571`), so **re-verify
+`/health/live`/`/health/ready` still pass before ever relying on this against
+a real cluster** — the recipe below only proves the policy's shape is correct
+under Calico, a different enforcement engine than AWS's own agent.
+
+Egress is the control that actually does something for this single-Deployment
+app: default-deny, with explicit allows for DNS (CoreDNS), DB
+(`networkPolicy.egress.vpcCidr:networkPolicy.egress.dbPort` — defaults to
+`10.0.0.0/16:5432`, matching `cluster/main.tf`'s `var.vpc_cidr` default;
+override if Terraform was applied with a different CIDR), and HTTPS on 443 to
+any destination (S3/AWS API — there's no S3 VPC endpoint to scope this to a
+CIDR, see the ADR).
+
+### Verifying against a throwaway kind + Calico cluster
+
+`kind`'s own CNI doesn't enforce `NetworkPolicy` — you need Calico:
+
+```bash
+kind create cluster --name netpol-verify --config - <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  podSubnet: "192.168.0.0/16"
+EOF
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml
+# wait for the node and calico-node/calico-kube-controllers/coredns to be Ready, then:
+docker build -t sharenpo-netpol-test:local -f Dockerfile .
+kind load docker-image sharenpo-netpol-test:local --name netpol-verify
+kubectl run postgres --image=postgres:16 --restart=Never \
+  --env=POSTGRES_USER=sharenpo --env=POSTGRES_PASSWORD=sharenpo_pw --env=POSTGRES_DB=sharenpo \
+  --port=5432 --overrides='{"apiVersion":"v1","metadata":{"labels":{"app":"postgres"}}}'
+kubectl expose pod postgres --port=5432 --target-port=5432
+kubectl create secret generic test-secrets \
+  --from-literal=DB_USERNAME=sharenpo --from-literal=DB_PASSWORD=sharenpo_pw \
+  --from-literal=ACCESS_TOKEN_SECRET=<32+ chars, mixed case+digit+symbol> \
+  --from-literal=REFRESH_TOKEN_SECRET=<32+ chars, mixed case+digit+symbol>
+
+helm install netpol-test . \
+  --set image.repository=sharenpo-netpol-test --set image.tag=local --set image.pullPolicy=Never \
+  --set secrets.existingSecret=test-secrets \
+  --set env.DB_HOST=postgres --set env.DB_DATABASE=sharenpo --set env.BASE_URL=http://localhost:3000 \
+  --set networkPolicy.enabled=true \
+  --set networkPolicy.egress.vpcCidr=$(kubectl get pod postgres -o jsonpath='{.status.podIP}')/32 \
+  --wait --timeout=180s
+```
+
+If this succeeds, kubelet's probes reached the pod despite the ingress rule —
+the readiness probe checks DB connectivity too (ADR 0031), so a successful
+`--wait` also proves the DNS + DB egress rules work and the migration Job's
+pre-install hook completed. To confirm the restrictions are real, not a no-op:
+
+```bash
+# cross-namespace ingress must be blocked
+kubectl create namespace other-ns
+kubectl run curl-other -n other-ns --image=curlimages/curl:8.10.1 --restart=Never --rm -i --command -- \
+  curl -sS -m 8 http://netpol-test.default.svc.cluster.local:3000/health/live
+# expect: "Connection timed out"
+
+# egress to an already-allowed host on a non-allowlisted port must be blocked
+kubectl run curl-egress --image=curlimages/curl:8.10.1 --restart=Never --rm -i \
+  --labels="app.kubernetes.io/name=sharenpo,app.kubernetes.io/instance=netpol-test" --command -- \
+  curl -sS -m 8 telnet://$(kubectl get pod postgres -o jsonpath='{.status.podIP}'):9999
+# expect: "Connection timed out"
+```
+
+Tear down when done: `helm uninstall netpol-test && kind delete cluster --name netpol-verify`.
 
 ## Env vars
 

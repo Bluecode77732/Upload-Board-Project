@@ -13,6 +13,35 @@
 ## [Unreleased]
 
 ### 보안
+- **클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy (2026-09-11, [ADR
+  0056](ADR/0056-networkpolicy-east-west-restriction.ko.md))** — 보안 점검 결과
+  `k8s/helm/templates/`에 `NetworkPolicy` 리소스가 없다는 사실이 드러났다: 앱이
+  배포된 뒤 클러스터 내부 파드 간 트래픽을 제한하는 장치가 전무했다. 새
+  `templates/networkpolicy.yaml`(`networkPolicy.enabled`로 게이팅, 기본값 `false` —
+  `ingress.yaml`/`servicemonitor.yaml`과 같은 패턴; `values-prod.yaml`에서는 켜둠)이
+  앱 파드의 인바운드를 같은 네임스페이스의 파드로만 제한하고, 아웃바운드는 DNS
+  (CoreDNS), DB(`networkPolicy.egress.vpcCidr:dbPort`, 기본값 `10.0.0.0/16:5432` —
+  `cluster/main.tf`의 `var.vpc_cidr`과 동일), HTTPS/443(S3/AWS API — 이를 더 좁힐
+  VPC 엔드포인트가 없음)만 명시적으로 허용하고 나머지는 기본 거부한다. 이 앱은
+  Deployment 하나뿐이라(DB·스토리지는 인클러스터 파드가 아니라 외부 RDS/S3),
+  아웃바운드가 실제 보안 가치를 낸다. 인바운드 제한은 일부러 얕게 잡았는데, AWS
+  VPC CNI가 파드 IP를 노드 IP와 같은 주소 공간에서 할당해 kubelet의 헬스체크
+  트래픽만 따로 `ipBlock`으로 골라낼 방법이 없기 때문이다 — 업스트림에 보고된
+  실제 이슈(`aws/amazon-vpc-cni-k8s#2571`)를 보면 인바운드를 과도하게 제한할
+  경우 프로덕션에서 프로브가 실패할 위험이 있는데, 이게 지금 감수하는 잔여
+  위험보다 더 나쁜 결과라고 판단했다. 2026-09-11에 Calico를 설치한 throwaway
+  `kind` 클러스터(`kind`의 기본 CNI는 `NetworkPolicy`를 강제하지 않음)와 RDS를
+  대신하는 throwaway `postgres:16`에 대해 실제 검증했다: `helm install --wait`가
+  성공했고(kubelet의 프로브 — readiness는 DB 연결까지 확인, ADR 0031 — 가
+  인바운드 제한에도 불구하고 파드에 도달), `/health/live`/`/health/ready`/`/doc`이
+  같은 네임스페이스의 파드에서 모두 `200`을 응답했으며, 다른 네임스페이스의
+  파드는 요청이 타임아웃됐고(인바운드 제한이 실제로 동작함을 확인), 앱과 같은
+  라벨을 붙인 파드가 이미 허용된 호스트라도 허용되지 않은 포트로 요청하면
+  마찬가지로 타임아웃됐다(아웃바운드 기본 거부가 실제로 동작함을 확인). 실제
+  (현재는 철거된) EKS 대상에는 아직 무효하다 — `cluster/main.tf`의 `vpc-cni`
+  애드온이 VPC CNI Network Policy 강제 에이전트를 아직 켜지 않았다(별도의,
+  아직 일정이 잡히지 않은 Terraform 작업). AWS 자신의 에이전트(Calico와는 다른
+  강제 엔진)를 실제로 켜기 전엔 프로브를 다시 검증해야 한다.
 - **`helmet`을 통한 보안 응답 헤더 (2026-09-11, [ADR
   0055](ADR/0055-helmet-security-headers.ko.md))** — 백엔드는 강화 응답 헤더를
   전혀 보내지 않고 있었다: `Content-Security-Policy`, `X-Content-Type-Options`,
