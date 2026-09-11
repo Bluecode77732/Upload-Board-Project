@@ -9,6 +9,10 @@ export enum ErrorCode {
   AUTH_BAD_TOKEN_FORMAT = 'AUTH_BAD_TOKEN_FORMAT',
   AUTH_INVALID_CREDENTIALS = 'AUTH_INVALID_CREDENTIALS',
   AUTH_EMAIL_TAKEN = 'AUTH_EMAIL_TAKEN',
+  // register()로 넘어온 비밀번호가 최소 강도 기준(길이 10자 이상 + 대/소문자·숫자·기호
+  // 모두 포함)을 만족하지 못한다 — Basic 토큰 파싱 경로는 DTO/ValidationPipe를 거치지
+  // 않으므로 서비스 레벨에서 직접 검증한다.
+  AUTH_WEAK_PASSWORD = 'AUTH_WEAK_PASSWORD',
   FILE_TITLE_TAKEN = 'FILE_TITLE_TAKEN',
   FILE_INVALID_PATH = 'FILE_INVALID_PATH',
   // unlisted 파일의 콘텐츠를 요청했는데 share 토큰이 없거나, 틀렸거나, 만료됐다

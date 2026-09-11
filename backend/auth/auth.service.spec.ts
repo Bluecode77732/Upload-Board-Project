@@ -9,6 +9,7 @@ import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { createHash } from 'crypto';
 import { UserRole } from 'backend/auth/role/role';
+import { ErrorCode } from 'backend/common/error-code';
 
 jest.mock('bcrypt');
 
@@ -144,14 +145,13 @@ describe('AuthService', () => {
   });
 
   describe('register', () => {
-    const token = Buffer.from('test@gmail.com:Test123Password').toString(
-      'base64',
-    );
-    const basicToken = `Basic ${token}`;
-    const hashRounds = 10;
     const email = 'test@gmail.com';
-    const password = 'Test123Password';
+    const password = 'Test123Password!';
+    const hashRounds = 10;
     const hashedPassword = 'HashedPassword';
+    const basicTokenFor = (rawPassword: string) =>
+      `Basic ${Buffer.from(`${email}:${rawPassword}`).toString('base64')}`;
+    const basicToken = basicTokenFor(password);
 
     it('should register a new user', async () => {
       mockUserRepository.findOne
@@ -182,6 +182,26 @@ describe('AuthService', () => {
       );
       expect(mockUserRepository.save).not.toHaveBeenCalled();
     });
+
+    it.each([
+      ['too short', 'Sh0rt!Aa'],
+      ['no lowercase', 'ALLUPPER123!'],
+      ['no uppercase', 'alllower123!'],
+      ['no digit', 'NoDigitsHere!'],
+      ['no symbol', 'NoSymbolHere123'],
+      ['empty', ''],
+    ])(
+      'should reject a weak password with AUTH_WEAK_PASSWORD (%s)',
+      async (_case, weakPassword) => {
+        await expect(
+          authService.register(basicTokenFor(weakPassword)),
+        ).rejects.toMatchObject({
+          response: { code: ErrorCode.AUTH_WEAK_PASSWORD },
+        });
+        expect(mockUserRepository.findOne).not.toHaveBeenCalled();
+        expect(mockUserRepository.save).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('validateUser', () => {
