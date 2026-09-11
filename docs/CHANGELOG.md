@@ -13,6 +13,26 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Security
+- **Security response headers via `helmet` (2026-09-11, [ADR
+  0055](ADR/0055-helmet-security-headers.md))** — the backend sent no hardening response
+  headers at all: no `Content-Security-Policy`, `X-Content-Type-Options`,
+  `X-Frame-Options`, `Strict-Transport-Security`, or any of the rest of the
+  OWASP-recommended set. `helmet()` is now the first middleware registered in `main.ts`'s
+  `bootstrap()`, ahead of CORS/`cookieParser()`/the global `ValidationPipe`, so every
+  route carries the full header set. The one deviation from helmet's defaults:
+  `script-src` widens to `'self' 'unsafe-inline'` (every other directive stays default) —
+  plain `helmet()` would otherwise block `/doc`'s inline Swagger UI bootstrap script, and
+  ADR 0009 already settled that Swagger is this project's API documentation, so a change
+  that silently blanks it wasn't an acceptable trade-off. Live-verified in a real browser
+  (Playwright MCP): `/doc` renders every tag group and the full Schemas list, the
+  Authorize modal opens, zero console/CSP errors; response headers confirmed via `curl -i`
+  on both `/doc` and `/health/live`. Along the way, found and fixed (with developer
+  confirmation, since it's outside this task's own file scope) a pre-existing, unrelated
+  e2e failure: `test/app.e2e-spec.ts`'s `PW` fixture (`'pw12345678'`) never satisfied
+  `AuthService.register`'s password-strength check from an earlier commit
+  (`095a32a`), so all 76 e2e cases had been failing at registration before this task
+  touched anything — `PW` is now `'Pw1234567!'`. Verified: `pnpm lint` clean, `pnpm test`
+  270/270, `pnpm test:e2e` 76/76 against a live Postgres.
 - **`pnpm audit --prod` re-clean: qs/brace-expansion pinned, multer/js-yaml
   bumped, unused `aws-sdk` v2 removed (2026-09-10)** — re-running the audit
   surfaced 14 findings (7 high) beyond the 2 moderate `qs` DoS/array-limit-bypass

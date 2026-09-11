@@ -4,13 +4,28 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 
-// 목적: Nest 앱을 부트스트랩하고 CORS/쿠키/검증/Swagger를 구성한 뒤 리슨을 시작한다.
+// 목적: Nest 앱을 부트스트랩하고 보안 헤더/CORS/쿠키/검증/Swagger를 구성한 뒤 리슨을 시작한다.
 // 이유: PORT를 process.env에서 직접 읽으면 Joi 검증을 우회해 Config 정책(ConfigService만 사용)을 깨뜨린다.
-// 방법: ConfigService 인스턴스를 한 번만 얻어 CORS_ORIGIN과 PORT 조회에 재사용한다.
+// 방법: ConfigService 인스턴스를 한 번만 얻어 CORS_ORIGIN과 PORT 조회에 재사용한다. helmet은
+//       다른 미들웨어보다 먼저 적용해 모든 응답에 보안 헤더가 빠짐없이 붙게 하되, CSP의
+//       script-src는 /doc(Swagger UI)의 인라인 부트스트랩 스크립트가 실행되도록 완화한다
+//       (ADR 0055).
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+          'script-src': ["'self'", "'unsafe-inline'"],
+        },
+      },
+    }),
+  );
 
   // CORS_ORIGIN이 설정되지 않으면 CORS는 계속 꺼져 있다 — same-origin/Swagger 사용에는
   // 필요 없다; 다른 origin의 브라우저 프론트엔드는 콤마로 구분된 allowlist를 설정한다.

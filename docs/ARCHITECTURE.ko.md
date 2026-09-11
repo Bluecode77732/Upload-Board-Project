@@ -258,6 +258,16 @@ URL 접두사가 둘이라 컨트롤러도 둘입니다 — 스레드는 게시�
 
 ## 요청 흐름
 
+### 보안 헤더
+
+어떤 Nest 가드보다도 먼저, `main.ts`의 `bootstrap()`에서 가장 먼저 등록되는 순수
+Express 미들웨어인 `helmet()`이 OWASP 권장 응답 헤더 집합(`Content-Security-Policy`,
+`X-Content-Type-Options`, `X-Frame-Options`, `Strict-Transport-Security` 등)을 모든
+응답에 붙입니다([ADR 0055](ADR/0055-helmet-security-headers.ko.md)). helmet 기본값에서
+벗어난 directive는 `script-src` 하나뿐입니다(`'self' 'unsafe-inline'`으로 완화) —
+`/doc`의 인라인 Swagger UI 부트스트랩 스크립트가 계속 실행되게 하기 위해서이며,
+나머지 directive는 모두 기본값을 유지합니다.
+
 ### 가드 체인
 
 아래 인증 체인보다 먼저, 전역 `ThrottlerGuard`(`APP_GUARD`)가 모든 요청에 대해 돌면서

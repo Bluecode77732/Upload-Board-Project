@@ -252,6 +252,16 @@ Also unauthenticated, mirroring `HealthModule` — Prometheus scrapes carry no b
 
 ## Request Flow
 
+### Security headers
+
+Before any Nest guard runs, `helmet()` — plain Express middleware registered first in
+`main.ts`'s `bootstrap()` — attaches the OWASP-recommended response header set
+(`Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`,
+`Strict-Transport-Security`, etc.) to every response
+([ADR 0055](ADR/0055-helmet-security-headers.md)). `script-src` is the one directive
+widened past helmet's default (`'self' 'unsafe-inline'`) so `/doc`'s inline Swagger UI
+bootstrap script still executes; every other directive stays default.
+
 ### Guard chain
 
 Before any of the auth chain below, a global `ThrottlerGuard` (`APP_GUARD`) runs on every

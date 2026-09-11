@@ -28,7 +28,9 @@ describe('Sharenpo API (e2e)', () => {
   // 테스트가 만든 실제 파일들; 디스크를 깨끗하게 유지하려고 각 테스트 후 unlink한다.
   let createdFiles: string[] = [];
 
-  const PW = 'pw12345678';
+  // AuthService.register()의 PASSWORD_STRENGTH_PATTERN(10자 이상 + 소문자/대문자/숫자/기호,
+  // 커밋 095a32a)을 만족해야 한다 — 그냥 숫자+소문자 조합은 AUTH_WEAK_PASSWORD 400으로 막힌다.
+  const PW = 'Pw1234567!';
 
   const register = (email: string, password = PW) =>
     request(server)

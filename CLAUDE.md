@@ -1151,6 +1151,19 @@ Do not suggest alternatives to these decisions without explicit request.
   limitation: the default storage is single-instance in-memory, so a future multi-replica
   deployment would need Redis-backed storage to keep one true global ceiling — out of scope
   until this app actually runs more than one replica
+- **Security response headers (landed 2026-09-11, [ADR 0055](docs/ADR/0055-helmet-security-headers.md))**:
+  `helmet()` is applied in `main.ts`'s `bootstrap()` — the first middleware registered,
+  before CORS/`cookieParser()`/the global `ValidationPipe` — so every route carries the
+  OWASP-recommended header set (`Content-Security-Policy`, `X-Content-Type-Options`,
+  `X-Frame-Options`, `Strict-Transport-Security`, etc.). This is Express-level middleware,
+  not a Nest guard, so it runs ahead of `ThrottlerGuard`/`JwtAuthGuard`/`RolesGuard` and
+  changes no guard's coverage. The one deviation from `helmet`'s defaults: `script-src`
+  widens to `'self' 'unsafe-inline'` (every other directive stays default) because
+  `SwaggerModule.setup('doc', ...)`'s inline bootstrap `<script>` would otherwise be
+  blocked by CSP — live-verified in a real browser (Playwright), confirming `/doc` renders
+  and its Authorize modal opens with zero console/CSP errors. `Strict-Transport-Security`
+  is sent even though this app has no TLS termination yet (ADR 0034, deferred) — inert
+  until then, since browsers only honor it over an already-HTTPS connection
 - **Never suggest**: GraphQL, WebSocket, gRPC — the small request/response CRUD surface
   does not justify the schema layer, client story, or operational overhead each would add
   (full reasoning: ADR 0009)

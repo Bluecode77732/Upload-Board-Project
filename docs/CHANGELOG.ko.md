@@ -13,6 +13,28 @@
 ## [Unreleased]
 
 ### 보안
+- **`helmet`을 통한 보안 응답 헤더 (2026-09-11, [ADR
+  0055](ADR/0055-helmet-security-headers.ko.md))** — 백엔드는 강화 응답 헤더를
+  전혀 보내지 않고 있었다: `Content-Security-Policy`, `X-Content-Type-Options`,
+  `X-Frame-Options`, `Strict-Transport-Security` 등 OWASP 권장 헤더 집합이
+  하나도 없었다. 이제 `helmet()`이 `main.ts`의 `bootstrap()`에서 가장 먼저
+  등록되는 미들웨어로 CORS/`cookieParser()`/전역 `ValidationPipe`보다 앞서
+  적용되어, 모든 라우트가 전체 헤더 집합을 받는다. helmet 기본값에서 벗어난
+  지점은 하나뿐이다: `script-src`를 `'self' 'unsafe-inline'`으로 완화했다
+  (나머지 directive는 모두 기본값 유지) — 그러지 않으면 `/doc`의 인라인
+  Swagger UI 부트스트랩 스크립트가 막히는데, ADR 0009가 이미 "Swagger가 곧 이
+  프로젝트의 API 문서"라고 못박은 만큼 그걸 조용히 빈 화면으로 만드는 건
+  받아들일 수 있는 트레이드오프가 아니었다. 실제 브라우저(Playwright MCP)로
+  라이브 검증했다: `/doc`이 모든 태그 그룹과 전체 Schemas 목록을 렌더링하고,
+  Authorize 모달이 콘솔/CSP 에러 0건으로 열린다. 응답 헤더는 `/doc`과
+  `/health/live` 양쪽에서 `curl -i`로 확인했다. 작업 도중 이 작업의 파일 범위
+  밖에 있는, 무관한 기존 e2e 실패를 하나 찾아 개발자 확인을 거쳐 고쳤다:
+  `test/app.e2e-spec.ts`의 `PW` 픽스처(`'pw12345678'`)가 이전 커밋
+  (`095a32a`)의 `AuthService.register` 비밀번호 강도 검증을 한 번도 만족한
+  적이 없어서, 이 작업이 뭔가 건드리기 전부터 이미 e2e 76건 전부가 등록
+  단계에서 실패하고 있었다 — `PW`를 이제 `'Pw1234567!'`로 바꿨다. 확인:
+  `pnpm lint` clean, `pnpm test` 270/270, 실제 Postgres 대상 `pnpm test:e2e`
+  76/76.
 - **`pnpm audit --prod` 재정화: qs·brace-expansion 고정, multer·js-yaml 상향,
   안 쓰는 `aws-sdk` v2 제거 (2026-09-10)** — 점검을 다시 돌린 계기였던 moderate
   `qs` DoS·array-limit 우회 취약점 2건 외에, 재실행 결과 14건(high 7건)이

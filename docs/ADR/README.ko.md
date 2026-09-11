@@ -62,6 +62,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0052](0052-superadmin-seed-manual-trigger.ko.md) | Superadmin 시딩을 수동 트리거로 전환 — 부팅 시 무검증 자동 승격 제거, 0013 amend | 승인됨 — 구현됨 | 2026-09-09 |
 | [0053](0053-global-rate-limiting.ko.md) | `@nestjs/throttler`를 통한 전역 요청 횟수 제한 — 최초의 전역 `APP_GUARD`, health/metrics 예외 | 승인됨 — 구현됨, e2e 검증 완료 | 2026-09-10 |
 | [0054](0054-per-route-rate-limit-tuning.ko.md) | 라우트별 요청 횟수 제한 차등화 — auth/upload 강화, skipIf 기반 우회, 0053 amend | 승인됨 — 구현됨, e2e 검증 완료 | 2026-09-10 |
+| [0055](0055-helmet-security-headers.ko.md) | `helmet`을 통한 보안 응답 헤더 — 전역 미들웨어, Swagger UI를 위해 CSP script-src 완화 | 승인됨 — 구현됨, 라이브 검증 완료 | 2026-09-11 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

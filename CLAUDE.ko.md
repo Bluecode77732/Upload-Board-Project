@@ -1174,6 +1174,20 @@ Conflict Protocol을 따른다.
   유지하려면 Redis 기반 storage가 필요하다 — 이 앱이 실제로 replica 2개 이상으로
   돌기 전까지는
   범위 밖이다
+- **보안 응답 헤더(landed 2026-09-11, [ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md))**:
+  `main.ts`의 `bootstrap()`에서 `helmet()`을 적용한다 — CORS/`cookieParser()`/전역
+  `ValidationPipe`보다 먼저 등록되는 첫 번째 미들웨어라, 모든 라우트가 OWASP 권장
+  헤더 집합(`Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`,
+  `Strict-Transport-Security` 등)을 받는다. 이것은 Nest 가드가 아니라 Express 레벨
+  미들웨어라 `ThrottlerGuard`/`JwtAuthGuard`/`RolesGuard`보다 먼저 실행되며 어떤
+  가드의 적용 범위도 바꾸지 않는다. helmet 기본값에서 벗어난 지점은 하나뿐이다:
+  `script-src`를 `'self' 'unsafe-inline'`으로 완화했다(나머지 directive는 모두
+  기본값 유지) — 그러지 않으면 `SwaggerModule.setup('doc', ...)`의 인라인
+  부트스트랩 `<script>`가 CSP에 막히기 때문이다. 실제 브라우저(Playwright)로
+  `/doc`이 정상 렌더링되고 Authorize 모달이 콘솔/CSP 에러 0건으로 열림을
+  라이브 검증했다. `Strict-Transport-Security`는 이 앱이 아직 TLS 종단을 갖지
+  않는데도(ADR 0034, 보류) 전송되지만 — 브라우저는 이미 HTTPS로 도착한 응답에서만
+  이 헤더를 준수하므로 그 전까지는 무해하다
 - **절대 제안 금지**: GraphQL, WebSocket, gRPC — 작은 요청/응답 CRUD 표면은
   이들 각각이 더할 스키마 레이어, 클라이언트 구현, 운영 오버헤드를 정당화하지
   못한다(전체 근거: ADR 0009)
