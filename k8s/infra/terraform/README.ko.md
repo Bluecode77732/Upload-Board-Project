@@ -374,6 +374,17 @@ helm upgrade sharenpo . \
   --set ingress.hosts[0].host=<본인-도메인>
 ```
 
+이게 실제로 무슨 일을 하는지 끝까지 따라가 보면: 이 명령으로 만들어지는 `Ingress`
+객체는 ACM 인증서 ARN을 annotation으로 **표시만** 할 뿐, 그 자체로 AWS에 뭔가를
+만들지 않습니다. ALB Controller(`addons/`가 클러스터 안에 설치)가
+`ingressClassName: alb`인 `Ingress` 객체를 지켜보다가 그 annotation을 읽고, AWS
+API를 직접 호출해 인증서가 이미 HTTPS 리스너에 붙은 상태의 진짜 ALB를 만듭니다 —
+"ALB부터 만들고 인증서는 따로 붙이는" 두 단계가 아니라 한 번에 됩니다. 그 AWS API
+호출 자체가 로드밸런서의 배포이고, "AWS 쪽"에서 별도로 뭔가 더 일어나지 않습니다.
+그 이후 런타임에서는, 사용자의 브라우저가 그 ALB에 HTTPS로 접속하고 — ALB →
+Service → Pod 구간은 ADR 0034의 트러스트 바운더리에 따라 클러스터 내부망 안에서
+평문 HTTP로 남습니다.
+
 ## 각 state가 만드는 것
 
 | State | 리소스 | 목적 | ADR 0043 결정 |

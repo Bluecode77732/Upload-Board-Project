@@ -373,6 +373,16 @@ helm upgrade sharenpo . \
   --set ingress.hosts[0].host=<your-domain>
 ```
 
+What this actually does, end to end: the `Ingress` object this creates only *carries* the
+ACM certificate ARN as an annotation — it does not itself provision anything in AWS. The
+ALB Controller (running in-cluster, installed by `addons/`) watches for `Ingress` objects
+with `ingressClassName: alb`, reads that annotation, and calls the AWS API directly to
+create a real ALB with the certificate already attached to its HTTPS listener — one step,
+not "create the ALB, then separately attach the cert." That AWS API call *is* the
+deployment of the load balancer; nothing further happens on "AWS's side" as a separate
+step. From then on, at runtime, a user's browser connects to that ALB over HTTPS; ALB → Service → pod
+stays plain HTTP inside the cluster's private network, per ADR 0034's trust boundary.
+
 ## What each state provisions
 
 | State | Resource | Purpose | ADR 0043 decision |
