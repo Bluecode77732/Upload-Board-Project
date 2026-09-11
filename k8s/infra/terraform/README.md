@@ -60,18 +60,45 @@ just convention (ADR 0044 D2):
    `app-infra/` (`external_secrets_secrets_manager_arns`). This is why it
    cannot run before `app-infra/` exists.
 
-`terraform_remote_state` in `app-infra/` and `addons/` uses `backend =
-"local"` with a relative path to the producing state's directory
-(`../cluster/terraform.tfstate`, etc.) — this is a single-developer
-convenience, not a shared/CI backend (ADR 0044 D3). Run every command below
-from inside the directory it's shown under; `terraform init` must be run
-separately in each of the three.
+Each state's own `terraform.tfstate` — and, for `app-infra/`/`addons/`, the
+`terraform_remote_state` reads of the other states' outputs — live in an S3
+bucket with native locking and SSE-S3 encryption, not Terraform's local-file
+default ([ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.md),
+amending ADR 0044 D3's original "local, revisit once a second developer or
+CI pipeline needs to apply" stance — a 2026-09-09 security review found
+`app-infra/`'s generated secrets landing in plaintext in the local state
+file, which made switching worth doing sooner). No DynamoDB table, no KMS
+key — S3's native `use_lockfile` (GA in Terraform 1.11) and free SSE-S3
+cover locking and encryption without either; see the ADR for why (this AWS
+account has exactly one human principal, so KMS's access-separation value
+doesn't apply yet — D6 names the trigger for revisiting that). Run every
+command below from inside the directory it's shown under; `terraform init`
+must be run separately in each of the three, and now needs
+`-backend-config="bucket=<value>"` (see bootstrap step below) every time.
 
-**Future**: once a second developer or a CI pipeline needs to `apply` this
-configuration, each state's `backend "local"` migrates to a remote backend
-(S3 + DynamoDB lock, or Terraform Cloud) — deliberately not done now (ADR
-0044 D3, Alternatives rejected), tracked as unscheduled work in
-[ROADMAP.md §7](../../../docs/ROADMAP.md#7-unscheduled--open-decisions).
+**One-time bootstrap, before the first `apply` after this change**: the S3
+bucket a `backend "s3" {}` block points at has to exist before `terraform
+init` can use it — Terraform doesn't create its own backend. This is a
+manual, one-time step (deliberately not a fourth Terraform root module — ADR
+0057 Alternatives rejected), run once, not repeated per apply:
+
+```sh
+aws s3api create-bucket --bucket <globally-unique-tfstate-bucket-name> \
+  --region ap-northeast-2 \
+  --create-bucket-configuration LocationConstraint=ap-northeast-2
+aws s3api put-bucket-versioning --bucket <that-bucket-name> \
+  --versioning-configuration Status=Enabled
+aws s3api put-public-access-block --bucket <that-bucket-name> \
+  --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+```
+
+Then, in each of the three directories, `terraform init -backend-config="bucket=<that-bucket-name>"`
+(or, via `deploy.sh`, set `TFSTATE_BUCKET_NAME=<that-bucket-name>` — every
+`deploy.sh` command below already expects it). This bucket is meant to
+persist — it is not something to tear down after verifying it works, the
+way the EKS/RDS stack below was (see ADR 0057 Alternatives rejected for why
+that was considered and rejected for this bucket specifically).
 
 ## Before you `apply` anything
 
@@ -110,11 +137,17 @@ configuration, each state's `backend "local"` migrates to a remote backend
 2. **A globally-unique S3 bucket name** for `app-infra/`'s
    `var.s3_bucket_name` — bucket names collide across all AWS accounts, not
    just yours.
-3. **AWS credentials** with permission to create EKS/RDS/S3/IAM/Route53/ACM
+3. **A second, separate globally-unique S3 bucket for Terraform state itself**
+   (`TFSTATE_BUCKET_NAME` / `-backend-config="bucket=..."` /
+   `var.tfstate_bucket_name`) — see the one-time bootstrap step above
+   ([ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.md)).
+   Must not be the same bucket as `s3_bucket_name` above (that one holds
+   app-uploaded media, not Terraform state).
+4. **AWS credentials** with permission to create EKS/RDS/S3/IAM/Route53/ACM
    resources, and the `aws`/`kubectl`/`helm` CLIs installed locally (the
    `kubernetes`/`helm` providers in `addons/` shell out to `aws eks
    get-token`).
-4. **`region`/`cluster_name` must match across all three `.tfvars`/`-var`
+5. **`region`/`cluster_name` must match across all three `.tfvars`/`-var`
    invocations.** These are plain variables, not shared via
    `terraform_remote_state` — passing a different `cluster_name` to
    `app-infra/` than you did to `cluster/` produces a config that plans
@@ -127,6 +160,7 @@ point" below for what each one actually does):
 
 ```sh
 cd k8s/infra/terraform
+export TFSTATE_BUCKET_NAME=<globally-unique-tfstate-bucket-name>  # bootstrapped once, see above
 
 # 1. cluster
 bash deploy.sh cluster
@@ -207,12 +241,12 @@ destroy` (below) — nothing about the sequence changes.
 ```sh
 # 1. cluster/
 cd cluster
-terraform init
+terraform init -backend-config="bucket=<globally-unique-tfstate-bucket-name>"
 terraform apply
 
 # 2. app-infra/ — reads cluster/'s state via terraform_remote_state
 cd ../app-infra
-terraform init
+terraform init -backend-config="bucket=<globally-unique-tfstate-bucket-name>"
 # The apply below creates a new Route53 zone and waits, in the same run, for
 # ACM to DNS-validate against it — it will hang until your registrar's
 # nameservers point at this new zone. The zone doesn't exist until this
@@ -229,12 +263,13 @@ terraform init
 # anywhere and must be replaced at the registrar again.
 terraform apply \
   -var="s3_bucket_name=<globally-unique-bucket-name>" \
-  -var="domain_name=<your-domain>"
+  -var="domain_name=<your-domain>" \
+  -var="tfstate_bucket_name=<globally-unique-tfstate-bucket-name>"
 
 # 3. addons/ — reads both cluster/'s and app-infra/'s state
 cd ../addons
-terraform init
-terraform apply
+terraform init -backend-config="bucket=<globally-unique-tfstate-bucket-name>"
+terraform apply -var="tfstate_bucket_name=<globally-unique-tfstate-bucket-name>"
 ```
 
 No variable in any of the three states accepts a secret value — the four
@@ -275,9 +310,10 @@ does not always clear on its own.
   the instance type) and re-run `terraform apply`; it replaces just the
   failed node group.
 - **`Error: Error acquiring the state lock`** after an interrupted (e.g.
-  Ctrl-C'd) `terraform apply` — the local backend leaves a lock file behind
-  when the process doesn't get to release it cleanly. The error message
-  itself prints the lock ID; use it exactly:
+  Ctrl-C'd) `terraform apply` — the S3 backend's native lock (`use_lockfile`,
+  ADR 0057) leaves a `.tflock` object in the state bucket behind when the
+  process doesn't get to release it cleanly. The error message itself prints
+  the lock ID; use it exactly:
   ```sh
   terraform force-unlock <LOCK_ID>
   ```
@@ -466,12 +502,13 @@ review ([ADR 0046](../../../docs/ADR/0046-deploy-sequence-automation.md) D3):
 
 ```sh
 cd addons
-terraform destroy
+terraform destroy -var="tfstate_bucket_name=<tfstate-bucket-name>"
 
 cd ../app-infra
 terraform destroy \
   -var="s3_bucket_name=<value from above>" \
-  -var="domain_name=<value from above>"
+  -var="domain_name=<value from above>" \
+  -var="tfstate_bucket_name=<tfstate-bucket-name>"
 
 cd ../cluster
 terraform destroy
@@ -487,10 +524,11 @@ use this only once you've already reviewed what each state holds (e.g. from
 a prior `plan`) and just want to skip re-confirming interactively:
 
 ```sh
-cd addons       && terraform destroy -auto-approve
+cd addons       && terraform destroy -auto-approve -var="tfstate_bucket_name=<tfstate-bucket-name>"
 cd ../app-infra && terraform destroy -auto-approve \
   -var="s3_bucket_name=<value from above>" \
-  -var="domain_name=<value from above>"
+  -var="domain_name=<value from above>" \
+  -var="tfstate_bucket_name=<tfstate-bucket-name>"
 cd ../cluster   && terraform destroy -auto-approve
 ```
 

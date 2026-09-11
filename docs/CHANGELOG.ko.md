@@ -13,6 +13,26 @@
 ## [Unreleased]
 
 ### 보안
+- **Terraform state 백엔드 — S3 네이티브 락, DynamoDB·KMS 없이 (2026-09-12, [ADR
+  0057](ADR/0057-terraform-state-backend-s3-native-lock.ko.md), ADR 0044 D3 amends)** —
+  2026-09-09 보안 점검에서 세 Terraform state(`cluster/`, `app-infra/`, `addons/`) 모두
+  기본값인 local backend를 쓰고 있고, `app-infra/`가 생성한 시크릿
+  (`random_password.db`/`access_token_secret`/`refresh_token_secret`)이 로컬
+  `terraform.tfstate`에 평문으로 남는다는 사실이 드러났다. 세 `versions.tf` 모두
+  백엔드를 S3로 옮긴다 — DynamoDB 대신 네이티브 락(`use_lockfile`, Terraform 1.11
+  GA), SSE-KMS 대신 SSE-S3(이 AWS 계정에는 사람 주체가 1명뿐이라 KMS의 IAM
+  복호화/읽기 분리가 아직 아무 가치도 안 준다 — 재검토 시점은 ADR 0057 D6에 정함).
+  버킷 이름은 의도적으로 커밋하지 않는다(`s3_bucket_name`의 기존 기본값-없음
+  컨벤션과 동일하게 init 시점에 `-backend-config="bucket=..."`로 넘김);
+  `app-infra/`·`addons/`가 서로의 출력값을 읽는 `data.terraform_remote_state`도
+  `backend = "local"` + 상대경로에서 `backend = "s3"` + 새 `tfstate_bucket_name`
+  변수로 옮긴다 — 생성 측 state의 실제 파일이 옮겨가면 예전 상대경로 읽기는
+  조용히 깨지기 때문이다. `deploy.sh`에 `TFSTATE_BUCKET_NAME` 환경변수를 추가해
+  세 state 전체의 모든 `terraform init`/`-var` 호출에 배선했다. 세 디렉터리 모두
+  `terraform init -backend=false`, `fmt -check`, `validate`가 통과한다 —
+  **버킷을 생성하지도, `apply`를 실행하지도 않았다**; 버킷 생성과 실제
+  `terraform init -migrate-state`는 실제 배포 시점으로 유예됐고(ADR 0057 D5),
+  `k8s/infra/terraform/README.md`에 1회성 런북 단계로 기록돼 있다.
 - **클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy (2026-09-11, [ADR
   0056](ADR/0056-networkpolicy-east-west-restriction.ko.md))** — 보안 점검 결과
   `k8s/helm/templates/`에 `NetworkPolicy` 리소스가 없다는 사실이 드러났다: 앱이

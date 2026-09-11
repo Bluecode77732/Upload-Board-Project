@@ -39,6 +39,9 @@ REGION="${REGION:-ap-northeast-2}"
 CLUSTER_NAME="${CLUSTER_NAME:-sharenpo}"
 S3_BUCKET_NAME="${S3_BUCKET_NAME:-}"
 DOMAIN_NAME="${DOMAIN_NAME:-}"
+# ADR 0057 -- 세 state 모두 backend "s3" 블록을 쓰므로(bucket은 커밋하지 않고
+# terraform init -backend-config로 넘김), 세 상태 전부에 필요하다.
+TFSTATE_BUCKET_NAME="${TFSTATE_BUCKET_NAME:-}"
 HELM_RELEASE="${HELM_RELEASE:-sharenpo}"
 # helm 단계에서 이 브랜치의 최신 커밋 이미지를 자동으로 조회해 쓴다. 기본값은
 # dev -- 실제로 지금까지의 모든 라이브 배포가 dev 기준이었다(main은 정식
@@ -81,6 +84,9 @@ print_usage() {
   echo "  CLUSTER_NAME      기본값: sharenpo"
   echo "  S3_BUCKET_NAME    app-infra/all 실행 시 필수 (전역적으로 유일한 버킷 이름)"
   echo "  DOMAIN_NAME       app-infra/all 실행 시 필수 (도메인은 미리 구매돼 있어야 함)"
+  echo "  TFSTATE_BUCKET_NAME  cluster/app-infra/addons/all 실행 시 모두 필수"
+  echo "                    (Terraform state 저장용 S3 버킷 이름, ADR 0057 -- 버킷을"
+  echo "                    아직 만들지 않았다면 README.md 부트스트랩 절차부터 실행)"
   echo "  HELM_RELEASE      기본값: sharenpo (app-infra의 IRSA trust policy가 신뢰하는"
   echo "                    ServiceAccount 이름과 반드시 같아야 함 -- values-prod.yaml의"
   echo "                    serviceAccount.create=true가 이 값을 그대로 SA 이름으로 씀)"
@@ -130,6 +136,19 @@ run_terraform_step() {
 # 방법: cluster/의 실제 적용된 cluster_name output을 읽어서 지금 쓰려는
 #   CLUSTER_NAME과 비교한다. cluster/가 아직 apply되지 않았다면(=output이 없다면)
 #   건너뛴다 -- 그 경우는 deploy_cluster가 먼저 실행돼야 한다.
+# 목적: 모든 terraform init이 backend "s3" 블록(ADR 0057)에 필요한 버킷 이름을
+#   가지고 있는지 확인한다.
+# 이유: TFSTATE_BUCKET_NAME이 비어 있으면 terraform init -backend-config가 빈
+#   문자열을 넘겨 실패한다 -- S3_BUCKET_NAME/DOMAIN_NAME과 같은 이유로, 그
+#   불명확한 에러 대신 여기서 먼저 명확한 에러를 낸다.
+# 방법: 비어 있으면 즉시 에러 메시지를 출력하고 종료한다.
+check_tfstate_bucket_name() {
+  if [ -z "$TFSTATE_BUCKET_NAME" ]; then
+    echo "에러: TFSTATE_BUCKET_NAME 환경변수가 필요합니다 (Terraform state를 저장할 전역적으로 유일한 버킷 이름 -- ADR 0057, 아직 버킷을 만들지 않았다면 README.md의 부트스트랩 절차부터)." >&2
+    exit 1
+  fi
+}
+
 check_cluster_name_matches() {
   local applied_name
   applied_name="$(cd cluster && terraform output -raw cluster_name 2>/dev/null || echo "")"
@@ -193,8 +212,14 @@ apply_saved_plan() {
   fi
 }
 
+# 목적: cluster/를 apply한다.
+# 이유: TFSTATE_BUCKET_NAME이 backend "s3" 블록(ADR 0057)의 필수 인자라, init에
+#   먼저 넘겨야 한다.
+# 방법: check_tfstate_bucket_name으로 먼저 확인한 뒤, terraform init에
+#   -backend-config="bucket=..."을 붙여 그 버킷을 가리키게 한다.
 deploy_cluster() {
-  (cd cluster && terraform init -input=false)
+  check_tfstate_bucket_name
+  (cd cluster && terraform init -input=false -backend-config="bucket=$TFSTATE_BUCKET_NAME")
   run_terraform_step cluster \
     -var="region=$REGION" \
     -var="cluster_name=$CLUSTER_NAME"
@@ -202,9 +227,11 @@ deploy_cluster() {
 
 # 목적: cluster의 plan만 계산해서 저장한다(적용은 apply_cluster()가 별도로 한다).
 # 이유/방법: plan_and_save()의 목적/이유/방법 참고 -- cluster는 2단계 apply 같은
-#   특수 사정이 없어 그대로 감싸기만 하면 된다.
+#   특수 사정이 없어 그대로 감싸기만 하면 된다. TFSTATE_BUCKET_NAME 확인과
+#   -backend-config는 deploy_cluster()와 같은 이유(ADR 0057)로 필요하다.
 plan_cluster() {
-  (cd cluster && terraform init -input=false)
+  check_tfstate_bucket_name
+  (cd cluster && terraform init -input=false -backend-config="bucket=$TFSTATE_BUCKET_NAME")
   plan_and_save cluster .deploy-plan.tfplan \
     -var="region=$REGION" \
     -var="cluster_name=$CLUSTER_NAME"
@@ -224,9 +251,10 @@ deploy_app_infra() {
     echo "에러: DOMAIN_NAME 환경변수가 필요합니다 (도메인은 미리 구매돼 있어야 함)." >&2
     exit 1
   fi
+  check_tfstate_bucket_name
   check_cluster_name_matches
 
-  (cd app-infra && terraform init -input=false)
+  (cd app-infra && terraform init -input=false -backend-config="bucket=$TFSTATE_BUCKET_NAME")
 
   # ACM 2단계 apply: DNS 검증용 Route53 레코드(aws_route53_record.app_cert_validation)는
   # 인증서(aws_acm_certificate.app)의 domain_validation_options 값을 for_each로
@@ -238,6 +266,7 @@ deploy_app_infra() {
     -var="cluster_name=$CLUSTER_NAME" \
     -var="s3_bucket_name=$S3_BUCKET_NAME" \
     -var="domain_name=$DOMAIN_NAME" \
+    -var="tfstate_bucket_name=$TFSTATE_BUCKET_NAME" \
     -target=aws_acm_certificate.app
 
   # 이 2단계에서 aws_route53_zone.app이 새로 만들어지고, 같은 apply 안에서
@@ -264,7 +293,8 @@ deploy_app_infra() {
     -var="region=$REGION" \
     -var="cluster_name=$CLUSTER_NAME" \
     -var="s3_bucket_name=$S3_BUCKET_NAME" \
-    -var="domain_name=$DOMAIN_NAME"
+    -var="domain_name=$DOMAIN_NAME" \
+    -var="tfstate_bucket_name=$TFSTATE_BUCKET_NAME"
 }
 
 # 목적: app-infra 1단계(ACM 인증서)의 plan만 계산해서 저장한다.
@@ -284,9 +314,10 @@ plan_app_infra() {
     echo "에러: DOMAIN_NAME 환경변수가 필요합니다 (도메인은 미리 구매돼 있어야 함)." >&2
     exit 1
   fi
+  check_tfstate_bucket_name
   check_cluster_name_matches
 
-  (cd app-infra && terraform init -input=false)
+  (cd app-infra && terraform init -input=false -backend-config="bucket=$TFSTATE_BUCKET_NAME")
 
   echo "==> app-infra 1단계(ACM 인증서)만 plan을 계산해 저장합니다."
   echo "    (2단계 전체 plan은 인증서가 실제로 만들어져야 계산할 수 있어서,"
@@ -296,6 +327,7 @@ plan_app_infra() {
     -var="cluster_name=$CLUSTER_NAME" \
     -var="s3_bucket_name=$S3_BUCKET_NAME" \
     -var="domain_name=$DOMAIN_NAME" \
+    -var="tfstate_bucket_name=$TFSTATE_BUCKET_NAME" \
     -target=aws_acm_certificate.app
 }
 
@@ -322,26 +354,37 @@ apply_app_infra() {
     -var="region=$REGION" \
     -var="cluster_name=$CLUSTER_NAME" \
     -var="s3_bucket_name=$S3_BUCKET_NAME" \
-    -var="domain_name=$DOMAIN_NAME"
+    -var="domain_name=$DOMAIN_NAME" \
+    -var="tfstate_bucket_name=$TFSTATE_BUCKET_NAME"
 }
 
+# 목적: addons/를 apply한다.
+# 이유: cluster/뿐 아니라 app-infra/의 출력도 terraform_remote_state(backend s3,
+#   ADR 0057)로 읽으므로 TFSTATE_BUCKET_NAME이 필요하다.
+# 방법: check_tfstate_bucket_name으로 먼저 확인한 뒤, terraform init에
+#   -backend-config="bucket=..."과 -var="tfstate_bucket_name=..."을 함께 넘긴다.
 deploy_addons() {
+  check_tfstate_bucket_name
   check_cluster_name_matches
-  (cd addons && terraform init -input=false)
+  (cd addons && terraform init -input=false -backend-config="bucket=$TFSTATE_BUCKET_NAME")
   run_terraform_step addons \
     -var="region=$REGION" \
-    -var="cluster_name=$CLUSTER_NAME"
+    -var="cluster_name=$CLUSTER_NAME" \
+    -var="tfstate_bucket_name=$TFSTATE_BUCKET_NAME"
 }
 
 # 목적: addons의 plan만 계산해서 저장한다(적용은 apply_addons()가 별도로 한다).
 # 이유/방법: plan_and_save()의 목적/이유/방법 참고 -- addons는 2단계 apply 같은
-#   특수 사정이 없어 그대로 감싸기만 하면 된다.
+#   특수 사정이 없어 그대로 감싸기만 하면 된다. TFSTATE_BUCKET_NAME 확인과
+#   -backend-config/-var는 deploy_addons()와 같은 이유(ADR 0057)로 필요하다.
 plan_addons() {
+  check_tfstate_bucket_name
   check_cluster_name_matches
-  (cd addons && terraform init -input=false)
+  (cd addons && terraform init -input=false -backend-config="bucket=$TFSTATE_BUCKET_NAME")
   plan_and_save addons .deploy-plan.tfplan \
     -var="region=$REGION" \
-    -var="cluster_name=$CLUSTER_NAME"
+    -var="cluster_name=$CLUSTER_NAME" \
+    -var="tfstate_bucket_name=$TFSTATE_BUCKET_NAME"
 }
 
 # 목적: plan_addons()가 저장해 둔 plan을 검토·승인 후 적용한다.

@@ -17,6 +17,11 @@ variable "cluster_name" {
   default     = "sharenpo"
 }
 
+variable "tfstate_bucket_name" {
+  description = "cluster/·app-infra/의 terraform_remote_state를 읽을 S3 버킷 이름 — 이 상태 자신의 backend \"s3\" 블록과 같은 버킷을 가리켜야 한다(ADR 0057). 버킷 이름은 전역적으로 유일해야 하므로 안전한 기본값이 없다(s3_bucket_name과 동일한 이유, ADR 0043 D8)"
+  type        = string
+}
+
 variable "tags" {
   description = "모든 리소스에 추가로 붙일 태그 — local.tags의 Blueprint/GithubRepo 태그에 더해진다"
   type        = map(string)

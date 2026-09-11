@@ -887,14 +887,24 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   이 항목이 측정했던 데이터가 지금 접근 가능한 개발 DB엔 더 이상 존재하지 않으므로,
   정리할 것도 결정할 것도 남지 않았다. 이는 원래부터 *개발* DB에만 해당하는 이야기였고,
   운영 데이터 경로를 가리킨 적은 없다.
-- Terraform 원격 state backend (2026-08-19 기록,
-  [ADR 0044](ADR/0044-terraform-three-state-split.ko.md) D3) — **미착수
-  이유**: 3-state 분할의 `terraform_remote_state`는 의도적으로 `backend =
-  "local"`을 쓰며, 개발자 1인의 `apply`/`destroy` 사이클에만 범위를 한정한
-  선택이다. 아직 실제 AWS에 한 번도 `apply`하지 않은 설정(ADR 0043 D1)에
-  S3+DynamoDB 락(또는 Terraform Cloud) 원격 backend를 지금 도입하는 건
-  요청받지 않은 추가 범위 확장이다. 두 번째 개발자나 CI 파이프라인이 이
-  설정을 apply해야 할 때 재검토한다.
+- ~~Terraform 원격 state backend~~ (2026-08-19 기록,
+  [ADR 0044](ADR/0044-terraform-three-state-split.ko.md) D3) — **2026-09-12
+  결정 및 코드 완료, 미적용**
+  ([ADR 0057](ADR/0057-terraform-state-backend-s3-native-lock.ko.md), ADR
+  0044 D3 amends). 원래 트리거("두 번째 개발자나 CI 파이프라인")보다 먼저
+  재검토했다: 2026-09-09 보안 점검에서 `app-infra/`가 생성한 시크릿
+  (`random_password.db`/`access_token_secret`/`refresh_token_secret`)이
+  로컬 state 파일에 평문으로 남는다는 걸 발견했고, 세 state가 모두 비어
+  있는 지금이 전환하기 가장 저렴한 시점이다. 백엔드는 S3 네이티브
+  락(`use_lockfile`, Terraform 1.11에서 GA) + SSE-S3 암호화로 옮긴다 —
+  여기 원래 적었던 DynamoDB+KMS 형태가 아니다, 네이티브 락이 DynamoDB
+  필요성을 완전히 없애고, 이 AWS 계정에는 사람 주체가 1명뿐이라 KMS의
+  IAM 복호화/읽기 분리가 아직 아무 가치를 안 주기 때문이다(ADR 0057
+  D2/D3). SSE-KMS로의 승격은 이 항목의 원래 트리거를 정확하게 다시 표현한
+  형태로 유예됐다(ADR 0057 D6) — 그 시점에도 DynamoDB는 돌아오지 않는다,
+  `use_lockfile`이 이미 팀 규모와 무관하게 확장되기 때문이다. 버킷 생성과
+  실제 `terraform init -migrate-state`는 실제 배포 시점으로 유예 —
+  `k8s/infra/terraform/README.md`의 부트스트랩 런북 참고.
 - Distroless 런타임 베이스 (2026-08-08 기록, [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md))
   — **미착수 이유**: Node 24용 distroless 태그(`gcr.io/distroless/nodejs24-debian12`
   등)가 실제로 존재하는지 실물 레지스트리로 검증하지 않았고, distroless는 이

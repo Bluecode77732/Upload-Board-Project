@@ -60,19 +60,44 @@ k8s/infra/terraform/
    (`external_secrets_secrets_manager_arns`) 읽습니다. `app-infra/`가
    존재하기 전에는 이 state를 먼저 apply할 수 없는 이유입니다.
 
-`app-infra/`와 `addons/`의 `terraform_remote_state`는 생성한 state
-디렉터리를 가리키는 상대 경로와 함께 `backend = "local"`을 씁니다
-(`../cluster/terraform.tfstate` 등) — 팀/CI 공유용 백엔드가 아니라 개발자
-1인의 편의를 위한 선택입니다(ADR 0044 D3). 아래 명령은 표시된 디렉터리
-안에서 각각 실행하세요; `terraform init`도 세 곳에서 각각 따로 실행해야
-합니다.
+각 state 자신의 `terraform.tfstate`, 그리고 `app-infra/`/`addons/`가 다른
+state의 출력값을 읽는 `terraform_remote_state`도 Terraform 기본값인 로컬
+파일이 아니라 네이티브 락 + SSE-S3 암호화를 쓰는 S3 버킷에 저장됩니다
+([ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.ko.md),
+ADR 0044 D3의 원래 "local, 두 번째 개발자나 CI 파이프라인이 필요해지면
+재검토"라는 입장을 수정함 — 2026-09-09 보안 점검에서 `app-infra/`가 생성한
+시크릿이 로컬 state 파일에 평문으로 남는다는 사실을 발견해서, 더 일찍
+전환할 가치가 생겼습니다). DynamoDB 테이블도, KMS 키도 없습니다 — S3의
+네이티브 `use_lockfile`(Terraform 1.11에서 GA)과 무료 SSE-S3만으로 락과
+암호화를 둘 다 해결합니다 — 이유는 ADR을 참고하세요(이 AWS 계정에는 사람
+주체가 1명뿐이라 KMS의 접근 분리 가치가 아직 적용되지 않습니다 — 언제
+재검토할지는 D6에 정해 둠). 아래 명령은 표시된 디렉터리 안에서 각각
+실행하세요; `terraform init`도 세 곳에서 각각 따로 실행해야 하고, 이제
+매번 `-backend-config="bucket=<value>"`가 필요합니다(아래 부트스트랩 단계
+참고).
 
-**향후 계획**: 두 번째 개발자나 CI 파이프라인이 이 설정을 apply해야 하는
-시점이 오면, 각 state의 `backend "local"`을 원격 backend(S3 + DynamoDB
-락, 또는 Terraform Cloud)로 옮깁니다 — 지금은 의도적으로 하지 않은
-상태이며(ADR 0044 D3, 기각된 대안), [ROADMAP.md
-7절](../../../docs/ROADMAP.ko.md#7-미일정--미결-사항)에 미예정 작업으로
-기록돼 있습니다.
+**이 변경 이후 첫 `apply` 전 1회성 부트스트랩**: `backend "s3" {}` 블록이
+가리키는 S3 버킷은 `terraform init`이 쓰기 전에 먼저 존재해야 합니다 —
+Terraform이 자기 자신의 backend를 만들어주지는 않습니다. 이건 수동으로
+한 번만 하는 작업입니다(일부러 네 번째 Terraform root 모듈로 만들지
+않았습니다 — ADR 0057 기각된 대안), apply마다 반복하지 않습니다:
+
+```sh
+aws s3api create-bucket --bucket <전역적으로-유일한-tfstate-버킷-이름> \
+  --region ap-northeast-2 \
+  --create-bucket-configuration LocationConstraint=ap-northeast-2
+aws s3api put-bucket-versioning --bucket <그-버킷-이름> \
+  --versioning-configuration Status=Enabled
+aws s3api put-public-access-block --bucket <그-버킷-이름> \
+  --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+```
+
+그다음 세 디렉터리 각각에서 `terraform init -backend-config="bucket=<그-버킷-이름>"`을
+실행하세요(또는 `deploy.sh`를 쓴다면 `TFSTATE_BUCKET_NAME=<그-버킷-이름>`을
+설정 — 아래 모든 `deploy.sh` 명령이 이미 이 값을 기대합니다). 이 버킷은
+계속 유지되어야 합니다 — 아래 EKS/RDS 스택처럼 검증 후 지우는 대상이
+아닙니다(왜 그렇게 하지 않기로 했는지는 ADR 0057 기각된 대안 참고).
 
 ## 아무거나 `apply`하기 전에 준비할 것
 
@@ -110,11 +135,17 @@ k8s/infra/terraform/
 2. **전역적으로 유일한 S3 버킷 이름** — `app-infra/`의
    `var.s3_bucket_name`에 넣을 값으로, 버킷 이름은 계정을 넘어 AWS
    전체에서 충돌합니다.
-3. **필요한 권한을 가진 AWS 자격증명**(EKS/RDS/S3/IAM/Route53/ACM 생성
+3. **Terraform state 저장용으로 별도의, 전역적으로 유일한 S3 버킷**
+   (`TFSTATE_BUCKET_NAME` / `-backend-config="bucket=..."` /
+   `var.tfstate_bucket_name`) — 위 1회성 부트스트랩 단계 참고
+   ([ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.ko.md)).
+   위 `s3_bucket_name`과 같은 버킷이면 안 됩니다(그건 앱이 업로드한
+   미디어용이지 Terraform state용이 아닙니다).
+4. **필요한 권한을 가진 AWS 자격증명**(EKS/RDS/S3/IAM/Route53/ACM 생성
    권한)과 로컬에 설치된 `aws`/`kubectl`/`helm` CLI — `addons/`의
    `kubernetes`/`helm` provider가 내부적으로 `aws eks get-token`을
    실행합니다.
-4. **`region`/`cluster_name`은 세 state의 `.tfvars`/`-var` 값이 모두
+5. **`region`/`cluster_name`은 세 state의 `.tfvars`/`-var` 값이 모두
    일치해야 합니다.** 이 값들은 `terraform_remote_state`로 자동 공유되지
    않는 순수 변수입니다 — `cluster/`에 준 것과 다른 `cluster_name`을
    `app-infra/`에 주면 plan은 성공하지만 리소스 이름/태그가 서로 어긋난
@@ -127,6 +158,7 @@ k8s/infra/terraform/
 
 ```sh
 cd k8s/infra/terraform
+export TFSTATE_BUCKET_NAME=<전역적으로-유일한-tfstate-버킷-이름>  # 위에서 1회성 부트스트랩한 값
 
 # 1. cluster
 bash deploy.sh cluster
@@ -207,12 +239,12 @@ plan을 다시 보여주고 여전히 명시적 `y` 확인을 받은 뒤에만 �
 ```sh
 # 1. cluster/
 cd cluster
-terraform init
+terraform init -backend-config="bucket=<전역적으로-유일한-tfstate-버킷-이름>"
 terraform apply
 
 # 2. app-infra/ — terraform_remote_state로 cluster/의 state를 읽는다
 cd ../app-infra
-terraform init
+terraform init -backend-config="bucket=<전역적으로-유일한-tfstate-버킷-이름>"
 # 아래 apply는 Route53 zone을 새로 만들고, 같은 실행 안에서 ACM이 그 zone을
 # 상대로 DNS 검증을 마칠 때까지 대기한다 — 등록기관 네임서버가 이 새 zone을
 # 가리키기 전까지는 계속 멈춰 있는다. zone은 이 apply가 만들기 전엔 존재하지
@@ -228,12 +260,13 @@ terraform init
 # 안 가리키니 등록기관에서 다시 교체해야 합니다.
 terraform apply \
   -var="s3_bucket_name=<전역적으로-유일한-버킷-이름>" \
-  -var="domain_name=<본인-도메인>"
+  -var="domain_name=<본인-도메인>" \
+  -var="tfstate_bucket_name=<전역적으로-유일한-tfstate-버킷-이름>"
 
 # 3. addons/ — cluster/와 app-infra/의 state를 모두 읽는다
 cd ../addons
-terraform init
-terraform apply
+terraform init -backend-config="bucket=<전역적으로-유일한-tfstate-버킷-이름>"
+terraform apply -var="tfstate_bucket_name=<전역적으로-유일한-tfstate-버킷-이름>"
 ```
 
 세 state 어느 변수도 비밀값을 직접 받지 않습니다 — Helm 차트의
@@ -273,9 +306,9 @@ state 파일 안에만 존재합니다(ADR 0043 D7/D8).
   타입)를 고치고 `terraform apply`를 다시 실행하면 실패한 노드그룹만
   교체됩니다.
 - **`Error: Error acquiring the state lock`** — `terraform apply`가
-  중간에 끊겼을 때(예: Ctrl-C) 로컬 backend가 정상적으로 lock을 못 풀고
-  파일로 남기는 경우입니다. 에러 메시지 자체에 lock ID가 찍혀 나오니
-  그대로 씁니다:
+  중간에 끊겼을 때(예: Ctrl-C) S3 backend의 네이티브 락(`use_lockfile`,
+  ADR 0057)이 정상적으로 안 풀리고 state 버킷 안에 `.tflock` 객체로 남는
+  경우입니다. 에러 메시지 자체에 lock ID가 찍혀 나오니 그대로 씁니다:
   ```sh
   terraform force-unlock <LOCK_ID>
   ```
@@ -466,12 +499,13 @@ terraform state show aws_route53_zone.app | grep '  name '  # -> 도메인 이�
 
 ```sh
 cd addons
-terraform destroy
+terraform destroy -var="tfstate_bucket_name=<tfstate-버킷-이름>"
 
 cd ../app-infra
 terraform destroy \
   -var="s3_bucket_name=<위에서 읽은 값>" \
-  -var="domain_name=<위에서 읽은 값>"
+  -var="domain_name=<위에서 읽은 값>" \
+  -var="tfstate_bucket_name=<tfstate-버킷-이름>"
 
 cd ../cluster
 terraform destroy
@@ -487,10 +521,11 @@ terraform destroy
 쓰세요:
 
 ```sh
-cd addons       && terraform destroy -auto-approve
+cd addons       && terraform destroy -auto-approve -var="tfstate_bucket_name=<tfstate-버킷-이름>"
 cd ../app-infra && terraform destroy -auto-approve \
   -var="s3_bucket_name=<위에서 읽은 값>" \
-  -var="domain_name=<위에서 읽은 값>"
+  -var="domain_name=<위에서 읽은 값>" \
+  -var="tfstate_bucket_name=<tfstate-버킷-이름>"
 cd ../cluster   && terraform destroy -auto-approve
 ```
 

@@ -13,6 +13,26 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Security
+- **Terraform state backend — S3 with native locking, no DynamoDB, no KMS (2026-09-12,
+  [ADR 0057](ADR/0057-terraform-state-backend-s3-native-lock.md), amends ADR 0044 D3)** —
+  a 2026-09-09 security review found all three Terraform states (`cluster/`, `app-infra/`,
+  `addons/`) using the default local backend, with `app-infra/`'s generated secrets
+  (`random_password.db`/`access_token_secret`/`refresh_token_secret`) landing in plaintext
+  in the local `terraform.tfstate`. Backend moves to S3 in all three `versions.tf` files —
+  native locking (`use_lockfile`, GA in Terraform 1.11) instead of DynamoDB, SSE-S3 instead
+  of SSE-KMS (this AWS account has exactly one human principal, so KMS's IAM decrypt/read
+  separation buys nothing yet — ADR 0057 D6 names the trigger to revisit). The bucket name
+  is deliberately not committed (`-backend-config="bucket=..."` at `init` time, mirroring
+  `s3_bucket_name`'s existing no-default convention); `app-infra/`'s and `addons/`'s
+  `data.terraform_remote_state` reads of each other's outputs move from `backend = "local"`
+  + relative path to `backend = "s3"` + a new `tfstate_bucket_name` variable, since the old
+  relative-path reads would silently break once the producing state's real file moved.
+  `deploy.sh` gained a `TFSTATE_BUCKET_NAME` env var wired into every `terraform init`/
+  `-var` call across all three states. `terraform init -backend=false`, `fmt -check`, and
+  `validate` pass in all three directories — **no bucket was created and no `apply` was
+  run**; bucket creation and the actual `terraform init -migrate-state` are deferred to
+  real deployment time (ADR 0057 D5), documented as a one-time runbook step in
+  `k8s/infra/terraform/README.md`.
 - **NetworkPolicy for cluster east-west traffic restriction (2026-09-11, [ADR
   0056](ADR/0056-networkpolicy-east-west-restriction.md))** — a security review found
   `k8s/helm/templates/` had no `NetworkPolicy` resource: nothing restricted pod-to-pod

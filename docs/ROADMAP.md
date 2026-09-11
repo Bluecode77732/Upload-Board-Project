@@ -931,15 +931,25 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   in the reachable dev DB, so there is nothing left to prune and no decision left to make.
   Note this was always the *dev* database only; nothing here indicated a production data
   path.
-- Terraform remote state backend (recorded 2026-08-19,
-  [ADR 0044](ADR/0044-terraform-three-state-split.md) D3) — **not started
-  because** the three-state split's `terraform_remote_state` reads use
-  `backend = "local"` deliberately, scoped to a single developer's own
-  `apply`/`destroy` cycles; introducing an S3+DynamoDB-lock (or Terraform
-  Cloud) remote backend now would be a second, unrequested scope expansion on
-  a config that has not yet been `apply`d against real AWS at all (ADR 0043
-  D1). Revisit once a second developer or a CI pipeline needs to `apply`
-  this configuration.
+- ~~Terraform remote state backend~~ (recorded 2026-08-19,
+  [ADR 0044](ADR/0044-terraform-three-state-split.md) D3) — **decided and
+  code-complete 2026-09-12, not applied**
+  ([ADR 0057](ADR/0057-terraform-state-backend-s3-native-lock.md), amends ADR
+  0044 D3). Revisited earlier than the original "second developer or CI
+  pipeline" trigger: a 2026-09-09 security review found `app-infra/`'s
+  generated secrets (`random_password.db`/`access_token_secret`/
+  `refresh_token_secret`) landing in plaintext in the local state file, and
+  switching while all three states are empty is the cheapest time to do it.
+  Backend moves to S3 with native locking (`use_lockfile`, GA in Terraform
+  1.11) and SSE-S3 encryption — not the DynamoDB+KMS shape originally
+  sketched here, since native locking removes the DynamoDB need entirely and
+  this AWS account has exactly one human principal, so KMS's IAM
+  decrypt/read separation buys nothing yet (ADR 0057 D2/D3). Escalating to
+  SSE-KMS is deferred to a precisely restated version of this row's original
+  trigger (ADR 0057 D6) — DynamoDB does not come back at that point, since
+  `use_lockfile` already scales with team size. Bucket creation and the
+  actual `terraform init -migrate-state` are deferred to real deployment
+  time — see `k8s/infra/terraform/README.md`'s bootstrap runbook.
 - Distroless runtime base (recorded 2026-08-08, [ADR 0030](ADR/0030-container-non-root-and-arch-stance.md))
   — **not started because** whether an exact Node 24 distroless tag
   (`gcr.io/distroless/nodejs24-debian12` or similar) even exists was never verified
