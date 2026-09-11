@@ -1475,9 +1475,14 @@ Architecture Decisions가 계속 유효하다.
   확인받았다(Clarification Protocol). `signIn`/`parseBasicToken`은 의도적으로 건드리지
   않았다 — 로그인에 적용하면 이 규칙 이전에 가입한 계정이 잠기기 때문이다.
   `auth.service.spec.ts`에 거부 케이스 6가지(길이 미달·문자 종류별 누락 4가지·빈
-  문자열)를 추가했고, `pnpm lint` 클린, 유닛 테스트 270/270 통과. 위 시크릿 강도
-  항목과 달리, 이번 건은 유닛 테스트 수준까지만 검증했고 실제 서버/DB를 띄워 부팅
-  검증하지는 않았다
+  문자열)를 추가했고, `pnpm lint` 클린, 유닛 테스트 270/270 통과. **같은 날 실제 검증**:
+  일회성 e2e 스펙으로(`test/e2e-utils.ts`의 격리된 `sharenpo_e2e` DB, supertest로 실제
+  HTTP 호출을 실제로 마이그레이션한 Postgres에 대고 실행, 실행 후 스펙 파일 삭제)
+  `POST /auth/register`에 빈 문자열·길이 미달·기호 누락 비밀번호(각각 400
+  `AUTH_WEAK_PASSWORD`), 강한 비밀번호(201, 응답에 `password` 필드 없음), 같은 이메일
+  재시도(400 `AUTH_EMAIL_TAKEN` — 강도 검사가 중복 검사보다 먼저 실행되지만 그걸로
+  중복 검사를 건너뛰지는 않음을 확인)를 실제로 호출했다 — 5건 모두 실제 bcrypt 해싱과
+  실제 DB 왕복까지 거쳐 통과
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

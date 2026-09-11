@@ -1449,8 +1449,13 @@ Architecture Decisions above remain operative.
   `signIn`/`parseBasicToken` are deliberately untouched — enforcing this on login would
   lock out any pre-existing account whose password predates the rule. `auth.service.spec.ts`
   covers six rejection shapes (too short, each missing character class, empty);
-  `pnpm lint` clean, unit suite 270/270. Verified at the unit-test level only — unlike
-  the secret-strength entry above, this was not live-booted against a running server/DB
+  `pnpm lint` clean, unit suite 270/270. **Live-verified same day**: a throwaway e2e spec
+  (`test/e2e-utils.ts`'s isolated `sharenpo_e2e` DB, real HTTP via supertest against a real
+  migrated Postgres, deleted after the run) hit `POST /auth/register` with an empty, a
+  too-short, and a symbol-missing password (each 400 `AUTH_WEAK_PASSWORD`), a strong
+  password (201, no `password` field in the response), and a same-email repeat (400
+  `AUTH_EMAIL_TAKEN`, confirming the strength check runs before and doesn't short-circuit
+  the uniqueness check) — all 5 passed against real bcrypt hashing and a real DB round-trip
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for
