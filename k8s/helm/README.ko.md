@@ -232,6 +232,13 @@ kubectl run curl-egress --image=curlimages/curl:8.10.1 --restart=Never --rm -i \
 
 끝나면 정리: `helm uninstall netpol-test && kind delete cluster --name netpol-verify`.
 
+**문제 해결**: 이전 시도가 중간에 끊기거나 실패한 뒤(정리 없이) `helm install`
+단계를 다시 실행하면 `release name check failed: cannot reuse a name that is
+still in use` 에러가 납니다 — 예전 `netpol-test` 릴리스가 여전히 등록돼 있는
+것. 해결: `helm uninstall netpol-test`(상태가 `pending-install`처럼 어정쩡해
+보이면 `helm list -A`로 먼저 확인), 제거됐는지 확인한 뒤 `helm install`을
+다시 시도.
+
 ## Env var
 
 `values.yaml`의 `env:` 블록 아래 모든 키는 `backend/app.module.ts`의 Joi

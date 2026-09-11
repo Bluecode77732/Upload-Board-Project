@@ -232,6 +232,13 @@ kubectl run curl-egress --image=curlimages/curl:8.10.1 --restart=Never --rm -i \
 
 Tear down when done: `helm uninstall netpol-test && kind delete cluster --name netpol-verify`.
 
+**Troubleshooting**: re-running the `helm install` step after an interrupted or
+failed prior attempt (without having torn down first) fails with `release name
+check failed: cannot reuse a name that is still in use` — the old
+`netpol-test` release is still registered. Fix: `helm uninstall netpol-test`
+(check first with `helm list -A` if its status looks stuck, e.g.
+`pending-install`), confirm it's gone, then retry `helm install`.
+
 ## Env vars
 
 Every key under `values.yaml`'s `env:` block must match the Joi schema in
