@@ -24,7 +24,7 @@
    - 물리 업로드 변경      → `backend/upload/upload.module.ts`(Multer `memoryStorage`)와 `upload.controller.ts`(100MB 크기 제한)를 `backend/upload/upload.service.ts`(`stageTemp` — `temp_{uuid}_{timestamp}` 네이밍, `FileStorage` 포트 호출, ADR 0029 D4)와 함께 읽는다
    - 스토리지 어댑터 변경  → `backend/storage/file-storage.interface.ts`(`FileStorage` 포트 + `FILE_STORAGE` 토큰), `local-disk.storage.ts` / `s3.storage.ts`(두 구현체), `storage.module.ts`(`STORAGE_DRIVER` 기반 팩토리, ADR 0029)를 읽는다
    - 컨테이너/배포 변경    → `Dockerfile`(non-root `USER`, `HEALTHCHECK`, `CMD`에서 마이그레이션 제거 — ADR 0030/0032)과 `docker-compose.yml`(원샷 `migrate` 서비스)을 `backend/health/`(`GET /health/live`/`GET /health/ready` — ADR 0031)와 함께 읽는다
-   - Helm/K8s 배포 변경    → `k8s/helm/`(`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/기본 비활성 Ingress/기본 비활성 NetworkPolicy, ADR 0056)과 그 `README.md`(Secret 생성 절차, `existingSecret` 전용 소비 방식)를 읽는다. `k8s/`엔 이 차트 밖의 매니페스트가 없다 — 예전 `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/`에 있던 독립 raw 매니페스트는 삭제됐다(ADR 0042); 차트 옆에 정적 매니페스트를 다시 추가하지 않는다(ADR 0037/0041/0042)
+   - Helm/K8s 배포 변경    → `k8s/helm/`(`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/명시적 경로 allow-list를 가진 기본 비활성 Ingress(ADR 0058, `/` catch-all 아님)/기본 비활성 NetworkPolicy, ADR 0056)과 그 `README.md`(Secret 생성 절차, `existingSecret` 전용 소비 방식)를 읽는다. `k8s/`엔 이 차트 밖의 매니페스트가 없다 — 예전 `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/`에 있던 독립 raw 매니페스트는 삭제됐다(ADR 0042); 차트 옆에 정적 매니페스트를 다시 추가하지 않는다(ADR 0037/0041/0042)
    - Terraform/인프라 변경 → `k8s/infra/terraform/`은 하나가 아니라 독립된 3개의 root module이다 — `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM, `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — ALB Controller+ESO, 다른 두 state를 **모두** 읽는 유일한 state). 각 디렉토리는 `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`와 자신만의 state 파일을 가지는데, 그 state는 Terraform 기본값인 로컬 파일이 아니라 네이티브 락 + SSE-S3 암호화를 쓰는 S3에 저장된다(ADR 0057, ADR 0044 D3 amends — 2026-09-12 코드 완료, 버킷 생성과 실제 마이그레이션은 실제 배포 시점으로 유예) — 변경이 실제로 건드리는 디렉토리만 읽는다. `README.md`(`cluster` → `app-infra` → `addons` 3단계 apply 순서와 그 역순 destroy, `SecretStore`/`ExternalSecret`을 한 번만 수동으로 `kubectl apply`하는 단계, 그리고 앱 전용 ServiceAccount IRSA 배선을 다루는 "Known gap" 절 — `app-infra/main.tf`의 trust policy, `k8s/helm/`의 `serviceaccount.yaml`+`values-prod.yaml`, `deploy.sh`의 `HELM_RELEASE` 기본값이 2026-09-03부로 모두 `sharenpo`라는 같은 이름으로 고정돼 있음. 코드는 완성되고 검증됐지만 실제 AWS엔 한 번도 적용된 적 없음 — 이걸로 대체된 예전 `default` ServiceAccount IRSA annotate 방식은 그 trust policy가 적용되는 순간 더 이상 동작하지 않음)를 읽는다. 설계 기록: ADR 0038(업스트림 스캐폴딩, 재작성 유예) → ADR 0043(프로젝트 적응 — 2026-08-18 구현됨) → ADR 0044(3-state 분리 — 2026-08-20 구현됨, 세 디렉토리 모두 `terraform validate`/`fmt -check` 통과) → ADR 0057(state 백엔드 — S3 네이티브 락 + SSE-S3, DynamoDB·KMS 없이, ADR 0044 D3 amends — 2026-09-12 코드 완료, 미적용). **두 ADR의 Addendum은 이 설정을 실제 AWS에 `apply`한 적이 없다고 말하는데, 그건 작성 시점엔 사실이었다가, 한동안 거짓이었다가, 다시 사실이 됐다.** 세 state 전부 2026-08-25~27에 실제 apply됐다(살아 있는 EKS 클러스터, RDS 인스턴스, S3 버킷, Route53 존, ACM 인증서, 그리고 Helm으로 앱 자체까지 배포됨 — 같은 기간 그 실제 RDS를 상대로 발견·수정된 TLS 검증 결함은 ADR 0039의 Addendum에 기록돼 있다). 그 뒤 **2026-08-28에 전체 destroy**해서, 배포가 end-to-end로 검증된 뒤 AWS 과금을 멈췄다 — 지금은 이 스택에서 실재하거나 과금되는 게 아무것도 없다(`aws eks/rds/ec2/elb` describe 호출이 전부 빈 값/not-found를 반환함으로 확인됨). 현재 상태: 미적용. 어느 쪽이든 가정하지 말고, 셋 다에서 `terraform plan`을 돌려 확인할 것 — ADR의 Addendum도 이 줄도 특정 시점의 스냅샷일 뿐 실시간 상태가 아니다. ADR의 Addendum은 작성 시점의 사실을 기록한 것이므로 일부러 그대로 두었고, 정정은 여기와 ROADMAP.md 7절에 있다
    - 삭제 경로 변경        → `backend/user/user.service.ts`(`remove` — 확인된 연쇄 삭제), `backend/file/file.service.ts`(`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts`(`deletePost`, `deletePostsOfCreator`), `LocalDiskStorage.unlink`/`S3Storage.unlink`(`FileStorage` 포트를 통한 커밋 후 unlink, ADR 0020/0023/0029)를 읽는다
    - 게시글/게시판 변경    → `backend/post/post.service.ts`(`fileId`에 대한 claim 해석, `canManage`, ADR 0021 읽기 레이어 재사용)를 `FileService.assertAttachableBy` / `toResponse` — PostModule이 FileModule에 묻는 두 가지 질문 — 와 함께 읽는다(ADR 0023)
@@ -1544,6 +1544,26 @@ Architecture Decisions가 계속 유효하다.
   mismatch)도 "검토 후 현행 유지" 결정을 자체 ADR이 아니라 여기에 기록했다. 프로젝트가
   실사용자를 확보하고 실제로 악용되고 있다는 구체적 신호(악용 신고, 크리덴셜 스터핑
   상관관계)가 나오면 재검토한다.
+- ~~`k8s/helm/templates/ingress.yaml`의 유일한 경로 규칙이 단일 `/` catch-all이었다~~ —
+  **2026-09-13 해결됨**([ADR 0058](docs/ADR/0058-ingress-path-allowlist.ko.md), ADR
+  0041 extends): 2026-09-09 보안 점검에서, `ingress.enabled`를 언젠가 켜는 순간 이
+  규칙 하나가 `/health/*`, `/metrics`, `/doc`을 — 셋 다 인증이 전혀 없는데도 — 예외
+  없이 공개 ALB로 라우팅하게 된다는 게 발견됐다. `values.yaml`의
+  `ingress.hosts[].paths`는 이제 이 앱의 실제 컨트롤러 prefix를 명시적으로 나열한
+  allow-list다(`/auth`, `/user`, `/post`, `/comment`, `/file`, `/upload`,
+  `/audit-log`); `/health`, `/metrics`, `/doc`은 목록에서 빠져 차단된다 — 앞의 둘은
+  kubelet·Prometheus가 애초에 Ingress를 거쳐 앱에 도달하지 않기 때문이고, `/doc`은
+  "외부 검토자가 열람하게 하기"라는 이득을 "인증 게이트 없음"이라는 위험과 견줘봤을
+  때 그 이득이 얕다고 판단했기 때문이다(포트폴리오/면접 검토는 대부분 리포를 읽거나
+  실시간 시연으로 이뤄지지, 면접관이 공개 Swagger URL을 혼자 찾아 눌러보는 경우는
+  드물다). ALB 전용 fixed-response 리젝트 규칙 대안도 검토했으나 기각했다 —
+  aws-load-balancer-controller의 규칙 우선순위 처리가 불안정하다는 미해결 이슈가
+  있고, 이를 시험해볼 살아있는 ALB도 없다(세 Terraform 상태 모두 2026-08-28
+  destroy). `templates/ingress.yaml`은 변경이 필요 없었다; `helm lint`/
+  `helm template`로 렌더링된 규칙을 확인했다. `ingress.enabled`는 여전히 `false`이고
+  `values-prod.yaml`은 무변경이다 — Ingress를 실제로 켜려면 host/TLS/ALB 어노테이션
+  작업이 따로 필요하고, 그때 `values-prod.yaml`에도 `paths` 전체를 다시 적어야 한다
+  (Helm은 `-f` 레이어 간 배열을 병합하지 않는다 — `values.yaml` 주석에 기록해둠).
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

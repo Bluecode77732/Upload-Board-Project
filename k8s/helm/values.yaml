@@ -115,6 +115,22 @@ resources: {}
 # TLS는 ingress에서 종료되며, 앱 프로세스 안에서는 절대 하지 않는다(ADR 0034).
 # 기본은 비활성 — 실제로 켜려면 살아있는 클러스터, DNS 이름, 인증서 메커니즘
 # (ACM 또는 cert-manager)이 필요한데 아직 아무것도 없다.
+#
+# paths는 단일 "/" catch-all이 아니라 실제 컨트롤러 prefix의 명시적 allow-list다
+# (ADR 0058) — ValidationPipe의 whitelist+forbidNonWhitelisted, entities.ts 단일
+# 목록과 같은 "선언된 것만 허용" 철학을 Ingress 레벨에 그대로 옮긴 것. /health,
+# /metrics, /doc은 의도적으로 뺐다 — health/metrics는 kubelet·Prometheus가
+# Ingress를 거치지 않고 파드에 직접 붙으므로 외부 노출이 애초에 불필요하고, doc
+# (Swagger)은 인증 게이트가 없는 채로 API 구조 전체를 외부에 지도로 넘겨주는
+# 셈이라 노출 이득(포트폴리오 열람)보다 위험이 크다고 판단했다(ADR 0058) — 개발
+# 중 로컬 접속이나 클러스터 내부 열람은 그대로 가능하다. 새 컨트롤러를 추가하면
+# 이 목록에도 prefix를 함께 추가해야 외부에서 호출 가능해진다 — 안 하면 조용히
+# 404.
+#
+# 주의: Helm은 배열(hosts)을 병합하지 않고 통째로 덮어쓴다 — 나중에
+# values-prod.yaml에서 host(실제 도메인)만 바꾸려고 ingress.hosts를 다시 적으면
+# paths도 함께 옮겨 적어야 한다. host만 오버라이드하고 paths를 빠뜨리면 "경로
+# 없는 Ingress"로 조용히 축소된다(ADR 0058).
 ingress:
   enabled: false
   className: ""
@@ -124,8 +140,20 @@ ingress:
   hosts:
     - host: chart-example.local
       paths:
-        - path: /
-          pathType: ImplementationSpecific
+        - path: /auth
+          pathType: Prefix
+        - path: /user
+          pathType: Prefix
+        - path: /post
+          pathType: Prefix
+        - path: /comment
+          pathType: Prefix
+        - path: /file
+          pathType: Prefix
+        - path: /upload
+          pathType: Prefix
+        - path: /audit-log
+          pathType: Prefix
   tls: []
     # - secretName: chart-example-tls
     #   hosts:

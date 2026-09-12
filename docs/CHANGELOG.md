@@ -13,6 +13,25 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Security
+- **Ingress path allow-list — closing off health, metrics, and docs (2026-09-13, [ADR
+  0058](ADR/0058-ingress-path-allowlist.md), extends ADR 0041)** — a 2026-09-09 security
+  review found `k8s/helm/templates/ingress.yaml`'s only path rule was a single `/`
+  catch-all, which would route `/health/*`, `/metrics`, and `/doc` — none of which carry
+  any authentication — to the public ALB with no exception the moment `ingress.enabled`
+  is ever turned on. `values.yaml`'s `ingress.hosts[].paths` is now an explicit allow-list
+  of the app's real controller prefixes (`/auth`, `/user`, `/post`, `/comment`, `/file`,
+  `/upload`, `/audit-log`); `/health`, `/metrics`, and `/doc` are excluded by omission —
+  the first two never need external reach at all (kubelet/Prometheus reach the pod
+  directly, bypassing Ingress), the third was judged not worth its "no auth gate" risk
+  given how thin its external-portfolio-review benefit is in practice. An ALB-specific
+  fixed-response reject-rule alternative was considered and rejected in favor of the
+  allow-list — it would depend on aws-load-balancer-controller's rule-priority ordering,
+  which has open reliability reports, and there is no live ALB to verify it against.
+  `templates/ingress.yaml` needed no changes; `helm lint`/`helm template` confirm the
+  rendered rules. `ingress.enabled` stays `false` and `values-prod.yaml` is untouched —
+  turning Ingress on for real still needs its own host/TLS/ALB-annotation work, at which
+  point `values-prod.yaml` must redeclare the full `paths` list too (Helm doesn't merge
+  arrays across `-f` layers).
 - **Terraform state backend — S3 with native locking, no DynamoDB, no KMS (2026-09-12,
   [ADR 0057](ADR/0057-terraform-state-backend-s3-native-lock.md), amends ADR 0044 D3)** —
   a 2026-09-09 security review found all three Terraform states (`cluster/`, `app-infra/`,

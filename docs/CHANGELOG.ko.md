@@ -13,6 +13,24 @@
 ## [Unreleased]
 
 ### 보안
+- **Ingress 경로 allow-list — health·metrics·docs 차단 (2026-09-13, [ADR
+  0058](ADR/0058-ingress-path-allowlist.ko.md), ADR 0041 extends)** — 2026-09-09 보안
+  점검에서 `k8s/helm/templates/ingress.yaml`의 유일한 경로 규칙이 단일 `/` catch-all
+  이었다는 게 드러났다 — `ingress.enabled`를 언젠가 켜는 순간 `/health/*`, `/metrics`,
+  `/doc`을(셋 다 인증이 전혀 없는데도) 예외 없이 공개 ALB로 라우팅하게 된다.
+  `values.yaml`의 `ingress.hosts[].paths`는 이제 이 앱의 실제 컨트롤러 prefix를
+  명시적으로 나열한 allow-list다(`/auth`, `/user`, `/post`, `/comment`, `/file`,
+  `/upload`, `/audit-log`); `/health`, `/metrics`, `/doc`은 목록에서 빠져 차단된다 —
+  앞의 둘은 애초에 외부 도달이 전혀 필요 없고(kubelet·Prometheus가 Ingress를 거치지
+  않고 파드에 직접 붙음), `/doc`은 "외부 포트폴리오 열람"이라는 이득이 실제로는
+  얕다고 판단해 "인증 게이트 없음" 위험 쪽에 무게를 실었다. ALB 전용 fixed-response
+  리젝트 규칙 대안도 검토했으나 allow-list를 택했다 — aws-load-balancer-controller의
+  규칙 우선순위 처리에 의존해야 하는데 여기엔 미해결 신뢰성 이슈가 있고, 시험해볼
+  살아있는 ALB도 없다. `templates/ingress.yaml`은 변경이 필요 없었다; `helm lint`/
+  `helm template`로 렌더링된 규칙을 확인했다. `ingress.enabled`는 여전히 `false`이고
+  `values-prod.yaml`은 무변경이다 — Ingress를 실제로 켜려면 host/TLS/ALB 어노테이션
+  작업이 따로 필요하고, 그때 `values-prod.yaml`에도 `paths` 전체를 다시 적어야 한다
+  (Helm은 `-f` 레이어 간 배열을 병합하지 않는다).
 - **Terraform state 백엔드 — S3 네이티브 락, DynamoDB·KMS 없이 (2026-09-12, [ADR
   0057](ADR/0057-terraform-state-backend-s3-native-lock.ko.md), ADR 0044 D3 amends)** —
   2026-09-09 보안 점검에서 세 Terraform state(`cluster/`, `app-infra/`, `addons/`) 모두
