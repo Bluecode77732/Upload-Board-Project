@@ -1361,6 +1361,33 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   확정했다. Redis 기반 `ThrottlerStorage`도 열려 있음 — 이 앱이 실제로
   replica 2개 이상으로 돌기 전까지는 필요 없다(현재 기본 storage는 인스턴스별로
   카운트한다).
+- ~~회원가입 계정 열거~~ (위 두 항목과 함께 2026-09-09 발견, **2026-09-12 결정: 현행
+  유지**) — `POST /auth/register`는 이메일 중복 시 `AUTH_EMAIL_TAKEN`을 노출하는데,
+  `POST /auth/signin`의 `validateUser`는 "그런 계정 없음"과 "비밀번호 틀림"을 의도적으로
+  하나의 일반 `AUTH_INVALID_CREDENTIALS`로 합쳐버린다 — 위 Superadmin 항목과 같은
+  비대칭 패턴(보안 점검에서 발견됐지만, 실질 해결책인 이메일 인증은 이 프로젝트
+  단계에서 감당하기엔 과분한 비용). 결정 전에 가정이 아니라 실제로 확인했다 —
+  `frontend/src/features/auth/LoginPage.tsx`의 `messageForError`가 `AUTH_EMAIL_TAKEN`을
+  받아 "That email is already registered — try signing in."을 보여주고,
+  `frontend/e2e/auth.spec.ts`와 `test/app.e2e-spec.ts` 둘 다 이 코드를 직접 검증한다 —
+  감추면 가상의 우려가 아니라 실사용 중인 UX 계약이 깨진다. 더 강한 두 대안을
+  저울질했다가 기각했다: `POST /auth/register`의 기존 5회/분 스로틀(ADR 0054)을 더
+  낮추는 안 — IP당이라 단일 출처 스캔만 느려질 뿐 분산 공격엔 거의 효과가 없고, 대신
+  오타로 재시도하는 정상 유저를 막을 위험이 실질적으로 커진다; 이메일 인증 흐름으로
+  전환해 열거 자체를 없애는 안 — 이 프로젝트엔 이메일 발송 인프라가 전혀 없어 신규
+  외부 연동(자체 Retry Limits/Timeout 설계), 가입 대기 상태용 스키마/마이그레이션,
+  e2e 두 벌 재작성이 필요한데, 정작 가입 시점의 계정 열거는 로그인/비밀번호 오라클과
+  달리 그 자체로 접근권을 주지 않아 실질 노출도가 낮다. 현행 유지로 결정 — 기존
+  5회/분 스로틀이 유일한 완화책으로 남는다. 이 프로젝트가 실제 공격 표면에 노출되는
+  트래픽을 다루게 되면 재검토한다(Superadmin 항목과 같은 트리거). 전체 기록:
+  CLAUDE.md > Known Gaps.
+- `docs/CHANGELOG.md`(+ko)에 [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.ko.md)(Superadmin
+  수동 승격 트리거)와 [ADR 0054](ADR/0054-per-route-rate-limit-tuning.ko.md)(라우트별 rate limit
+  튜닝) 항목이 빠져 있다 — 위 회원가입 계정 열거 항목을 추가하다가 2026-09-12 발견(줄바꿈된
+  `[ADR\n0053]` 형태 링크를 못 잡은 grep 패턴 때문에 처음엔 0053·0055도 누락된 것으로
+  오판했으나, 그 둘은 실제로는 있고 0052·0054만 빠져 있다). 발견한 작업의 스코프 밖이라
+  백필하지 않고 남겨둔다. 명시적 요청이 있을 때 각 ADR 섹션이 이미 쓰는
+  `### Security`/`### Changed` 항목 형식 그대로 채워 넣는다.
 
 ## 8. Advisory 노트
 

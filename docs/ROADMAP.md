@@ -1431,6 +1431,33 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   specifically on `POST /auth/signin`) — this ADR deliberately settled only the global
   default. Also open: Redis-backed `ThrottlerStorage`, needed only once this app actually
   runs more than one replica (today's default storage counts per-instance).
+- ~~Registration account enumeration~~ (found 2026-09-09 alongside the two rows above, **decided
+  2026-09-12: accept as-is**) — `POST /auth/register` discloses `AUTH_EMAIL_TAKEN` on a
+  duplicate email, while `POST /auth/signin`'s `validateUser` deliberately collapses "no such
+  account" and "wrong password" into one generic `AUTH_INVALID_CREDENTIALS` — the same
+  asymmetry pattern as the Superadmin row above (a security-review finding weighed against an
+  email-verification fix this project's current stage can't cheaply afford). Confirmed live
+  before deciding, not assumed: `frontend/src/features/auth/LoginPage.tsx`'s `messageForError`
+  branches on `AUTH_EMAIL_TAKEN` to show "That email is already registered — try signing in.",
+  and both `frontend/e2e/auth.spec.ts` and `test/app.e2e-spec.ts` assert the code directly —
+  hiding it breaks a live, tested UX contract, not a hypothetical one. Two stronger options were
+  weighed and declined: tightening `POST /auth/register`'s existing 5/minute throttle (ADR 0054)
+  further — keyed per-IP, so it mostly slows a single-source scan while barely touching a
+  distributed one, at real cost to a genuine user's retry-after-typo; and eliminating enumeration
+  outright via an email-verification flow — this project has no email-sending infrastructure, so
+  closing the gap fully means a new external integration (its own Retry Limits/Timeout design), a
+  pending-registration schema/migration, and rewriting both e2e suites, for a gap whose real-world
+  exposure is low (registration-time enumeration doesn't itself grant access, unlike a
+  login/password oracle). Accepted as-is — the existing 5/minute throttle stays the only
+  mitigation. Revisit if this project ever carries real, adversarial-facing traffic (same trigger
+  as the Superadmin row). Full record: CLAUDE.md > Known Gaps.
+- `docs/CHANGELOG.md`(+ko) is missing entries for [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.md)
+  (Superadmin manual promotion trigger) and [ADR 0054](ADR/0054-per-route-rate-limit-tuning.md)
+  (per-route rate-limit tuning) — found 2026-09-12 while adding the registration-enumeration row
+  above (a `grep` for a line-wrapped `[ADR\n0053]`-style link had initially misreported 0053/0055
+  as missing too; both are actually present, only 0052/0054 are not). Left unbackfilled — out of
+  scope for the task that found it. Backfill when explicitly requested, following the existing
+  `### Security`/`### Changed` entry format each ADR's section already uses.
 
 ## 8. Advisory notes
 

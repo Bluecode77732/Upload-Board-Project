@@ -253,6 +253,23 @@ development line (package.json version).
   naturally alongside a future S3 cutover touching the same `FileStorage` port. No code
   change — pure documentation in `docs/ROADMAP.md`(+ko).
 
+- **Registration account-enumeration asymmetry confirmed accept-as-is (2026-09-12)** — a
+  2026-09-09 security review found `POST /auth/register` discloses `AUTH_EMAIL_TAKEN` on a
+  duplicate email while `POST /auth/signin`'s `validateUser` deliberately hides whether an
+  account exists at all. Two alternatives were weighed and declined: tightening
+  `POST /auth/register`'s existing 5/minute throttle ([ADR
+  0054](ADR/0054-per-route-rate-limit-tuning.md)) further — keyed per-IP, so it mostly slows
+  a single-source scan while barely touching a distributed one, at real cost to a genuine
+  user's retry-after-typo; and eliminating enumeration via an email-verification flow — this
+  project has no email-sending infrastructure, so closing the gap fully needs a new external
+  integration, a pending-registration schema/migration, and rewriting the live UX/e2e coverage
+  that already depends on `AUTH_EMAIL_TAKEN` (`frontend/src/features/auth/LoginPage.tsx`,
+  `frontend/e2e/auth.spec.ts`, `test/app.e2e-spec.ts`) — disproportionate to a low-severity gap
+  (registration-time enumeration doesn't itself grant access, unlike a login/password oracle)
+  on a project with no live users yet. Accepted as-is — the existing throttle stays the only
+  mitigation. No code change — pure documentation in `CLAUDE.md`(+ko) and `docs/ROADMAP.md`(+ko)
+  §7.
+
 ### Added
 - **Frontend: account-deletion UI + upload-replay UX (2026-09-07)** — closes the last two
   open "frontend adoption" gaps ROADMAP.md §7 tracked ([ADR 0019](ADR/0019-upload-claim-idempotency.md),

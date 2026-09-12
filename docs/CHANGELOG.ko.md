@@ -257,6 +257,21 @@
   불만으로 이어지거나, 같은 `FileStorage` 포트를 건드리는 미래 S3 전환과 자연스럽게
   묶일 때만 재검토. 코드 변경 없음 — `docs/ROADMAP.md`(+ko) 순수 문서.
 
+- **회원가입 계정 열거 비대칭, 현행 유지로 확정 (2026-09-12)** — 2026-09-09 보안
+  점검에서 `POST /auth/register`가 이메일 중복 시 `AUTH_EMAIL_TAKEN`을 노출하는데,
+  `POST /auth/signin`의 `validateUser`는 계정 존재 여부 자체를 의도적으로 숨긴다는
+  비대칭이 발견됐다. 더 강한 두 대안을 저울질했다가 기각했다: `POST /auth/register`의
+  기존 5회/분 스로틀([ADR 0054](ADR/0054-per-route-rate-limit-tuning.ko.md))을 더
+  낮추는 안 — IP당이라 단일 출처 스캔만 느려질 뿐 분산 공격엔 거의 효과가 없고, 대신
+  오타로 재시도하는 정상 유저를 막을 실질적 비용이 든다; 이메일 인증 흐름으로 전환해
+  열거 자체를 없애는 안 — 이 프로젝트엔 이메일 발송 인프라가 전혀 없어 신규 외부 연동,
+  가입 대기 상태용 스키마/마이그레이션, `AUTH_EMAIL_TAKEN`에 이미 의존 중인 실사용
+  UX/e2e(`frontend/src/features/auth/LoginPage.tsx`, `frontend/e2e/auth.spec.ts`,
+  `test/app.e2e-spec.ts`) 재작성이 필요한데, 정작 가입 시점의 계정 열거는
+  로그인/비밀번호 오라클과 달리 그 자체로 접근권을 주지 않아 실사용자가 없는 이
+  단계에선 과분한 비용이다. 현행 유지로 결정 — 기존 스로틀이 유일한 완화책으로 남는다.
+  코드 변경 없음 — `CLAUDE.md`(+ko)와 `docs/ROADMAP.md`(+ko) §7 순수 문서.
+
 ### 추가
 - **프론트엔드: 계정 삭제 UI + 업로드 replay UX (2026-09-07)** — `docs/ROADMAP.md` §7이
   추적하던 마지막 두 "프론트엔드 반영" 공백을 닫는다([ADR 0019](ADR/0019-upload-claim-idempotency.ko.md),

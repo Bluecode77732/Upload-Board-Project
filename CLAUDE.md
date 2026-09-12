@@ -1492,6 +1492,31 @@ Architecture Decisions above remain operative.
   "the three allowed paths happen to work"). This does not prove identical behavior once
   AWS's own Network Policy agent — a different enforcement engine than Calico — is what's
   actually running; re-verify probes before ever enabling that agent for real (ADR 0056 D2/D4)
+- `register()` discloses `AUTH_EMAIL_TAKEN` while `validateUser()` deliberately hides why a
+  login failed — found in the 2026-09-09 security review alongside the two `register()`/Joi
+  strength entries above, **reviewed 2026-09-12, decided: accept as-is** (Principle Conflict
+  Protocol — "account enumeration prevention" vs. "tell the user why signup failed").
+  Compatibility check confirmed `AUTH_EMAIL_TAKEN` is a live, tested contract, not a
+  hypothetical one: `frontend/src/features/auth/LoginPage.tsx`'s `messageForError` branches
+  on it to show "That email is already registered — try signing in.", and both
+  `frontend/e2e/auth.spec.ts` and `test/app.e2e-spec.ts` assert the code directly — hiding it
+  would break both with no replacement UX designed. Three paths were weighed: (1) accept
+  as-is; (2) keep the response but tighten `POST /auth/register`'s existing 5/minute throttle
+  (ADR 0054) further; (3) eliminate enumeration entirely via an email-verification flow. (3)
+  was rejected — this project has no email-sending infrastructure, so closing the gap fully
+  means a new external integration (its own Retry Limits/Timeout design), a
+  pending-registration schema/migration, and rewriting both e2e suites, for a gap whose
+  real-world exposure is low (registration-time enumeration doesn't itself grant access,
+  unlike a login/password oracle, and is commonly treated as low-severity). (2) was also
+  rejected: the throttle keys per-IP, so lowering it further mostly slows a single-source
+  scan while barely inconveniencing a distributed one, and trades that for a real chance of
+  blocking a genuine user's retry-after-typo. (1) was chosen — the existing 5/minute throttle
+  stays as the only mitigation. No ADR was written for this one: unlike ADR 0052/0055/0056,
+  nothing in the codebase changed, and the closest precedent (Chat-project remnant handling,
+  License mismatch, both above) recorded a similar "reviewed, decided to leave as-is" call
+  here rather than in its own ADR. Revisit if the project gains real deployed users and a
+  concrete signal (abuse reports, credential-stuffing correlation) that this is being
+  exploited in practice.
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for
