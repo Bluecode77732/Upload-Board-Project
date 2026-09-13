@@ -149,3 +149,17 @@ destroy). 이번 변경은 순수 쿠버네티스 스펙 레벨의 Ingress 데�
 - `values-prod.yaml`은 무변경이다; 실제로 Ingress를 켜는 사람은 실 host/TLS/
   ALB 어노테이션과 함께 거기서도 `paths` 전체를 다시 적어야 한다(Helm이
   배열을 병합하지 않는다는 점, `values.yaml` 주석에 기록됨).
+
+### 추가 기록 (2026-09-13) — values-prod.yaml 템플릿 반영
+
+위 공백이 이제 절반은 메워졌다: `k8s/helm/values-prod.yaml`에 실제 도메인,
+이 ADR의 일곱 경로 목록 전체, `certificate-arn`/`listen-ports`/`ssl-redirect`
+annotation까지 담은 주석 처리된 `ingress` 블록이 준비돼 있다 — `addons/`와
+`app-infra/`를 다시 apply한 뒤 이 주석만 풀면 된다. `ingress.enabled`는
+여전히 `false`이고 이 변경이 그걸 바꾸지 않는다. 이 템플릿을 검증하는
+과정(`helm lint`/`helm template --set ingress.enabled=true ...`)에서
+`k8s/infra/terraform/README.md`에 이미 있던 `helm upgrade --set
+ingress.hosts[0].host=...` 한 줄짜리 레시피의 실제 버그도 함께 발견했다 —
+`--set`은 배열 인덱스에 값을 줄 때 그 원소 전체를 교체해버려서 이 ADR의
+allow-list 경로가 전부 조용히 사라지고 있었다 — 바로 이 ADR이 막으려던
+문제 그 자체다. 대신 `--set-json`으로 `hosts` 배열 전체를 넘기도록 고쳤다.

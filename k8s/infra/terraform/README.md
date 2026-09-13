@@ -425,8 +425,26 @@ helm upgrade sharenpo . \
   --set ingress.annotations."kubernetes\.io/ingress\.class"=alb \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/scheme"=internet-facing \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=$(terraform -chdir=../infra/terraform/app-infra output -raw acm_certificate_arn) \
-  --set ingress.hosts[0].host=<your-domain>
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
+  --set-json 'ingress.hosts=[{"host":"<your-domain>","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]'
 ```
+
+The last two annotations are what actually forces the HTTP→HTTPS redirect (found missing
+from this recipe in a 2026-09-13 review): without an explicit `listen-ports`, the ALB
+Controller never opens the port-80 listener `ssl-redirect` needs to redirect *from*, so the
+two have to be set together, not `ssl-redirect` alone. The `hosts` override is
+`--set-json`, not `--set ingress.hosts[0].host=<your-domain>` as this recipe used to read —
+also found and fixed in that same 2026-09-13 review: `--set` on an array index replaces the
+whole element rather than merging into it, so a bare `.host` override silently rendered an
+`Ingress` with a real host and **zero paths** (verified by rendering it), exactly the
+"routing rules quietly vanish" failure ADR 0058 exists to prevent. `--set-json` supplies the
+full `hosts[0]` object — host and the complete ADR 0058 path list together — in one write.
+
+For a checked-in, repeatable version of this instead of retyping `--set` flags on the
+command line, `k8s/helm/values-prod.yaml` carries the equivalent config (host, the full
+ADR 0058 path list, and these same annotations) as a commented-out template — see
+`k8s/helm/README.md`'s "Enabling HTTPS (Ingress)" section.
 
 What this actually does, end to end: the `Ingress` object this creates only *carries* the
 ACM certificate ARN as an annotation — it does not itself provision anything in AWS. The

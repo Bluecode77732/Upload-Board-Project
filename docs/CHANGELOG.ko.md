@@ -13,6 +13,22 @@
 ## [Unreleased]
 
 ### 보안
+- **HTTPS Ingress annotation 템플릿 + 실제 `--set-json` 버그 수정 (2026-09-13, [ADR
+  0058](ADR/0058-ingress-path-allowlist.ko.md), [ADR 0034](ADR/0034-https-termination-stance.ko.md)
+  extends)** — 바로 아래 ADR 0058 항목이 열어둔 "host/TLS/ALB 어노테이션 작업이 따로
+  필요하다"는 공백을 마저 메웠다. `k8s/helm/values-prod.yaml`에 이제 실제 도메인, 일곱
+  경로 allow-list 전체, HTTP→HTTPS 강제 리다이렉트용
+  `certificate-arn`/`listen-ports`/`ssl-redirect` annotation까지 담은 주석 처리된
+  `ingress` 블록이 있다 — `ingress.enabled`는 여전히 `false`(개발자 결정 그대로).
+  `helm lint`/`helm template`로 검증하는 과정에서 `k8s/infra/terraform/README.md`에
+  이미 있던 `helm upgrade --set ingress.hosts[0].host=...` 레시피의 실제 재현 가능한
+  버그를 발견했다 — `--set`은 배열 인덱스에 값을 줄 때 그 원소 전체를 교체해버려서, 이
+  한 줄 명령이 실제 도메인은 넣지만 경로가 하나도 없는 `Ingress`를 조용히 렌더링하고
+  있었다 — 바로 ADR 0058이 막으려던 문제 그 자체다. `--set-json`으로 `hosts` 배열
+  전체를 넘기도록 고쳤고, 레시피에 빠져 있던 리다이렉트 annotation
+  (`listen-ports`+`ssl-redirect`)도 함께 추가했다. 코드 변경은 없음;
+  `k8s/helm/README.md`에 "Enabling HTTPS (Ingress)" 절을 새로 추가해 아직 충족되지 않은
+  두 선행 조건(`addons/`+`app-infra/` 재적용)을 문서화했다.
 - **Ingress 경로 allow-list — health·metrics·docs 차단 (2026-09-13, [ADR
   0058](ADR/0058-ingress-path-allowlist.ko.md), ADR 0041 extends)** — 2026-09-09 보안
   점검에서 `k8s/helm/templates/ingress.yaml`의 유일한 경로 규칙이 단일 `/` catch-all

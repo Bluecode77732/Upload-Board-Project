@@ -159,3 +159,17 @@ sufficient here, not a stand-in for missing live verification:
   redeclare the full `paths` list there too (Helm doesn't merge arrays,
   documented in `values.yaml`'s comment) alongside the real host/TLS/ALB
   annotations.
+
+### Addendum (2026-09-13) — the values-prod.yaml template landed
+
+The gap above is now partly closed: `k8s/helm/values-prod.yaml` carries a fully
+commented-out `ingress` block with the real host, this ADR's seven-path list
+redeclared in full, and the `certificate-arn`/`listen-ports`/`ssl-redirect`
+annotations — ready to uncomment once `addons/` and `app-infra/` are re-applied.
+`ingress.enabled` stays `false`; nothing here changes that. Verifying the
+template (`helm lint`/`helm template --set ingress.enabled=true ...`) also
+surfaced a real bug in `k8s/infra/terraform/README.md`'s existing `helm
+upgrade --set ingress.hosts[0].host=...` one-liner: `--set` on an array index
+replaces the whole element, silently dropping every path in this ADR's
+allow-list — exactly what this ADR exists to prevent. Fixed there with
+`--set-json` for the full `hosts` array instead.

@@ -239,6 +239,58 @@ check failed: cannot reuse a name that is still in use` — the old
 (check first with `helm list -A` if its status looks stuck, e.g.
 `pending-install`), confirm it's gone, then retry `helm install`.
 
+## Enabling HTTPS (Ingress)
+
+TLS terminates at the Ingress/ALB, never in-process ([ADR 0034](../../docs/ADR/0034-https-termination-stance.md));
+`values.yaml`'s `ingress` block ships an explicit controller-prefix allow-list, not a `/`
+catch-all ([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.md)). `ingress.enabled`
+stays `false` — a deliberate developer choice
+([ROADMAP.md](../../docs/ROADMAP.md) > Unscheduled), not a missing dependency: while the
+stack was live 2026-08-27 the cluster, the domain (`sharenpo.cloud`), and a real ACM cert
+were all in place, and it was left off until an outside tester actually needs external
+access. Re-confirmed 2026-09-13.
+
+Two preconditions before it can do anything, both currently unmet (all three Terraform
+states are destroyed):
+- `addons/` applied — the AWS Load Balancer Controller has to be running in-cluster to
+  reconcile an `Ingress` object at all.
+- `app-infra/` applied — the ACM certificate for `domain_name` has to reach `ISSUED`
+  (`terraform output -raw acm_certificate_arn`).
+
+`values-prod.yaml` carries a fully commented-out `ingress:` block with the real host, the
+ADR 0058 path list redeclared in full (Helm doesn't merge arrays across `-f` layers), and
+the `certificate-arn`/`listen-ports`/`ssl-redirect` annotations for the HTTP→HTTPS force
+redirect. Once both states above are applied, uncomment it, fill in the ARN, and flip
+`enabled: true` — no `--set` flags needed at that point. For a one-off manual enable
+without touching the checked-in file, `k8s/infra/terraform/README.md`'s "Enabling the ALB
+ingress" section has the equivalent `helm upgrade --set ...` form.
+
+Verifying without a live cluster (none exists right now):
+
+```bash
+helm lint --strict . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
+  --set ingress.className=alb \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]'
+helm template . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
+  --set ingress.className=alb \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]' \
+  -s templates/ingress.yaml
+```
+
+confirms the rendered `Ingress` carries `ingressClassName: alb`, the host, all seven
+allow-listed paths, and the annotations (verified 2026-09-13 — an earlier draft of this
+recipe used `--set ingress.hosts[0].host=...`, which replaces the whole array element and
+silently drops every path; `--set-json` is what actually keeps them, per
+`k8s/infra/terraform/README.md`'s "Enabling the ALB ingress" section, which hit and fixed
+the same thing). A real `helm install --wait` against a live ALB Controller is out of scope
+until Terraform is re-applied.
+
 ## Env vars
 
 Every key under `values.yaml`'s `env:` block must match the Joi schema in

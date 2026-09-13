@@ -149,3 +149,48 @@ metrics:
 # 따로 오버라이드하지 않는다.
 networkPolicy:
   enabled: true
+
+# HTTPS 종단(ADR 0034)은 ingress/ALB에서만 하고 앱 프로세스 안에서는 하지 않는다. 아래는
+# 실제로 켤 때 쓸 값의 참고 템플릿이다 — 전부 주석 처리돼 있고 ingress.enabled은 여전히
+# values.yaml 기본값(false)을 따른다. 외부 테스터가 실제로 필요해질 때까지 켜지 않기로 한
+# 결정은 그대로다(ROADMAP.md > Unscheduled, 개발자 확정 2026-08-27, 재확인 2026-09-13) —
+# 이 블록은 그 결정을 바꾸지 않고, 켜는 날의 실수 여지만 줄여둔 것.
+#
+# 켜기 전 필요한 두 가지 선행 조건(현재 Terraform 3-state 전부 destroy 상태라 둘 다
+# 미충족): addons/ apply(ALB Controller가 떠 있어야 Ingress 객체를 실제로 처리한다),
+# app-infra/ apply(ACM 인증서가 ISSUED 상태여야 한다 — `terraform output -raw
+# acm_certificate_arn`, app-infra/). 두 상태가 갖춰진 뒤 아래 주석을 해제하고 ARN 값을
+# 채운 다음 enabled만 true로 바꾼다 — k8s/helm/README.md "Enabling HTTPS (Ingress)" 참고.
+#
+# paths는 values.yaml과 동일하게 전체를 다시 선언해야 한다 — Helm은 배열을 병합하지
+# 않는다(ADR 0058). tls: 블록은 없다 — ALB Ingress Controller는 spec.tls를 쓰지 않고
+# certificate-arn annotation으로 인증서를 붙인다(k8s/infra/terraform/README.md
+# "Enabling the ALB ingress" 참고).
+# ingress:
+#   enabled: true
+#   className: alb
+#   annotations:
+#     kubernetes.io/ingress.class: alb
+#     alb.ingress.kubernetes.io/scheme: internet-facing
+#     alb.ingress.kubernetes.io/certificate-arn: <app-infra `terraform output -raw acm_certificate_arn`>
+#     # HTTP(80)->HTTPS(443) 강제 리다이렉트 — 두 리스너를 명시하지 않으면 ALB
+#     # Controller가 80 리스너 자체를 만들지 않아 리다이렉트할 대상이 없다.
+#     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+#     alb.ingress.kubernetes.io/ssl-redirect: '443'
+#   hosts:
+#     - host: sharenpo.cloud
+#       paths:
+#         - path: /auth
+#           pathType: Prefix
+#         - path: /user
+#           pathType: Prefix
+#         - path: /post
+#           pathType: Prefix
+#         - path: /comment
+#           pathType: Prefix
+#         - path: /file
+#           pathType: Prefix
+#         - path: /upload
+#           pathType: Prefix
+#         - path: /audit-log
+#           pathType: Prefix

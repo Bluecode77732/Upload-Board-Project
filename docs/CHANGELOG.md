@@ -13,6 +13,21 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Security
+- **HTTPS Ingress annotation template + a real `--set-json` fix (2026-09-13, extends [ADR
+  0058](ADR/0058-ingress-path-allowlist.md) and [ADR 0034](ADR/0034-https-termination-stance.md))**
+  — completes the "still needs its own host/TLS/ALB-annotation work" gap the ADR 0058 entry
+  below left open. `k8s/helm/values-prod.yaml` now carries a fully commented-out `ingress`
+  block with the real host, the full seven-path allow-list, and the
+  `certificate-arn`/`listen-ports`/`ssl-redirect` annotations that force an HTTP→HTTPS
+  redirect; `ingress.enabled` stays `false` (developer choice, unchanged). Verifying it via
+  `helm lint`/`helm template` surfaced a real, reproducible bug in
+  `k8s/infra/terraform/README.md`'s pre-existing `helm upgrade --set
+  ingress.hosts[0].host=...` recipe: `--set` on an array index replaces the whole element,
+  so that one-liner silently rendered an `Ingress` with a real host and zero paths — exactly
+  what ADR 0058 exists to prevent. Fixed with `--set-json` for the whole `hosts` array, and
+  the recipe's missing redirect annotations (`listen-ports`+`ssl-redirect`) were added too.
+  No code change; `k8s/helm/README.md` gained an "Enabling HTTPS (Ingress)" section
+  documenting the two preconditions (`addons/`+`app-infra/` re-apply) still unmet.
 - **Ingress path allow-list — closing off health, metrics, and docs (2026-09-13, [ADR
   0058](ADR/0058-ingress-path-allowlist.md), extends ADR 0041)** — a 2026-09-09 security
   review found `k8s/helm/templates/ingress.yaml`'s only path rule was a single `/`

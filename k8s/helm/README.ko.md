@@ -239,6 +239,60 @@ still in use` 에러가 납니다 — 예전 `netpol-test` 릴리스가 여전�
 보이면 `helm list -A`로 먼저 확인), 제거됐는지 확인한 뒤 `helm install`을
 다시 시도.
 
+## HTTPS(Ingress) 활성화
+
+TLS는 ingress/ALB에서만 종료하고 앱 프로세스 안에서는 하지 않는다([ADR
+0034](../../docs/ADR/0034-https-termination-stance.ko.md)). `values.yaml`의
+`ingress` 블록은 `/` catch-all이 아니라 실제 컨트롤러 prefix의 명시적
+allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)).
+`ingress.enabled`는 계속 `false`다 — 이건 뭔가 빠져서가 아니라 개발자가 확정한
+의도적 결정이다([ROADMAP.md](../../docs/ROADMAP.md) > Unscheduled): 스택이
+실제로 떠 있던 2026-08-27 당시엔 클러스터·도메인(`sharenpo.cloud`)·실제 ACM
+인증서까지 전부 준비돼 있었지만, 외부 테스터가 실제로 필요해질 때까지는 켜지
+않기로 했다. 2026-09-13에 다시 확인했고 그대로다.
+
+켜기 전 필요한 선행 조건 두 가지, 지금은 둘 다 미충족이다(Terraform 3-state
+전부 destroy 상태):
+- `addons/` apply — AWS Load Balancer Controller가 클러스터 안에 떠 있어야
+  `Ingress` 객체를 처리할 수 있다.
+- `app-infra/` apply — `domain_name`의 ACM 인증서가 `ISSUED` 상태여야 한다
+  (`terraform output -raw acm_certificate_arn`).
+
+`values-prod.yaml`엔 실제 도메인, ADR 0058의 경로 목록 전체(Helm은 `-f` 레이어
+사이에 배열을 병합하지 않으므로 그대로 재선언), 그리고 HTTP→HTTPS 강제
+리다이렉트용 `certificate-arn`/`listen-ports`/`ssl-redirect` annotation까지
+전부 주석 처리된 `ingress:` 블록이 이미 준비돼 있다. 위 두 상태가 갖춰지면 그
+주석을 해제하고 ARN을 채운 뒤 `enabled: true`로 바꾸면 된다 — 그 시점엔
+`--set` 플래그가 따로 필요 없다. 체크인된 파일을 건드리지 않고 한 번만
+켜보려면 `k8s/infra/terraform/README.md`의 "Enabling the ALB ingress"
+절에 같은 내용의 `helm upgrade --set ...` 형태가 있다.
+
+실제 클러스터 없이 검증하기(지금은 아무 클러스터도 없다):
+
+```bash
+helm lint --strict . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
+  --set ingress.className=alb \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]'
+helm template . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
+  --set ingress.className=alb \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]' \
+  -s templates/ingress.yaml
+```
+
+렌더링된 `Ingress`에 `ingressClassName: alb`, 호스트, allow-list의 일곱 경로,
+annotation이 전부 의도대로 나오는지 확인한다(2026-09-13 검증 — 이 레시피의 이전 초안은
+`--set ingress.hosts[0].host=...`를 썼는데, 이건 배열 원소 전체를 교체해버려 경로가 다
+사라진다; `--set-json`이라야 실제로 유지된다 — `k8s/infra/terraform/README.md`의 "ALB
+ingress 켜기" 절에서도 같은 문제를 발견해 같은 방식으로 고쳤다) — 지금 이 저장소가
+검증할 수 있는 최대치다. 실제 ALB Controller가 떠 있는 클러스터에 대한 진짜 `helm
+install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 밖이다.
+
 ## Env var
 
 `values.yaml`의 `env:` 블록 아래 모든 키는 `backend/app.module.ts`의 Joi

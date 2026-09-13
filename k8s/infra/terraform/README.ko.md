@@ -424,8 +424,26 @@ helm upgrade sharenpo . \
   --set ingress.annotations."kubernetes\.io/ingress\.class"=alb \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/scheme"=internet-facing \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=$(terraform -chdir=../infra/terraform/app-infra output -raw acm_certificate_arn) \
-  --set ingress.hosts[0].host=<본인-도메인>
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
+  --set-json 'ingress.hosts=[{"host":"<본인-도메인>","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]'
 ```
+
+뒤의 두 annotation이 실제로 HTTP→HTTPS 강제 리다이렉트를 만드는 부분입니다(2026-09-13
+점검에서 이 레시피에 빠져 있던 걸 발견) — `listen-ports`를 명시하지 않으면 ALB
+Controller가 `ssl-redirect`가 리다이렉트할 대상인 80번 포트 리스너 자체를 열지 않으므로,
+`ssl-redirect` 하나만으로는 동작하지 않고 둘을 함께 설정해야 합니다. `hosts` 오버라이드도
+예전엔 `--set ingress.hosts[0].host=<본인-도메인>` 형태였는데, 같은 2026-09-13 점검에서
+찾아 함께 고쳤습니다 — `--set`은 배열 인덱스에 값을 줄 때 그 원소 전체를 병합이 아니라
+교체해버려서, `.host`만 오버라이드하면 실제 도메인은 들어가지만 **경로가 하나도 없는**
+`Ingress`가 조용히 렌더링됩니다(실제로 렌더링해서 확인함) — ADR 0058이 막으려던 바로 그
+"라우팅 규칙이 조용히 사라지는" 실패입니다. `--set-json`은 `hosts[0]` 객체 전체(도메인과
+ADR 0058 경로 목록 전부)를 한 번에 써 넣어 이 문제를 피합니다.
+
+명령줄에 `--set`을 매번 다시 치는 대신 체크인된 반복 가능한 형태를 쓰려면,
+`k8s/helm/values-prod.yaml`에 같은 설정(도메인, ADR 0058 경로 목록 전체, 위와 동일한
+annotation들)이 주석 처리된 템플릿으로 이미 준비돼 있습니다 —
+`k8s/helm/README.md`의 "Enabling HTTPS (Ingress)" 절 참고.
 
 이게 실제로 무슨 일을 하는지 끝까지 따라가 보면: 이 명령으로 만들어지는 `Ingress`
 객체는 ACM 인증서 ARN을 annotation으로 **표시만** 할 뿐, 그 자체로 AWS에 뭔가를
