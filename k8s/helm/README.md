@@ -291,6 +291,23 @@ silently drops every path; `--set-json` is what actually keeps them, per
 the same thing). A real `helm install --wait` against a live ALB Controller is out of scope
 until Terraform is re-applied.
 
+**Pending — required before trusting this in production, not yet done because no live
+ALB Controller exists to test against:** rendering correctly is not the same as the ALB
+actually behaving as configured. Once `addons/`+`app-infra/` are re-applied and
+`ingress.enabled` is actually flipped on, verify explicitly rather than assuming the
+annotations worked:
+- `aws elbv2 describe-listeners` on the created ALB shows both a port-80 and a port-443
+  listener (`listen-ports` actually took effect, not just rendered).
+- `curl -I http://<domain>` returns a `301`/`302` to the `https://` URL (`ssl-redirect`
+  actually fires).
+- A browser accepts the certificate with no warnings for the same domain the ACM
+  certificate was issued for (the `certificate-arn` annotation actually bound the right
+  cert).
+
+None of this can be verified by `helm lint`/`helm template` — they only prove the YAML
+this repo renders is correct, never that the AWS Load Balancer Controller acts on it as
+documented.
+
 ## Env vars
 
 Every key under `values.yaml`'s `env:` block must match the Joi schema in

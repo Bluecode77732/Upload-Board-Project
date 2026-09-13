@@ -293,6 +293,21 @@ ingress 켜기" 절에서도 같은 문제를 발견해 같은 방식으로 고�
 검증할 수 있는 최대치다. 실제 ALB Controller가 떠 있는 클러스터에 대한 진짜 `helm
 install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 밖이다.
 
+**미해결 — 실전 신뢰 전 필수, 지금은 검증할 살아있는 ALB Controller가 없어서 아직 안 함:**
+YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 동작하는 것은 별개다.
+`addons/`+`app-infra/`를 다시 apply하고 `ingress.enabled`를 실제로 켠 뒤엔, annotation이
+먹혔다고 가정하지 말고 다음을 직접 확인한다:
+- `aws elbv2 describe-listeners`로 만들어진 ALB에 80번과 443번 리스너가 둘 다 있는지
+  (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지).
+- `curl -I http://<도메인>`이 `https://` URL로 `301`/`302`를 반환하는지(`ssl-redirect`가
+  실제로 동작하는지).
+- 브라우저가 ACM 인증서가 발급된 그 도메인에 대해 경고 없이 인증서를 신뢰하는지
+  (`certificate-arn` annotation이 실제로 올바른 인증서를 붙였는지).
+
+이 중 어느 것도 `helm lint`/`helm template`로는 확인할 수 없다 — 이 둘은 이 저장소가
+렌더링하는 YAML이 올바르다는 것만 증명할 뿐, AWS Load Balancer Controller가 그 설정대로
+실제로 동작한다는 것은 증명하지 못한다.
+
 ## Env var
 
 `values.yaml`의 `env:` 블록 아래 모든 키는 `backend/app.module.ts`의 Joi
