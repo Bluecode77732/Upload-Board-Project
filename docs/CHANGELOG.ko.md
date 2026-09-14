@@ -13,6 +13,23 @@
 ## [Unreleased]
 
 ### 보안
+- **`trust proxy`를 앱의 VPC CIDR로 설정 (2026-09-14, [ADR
+  0054](ADR/0054-per-route-rate-limit-tuning.ko.md)의 2026-09-10 addendum 해결)** —
+  리버스 프록시 뒤에서는 `ThrottlerGuard`가 키로 쓰는 `req.ip`가 프록시 자신의 주소로
+  해석돼, 클라이언트당 분당 5회(`auth`)·15회(`upload`) 제한이 방문자 전원이 나눠 쓰는
+  버킷 하나로 무너지는 문제가 있었다. `backend/main.ts`의 `bootstrap()`이 이제
+  `app.set('trust proxy', '10.0.0.0/16')`를 호출한다 — 이 프로젝트 자신의 VPC CIDR
+  (`cluster/main.tf`의 `vpc_cidr`, ADR 0056의 NetworkPolicy egress 규칙이 이미 재사용
+  중인 값)이며, 단순 홉 수(`trust proxy: 1`) 대신 이걸 고른 이유는 CIDR이 실제 소켓
+  연결 주체가 VPC 안에 있을 때만 `X-Forwarded-For`를 신뢰해서, ALB를 우회하는 직접
+  연결에 대해 홉 수 방식이 남기는 허점을 막기 때문이다. 라이브 배포 없이, 이 프로젝트가
+  이미 확정한 "ALB 직결, CDN 없음" 목표 구조(ADR 0034, 2026-09-13의 Ingress 작업)만
+  근거로 내린 설계 결정이다. env var/스키마 변경 없음(이 값은 운영자가 조정하는 값이
+  아니라 배포 토폴로지에 고정된 값). dev/로컬 영향은 `proxy-addr`을 대상으로 직접
+  검증했다 — loopback 연결에 `X-Forwarded-For`를 위조해도 `127.0.0.1`로 그대로 해석됨;
+  `pnpm lint`/`pnpm test`(278/278) 통과. ADR 0058과 같은 정직성 기준으로 남기는 잔여
+  사항: 실제 ALB의 연결 주소가 정말 이 CIDR 안에 들어오는지는 AWS 스택을 다시 적용하지
+  않고는 검증 불가.
 - **업로드 악성코드 스캔 — 동기 ClamAV 게이트 ([ADR
   0059](ADR/0059-upload-malware-scanning-clamav.ko.md), 2026-09-14)** — `POST
   /upload/attach`의 확장자/mimetype 허용목록은 파일 내용물을 전혀 검사하지 않았다.

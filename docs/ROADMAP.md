@@ -1427,10 +1427,21 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   mistaken for abuse. e2e-verified against a live Postgres (76/76, no 429s), and a live 429
   fired against a running dev server confirmed both the limit and the per-route isolation
   (`GET /file` hitting its own ceiling left `POST /auth/signin` unaffected in the same
-  window). **Still open, left for a follow-up task**: per-route tuning (e.g. a tighter bound
-  specifically on `POST /auth/signin`) — this ADR deliberately settled only the global
-  default. Also open: Redis-backed `ThrottlerStorage`, needed only once this app actually
-  runs more than one replica (today's default storage counts per-instance).
+  window). ~~Still open, left for a follow-up task: per-route tuning~~ — **landed 2026-09-10**
+  ([ADR 0054](ADR/0054-per-route-rate-limit-tuning.md)): `POST /auth/register`/
+  `POST /auth/signin`/`POST /auth/token/refresh` tightened to 5/minute, `POST /upload/attach`
+  to 15/minute. That same ADR's live verification surfaced a second gap: `trust proxy` was
+  unset, so behind any reverse proxy every client's `req.ip` collapsed to the proxy's own
+  address, merging all visitors into one shared bucket. ~~Deferred pending an Ingress
+  topology decision~~ — **resolved 2026-09-14**: `backend/main.ts` now trusts
+  `X-Forwarded-For` only from connections inside this project's own VPC CIDR (`10.0.0.0/16`
+  — ADR 0054's 2026-09-14 addendum), a design decision made without a live deploy (this
+  project's already-committed ALB-direct-with-no-CDN target shape, ADR 0034, was enough to
+  fix the value on paper). Dev/local impact verified against `proxy-addr` directly; whether a
+  live ALB's connecting peer actually lands inside that CIDR stays unverified until the AWS
+  stack is applied again (§9) — see that addendum for the honest residual. Also open:
+  Redis-backed `ThrottlerStorage`, needed only once this app actually runs more than one
+  replica (today's default storage counts per-instance).
 - ~~Registration account enumeration~~ (found 2026-09-09 alongside the two rows above, **decided
   2026-09-12: accept as-is**) — `POST /auth/register` discloses `AUTH_EMAIL_TAKEN` on a
   duplicate email, while `POST /auth/signin`'s `validateUser` deliberately collapses "no such

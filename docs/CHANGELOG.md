@@ -13,6 +13,23 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Security
+- **`trust proxy` set to the app's VPC CIDR (2026-09-14, resolves the [ADR
+  0054](ADR/0054-per-route-rate-limit-tuning.md) 2026-09-10 addendum)** — behind a reverse
+  proxy, `ThrottlerGuard`'s `req.ip` key resolved to the proxy's own address, collapsing the
+  per-client 5/minute (`auth`) and 15/minute (`upload`) rate limits into one bucket shared by
+  every visitor. `backend/main.ts`'s `bootstrap()` now calls
+  `app.set('trust proxy', '10.0.0.0/16')` — this project's own VPC CIDR
+  (`cluster/main.tf`'s `vpc_cidr`, already reused by ADR 0056's NetworkPolicy egress rule),
+  chosen over a bare hop count (`trust proxy: 1`) because a CIDR only trusts
+  `X-Forwarded-For` from a connection whose real socket peer is inside the VPC, closing the
+  gap a hop count would leave against a direct-to-app connection that bypasses the ALB. A
+  design decision made without a live deploy, on this project's already-committed
+  ALB-direct-with-no-CDN target shape (ADR 0034, the 2026-09-13 Ingress work). No env
+  var/schema change (the value is fixed by deployment topology, not operator-tunable).
+  Dev/local impact verified against `proxy-addr` directly — a loopback connection with a
+  forged `X-Forwarded-For` still resolves to `127.0.0.1`; `pnpm lint`/`pnpm test` (278/278)
+  pass. Same residual honesty as ADR 0058: whether a live ALB's connecting peer actually
+  lands inside the CIDR is unverified without the AWS stack applied again.
 - **Malware scanning for uploads — synchronous ClamAV gate ([ADR
   0059](ADR/0059-upload-malware-scanning-clamav.md), 2026-09-14)** — `POST
   /upload/attach`'s extension/mimetype allowlist never inspected file content.

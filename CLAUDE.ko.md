@@ -1471,18 +1471,26 @@ Architecture Decisions가 계속 유효하다.
   DB(`sharenpo_promote_verify`, 검증 후 drop)에서 승격/재실행 no-op/미존재 이메일
   에러/env var 미설정 에러 네 가지가 모두 설계대로 동작함을 확인 — ADR 0052 addendum
   참고
-- **요청 횟수 제한이 `req.ip`로 키잉되는데 `trust proxy`가 미설정**([ADR
-  0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md) addendum, 2026-09-10 발견):
-  `ThrottlerGuard`의 기본 tracker는 앞단에 리버스 프록시가 있으면 실제 방문자가 아니라
-  Express 자신의 클라이언트-소켓 해석 결과를 읽는다 — `backend/main.ts`에
-  `app.set('trust proxy', ...)` 호출이 없음을 확인했다. 지금은 실제 영향이 없다(아무것도
-  배포돼 있지 않고, `k8s/helm/`의 `Ingress`도 기본 비활성에 ALB/nginx 선택이 확정돼
-  있지 않다). 하지만 `Ingress`가 켜지는 순간 외부 클라이언트 전원의 `req.ip`가 그
-  프록시 주소로 수렴해, 클라이언트당 분당 5회(`auth`)·15회(`upload`) 버킷
-  ([ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md))이 방문자 전원이 나눠
-  쓰는 버킷 하나로 무너진다. 지금 고치지 않는다 — 올바른 `trust proxy` 값(홉 수 또는
-  명시적 프록시 CIDR)은 `Ingress`를 실제로 켤 때 선택하는 인그레스/로드밸런서
-  토폴로지에 달려 있고, 그게 아직 정해지지 않았다 — 그 작업과 함께 다시 다룰 것
+- ~~요청 횟수 제한이 `req.ip`로 키잉되는데 `trust proxy`가 미설정~~ — **2026-09-14 해결**
+  ([ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md) 2026-09-10 addendum에서
+  발견, 2026-09-14 addendum에서 해결): `ThrottlerGuard`의 기본 tracker는 앞단에 리버스
+  프록시가 있으면 실제 방문자가 아니라 Express 자신의 클라이언트-소켓 해석 결과를 읽는다
+  — `backend/main.ts`에 `app.set('trust proxy', ...)` 호출이 없었음을 확인했었다.
+  `app.set('trust proxy', '10.0.0.0/16')`로 고쳤다 — 이 CIDR은 이 프로젝트 자신의 VPC
+  대역(`cluster/main.tf`의 `vpc_cidr`, ADR 0056의 NetworkPolicy egress 규칙이 이미
+  재사용 중인 바로 그 상수)이며, 단순 홉 수(`trust proxy: 1`) 대신 이걸 고른 이유는
+  홉 수가 실제로 누가 연결해왔는지와 무관하게 `X-Forwarded-For`를 그대로 믿는 반면,
+  CIDR은 실제 소켓 연결 주체가 VPC 안에 있을 때만 신뢰를 확장하기 때문이다 — 앱이 ALB를
+  우회하는 경로로 도달 가능해지는 경우까지 대비한 선택이다. 이건 **라이브 배포 없이
+  내린 설계 결정**이다 — 이 프로젝트가 이미 확정한 목표 구조(ADR 0034, 2026-09-13의
+  Ingress annotation 작업)가 정확히 ALB 하나가 CDN이나 다른 프록시 계층 없이 `Ingress`를
+  직접 구현하는 형태라, 이것만으로도 종이 위에서 값을 확정하기 충분했다 — ADR 0034
+  자신이 design-only로 남았던 것과 같은 방식이다. dev/로컬 영향은 `proxy-addr`을 대상으로
+  직접 검증했다(주장만 하지 않았다) — loopback 연결에 `X-Forwarded-For`를 위조해도
+  `127.0.0.1`로 그대로 해석돼, 로컬 `pnpm start:dev` 동작은 안 바뀐다. `pnpm lint`/
+  `pnpm test`(278/278) 모두 통과. ADR 0058과 같은 정직성 기준으로 남기는 잔여 사항: 실제
+  ALB의 연결 주소가 정말 `10.0.0.0/16` 안에 들어오는지는 AWS 스택을 다시 적용하지 않고는
+  검증 불가 — 다음에 실제로 적용할 때(ROADMAP.md §9) 다시 확인할 것
 - ~~시크릿/해시 라운드 Joi 검증이 존재 여부만 확인하고 강도는 확인하지 않았다~~ —
   **2026-09-11 해결**: 보안 점검 결과 `backend/app.module.ts`의 Joi 스키마가
   `HASH_ROUNDS`/`ACCESS_TOKEN_SECRET`/`REFRESH_TOKEN_SECRET`에 대해 값이 존재하는지만

@@ -3,18 +3,29 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 
-// 목적: Nest 앱을 부트스트랩하고 보안 헤더/CORS/쿠키/검증/Swagger를 구성한 뒤 리슨을 시작한다.
-// 이유: PORT를 process.env에서 직접 읽으면 Joi 검증을 우회해 Config 정책(ConfigService만 사용)을 깨뜨린다.
-// 방법: ConfigService 인스턴스를 한 번만 얻어 CORS_ORIGIN과 PORT 조회에 재사용한다. helmet은
-//       다른 미들웨어보다 먼저 적용해 모든 응답에 보안 헤더가 빠짐없이 붙게 하되, CSP의
-//       script-src는 /doc(Swagger UI)의 인라인 부트스트랩 스크립트가 실행되도록 완화한다
-//       (ADR 0055).
+// 목적: Nest 앱을 부트스트랩하고 프록시 신뢰 범위/보안 헤더/CORS/쿠키/검증/Swagger를 구성한 뒤
+//       리슨을 시작한다.
+// 이유: PORT를 process.env에서 직접 읽으면 Joi 검증을 우회해 Config 정책(ConfigService만 사용)을
+//       깨뜨린다. ALB 뒤에서는 req.ip가 항상 ALB 자신의 주소로 찍혀, 라우트별 rate limit
+//       (ADR 0054)이 방문자별이 아닌 전체 공유 버킷이 된다.
+// 방법: ConfigService 인스턴스를 한 번만 얻어 CORS_ORIGIN과 PORT 조회에 재사용한다. trust proxy는
+//       VPC 대역(10.0.0.0/16, ADR 0056과 동일 상수)에서 온 연결일 때만 X-Forwarded-For를
+//       신뢰하도록 가장 먼저 설정한다(ADR 0054 addendum). helmet은 다른 미들웨어보다 먼저
+//       적용해 모든 응답에 보안 헤더가 빠짐없이 붙게 하되, CSP의 script-src는 /doc(Swagger UI)의
+//       인라인 부트스트랩 스크립트가 실행되도록 완화한다(ADR 0055).
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
+
+  // ALB(리버스 프록시) 뒤에서 req.ip가 항상 ALB 자신의 주소로 찍혀 rate limit이 방문자별이
+  // 아닌 전체 공유 버킷이 되는 문제를 막는다(ADR 0054 addendum) — VPC 내부(10.0.0.0/16,
+  // ADR 0056과 동일 상수)에서 온 연결일 때만 X-Forwarded-For를 신뢰한다. 배포 토폴로지에
+  // 고정된 상수라 env var로 빼지 않았다 — ADR 0054 addendum 참고.
+  app.set('trust proxy', '10.0.0.0/16');
 
   app.use(
     helmet({

@@ -1356,11 +1356,22 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   오인되지 않게 했다. 실제 Postgres 대상 e2e로 검증 완료(76/76, 429 없음), 실행
   중인 dev 서버에 실제 429를 발생시켜 한도 자체와 라우트별 독립성을 둘 다
   확인했다(`GET /file`이 자신의 한도에 걸려도 같은 창의 `POST /auth/signin`은
-  영향받지 않음). **아직 열려 있어 후속 작업으로 남김**: 라우트별 세분화(예:
-  `POST /auth/signin`만 더 빡빡하게) — 이 ADR은 의도적으로 전역 기본값만
-  확정했다. Redis 기반 `ThrottlerStorage`도 열려 있음 — 이 앱이 실제로
-  replica 2개 이상으로 돌기 전까지는 필요 없다(현재 기본 storage는 인스턴스별로
-  카운트한다).
+  영향받지 않음). ~~아직 열려 있어 후속 작업으로 남김: 라우트별 세분화~~ —
+  **2026-09-10 착지** ([ADR 0054](ADR/0054-per-route-rate-limit-tuning.ko.md)):
+  `POST /auth/register`/`POST /auth/signin`/`POST /auth/token/refresh`는 분당 5회,
+  `POST /upload/attach`는 분당 15회로 강화됐다. 같은 ADR의 라이브 검증 과정에서
+  두 번째 허점이 드러났다: `trust proxy`가 미설정이라 리버스 프록시 뒤에서는
+  모든 클라이언트의 `req.ip`가 프록시 자신의 주소 하나로 수렴해, 방문자 전원이
+  버킷 하나를 나눠 쓰게 되는 문제였다. ~~인그레스 토폴로지 결정이 있을 때까지
+  미룸~~ — **2026-09-14 해결**: `backend/main.ts`가 이제 이 프로젝트 자신의
+  VPC CIDR(`10.0.0.0/16` — ADR 0054의 2026-09-14 addendum) 안에서 온 연결에만
+  `X-Forwarded-For`를 신뢰한다 — 라이브 배포 없이 내린 설계 결정이다(이 프로젝트가
+  이미 확정한 "ALB 직결, CDN 없음" 목표 구조, ADR 0034만으로 종이 위에서 값을
+  확정하기 충분했다). dev/로컬 영향은 `proxy-addr`을 대상으로 직접 검증했고,
+  실제 ALB의 연결 주체가 정말 그 CIDR 안에 들어오는지는 AWS 스택을 다시 적용할
+  때까지(§9) 미검증 상태로 남는다 — 정직한 잔여 사항은 해당 addendum 참고. Redis
+  기반 `ThrottlerStorage`도 여전히 열려 있음 — 이 앱이 실제로 replica 2개
+  이상으로 돌기 전까지는 필요 없다(현재 기본 storage는 인스턴스별로 카운트한다).
 - ~~회원가입 계정 열거~~ (위 두 항목과 함께 2026-09-09 발견, **2026-09-12 결정: 현행
   유지**) — `POST /auth/register`는 이메일 중복 시 `AUTH_EMAIL_TAKEN`을 노출하는데,
   `POST /auth/signin`의 `validateUser`는 "그런 계정 없음"과 "비밀번호 틀림"을 의도적으로

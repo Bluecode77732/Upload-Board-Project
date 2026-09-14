@@ -1436,19 +1436,26 @@ Architecture Decisions above remain operative.
   an isolated throwaway DB (`sharenpo_promote_verify`, dropped after) — promote, re-run
   no-op, unknown-email error, and unset-env-var error all behaved as designed; see ADR
   0052's addendum
-- **Rate limiting keys on `req.ip`, and `trust proxy` is unset** ([ADR
-  0054](docs/ADR/0054-per-route-rate-limit-tuning.md) addendum, found 2026-09-10):
-  `ThrottlerGuard`'s default tracker reads Express's own client-socket resolution, not the
-  real originating client, once a reverse proxy sits in front of the app — confirmed
-  `backend/main.ts` has no `app.set('trust proxy', ...)` call. No live impact today (nothing
-  is deployed; `k8s/helm/`'s `Ingress` is disabled by default with no committed
-  ALB/nginx choice), but the moment `Ingress` is turned on, every external client's `req.ip`
-  resolves to the proxy's own address, collapsing the per-client 5/minute (`auth`) and
-  15/minute (`upload`) buckets ([ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
-  into one bucket shared by every visitor. Not fixed now — the correct `trust proxy` value
-  (a hop count or explicit proxy CIDR) depends on whichever ingress/load-balancer topology
-  is chosen when `Ingress` is actually enabled, which hasn't happened; revisit alongside
-  that task, not before
+- ~~Rate limiting keys on `req.ip`, and `trust proxy` is unset~~ — **resolved 2026-09-14**
+  ([ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md) 2026-09-10 addendum, found that
+  day; 2026-09-14 addendum resolves it): `ThrottlerGuard`'s default tracker reads Express's
+  own client-socket resolution, not the real originating client, once a reverse proxy sits
+  in front of the app — confirmed `backend/main.ts` had no `app.set('trust proxy', ...)`
+  call. Fixed with `app.set('trust proxy', '10.0.0.0/16')` — the CIDR is this project's own
+  VPC block (`cluster/main.tf`'s `vpc_cidr`, the same constant ADR 0056's NetworkPolicy
+  egress rule already reuses), chosen over a bare hop count (`trust proxy: 1`) because a
+  hop count trusts `X-Forwarded-For` regardless of who actually connected, while a CIDR only
+  extends trust to a connection whose real socket peer is inside the VPC — closing the gap
+  a hop count would leave if the app were ever reachable by a path that bypasses the ALB.
+  This is a **design decision made without a live deploy** — this project's committed target
+  shape (ADR 0034, the 2026-09-13 Ingress annotation work) is exactly one ALB implementing
+  `Ingress` directly with no CDN/second proxy layer in front, which is enough to fix the
+  value on paper, the same way ADR 0034 itself was design-only. Dev/local impact verified
+  (not just reasoned about) against `proxy-addr` — a loopback connection with a forged
+  `X-Forwarded-For` still resolves to `127.0.0.1`, so local `pnpm start:dev` behavior is
+  unchanged; `pnpm lint`/`pnpm test` (278/278) both pass. Honest residual, same posture as
+  ADR 0058: whether a live ALB's actual connecting peer really lands inside `10.0.0.0/16`
+  is unverified without the AWS stack applied again — revisit next time it is (ROADMAP.md §9)
 - ~~Secret/hash-rounds Joi validation checked presence only, not strength~~ —
   **resolved 2026-09-11**: a security review found `HASH_ROUNDS`/`ACCESS_TOKEN_SECRET`/
   `REFRESH_TOKEN_SECRET` in `backend/app.module.ts`'s Joi schema validated only that a
