@@ -66,7 +66,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0056](0056-networkpolicy-east-west-restriction.ko.md) | 클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy — 아웃바운드 중심, 기본 비활성 게이팅, 0041 확장 | 승인됨 — 구현됨, kind+Calico 검증 완료 | 2026-09-11 |
 | [0057](0057-terraform-state-backend-s3-native-lock.ko.md) | Terraform state 백엔드 — S3 네이티브 락, DynamoDB·KMS 없이, 0044 amends | 승인됨 — 코드 완료, 미적용 | 2026-09-12 |
 | [0058](0058-ingress-path-allowlist.ko.md) | Ingress 경로 allow-list — health·metrics·docs 차단, 0041 extends | 승인됨 — 구현 완료, helm template/lint 검증 | 2026-09-13 |
-| [0059](0059-upload-malware-scanning-clamav.ko.md) | 업로드 악성코드 스캔 — temp 쓰기 전 동기 ClamAV 게이트 | 승인됨 — 구현 완료, 로컬 라이브 검증 완료 | 2026-09-14 |
+| [0059](0059-upload-malware-scanning-clamav.ko.md) | 업로드 악성코드 스캔 — temp 쓰기 전 동기 ClamAV 게이트 | 승인됨 — 구현 완료, 라이브+CI 검증 완료(Helm install은 미검증) | 2026-09-14 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

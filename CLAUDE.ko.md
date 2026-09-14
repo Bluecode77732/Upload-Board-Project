@@ -1135,9 +1135,12 @@ Conflict Protocol을 따른다.
   시그니처 DB 복제를 피하려고, ADR 0059 D6) — 로컬에서는 `docker-compose.yml`
   서비스로 동일하게 뜬다; `.github/workflows/ci.yml`의 업로드를 거치는 잡
   (`e2e`/`frontend-e2e`/`admin-e2e`) 각각에 `clamav` 서비스 컨테이너를
-  추가했다. CI 연결 자체는 아직 실행된 적 없고(실제 push/PR 필요), Helm
-  차트는 template/lint 검증만 됐다(살아있는 클러스터가 없어 `helm install`
-  검증은 못 함)
+  추가했다 — 실제 GitHub Actions에서 CI 검증 완료(`admin-e2e`에서 무관한
+  기존 결함 하나 발견 — 기호 빠진 픽스처 비밀번호, 별도 수정함). Helm
+  차트는 template/lint 검증만 됐다 — `helm install --wait`은 아직인데,
+  이건 실 AWS가 있어야 닫히는 공백이 아니다: ADR 0056의 `kind`+Calico
+  레시피(`k8s/helm/README.md`)가 정확히 이 검증용이고, 돌리면 새
+  `clamav` egress `NetworkPolicy` 규칙도 함께 검증된다
 - **절대 제안 금지**: 스트리밍/청크 업로드, CDN — 명시적으로 요청받지 않는 한.
   S3는 더 이상 이 목록에 없다: 스토리지 포트-어댑터(위 ADR 0029)가
   `S3Storage` 구현체와 `STORAGE_DRIVER` 스위치를 둘 다 이미 도입했지만,
@@ -1614,12 +1617,24 @@ Architecture Decisions가 계속 유효하다.
   clamav`) 대상 — 정상 버퍼 통과, EICAR 테스트 버퍼 정상 탐지
   (`Eicar-Test-Signature`), 100MB 버퍼 약 5.97초로 스캔(8초 시도당 타임아웃
   이내), 스캐너 접속 불가 시 2회 시도 후 `ScanUnavailableError`로 fail-closed
-  재현(약 212ms). 남은 부분: `.github/workflows/ci.yml`의
-  `e2e`/`frontend-e2e`/`admin-e2e` 잡에 추가한 `clamav` 서비스 컨테이너는
-  아직 실제 GitHub Actions에서 실행된 적 없고(push/PR 필요), Helm 차트의
-  `clamav-deployment.yaml`/`clamav-service.yaml`도 `helm lint`/`helm
-  template` 검증만 됐다 — 살아있는 클러스터가 없어 `helm install --wait`
-  검증은 못 함(ADR 0058과 같은 한계, ROADMAP.md §9)
+  재현(약 212ms). **2026-09-14 CI 검증 완료**: 새 `clamav` 서비스 컨테이너가
+  `e2e`/`frontend-e2e`에서 첫 실제 GitHub Actions 실행부터 정상 동작
+  ([34825693680](https://github.com/Bluecode77732/Upload-Board-Project/actions/runs/34825693680));
+  같은 실행에서 `admin-e2e`도 실패했지만 원인은 `AUTH_WEAK_PASSWORD` — 2026-09-11
+  강도 규칙 이전부터 있던, 기호 문자가 빠진 기존 픽스처 비밀번호 결함
+  (`admin/e2e/helpers.ts`)이라 별도로 수정했고, 그다음 실행
+  ([34829671565](https://github.com/Bluecode77732/Upload-Board-Project/actions/runs/34829671565))에서
+  7개 잡 전부 통과 확인. 남은 부분: Helm 차트의 `clamav-deployment.yaml`/
+  `clamav-service.yaml`은 `helm lint`/`helm template` 검증만 됐고 `helm
+  install --wait`은 아직인데 — ADR 0058의 Ingress 작업과 달리 이건 실
+  AWS가 있어야 닫히는 공백이 아니다. ADR 0056이 이미 정확히 이 검증용
+  `kind`+Calico 레시피를 만들어뒀고(`k8s/helm/README.md` > "Verifying
+  against a throwaway kind + Calico cluster"), 그걸 돌리면 이번에 추가한
+  `clamav` egress `NetworkPolicy` 규칙도 처음으로 실제 검증된다. 진짜로
+  실 AWS가 있어야만 확인되는 잔여 항목은 딱 하나 — AWS 자신의 VPC CNI
+  Network Policy 강제 에이전트(Calico와 다른 엔진)가 똑같이 동작하는지뿐이고,
+  이건 ADR 0056이 이미 안고 있던 것과 같은 공백이지 새로 생긴 게 아니다
+  (ROADMAP.md §9)
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

@@ -1116,8 +1116,12 @@ Do not suggest alternatives to these decisions without explicit request.
   `k8s/helm/` (not a sidecar — avoids per-replica signature-DB duplication, ADR 0059 D6)
   and as a `docker-compose.yml` service locally; `.github/workflows/ci.yml`'s
   upload-touching jobs (`e2e`/`frontend-e2e`/`admin-e2e`) each gained a `clamav` service
-  container. CI wiring itself is unexercised (needs a real push/PR run) and the Helm
-  chart is template/lint-verified only (no live cluster to `helm install` against)
+  container — CI-verified on real GitHub Actions (`admin-e2e` uncovered an unrelated
+  pre-existing bug, a fixture password missing a symbol; fixed separately). The Helm
+  chart is template/lint-verified only — `helm install --wait` is not, but that gap
+  doesn't need real AWS to close: ADR 0056's `kind`+Calico recipe
+  (`k8s/helm/README.md`) covers exactly this and would also exercise the new
+  `clamav`-egress `NetworkPolicy` rule
 - **Never suggest**: streaming/chunked upload, CDN — unless explicitly requested. S3 is no
   longer in this list: the storage port-adapter (ADR 0029, above) landed both an
   `S3Storage` implementation and the `STORAGE_DRIVER` switch, but `local` stays the
@@ -1583,12 +1587,23 @@ Architecture Decisions above remain operative.
   against a real `clamd` (`docker compose up clamav`): clean buffer passes, an EICAR test
   buffer is correctly detected (`Eicar-Test-Signature`), a 100MB buffer scans in ~5.97s
   (within the 8s per-attempt timeout), and the fail-closed path reproduces
-  `ScanUnavailableError` after 2 attempts (~212ms) when the scanner is unreachable. Residual,
-  not yet exercised: the new `clamav` service containers added to
-  `.github/workflows/ci.yml`'s `e2e`/`frontend-e2e`/`admin-e2e` jobs haven't run in a real
-  GitHub Actions job yet (needs a push/PR), and the Helm chart's `clamav-deployment.yaml`/
-  `clamav-service.yaml` are `helm lint`/`helm template`-verified only — no live cluster
-  exists to `helm install --wait` against (same caveat as ADR 0058, ROADMAP.md §9)
+  `ScanUnavailableError` after 2 attempts (~212ms) when the scanner is unreachable.
+  **CI-verified 2026-09-14**: the new `clamav` service containers worked correctly in
+  `e2e`/`frontend-e2e` on the first real GitHub Actions run
+  ([34825693680](https://github.com/Bluecode77732/Upload-Board-Project/actions/runs/34825693680));
+  `admin-e2e` failed there too, but on `AUTH_WEAK_PASSWORD` — an unrelated pre-existing
+  bug (`admin/e2e/helpers.ts`'s fixture password predates the 2026-09-11 strength rule
+  and had no symbol character), fixed separately; all 7 jobs passed on the next run
+  ([34829671565](https://github.com/Bluecode77732/Upload-Board-Project/actions/runs/34829671565)).
+  Residual: the Helm chart's `clamav-deployment.yaml`/`clamav-service.yaml` are `helm
+  lint`/`helm template`-verified only, not `helm install --wait`-verified — but unlike
+  ADR 0058's Ingress work, that gap doesn't need real AWS to close. ADR 0056 already
+  built a `kind`+Calico recipe for exactly this (`k8s/helm/README.md` > "Verifying
+  against a throwaway kind + Calico cluster"), and running it would also be this
+  change's first real test of its new `clamav`-egress `NetworkPolicy` rule. Only AWS's
+  own VPC CNI Network Policy enforcement agent (a different engine than Calico) stays
+  genuinely AWS-only-verifiable — the same residual ADR 0056 already carries, not a new
+  one (ROADMAP.md §9)
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for
