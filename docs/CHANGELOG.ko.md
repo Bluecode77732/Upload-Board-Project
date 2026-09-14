@@ -13,6 +13,21 @@
 ## [Unreleased]
 
 ### 보안
+- **업로드 악성코드 스캔 — 동기 ClamAV 게이트 ([ADR
+  0059](ADR/0059-upload-malware-scanning-clamav.ko.md), 2026-09-14)** — `POST
+  /upload/attach`의 확장자/mimetype 허용목록은 파일 내용물을 전혀 검사하지 않았다.
+  이제 `UploadService.stageTemp`가 temp 저장소에 뭔가 쓰이기 전에 새 `ScanService`
+  (`clamscan`으로 `clamd` 데몬에 TCP 접속)로 메모리 버퍼를 스캔한다 — 감염이면
+  400 `UPLOAD_MALWARE_DETECTED`, 스캐너에 연결할 수 없거나 타임아웃되면 검사를
+  건너뛰지 않고 503 `UPLOAD_SCAN_UNAVAILABLE`로 fail-closed(최대 2회 시도, 각
+  8초 제한 — Reliability > Retry Limits/Timeout이 실제로 적용되는 첫 사례).
+  `clamd`는 `k8s/helm/`에서 사이드카가 아니라 별도 Deployment+Service로 뜬다(앱
+  replica마다 시그니처 DB가 복제되는 걸 피하려고), 로컬에서는 새
+  `docker-compose.yml` 서비스로 동일하게 뜬다; `.github/workflows/ci.yml`의
+  `e2e`/`frontend-e2e`/`admin-e2e` 잡 각각에 `clamav` 서비스 컨테이너를 추가했다.
+  스키마 변경 없음. 실제 `clamd` 대상 라이브 검증 완료: EICAR 정탐, 정상 파일
+  통과, 100MB 버퍼 약 5.97초(8초 타임아웃 이내), 스캐너 접속 불가 시 약
+  212ms만에 fail-closed 재현.
 - **HTTPS Ingress annotation 템플릿 + 실제 `--set-json` 버그 수정 (2026-09-13, [ADR
   0058](ADR/0058-ingress-path-allowlist.ko.md), [ADR 0034](ADR/0034-https-termination-stance.ko.md)
   extends)** — 바로 아래 ADR 0058 항목이 열어둔 "host/TLS/ALB 어노테이션 작업이 따로

@@ -13,6 +13,21 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Security
+- **Malware scanning for uploads — synchronous ClamAV gate ([ADR
+  0059](ADR/0059-upload-malware-scanning-clamav.md), 2026-09-14)** — `POST
+  /upload/attach`'s extension/mimetype allowlist never inspected file content.
+  `UploadService.stageTemp` now scans the in-memory buffer via a new `ScanService`
+  (`clamscan`, TCP to a `clamd` daemon) before anything is written to temp storage: a
+  positive match is 400 `UPLOAD_MALWARE_DETECTED`, and a scanner that can't be reached
+  or times out fails the upload closed with 503 `UPLOAD_SCAN_UNAVAILABLE` rather than
+  skipping the check (bounded to 2 attempts / 8s each — the first real use of
+  Reliability > Retry Limits/Timeout). `clamd` runs as its own Deployment+Service in
+  `k8s/helm/` (not a sidecar, to avoid duplicating the signature DB per app replica)
+  and as a new `docker-compose.yml` service locally; `.github/workflows/ci.yml`'s
+  `e2e`/`frontend-e2e`/`admin-e2e` jobs each gained a `clamav` service container. No
+  schema change. Live-verified against a real `clamd`: EICAR correctly detected, a
+  clean file passes, a 100MB buffer scans in ~5.97s (within the 8s timeout), and the
+  fail-closed path reproduces in ~212ms when the scanner is unreachable.
 - **HTTPS Ingress annotation template + a real `--set-json` fix (2026-09-13, extends [ADR
   0058](ADR/0058-ingress-path-allowlist.md) and [ADR 0034](ADR/0034-https-termination-stance.md))**
   — completes the "still needs its own host/TLS/ALB-annotation work" gap the ADR 0058 entry

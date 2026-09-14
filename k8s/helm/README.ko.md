@@ -105,6 +105,9 @@ helm upgrade sharenpo . -f values-prod.yaml --set image.tag=<태그>
 | `ingress.yaml` | Ingress | 기본 비활성(`ingress.enabled: false`) — TLS는 여기서 종료, 앱 내부에서는 안 함(ADR 0034). 경로 규칙은 `/` catch-all이 아니라 실제 컨트롤러 prefix의 명시적 allow-list다 — `/health`, `/metrics`, `/doc`은 의도적으로 제외(ADR 0058) |
 | `serviceaccount.yaml` | ServiceAccount | 기본 비활성(`serviceAccount.create: false` — Deployment는 네임스페이스의 `default` ServiceAccount로 그대로 뜸). S3 IRSA 권한을 네임스페이스의 모든 pod가 아니라 이 앱에만 좁히려면 켠다 — 아래 "IRSA용 전용 ServiceAccount" 참고 |
 | `networkpolicy.yaml` | NetworkPolicy | 기본 비활성(`networkPolicy.enabled: false`) — 앱 파드의 인바운드/아웃바운드 트래픽을 제한한다. 아래 "NetworkPolicy" 참고(ADR 0056) |
+| `clamav-deployment.yaml` | Deployment | `UploadService`가 업로드를 검사하는 `clamd` 데몬 — 앱 파드마다 하나씩이 아니라 공유되는 단일 replica다(시그니처 DB 중복을 피함, ADR 0059 D6). `ingress`/`networkPolicy`와 달리 항상 렌더링된다 |
+| `clamav-service.yaml` | Service | `ClusterIP`, 포트 3310 — `configmap.yaml`이 `values.yaml`의 `env` 맵이 아니라 이 Service 이름에서 `CLAMD_HOST`를 직접 계산한다 |
+| `clamav-pvc.yaml` | PersistentVolumeClaim | `clamav.persistence.enabled: true`일 때만 렌더링된다(기본 `false` — 그렇지 않으면 재시작마다 `emptyDir`에 시그니처 DB를 다시 내려받는다) |
 
 `values.yaml`엔 실제로 템플릿이 읽는 키만 남아 있습니다 — 어떤 템플릿도 소비하지
 않던 `autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride` 스캐폴딩

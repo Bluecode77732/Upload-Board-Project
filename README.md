@@ -93,12 +93,14 @@ pnpm run test:cov      # coverage (only services are measured)
 
 ### With Docker
 
-`docker compose` brings up Postgres and the API together ([ADR 0015](docs/ADR/0015-docker-and-compose.md)).
+`docker compose` brings up Postgres, ClamAV, and the API together
+([ADR 0015](docs/ADR/0015-docker-and-compose.md); ClamAV added by
+[ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md)).
 Stop the legacy `upload-board-pg` container first — it holds host port 5435.
 
 ```bash
 cp .env.example .env        # fill in secrets; DB_* can stay as-is for compose
-docker compose up --build   # db (postgres:16) → migrate (one-shot) → api on :3000
+docker compose up --build   # db (postgres:16) + clamav → migrate (one-shot) → api on :3000
 ```
 
 The `db` service publishes `${DB_PORT}` (5435), so host-run `pnpm test:e2e` and
@@ -132,7 +134,9 @@ automatic boot-time promotion —
 sweep — [ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.md)), `STORAGE_DRIVER`
 (`local` default | `s3`, with `S3_BUCKET`/`AWS_REGION` required when `s3` —
 [ADR 0029](docs/ADR/0029-storage-port-adapter.md)), `CONTENT_SIGNED_URL_TTL_SECONDS` (S3 presigned-redirect TTL, unused under `local` —
-[ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md)), and `THROTTLE_ENABLED`
+[ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md)), `CLAMD_HOST` / `CLAMD_PORT`
+(default `clamav` / `3310`, matching the `docker-compose.yml` service name — upload
+malware scanning, [ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md)), and `THROTTLE_ENABLED`
 (default `true` — not a dev/prod switch; exists only so the e2e suite can bypass the
 global rate limit and the tighter per-route auth/upload limits —
 [ADR 0053](docs/ADR/0053-global-rate-limiting.md),
@@ -185,7 +189,11 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](docs/ADR/0013-rbac-and-audit-
   (mp3), `video` (mp4/mov/webm). Zero fields is 400 `UPLOAD_FILE_REQUIRED`; more than one is
   400 `UPLOAD_MULTIPLE_FIELDS`; a file that does not match its field's allowlist is 400
   `UPLOAD_INVALID_TYPE` ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md) D4/D5,
-  [ADR 0027](docs/ADR/0027-media-type-expansion-implementation.md))
+  [ADR 0027](docs/ADR/0027-media-type-expansion-implementation.md)). Before the file ever
+  reaches temp storage, it's scanned by ClamAV (`clamd`) — a positive match is 400
+  `UPLOAD_MALWARE_DETECTED`; if the scanner can't be reached or times out, the upload fails
+  closed with 503 `UPLOAD_SCAN_UNAVAILABLE` rather than skipping the check
+  ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md))
 - `GET /file` — list files. All query parameters are optional and combinable; an undeclared
   one is rejected as 400 `VALIDATION_FAILED` ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md))
 

@@ -103,6 +103,9 @@ under a different release name renames every object with it; only the
 | `ingress.yaml` | Ingress | Disabled by default (`ingress.enabled: false`) — TLS terminates here, never in-process (ADR 0034). Path rules are an explicit allow-list of real controller prefixes, not a `/` catch-all — `/health`, `/metrics`, `/doc` are deliberately excluded (ADR 0058) |
 | `serviceaccount.yaml` | ServiceAccount | Disabled by default (`serviceAccount.create: false` — Deployment runs as the namespace's `default` ServiceAccount, unchanged). Enable it to scope the S3 IRSA role to this app instead of every pod in the namespace — see "Dedicated ServiceAccount for IRSA" below |
 | `networkpolicy.yaml` | NetworkPolicy | Disabled by default (`networkPolicy.enabled: false`) — restricts the app pod's inbound/outbound traffic. See "NetworkPolicy" below (ADR 0056) |
+| `clamav-deployment.yaml` | Deployment | The `clamd` daemon `UploadService` scans uploads against — a single shared replica, not a per-app-pod sidecar (avoids duplicating the signature DB, ADR 0059 D6). Always renders, unlike `ingress`/`networkPolicy` |
+| `clamav-service.yaml` | Service | `ClusterIP`, port 3310 — `configmap.yaml` computes `CLAMD_HOST` from this Service's name directly, not from `values.yaml`'s `env` map |
+| `clamav-pvc.yaml` | PersistentVolumeClaim | Only renders when `clamav.persistence.enabled: true` (default `false` — signature DB re-downloads into an `emptyDir` on restart otherwise) |
 
 `values.yaml` carries only keys a template actually reads — the unused
 `autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride` scaffold leftovers
