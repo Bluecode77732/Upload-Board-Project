@@ -231,16 +231,40 @@ kubectl run curl-egress --image=curlimages/curl:8.10.1 --restart=Never --rm -i \
   --labels="app.kubernetes.io/name=sharenpo,app.kubernetes.io/instance=netpol-test" --command -- \
   curl -sS -m 8 telnet://$(kubectl get pod postgres -o jsonpath='{.status.podIP}'):9999
 # 기대 결과: "Connection timed out"
+
+# clamav egress 규칙(ADR 0059 D6)이 실제로 열려 있어야 한다 — `curl telnet://`이
+# 아니라 `nc -zv`를 써야 함(바로 아래 이유 참고)
+kubectl run curl-clamav --image=busybox:1.36 --restart=Never --rm -i \
+  --labels="app.kubernetes.io/name=sharenpo,app.kubernetes.io/instance=netpol-test" --command -- \
+  timeout 5 nc -zv netpol-test-clamav 3310
+# 기대 결과: "... 3310 (...) open"
 ```
+
+**`clamav` 연결 확인에 `curl telnet://host:port`를 쓰지 말 것** — 2026-09-15에
+처음 이 방식으로 시도했다가 실제로는 열려 있던 연결을 `curl: (28) Time-out`으로
+잘못 보고했고, 나중에 `nc -zv`로 확인해서야 실제로 열려 있었다는 걸 알았다.
+`clamd`는 클라이언트가 먼저 말을 걸어야 응답하는 프로토콜이라, curl telnet
+모드는 오지 않을 응답을 기다리며 그냥 앉아 있을 뿐이고, 이건 curl 출력만
+봐서는 진짜로 막힌 연결과 구분이 안 된다. 이런 raw 프로토콜 포트를 확인할
+땐 TCP 핸드셰이크만 보는(프로토콜 가정이 없는) `nc -zv`가 맞는 도구다.
 
 끝나면 정리: `helm uninstall netpol-test && kind delete cluster --name netpol-verify`.
 
-**문제 해결**: 이전 시도가 중간에 끊기거나 실패한 뒤(정리 없이) `helm install`
-단계를 다시 실행하면 `release name check failed: cannot reuse a name that is
-still in use` 에러가 납니다 — 예전 `netpol-test` 릴리스가 여전히 등록돼 있는
-것. 해결: `helm uninstall netpol-test`(상태가 `pending-install`처럼 어정쩡해
-보이면 `helm list -A`로 먼저 확인), 제거됐는지 확인한 뒤 `helm install`을
-다시 시도.
+**문제 해결**:
+- 이전 시도가 중간에 끊기거나 실패한 뒤(정리 없이) `helm install` 단계를
+  다시 실행하면 `release name check failed: cannot reuse a name that is
+  still in use` 에러가 납니다 — 예전 `netpol-test` 릴리스가 여전히 등록돼
+  있는 것. 해결: `helm uninstall netpol-test`(상태가 `pending-install`처럼
+  어정쩡해 보이면 `helm list -A`로 먼저 확인), 제거됐는지 확인한 뒤
+  `helm install`을 다시 시도.
+- Git Bash(Windows)에서는 `$(kubectl get pod ... -o
+  jsonpath='{.status.podIP}')`를 `--set ...=$(...)/32` 인자 안에 바로 넣지
+  말 것. pod가 아직 IP를 못 받았으면 이 치환이 조용히 빈 문자열이 되고,
+  앞의 `/32`가 MSYS2의 경로 변환에 걸려 `C:/Program Files/Git/32` 같은
+  값으로 둔갑해 쿠버네티스 CIDR 검증에서 알아보기 힘든 에러를 냅니다.
+  변수에 먼저 담아 출력해서 확인할 것:
+  `PG_IP=$(kubectl get pod postgres -o jsonpath='{.status.podIP}'); echo
+  "PG_IP=$PG_IP"` — 진짜 IP인지 눈으로 확인한 뒤에 사용.
 
 ## HTTPS(Ingress) 활성화
 

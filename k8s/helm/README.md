@@ -231,16 +231,40 @@ kubectl run curl-egress --image=curlimages/curl:8.10.1 --restart=Never --rm -i \
   --labels="app.kubernetes.io/name=sharenpo,app.kubernetes.io/instance=netpol-test" --command -- \
   curl -sS -m 8 telnet://$(kubectl get pod postgres -o jsonpath='{.status.podIP}'):9999
 # expect: "Connection timed out"
+
+# clamav egress rule (ADR 0059 D6) must actually be open — use `nc -zv`, not
+# `curl telnet://`; see the note right below for why
+kubectl run curl-clamav --image=busybox:1.36 --restart=Never --rm -i \
+  --labels="app.kubernetes.io/name=sharenpo,app.kubernetes.io/instance=netpol-test" --command -- \
+  timeout 5 nc -zv netpol-test-clamav 3310
+# expect: "... 3310 (...) open"
 ```
+
+**Don't use `curl telnet://host:port` to probe the `clamav` connection** — this
+was tried first (2026-09-15) and reported `curl: (28) Time-out` for a
+connection that `nc -zv` then confirmed was actually open. `clamd` never sends
+anything until the client speaks first, so curl's telnet mode just sits
+waiting for a response that never comes, indistinguishable in curl's own
+output from a genuinely blocked connection. `nc -zv` (TCP handshake only, no
+protocol assumptions) is the right tool for any raw-protocol port like this.
 
 Tear down when done: `helm uninstall netpol-test && kind delete cluster --name netpol-verify`.
 
-**Troubleshooting**: re-running the `helm install` step after an interrupted or
-failed prior attempt (without having torn down first) fails with `release name
-check failed: cannot reuse a name that is still in use` — the old
-`netpol-test` release is still registered. Fix: `helm uninstall netpol-test`
-(check first with `helm list -A` if its status looks stuck, e.g.
-`pending-install`), confirm it's gone, then retry `helm install`.
+**Troubleshooting**:
+- Re-running the `helm install` step after an interrupted or failed prior
+  attempt (without having torn down first) fails with `release name check
+  failed: cannot reuse a name that is still in use` — the old `netpol-test`
+  release is still registered. Fix: `helm uninstall netpol-test` (check first
+  with `helm list -A` if its status looks stuck, e.g. `pending-install`),
+  confirm it's gone, then retry `helm install`.
+- On Git Bash (Windows), don't inline `$(kubectl get pod ... -o
+  jsonpath='{.status.podIP}')` directly into a `--set ...=$(...)/32` argument.
+  If the pod has no IP yet, the substitution silently becomes empty and the
+  leading `/32` gets mangled by MSYS2's path conversion into something like
+  `C:/Program Files/Git/32`, which then fails Kubernetes' CIDR validation with
+  a confusing error. Capture it into a variable and print it first:
+  `PG_IP=$(kubectl get pod postgres -o jsonpath='{.status.podIP}'); echo
+  "PG_IP=$PG_IP"` — confirm it's a real IP before using it.
 
 ## Enabling HTTPS (Ingress)
 

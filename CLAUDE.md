@@ -1117,11 +1117,11 @@ Do not suggest alternatives to these decisions without explicit request.
   and as a `docker-compose.yml` service locally; `.github/workflows/ci.yml`'s
   upload-touching jobs (`e2e`/`frontend-e2e`/`admin-e2e`) each gained a `clamav` service
   container — CI-verified on real GitHub Actions (`admin-e2e` uncovered an unrelated
-  pre-existing bug, a fixture password missing a symbol; fixed separately). The Helm
-  chart is template/lint-verified only — `helm install --wait` is not, but that gap
-  doesn't need real AWS to close: ADR 0056's `kind`+Calico recipe
-  (`k8s/helm/README.md`) covers exactly this and would also exercise the new
-  `clamav`-egress `NetworkPolicy` rule
+  pre-existing bug, a fixture password missing a symbol; fixed separately). `helm
+  install --wait` and the new `clamav`-egress `NetworkPolicy` rule are both
+  live-verified against a throwaway `kind`+Calico cluster (ADR 0056's recipe,
+  `k8s/helm/README.md`) — only AWS's own VPC CNI enforcement agent stays
+  AWS-only-verifiable, the same residual ADR 0056 already carries
 - **Never suggest**: streaming/chunked upload, CDN — unless explicitly requested. S3 is no
   longer in this list: the storage port-adapter (ADR 0029, above) landed both an
   `S3Storage` implementation and the `STORAGE_DRIVER` switch, but `local` stays the
@@ -1602,15 +1602,19 @@ Architecture Decisions above remain operative.
   bug (`admin/e2e/helpers.ts`'s fixture password predates the 2026-09-11 strength rule
   and had no symbol character), fixed separately; all 7 jobs passed on the next run
   ([34829671565](https://github.com/Bluecode77732/Upload-Board-Project/actions/runs/34829671565)).
-  Residual: the Helm chart's `clamav-deployment.yaml`/`clamav-service.yaml` are `helm
-  lint`/`helm template`-verified only, not `helm install --wait`-verified — but unlike
-  ADR 0058's Ingress work, that gap doesn't need real AWS to close. ADR 0056 already
-  built a `kind`+Calico recipe for exactly this (`k8s/helm/README.md` > "Verifying
-  against a throwaway kind + Calico cluster"), and running it would also be this
-  change's first real test of its new `clamav`-egress `NetworkPolicy` rule. Only AWS's
-  own VPC CNI Network Policy enforcement agent (a different engine than Calico) stays
-  genuinely AWS-only-verifiable — the same residual ADR 0056 already carries, not a new
-  one (ROADMAP.md §9)
+  **`kind`+Calico-verified 2026-09-15** (ADR 0056's recipe, `k8s/helm/README.md`):
+  `helm install --wait` succeeds with both the app and `clamav` Deployments reaching
+  Ready, and the new `clamav`-egress `NetworkPolicy` rule actually opens the hole it's
+  meant to (`nc -zv` from an app-labeled pod to the `clamav` Service succeeds) while
+  cross-namespace ingress and non-allowlisted egress stay genuinely blocked (timeouts,
+  not refusals). One methodology note worth keeping: an initial pass tested the
+  `clamav` connection with `curl telnet://...`, which misreported a working connection
+  as blocked — clamd never speaks first, so curl's telnet mode just times out waiting
+  for a response that isn't coming; `nc -zv` (TCP handshake only, no protocol
+  assumptions) is the correct tool for probing a port like this. Only AWS's own VPC CNI
+  Network Policy enforcement agent (a different engine than Calico) stays genuinely
+  AWS-only-verifiable — the same residual ADR 0056 already carries, not a new one
+  (ROADMAP.md §9)
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for

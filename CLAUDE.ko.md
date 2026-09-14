@@ -1136,11 +1136,11 @@ Conflict Protocol을 따른다.
   서비스로 동일하게 뜬다; `.github/workflows/ci.yml`의 업로드를 거치는 잡
   (`e2e`/`frontend-e2e`/`admin-e2e`) 각각에 `clamav` 서비스 컨테이너를
   추가했다 — 실제 GitHub Actions에서 CI 검증 완료(`admin-e2e`에서 무관한
-  기존 결함 하나 발견 — 기호 빠진 픽스처 비밀번호, 별도 수정함). Helm
-  차트는 template/lint 검증만 됐다 — `helm install --wait`은 아직인데,
-  이건 실 AWS가 있어야 닫히는 공백이 아니다: ADR 0056의 `kind`+Calico
-  레시피(`k8s/helm/README.md`)가 정확히 이 검증용이고, 돌리면 새
-  `clamav` egress `NetworkPolicy` 규칙도 함께 검증된다
+  기존 결함 하나 발견 — 기호 빠진 픽스처 비밀번호, 별도 수정함). `helm
+  install --wait`과 새 `clamav` egress `NetworkPolicy` 규칙 모두 임시
+  `kind`+Calico 클러스터(ADR 0056 레시피, `k8s/helm/README.md`)로 라이브
+  검증 완료 — 남은 건 AWS 자신의 VPC CNI 강제 에이전트뿐, ADR 0056도 이미
+  안고 있는 것과 동일한 잔여 항목
 - **절대 제안 금지**: 스트리밍/청크 업로드, CDN — 명시적으로 요청받지 않는 한.
   S3는 더 이상 이 목록에 없다: 스토리지 포트-어댑터(위 ADR 0029)가
   `S3Storage` 구현체와 `STORAGE_DRIVER` 스위치를 둘 다 이미 도입했지만,
@@ -1631,16 +1631,19 @@ Architecture Decisions가 계속 유효하다.
   강도 규칙 이전부터 있던, 기호 문자가 빠진 기존 픽스처 비밀번호 결함
   (`admin/e2e/helpers.ts`)이라 별도로 수정했고, 그다음 실행
   ([34829671565](https://github.com/Bluecode77732/Upload-Board-Project/actions/runs/34829671565))에서
-  7개 잡 전부 통과 확인. 남은 부분: Helm 차트의 `clamav-deployment.yaml`/
-  `clamav-service.yaml`은 `helm lint`/`helm template` 검증만 됐고 `helm
-  install --wait`은 아직인데 — ADR 0058의 Ingress 작업과 달리 이건 실
-  AWS가 있어야 닫히는 공백이 아니다. ADR 0056이 이미 정확히 이 검증용
-  `kind`+Calico 레시피를 만들어뒀고(`k8s/helm/README.md` > "Verifying
-  against a throwaway kind + Calico cluster"), 그걸 돌리면 이번에 추가한
-  `clamav` egress `NetworkPolicy` 규칙도 처음으로 실제 검증된다. 진짜로
-  실 AWS가 있어야만 확인되는 잔여 항목은 딱 하나 — AWS 자신의 VPC CNI
-  Network Policy 강제 에이전트(Calico와 다른 엔진)가 똑같이 동작하는지뿐이고,
-  이건 ADR 0056이 이미 안고 있던 것과 같은 공백이지 새로 생긴 게 아니다
+  7개 잡 전부 통과 확인. **2026-09-15 kind+Calico 검증 완료**(ADR 0056
+  레시피, `k8s/helm/README.md`): `helm install --wait`이 앱·`clamav`
+  Deployment 둘 다 Ready에 도달하며 성공했고, 새 `clamav` egress
+  `NetworkPolicy` 규칙이 실제로 구멍을 열어준다는 것도 확인됨(앱 라벨
+  pod에서 `nc -zv`로 `clamav` Service에 성공), 타 네임스페이스 인바운드와
+  허용 안 된 egress는 여전히 실제로 차단됨(거부가 아니라 timeout).
+  기록해둘 방법론 하나: 처음엔 `clamav` 연결 확인에 `curl telnet://...`을
+  썼는데, 정상 연결을 막힌 것처럼 오보고했다 — clamd는 먼저 말을 안 걸어서
+  curl telnet 모드가 응답을 기다리다 그냥 timeout난 것. TCP 핸드셰이크
+  성립 여부만 보는 `nc -zv`가 이런 포트 확인엔 맞는 도구였다. 진짜로 실
+  AWS가 있어야만 확인되는 잔여 항목은 딱 하나 — AWS 자신의 VPC CNI Network
+  Policy 강제 에이전트(Calico와 다른 엔진)가 똑같이 동작하는지뿐이고, 이건
+  ADR 0056이 이미 안고 있던 것과 같은 공백이지 새로 생긴 게 아니다
   (ROADMAP.md §9)
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
