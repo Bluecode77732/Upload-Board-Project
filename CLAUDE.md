@@ -1364,9 +1364,16 @@ Architecture Decisions above remain operative.
   (a handful in 2026-07-24), including one critical (`handlebars` via
   `ts-jest`) — still build/test-time only, waiting on upstream releases in the
   jest/@nestjs/cli/eslint toolchains
-- `test/app.e2e-spec.ts` is the untouched Nest template: it targets `GET /`, which
+- ~~`test/app.e2e-spec.ts` is the untouched Nest template: it targets `GET /`, which
   does not exist in this app, and booting AppModule needs a live DB — the e2e suite
-  needs a real rewrite before it verifies anything
+  needs a real rewrite before it verifies anything~~ — **stale, corrected 2026-09-14**:
+  this claim was already false by the time it was written down here — commit `180a20f`
+  (2026-07-25, Stage 1) replaced the blank Nest template with a real 1,660-line suite
+  over HTTP+DB (auth flow, refresh rotation/reuse, RBAC ownership 403s, list pagination,
+  `temp_`→`granted_` promotion, the account-deletion cascade) — nobody removed this entry
+  from Known Gaps once that landed. `pnpm test:e2e` currently passes 76/76 (ADR 0054's
+  Consequences). No code change here — a documentation-only correction, found while
+  surveying this section for genuinely open items
 - ~~Deleting a user who owns files hits an FK constraint~~ — **resolved 2026-07-30**
   (ADR 0020): `DELETE /user/:id?deleteFiles=true` cascades (post rows → file rows →
   user row → stored files; posts joined the order 2026-07-31, ADR 0023); unconfirmed,
