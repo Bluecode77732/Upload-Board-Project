@@ -1100,6 +1100,24 @@ Do not suggest alternatives to these decisions without explicit request.
   is explicitly set to `false`. Ships inert with respect to deletion: the code path exists
   and is unit-tested, but no production data has been reclaimed by it yet, and doing so
   requires an operator decision, not a code change
+- **Malware scanning (landed 2026-09-14, live-verified — [ADR
+  0059](docs/ADR/0059-upload-malware-scanning-clamav.md))**: uploads get a synchronous
+  ClamAV scan gate inside `UploadService.stageTemp()`, run against the in-memory Multer
+  buffer before `storage.saveTemp()` — an infected file never reaches temp storage under
+  either `FileStorage` adapter. No schema change (the scan is a pass/fail precondition, not
+  persisted state); a plain `ScanService` inside `UploadModule` (wrapping `clamscan`, chosen
+  over the unmaintained-since-2019 `clamdjs` — ADR 0059 D2), not a new `FileStorage`-style
+  port — only one implementation and one consumer exist, so a port would be premature under
+  this project's own ISP stance ("no service-interface layer until a real second
+  implementation exists"). Fails closed on scanner unavailability (`503
+  UPLOAD_SCAN_UNAVAILABLE`) with a bounded 2-attempt/8s-timeout retry — the first real
+  application of Reliability > Retry Limits/Timeout, live-verified against a real `clamd`
+  at ~5.97s for a 100MB buffer. `clamd` runs as its own Deployment+Service in
+  `k8s/helm/` (not a sidecar — avoids per-replica signature-DB duplication, ADR 0059 D6)
+  and as a `docker-compose.yml` service locally; `.github/workflows/ci.yml`'s
+  upload-touching jobs (`e2e`/`frontend-e2e`/`admin-e2e`) each gained a `clamav` service
+  container. CI wiring itself is unexercised (needs a real push/PR run) and the Helm
+  chart is template/lint-verified only (no live cluster to `helm install` against)
 - **Never suggest**: streaming/chunked upload, CDN — unless explicitly requested. S3 is no
   longer in this list: the storage port-adapter (ADR 0029, above) landed both an
   `S3Storage` implementation and the `STORAGE_DRIVER` switch, but `local` stays the
@@ -1538,6 +1556,32 @@ Architecture Decisions above remain operative.
   needs its own host/TLS/ALB-annotation work, at which point `values-prod.yaml` must
   redeclare the full `paths` list too (Helm doesn't merge arrays across `-f` layers, now
   documented in `values.yaml`'s comment).
+- ~~Upload malware scanning~~ — **resolved 2026-09-14** ([ADR
+  0059](docs/ADR/0059-upload-malware-scanning-clamav.md)): a 2026-09-13 review found the
+  upload pipeline's extension/mimetype allowlist never inspects file content. Considered
+  and rejected: AWS GuardDuty Malware Protection for S3 (async — would force a new
+  `FileEntity` scan-status column, a schema change this decision doesn't need), ClamAV
+  packaged as a Lambda (real added implementation cost without removing the
+  signature-maintenance burden), and third-party scan APIs — VirusTotal/Cloudmersive (send
+  user-uploaded file bytes to an outside vendor, the first such case this project would
+  accept). Landed: a `ScanService` (wrapping `clamscan`) scanning the in-memory buffer
+  inside `UploadService.stageTemp()` before any temp write, failing closed on scanner
+  unavailability — see Architecture Decisions > File Storage for the summary. Deliberately
+  not filed as a plain "reviewed, left as-is" gap like the account-enumeration entry above:
+  the correct deferral trigger here is "before this app is ever reachable from the public
+  internet" (anonymous upload+share abuse is bot-driven, not tied to having real users), and
+  recent deploy-readiness work (ADR 0056 NetworkPolicy, ADR 0057 Terraform state backend,
+  ADR 0058 Ingress path allow-list) was closing in on that boundary — so the decision was
+  made and implemented in the same session rather than deferred. **Live-verified 2026-09-14**
+  against a real `clamd` (`docker compose up clamav`): clean buffer passes, an EICAR test
+  buffer is correctly detected (`Eicar-Test-Signature`), a 100MB buffer scans in ~5.97s
+  (within the 8s per-attempt timeout), and the fail-closed path reproduces
+  `ScanUnavailableError` after 2 attempts (~212ms) when the scanner is unreachable. Residual,
+  not yet exercised: the new `clamav` service containers added to
+  `.github/workflows/ci.yml`'s `e2e`/`frontend-e2e`/`admin-e2e` jobs haven't run in a real
+  GitHub Actions job yet (needs a push/PR), and the Helm chart's `clamav-deployment.yaml`/
+  `clamav-service.yaml` are `helm lint`/`helm template`-verified only — no live cluster
+  exists to `helm install --wait` against (same caveat as ADR 0058, ROADMAP.md §9)
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for

@@ -15,6 +15,11 @@ metadata:
     "helm.sh/hook-weight": "-5"
     "helm.sh/hook-delete-policy": before-hook-creation
 data:
+  {{- /* clamd 접속 정보(ADR 0059) — .Values.env가 아니라 여기서 직접 계산한다: 이 값은
+  이 릴리스의 clamav Service 이름(clamav-deployment.yaml/clamav-service.yaml과 반드시
+  일치)에서 나오므로, values.yaml 작성 시점엔 알 수 없는 릴리스별 값이다. */}}
+  CLAMD_HOST: {{ printf "%s-clamav" (include "sharenpo.fullname" .) | quote }}
+  CLAMD_PORT: "3310"
   {{- range $key, $value := .Values.env }}
   {{- /* 빈 문자열은 "값이 없는 것"과 다르다: Joi.string()은(.allow('') 없이는)
   ""는 거부하지만 선택적 키가 아예 없는 건 허용한다 — .env.example이 이런

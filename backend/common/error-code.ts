@@ -23,6 +23,8 @@ export enum ErrorCode {
   // 같은 POST /upload/attach 요청에 타입별 필드(image/audio/video) 세 개 중
   // 둘 이상이 첨부됐다(ADR 0025 D5).
   UPLOAD_MULTIPLE_FIELDS = 'UPLOAD_MULTIPLE_FIELDS',
+  // ClamAV 스캔이 첨부된 파일에서 악성 콘텐츠를 확정적으로 탐지했다(ADR 0059 D3).
+  UPLOAD_MALWARE_DETECTED = 'UPLOAD_MALWARE_DETECTED',
   // 거부됨: 마지막 남은 superadmin을 강등시키면 역할 체계 자체가 잠긴다(ADR 0013).
   AUTH_LAST_SUPERADMIN = 'AUTH_LAST_SUPERADMIN',
   // 이전 대상을 파일의 현재 소유자 본인으로 지정한 채 이전이 제안됐다(ADR 0050).
@@ -82,6 +84,11 @@ export enum ErrorCode {
 
   // 500
   INTERNAL_ERROR = 'INTERNAL_ERROR',
+
+  // 503
+  // clamd에 연결할 수 없었거나 재시도(D5)가 모두 타임아웃됐다 — 파일 자체에 대해서는
+  // 아무것도 확인되지 않았다는 뜻이다, 감염이 아니라(ADR 0059 D3/D4).
+  UPLOAD_SCAN_UNAVAILABLE = 'UPLOAD_SCAN_UNAVAILABLE',
 }
 
 // 모든 에러 응답이 따르는 고정된 wire shape(ADR 0011 참고).

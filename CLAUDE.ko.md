@@ -1117,6 +1117,27 @@ Conflict Protocol을 따른다.
   삭제하지 않고 **리포트만** 한다. 삭제 관점에서는 무해하게 출시된다: 코드
   경로는 있고 단위 테스트도 됐지만, 아직 이걸로 실제 데이터가 회수된 적은
   없으며 그러려면 코드 변경이 아니라 운영자의 결정이 필요하다
+- **악성코드 스캔(랜딩 2026-09-14, 라이브 검증 완료 — [ADR
+  0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md))**: 업로드는
+  `UploadService.stageTemp()` 내부, `storage.saveTemp()`를 호출하기 전에
+  Multer의 메모리 버퍼를 대상으로 동기 ClamAV 스캔 게이트를 거친다 — 감염
+  파일은 어떤 `FileStorage` 어댑터에서도 temp 저장소에 도달하지 않는다.
+  스키마 변경 없음(스캔은 영속화되는 상태가 아니라 통과/거부 전제조건일
+  뿐); `FileStorage`류 포트가 아니라 `UploadModule` 안의 평범한
+  `ScanService`(`clamscan`을 감쌈 — 2019년 이후 방치된 `clamdjs` 대신 채택,
+  ADR 0059 D2) — 구현체와 소비자가 각각 하나뿐이라, 이 프로젝트 스스로의
+  ISP 방침("실제 두 번째 구현체가 생기기 전까지는 서비스-인터페이스 계층을
+  도입하지 않는다")상 포트는 시기상조다. 스캐너 접속 불가 시
+  fail-closed(`503 UPLOAD_SCAN_UNAVAILABLE`)이며 재시도 2회/8초 타임아웃으로
+  제한한다 — Reliability > Retry Limits/Timeout이 실제로 적용되는 첫 사례이며,
+  실제 `clamd`로 100MB 버퍼 기준 약 5.97초로 라이브 검증됐다. `clamd`는
+  `k8s/helm/`에서 사이드카가 아니라 별도 Deployment+Service로 뜬다(replica별
+  시그니처 DB 복제를 피하려고, ADR 0059 D6) — 로컬에서는 `docker-compose.yml`
+  서비스로 동일하게 뜬다; `.github/workflows/ci.yml`의 업로드를 거치는 잡
+  (`e2e`/`frontend-e2e`/`admin-e2e`) 각각에 `clamav` 서비스 컨테이너를
+  추가했다. CI 연결 자체는 아직 실행된 적 없고(실제 push/PR 필요), Helm
+  차트는 template/lint 검증만 됐다(살아있는 클러스터가 없어 `helm install`
+  검증은 못 함)
 - **절대 제안 금지**: 스트리밍/청크 업로드, CDN — 명시적으로 요청받지 않는 한.
   S3는 더 이상 이 목록에 없다: 스토리지 포트-어댑터(위 ADR 0029)가
   `S3Storage` 구현체와 `STORAGE_DRIVER` 스위치를 둘 다 이미 도입했지만,
@@ -1564,6 +1585,33 @@ Architecture Decisions가 계속 유효하다.
   `values-prod.yaml`은 무변경이다 — Ingress를 실제로 켜려면 host/TLS/ALB 어노테이션
   작업이 따로 필요하고, 그때 `values-prod.yaml`에도 `paths` 전체를 다시 적어야 한다
   (Helm은 `-f` 레이어 간 배열을 병합하지 않는다 — `values.yaml` 주석에 기록해둠).
+- ~~업로드 악성코드 스캔~~ — **2026-09-14 해결됨** ([ADR
+  0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)): 2026-09-13 점검에서
+  업로드 파이프라인의 확장자/mimetype 허용목록이 파일 내용물은 전혀 검사하지
+  않는다는 게 확인됐다. 검토 후 기각한 대안: AWS GuardDuty Malware Protection
+  for S3(비동기라 새 `FileEntity` 스캔 상태 컬럼이 필요해지는 스키마 변경을
+  요구함, 이 결정은 그게 필요 없음), Lambda로 패키징한 ClamAV(같은 유지부담을
+  지면서 구현 비용만 추가됨), 서드파티 스캔 API — VirusTotal/Cloudmersive
+  (사용자가 업로드한 파일 바이트를 외부 벤더로 전송 — 이 프로젝트가 처음으로
+  받아들이게 될 유형의 노출). 랜딩: `UploadService.stageTemp()` 내부에서 temp
+  쓰기 전에 메모리 버퍼를 스캔하는 `ScanService`(`clamscan` 감쌈), 스캐너
+  접속 불가 시 fail-closed — 요약은 Architecture Decisions > File Storage 참고.
+  위 회원가입 계정 열거 항목처럼 "검토 후 현행 유지"로 단순 기록하지 않은
+  이유: 여기서 올바른 유예 경계는 "실사용자가 생기기 전까지"가 아니라 "이
+  앱이 인터넷에서 실제로 도달 가능해지기 전까지"이고(익명 업로드+공유 남용은
+  봇이 주도하며 실사용자 여부와 무관하다), 최근 배포 준비 작업(ADR 0056
+  NetworkPolicy, ADR 0057 Terraform state 백엔드, ADR 0058 Ingress 경로
+  allow-list)이 그 경계에 가까워지고 있어 같은 세션 안에서 결정과 구현을
+  함께 마쳤다. **2026-09-14 라이브 검증 완료**: 실제 `clamd`(`docker compose up
+  clamav`) 대상 — 정상 버퍼 통과, EICAR 테스트 버퍼 정상 탐지
+  (`Eicar-Test-Signature`), 100MB 버퍼 약 5.97초로 스캔(8초 시도당 타임아웃
+  이내), 스캐너 접속 불가 시 2회 시도 후 `ScanUnavailableError`로 fail-closed
+  재현(약 212ms). 남은 부분: `.github/workflows/ci.yml`의
+  `e2e`/`frontend-e2e`/`admin-e2e` 잡에 추가한 `clamav` 서비스 컨테이너는
+  아직 실제 GitHub Actions에서 실행된 적 없고(push/PR 필요), Helm 차트의
+  `clamav-deployment.yaml`/`clamav-service.yaml`도 `helm lint`/`helm
+  template` 검증만 됐다 — 살아있는 클러스터가 없어 `helm install --wait`
+  검증은 못 함(ADR 0058과 같은 한계, ROADMAP.md §9)
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

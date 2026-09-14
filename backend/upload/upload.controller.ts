@@ -90,8 +90,15 @@ export class UploadController {
     status: 400,
     description:
       'Bad Request. No file attached, more than one of image/audio/video attached, ' +
-      'the file is larger than 100MB, or the file is not an allowed type for its field ' +
-      '(image: jpg/jpeg/png/webp; audio: mp3; video: mp4/mov/webm).',
+      'the file is larger than 100MB, the file is not an allowed type for its field ' +
+      '(image: jpg/jpeg/png/webp; audio: mp3; video: mp4/mov/webm), or the file was ' +
+      'rejected by malware scanning (ADR 0059).',
+  })
+  @ApiResponse({
+    status: 503,
+    description:
+      'Service Unavailable. The malware scanner could not be reached or timed out ' +
+      '(ADR 0059) — the file was not scanned and was not saved.',
   })
   @UseInterceptors(
     FileFieldsInterceptor(

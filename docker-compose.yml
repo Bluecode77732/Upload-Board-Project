@@ -4,6 +4,27 @@
 # 읽는다 — 앱이 쓰는 것과 같은 값이다.
 
 services:
+  # 업로드 악성코드 스캔의 clamd 데몬(ADR 0059) — UploadService가 CLAMD_HOST=clamav로
+  # 접속한다. clamav/clamav 공식 이미지는 부팅 시 시그니처 DB를 내려받아 준비되기까지
+  # 시간이 걸리므로, healthcheck로 준비 여부를 확인한다.
+  clamav:
+    image: clamav/clamav:stable
+    ports:
+      - '3310:3310'
+    volumes:
+      - clamav-data:/var/lib/clamav
+    healthcheck:
+      test: ['CMD', 'clamdcheck.sh']
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
   db:
     image: postgres:16
     environment:
@@ -53,11 +74,16 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      clamav:
+        condition: service_healthy
     env_file: .env
     environment:
       # compose 네트워크 안에서 DB는 localhost:5435가 아니라 `db:5432`로 접근한다.
       DB_HOST: db
       DB_PORT: 5432
+      # compose 네트워크 안에서 clamd는 서비스명 clamav로 접근한다(ADR 0059).
+      CLAMD_HOST: clamav
+      CLAMD_PORT: 3310
     ports:
       - '3000:3000'
     volumes:
@@ -73,3 +99,4 @@ services:
 
 volumes:
   db-data:
+  clamav-data:

@@ -56,6 +56,19 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # 업로드 악성코드 스캔(ADR 0059) — POST /upload/attach를 실제로 거치는 e2e
+      # 테스트가 있어 실제 clamd가 필요하다. 시그니처 DB를 처음 받는 데 시간이
+      # 걸려 start-period를 넉넉히 둔다(docker-compose.yml/Helm과 동일한 근거).
+      clamav:
+        image: clamav/clamav:stable
+        ports:
+          - 3310:3310
+        options: >-
+          --health-cmd "clamdcheck.sh"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 20
+          --health-start-period 180s
     env:
       # CI에는 .env가 없다 — 스위트는 이 값들을 환경변수에서 그대로 읽는다
       # (e2e-utils가 실행 시점에 DB_DATABASE를 임시 DB로 덮어쓴다).
@@ -73,6 +86,8 @@ jobs:
       REFRESH_TOKEN_SECRET: Ci-Refresh-Secret-2026-For-E2E-Test!
       ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
       REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
+      CLAMD_HOST: 127.0.0.1
+      CLAMD_PORT: 3310
     steps:
       - uses: actions/checkout@v4
       - run: corepack enable
@@ -135,6 +150,18 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # 업로드 악성코드 스캔(ADR 0059) — FileBoard의 업로드 플로우를 실제로 거치는
+      # Playwright 스펙이 있어 실제 clamd가 필요하다.
+      clamav:
+        image: clamav/clamav:stable
+        ports:
+          - 3310:3310
+        options: >-
+          --health-cmd "clamdcheck.sh"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 20
+          --health-start-period 180s
     env:
       ENV: dev
       DB_TYPE: postgres
@@ -149,6 +176,8 @@ jobs:
       ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
       REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
       THROTTLE_ENABLED: 'false'
+      CLAMD_HOST: 127.0.0.1
+      CLAMD_PORT: 3310
       # frontend/vite.config.ts가 API 호출을 same-origin으로 :3000에 프록시하므로
       # frontend 쪽엔 VITE_API_* 변수가 필요 없다 — 백엔드만 어떤 브라우저
       # origin을 허용할지 알면 된다.
@@ -211,6 +240,18 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # 업로드 악성코드 스캔(ADR 0059) — admin 콘솔의 파일 관련 e2e 스펙이 실제
+      # 백엔드를 거치는 한, 이 job도 실제 clamd가 필요하다.
+      clamav:
+        image: clamav/clamav:stable
+        ports:
+          - 3310:3310
+        options: >-
+          --health-cmd "clamdcheck.sh"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 20
+          --health-start-period 180s
     env:
       ENV: dev
       DB_TYPE: postgres
@@ -225,6 +266,8 @@ jobs:
       ACCESS_TOKEN_SECRET_EXPIRES_IN: 180
       REFRESH_TOKEN_SECRET_EXPIRES_IN: 43200
       THROTTLE_ENABLED: 'false'
+      CLAMD_HOST: 127.0.0.1
+      CLAMD_PORT: 3310
       # Admin은 (frontend와 달리) dev 서버 프록시가 없다 — admin/src/api/axios.ts의
       # VITE_API_URL을 통해 백엔드를 직접 호출하고, frontend(:5173)와는 다른
       # origin(:5174)에서 돈다.

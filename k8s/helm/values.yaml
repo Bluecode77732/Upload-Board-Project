@@ -85,6 +85,26 @@ env:
 secrets:
   existingSecret: ""
 
+# 업로드 악성코드 스캔의 clamd 데몬(ADR 0059) — templates/clamav-deployment.yaml +
+# clamav-service.yaml이 항상 렌더링한다(DB와 달리 실제 운영에서도 이 클러스터 안에
+# 있어야 하는 대상이라 ingress/networkPolicy처럼 기본 꺼두지 않는다). CLAMD_HOST/
+# CLAMD_PORT는 여기 없다 — configmap.yaml이 이 Service 이름에서 직접 계산한다.
+clamav:
+  image:
+    repository: clamav/clamav
+    tag: stable
+  resources: {}
+    # 위 app resources와 같은 이유로 기본은 비어 있음(Avoid Premature Optimization).
+    # ClamAV는 시그니처 DB 로딩 시 메모리를 상당히 쓰므로, 실측 후 최소
+    # limits.memory: 1Gi 정도부터 검토한다.
+  persistence:
+    # true면 clamav-pvc.yaml이 PVC를 만들어 시그니처 DB를 pod 재시작 사이에도
+    # 보존한다. 기본은 emptyDir(재시작마다 재다운로드) — StorageClass를
+    # 아직 정하지 않아서다.
+    enabled: false
+    size: 2Gi
+    storageClassName: ""
+
 # 한 번만 도는 migration Job(templates/migration-job.yml)이 Helm의
 # pre-install/pre-upgrade hook으로 `migration:run`을 실행한다 —
 # docker-compose.yml의 `migrate` 서비스를 본뜬 것(ADR 0032). 이 덕분에
