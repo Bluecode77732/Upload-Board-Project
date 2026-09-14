@@ -182,12 +182,20 @@ URL 접두사가 둘이라 컨트롤러도 둘입니다 — 스레드는 게시�
 
 | 라우트 | 동작 |
 |---|---|
-| `POST /upload/attach` | `image`, `audio`, `video` 세 멀티파트 필드 중 정확히 하나를 첨부합니다 — 필드마다 확장자/mimetype 허용 목록이 따로 있습니다. 100MB 제한. `{ filename }`을 반환합니다 |
+| `POST /upload/attach` | `image`, `audio`, `video` 세 멀티파트 필드 중 정확히 하나를 첨부합니다 — 필드마다 확장자/mimetype 허용 목록이 따로 있습니다. 100MB 제한. staging 전에 악성코드 스캔을 거칩니다. `{ filename }`을 반환합니다 |
 
 - Multer는 파일을 직접 디스크에 쓰지 않고 메모리에 버퍼링만 합니다 — 실제 쓰기는
   `FileStorage` 포트를 거칩니다(`UploadService.stageTemp`). 그래서 temp 파일의 첫
   바이트부터 이미 설정된 어댑터를 통과합니다 — 승격된 사본만이 아니라
   ([ADR 0029](ADR/0029-storage-port-adapter.ko.md) D4).
+- 그 쓰기 전에 `stageTemp`는 `ScanService.scanBuffer`를 호출합니다 — `clamd`
+  데몬(`CLAMD_HOST`/`CLAMD_PORT`)에 TCP로 접속하는 `clamscan` 클라이언트를 감싼
+  서비스입니다. 감염이 확인되면 400 `UPLOAD_MALWARE_DETECTED`로 아무것도 쓰지
+  않고 거부합니다. 스캐너에 연결할 수 없거나 모든 재시도(2회, 각 8초 타임아웃)가
+  실패하면 검사를 건너뛰지 않고 503 `UPLOAD_SCAN_UNAVAILABLE`로 fail-closed합니다
+  ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md)). `ScanService`는
+  `FileStorage` 같은 포트가 아니라 평범한 provider입니다 — 구현체와 소비자가
+  각각 정확히 하나뿐이기 때문입니다.
 - 생성되는 이름은 항상 `temp_{uuid}_{timestamp}.{ext}` 형태입니다. 클라이언트는
   `POST /file`에서 이 이름을 그대로 돌려줄 뿐, 경로를 스스로 고르는 일은 없습니다.
 
@@ -257,6 +265,16 @@ URL 접두사가 둘이라 컨트롤러도 둘입니다 — 스레드는 게시�
   `TempCleanupService`의 `tempCleanupDeletedTotal`입니다.
 
 ## 요청 흐름
+
+### 보안 헤더
+
+어떤 Nest 가드보다도 먼저, `main.ts`의 `bootstrap()`에서 가장 먼저 등록되는 순수
+Express 미들웨어인 `helmet()`이 OWASP 권장 응답 헤더 집합(`Content-Security-Policy`,
+`X-Content-Type-Options`, `X-Frame-Options`, `Strict-Transport-Security` 등)을 모든
+응답에 붙입니다([ADR 0055](ADR/0055-helmet-security-headers.ko.md)). helmet 기본값에서
+벗어난 directive는 `script-src` 하나뿐입니다(`'self' 'unsafe-inline'`으로 완화) —
+`/doc`의 인라인 Swagger UI 부트스트랩 스크립트가 계속 실행되게 하기 위해서이며,
+나머지 directive는 모두 기본값을 유지합니다.
 
 ### 가드 체인
 
@@ -328,8 +346,12 @@ forbidNonWhitelisted + enableImplicitConversion`을 실행합니다. DTO에 선�
 
 ```
 1. POST /upload/attach   (multipart: image, audio, 또는 video)
-      └─ UploadService.stageTemp가 FileStorage 포트를 통해
-         file/temp/temp_{uuid}_{ts}.{ext} 를 씀     → { filename } 반환
+      └─ UploadService.stageTemp:
+           a. clamd를 통해 ScanService.scanBuffer(file.buffer) 실행  (ADR 0059)
+                감염됨          → 400 UPLOAD_MALWARE_DETECTED, 아무것도 안 씀
+                스캐너 접속 불가 → 503 UPLOAD_SCAN_UNAVAILABLE (fail-closed)
+           b. FileStorage 포트를 통해
+              file/temp/temp_{uuid}_{ts}.{ext} 를 씀     → { filename } 반환
 
 2. POST /file  { title, filePath: <그 파일명> }
       └─ FileService.uploadFile, 트랜잭션을 열기 전에(ADR 0019):
@@ -419,6 +441,9 @@ DB/JWT/해싱 같은 기본값 말고도, 특정 기능을 위한 그룹이 몇 
   얼마나 유효한지)(ADR 0029, ADR 0036).
 - **고아 파일 청소**: `TEMP_SWEEP_ENABLED`(기본 켜짐), `TEMP_SWEEP_CRON`,
   `TEMP_SWEEP_TTL_HOURS`(기본 24), `TEMP_SWEEP_DRY_RUN`(ADR 0018).
+- **악성코드 스캔**: `CLAMD_HOST`(기본값 `clamav`), `CLAMD_PORT`(기본값 `3310`) —
+  `UploadService.stageTemp`가 모든 업로드를 staging 전에 검사하려고 접속하는
+  `clamd` 데몬 위치(ADR 0059).
 - **RBAC 시드**: `SUPERADMIN_EMAIL` — 선택 사항이며, `pnpm promote-superadmin`이
   superadmin으로 승격시킬 대상 계정을 지정합니다(부팅 시 자동이 아니라 수동 단계 —
   [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.ko.md)).

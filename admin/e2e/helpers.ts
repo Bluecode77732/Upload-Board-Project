@@ -68,7 +68,10 @@ export async function registerTargetUser(
 ): Promise<TargetUser> {
     const suffix = uniqueSuffix();
     const email = `admin-e2e-${label}-${suffix}@test.local`;
-    const password = 'E2ETestPassword123';
+    // 백엔드의 AUTH_WEAK_PASSWORD 규칙(10자 이상 + 대/소문자·숫자·기호 전부 포함,
+    // 2026-09-11 도입)을 반드시 만족해야 한다 — 이 문자열이 유일한 자리이므로
+    // 정책이 다시 바뀌면 여기만 고치면 된다.
+    const password = 'E2ETestPassword123!';
 
     const credential = Buffer.from(`${email}:${password}`).toString('base64');
     const registerRes = await request.post(`${BACKEND_URL}/auth/register`, {

@@ -85,6 +85,26 @@ env:
 secrets:
   existingSecret: ""
 
+# 업로드 악성코드 스캔의 clamd 데몬(ADR 0059) — templates/clamav-deployment.yaml +
+# clamav-service.yaml이 항상 렌더링한다(DB와 달리 실제 운영에서도 이 클러스터 안에
+# 있어야 하는 대상이라 ingress/networkPolicy처럼 기본 꺼두지 않는다). CLAMD_HOST/
+# CLAMD_PORT는 여기 없다 — configmap.yaml이 이 Service 이름에서 직접 계산한다.
+clamav:
+  image:
+    repository: clamav/clamav
+    tag: stable
+  resources: {}
+    # 위 app resources와 같은 이유로 기본은 비어 있음(Avoid Premature Optimization).
+    # ClamAV는 시그니처 DB 로딩 시 메모리를 상당히 쓰므로, 실측 후 최소
+    # limits.memory: 1Gi 정도부터 검토한다.
+  persistence:
+    # true면 clamav-pvc.yaml이 PVC를 만들어 시그니처 DB를 pod 재시작 사이에도
+    # 보존한다. 기본은 emptyDir(재시작마다 재다운로드) — StorageClass를
+    # 아직 정하지 않아서다.
+    enabled: false
+    size: 2Gi
+    storageClassName: ""
+
 # 한 번만 도는 migration Job(templates/migration-job.yml)이 Helm의
 # pre-install/pre-upgrade hook으로 `migration:run`을 실행한다 —
 # docker-compose.yml의 `migrate` 서비스를 본뜬 것(ADR 0032). 이 덕분에
@@ -115,6 +135,22 @@ resources: {}
 # TLS는 ingress에서 종료되며, 앱 프로세스 안에서는 절대 하지 않는다(ADR 0034).
 # 기본은 비활성 — 실제로 켜려면 살아있는 클러스터, DNS 이름, 인증서 메커니즘
 # (ACM 또는 cert-manager)이 필요한데 아직 아무것도 없다.
+#
+# paths는 단일 "/" catch-all이 아니라 실제 컨트롤러 prefix의 명시적 allow-list다
+# (ADR 0058) — ValidationPipe의 whitelist+forbidNonWhitelisted, entities.ts 단일
+# 목록과 같은 "선언된 것만 허용" 철학을 Ingress 레벨에 그대로 옮긴 것. /health,
+# /metrics, /doc은 의도적으로 뺐다 — health/metrics는 kubelet·Prometheus가
+# Ingress를 거치지 않고 파드에 직접 붙으므로 외부 노출이 애초에 불필요하고, doc
+# (Swagger)은 인증 게이트가 없는 채로 API 구조 전체를 외부에 지도로 넘겨주는
+# 셈이라 노출 이득(포트폴리오 열람)보다 위험이 크다고 판단했다(ADR 0058) — 개발
+# 중 로컬 접속이나 클러스터 내부 열람은 그대로 가능하다. 새 컨트롤러를 추가하면
+# 이 목록에도 prefix를 함께 추가해야 외부에서 호출 가능해진다 — 안 하면 조용히
+# 404.
+#
+# 주의: Helm은 배열(hosts)을 병합하지 않고 통째로 덮어쓴다 — 나중에
+# values-prod.yaml에서 host(실제 도메인)만 바꾸려고 ingress.hosts를 다시 적으면
+# paths도 함께 옮겨 적어야 한다. host만 오버라이드하고 paths를 빠뜨리면 "경로
+# 없는 Ingress"로 조용히 축소된다(ADR 0058).
 ingress:
   enabled: false
   className: ""
@@ -124,8 +160,20 @@ ingress:
   hosts:
     - host: chart-example.local
       paths:
-        - path: /
-          pathType: ImplementationSpecific
+        - path: /auth
+          pathType: Prefix
+        - path: /user
+          pathType: Prefix
+        - path: /post
+          pathType: Prefix
+        - path: /comment
+          pathType: Prefix
+        - path: /file
+          pathType: Prefix
+        - path: /upload
+          pathType: Prefix
+        - path: /audit-log
+          pathType: Prefix
   tls: []
     # - secretName: chart-example-tls
     #   hosts:
@@ -156,3 +204,17 @@ volumeMounts: []
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# 클러스터 내부 파드 간 트래픽 제한(2026-09-09 보안 점검 발견 항목, ADR 0056). 기본은
+# 비활성 — ingress/metrics.serviceMonitor와 같은 이유는 아니고, 지금
+# k8s/infra/terraform/cluster/main.tf의 vpc-cni가 Network Policy 강제 에이전트를 켜지
+# 않은 상태라 true로 바꿔도 실제 EKS에서는 아직 강제되지 않기 때문이다(별도 Terraform
+# 작업 필요, ADR 0056). templates/networkpolicy.yaml 파일 헤더에 인바운드/아웃바운드
+# 범위 설계 근거가 있다.
+networkPolicy:
+  enabled: false
+  egress:
+    # RDS가 있는 VPC CIDR — cluster/main.tf의 var.vpc_cidr 기본값과 같다. 다른
+    # CIDR로 apply했다면 이 값도 맞춰 오버라이드한다.
+    vpcCidr: "10.0.0.0/16"
+    dbPort: 5432

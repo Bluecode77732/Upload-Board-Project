@@ -24,8 +24,8 @@
    - 물리 업로드 변경      → `backend/upload/upload.module.ts`(Multer `memoryStorage`)와 `upload.controller.ts`(100MB 크기 제한)를 `backend/upload/upload.service.ts`(`stageTemp` — `temp_{uuid}_{timestamp}` 네이밍, `FileStorage` 포트 호출, ADR 0029 D4)와 함께 읽는다
    - 스토리지 어댑터 변경  → `backend/storage/file-storage.interface.ts`(`FileStorage` 포트 + `FILE_STORAGE` 토큰), `local-disk.storage.ts` / `s3.storage.ts`(두 구현체), `storage.module.ts`(`STORAGE_DRIVER` 기반 팩토리, ADR 0029)를 읽는다
    - 컨테이너/배포 변경    → `Dockerfile`(non-root `USER`, `HEALTHCHECK`, `CMD`에서 마이그레이션 제거 — ADR 0030/0032)과 `docker-compose.yml`(원샷 `migrate` 서비스)을 `backend/health/`(`GET /health/live`/`GET /health/ready` — ADR 0031)와 함께 읽는다
-   - Helm/K8s 배포 변경    → `k8s/helm/`(`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/기본 비활성 Ingress)과 그 `README.md`(Secret 생성 절차, `existingSecret` 전용 소비 방식)를 읽는다. `k8s/`엔 이 차트 밖의 매니페스트가 없다 — 예전 `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/`에 있던 독립 raw 매니페스트는 삭제됐다(ADR 0042); 차트 옆에 정적 매니페스트를 다시 추가하지 않는다(ADR 0037/0041/0042)
-   - Terraform/인프라 변경 → `k8s/infra/terraform/`은 하나가 아니라 독립된 3개의 root module이다 — `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM, `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — ALB Controller+ESO, 다른 두 state를 **모두** 읽는 유일한 state). 각 디렉토리는 `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`와 자신만의 로컬 state 파일을 가진다 — 변경이 실제로 건드리는 디렉토리만 읽는다. `README.md`(`cluster` → `app-infra` → `addons` 3단계 apply 순서와 그 역순 destroy, `SecretStore`/`ExternalSecret`을 한 번만 수동으로 `kubectl apply`하는 단계, 그리고 앱 전용 ServiceAccount IRSA 배선을 다루는 "Known gap" 절 — `app-infra/main.tf`의 trust policy, `k8s/helm/`의 `serviceaccount.yaml`+`values-prod.yaml`, `deploy.sh`의 `HELM_RELEASE` 기본값이 2026-09-03부로 모두 `sharenpo`라는 같은 이름으로 고정돼 있음. 코드는 완성되고 검증됐지만 실제 AWS엔 한 번도 적용된 적 없음 — 이걸로 대체된 예전 `default` ServiceAccount IRSA annotate 방식은 그 trust policy가 적용되는 순간 더 이상 동작하지 않음)를 읽는다. 설계 기록: ADR 0038(업스트림 스캐폴딩, 재작성 유예) → ADR 0043(프로젝트 적응 — 2026-08-18 구현됨) → ADR 0044(3-state 분리 — 2026-08-20 구현됨, 세 디렉토리 모두 `terraform validate`/`fmt -check` 통과). **두 ADR의 Addendum은 이 설정을 실제 AWS에 `apply`한 적이 없다고 말하는데, 그건 작성 시점엔 사실이었다가, 한동안 거짓이었다가, 다시 사실이 됐다.** 세 state 전부 2026-08-25~27에 실제 apply됐다(살아 있는 EKS 클러스터, RDS 인스턴스, S3 버킷, Route53 존, ACM 인증서, 그리고 Helm으로 앱 자체까지 배포됨 — 같은 기간 그 실제 RDS를 상대로 발견·수정된 TLS 검증 결함은 ADR 0039의 Addendum에 기록돼 있다). 그 뒤 **2026-08-28에 전체 destroy**해서, 배포가 end-to-end로 검증된 뒤 AWS 과금을 멈췄다 — 지금은 이 스택에서 실재하거나 과금되는 게 아무것도 없다(`aws eks/rds/ec2/elb` describe 호출이 전부 빈 값/not-found를 반환함으로 확인됨). 현재 상태: 미적용. 어느 쪽이든 가정하지 말고, 셋 다에서 `terraform plan`을 돌려 확인할 것 — ADR의 Addendum도 이 줄도 특정 시점의 스냅샷일 뿐 실시간 상태가 아니다. ADR의 Addendum은 작성 시점의 사실을 기록한 것이므로 일부러 그대로 두었고, 정정은 여기와 ROADMAP.md 7절에 있다
+   - Helm/K8s 배포 변경    → `k8s/helm/`(`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/명시적 경로 allow-list를 가진 기본 비활성 Ingress(ADR 0058, `/` catch-all 아님)/기본 비활성 NetworkPolicy, ADR 0056)과 그 `README.md`(Secret 생성 절차, `existingSecret` 전용 소비 방식)를 읽는다. `k8s/`엔 이 차트 밖의 매니페스트가 없다 — 예전 `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/`에 있던 독립 raw 매니페스트는 삭제됐다(ADR 0042); 차트 옆에 정적 매니페스트를 다시 추가하지 않는다(ADR 0037/0041/0042)
+   - Terraform/인프라 변경 → `k8s/infra/terraform/`은 하나가 아니라 독립된 3개의 root module이다 — `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM, `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — ALB Controller+ESO, 다른 두 state를 **모두** 읽는 유일한 state). 각 디렉토리는 `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`와 자신만의 state 파일을 가지는데, 그 state는 Terraform 기본값인 로컬 파일이 아니라 네이티브 락 + SSE-S3 암호화를 쓰는 S3에 저장된다(ADR 0057, ADR 0044 D3 amends — 2026-09-12 코드 완료, 버킷 생성과 실제 마이그레이션은 실제 배포 시점으로 유예) — 변경이 실제로 건드리는 디렉토리만 읽는다. `README.md`(`cluster` → `app-infra` → `addons` 3단계 apply 순서와 그 역순 destroy, `SecretStore`/`ExternalSecret`을 한 번만 수동으로 `kubectl apply`하는 단계, 그리고 앱 전용 ServiceAccount IRSA 배선을 다루는 "Known gap" 절 — `app-infra/main.tf`의 trust policy, `k8s/helm/`의 `serviceaccount.yaml`+`values-prod.yaml`, `deploy.sh`의 `HELM_RELEASE` 기본값이 2026-09-03부로 모두 `sharenpo`라는 같은 이름으로 고정돼 있음. 코드는 완성되고 검증됐지만 실제 AWS엔 한 번도 적용된 적 없음 — 이걸로 대체된 예전 `default` ServiceAccount IRSA annotate 방식은 그 trust policy가 적용되는 순간 더 이상 동작하지 않음)를 읽는다. 설계 기록: ADR 0038(업스트림 스캐폴딩, 재작성 유예) → ADR 0043(프로젝트 적응 — 2026-08-18 구현됨) → ADR 0044(3-state 분리 — 2026-08-20 구현됨, 세 디렉토리 모두 `terraform validate`/`fmt -check` 통과) → ADR 0057(state 백엔드 — S3 네이티브 락 + SSE-S3, DynamoDB·KMS 없이, ADR 0044 D3 amends — 2026-09-12 코드 완료, 미적용). **두 ADR의 Addendum은 이 설정을 실제 AWS에 `apply`한 적이 없다고 말하는데, 그건 작성 시점엔 사실이었다가, 한동안 거짓이었다가, 다시 사실이 됐다.** 세 state 전부 2026-08-25~27에 실제 apply됐다(살아 있는 EKS 클러스터, RDS 인스턴스, S3 버킷, Route53 존, ACM 인증서, 그리고 Helm으로 앱 자체까지 배포됨 — 같은 기간 그 실제 RDS를 상대로 발견·수정된 TLS 검증 결함은 ADR 0039의 Addendum에 기록돼 있다). 그 뒤 **2026-08-28에 전체 destroy**해서, 배포가 end-to-end로 검증된 뒤 AWS 과금을 멈췄다 — 지금은 이 스택에서 실재하거나 과금되는 게 아무것도 없다(`aws eks/rds/ec2/elb` describe 호출이 전부 빈 값/not-found를 반환함으로 확인됨). 현재 상태: 미적용. 어느 쪽이든 가정하지 말고, 셋 다에서 `terraform plan`을 돌려 확인할 것 — ADR의 Addendum도 이 줄도 특정 시점의 스냅샷일 뿐 실시간 상태가 아니다. ADR의 Addendum은 작성 시점의 사실을 기록한 것이므로 일부러 그대로 두었고, 정정은 여기와 ROADMAP.md 7절에 있다
    - 삭제 경로 변경        → `backend/user/user.service.ts`(`remove` — 확인된 연쇄 삭제), `backend/file/file.service.ts`(`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts`(`deletePost`, `deletePostsOfCreator`), `LocalDiskStorage.unlink`/`S3Storage.unlink`(`FileStorage` 포트를 통한 커밋 후 unlink, ADR 0020/0023/0029)를 읽는다
    - 게시글/게시판 변경    → `backend/post/post.service.ts`(`fileId`에 대한 claim 해석, `canManage`, ADR 0021 읽기 레이어 재사용)를 `FileService.assertAttachableBy` / `toResponse` — PostModule이 FileModule에 묻는 두 가지 질문 — 와 함께 읽는다(ADR 0023)
    - 댓글/스레드 변경      → `backend/comment/comment.service.ts`(고정된 `createdAt ASC` 정렬, `canManage`, `deleteCommentsOfCreator`)와 `PostService.assertPostExists` — CommentModule이 PostModule에 묻는 유일한 질문 — 를 읽는다. 라우트는 **두** 컨트롤러에 나뉘어 있다(`/post/:postId/comment`용 `post-comment.controller.ts`, `/comment/:id`용 `comment.controller.ts`); 게시글 삭제는 서비스가 아니라 FK를 통해 댓글을 제거한다(ADR 0023 D3)
@@ -1117,6 +1117,30 @@ Conflict Protocol을 따른다.
   삭제하지 않고 **리포트만** 한다. 삭제 관점에서는 무해하게 출시된다: 코드
   경로는 있고 단위 테스트도 됐지만, 아직 이걸로 실제 데이터가 회수된 적은
   없으며 그러려면 코드 변경이 아니라 운영자의 결정이 필요하다
+- **악성코드 스캔(랜딩 2026-09-14, 라이브 검증 완료 — [ADR
+  0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md))**: 업로드는
+  `UploadService.stageTemp()` 내부, `storage.saveTemp()`를 호출하기 전에
+  Multer의 메모리 버퍼를 대상으로 동기 ClamAV 스캔 게이트를 거친다 — 감염
+  파일은 어떤 `FileStorage` 어댑터에서도 temp 저장소에 도달하지 않는다.
+  스키마 변경 없음(스캔은 영속화되는 상태가 아니라 통과/거부 전제조건일
+  뿐); `FileStorage`류 포트가 아니라 `UploadModule` 안의 평범한
+  `ScanService`(`clamscan`을 감쌈 — 2019년 이후 방치된 `clamdjs` 대신 채택,
+  ADR 0059 D2) — 구현체와 소비자가 각각 하나뿐이라, 이 프로젝트 스스로의
+  ISP 방침("실제 두 번째 구현체가 생기기 전까지는 서비스-인터페이스 계층을
+  도입하지 않는다")상 포트는 시기상조다. 스캐너 접속 불가 시
+  fail-closed(`503 UPLOAD_SCAN_UNAVAILABLE`)이며 재시도 2회/8초 타임아웃으로
+  제한한다 — Reliability > Retry Limits/Timeout이 실제로 적용되는 첫 사례이며,
+  실제 `clamd`로 100MB 버퍼 기준 약 5.97초로 라이브 검증됐다. `clamd`는
+  `k8s/helm/`에서 사이드카가 아니라 별도 Deployment+Service로 뜬다(replica별
+  시그니처 DB 복제를 피하려고, ADR 0059 D6) — 로컬에서는 `docker-compose.yml`
+  서비스로 동일하게 뜬다; `.github/workflows/ci.yml`의 업로드를 거치는 잡
+  (`e2e`/`frontend-e2e`/`admin-e2e`) 각각에 `clamav` 서비스 컨테이너를
+  추가했다 — 실제 GitHub Actions에서 CI 검증 완료(`admin-e2e`에서 무관한
+  기존 결함 하나 발견 — 기호 빠진 픽스처 비밀번호, 별도 수정함). `helm
+  install --wait`과 새 `clamav` egress `NetworkPolicy` 규칙 모두 임시
+  `kind`+Calico 클러스터(ADR 0056 레시피, `k8s/helm/README.md`)로 라이브
+  검증 완료 — 남은 건 AWS 자신의 VPC CNI 강제 에이전트뿐, ADR 0056도 이미
+  안고 있는 것과 동일한 잔여 항목
 - **절대 제안 금지**: 스트리밍/청크 업로드, CDN — 명시적으로 요청받지 않는 한.
   S3는 더 이상 이 목록에 없다: 스토리지 포트-어댑터(위 ADR 0029)가
   `S3Storage` 구현체와 `STORAGE_DRIVER` 스위치를 둘 다 이미 도입했지만,
@@ -1174,6 +1198,20 @@ Conflict Protocol을 따른다.
   유지하려면 Redis 기반 storage가 필요하다 — 이 앱이 실제로 replica 2개 이상으로
   돌기 전까지는
   범위 밖이다
+- **보안 응답 헤더(landed 2026-09-11, [ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md))**:
+  `main.ts`의 `bootstrap()`에서 `helmet()`을 적용한다 — CORS/`cookieParser()`/전역
+  `ValidationPipe`보다 먼저 등록되는 첫 번째 미들웨어라, 모든 라우트가 OWASP 권장
+  헤더 집합(`Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`,
+  `Strict-Transport-Security` 등)을 받는다. 이것은 Nest 가드가 아니라 Express 레벨
+  미들웨어라 `ThrottlerGuard`/`JwtAuthGuard`/`RolesGuard`보다 먼저 실행되며 어떤
+  가드의 적용 범위도 바꾸지 않는다. helmet 기본값에서 벗어난 지점은 하나뿐이다:
+  `script-src`를 `'self' 'unsafe-inline'`으로 완화했다(나머지 directive는 모두
+  기본값 유지) — 그러지 않으면 `SwaggerModule.setup('doc', ...)`의 인라인
+  부트스트랩 `<script>`가 CSP에 막히기 때문이다. 실제 브라우저(Playwright)로
+  `/doc`이 정상 렌더링되고 Authorize 모달이 콘솔/CSP 에러 0건으로 열림을
+  라이브 검증했다. `Strict-Transport-Security`는 이 앱이 아직 TLS 종단을 갖지
+  않는데도(ADR 0034, 보류) 전송되지만 — 브라우저는 이미 HTTPS로 도착한 응답에서만
+  이 헤더를 준수하므로 그 전까지는 무해하다
 - **절대 제안 금지**: GraphQL, WebSocket, gRPC — 작은 요청/응답 CRUD 표면은
   이들 각각이 더할 스키마 레이어, 클라이언트 구현, 운영 오버헤드를 정당화하지
   못한다(전체 근거: ADR 0009)
@@ -1357,9 +1395,16 @@ Architecture Decisions가 계속 유효하다.
   이제 58건(2026-07-24 당시엔 몇 건 수준)을 보고하며, critical 1건(`ts-jest`를
   통한 `handlebars`)도 포함돼 있다 — 여전히 빌드/테스트 시점에만 관련되며
   jest/@nestjs/cli/eslint 툴체인의 업스트림 릴리스를 기다리는 중이다
-- `test/app.e2e-spec.ts`는 손대지 않은 Nest 템플릿이다: 이 앱에 존재하지
+- ~~`test/app.e2e-spec.ts`는 손대지 않은 Nest 템플릿이다: 이 앱에 존재하지
   않는 `GET /`를 대상으로 하고, AppModule을 부팅하려면 실제 DB가 필요하다
-  — e2e 스위트는 무언가를 검증하기 전에 실제로 다시 작성되어야 한다
+  — e2e 스위트는 무언가를 검증하기 전에 실제로 다시 작성되어야 한다~~ —
+  **오래전에 사실이 아니게 됐던 항목, 2026-09-14 정정**: 이 문장이 여기 쓰인
+  시점에 이미 거짓이었다 — 커밋 `180a20f`(2026-07-25, Stage 1)가 빈 Nest
+  템플릿을 실제 HTTP+DB 기반의 1,660줄짜리 스위트(auth 흐름, refresh
+  회전/재사용, RBAC 소유권 403, 목록 페이지네이션, `temp_`→`granted_` 승격,
+  계정 삭제 cascade)로 이미 교체했는데, 그 뒤로 아무도 이 Known Gaps 항목을
+  지우지 않은 것이다. `pnpm test:e2e`는 현재 76/76 통과한다(ADR 0054의
+  Consequences). 코드 변경 없음 — 이 섹션을 훑다가 발견한 순수 문서 정정
 - ~~파일을 소유한 사용자를 삭제하면 FK 제약에 걸린다~~ — **2026-07-30 해결**
   (ADR 0020): `DELETE /user/:id?deleteFiles=true`가 연쇄한다(게시글 행 →
   파일 행 → 사용자 행 → 저장된 파일; 게시글은 2026-07-31에 순서에
@@ -1436,18 +1481,26 @@ Architecture Decisions가 계속 유효하다.
   DB(`sharenpo_promote_verify`, 검증 후 drop)에서 승격/재실행 no-op/미존재 이메일
   에러/env var 미설정 에러 네 가지가 모두 설계대로 동작함을 확인 — ADR 0052 addendum
   참고
-- **요청 횟수 제한이 `req.ip`로 키잉되는데 `trust proxy`가 미설정**([ADR
-  0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md) addendum, 2026-09-10 발견):
-  `ThrottlerGuard`의 기본 tracker는 앞단에 리버스 프록시가 있으면 실제 방문자가 아니라
-  Express 자신의 클라이언트-소켓 해석 결과를 읽는다 — `backend/main.ts`에
-  `app.set('trust proxy', ...)` 호출이 없음을 확인했다. 지금은 실제 영향이 없다(아무것도
-  배포돼 있지 않고, `k8s/helm/`의 `Ingress`도 기본 비활성에 ALB/nginx 선택이 확정돼
-  있지 않다). 하지만 `Ingress`가 켜지는 순간 외부 클라이언트 전원의 `req.ip`가 그
-  프록시 주소로 수렴해, 클라이언트당 분당 5회(`auth`)·15회(`upload`) 버킷
-  ([ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md))이 방문자 전원이 나눠
-  쓰는 버킷 하나로 무너진다. 지금 고치지 않는다 — 올바른 `trust proxy` 값(홉 수 또는
-  명시적 프록시 CIDR)은 `Ingress`를 실제로 켤 때 선택하는 인그레스/로드밸런서
-  토폴로지에 달려 있고, 그게 아직 정해지지 않았다 — 그 작업과 함께 다시 다룰 것
+- ~~요청 횟수 제한이 `req.ip`로 키잉되는데 `trust proxy`가 미설정~~ — **2026-09-14 해결**
+  ([ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md) 2026-09-10 addendum에서
+  발견, 2026-09-14 addendum에서 해결): `ThrottlerGuard`의 기본 tracker는 앞단에 리버스
+  프록시가 있으면 실제 방문자가 아니라 Express 자신의 클라이언트-소켓 해석 결과를 읽는다
+  — `backend/main.ts`에 `app.set('trust proxy', ...)` 호출이 없었음을 확인했었다.
+  `app.set('trust proxy', '10.0.0.0/16')`로 고쳤다 — 이 CIDR은 이 프로젝트 자신의 VPC
+  대역(`cluster/main.tf`의 `vpc_cidr`, ADR 0056의 NetworkPolicy egress 규칙이 이미
+  재사용 중인 바로 그 상수)이며, 단순 홉 수(`trust proxy: 1`) 대신 이걸 고른 이유는
+  홉 수가 실제로 누가 연결해왔는지와 무관하게 `X-Forwarded-For`를 그대로 믿는 반면,
+  CIDR은 실제 소켓 연결 주체가 VPC 안에 있을 때만 신뢰를 확장하기 때문이다 — 앱이 ALB를
+  우회하는 경로로 도달 가능해지는 경우까지 대비한 선택이다. 이건 **라이브 배포 없이
+  내린 설계 결정**이다 — 이 프로젝트가 이미 확정한 목표 구조(ADR 0034, 2026-09-13의
+  Ingress annotation 작업)가 정확히 ALB 하나가 CDN이나 다른 프록시 계층 없이 `Ingress`를
+  직접 구현하는 형태라, 이것만으로도 종이 위에서 값을 확정하기 충분했다 — ADR 0034
+  자신이 design-only로 남았던 것과 같은 방식이다. dev/로컬 영향은 `proxy-addr`을 대상으로
+  직접 검증했다(주장만 하지 않았다) — loopback 연결에 `X-Forwarded-For`를 위조해도
+  `127.0.0.1`로 그대로 해석돼, 로컬 `pnpm start:dev` 동작은 안 바뀐다. `pnpm lint`/
+  `pnpm test`(278/278) 모두 통과. ADR 0058과 같은 정직성 기준으로 남기는 잔여 사항: 실제
+  ALB의 연결 주소가 정말 `10.0.0.0/16` 안에 들어오는지는 AWS 스택을 다시 적용하지 않고는
+  검증 불가 — 다음에 실제로 적용할 때(ROADMAP.md §9) 다시 확인할 것
 - ~~시크릿/해시 라운드 Joi 검증이 존재 여부만 확인하고 강도는 확인하지 않았다~~ —
   **2026-09-11 해결**: 보안 점검 결과 `backend/app.module.ts`의 Joi 스키마가
   `HASH_ROUNDS`/`ACCESS_TOKEN_SECRET`/`REFRESH_TOKEN_SECRET`에 대해 값이 존재하는지만
@@ -1460,6 +1513,138 @@ Architecture Decisions가 계속 유효하다.
   실제 검증**: 컴파일된 앱을 다섯 가지 가짜 env 조합(길이 미달·숫자 없음·기호 없음·
   낮은 해시 라운드·정상값)으로 직접 부팅해 각각 설계대로 통과/거부됨을 확인했다 —
   실제 `.env`는 한 번도 읽지 않았고 그 값도 결과에 전혀 노출되지 않았다
+- ~~`register()`의 비밀번호가 강도 검증 없이 bcrypt로 넘어갔다~~ — **2026-09-11
+  해결**: 보안 점검 결과 `backend/auth/auth.service.ts`의 `register()`가 Basic 토큰에서
+  뽑은 비밀번호를 길이·복잡도 검증 없이 그대로 `bcrypt.hash()`에 넘기고 있었다는 사실이
+  드러났다 — 빈 문자열도 그대로 해시되어 저장됐다. 회원가입은 DTO·전역
+  `ValidationPipe`를 완전히 우회하는 구조라(Basic 토큰 파싱, ADR 0001),
+  `CreateUserDto`의 `@IsNotEmpty()`/`@IsString()`은 이 경로에서 애초에 실행된 적이
+  없었다. 이제 `register()`는 10자 미만이거나 소문자·대문자·숫자·기호 중 하나라도
+  빠진 비밀번호를 새 400 `AUTH_WEAK_PASSWORD`(`backend/common/error-code.ts`)로
+  거부하며, 이메일 중복 조회보다 먼저 검사한다 — 위 시크릿 강도 기준과 같은 문자
+  조합 원칙을 쓰되, 길이만 32자에서 10자로 낮췄다(비밀번호는 기계가 아니라 사람이
+  직접 타이핑하는 값이므로). 정책(길이만 vs 길이+문자 조합)과 에러 코드 선택
+  (`AUTH_INVALID_CREDENTIALS` 재사용 vs 신설) 모두 구현 전에 비교표로 개발자에게
+  확인받았다(Clarification Protocol). `signIn`/`parseBasicToken`은 의도적으로 건드리지
+  않았다 — 로그인에 적용하면 이 규칙 이전에 가입한 계정이 잠기기 때문이다.
+  `auth.service.spec.ts`에 거부 케이스 6가지(길이 미달·문자 종류별 누락 4가지·빈
+  문자열)를 추가했고, `pnpm lint` 클린, 유닛 테스트 270/270 통과. **같은 날 실제 검증**:
+  일회성 e2e 스펙으로(`test/e2e-utils.ts`의 격리된 `sharenpo_e2e` DB, supertest로 실제
+  HTTP 호출을 실제로 마이그레이션한 Postgres에 대고 실행, 실행 후 스펙 파일 삭제)
+  `POST /auth/register`에 빈 문자열·길이 미달·기호 누락 비밀번호(각각 400
+  `AUTH_WEAK_PASSWORD`), 강한 비밀번호(201, 응답에 `password` 필드 없음), 같은 이메일
+  재시도(400 `AUTH_EMAIL_TAKEN` — 강도 검사가 중복 검사보다 먼저 실행되지만 그걸로
+  중복 검사를 건너뛰지는 않음을 확인)를 실제로 호출했다 — 5건 모두 실제 bcrypt 해싱과
+  실제 DB 왕복까지 거쳐 통과
+- ~~`k8s/helm/templates/`에 `NetworkPolicy` 리소스가 없어 배포된 뒤 클러스터 내부
+  east-west(파드 간) 트래픽을 제한하는 장치가 전무했다~~ — **2026-09-11 해결**
+  ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.ko.md), ADR 0041 확장):
+  보안 점검 결과 앱이 배포된 뒤 파드 간 트래픽을 제한하는 장치가 전혀 없다는 사실이
+  드러났다. `templates/networkpolicy.yaml`(`networkPolicy.enabled`로 게이팅, 기본값
+  `false` — `ingress.yaml`/`servicemonitor.yaml`과 같은 패턴)이 앱 파드의 인바운드를
+  같은 네임스페이스의 파드로만 제한하고, 아웃바운드는 DNS(CoreDNS), DB
+  (`networkPolicy.egress.vpcCidr:dbPort`, 기본값 `10.0.0.0/16:5432` —
+  `cluster/main.tf`의 `var.vpc_cidr`과 동일), HTTPS/443(S3·AWS API — 이를 더 좁힐
+  VPC 엔드포인트가 없음)만 명시적으로 허용하고 나머지는 기본 거부한다.
+  `values-prod.yaml`에서 이미 켜뒀지만, 실제(현재는 철거된) EKS 대상에는 아직
+  무효하다 — `cluster/main.tf`의 `vpc-cni` 애드온이 VPC CNI Network Policy 강제
+  에이전트를 아직 켜지 않았다(별도의, 아직 일정이 잡히지 않은 Terraform 작업).
+  **2026-09-11 실제 검증**: Calico를 설치한 throwaway `kind` 클러스터(`kind`의
+  기본 CNI는 `NetworkPolicy`를 강제하지 않음)와 RDS를 대신하는 throwaway
+  `postgres:16`에 대해 검증했다 — `helm install --wait`가 성공했고(kubelet의
+  liveness/readiness 프로브가 — DB 연결까지 확인하는 readiness 포함, ADR 0031 —
+  인바운드 제한에도 불구하고 파드에 도달했다는 뜻), `/health/live`/`/health/ready`/
+  `/doc`이 같은 네임스페이스의 파드에서 모두 `200`을 응답했고, 다른 네임스페이스의
+  파드는 요청이 타임아웃됐으며(인바운드 제한이 실제로 동작함을 확인), 앱과 같은
+  라벨을 붙인 파드가 이미 허용된 호스트라도 허용되지 않은 포트로 요청하면 마찬가지로
+  타임아웃됐다(아웃바운드 기본 거부가 "허용된 세 경로가 우연히 동작"하는 게 아니라
+  실제로 동작함을 확인). 이건 AWS 자신의 Network Policy 에이전트(Calico와는 다른
+  강제 엔진)가 실제로 돌아갈 때도 똑같이 동작한다는 걸 증명하지 않는다 — 그 에이전트를
+  실제로 켜기 전엔 프로브를 다시 검증해야 한다(ADR 0056 D2/D4)
+- `register()`는 `AUTH_EMAIL_TAKEN`으로 계정 존재 여부를 노출하는데, `validateUser()`는
+  로그인 실패 사유를 의도적으로 숨긴다 — 위의 `register()`/Joi 강도 두 항목과 함께
+  2026-09-09 보안 점검에서 발견됐고, **2026-09-12 재검토, 현행 유지로 결정**(Principle
+  Conflict Protocol — "계정 열거 방지"와 "가입 실패 사유를 사용자에게 알려줌"의 충돌).
+  호환성 확인 결과 `AUTH_EMAIL_TAKEN`은 가상의 우려가 아니라 실사용 중인 계약이었다 —
+  `frontend/src/features/auth/LoginPage.tsx`의 `messageForError`가 이 코드를 받아 "That
+  email is already registered — try signing in."을 그대로 보여주고, `frontend/e2e/auth.spec.ts`와
+  `test/app.e2e-spec.ts` 둘 다 이 코드 자체를 직접 검증한다 — 감추면 대체 UX 설계 없이
+  둘 다 깨진다. 세 경로를 저울질했다: (1) 현행 유지, (2) 응답은 그대로 두고
+  `POST /auth/register`의 기존 5회/분 스로틀(ADR 0054)을 더 낮춘다, (3) 이메일 인증
+  흐름으로 전환해 열거 자체를 불가능하게 만든다. (3)은 기각 — 이 프로젝트엔 이메일
+  발송 인프라가 전혀 없어 완전히 막으려면 신규 외부 연동(자체 Retry Limits/Timeout
+  설계 필요), 가입 대기 상태를 위한 스키마/마이그레이션, e2e 두 벌의 재작성이 필요한데,
+  정작 가입 시점의 계정 열거는 로그인/비밀번호 오라클과 달리 그 자체로 접근권을 주지
+  않아 업계에서도 대체로 낮은 심각도로 취급된다. (2)도 기각 — 스로틀은 IP당이라 더
+  낮춰도 단일 출처 스캔만 느려질 뿐 분산 공격엔 거의 효과가 없고, 대신 오타로
+  재시도하는 정상 유저를 막을 위험만 실질적으로 커진다. (1)을 선택 — 기존 5회/분
+  스로틀이 유일한 완화책으로 남는다. 이 건은 별도 ADR을 쓰지 않았다: ADR 0052/0055/0056과
+  달리 코드가 바뀐 게 없고, 가장 가까운 선례(위의 Chat-project remnant handling, License
+  mismatch)도 "검토 후 현행 유지" 결정을 자체 ADR이 아니라 여기에 기록했다. 프로젝트가
+  실사용자를 확보하고 실제로 악용되고 있다는 구체적 신호(악용 신고, 크리덴셜 스터핑
+  상관관계)가 나오면 재검토한다.
+- ~~`k8s/helm/templates/ingress.yaml`의 유일한 경로 규칙이 단일 `/` catch-all이었다~~ —
+  **2026-09-13 해결됨**([ADR 0058](docs/ADR/0058-ingress-path-allowlist.ko.md), ADR
+  0041 extends): 2026-09-09 보안 점검에서, `ingress.enabled`를 언젠가 켜는 순간 이
+  규칙 하나가 `/health/*`, `/metrics`, `/doc`을 — 셋 다 인증이 전혀 없는데도 — 예외
+  없이 공개 ALB로 라우팅하게 된다는 게 발견됐다. `values.yaml`의
+  `ingress.hosts[].paths`는 이제 이 앱의 실제 컨트롤러 prefix를 명시적으로 나열한
+  allow-list다(`/auth`, `/user`, `/post`, `/comment`, `/file`, `/upload`,
+  `/audit-log`); `/health`, `/metrics`, `/doc`은 목록에서 빠져 차단된다 — 앞의 둘은
+  kubelet·Prometheus가 애초에 Ingress를 거쳐 앱에 도달하지 않기 때문이고, `/doc`은
+  "외부 검토자가 열람하게 하기"라는 이득을 "인증 게이트 없음"이라는 위험과 견줘봤을
+  때 그 이득이 얕다고 판단했기 때문이다(포트폴리오/면접 검토는 대부분 리포를 읽거나
+  실시간 시연으로 이뤄지지, 면접관이 공개 Swagger URL을 혼자 찾아 눌러보는 경우는
+  드물다). ALB 전용 fixed-response 리젝트 규칙 대안도 검토했으나 기각했다 —
+  aws-load-balancer-controller의 규칙 우선순위 처리가 불안정하다는 미해결 이슈가
+  있고, 이를 시험해볼 살아있는 ALB도 없다(세 Terraform 상태 모두 2026-08-28
+  destroy). `templates/ingress.yaml`은 변경이 필요 없었다; `helm lint`/
+  `helm template`로 렌더링된 규칙을 확인했다. `ingress.enabled`는 여전히 `false`이고
+  `values-prod.yaml`은 무변경이다 — Ingress를 실제로 켜려면 host/TLS/ALB 어노테이션
+  작업이 따로 필요하고, 그때 `values-prod.yaml`에도 `paths` 전체를 다시 적어야 한다
+  (Helm은 `-f` 레이어 간 배열을 병합하지 않는다 — `values.yaml` 주석에 기록해둠).
+- ~~업로드 악성코드 스캔~~ — **2026-09-14 해결됨** ([ADR
+  0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)): 2026-09-13 점검에서
+  업로드 파이프라인의 확장자/mimetype 허용목록이 파일 내용물은 전혀 검사하지
+  않는다는 게 확인됐다. 검토 후 기각한 대안: AWS GuardDuty Malware Protection
+  for S3(비동기라 새 `FileEntity` 스캔 상태 컬럼이 필요해지는 스키마 변경을
+  요구함, 이 결정은 그게 필요 없음), Lambda로 패키징한 ClamAV(같은 유지부담을
+  지면서 구현 비용만 추가됨), 서드파티 스캔 API — VirusTotal/Cloudmersive
+  (사용자가 업로드한 파일 바이트를 외부 벤더로 전송 — 이 프로젝트가 처음으로
+  받아들이게 될 유형의 노출). 랜딩: `UploadService.stageTemp()` 내부에서 temp
+  쓰기 전에 메모리 버퍼를 스캔하는 `ScanService`(`clamscan` 감쌈), 스캐너
+  접속 불가 시 fail-closed — 요약은 Architecture Decisions > File Storage 참고.
+  위 회원가입 계정 열거 항목처럼 "검토 후 현행 유지"로 단순 기록하지 않은
+  이유: 여기서 올바른 유예 경계는 "실사용자가 생기기 전까지"가 아니라 "이
+  앱이 인터넷에서 실제로 도달 가능해지기 전까지"이고(익명 업로드+공유 남용은
+  봇이 주도하며 실사용자 여부와 무관하다), 최근 배포 준비 작업(ADR 0056
+  NetworkPolicy, ADR 0057 Terraform state 백엔드, ADR 0058 Ingress 경로
+  allow-list)이 그 경계에 가까워지고 있어 같은 세션 안에서 결정과 구현을
+  함께 마쳤다. **2026-09-14 라이브 검증 완료**: 실제 `clamd`(`docker compose up
+  clamav`) 대상 — 정상 버퍼 통과, EICAR 테스트 버퍼 정상 탐지
+  (`Eicar-Test-Signature`), 100MB 버퍼 약 5.97초로 스캔(8초 시도당 타임아웃
+  이내), 스캐너 접속 불가 시 2회 시도 후 `ScanUnavailableError`로 fail-closed
+  재현(약 212ms). **2026-09-14 CI 검증 완료**: 새 `clamav` 서비스 컨테이너가
+  `e2e`/`frontend-e2e`에서 첫 실제 GitHub Actions 실행부터 정상 동작
+  ([34825693680](https://github.com/Bluecode77732/Upload-Board-Project/actions/runs/34825693680));
+  같은 실행에서 `admin-e2e`도 실패했지만 원인은 `AUTH_WEAK_PASSWORD` — 2026-09-11
+  강도 규칙 이전부터 있던, 기호 문자가 빠진 기존 픽스처 비밀번호 결함
+  (`admin/e2e/helpers.ts`)이라 별도로 수정했고, 그다음 실행
+  ([34829671565](https://github.com/Bluecode77732/Upload-Board-Project/actions/runs/34829671565))에서
+  7개 잡 전부 통과 확인. **2026-09-15 kind+Calico 검증 완료**(ADR 0056
+  레시피, `k8s/helm/README.md`): `helm install --wait`이 앱·`clamav`
+  Deployment 둘 다 Ready에 도달하며 성공했고, 새 `clamav` egress
+  `NetworkPolicy` 규칙이 실제로 구멍을 열어준다는 것도 확인됨(앱 라벨
+  pod에서 `nc -zv`로 `clamav` Service에 성공), 타 네임스페이스 인바운드와
+  허용 안 된 egress는 여전히 실제로 차단됨(거부가 아니라 timeout).
+  기록해둘 방법론 하나: 처음엔 `clamav` 연결 확인에 `curl telnet://...`을
+  썼는데, 정상 연결을 막힌 것처럼 오보고했다 — clamd는 먼저 말을 안 걸어서
+  curl telnet 모드가 응답을 기다리다 그냥 timeout난 것. TCP 핸드셰이크
+  성립 여부만 보는 `nc -zv`가 이런 포트 확인엔 맞는 도구였다. 진짜로 실
+  AWS가 있어야만 확인되는 잔여 항목은 딱 하나 — AWS 자신의 VPC CNI Network
+  Policy 강제 에이전트(Calico와 다른 엔진)가 똑같이 동작하는지뿐이고, 이건
+  ADR 0056이 이미 안고 있던 것과 같은 공백이지 새로 생긴 게 아니다
+  (ROADMAP.md §9)
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

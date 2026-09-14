@@ -24,8 +24,8 @@ Before making any change:
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer `memoryStorage`) and `upload.controller.ts` (100MB size limit) together with `backend/upload/upload.service.ts` (`stageTemp` — `temp_{uuid}_{timestamp}` naming, calls the `FileStorage` port, ADR 0029 D4)
    - Storage adapter change→ read `backend/storage/file-storage.interface.ts` (the `FileStorage` port + `FILE_STORAGE` token), `local-disk.storage.ts` / `s3.storage.ts` (the two implementations), and `storage.module.ts` (the `STORAGE_DRIVER`-keyed factory, ADR 0029)
    - Container/deploy change→ read `Dockerfile` (non-root `USER`, `HEALTHCHECK`, migration removed from `CMD` — ADR 0030/0032) and `docker-compose.yml` (the one-shot `migrate` service) together with `backend/health/` (`GET /health/live`/`GET /health/ready` — ADR 0031)
-   - Helm/K8s deploy change→ read `k8s/helm/` (`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/disabled-by-default Ingress) and its `README.md` (Secret creation runbook, `existingSecret`-only consumption). `k8s/` holds no manifests outside this chart — the standalone raw manifests once at `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/` were deleted (ADR 0042); do not re-add static manifests alongside the chart (ADR 0037/0041/0042)
-   - Terraform/infra change  → `k8s/infra/terraform/` is three independent root modules, not one — `cluster/` (`module.vpc`+`module.eks`), `app-infra/` (RDS/S3+IRSA/Secrets Manager/Route53+ACM, reads `cluster/` via `terraform_remote_state`), `addons/` (`module.eks_blueprints_addons` — ALB Controller+ESO, the only state reading **both** other states). Each is `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` with its own local state file; read the one(s) the change actually touches. Read `README.md` (the three-step `cluster` → `app-infra` → `addons` apply order and its destroy-order reversal, the `SecretStore`/`ExternalSecret` one-time manual `kubectl apply` step, and the "Known gap" section covering the app's dedicated-ServiceAccount IRSA wiring — `app-infra/main.tf`'s trust policy, `k8s/helm/`'s `serviceaccount.yaml`+`values-prod.yaml`, and `deploy.sh`'s `HELM_RELEASE` default all pinned to the name `sharenpo` as of 2026-09-03, code-complete and validated but never applied against real AWS; the old `default`-ServiceAccount IRSA annotation this superseded is now dead once that trust policy is ever applied). Design record: ADR 0038 (upstream scaffold, deferred rewrite) → ADR 0043 (project adaptation — implemented 2026-08-18) → ADR 0044 (three-state split — implemented 2026-08-20, `terraform validate`/`fmt -check` pass in all three directories). **Both ADRs' addenda say this config had never been `apply`d against real AWS — that was true when written, then briefly false, then true again.** All three states were applied 2026-08-25–27 (a live EKS cluster, RDS instance, S3 bucket, Route53 zone, ACM certificate, plus the app itself deployed via Helm — ADR 0039's Addendum records a same-window TLS-verification defect found and fixed against that live RDS), then **fully destroyed 2026-08-28** to stop the ongoing AWS bill once the deploy was proven end-to-end — nothing from this stack currently exists or costs money (verified via `aws eks/rds/ec2/elb` describe calls returning empty/not-found across the board). Currently: not applied. Before assuming either state, run `terraform plan` in each of the three directories — the ADR addenda and this line are both point-in-time snapshots, not live state. The ADR addenda are deliberately left as written — they record what was true when written; the correction lives here and in ROADMAP.md §7
+   - Helm/K8s deploy change→ read `k8s/helm/` (`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/disabled-by-default Ingress with an explicit path allow-list (ADR 0058, not a `/` catch-all)/disabled-by-default NetworkPolicy, ADR 0056) and its `README.md` (Secret creation runbook, `existingSecret`-only consumption). `k8s/` holds no manifests outside this chart — the standalone raw manifests once at `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/` were deleted (ADR 0042); do not re-add static manifests alongside the chart (ADR 0037/0041/0042)
+   - Terraform/infra change  → `k8s/infra/terraform/` is three independent root modules, not one — `cluster/` (`module.vpc`+`module.eks`), `app-infra/` (RDS/S3+IRSA/Secrets Manager/Route53+ACM, reads `cluster/` via `terraform_remote_state`), `addons/` (`module.eks_blueprints_addons` — ALB Controller+ESO, the only state reading **both** other states). Each is `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` with its own state file, stored in S3 with native locking and SSE-S3 encryption rather than Terraform's local-file default (ADR 0057, amends ADR 0044 D3 — code-complete 2026-09-12, bucket creation and the actual migration deferred to real deployment time); read the one(s) the change actually touches. Read `README.md` (the three-step `cluster` → `app-infra` → `addons` apply order and its destroy-order reversal, the `SecretStore`/`ExternalSecret` one-time manual `kubectl apply` step, and the "Known gap" section covering the app's dedicated-ServiceAccount IRSA wiring — `app-infra/main.tf`'s trust policy, `k8s/helm/`'s `serviceaccount.yaml`+`values-prod.yaml`, and `deploy.sh`'s `HELM_RELEASE` default all pinned to the name `sharenpo` as of 2026-09-03, code-complete and validated but never applied against real AWS; the old `default`-ServiceAccount IRSA annotation this superseded is now dead once that trust policy is ever applied). Design record: ADR 0038 (upstream scaffold, deferred rewrite) → ADR 0043 (project adaptation — implemented 2026-08-18) → ADR 0044 (three-state split — implemented 2026-08-20, `terraform validate`/`fmt -check` pass in all three directories) → ADR 0057 (state backend — S3 native lock + SSE-S3, no DynamoDB/KMS, amends 0044 D3 — code-complete 2026-09-12, not applied). **Both ADRs' addenda say this config had never been `apply`d against real AWS — that was true when written, then briefly false, then true again.** All three states were applied 2026-08-25–27 (a live EKS cluster, RDS instance, S3 bucket, Route53 zone, ACM certificate, plus the app itself deployed via Helm — ADR 0039's Addendum records a same-window TLS-verification defect found and fixed against that live RDS), then **fully destroyed 2026-08-28** to stop the ongoing AWS bill once the deploy was proven end-to-end — nothing from this stack currently exists or costs money (verified via `aws eks/rds/ec2/elb` describe calls returning empty/not-found across the board). Currently: not applied. Before assuming either state, run `terraform plan` in each of the three directories — the ADR addenda and this line are both point-in-time snapshots, not live state. The ADR addenda are deliberately left as written — they record what was true when written; the correction lives here and in ROADMAP.md §7
    - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `LocalDiskStorage.unlink`/`S3Storage.unlink` (post-commit unlink through the `FileStorage` port, ADR 0020/0023/0029)
    - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
    - Comment/thread change → read `backend/comment/comment.service.ts` (fixed `createdAt ASC` order, `canManage`, `deleteCommentsOfCreator`) and `PostService.assertPostExists` — the one thing CommentModule asks PostModule for. Routes live in **two** controllers (`post-comment.controller.ts` for `/post/:postId/comment`, `comment.controller.ts` for `/comment/:id`); post deletion removes comments via the FK, not the service (ADR 0023 D3)
@@ -1100,6 +1100,28 @@ Do not suggest alternatives to these decisions without explicit request.
   is explicitly set to `false`. Ships inert with respect to deletion: the code path exists
   and is unit-tested, but no production data has been reclaimed by it yet, and doing so
   requires an operator decision, not a code change
+- **Malware scanning (landed 2026-09-14, live-verified — [ADR
+  0059](docs/ADR/0059-upload-malware-scanning-clamav.md))**: uploads get a synchronous
+  ClamAV scan gate inside `UploadService.stageTemp()`, run against the in-memory Multer
+  buffer before `storage.saveTemp()` — an infected file never reaches temp storage under
+  either `FileStorage` adapter. No schema change (the scan is a pass/fail precondition, not
+  persisted state); a plain `ScanService` inside `UploadModule` (wrapping `clamscan`, chosen
+  over the unmaintained-since-2019 `clamdjs` — ADR 0059 D2), not a new `FileStorage`-style
+  port — only one implementation and one consumer exist, so a port would be premature under
+  this project's own ISP stance ("no service-interface layer until a real second
+  implementation exists"). Fails closed on scanner unavailability (`503
+  UPLOAD_SCAN_UNAVAILABLE`) with a bounded 2-attempt/8s-timeout retry — the first real
+  application of Reliability > Retry Limits/Timeout, live-verified against a real `clamd`
+  at ~5.97s for a 100MB buffer. `clamd` runs as its own Deployment+Service in
+  `k8s/helm/` (not a sidecar — avoids per-replica signature-DB duplication, ADR 0059 D6)
+  and as a `docker-compose.yml` service locally; `.github/workflows/ci.yml`'s
+  upload-touching jobs (`e2e`/`frontend-e2e`/`admin-e2e`) each gained a `clamav` service
+  container — CI-verified on real GitHub Actions (`admin-e2e` uncovered an unrelated
+  pre-existing bug, a fixture password missing a symbol; fixed separately). `helm
+  install --wait` and the new `clamav`-egress `NetworkPolicy` rule are both
+  live-verified against a throwaway `kind`+Calico cluster (ADR 0056's recipe,
+  `k8s/helm/README.md`) — only AWS's own VPC CNI enforcement agent stays
+  AWS-only-verifiable, the same residual ADR 0056 already carries
 - **Never suggest**: streaming/chunked upload, CDN — unless explicitly requested. S3 is no
   longer in this list: the storage port-adapter (ADR 0029, above) landed both an
   `S3Storage` implementation and the `STORAGE_DRIVER` switch, but `local` stays the
@@ -1151,6 +1173,19 @@ Do not suggest alternatives to these decisions without explicit request.
   limitation: the default storage is single-instance in-memory, so a future multi-replica
   deployment would need Redis-backed storage to keep one true global ceiling — out of scope
   until this app actually runs more than one replica
+- **Security response headers (landed 2026-09-11, [ADR 0055](docs/ADR/0055-helmet-security-headers.md))**:
+  `helmet()` is applied in `main.ts`'s `bootstrap()` — the first middleware registered,
+  before CORS/`cookieParser()`/the global `ValidationPipe` — so every route carries the
+  OWASP-recommended header set (`Content-Security-Policy`, `X-Content-Type-Options`,
+  `X-Frame-Options`, `Strict-Transport-Security`, etc.). This is Express-level middleware,
+  not a Nest guard, so it runs ahead of `ThrottlerGuard`/`JwtAuthGuard`/`RolesGuard` and
+  changes no guard's coverage. The one deviation from `helmet`'s defaults: `script-src`
+  widens to `'self' 'unsafe-inline'` (every other directive stays default) because
+  `SwaggerModule.setup('doc', ...)`'s inline bootstrap `<script>` would otherwise be
+  blocked by CSP — live-verified in a real browser (Playwright), confirming `/doc` renders
+  and its Authorize modal opens with zero console/CSP errors. `Strict-Transport-Security`
+  is sent even though this app has no TLS termination yet (ADR 0034, deferred) — inert
+  until then, since browsers only honor it over an already-HTTPS connection
 - **Never suggest**: GraphQL, WebSocket, gRPC — the small request/response CRUD surface
   does not justify the schema layer, client story, or operational overhead each would add
   (full reasoning: ADR 0009)
@@ -1329,9 +1364,16 @@ Architecture Decisions above remain operative.
   (a handful in 2026-07-24), including one critical (`handlebars` via
   `ts-jest`) — still build/test-time only, waiting on upstream releases in the
   jest/@nestjs/cli/eslint toolchains
-- `test/app.e2e-spec.ts` is the untouched Nest template: it targets `GET /`, which
+- ~~`test/app.e2e-spec.ts` is the untouched Nest template: it targets `GET /`, which
   does not exist in this app, and booting AppModule needs a live DB — the e2e suite
-  needs a real rewrite before it verifies anything
+  needs a real rewrite before it verifies anything~~ — **stale, corrected 2026-09-14**:
+  this claim was already false by the time it was written down here — commit `180a20f`
+  (2026-07-25, Stage 1) replaced the blank Nest template with a real 1,660-line suite
+  over HTTP+DB (auth flow, refresh rotation/reuse, RBAC ownership 403s, list pagination,
+  `temp_`→`granted_` promotion, the account-deletion cascade) — nobody removed this entry
+  from Known Gaps once that landed. `pnpm test:e2e` currently passes 76/76 (ADR 0054's
+  Consequences). No code change here — a documentation-only correction, found while
+  surveying this section for genuinely open items
 - ~~Deleting a user who owns files hits an FK constraint~~ — **resolved 2026-07-30**
   (ADR 0020): `DELETE /user/:id?deleteFiles=true` cascades (post rows → file rows →
   user row → stored files; posts joined the order 2026-07-31, ADR 0023); unconfirmed,
@@ -1405,19 +1447,26 @@ Architecture Decisions above remain operative.
   an isolated throwaway DB (`sharenpo_promote_verify`, dropped after) — promote, re-run
   no-op, unknown-email error, and unset-env-var error all behaved as designed; see ADR
   0052's addendum
-- **Rate limiting keys on `req.ip`, and `trust proxy` is unset** ([ADR
-  0054](docs/ADR/0054-per-route-rate-limit-tuning.md) addendum, found 2026-09-10):
-  `ThrottlerGuard`'s default tracker reads Express's own client-socket resolution, not the
-  real originating client, once a reverse proxy sits in front of the app — confirmed
-  `backend/main.ts` has no `app.set('trust proxy', ...)` call. No live impact today (nothing
-  is deployed; `k8s/helm/`'s `Ingress` is disabled by default with no committed
-  ALB/nginx choice), but the moment `Ingress` is turned on, every external client's `req.ip`
-  resolves to the proxy's own address, collapsing the per-client 5/minute (`auth`) and
-  15/minute (`upload`) buckets ([ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
-  into one bucket shared by every visitor. Not fixed now — the correct `trust proxy` value
-  (a hop count or explicit proxy CIDR) depends on whichever ingress/load-balancer topology
-  is chosen when `Ingress` is actually enabled, which hasn't happened; revisit alongside
-  that task, not before
+- ~~Rate limiting keys on `req.ip`, and `trust proxy` is unset~~ — **resolved 2026-09-14**
+  ([ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md) 2026-09-10 addendum, found that
+  day; 2026-09-14 addendum resolves it): `ThrottlerGuard`'s default tracker reads Express's
+  own client-socket resolution, not the real originating client, once a reverse proxy sits
+  in front of the app — confirmed `backend/main.ts` had no `app.set('trust proxy', ...)`
+  call. Fixed with `app.set('trust proxy', '10.0.0.0/16')` — the CIDR is this project's own
+  VPC block (`cluster/main.tf`'s `vpc_cidr`, the same constant ADR 0056's NetworkPolicy
+  egress rule already reuses), chosen over a bare hop count (`trust proxy: 1`) because a
+  hop count trusts `X-Forwarded-For` regardless of who actually connected, while a CIDR only
+  extends trust to a connection whose real socket peer is inside the VPC — closing the gap
+  a hop count would leave if the app were ever reachable by a path that bypasses the ALB.
+  This is a **design decision made without a live deploy** — this project's committed target
+  shape (ADR 0034, the 2026-09-13 Ingress annotation work) is exactly one ALB implementing
+  `Ingress` directly with no CDN/second proxy layer in front, which is enough to fix the
+  value on paper, the same way ADR 0034 itself was design-only. Dev/local impact verified
+  (not just reasoned about) against `proxy-addr` — a loopback connection with a forged
+  `X-Forwarded-For` still resolves to `127.0.0.1`, so local `pnpm start:dev` behavior is
+  unchanged; `pnpm lint`/`pnpm test` (278/278) both pass. Honest residual, same posture as
+  ADR 0058: whether a live ALB's actual connecting peer really lands inside `10.0.0.0/16`
+  is unverified without the AWS stack applied again — revisit next time it is (ROADMAP.md §9)
 - ~~Secret/hash-rounds Joi validation checked presence only, not strength~~ —
   **resolved 2026-09-11**: a security review found `HASH_ROUNDS`/`ACCESS_TOKEN_SECRET`/
   `REFRESH_TOKEN_SECRET` in `backend/app.module.ts`'s Joi schema validated only that a
@@ -1432,6 +1481,140 @@ Architecture Decisions above remain operative.
   missing-symbol, low-hash-rounds, and a valid baseline) and confirmed each
   failed/passed exactly as designed, without the real `.env` ever being read or its
   values ever appearing in output
+- ~~`register()`'s password went to bcrypt with no strength check~~ — **resolved
+  2026-09-11**: a security review found `backend/auth/auth.service.ts`'s `register()`
+  passed the Basic-token password straight into `bcrypt.hash()` with no length or
+  complexity check — an empty string hashed and saved successfully. Registration
+  bypasses DTOs/the global `ValidationPipe` entirely (Basic-token parsing, ADR 0001),
+  so `CreateUserDto`'s `@IsNotEmpty()`/`@IsString()` never ran against this path.
+  `register()` now rejects anything under 10 characters or missing a lowercase letter,
+  an uppercase letter, a digit, or a symbol with a new 400 `AUTH_WEAK_PASSWORD`
+  (`backend/common/error-code.ts`), checked before the email-uniqueness lookup — the
+  same character-class posture the secret-strength entry above just adopted, with the
+  length dropped from 32 to 10 since a password is typed by a human, not generated by
+  a machine. Both the policy (length + full character-class mix over length-only) and
+  the new error code (over reusing `AUTH_INVALID_CREDENTIALS`) were confirmed with the
+  developer via a comparison table before implementation (Clarification Protocol).
+  `signIn`/`parseBasicToken` are deliberately untouched — enforcing this on login would
+  lock out any pre-existing account whose password predates the rule. `auth.service.spec.ts`
+  covers six rejection shapes (too short, each missing character class, empty);
+  `pnpm lint` clean, unit suite 270/270. **Live-verified same day**: a throwaway e2e spec
+  (`test/e2e-utils.ts`'s isolated `sharenpo_e2e` DB, real HTTP via supertest against a real
+  migrated Postgres, deleted after the run) hit `POST /auth/register` with an empty, a
+  too-short, and a symbol-missing password (each 400 `AUTH_WEAK_PASSWORD`), a strong
+  password (201, no `password` field in the response), and a same-email repeat (400
+  `AUTH_EMAIL_TAKEN`, confirming the strength check runs before and doesn't short-circuit
+  the uniqueness check) — all 5 passed against real bcrypt hashing and a real DB round-trip
+- ~~`k8s/helm/templates/` had no `NetworkPolicy` resource — nothing restricted
+  east-west (pod-to-pod) traffic inside the cluster~~ — **resolved 2026-09-11**
+  ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.md), extends ADR 0041): a
+  security review found no traffic-restriction mechanism between pods once the app is
+  deployed. `templates/networkpolicy.yaml` (gated by `networkPolicy.enabled`, default
+  `false`, mirroring `ingress.yaml`/`servicemonitor.yaml`'s pattern) restricts the app
+  pod's ingress to same-namespace pods only and default-denies egress except DNS
+  (CoreDNS), DB (`networkPolicy.egress.vpcCidr:dbPort`, default `10.0.0.0/16:5432`
+  matching `cluster/main.tf`'s `var.vpc_cidr`), and HTTPS/443 (S3/AWS API — no VPC
+  endpoint exists to scope this further). `values-prod.yaml` turns it on, but it's
+  currently inert against the real (torn-down) EKS target: `cluster/main.tf`'s `vpc-cni`
+  addon doesn't enable the VPC CNI Network Policy enforcement agent yet — a separate,
+  unscheduled Terraform task. **Live-verified 2026-09-11** against a throwaway `kind`
+  cluster with Calico installed (`kind`'s own CNI doesn't enforce `NetworkPolicy`) and a
+  throwaway `postgres:16` standing in for RDS: `helm install --wait` succeeded (kubelet's
+  liveness/readiness probes — which check DB connectivity, ADR 0031 — reached the pod
+  despite the ingress restriction), `/health/live`/`/health/ready`/`/doc` all answered
+  `200` from a same-namespace pod, a cross-namespace pod's request timed out (ingress
+  restriction confirmed real), and a same-labels pod's request to an already-allowed host
+  on a non-allowlisted port also timed out (egress default-deny confirmed real, not just
+  "the three allowed paths happen to work"). This does not prove identical behavior once
+  AWS's own Network Policy agent — a different enforcement engine than Calico — is what's
+  actually running; re-verify probes before ever enabling that agent for real (ADR 0056 D2/D4)
+- `register()` discloses `AUTH_EMAIL_TAKEN` while `validateUser()` deliberately hides why a
+  login failed — found in the 2026-09-09 security review alongside the two `register()`/Joi
+  strength entries above, **reviewed 2026-09-12, decided: accept as-is** (Principle Conflict
+  Protocol — "account enumeration prevention" vs. "tell the user why signup failed").
+  Compatibility check confirmed `AUTH_EMAIL_TAKEN` is a live, tested contract, not a
+  hypothetical one: `frontend/src/features/auth/LoginPage.tsx`'s `messageForError` branches
+  on it to show "That email is already registered — try signing in.", and both
+  `frontend/e2e/auth.spec.ts` and `test/app.e2e-spec.ts` assert the code directly — hiding it
+  would break both with no replacement UX designed. Three paths were weighed: (1) accept
+  as-is; (2) keep the response but tighten `POST /auth/register`'s existing 5/minute throttle
+  (ADR 0054) further; (3) eliminate enumeration entirely via an email-verification flow. (3)
+  was rejected — this project has no email-sending infrastructure, so closing the gap fully
+  means a new external integration (its own Retry Limits/Timeout design), a
+  pending-registration schema/migration, and rewriting both e2e suites, for a gap whose
+  real-world exposure is low (registration-time enumeration doesn't itself grant access,
+  unlike a login/password oracle, and is commonly treated as low-severity). (2) was also
+  rejected: the throttle keys per-IP, so lowering it further mostly slows a single-source
+  scan while barely inconveniencing a distributed one, and trades that for a real chance of
+  blocking a genuine user's retry-after-typo. (1) was chosen — the existing 5/minute throttle
+  stays as the only mitigation. No ADR was written for this one: unlike ADR 0052/0055/0056,
+  nothing in the codebase changed, and the closest precedent (Chat-project remnant handling,
+  License mismatch, both above) recorded a similar "reviewed, decided to leave as-is" call
+  here rather than in its own ADR. Revisit if the project gains real deployed users and a
+  concrete signal (abuse reports, credential-stuffing correlation) that this is being
+  exploited in practice.
+- ~~`k8s/helm/templates/ingress.yaml`'s only path rule was a single `/` catch-all~~ —
+  **resolved 2026-09-13** ([ADR 0058](docs/ADR/0058-ingress-path-allowlist.md), extends
+  ADR 0041): a 2026-09-09 security review found that the moment `ingress.enabled` is
+  ever turned on, that one rule would route `/health/*`, `/metrics`, and `/doc` — none
+  of which carry any authentication — to the public ALB with no exception.
+  `values.yaml`'s `ingress.hosts[].paths` is now an explicit allow-list of the app's real
+  controller prefixes (`/auth`, `/user`, `/post`, `/comment`, `/file`, `/upload`,
+  `/audit-log`); `/health`, `/metrics`, and `/doc` are excluded by omission — the first
+  two because kubelet/Prometheus never reach the app through Ingress in the first place,
+  the third because the "let external reviewers browse it" benefit was weighed against
+  its "no auth gate" risk and found thin (portfolio/interview review happens mostly via
+  reading the repo or a live demo, not a cold public Swagger visit) and decided against.
+  An ALB-specific fixed-response reject-rule alternative was considered and rejected —
+  it would depend on aws-load-balancer-controller's rule-priority ordering, which has
+  open reports of being unreliable, and there is no live ALB to verify it against
+  (all three Terraform states destroyed 2026-08-28). `templates/ingress.yaml` needed no
+  changes; `helm lint`/`helm template` confirm the rendered rules. `ingress.enabled`
+  stays `false` and `values-prod.yaml` is untouched — turning Ingress on for real still
+  needs its own host/TLS/ALB-annotation work, at which point `values-prod.yaml` must
+  redeclare the full `paths` list too (Helm doesn't merge arrays across `-f` layers, now
+  documented in `values.yaml`'s comment).
+- ~~Upload malware scanning~~ — **resolved 2026-09-14** ([ADR
+  0059](docs/ADR/0059-upload-malware-scanning-clamav.md)): a 2026-09-13 review found the
+  upload pipeline's extension/mimetype allowlist never inspects file content. Considered
+  and rejected: AWS GuardDuty Malware Protection for S3 (async — would force a new
+  `FileEntity` scan-status column, a schema change this decision doesn't need), ClamAV
+  packaged as a Lambda (real added implementation cost without removing the
+  signature-maintenance burden), and third-party scan APIs — VirusTotal/Cloudmersive (send
+  user-uploaded file bytes to an outside vendor, the first such case this project would
+  accept). Landed: a `ScanService` (wrapping `clamscan`) scanning the in-memory buffer
+  inside `UploadService.stageTemp()` before any temp write, failing closed on scanner
+  unavailability — see Architecture Decisions > File Storage for the summary. Deliberately
+  not filed as a plain "reviewed, left as-is" gap like the account-enumeration entry above:
+  the correct deferral trigger here is "before this app is ever reachable from the public
+  internet" (anonymous upload+share abuse is bot-driven, not tied to having real users), and
+  recent deploy-readiness work (ADR 0056 NetworkPolicy, ADR 0057 Terraform state backend,
+  ADR 0058 Ingress path allow-list) was closing in on that boundary — so the decision was
+  made and implemented in the same session rather than deferred. **Live-verified 2026-09-14**
+  against a real `clamd` (`docker compose up clamav`): clean buffer passes, an EICAR test
+  buffer is correctly detected (`Eicar-Test-Signature`), a 100MB buffer scans in ~5.97s
+  (within the 8s per-attempt timeout), and the fail-closed path reproduces
+  `ScanUnavailableError` after 2 attempts (~212ms) when the scanner is unreachable.
+  **CI-verified 2026-09-14**: the new `clamav` service containers worked correctly in
+  `e2e`/`frontend-e2e` on the first real GitHub Actions run
+  ([34825693680](https://github.com/Bluecode77732/Upload-Board-Project/actions/runs/34825693680));
+  `admin-e2e` failed there too, but on `AUTH_WEAK_PASSWORD` — an unrelated pre-existing
+  bug (`admin/e2e/helpers.ts`'s fixture password predates the 2026-09-11 strength rule
+  and had no symbol character), fixed separately; all 7 jobs passed on the next run
+  ([34829671565](https://github.com/Bluecode77732/Upload-Board-Project/actions/runs/34829671565)).
+  **`kind`+Calico-verified 2026-09-15** (ADR 0056's recipe, `k8s/helm/README.md`):
+  `helm install --wait` succeeds with both the app and `clamav` Deployments reaching
+  Ready, and the new `clamav`-egress `NetworkPolicy` rule actually opens the hole it's
+  meant to (`nc -zv` from an app-labeled pod to the `clamav` Service succeeds) while
+  cross-namespace ingress and non-allowlisted egress stay genuinely blocked (timeouts,
+  not refusals). One methodology note worth keeping: an initial pass tested the
+  `clamav` connection with `curl telnet://...`, which misreported a working connection
+  as blocked — clamd never speaks first, so curl's telnet mode just times out waiting
+  for a response that isn't coming; `nc -zv` (TCP handshake only, no protocol
+  assumptions) is the correct tool for probing a port like this. Only AWS's own VPC CNI
+  Network Policy enforcement agent (a different engine than Calico) stays genuinely
+  AWS-only-verifiable — the same residual ADR 0056 already carries, not a new one
+  (ROADMAP.md §9)
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for

@@ -60,19 +60,44 @@ k8s/infra/terraform/
    (`external_secrets_secrets_manager_arns`) 읽습니다. `app-infra/`가
    존재하기 전에는 이 state를 먼저 apply할 수 없는 이유입니다.
 
-`app-infra/`와 `addons/`의 `terraform_remote_state`는 생성한 state
-디렉터리를 가리키는 상대 경로와 함께 `backend = "local"`을 씁니다
-(`../cluster/terraform.tfstate` 등) — 팀/CI 공유용 백엔드가 아니라 개발자
-1인의 편의를 위한 선택입니다(ADR 0044 D3). 아래 명령은 표시된 디렉터리
-안에서 각각 실행하세요; `terraform init`도 세 곳에서 각각 따로 실행해야
-합니다.
+각 state 자신의 `terraform.tfstate`, 그리고 `app-infra/`/`addons/`가 다른
+state의 출력값을 읽는 `terraform_remote_state`도 Terraform 기본값인 로컬
+파일이 아니라 네이티브 락 + SSE-S3 암호화를 쓰는 S3 버킷에 저장됩니다
+([ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.ko.md),
+ADR 0044 D3의 원래 "local, 두 번째 개발자나 CI 파이프라인이 필요해지면
+재검토"라는 입장을 수정함 — 2026-09-09 보안 점검에서 `app-infra/`가 생성한
+시크릿이 로컬 state 파일에 평문으로 남는다는 사실을 발견해서, 더 일찍
+전환할 가치가 생겼습니다). DynamoDB 테이블도, KMS 키도 없습니다 — S3의
+네이티브 `use_lockfile`(Terraform 1.11에서 GA)과 무료 SSE-S3만으로 락과
+암호화를 둘 다 해결합니다 — 이유는 ADR을 참고하세요(이 AWS 계정에는 사람
+주체가 1명뿐이라 KMS의 접근 분리 가치가 아직 적용되지 않습니다 — 언제
+재검토할지는 D6에 정해 둠). 아래 명령은 표시된 디렉터리 안에서 각각
+실행하세요; `terraform init`도 세 곳에서 각각 따로 실행해야 하고, 이제
+매번 `-backend-config="bucket=<value>"`가 필요합니다(아래 부트스트랩 단계
+참고).
 
-**향후 계획**: 두 번째 개발자나 CI 파이프라인이 이 설정을 apply해야 하는
-시점이 오면, 각 state의 `backend "local"`을 원격 backend(S3 + DynamoDB
-락, 또는 Terraform Cloud)로 옮깁니다 — 지금은 의도적으로 하지 않은
-상태이며(ADR 0044 D3, 기각된 대안), [ROADMAP.md
-7절](../../../docs/ROADMAP.ko.md#7-미일정--미결-사항)에 미예정 작업으로
-기록돼 있습니다.
+**이 변경 이후 첫 `apply` 전 1회성 부트스트랩**: `backend "s3" {}` 블록이
+가리키는 S3 버킷은 `terraform init`이 쓰기 전에 먼저 존재해야 합니다 —
+Terraform이 자기 자신의 backend를 만들어주지는 않습니다. 이건 수동으로
+한 번만 하는 작업입니다(일부러 네 번째 Terraform root 모듈로 만들지
+않았습니다 — ADR 0057 기각된 대안), apply마다 반복하지 않습니다:
+
+```sh
+aws s3api create-bucket --bucket <전역적으로-유일한-tfstate-버킷-이름> \
+  --region ap-northeast-2 \
+  --create-bucket-configuration LocationConstraint=ap-northeast-2
+aws s3api put-bucket-versioning --bucket <그-버킷-이름> \
+  --versioning-configuration Status=Enabled
+aws s3api put-public-access-block --bucket <그-버킷-이름> \
+  --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+```
+
+그다음 세 디렉터리 각각에서 `terraform init -backend-config="bucket=<그-버킷-이름>"`을
+실행하세요(또는 `deploy.sh`를 쓴다면 `TFSTATE_BUCKET_NAME=<그-버킷-이름>`을
+설정 — 아래 모든 `deploy.sh` 명령이 이미 이 값을 기대합니다). 이 버킷은
+계속 유지되어야 합니다 — 아래 EKS/RDS 스택처럼 검증 후 지우는 대상이
+아닙니다(왜 그렇게 하지 않기로 했는지는 ADR 0057 기각된 대안 참고).
 
 ## 아무거나 `apply`하기 전에 준비할 것
 
@@ -110,11 +135,17 @@ k8s/infra/terraform/
 2. **전역적으로 유일한 S3 버킷 이름** — `app-infra/`의
    `var.s3_bucket_name`에 넣을 값으로, 버킷 이름은 계정을 넘어 AWS
    전체에서 충돌합니다.
-3. **필요한 권한을 가진 AWS 자격증명**(EKS/RDS/S3/IAM/Route53/ACM 생성
+3. **Terraform state 저장용으로 별도의, 전역적으로 유일한 S3 버킷**
+   (`TFSTATE_BUCKET_NAME` / `-backend-config="bucket=..."` /
+   `var.tfstate_bucket_name`) — 위 1회성 부트스트랩 단계 참고
+   ([ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.ko.md)).
+   위 `s3_bucket_name`과 같은 버킷이면 안 됩니다(그건 앱이 업로드한
+   미디어용이지 Terraform state용이 아닙니다).
+4. **필요한 권한을 가진 AWS 자격증명**(EKS/RDS/S3/IAM/Route53/ACM 생성
    권한)과 로컬에 설치된 `aws`/`kubectl`/`helm` CLI — `addons/`의
    `kubernetes`/`helm` provider가 내부적으로 `aws eks get-token`을
    실행합니다.
-4. **`region`/`cluster_name`은 세 state의 `.tfvars`/`-var` 값이 모두
+5. **`region`/`cluster_name`은 세 state의 `.tfvars`/`-var` 값이 모두
    일치해야 합니다.** 이 값들은 `terraform_remote_state`로 자동 공유되지
    않는 순수 변수입니다 — `cluster/`에 준 것과 다른 `cluster_name`을
    `app-infra/`에 주면 plan은 성공하지만 리소스 이름/태그가 서로 어긋난
@@ -127,6 +158,7 @@ k8s/infra/terraform/
 
 ```sh
 cd k8s/infra/terraform
+export TFSTATE_BUCKET_NAME=<전역적으로-유일한-tfstate-버킷-이름>  # 위에서 1회성 부트스트랩한 값
 
 # 1. cluster
 bash deploy.sh cluster
@@ -207,12 +239,12 @@ plan을 다시 보여주고 여전히 명시적 `y` 확인을 받은 뒤에만 �
 ```sh
 # 1. cluster/
 cd cluster
-terraform init
+terraform init -backend-config="bucket=<전역적으로-유일한-tfstate-버킷-이름>"
 terraform apply
 
 # 2. app-infra/ — terraform_remote_state로 cluster/의 state를 읽는다
 cd ../app-infra
-terraform init
+terraform init -backend-config="bucket=<전역적으로-유일한-tfstate-버킷-이름>"
 # 아래 apply는 Route53 zone을 새로 만들고, 같은 실행 안에서 ACM이 그 zone을
 # 상대로 DNS 검증을 마칠 때까지 대기한다 — 등록기관 네임서버가 이 새 zone을
 # 가리키기 전까지는 계속 멈춰 있는다. zone은 이 apply가 만들기 전엔 존재하지
@@ -228,12 +260,13 @@ terraform init
 # 안 가리키니 등록기관에서 다시 교체해야 합니다.
 terraform apply \
   -var="s3_bucket_name=<전역적으로-유일한-버킷-이름>" \
-  -var="domain_name=<본인-도메인>"
+  -var="domain_name=<본인-도메인>" \
+  -var="tfstate_bucket_name=<전역적으로-유일한-tfstate-버킷-이름>"
 
 # 3. addons/ — cluster/와 app-infra/의 state를 모두 읽는다
 cd ../addons
-terraform init
-terraform apply
+terraform init -backend-config="bucket=<전역적으로-유일한-tfstate-버킷-이름>"
+terraform apply -var="tfstate_bucket_name=<전역적으로-유일한-tfstate-버킷-이름>"
 ```
 
 세 state 어느 변수도 비밀값을 직접 받지 않습니다 — Helm 차트의
@@ -273,9 +306,9 @@ state 파일 안에만 존재합니다(ADR 0043 D7/D8).
   타입)를 고치고 `terraform apply`를 다시 실행하면 실패한 노드그룹만
   교체됩니다.
 - **`Error: Error acquiring the state lock`** — `terraform apply`가
-  중간에 끊겼을 때(예: Ctrl-C) 로컬 backend가 정상적으로 lock을 못 풀고
-  파일로 남기는 경우입니다. 에러 메시지 자체에 lock ID가 찍혀 나오니
-  그대로 씁니다:
+  중간에 끊겼을 때(예: Ctrl-C) S3 backend의 네이티브 락(`use_lockfile`,
+  ADR 0057)이 정상적으로 안 풀리고 state 버킷 안에 `.tflock` 객체로 남는
+  경우입니다. 에러 메시지 자체에 lock ID가 찍혀 나오니 그대로 씁니다:
   ```sh
   terraform force-unlock <LOCK_ID>
   ```
@@ -356,6 +389,26 @@ annotate하지 않고 대신 `sharenpo` ServiceAccount를 만들고 annotate함)
 같이 쓰면, 반대 방향으로 IRSA가 깨집니다 — Terraform 쪽과 Helm 쪽은 항상
 같은 커밋에서 함께 배포하세요.
 
+## 알려진 한계: NetworkPolicy가 아직 강제되지 않음(vpc-cni Network Policy 에이전트 꺼짐)
+
+`k8s/helm/`의 `templates/networkpolicy.yaml`([ADR
+0056](../../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md))은 앱 파드의
+east-west 트래픽을 제한하고, `values-prod.yaml`은 이미 `networkPolicy.enabled: true`로
+켜둔 상태입니다. 다만 `cluster/main.tf`의 `vpc-cni` 애드온은 기본 설정 그대로라
+(`cluster_addons = { vpc-cni = {} }`) VPC CNI의 Network Policy 강제 에이전트가 켜져
+있지 않습니다 — 지금 이대로 실제 EKS 클러스터에 적용해도 `NetworkPolicy` 오브젝트는
+생성되지만 강제되지는 않습니다.
+
+강제를 켜는 건 `cluster_addons.vpc-cni.configuration_values`를 바꿔
+`ENABLE_NETWORK_POLICY`를 설정하는 작업입니다 — 아직 하지 않았고, 이 ADR의 범위에도
+포함되지 않습니다. 실제 클러스터에 그 변경을 적용하기 전에는 AWS 자신의 Network
+Policy 에이전트 아래에서 `/health/live`/`/health/ready`가 여전히 통과하는지 반드시
+다시 검증하세요: ADR 0056이 이미 돌린 kind+Calico 검증은 정책의 모양이 맞다는 것만
+증명합니다 — Calico와 AWS 에이전트는 서로 다른 강제 엔진이고, 실제로 이 CNI에서
+NetworkPolicy가 liveness/readiness 프로브를 막은 사례
+(`aws/amazon-vpc-cni-k8s#2571`)가 보고돼 있습니다 — kind 결과를 그대로 가져다 쓰지
+마세요.
+
 ## ALB ingress 켜기
 
 Helm 차트의 `Ingress` 템플릿은 이미 만들어져 있지만 기본은 비활성입니다
@@ -371,8 +424,37 @@ helm upgrade sharenpo . \
   --set ingress.annotations."kubernetes\.io/ingress\.class"=alb \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/scheme"=internet-facing \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=$(terraform -chdir=../infra/terraform/app-infra output -raw acm_certificate_arn) \
-  --set ingress.hosts[0].host=<본인-도메인>
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
+  --set-json 'ingress.hosts=[{"host":"<본인-도메인>","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]'
 ```
+
+뒤의 두 annotation이 실제로 HTTP→HTTPS 강제 리다이렉트를 만드는 부분입니다(2026-09-13
+점검에서 이 레시피에 빠져 있던 걸 발견) — `listen-ports`를 명시하지 않으면 ALB
+Controller가 `ssl-redirect`가 리다이렉트할 대상인 80번 포트 리스너 자체를 열지 않으므로,
+`ssl-redirect` 하나만으로는 동작하지 않고 둘을 함께 설정해야 합니다. `hosts` 오버라이드도
+예전엔 `--set ingress.hosts[0].host=<본인-도메인>` 형태였는데, 같은 2026-09-13 점검에서
+찾아 함께 고쳤습니다 — `--set`은 배열 인덱스에 값을 줄 때 그 원소 전체를 병합이 아니라
+교체해버려서, `.host`만 오버라이드하면 실제 도메인은 들어가지만 **경로가 하나도 없는**
+`Ingress`가 조용히 렌더링됩니다(실제로 렌더링해서 확인함) — ADR 0058이 막으려던 바로 그
+"라우팅 규칙이 조용히 사라지는" 실패입니다. `--set-json`은 `hosts[0]` 객체 전체(도메인과
+ADR 0058 경로 목록 전부)를 한 번에 써 넣어 이 문제를 피합니다.
+
+명령줄에 `--set`을 매번 다시 치는 대신 체크인된 반복 가능한 형태를 쓰려면,
+`k8s/helm/values-prod.yaml`에 같은 설정(도메인, ADR 0058 경로 목록 전체, 위와 동일한
+annotation들)이 주석 처리된 템플릿으로 이미 준비돼 있습니다 —
+`k8s/helm/README.md`의 "Enabling HTTPS (Ingress)" 절 참고.
+
+이게 실제로 무슨 일을 하는지 끝까지 따라가 보면: 이 명령으로 만들어지는 `Ingress`
+객체는 ACM 인증서 ARN을 annotation으로 **표시만** 할 뿐, 그 자체로 AWS에 뭔가를
+만들지 않습니다. ALB Controller(`addons/`가 클러스터 안에 설치)가
+`ingressClassName: alb`인 `Ingress` 객체를 지켜보다가 그 annotation을 읽고, AWS
+API를 직접 호출해 인증서가 이미 HTTPS 리스너에 붙은 상태의 진짜 ALB를 만듭니다 —
+"ALB부터 만들고 인증서는 따로 붙이는" 두 단계가 아니라 한 번에 됩니다. 그 AWS API
+호출 자체가 로드밸런서의 배포이고, "AWS 쪽"에서 별도로 뭔가 더 일어나지 않습니다.
+그 이후 런타임에서는, 사용자의 브라우저가 그 ALB에 HTTPS로 접속하고 — ALB →
+Service → Pod 구간은 ADR 0034의 트러스트 바운더리에 따라 클러스터 내부망 안에서
+평문 HTTP로 남습니다.
 
 ## 각 state가 만드는 것
 
@@ -435,12 +517,13 @@ terraform state show aws_route53_zone.app | grep '  name '  # -> 도메인 이�
 
 ```sh
 cd addons
-terraform destroy
+terraform destroy -var="tfstate_bucket_name=<tfstate-버킷-이름>"
 
 cd ../app-infra
 terraform destroy \
   -var="s3_bucket_name=<위에서 읽은 값>" \
-  -var="domain_name=<위에서 읽은 값>"
+  -var="domain_name=<위에서 읽은 값>" \
+  -var="tfstate_bucket_name=<tfstate-버킷-이름>"
 
 cd ../cluster
 terraform destroy
@@ -456,10 +539,11 @@ terraform destroy
 쓰세요:
 
 ```sh
-cd addons       && terraform destroy -auto-approve
+cd addons       && terraform destroy -auto-approve -var="tfstate_bucket_name=<tfstate-버킷-이름>"
 cd ../app-infra && terraform destroy -auto-approve \
   -var="s3_bucket_name=<위에서 읽은 값>" \
-  -var="domain_name=<위에서 읽은 값>"
+  -var="domain_name=<위에서 읽은 값>" \
+  -var="tfstate_bucket_name=<tfstate-버킷-이름>"
 cd ../cluster   && terraform destroy -auto-approve
 ```
 

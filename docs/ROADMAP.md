@@ -436,7 +436,7 @@ the status of each is scannable rather than buried in prose (as of 2026-08-18). 
 | **Migration as a separate step** | Deploy safety | 🔶 compose ✅ / K8s Job 🆕 | `docker-compose.yml`'s one-shot `migrate` service models the eventual **Kubernetes Job**, so a scaled `api` never races `migration:run`. The K8s Job itself is pending. | [0032](ADR/0032-migration-as-separate-deploy-step.md) |
 | **Kubernetes** | Orchestration | ✅ currently deployed | The standalone static manifests formerly under `k8s/pod/`, `k8s/deployment/`, `k8s/cluster/` were deleted 2026-08-17 ([0042](ADR/0042-k8s-helm-directory-consolidation.md)) — they duplicated a strict subset of what the Helm chart below already renders, with no consumer of their own (no CI job, no compose reference). The Kubernetes manifests now exist only as the Helm chart's `templates/` (`k8s/helm/`). The live cluster deploy (on AWS) landed 2026-08-27 (§9) — then the underlying cluster was destroyed 2026-08-28 (§9) once that was proven. **Re-applied 2026-08-29/30** for [ADR 0047](ADR/0047-observability-prometheus-grafana.md) D4's live verification — `kubectl get nodes` shows 2 `Ready` nodes, confirmed live at the time of this edit. `bash k8s/infra/terraform/deploy.sh all` reproduces it; treat this cell as a snapshot, re-verify with `kubectl get nodes` before trusting it. | commit `48a89f2`, [0041](ADR/0041-helm-chart-project-adaptation.md), [0042](ADR/0042-k8s-helm-directory-consolidation.md) |
 | **Secrets delivery** | Secrets | ✅ code + currently running | Target decided: native **Kubernetes `Secret`**, synced from **AWS Secrets Manager** by External Secrets Operator via IRSA. The Helm chart implements the consumption side (`existingSecret` reference + `envFrom.secretRef`, 2026-08-17); the Terraform side ([0043](ADR/0043-terraform-project-adaptation.md) D7, 2026-08-18) provisions the Secrets Manager entry and ESO's install + IRSA role (via `eks_blueprints_addons`'s `enable_external_secrets`). Confirmed working live 2026-08-27, then destroyed 2026-08-28 (§9). **Re-applied 2026-08-29/30**: `external-secrets` Helm release confirmed `deployed` (`helm list -A`), app pod running and authenticating against RDS/signing tokens as of this edit — the mechanism is standing again, not merely proven once. | [0033](ADR/0033-secrets-delivery-target.md), [0041](ADR/0041-helm-chart-project-adaptation.md), [0043](ADR/0043-terraform-project-adaptation.md) |
-| **HTTPS termination** | TLS | 🔶 code ready, deliberately not enabled | Terminate at **ingress / ALB**, never in-process (the `Secure` refresh cookie needs it when `ENV=prod`, which the live release already ran as — `values.yaml`'s default). The Helm chart's `Ingress` template exists but stays disabled by default (`ingress.enabled: false`); while the stack was live, the cluster, the registered domain, and the cert were all real (see next sentence), so the gap was a deliberate developer choice, not a missing dependency — the developer confirmed 2026-08-27 (§9) that `Ingress` stays off until an outside tester actually needs external access. The cert mechanism is decided and coded: **ACM**, DNS-validated against a Terraform-provisioned Route53 zone ([0043](ADR/0043-terraform-project-adaptation.md) D4/D5, 2026-08-18) for `sharenpo.cloud` — it reached `ISSUED` before the whole stack, cert included, was destroyed 2026-08-28 (§9). The ARN pattern is ready for the Ingress's `certificate-arn` annotation whenever a future cert is issued. | [0034](ADR/0034-https-termination-stance.md), [0041](ADR/0041-helm-chart-project-adaptation.md), [0043](ADR/0043-terraform-project-adaptation.md) |
+| **HTTPS termination** | TLS | 🔶 code ready, deliberately not enabled | Terminate at **ingress / ALB**, never in-process (the `Secure` refresh cookie needs it when `ENV=prod`, which the live release already ran as — `values.yaml`'s default). The Helm chart's `Ingress` template exists but stays disabled by default (`ingress.enabled: false`); while the stack was live, the cluster, the registered domain, and the cert were all real (see next sentence), so the gap was a deliberate developer choice, not a missing dependency — the developer confirmed 2026-08-27 (§9) that `Ingress` stays off until an outside tester actually needs external access. The cert mechanism is decided and coded: **ACM**, DNS-validated against a Terraform-provisioned Route53 zone ([0043](ADR/0043-terraform-project-adaptation.md) D4/D5, 2026-08-18) for `sharenpo.cloud` — it reached `ISSUED` before the whole stack, cert included, was destroyed 2026-08-28 (§9). The ARN pattern is ready for the Ingress's `certificate-arn` annotation whenever a future cert is issued. **2026-09-13**: the annotation set is now complete and checked in — `k8s/helm/values-prod.yaml` carries a commented-out `ingress` block (host, the full ADR 0058 path list, `certificate-arn`/`listen-ports`/`ssl-redirect`), and the `helm upgrade --set ...` recipe in `k8s/infra/terraform/README.md` gained the `listen-ports`/`ssl-redirect` pair it was missing (without `listen-ports`, the ALB Controller never opens the port-80 listener `ssl-redirect` needs). Still deliberately `ingress.enabled: false` — this reduces mistakes for whenever it is eventually flipped, it does not change the status; verified only via `helm lint`/`helm template` (no live cluster exists), which proves the rendered YAML is correct but not that the ALB Controller actually acts on it. **Pending, explicit**: `k8s/helm/README.md`'s "Enabling HTTPS (Ingress)" section now names three checks (both ALB listeners exist, `curl` gets a real 301/302 redirect, the browser trusts the cert) that have to be run for real once this is ever flipped on — not yet possible with no live ALB Controller to test against. | [0034](ADR/0034-https-termination-stance.md), [0041](ADR/0041-helm-chart-project-adaptation.md), [0043](ADR/0043-terraform-project-adaptation.md), [0058](ADR/0058-ingress-path-allowlist.md) |
 | **Helm** | Release packaging | ✅ chart ready / ✅ release currently installed | Lives at `k8s/helm/` (moved from a sibling `helm/upload-board-project/` directory and then flattened one level further 2026-08-17, [0042](ADR/0042-k8s-helm-directory-consolidation.md), so Kubernetes-related content has one top-level home with no redundant nesting). Project-adapted 2026-08-17 ([0041](ADR/0041-helm-chart-project-adaptation.md), lifting [0037](ADR/0037-helm-chart-scaffold.md)'s deferral): real image/port, `/health/live`+`/health/ready` probes, non-root `securityContext`, a `ConfigMap`, `existingSecret`-only `Secret` consumption, a migration `Job` mirroring `docker-compose.yml`'s `migrate` service, and a disabled-by-default `Ingress`. `replicaCount` defaults to 1 (`STORAGE_DRIVER=local` loses uploaded files across replicas above 1; the live release ran `s3` for exactly this reason). `helm install --wait` verified against a throwaway local `kind` cluster (2026-08-17 addendum to [0041](ADR/0041-helm-chart-project-adaptation.md)) — found and fixed 2 real bugs (hook ordering, empty-string env vars). Installed against the real target cluster 2026-08-27, then uninstalled with the rest of the stack 2026-08-28 (§9). **Re-applied 2026-08-29/30** (chart bumped to `0.3.0` for [ADR 0047](ADR/0047-observability-prometheus-grafana.md)'s `ServiceMonitor` template) — `helm list -A` shows `upload-board` release `deployed` as of this edit. Reproducible via `bash k8s/infra/terraform/deploy.sh all`. | [0037](ADR/0037-helm-chart-scaffold.md), [0041](ADR/0041-helm-chart-project-adaptation.md), [0042](ADR/0042-k8s-helm-directory-consolidation.md) |
 | **Prometheus** | Metrics collection | ✅ landed, live-verified | [ADR 0047](ADR/0047-observability-prometheus-grafana.md): self-hosted via `eks_blueprints_addons`'s `enable_kube_prometheus_stack` flag (kube-prometheus-stack chart), scraping the app through a `ServiceMonitor` targeting a new `prom-client`-based `/metrics` endpoint (`MetricsModule`). Live-verified 2026-08-29/30 (ADR 0047 D4 Addendum): `up{job="upload-board"}` → `1`, custom counters (`upload_claims_total`, `temp_cleanup_deleted_total`) and the global `http_request_duration_seconds` histogram all present in query results. | [0047](ADR/0047-observability-prometheus-grafana.md), on [0017](ADR/0017-logging-conventions.md) |
 | **Grafana** | Dashboards | ✅ landed, live-verified | [ADR 0047](ADR/0047-observability-prometheus-grafana.md): bundled with the same `kube-prometheus-stack` Helm release as Prometheus (D3 — one combined decision, one Helm release). No custom dashboards provisioned yet — the default `kube-prometheus-stack` dashboards ship as-is. Live-verified 2026-08-29/30: `GET /api/datasources` lists a working `Prometheus` datasource, auto-provisioned by the chart with no manual wiring. | [0047](ADR/0047-observability-prometheus-grafana.md) |
@@ -931,15 +931,25 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   in the reachable dev DB, so there is nothing left to prune and no decision left to make.
   Note this was always the *dev* database only; nothing here indicated a production data
   path.
-- Terraform remote state backend (recorded 2026-08-19,
-  [ADR 0044](ADR/0044-terraform-three-state-split.md) D3) — **not started
-  because** the three-state split's `terraform_remote_state` reads use
-  `backend = "local"` deliberately, scoped to a single developer's own
-  `apply`/`destroy` cycles; introducing an S3+DynamoDB-lock (or Terraform
-  Cloud) remote backend now would be a second, unrequested scope expansion on
-  a config that has not yet been `apply`d against real AWS at all (ADR 0043
-  D1). Revisit once a second developer or a CI pipeline needs to `apply`
-  this configuration.
+- ~~Terraform remote state backend~~ (recorded 2026-08-19,
+  [ADR 0044](ADR/0044-terraform-three-state-split.md) D3) — **decided and
+  code-complete 2026-09-12, not applied**
+  ([ADR 0057](ADR/0057-terraform-state-backend-s3-native-lock.md), amends ADR
+  0044 D3). Revisited earlier than the original "second developer or CI
+  pipeline" trigger: a 2026-09-09 security review found `app-infra/`'s
+  generated secrets (`random_password.db`/`access_token_secret`/
+  `refresh_token_secret`) landing in plaintext in the local state file, and
+  switching while all three states are empty is the cheapest time to do it.
+  Backend moves to S3 with native locking (`use_lockfile`, GA in Terraform
+  1.11) and SSE-S3 encryption — not the DynamoDB+KMS shape originally
+  sketched here, since native locking removes the DynamoDB need entirely and
+  this AWS account has exactly one human principal, so KMS's IAM
+  decrypt/read separation buys nothing yet (ADR 0057 D2/D3). Escalating to
+  SSE-KMS is deferred to a precisely restated version of this row's original
+  trigger (ADR 0057 D6) — DynamoDB does not come back at that point, since
+  `use_lockfile` already scales with team size. Bucket creation and the
+  actual `terraform init -migrate-state` are deferred to real deployment
+  time — see `k8s/infra/terraform/README.md`'s bootstrap runbook.
 - Distroless runtime base (recorded 2026-08-08, [ADR 0030](ADR/0030-container-non-root-and-arch-stance.md))
   — **not started because** whether an exact Node 24 distroless tag
   (`gcr.io/distroless/nodejs24-debian12` or similar) even exists was never verified
@@ -1417,10 +1427,48 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   mistaken for abuse. e2e-verified against a live Postgres (76/76, no 429s), and a live 429
   fired against a running dev server confirmed both the limit and the per-route isolation
   (`GET /file` hitting its own ceiling left `POST /auth/signin` unaffected in the same
-  window). **Still open, left for a follow-up task**: per-route tuning (e.g. a tighter bound
-  specifically on `POST /auth/signin`) — this ADR deliberately settled only the global
-  default. Also open: Redis-backed `ThrottlerStorage`, needed only once this app actually
-  runs more than one replica (today's default storage counts per-instance).
+  window). ~~Still open, left for a follow-up task: per-route tuning~~ — **landed 2026-09-10**
+  ([ADR 0054](ADR/0054-per-route-rate-limit-tuning.md)): `POST /auth/register`/
+  `POST /auth/signin`/`POST /auth/token/refresh` tightened to 5/minute, `POST /upload/attach`
+  to 15/minute. That same ADR's live verification surfaced a second gap: `trust proxy` was
+  unset, so behind any reverse proxy every client's `req.ip` collapsed to the proxy's own
+  address, merging all visitors into one shared bucket. ~~Deferred pending an Ingress
+  topology decision~~ — **resolved 2026-09-14**: `backend/main.ts` now trusts
+  `X-Forwarded-For` only from connections inside this project's own VPC CIDR (`10.0.0.0/16`
+  — ADR 0054's 2026-09-14 addendum), a design decision made without a live deploy (this
+  project's already-committed ALB-direct-with-no-CDN target shape, ADR 0034, was enough to
+  fix the value on paper). Dev/local impact verified against `proxy-addr` directly; whether a
+  live ALB's connecting peer actually lands inside that CIDR stays unverified until the AWS
+  stack is applied again (§9) — see that addendum for the honest residual. Also open:
+  Redis-backed `ThrottlerStorage`, needed only once this app actually runs more than one
+  replica (today's default storage counts per-instance).
+- ~~Registration account enumeration~~ (found 2026-09-09 alongside the two rows above, **decided
+  2026-09-12: accept as-is**) — `POST /auth/register` discloses `AUTH_EMAIL_TAKEN` on a
+  duplicate email, while `POST /auth/signin`'s `validateUser` deliberately collapses "no such
+  account" and "wrong password" into one generic `AUTH_INVALID_CREDENTIALS` — the same
+  asymmetry pattern as the Superadmin row above (a security-review finding weighed against an
+  email-verification fix this project's current stage can't cheaply afford). Confirmed live
+  before deciding, not assumed: `frontend/src/features/auth/LoginPage.tsx`'s `messageForError`
+  branches on `AUTH_EMAIL_TAKEN` to show "That email is already registered — try signing in.",
+  and both `frontend/e2e/auth.spec.ts` and `test/app.e2e-spec.ts` assert the code directly —
+  hiding it breaks a live, tested UX contract, not a hypothetical one. Two stronger options were
+  weighed and declined: tightening `POST /auth/register`'s existing 5/minute throttle (ADR 0054)
+  further — keyed per-IP, so it mostly slows a single-source scan while barely touching a
+  distributed one, at real cost to a genuine user's retry-after-typo; and eliminating enumeration
+  outright via an email-verification flow — this project has no email-sending infrastructure, so
+  closing the gap fully means a new external integration (its own Retry Limits/Timeout design), a
+  pending-registration schema/migration, and rewriting both e2e suites, for a gap whose real-world
+  exposure is low (registration-time enumeration doesn't itself grant access, unlike a
+  login/password oracle). Accepted as-is — the existing 5/minute throttle stays the only
+  mitigation. Revisit if this project ever carries real, adversarial-facing traffic (same trigger
+  as the Superadmin row). Full record: CLAUDE.md > Known Gaps.
+- `docs/CHANGELOG.md`(+ko) is missing entries for [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.md)
+  (Superadmin manual promotion trigger) and [ADR 0054](ADR/0054-per-route-rate-limit-tuning.md)
+  (per-route rate-limit tuning) — found 2026-09-12 while adding the registration-enumeration row
+  above (a `grep` for a line-wrapped `[ADR\n0053]`-style link had initially misreported 0053/0055
+  as missing too; both are actually present, only 0052/0054 are not). Left unbackfilled — out of
+  scope for the task that found it. Backfill when explicitly requested, following the existing
+  `### Security`/`### Changed` entry format each ADR's section already uses.
 
 ## 8. Advisory notes
 

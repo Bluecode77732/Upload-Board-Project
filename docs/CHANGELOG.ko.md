@@ -13,6 +13,143 @@
 ## [Unreleased]
 
 ### 보안
+- **`trust proxy`를 앱의 VPC CIDR로 설정 (2026-09-14, [ADR
+  0054](ADR/0054-per-route-rate-limit-tuning.ko.md)의 2026-09-10 addendum 해결)** —
+  리버스 프록시 뒤에서는 `ThrottlerGuard`가 키로 쓰는 `req.ip`가 프록시 자신의 주소로
+  해석돼, 클라이언트당 분당 5회(`auth`)·15회(`upload`) 제한이 방문자 전원이 나눠 쓰는
+  버킷 하나로 무너지는 문제가 있었다. `backend/main.ts`의 `bootstrap()`이 이제
+  `app.set('trust proxy', '10.0.0.0/16')`를 호출한다 — 이 프로젝트 자신의 VPC CIDR
+  (`cluster/main.tf`의 `vpc_cidr`, ADR 0056의 NetworkPolicy egress 규칙이 이미 재사용
+  중인 값)이며, 단순 홉 수(`trust proxy: 1`) 대신 이걸 고른 이유는 CIDR이 실제 소켓
+  연결 주체가 VPC 안에 있을 때만 `X-Forwarded-For`를 신뢰해서, ALB를 우회하는 직접
+  연결에 대해 홉 수 방식이 남기는 허점을 막기 때문이다. 라이브 배포 없이, 이 프로젝트가
+  이미 확정한 "ALB 직결, CDN 없음" 목표 구조(ADR 0034, 2026-09-13의 Ingress 작업)만
+  근거로 내린 설계 결정이다. env var/스키마 변경 없음(이 값은 운영자가 조정하는 값이
+  아니라 배포 토폴로지에 고정된 값). dev/로컬 영향은 `proxy-addr`을 대상으로 직접
+  검증했다 — loopback 연결에 `X-Forwarded-For`를 위조해도 `127.0.0.1`로 그대로 해석됨;
+  `pnpm lint`/`pnpm test`(278/278) 통과. ADR 0058과 같은 정직성 기준으로 남기는 잔여
+  사항: 실제 ALB의 연결 주소가 정말 이 CIDR 안에 들어오는지는 AWS 스택을 다시 적용하지
+  않고는 검증 불가.
+- **업로드 악성코드 스캔 — 동기 ClamAV 게이트 ([ADR
+  0059](ADR/0059-upload-malware-scanning-clamav.ko.md), 2026-09-14)** — `POST
+  /upload/attach`의 확장자/mimetype 허용목록은 파일 내용물을 전혀 검사하지 않았다.
+  이제 `UploadService.stageTemp`가 temp 저장소에 뭔가 쓰이기 전에 새 `ScanService`
+  (`clamscan`으로 `clamd` 데몬에 TCP 접속)로 메모리 버퍼를 스캔한다 — 감염이면
+  400 `UPLOAD_MALWARE_DETECTED`, 스캐너에 연결할 수 없거나 타임아웃되면 검사를
+  건너뛰지 않고 503 `UPLOAD_SCAN_UNAVAILABLE`로 fail-closed(최대 2회 시도, 각
+  8초 제한 — Reliability > Retry Limits/Timeout이 실제로 적용되는 첫 사례).
+  `clamd`는 `k8s/helm/`에서 사이드카가 아니라 별도 Deployment+Service로 뜬다(앱
+  replica마다 시그니처 DB가 복제되는 걸 피하려고), 로컬에서는 새
+  `docker-compose.yml` 서비스로 동일하게 뜬다; `.github/workflows/ci.yml`의
+  `e2e`/`frontend-e2e`/`admin-e2e` 잡 각각에 `clamav` 서비스 컨테이너를 추가했다.
+  스키마 변경 없음. 실제 `clamd` 대상 라이브 검증 완료: EICAR 정탐, 정상 파일
+  통과, 100MB 버퍼 약 5.97초(8초 타임아웃 이내), 스캐너 접속 불가 시 약
+  212ms만에 fail-closed 재현.
+- **HTTPS Ingress annotation 템플릿 + 실제 `--set-json` 버그 수정 (2026-09-13, [ADR
+  0058](ADR/0058-ingress-path-allowlist.ko.md), [ADR 0034](ADR/0034-https-termination-stance.ko.md)
+  extends)** — 바로 아래 ADR 0058 항목이 열어둔 "host/TLS/ALB 어노테이션 작업이 따로
+  필요하다"는 공백을 마저 메웠다. `k8s/helm/values-prod.yaml`에 이제 실제 도메인, 일곱
+  경로 allow-list 전체, HTTP→HTTPS 강제 리다이렉트용
+  `certificate-arn`/`listen-ports`/`ssl-redirect` annotation까지 담은 주석 처리된
+  `ingress` 블록이 있다 — `ingress.enabled`는 여전히 `false`(개발자 결정 그대로).
+  `helm lint`/`helm template`로 검증하는 과정에서 `k8s/infra/terraform/README.md`에
+  이미 있던 `helm upgrade --set ingress.hosts[0].host=...` 레시피의 실제 재현 가능한
+  버그를 발견했다 — `--set`은 배열 인덱스에 값을 줄 때 그 원소 전체를 교체해버려서, 이
+  한 줄 명령이 실제 도메인은 넣지만 경로가 하나도 없는 `Ingress`를 조용히 렌더링하고
+  있었다 — 바로 ADR 0058이 막으려던 문제 그 자체다. `--set-json`으로 `hosts` 배열
+  전체를 넘기도록 고쳤고, 레시피에 빠져 있던 리다이렉트 annotation
+  (`listen-ports`+`ssl-redirect`)도 함께 추가했다. 코드 변경은 없음;
+  `k8s/helm/README.md`에 "Enabling HTTPS (Ingress)" 절을 새로 추가해 아직 충족되지 않은
+  두 선행 조건(`addons/`+`app-infra/` 재적용)을 문서화했다.
+- **Ingress 경로 allow-list — health·metrics·docs 차단 (2026-09-13, [ADR
+  0058](ADR/0058-ingress-path-allowlist.ko.md), ADR 0041 extends)** — 2026-09-09 보안
+  점검에서 `k8s/helm/templates/ingress.yaml`의 유일한 경로 규칙이 단일 `/` catch-all
+  이었다는 게 드러났다 — `ingress.enabled`를 언젠가 켜는 순간 `/health/*`, `/metrics`,
+  `/doc`을(셋 다 인증이 전혀 없는데도) 예외 없이 공개 ALB로 라우팅하게 된다.
+  `values.yaml`의 `ingress.hosts[].paths`는 이제 이 앱의 실제 컨트롤러 prefix를
+  명시적으로 나열한 allow-list다(`/auth`, `/user`, `/post`, `/comment`, `/file`,
+  `/upload`, `/audit-log`); `/health`, `/metrics`, `/doc`은 목록에서 빠져 차단된다 —
+  앞의 둘은 애초에 외부 도달이 전혀 필요 없고(kubelet·Prometheus가 Ingress를 거치지
+  않고 파드에 직접 붙음), `/doc`은 "외부 포트폴리오 열람"이라는 이득이 실제로는
+  얕다고 판단해 "인증 게이트 없음" 위험 쪽에 무게를 실었다. ALB 전용 fixed-response
+  리젝트 규칙 대안도 검토했으나 allow-list를 택했다 — aws-load-balancer-controller의
+  규칙 우선순위 처리에 의존해야 하는데 여기엔 미해결 신뢰성 이슈가 있고, 시험해볼
+  살아있는 ALB도 없다. `templates/ingress.yaml`은 변경이 필요 없었다; `helm lint`/
+  `helm template`로 렌더링된 규칙을 확인했다. `ingress.enabled`는 여전히 `false`이고
+  `values-prod.yaml`은 무변경이다 — Ingress를 실제로 켜려면 host/TLS/ALB 어노테이션
+  작업이 따로 필요하고, 그때 `values-prod.yaml`에도 `paths` 전체를 다시 적어야 한다
+  (Helm은 `-f` 레이어 간 배열을 병합하지 않는다).
+- **Terraform state 백엔드 — S3 네이티브 락, DynamoDB·KMS 없이 (2026-09-12, [ADR
+  0057](ADR/0057-terraform-state-backend-s3-native-lock.ko.md), ADR 0044 D3 amends)** —
+  2026-09-09 보안 점검에서 세 Terraform state(`cluster/`, `app-infra/`, `addons/`) 모두
+  기본값인 local backend를 쓰고 있고, `app-infra/`가 생성한 시크릿
+  (`random_password.db`/`access_token_secret`/`refresh_token_secret`)이 로컬
+  `terraform.tfstate`에 평문으로 남는다는 사실이 드러났다. 세 `versions.tf` 모두
+  백엔드를 S3로 옮긴다 — DynamoDB 대신 네이티브 락(`use_lockfile`, Terraform 1.11
+  GA), SSE-KMS 대신 SSE-S3(이 AWS 계정에는 사람 주체가 1명뿐이라 KMS의 IAM
+  복호화/읽기 분리가 아직 아무 가치도 안 준다 — 재검토 시점은 ADR 0057 D6에 정함).
+  버킷 이름은 의도적으로 커밋하지 않는다(`s3_bucket_name`의 기존 기본값-없음
+  컨벤션과 동일하게 init 시점에 `-backend-config="bucket=..."`로 넘김);
+  `app-infra/`·`addons/`가 서로의 출력값을 읽는 `data.terraform_remote_state`도
+  `backend = "local"` + 상대경로에서 `backend = "s3"` + 새 `tfstate_bucket_name`
+  변수로 옮긴다 — 생성 측 state의 실제 파일이 옮겨가면 예전 상대경로 읽기는
+  조용히 깨지기 때문이다. `deploy.sh`에 `TFSTATE_BUCKET_NAME` 환경변수를 추가해
+  세 state 전체의 모든 `terraform init`/`-var` 호출에 배선했다. 세 디렉터리 모두
+  `terraform init -backend=false`, `fmt -check`, `validate`가 통과한다 —
+  **버킷을 생성하지도, `apply`를 실행하지도 않았다**; 버킷 생성과 실제
+  `terraform init -migrate-state`는 실제 배포 시점으로 유예됐고(ADR 0057 D5),
+  `k8s/infra/terraform/README.md`에 1회성 런북 단계로 기록돼 있다.
+- **클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy (2026-09-11, [ADR
+  0056](ADR/0056-networkpolicy-east-west-restriction.ko.md))** — 보안 점검 결과
+  `k8s/helm/templates/`에 `NetworkPolicy` 리소스가 없다는 사실이 드러났다: 앱이
+  배포된 뒤 클러스터 내부 파드 간 트래픽을 제한하는 장치가 전무했다. 새
+  `templates/networkpolicy.yaml`(`networkPolicy.enabled`로 게이팅, 기본값 `false` —
+  `ingress.yaml`/`servicemonitor.yaml`과 같은 패턴; `values-prod.yaml`에서는 켜둠)이
+  앱 파드의 인바운드를 같은 네임스페이스의 파드로만 제한하고, 아웃바운드는 DNS
+  (CoreDNS), DB(`networkPolicy.egress.vpcCidr:dbPort`, 기본값 `10.0.0.0/16:5432` —
+  `cluster/main.tf`의 `var.vpc_cidr`과 동일), HTTPS/443(S3/AWS API — 이를 더 좁힐
+  VPC 엔드포인트가 없음)만 명시적으로 허용하고 나머지는 기본 거부한다. 이 앱은
+  Deployment 하나뿐이라(DB·스토리지는 인클러스터 파드가 아니라 외부 RDS/S3),
+  아웃바운드가 실제 보안 가치를 낸다. 인바운드 제한은 일부러 얕게 잡았는데, AWS
+  VPC CNI가 파드 IP를 노드 IP와 같은 주소 공간에서 할당해 kubelet의 헬스체크
+  트래픽만 따로 `ipBlock`으로 골라낼 방법이 없기 때문이다 — 업스트림에 보고된
+  실제 이슈(`aws/amazon-vpc-cni-k8s#2571`)를 보면 인바운드를 과도하게 제한할
+  경우 프로덕션에서 프로브가 실패할 위험이 있는데, 이게 지금 감수하는 잔여
+  위험보다 더 나쁜 결과라고 판단했다. 2026-09-11에 Calico를 설치한 throwaway
+  `kind` 클러스터(`kind`의 기본 CNI는 `NetworkPolicy`를 강제하지 않음)와 RDS를
+  대신하는 throwaway `postgres:16`에 대해 실제 검증했다: `helm install --wait`가
+  성공했고(kubelet의 프로브 — readiness는 DB 연결까지 확인, ADR 0031 — 가
+  인바운드 제한에도 불구하고 파드에 도달), `/health/live`/`/health/ready`/`/doc`이
+  같은 네임스페이스의 파드에서 모두 `200`을 응답했으며, 다른 네임스페이스의
+  파드는 요청이 타임아웃됐고(인바운드 제한이 실제로 동작함을 확인), 앱과 같은
+  라벨을 붙인 파드가 이미 허용된 호스트라도 허용되지 않은 포트로 요청하면
+  마찬가지로 타임아웃됐다(아웃바운드 기본 거부가 실제로 동작함을 확인). 실제
+  (현재는 철거된) EKS 대상에는 아직 무효하다 — `cluster/main.tf`의 `vpc-cni`
+  애드온이 VPC CNI Network Policy 강제 에이전트를 아직 켜지 않았다(별도의,
+  아직 일정이 잡히지 않은 Terraform 작업). AWS 자신의 에이전트(Calico와는 다른
+  강제 엔진)를 실제로 켜기 전엔 프로브를 다시 검증해야 한다.
+- **`helmet`을 통한 보안 응답 헤더 (2026-09-11, [ADR
+  0055](ADR/0055-helmet-security-headers.ko.md))** — 백엔드는 강화 응답 헤더를
+  전혀 보내지 않고 있었다: `Content-Security-Policy`, `X-Content-Type-Options`,
+  `X-Frame-Options`, `Strict-Transport-Security` 등 OWASP 권장 헤더 집합이
+  하나도 없었다. 이제 `helmet()`이 `main.ts`의 `bootstrap()`에서 가장 먼저
+  등록되는 미들웨어로 CORS/`cookieParser()`/전역 `ValidationPipe`보다 앞서
+  적용되어, 모든 라우트가 전체 헤더 집합을 받는다. helmet 기본값에서 벗어난
+  지점은 하나뿐이다: `script-src`를 `'self' 'unsafe-inline'`으로 완화했다
+  (나머지 directive는 모두 기본값 유지) — 그러지 않으면 `/doc`의 인라인
+  Swagger UI 부트스트랩 스크립트가 막히는데, ADR 0009가 이미 "Swagger가 곧 이
+  프로젝트의 API 문서"라고 못박은 만큼 그걸 조용히 빈 화면으로 만드는 건
+  받아들일 수 있는 트레이드오프가 아니었다. 실제 브라우저(Playwright MCP)로
+  라이브 검증했다: `/doc`이 모든 태그 그룹과 전체 Schemas 목록을 렌더링하고,
+  Authorize 모달이 콘솔/CSP 에러 0건으로 열린다. 응답 헤더는 `/doc`과
+  `/health/live` 양쪽에서 `curl -i`로 확인했다. 작업 도중 이 작업의 파일 범위
+  밖에 있는, 무관한 기존 e2e 실패를 하나 찾아 개발자 확인을 거쳐 고쳤다:
+  `test/app.e2e-spec.ts`의 `PW` 픽스처(`'pw12345678'`)가 이전 커밋
+  (`095a32a`)의 `AuthService.register` 비밀번호 강도 검증을 한 번도 만족한
+  적이 없어서, 이 작업이 뭔가 건드리기 전부터 이미 e2e 76건 전부가 등록
+  단계에서 실패하고 있었다 — `PW`를 이제 `'Pw1234567!'`로 바꿨다. 확인:
+  `pnpm lint` clean, `pnpm test` 270/270, 실제 Postgres 대상 `pnpm test:e2e`
+  76/76.
 - **`pnpm audit --prod` 재정화: qs·brace-expansion 고정, multer·js-yaml 상향,
   안 쓰는 `aws-sdk` v2 제거 (2026-09-10)** — 점검을 다시 돌린 계기였던 moderate
   `qs` DoS·array-limit 우회 취약점 2건 외에, 재실행 결과 14건(high 7건)이
@@ -185,6 +322,21 @@
   공백으로 남긴다. 영상 클릭 게이트나 private 파일 전체 다운로드 비용이 실제
   불만으로 이어지거나, 같은 `FileStorage` 포트를 건드리는 미래 S3 전환과 자연스럽게
   묶일 때만 재검토. 코드 변경 없음 — `docs/ROADMAP.md`(+ko) 순수 문서.
+
+- **회원가입 계정 열거 비대칭, 현행 유지로 확정 (2026-09-12)** — 2026-09-09 보안
+  점검에서 `POST /auth/register`가 이메일 중복 시 `AUTH_EMAIL_TAKEN`을 노출하는데,
+  `POST /auth/signin`의 `validateUser`는 계정 존재 여부 자체를 의도적으로 숨긴다는
+  비대칭이 발견됐다. 더 강한 두 대안을 저울질했다가 기각했다: `POST /auth/register`의
+  기존 5회/분 스로틀([ADR 0054](ADR/0054-per-route-rate-limit-tuning.ko.md))을 더
+  낮추는 안 — IP당이라 단일 출처 스캔만 느려질 뿐 분산 공격엔 거의 효과가 없고, 대신
+  오타로 재시도하는 정상 유저를 막을 실질적 비용이 든다; 이메일 인증 흐름으로 전환해
+  열거 자체를 없애는 안 — 이 프로젝트엔 이메일 발송 인프라가 전혀 없어 신규 외부 연동,
+  가입 대기 상태용 스키마/마이그레이션, `AUTH_EMAIL_TAKEN`에 이미 의존 중인 실사용
+  UX/e2e(`frontend/src/features/auth/LoginPage.tsx`, `frontend/e2e/auth.spec.ts`,
+  `test/app.e2e-spec.ts`) 재작성이 필요한데, 정작 가입 시점의 계정 열거는
+  로그인/비밀번호 오라클과 달리 그 자체로 접근권을 주지 않아 실사용자가 없는 이
+  단계에선 과분한 비용이다. 현행 유지로 결정 — 기존 스로틀이 유일한 완화책으로 남는다.
+  코드 변경 없음 — `CLAUDE.md`(+ko)와 `docs/ROADMAP.md`(+ko) §7 순수 문서.
 
 ### 추가
 - **프론트엔드: 계정 삭제 UI + 업로드 replay UX (2026-09-07)** — `docs/ROADMAP.md` §7이

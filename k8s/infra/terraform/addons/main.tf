@@ -1,23 +1,29 @@
 # ADR 0044(docs/ADR/0044-terraform-three-state-split.md) D1/D2/D4 — addons 상태:
 # module.eks_blueprints_addons(ALB Controller + External Secrets Operator)만
-# 담당한다. cluster/와 app-infra/ 양쪽을 terraform_remote_state(backend local)로
-# 읽는 유일한 상태다(D2) — coupling point 4: 이 애드온 레이어는 EKS 연결 정보
-# (cluster/)와 Secrets Manager ARN(app-infra/)을 동시에 필요로 해서, 어느 한쪽에
-# 접어 넣으면 순환 참조 또는 억지 apply 순서가 생긴다.
+# 담당한다. cluster/와 app-infra/ 양쪽을 terraform_remote_state(backend s3, ADR
+# 0057)로 읽는 유일한 상태다(D2) — coupling point 4: 이 애드온 레이어는 EKS 연결
+# 정보(cluster/)와 Secrets Manager ARN(app-infra/)을 동시에 필요로 해서, 어느
+# 한쪽에 접어 넣으면 순환 참조 또는 억지 apply 순서가 생긴다. 두 state의 실제
+# 저장 위치가 S3로 옮겨간 이상 로컬 상대경로로는 더 이상 읽을 수 없다 — 이 상태
+# 자신의 backend "s3" 블록(versions.tf)과 같은 버킷·리전을 가리켜야 한다.
 
 data "terraform_remote_state" "cluster" {
-  backend = "local"
+  backend = "s3"
 
   config = {
-    path = "${path.module}/../cluster/terraform.tfstate"
+    bucket = var.tfstate_bucket_name
+    key    = "cluster/terraform.tfstate"
+    region = var.region
   }
 }
 
 data "terraform_remote_state" "app_infra" {
-  backend = "local"
+  backend = "s3"
 
   config = {
-    path = "${path.module}/../app-infra/terraform.tfstate"
+    bucket = var.tfstate_bucket_name
+    key    = "app-infra/terraform.tfstate"
+    region = var.region
   }
 }
 

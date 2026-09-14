@@ -89,6 +89,11 @@ import { join } from 'node:path';
         // GET /file/:id/content의 presigned-redirect TTL (ADR 0036). S3Storage만
         // 읽는다 — STORAGE_DRIVER=local에서는 쓰이지 않는 무해한 기본값일 뿐이다.
         CONTENT_SIGNED_URL_TTL_SECONDS: Joi.number().default(300),
+        // 업로드 악성코드 스캔(ADR 0059): UploadService가 temp 쓰기 전에 붙는 clamd
+        // 데몬의 위치. 기본값은 docker-compose의 clamav 서비스명 — db가 DB_HOST=db인
+        // 것과 같은 이유다.
+        CLAMD_HOST: Joi.string().default('clamav'),
+        CLAMD_PORT: Joi.number().default(3310),
         // 전역 요청 횟수 제한(ADR 0053). false면 제한을 사실상 무제한으로 우회한다 —
         // e2e 스위트가 같은 인스턴스에 순차로 수백 건을 보내 429로 깨지는 것을 막기 위한
         // 테스트 전용 탈출구이며(test/e2e-env.ts에서만 false로 override), dev/prod는

@@ -13,6 +13,13 @@ import { JwtService } from '@nestjs/jwt';
 import { Payload } from './interface/payload-interface';
 import { ErrorCode } from 'backend/common/error-code';
 
+// 회원가입 비밀번호 최소 강도 — app.module.ts의 ACCESS_TOKEN_SECRET/REFRESH_TOKEN_SECRET Joi
+// 패턴(대/소문자·숫자·기호 모두 포함)을 그대로 미러링해, 시크릿에 적용한 것과 같은 강도
+// 기준을 사용자 비밀번호에도 적용한다. 길이만 32자에서 10자로 낮췄다 — 시크릿은 기계가
+// 생성하는 고엔트로피 값이지만 이건 사람이 직접 타이핑하는 값이기 때문.
+const PASSWORD_STRENGTH_PATTERN =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{10,}$/;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -63,11 +70,23 @@ export class AuthService {
 
   // 목적: Basic 토큰으로 넘어온 자격 증명으로 새 계정을 만든다.
   // 이유: `POST /user`는 존재하지 않고 가입 경로는 오직 `POST /auth/register`뿐이다 —
-  //       가입도 로그인과 같은 Basic 토큰 형식을 쓰기로 한 결정(ADR 0001)의 절반.
-  // 방법: 이메일 중복을 먼저 걸러 AUTH_EMAIL_TAKEN 400을 던지고, HASH_ROUNDS만큼 bcrypt 해시한
-  //       뒤 저장 — 응답은 방금 쓴 행을 다시 읽어 반환한다(캐시된 인메모리 값이 아니라 DB 확정값).
+  //       가입도 로그인과 같은 Basic 토큰 형식을 쓰기로 한 결정(ADR 0001)의 절반. Basic
+  //       토큰 파싱 경로는 DTO/ValidationPipe를 거치지 않으므로, 비밀번호 강도 검증을
+  //       여기서 직접 하지 않으면 빈 문자열도 그대로 해시되어 저장된다.
+  // 방법: PASSWORD_STRENGTH_PATTERN 미달 시 AUTH_WEAK_PASSWORD 400을 먼저 던지고,
+  //       이메일 중복을 걸러 AUTH_EMAIL_TAKEN 400을 던진 뒤, HASH_ROUNDS만큼 bcrypt
+  //       해시해 저장 — 응답은 방금 쓴 행을 다시 읽어 반환한다(캐시된 인메모리 값이
+  //       아니라 DB 확정값).
   async register(rawToken: string) {
     const { email, password } = this.parseBasicToken(rawToken);
+
+    if (!PASSWORD_STRENGTH_PATTERN.test(password)) {
+      throw new BadRequestException({
+        code: ErrorCode.AUTH_WEAK_PASSWORD,
+        message:
+          'Password must be at least 10 characters and include lowercase, uppercase, a digit, and a symbol.',
+      });
+    }
 
     const user = await this.userRepository.findOne({ where: { email } });
 

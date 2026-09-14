@@ -1,18 +1,22 @@
 # ADR 0044(docs/ADR/0044-terraform-three-state-split.md) D1/D2/D4 — app-infra 상태:
 # RDS + S3(IRSA 포함) + Secrets Manager + Route53/ACM만 담당한다. cluster/의
-# module.vpc/module.eks 출력을 terraform_remote_state(backend local)로 단방향
-# 읽기만 한다(D2/D3) — app-infra는 cluster를 읽지만 cluster는 app-infra를 절대
-# 읽지 않는다.
+# module.vpc/module.eks 출력을 terraform_remote_state(backend s3, ADR 0057)로
+# 단방향 읽기만 한다(D2/D3) — app-infra는 cluster를 읽지만 cluster는 app-infra를
+# 절대 읽지 않는다. cluster/의 실제 state가 S3로 옮겨간 이상 로컬 상대경로로는
+# 더 이상 읽을 수 없다 — 이 상태 자신의 backend "s3" 블록(versions.tf)과 같은
+# 버킷·리전을 가리켜야 한다(ADR 0057).
 
 provider "aws" {
   region = local.region
 }
 
 data "terraform_remote_state" "cluster" {
-  backend = "local"
+  backend = "s3"
 
   config = {
-    path = "${path.module}/../cluster/terraform.tfstate"
+    bucket = var.tfstate_bucket_name
+    key    = "cluster/terraform.tfstate"
+    region = var.region
   }
 }
 

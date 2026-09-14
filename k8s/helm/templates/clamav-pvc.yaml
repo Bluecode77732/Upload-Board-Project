@@ -1,0 +1,24 @@
+{{- /*
+clamav.persistence.enabled일 때만 렌더링된다. 기본은 emptyDir(clamav-deployment.yaml)
+— 시그니처 DB를 pod 재시작마다 다시 내려받는 대신 유지하고 싶을 때만 켠다. 이 차트가
+기본 StorageClass를 정하지 않는 건 다른 리소스(resources: {})와 같은 이유다 — 실측/운영
+결정 없이 값을 고정하지 않는다(Avoid Premature Optimization).
+*/}}
+{{- if .Values.clamav.persistence.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "sharenpo.fullname" . }}-clamav
+  labels:
+    {{- include "sharenpo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clamav
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.clamav.persistence.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.clamav.persistence.size }}
+{{- end }}

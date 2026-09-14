@@ -120,11 +120,70 @@ that proxy's own address, collapsing the per-client 5/minute (`auth`) and 15/min
 (`upload`) buckets this ADR built into one **app-wide** bucket shared by every visitor —
 five total login attempts per minute for the whole app, not per person.
 
-Not fixed here — deliberately deferred, tracked in `CLAUDE.md`'s Known Gaps (Rate limiting
-row) — because the correct `trust proxy` value (a hop count or explicit proxy IP range) is a
-property of whichever ingress/load-balancer topology is chosen when `Ingress` is actually
-enabled, which has not happened yet; setting a number now would be guessing at a topology
-that doesn't exist. Revisit alongside whichever task turns `Ingress` on.
+~~Not fixed here — deliberately deferred~~ — **resolved 2026-09-14**, see the addendum below.
+
+### Addendum (2026-09-14) — `trust proxy` set to the VPC CIDR, not a hop count
+
+The topology question the addendum above deferred is now answered on paper, without a live
+deploy: this project's target shape (ADR 0034, and the 2026-09-13 Ingress annotation work) is
+exactly one internet-facing ALB implementing the `Ingress` directly (`ingress.className: alb`)
+with no CDN or second reverse-proxy layer in front of it — nothing in `k8s/helm/`,
+`k8s/infra/terraform/`, or ADR 0034 mentions CloudFront or any other intermediary. That is
+enough to fix the value without needing AWS applied and billing again: a *design* decision,
+the same kind ADR 0034 itself made design-only in 2026-08-08.
+
+`backend/main.ts`'s `bootstrap()` now carries:
+
+```ts
+app.set('trust proxy', '10.0.0.0/16');
+```
+
+**Why a CIDR instead of a hop count (`trust proxy: 1`)**, the value this ADR's addendum above
+and CLAUDE.md's Known Gaps entry both left as the working example: a hop count tells Express
+"trust the outermost N addresses in `X-Forwarded-For`, no matter who actually connected" — it
+never checks *where* the connection came from, so if the app were ever reachable by a path
+that bypasses the ALB (a misconfigured security group, an exposed NodePort, a future second
+ingress path), an attacker connecting directly could forge `X-Forwarded-For` and the app would
+believe it, because a hop count doesn't verify the immediate peer at all. A CIDR only extends
+trust to connections whose immediate socket address falls inside `10.0.0.0/16` — this
+project's VPC block (`cluster/main.tf`'s `variable "vpc_cidr"` default, the same constant
+`values.yaml`'s `networkPolicy.egress.vpcCidr` already reuses for ADR 0056's egress rule) — so
+a direct-to-app connection from outside the VPC is never trusted regardless of what header it
+carries. This holds under either ALB target mode (`instance` or `ip`): EKS's VPC CNI assigns
+both node and pod addresses out of the VPC's own CIDR, so the connecting peer lands inside
+`10.0.0.0/16` either way — the choice doesn't have to wait on that target-type detail either.
+
+**No env var, and why**: `.env.example`/the Joi schema (`app.module.ts`) are unchanged. Same
+reasoning as the rest of this file's per-route limits — this value is fixed by the deployment
+topology (which VPC the app runs in), not something an operator tunes per environment; making
+it configurable would let a misconfigured env var silently widen the trust boundary with no
+compile-time or Joi-time check catching it. `backend/main.ts`'s own comment above the
+`app.set()` call carries this same one-line justification, so a future reader doesn't have to
+find this ADR to see why.
+
+**Dev/local impact — verified, not asserted**: local requests never touch the VPC, so the
+concern was whether an unauthenticated caller hitting `pnpm start:dev` directly could forge
+`X-Forwarded-For` to manipulate the rate limiter. Checked against `proxy-addr` (the library
+`app.set('trust proxy', ...)` compiles through internally) with the exact three shapes that
+matter, run from a throwaway script, not asserted from memory:
+
+| Case | Socket peer | `X-Forwarded-For` | Resolved `req.ip` |
+|---|---|---|---|
+| Local dev, direct connection, forged header | `127.0.0.1` | `9.9.9.9` (forged) | `127.0.0.1` — forged header ignored |
+| Real ALB relay | `10.0.5.20` (VPC-internal) | `198.51.100.5` (real client) | `198.51.100.5` — correct fix |
+| Attacker bypasses the ALB entirely | `203.0.113.9` (public) | `1.2.3.4` (forged) | `203.0.113.9` — forged header ignored |
+
+`pnpm lint` (0 errors) and `pnpm test` (19 suites, 278/278) both pass after the change.
+
+**What is and isn't verified**: the `10.0.0.0/16` value is correct by construction (it's read
+directly off `cluster/main.tf`'s committed `vpc_cidr`, not guessed), and the trust-boundary
+behavior above is verified against the real underlying library, not asserted. What is **not**
+verified — and cannot be, honestly, without the AWS stack applied and billing again — is that
+a live ALB's actual connecting peer address lands inside that CIDR in practice, the same
+"code/helm-level parity confirmed, real ALB Controller behavior not" honesty line
+[ADR 0058](0058-ingress-path-allowlist.md) already used for the same reason. Revisit this line
+the next time the stack is applied for real (ROADMAP.md §9) — confirm a live request's
+resolved `req.ip` is the actual client, not `10.0.5.x`-shaped.
 
 ### Addendum (2026-09-11) — `frontend-e2e`/`admin-e2e` CI jobs needed the same `THROTTLE_ENABLED` bypass
 

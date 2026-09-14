@@ -18,6 +18,11 @@ variable "cluster_name" {
   default     = "sharenpo"
 }
 
+variable "tfstate_bucket_name" {
+  description = "cluster/의 terraform_remote_state를 읽을 S3 버킷 이름 — 이 상태 자신의 backend \"s3\" 블록과 같은 버킷을 가리켜야 한다(ADR 0057). 버킷 이름은 전역적으로 유일해야 하므로 안전한 기본값이 없다(s3_bucket_name과 동일한 이유, ADR 0043 D8)"
+  type        = string
+}
+
 variable "db_instance_class" {
   description = "RDS 인스턴스 클래스 — 기본값은 Graviton 기반(db.t4g)으로 ADR 0043 D3의 비용 기조와 일관됨"
   type        = string

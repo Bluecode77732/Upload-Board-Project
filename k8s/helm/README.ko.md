@@ -102,8 +102,12 @@ helm upgrade sharenpo . -f values-prod.yaml --set image.tag=<태그>
 | `service.yaml` | Service | `ClusterIP`, 포트 3000 |
 | `configmap.yaml` | ConfigMap | `values.yaml`의 `env:` 블록 아래 모든 키 |
 | `migration-job.yml` | Job (Helm hook) | pre-install/pre-upgrade 시점에 `migration:run` 실행, `docker-compose.yml`의 `migrate` 서비스를 본뜸(ADR 0032) |
-| `ingress.yaml` | Ingress | 기본 비활성(`ingress.enabled: false`) — TLS는 여기서 종료, 앱 내부에서는 안 함(ADR 0034) |
+| `ingress.yaml` | Ingress | 기본 비활성(`ingress.enabled: false`) — TLS는 여기서 종료, 앱 내부에서는 안 함(ADR 0034). 경로 규칙은 `/` catch-all이 아니라 실제 컨트롤러 prefix의 명시적 allow-list다 — `/health`, `/metrics`, `/doc`은 의도적으로 제외(ADR 0058) |
 | `serviceaccount.yaml` | ServiceAccount | 기본 비활성(`serviceAccount.create: false` — Deployment는 네임스페이스의 `default` ServiceAccount로 그대로 뜸). S3 IRSA 권한을 네임스페이스의 모든 pod가 아니라 이 앱에만 좁히려면 켠다 — 아래 "IRSA용 전용 ServiceAccount" 참고 |
+| `networkpolicy.yaml` | NetworkPolicy | 기본 비활성(`networkPolicy.enabled: false`) — 앱 파드의 인바운드/아웃바운드 트래픽을 제한한다. 아래 "NetworkPolicy" 참고(ADR 0056) |
+| `clamav-deployment.yaml` | Deployment | `UploadService`가 업로드를 검사하는 `clamd` 데몬 — 앱 파드마다 하나씩이 아니라 공유되는 단일 replica다(시그니처 DB 중복을 피함, ADR 0059 D6). `ingress`/`networkPolicy`와 달리 항상 렌더링된다 |
+| `clamav-service.yaml` | Service | `ClusterIP`, 포트 3310 — `configmap.yaml`이 `values.yaml`의 `env` 맵이 아니라 이 Service 이름에서 `CLAMD_HOST`를 직접 계산한다 |
+| `clamav-pvc.yaml` | PersistentVolumeClaim | `clamav.persistence.enabled: true`일 때만 렌더링된다(기본 `false` — 그렇지 않으면 재시작마다 `emptyDir`에 시그니처 DB를 다시 내려받는다) |
 
 `values.yaml`엔 실제로 템플릿이 읽는 키만 남아 있습니다 — 어떤 템플릿도 소비하지
 않던 `autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride` 스캐폴딩
@@ -145,6 +149,191 @@ trust policy 적용 이후 왜 더 이상 안 통하는지는
 `serviceAccount.create`가 켜져 있어도 일부러 계속 `default`로 돕니다 — DB
 자격증명만 Secret에서 읽을 뿐 S3를 건드리지 않으므로, 앱의 IRSA 신원을
 붙이면 이유 없이 권한만 넓어집니다.
+
+## NetworkPolicy
+
+앱 파드의 트래픽을 제한한다([ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)).
+기본 비활성(`networkPolicy.enabled: false`) — `ingress.yaml`/`servicemonitor.yaml`과
+같은 이유(DNS/인증서 메커니즘 없음, CRD 없음)는 아니고,
+`k8s/infra/terraform/cluster/main.tf`의 `vpc-cni` 애드온이 아직 VPC CNI
+Network Policy 강제 에이전트를 켜지 않았기 때문이다 — 지금
+`networkPolicy.enabled`을 켜도 리소스는 생성되지만 실제 클러스터엔 강제되지
+않는다. `values-prod.yaml`은 이미 켜둬서, Terraform 쪽 강제가 켜지는 순간
+차트를 더 건드릴 필요 없이 바로 유효해진다.
+
+인바운드는 같은 네임스페이스의 파드로만 제한한다(다른 네임스페이스의 파드가
+이 파드에 직접 접근하는 걸 막는다) — kubelet의 헬스체크 트래픽을 위해 따로
+허용 규칙을 파지는 않는데, VPC CNI에서는 파드 IP와 노드 IP가 같은 주소
+공간을 공유해서 "노드"만 콕 집어내는 `ipBlock`을 쓸 방법이 없기 때문이다.
+AWS의 EKS 문서는 에이전트의 "strict" 모드에서 kubelet 프로브가 자동
+예외 처리된다고 하지만, 업스트림에 실제 반례도 등록돼 있다
+(`aws/amazon-vpc-cni-k8s#2571`) — 그래서 **실제 클러스터에 이걸 의존하기
+전엔 반드시 `/health/live`/`/health/ready`가 여전히 통과하는지 다시
+검증**해야 한다. 아래 레시피는 Calico(AWS 자신의 에이전트와는 다른 강제
+엔진) 아래에서 정책의 모양이 맞다는 것만 증명한다.
+
+이 단일 Deployment 앱에서 실제로 일을 하는 통제는 아웃바운드 쪽이다: 기본
+거부에 DNS(CoreDNS), DB(`networkPolicy.egress.vpcCidr:networkPolicy.egress.dbPort`
+— 기본값 `10.0.0.0/16:5432`, `cluster/main.tf`의 `var.vpc_cidr` 기본값과
+동일; Terraform을 다른 CIDR로 apply했다면 오버라이드), 그 외 HTTPS(443,
+목적지 제한 없음 — S3/AWS API용, S3 VPC 엔드포인트가 없어 CIDR로 좁힐
+방법이 없다. ADR 참고)만 명시적으로 허용한다.
+
+### throwaway kind + Calico 클러스터로 검증하기
+
+`kind`의 기본 CNI는 `NetworkPolicy`를 강제하지 않는다 — Calico가 필요하다:
+
+```bash
+kind create cluster --name netpol-verify --config - <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  podSubnet: "192.168.0.0/16"
+EOF
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml
+# 노드와 calico-node/calico-kube-controllers/coredns가 Ready가 될 때까지 기다린 뒤:
+docker build -t sharenpo-netpol-test:local -f Dockerfile .
+kind load docker-image sharenpo-netpol-test:local --name netpol-verify
+kubectl run postgres --image=postgres:16 --restart=Never \
+  --env=POSTGRES_USER=sharenpo --env=POSTGRES_PASSWORD=sharenpo_pw --env=POSTGRES_DB=sharenpo \
+  --port=5432 --overrides='{"apiVersion":"v1","metadata":{"labels":{"app":"postgres"}}}'
+kubectl expose pod postgres --port=5432 --target-port=5432
+kubectl create secret generic test-secrets \
+  --from-literal=DB_USERNAME=sharenpo --from-literal=DB_PASSWORD=sharenpo_pw \
+  --from-literal=ACCESS_TOKEN_SECRET=<32자 이상, 대소문자+숫자+기호 혼합> \
+  --from-literal=REFRESH_TOKEN_SECRET=<32자 이상, 대소문자+숫자+기호 혼합>
+
+helm install netpol-test . \
+  --set image.repository=sharenpo-netpol-test --set image.tag=local --set image.pullPolicy=Never \
+  --set secrets.existingSecret=test-secrets \
+  --set env.DB_HOST=postgres --set env.DB_DATABASE=sharenpo --set env.BASE_URL=http://localhost:3000 \
+  --set networkPolicy.enabled=true \
+  --set networkPolicy.egress.vpcCidr=$(kubectl get pod postgres -o jsonpath='{.status.podIP}')/32 \
+  --wait --timeout=180s
+```
+
+이게 성공하면 인바운드 규칙에도 불구하고 kubelet의 프로브가 파드에
+도달했다는 뜻이다 — readiness 프로브는 DB 연결까지 확인하므로(ADR 0031),
+`--wait` 성공은 DNS+DB 아웃바운드 규칙이 동작하고 migration Job의
+pre-install 훅도 끝났다는 것까지 함께 증명한다. 이 제한이 허울뿐이 아니라
+실제로 동작하는지 확인하려면:
+
+```bash
+# 다른 네임스페이스에서의 인바운드는 막혀야 한다
+kubectl create namespace other-ns
+kubectl run curl-other -n other-ns --image=curlimages/curl:8.10.1 --restart=Never --rm -i --command -- \
+  curl -sS -m 8 http://netpol-test.default.svc.cluster.local:3000/health/live
+# 기대 결과: "Connection timed out"
+
+# 이미 허용된 호스트라도 허용 목록에 없는 포트로의 아웃바운드는 막혀야 한다
+kubectl run curl-egress --image=curlimages/curl:8.10.1 --restart=Never --rm -i \
+  --labels="app.kubernetes.io/name=sharenpo,app.kubernetes.io/instance=netpol-test" --command -- \
+  curl -sS -m 8 telnet://$(kubectl get pod postgres -o jsonpath='{.status.podIP}'):9999
+# 기대 결과: "Connection timed out"
+
+# clamav egress 규칙(ADR 0059 D6)이 실제로 열려 있어야 한다 — `curl telnet://`이
+# 아니라 `nc -zv`를 써야 함(바로 아래 이유 참고)
+kubectl run curl-clamav --image=busybox:1.36 --restart=Never --rm -i \
+  --labels="app.kubernetes.io/name=sharenpo,app.kubernetes.io/instance=netpol-test" --command -- \
+  timeout 5 nc -zv netpol-test-clamav 3310
+# 기대 결과: "... 3310 (...) open"
+```
+
+**`clamav` 연결 확인에 `curl telnet://host:port`를 쓰지 말 것** — 2026-09-15에
+처음 이 방식으로 시도했다가 실제로는 열려 있던 연결을 `curl: (28) Time-out`으로
+잘못 보고했고, 나중에 `nc -zv`로 확인해서야 실제로 열려 있었다는 걸 알았다.
+`clamd`는 클라이언트가 먼저 말을 걸어야 응답하는 프로토콜이라, curl telnet
+모드는 오지 않을 응답을 기다리며 그냥 앉아 있을 뿐이고, 이건 curl 출력만
+봐서는 진짜로 막힌 연결과 구분이 안 된다. 이런 raw 프로토콜 포트를 확인할
+땐 TCP 핸드셰이크만 보는(프로토콜 가정이 없는) `nc -zv`가 맞는 도구다.
+
+끝나면 정리: `helm uninstall netpol-test && kind delete cluster --name netpol-verify`.
+
+**문제 해결**:
+- 이전 시도가 중간에 끊기거나 실패한 뒤(정리 없이) `helm install` 단계를
+  다시 실행하면 `release name check failed: cannot reuse a name that is
+  still in use` 에러가 납니다 — 예전 `netpol-test` 릴리스가 여전히 등록돼
+  있는 것. 해결: `helm uninstall netpol-test`(상태가 `pending-install`처럼
+  어정쩡해 보이면 `helm list -A`로 먼저 확인), 제거됐는지 확인한 뒤
+  `helm install`을 다시 시도.
+- Git Bash(Windows)에서는 `$(kubectl get pod ... -o
+  jsonpath='{.status.podIP}')`를 `--set ...=$(...)/32` 인자 안에 바로 넣지
+  말 것. pod가 아직 IP를 못 받았으면 이 치환이 조용히 빈 문자열이 되고,
+  앞의 `/32`가 MSYS2의 경로 변환에 걸려 `C:/Program Files/Git/32` 같은
+  값으로 둔갑해 쿠버네티스 CIDR 검증에서 알아보기 힘든 에러를 냅니다.
+  변수에 먼저 담아 출력해서 확인할 것:
+  `PG_IP=$(kubectl get pod postgres -o jsonpath='{.status.podIP}'); echo
+  "PG_IP=$PG_IP"` — 진짜 IP인지 눈으로 확인한 뒤에 사용.
+
+## HTTPS(Ingress) 활성화
+
+TLS는 ingress/ALB에서만 종료하고 앱 프로세스 안에서는 하지 않는다([ADR
+0034](../../docs/ADR/0034-https-termination-stance.ko.md)). `values.yaml`의
+`ingress` 블록은 `/` catch-all이 아니라 실제 컨트롤러 prefix의 명시적
+allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)).
+`ingress.enabled`는 계속 `false`다 — 이건 뭔가 빠져서가 아니라 개발자가 확정한
+의도적 결정이다([ROADMAP.md](../../docs/ROADMAP.md) > Unscheduled): 스택이
+실제로 떠 있던 2026-08-27 당시엔 클러스터·도메인(`sharenpo.cloud`)·실제 ACM
+인증서까지 전부 준비돼 있었지만, 외부 테스터가 실제로 필요해질 때까지는 켜지
+않기로 했다. 2026-09-13에 다시 확인했고 그대로다.
+
+켜기 전 필요한 선행 조건 두 가지, 지금은 둘 다 미충족이다(Terraform 3-state
+전부 destroy 상태):
+- `addons/` apply — AWS Load Balancer Controller가 클러스터 안에 떠 있어야
+  `Ingress` 객체를 처리할 수 있다.
+- `app-infra/` apply — `domain_name`의 ACM 인증서가 `ISSUED` 상태여야 한다
+  (`terraform output -raw acm_certificate_arn`).
+
+`values-prod.yaml`엔 실제 도메인, ADR 0058의 경로 목록 전체(Helm은 `-f` 레이어
+사이에 배열을 병합하지 않으므로 그대로 재선언), 그리고 HTTP→HTTPS 강제
+리다이렉트용 `certificate-arn`/`listen-ports`/`ssl-redirect` annotation까지
+전부 주석 처리된 `ingress:` 블록이 이미 준비돼 있다. 위 두 상태가 갖춰지면 그
+주석을 해제하고 ARN을 채운 뒤 `enabled: true`로 바꾸면 된다 — 그 시점엔
+`--set` 플래그가 따로 필요 없다. 체크인된 파일을 건드리지 않고 한 번만
+켜보려면 `k8s/infra/terraform/README.md`의 "Enabling the ALB ingress"
+절에 같은 내용의 `helm upgrade --set ...` 형태가 있다.
+
+실제 클러스터 없이 검증하기(지금은 아무 클러스터도 없다):
+
+```bash
+helm lint --strict . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
+  --set ingress.className=alb \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]'
+helm template . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
+  --set ingress.className=alb \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
+  --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]' \
+  -s templates/ingress.yaml
+```
+
+렌더링된 `Ingress`에 `ingressClassName: alb`, 호스트, allow-list의 일곱 경로,
+annotation이 전부 의도대로 나오는지 확인한다(2026-09-13 검증 — 이 레시피의 이전 초안은
+`--set ingress.hosts[0].host=...`를 썼는데, 이건 배열 원소 전체를 교체해버려 경로가 다
+사라진다; `--set-json`이라야 실제로 유지된다 — `k8s/infra/terraform/README.md`의 "ALB
+ingress 켜기" 절에서도 같은 문제를 발견해 같은 방식으로 고쳤다) — 지금 이 저장소가
+검증할 수 있는 최대치다. 실제 ALB Controller가 떠 있는 클러스터에 대한 진짜 `helm
+install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 밖이다.
+
+**미해결 — 실전 신뢰 전 필수, 지금은 검증할 살아있는 ALB Controller가 없어서 아직 안 함:**
+YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 동작하는 것은 별개다.
+`addons/`+`app-infra/`를 다시 apply하고 `ingress.enabled`를 실제로 켠 뒤엔, annotation이
+먹혔다고 가정하지 말고 다음을 직접 확인한다:
+- `aws elbv2 describe-listeners`로 만들어진 ALB에 80번과 443번 리스너가 둘 다 있는지
+  (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지).
+- `curl -I http://<도메인>`이 `https://` URL로 `301`/`302`를 반환하는지(`ssl-redirect`가
+  실제로 동작하는지).
+- 브라우저가 ACM 인증서가 발급된 그 도메인에 대해 경고 없이 인증서를 신뢰하는지
+  (`certificate-arn` annotation이 실제로 올바른 인증서를 붙였는지).
+
+이 중 어느 것도 `helm lint`/`helm template`로는 확인할 수 없다 — 이 둘은 이 저장소가
+렌더링하는 YAML이 올바르다는 것만 증명할 뿐, AWS Load Balancer Controller가 그 설정대로
+실제로 동작한다는 것은 증명하지 못한다.
 
 ## Env var
 

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
+import { ScanService } from './scan.service';
 import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { StorageModule } from 'backend/storage/storage.module';
@@ -16,6 +17,8 @@ import { StorageModule } from 'backend/storage/storage.module';
     StorageModule,
   ],
   controllers: [UploadController],
-  providers: [UploadService],
+  // ScanService는 다른 모듈이 쓸 일이 없는 UploadModule 전용 provider다(ADR 0059 D2) —
+  // FileStorage처럼 여러 도메인 모듈이 공유하는 게 아니라서 별도 모듈로 빼지 않는다.
+  providers: [UploadService, ScanService],
 })
 export class UploadModule {}

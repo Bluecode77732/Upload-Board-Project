@@ -92,12 +92,14 @@ pnpm run test:cov      # 커버리지 (서비스만 측정)
 
 ### Docker로 실행
 
-`docker compose`가 Postgres와 API를 함께 띄웁니다([ADR 0015](docs/ADR/0015-docker-and-compose.ko.md)).
+`docker compose`가 Postgres·ClamAV·API를 함께 띄웁니다
+([ADR 0015](docs/ADR/0015-docker-and-compose.ko.md); ClamAV는
+[ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)에서 추가됨).
 호스트 포트 5435를 점유하는 레거시 `upload-board-pg` 컨테이너를 먼저 멈추세요.
 
 ```bash
 cp .env.example .env        # 시크릿 채우기; DB_*는 compose용으로 그대로 둬도 됨
-docker compose up --build   # db(postgres:16) → migrate(one-shot) → api를 :3000에 기동
+docker compose up --build   # db(postgres:16) + clamav → migrate(one-shot) → api를 :3000에 기동
 ```
 
 `db` 서비스가 `${DB_PORT}`(5435)를 노출하므로, 호스트에서 돌리는 `pnpm test:e2e`와
@@ -131,7 +133,10 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 (`local` 기본 | `s3`, `s3`일 때 `S3_BUCKET`/`AWS_REGION` 필수 —
 [ADR 0029](docs/ADR/0029-storage-port-adapter.ko.md)), `CONTENT_SIGNED_URL_TTL_SECONDS`
 (S3 presigned 리다이렉트 TTL, `local`에서는 미사용 —
-[ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.ko.md)), 그리고
+[ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.ko.md)), `CLAMD_HOST` /
+`CLAMD_PORT`(기본값 `clamav` / `3310`, `docker-compose.yml`의 서비스명과 동일 —
+업로드 악성코드 스캔, [ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)),
+그리고
 `THROTTLE_ENABLED`(기본값 `true` — dev/prod를 가르는 스위치가 아니라 e2e 스위트가
 전역 제한과 라우트별 auth/upload 강화 제한을 함께 우회하기 위한 용도로만 존재 —
 [ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md),
@@ -182,7 +187,11 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
   (mp3), `video`(mp4/mov/webm). 필드가 0개면 400 `UPLOAD_FILE_REQUIRED`, 2개 이상이면 400
   `UPLOAD_MULTIPLE_FIELDS`, 필드의 허용 목록과 맞지 않는 파일이면 400
   `UPLOAD_INVALID_TYPE` ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md)
-  D4/D5, [ADR 0027](docs/ADR/0027-media-type-expansion-implementation.ko.md))
+  D4/D5, [ADR 0027](docs/ADR/0027-media-type-expansion-implementation.ko.md)). temp
+  저장소에 도달하기 전에 ClamAV(`clamd`)로 스캔되며, 감염이 확인되면 400
+  `UPLOAD_MALWARE_DETECTED`, 스캐너에 연결할 수 없거나 타임아웃되면 검사를 건너뛰지
+  않고 503 `UPLOAD_SCAN_UNAVAILABLE`로 fail-closed
+  ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md))
 - `GET /file` — 파일 목록. 모든 쿼리 파라미터는 선택적이며 함께 조합할 수 있다. 선언되지 않은
   파라미터는 400 `VALIDATION_FAILED`로 거절된다
   ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.ko.md))

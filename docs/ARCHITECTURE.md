@@ -180,12 +180,19 @@ comment is addressed by its own id:
 
 | Route | Behavior |
 |---|---|
-| `POST /upload/attach` | Attach exactly one of three multipart fields — `image`, `audio`, or `video`, each with its own extension/mimetype allowlist. 100MB limit. Returns `{ filename }` |
+| `POST /upload/attach` | Attach exactly one of three multipart fields — `image`, `audio`, or `video`, each with its own extension/mimetype allowlist. 100MB limit. Scanned for malware before being staged. Returns `{ filename }` |
 
 - Multer buffers into memory rather than writing to disk itself — the actual write happens
   through the `FileStorage` port (`UploadService.stageTemp`), so the temp file's very first
   byte already goes through whichever adapter is configured, not just the promoted copy
   ([ADR 0029](ADR/0029-storage-port-adapter.md) D4).
+- Before that write, `stageTemp` calls `ScanService.scanBuffer` — a `clamscan` client wrapping
+  a TCP connection to a `clamd` daemon (`CLAMD_HOST`/`CLAMD_PORT`). A positive match is 400
+  `UPLOAD_MALWARE_DETECTED`, nothing is written. If the scanner can't be reached or every
+  retry (2 attempts, 8s timeout each) fails, the upload fails closed with 503
+  `UPLOAD_SCAN_UNAVAILABLE` rather than skipping the check
+  ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.md)). `ScanService` is a plain provider,
+  not a `FileStorage`-style port — there's exactly one implementation and one consumer.
 - The generated name is always `temp_{uuid}_{timestamp}.{ext}`. The client only ever echoes
   this name back on `POST /file` — it never gets to choose a path itself.
 
@@ -251,6 +258,16 @@ Also unauthenticated, mirroring `HealthModule` — Prometheus scrapes carry no b
   `tempCleanupDeletedTotal` in `TempCleanupService`.
 
 ## Request Flow
+
+### Security headers
+
+Before any Nest guard runs, `helmet()` — plain Express middleware registered first in
+`main.ts`'s `bootstrap()` — attaches the OWASP-recommended response header set
+(`Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`,
+`Strict-Transport-Security`, etc.) to every response
+([ADR 0055](ADR/0055-helmet-security-headers.md)). `script-src` is the one directive
+widened past helmet's default (`'self' 'unsafe-inline'`) so `/doc`'s inline Swagger UI
+bootstrap script still executes; every other directive stays default.
 
 ### Guard chain
 
@@ -318,8 +335,12 @@ branch on `code` only — `message` is free to change.
 
 ```
 1. POST /upload/attach   (multipart: image, audio, or video)
-      └─ UploadService.stageTemp writes  file/temp/temp_{uuid}_{ts}.{ext}
-         through the FileStorage port    → returns { filename }
+      └─ UploadService.stageTemp:
+           a. ScanService.scanBuffer(file.buffer) via clamd  (ADR 0059)
+                infected           → 400 UPLOAD_MALWARE_DETECTED, nothing written
+                scanner unreachable→ 503 UPLOAD_SCAN_UNAVAILABLE (fail closed)
+           b. writes  file/temp/temp_{uuid}_{ts}.{ext}
+              through the FileStorage port    → returns { filename }
 
 2. POST /file  { title, filePath: <that filename> }
       └─ FileService.uploadFile, before any transaction (ADR 0019):
@@ -409,6 +430,9 @@ Beyond the DB/JWT/hashing basics, a few groups exist for specific features:
   presigned content URL stays valid) (ADR 0029, ADR 0036).
 - **Orphan sweep**: `TEMP_SWEEP_ENABLED` (default on), `TEMP_SWEEP_CRON`,
   `TEMP_SWEEP_TTL_HOURS` (default 24), `TEMP_SWEEP_DRY_RUN` (ADR 0018).
+- **Malware scanning**: `CLAMD_HOST` (default `clamav`), `CLAMD_PORT` (default `3310`) —
+  where `UploadService.stageTemp` reaches the `clamd` daemon it scans every upload against
+  before staging it (ADR 0059).
 - **RBAC seed**: `SUPERADMIN_EMAIL` — optional; names the account `pnpm
   promote-superadmin` promotes to superadmin (a manual step, not automatic on boot —
   [ADR 0052](ADR/0052-superadmin-seed-manual-trigger.md)).

@@ -1,0 +1,18 @@
+{{- /* clamd용 ClusterIP 서비스(ADR 0059 D1/D2) — 앱 Pod가 CLAMD_HOST로 접근하는 대상. 외부 노출 없음. */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sharenpo.fullname" . }}-clamav
+  labels:
+    {{- include "sharenpo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clamav
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3310
+      targetPort: clamd
+      protocol: TCP
+      name: clamd
+  selector:
+    app.kubernetes.io/name: clamav
+    app.kubernetes.io/instance: {{ .Release.Name }}

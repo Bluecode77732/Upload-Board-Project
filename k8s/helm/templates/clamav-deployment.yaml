@@ -1,0 +1,68 @@
+{{- /*
+업로드 악성코드 스캔의 clamd 데몬(ADR 0059 D1/D2) — 앱 Deployment와 별도 Pod로 둔다.
+사이드카로 앱 Pod 안에 넣으면 replica 수만큼 엔진+시그니처 DB가 통째로 복제되지만,
+여기처럼 별도 Deployment+Service로 두면 모든 replica가 하나(또는 소수)를 공유한다
+— Prometheus/Grafana(ADR 0047)와 같은 "부속 인프라는 별도 Pod" 방식이다. DB(RDS)와
+달리 clamd는 실제 운영에서도 이 클러스터 안에 있어야 하므로(관리형 대체재가 이
+결정에서 이미 기각됨, ADR 0059 Context) 이 차트 안에 항상 포함한다.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sharenpo.fullname" . }}-clamav
+  labels:
+    {{- include "sharenpo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clamav
+spec:
+  # 시그니처 DB를 공유하는 단일 인스턴스 — 여러 개로 늘리면 각자 시그니처 DB를
+  # 따로 내려받아 사이드카 방식의 낭비를 다시 불러온다(ADR 0059 Decision D2 취지).
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: clamav
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: clamav
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: clamav
+          image: "{{ .Values.clamav.image.repository }}:{{ .Values.clamav.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: clamd
+              containerPort: 3310
+              protocol: TCP
+          {{- /* 공식 이미지에 내장된 헬스체크 스크립트 — docker-compose.yml의 healthcheck와 동일. */}}
+          livenessProbe:
+            exec:
+              command: ['clamdcheck.sh']
+            # 시그니처 DB를 처음 내려받는 데 시간이 걸린다(docker-compose.yml과 동일한 근거).
+            initialDelaySeconds: 180
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 10
+          readinessProbe:
+            exec:
+              command: ['clamdcheck.sh']
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 6
+          {{- with .Values.clamav.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: clamav-data
+              mountPath: /var/lib/clamav
+      volumes:
+        - name: clamav-data
+          {{- if .Values.clamav.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "sharenpo.fullname" . }}-clamav
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
