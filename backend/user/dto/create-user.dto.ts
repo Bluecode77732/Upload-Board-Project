@@ -3,7 +3,7 @@ import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 
 export class CreateUserDto {
   @ApiProperty({
-    description: 'User Email',
+    description: '유저 이메일. (User Email.)',
     example: 'x@gmail.com',
     type: String,
   })
@@ -12,7 +12,7 @@ export class CreateUserDto {
   email: string;
 
   @ApiProperty({
-    description: 'User Password',
+    description: '유저 비밀번호. (User Password.)',
     example: 'test@!$!13',
     type: String,
   })

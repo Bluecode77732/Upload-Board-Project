@@ -19,7 +19,9 @@ export class UpdateFileDto extends PartialType(
   @IsOptional()
   @IsString()
   @ApiPropertyOptional({
-    description: 'Already-promoted filename (granted_ prefix)',
+    description:
+      '이미 승격된 파일명(granted_ 접두사). (Already-promoted filename (granted_ ' +
+      'prefix).)',
     example: 'granted_67ff0c79-a1f0-4d4f-865c-681af920378d_1764581241716.mp4',
   })
   filePath?: string;
@@ -28,7 +30,10 @@ export class UpdateFileDto extends PartialType(
   @IsEnum(FileVisibility)
   @ApiPropertyOptional({
     description:
-      "Toggle who can reach GET /file/:id/content. Switching to 'unlisted' generates a share token if the file does not already have one (ADR 0025 D1).",
+      "GET /file/:id/content에 누가 접근할 수 있는지를 전환한다. 'unlisted'로 " +
+      '바꾸면 파일에 아직 공유 토큰이 없을 때 새로 만든다(ADR 0025 D1). (Toggle who ' +
+      "can reach GET /file/:id/content. Switching to 'unlisted' generates a share " +
+      'token if the file does not already have one (ADR 0025 D1).)',
     enum: FileVisibility,
   })
   visibility?: FileVisibility;
@@ -37,7 +42,10 @@ export class UpdateFileDto extends PartialType(
   @IsBoolean()
   @ApiPropertyOptional({
     description:
-      "Regenerate the share token, invalidating every previously shared link. Only takes effect when the resulting visibility is 'unlisted' (ADR 0025 D3).",
+      '공유 토큰을 재발급해 이전에 공유된 모든 링크를 무효화한다. 결과 visibility가 ' +
+      "'unlisted'일 때만 효과가 있다(ADR 0025 D3). (Regenerate the share token, " +
+      'invalidating every previously shared link. Only takes effect when the resulting ' +
+      "visibility is 'unlisted' (ADR 0025 D3).)",
   })
   rotateShareToken?: boolean;
 
@@ -45,7 +53,10 @@ export class UpdateFileDto extends PartialType(
   @IsISO8601()
   @ApiPropertyOptional({
     description:
-      "Optional expiry for the current share token. Only takes effect when the resulting visibility is 'unlisted'; omit for a permanent link (ADR 0025 D3).",
+      "현재 공유 토큰의 선택적 만료 시각. 결과 visibility가 'unlisted'일 때만 " +
+      '효과가 있다; 생략하면 영구 링크가 된다(ADR 0025 D3). (Optional expiry for the ' +
+      'current share token. Only takes effect when the resulting visibility is ' +
+      "'unlisted'; omit for a permanent link (ADR 0025 D3).)",
     example: '2026-12-31T00:00:00.000Z',
   })
   shareExpiresAt?: string;

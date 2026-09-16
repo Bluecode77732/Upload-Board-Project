@@ -16,7 +16,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import type { Readable } from 'node:stream';
 import { FileService } from './file.service';
@@ -46,7 +46,7 @@ const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
 const RANGE_PATTERN = /^bytes=(\d*)-(\d*)$/;
 
 @Controller('file')
-@ApiTags('File API')
+@ApiTags('파일 API (File API)')
 export class FileContentController {
   private readonly logger = new Logger(FileContentController.name);
 
@@ -57,32 +57,53 @@ export class FileContentController {
 
   @Get(':id/content')
   @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({
+    summary:
+      '파일의 실제 저장 바이트를 스트리밍한다. (Stream a file’s stored bytes.)',
+  })
   @ApiQuery({
     name: 'share',
     required: false,
     description:
-      "The file's current share token — required only when its visibility is 'unlisted' (ADR 0025 D3).",
+      "파일의 현재 공유 토큰 — visibility가 'unlisted'일 때만 필요하다(ADR 0025 D3). " +
+      "(The file's current share token — required only when its visibility is " +
+      "'unlisted' (ADR 0025 D3).)",
   })
   @ApiResponse({
     status: 200,
     description:
-      'The stored bytes. Requires no auth for a public file, an owner/admin bearer token for a private file, and a matching ?share= token (no login required) for an unlisted file.',
+      '저장된 바이트. public 파일은 인증이 필요 없고, private 파일은 소유자/admin ' +
+      'bearer 토큰이, unlisted 파일은 일치하는 ?share= 토큰(로그인 불필요)이 필요하다. ' +
+      '(The stored bytes. Requires no auth for a public file, an owner/admin bearer token ' +
+      'for a private file, and a matching ?share= token (no login required) for an ' +
+      'unlisted file.)',
   })
   @ApiResponse({
     status: 206,
-    description: 'Partial content for a Range request (video/audio seeking).',
+    description:
+      'Range 요청(비디오/오디오 탐색)에 대한 부분 콘텐츠. (Partial content for a Range ' +
+      'request (video/audio seeking).)',
   })
   @ApiResponse({
     status: 302,
     description:
-      'Under STORAGE_DRIVER=s3 only: redirects to a short-lived presigned S3 URL instead of proxying bytes (ADR 0036). Never returned under the local adapter.',
+      'STORAGE_DRIVER=s3일 때만: 바이트를 프록시하는 대신 단기 presigned S3 URL로 ' +
+      '리다이렉트한다(ADR 0036). local 어댑터에서는 절대 반환되지 않는다. (Under ' +
+      'STORAGE_DRIVER=s3 only: redirects to a short-lived presigned S3 URL instead of ' +
+      'proxying bytes (ADR 0036). Never returned under the local adapter.)',
   })
   @ApiResponse({
     status: 403,
     description:
-      'FORBIDDEN_NOT_OWNER for a private file requested by a non-owner/non-admin, or FILE_SHARE_INVALID for a missing/wrong/expired unlisted share token.',
+      '소유자·admin이 아닌 요청자가 private 파일에 접근하면 FORBIDDEN_NOT_OWNER, ' +
+      'unlisted 파일의 공유 토큰이 없거나 틀리거나 만료됐으면 FILE_SHARE_INVALID. ' +
+      '(FORBIDDEN_NOT_OWNER for a private file requested by a non-owner/non-admin, or ' +
+      'FILE_SHARE_INVALID for a missing/wrong/expired unlisted share token.)',
   })
-  @ApiResponse({ status: 404, description: 'FILE_NOT_FOUND.' })
+  @ApiResponse({
+    status: 404,
+    description: 'FILE_NOT_FOUND — 존재하지 않는 파일이다. (FILE_NOT_FOUND.)',
+  })
   // 목적: 가시성 검사를 통과한 파일의 실제 바이트를, 가능하면 S3 리다이렉트로, 아니면 Range 요청까지
   //       지원하는 스트리밍으로 내려준다.
   // 이유: 접근 판정은 FileService가 이미 끝냈으므로 여기서는 순수 전달만 남는다. 프록시 스트리밍은

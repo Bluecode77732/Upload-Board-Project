@@ -10,7 +10,7 @@ export class CreateCommentDto {
   @IsNotEmpty()
   @MaxLength(1000)
   @ApiProperty({
-    description: 'Comment body.',
+    description: '댓글 본문. (Comment body.)',
     maxLength: 1000,
     example: 'Great clip — where was this filmed?',
   })

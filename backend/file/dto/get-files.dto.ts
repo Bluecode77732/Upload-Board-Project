@@ -29,7 +29,7 @@ export class GetFilesDto {
   @Min(1)
   @Max(100)
   @ApiPropertyOptional({
-    description: 'Number of files to return',
+    description: '반환할 파일 개수. (Number of files to return.)',
     default: 20,
     minimum: 1,
     maximum: 100,
@@ -40,7 +40,7 @@ export class GetFilesDto {
   @IsInt()
   @Min(0)
   @ApiPropertyOptional({
-    description: 'Number of files to skip',
+    description: '건너뛸 파일 개수. (Number of files to skip.)',
     default: 0,
     minimum: 0,
   })
@@ -53,7 +53,10 @@ export class GetFilesDto {
   @MaxLength(100)
   @ApiPropertyOptional({
     description:
-      'Case-insensitive partial match on the title. Wildcards are escaped, so % and _ match literally. Blank or whitespace-only is treated as absent.',
+      '제목에 대한 대소문자 무시 부분 일치. 와일드카드는 이스케이프되어 %와 _가 문자 ' +
+      '그대로 매칭된다. 공백뿐이거나 비어 있으면 없는 것으로 취급한다. ' +
+      '(Case-insensitive partial match on the title. Wildcards are escaped, so % and _ ' +
+      'match literally. Blank or whitespace-only is treated as absent.)',
     maxLength: 100,
     example: 'holiday',
   })
@@ -62,7 +65,9 @@ export class GetFilesDto {
   @IsOptional()
   @IsIn(FILE_SORT_FIELDS)
   @ApiPropertyOptional({
-    description: 'Column to sort by. Only these keys are accepted.',
+    description:
+      '정렬 기준 컬럼. 이 값들만 허용된다. (Column to sort by. Only these keys are ' +
+      'accepted.)',
     enum: FILE_SORT_FIELDS,
     default: 'createdAt',
   })
@@ -71,7 +76,7 @@ export class GetFilesDto {
   @IsOptional()
   @IsIn(SORT_ORDERS)
   @ApiPropertyOptional({
-    description: 'Sort direction.',
+    description: '정렬 방향. (Sort direction.)',
     enum: SORT_ORDERS,
     default: 'DESC',
   })
@@ -81,7 +86,8 @@ export class GetFilesDto {
   @IsInt()
   @Min(1)
   @ApiPropertyOptional({
-    description: 'Return only the files created by this user.',
+    description:
+      '이 유저가 만든 파일만 반환한다. (Return only the files created by this user.)',
     minimum: 1,
   })
   creatorId?: number;

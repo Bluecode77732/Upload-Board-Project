@@ -1987,9 +1987,37 @@ Swagger는 *곧* API 문서다(ADR 0009), 그러므로 이 데코레이터들은
 문서 버그다.
 - 모든 컨트롤러: `@ApiTags`; 인증이 필요한 컨트롤러는 클래스 레벨에서
   `@ApiBearerAuth`
-- 엔드포인트는 `@ApiResponse`로 상태 코드를 문서화한다; Basic 토큰
-  엔드포인트는 `@ApiBasicAuth`를 쓴다
+- 모든 엔드포인트: `@ApiOperation({ summary: ... })` (2026-09-16 추가 — 이전에는
+  `auth.controller.ts`의 `register`에만 있어서, `/doc`의 엔드포인트 목록 대부분에
+  요약 한 줄이 아예 없었다)
+- 엔드포인트는 실제 서비스가 던질 수 있는 모든 상태 코드를 `@ApiResponse`로
+  문서화한다 — 추측이 아니라 서비스 메서드의 실제 throw 지점을 확인한 값이다
+  (환각 방지 #1); Basic 토큰 엔드포인트는 `@ApiBasicAuth`를 쓴다
 - `/doc`의 Swagger UI는 `persistAuthorization: true`
+
+**이중 언어 표기 규약 (2026-09-16 결정)**: `@ApiTags`/`@ApiOperation`/
+`@ApiResponse`/`@ApiProperty`/`@ApiPropertyOptional` 텍스트는 한글 요약 뒤에 괄호로
+영문 원문을 병기한다 — `'<한글 요약>. (<English original>)'`. 전체를 한글로만 새로
+쓰거나 영문을 그대로 두는 대안 대신 이 형식을 택한 이유는, 이 프로젝트에 이미 있는 두
+이중 언어 선례의 무게를 재본 결과다: 소스 코드 주석(한글 전용, 영문 병기 없음 — File
+Creation Convention)과 `.md` 문서(별도 `.ko.md` 파일로 완전 이중 언어 — Documentation
+Convention). Swagger에는 `.md` 문서 같은 형제 파일 메커니즘이 없다 — 같은 문자열이
+`/doc` 한 페이지에서 모든 독자에게 그대로 렌더링된다 — 그래서 `.ko.md` 관행의 "두
+언어를 다 유지하고 아무것도 잃지 않는다"는 정신을, 파일을 하나 더 두는 대신 문자열
+하나에 담았다. 영문 절반은 **원문 그대로**이지 재번역이 아니므로 정보 손실이 없다;
+`ErrorCode` 이름, ADR 인용, 그 밖의 식별자는 양쪽 절반 모두에서 원문 그대로 유지한다
+(식별자이지 산문이 아니므로 — Documentation Convention의 "식별자는 원문 그대로"
+규칙이 여기도 적용된다). `@ApiTags` 값은 추가로 `'{한글} API ({Domain} API)'` 한
+형식으로 통일한다 — `health`/`metrics`만 나머지 아홉 컨트롤러가 이미 쓰던
+`'{Domain} API'` 패턴을 따르지 않고 있었다.
+- `PartialType`/`OmitType`으로 파생된 DTO(`UpdateUserDto`, `UpdateCommentDto`,
+  `UpdatePostDto`)는 베이스 클래스의 `@ApiProperty` 메타데이터를 자동으로 물려받는다 —
+  중복 데코레이터를 추가하지 않는다.
+- `@nestjs/swagger` CLI 플러그인(`nest-cli.json`의 `compilerOptions.plugins`)은
+  데코레이터가 없는 DTO 필드나 핸들러의 추론된 반환 타입에 대해서도 스키마를 스스로
+  채워 넣지만, 설명(description)은 절대 채워 넣지 않는다 — 응답 DTO(`FileResponseDto`,
+  `PostResponseDto`, `CommentResponseDto`)를 데코레이팅하는 건 플러그인이 이미
+  추론해 둔 것 위에 실제로 보이는 문서를 더하는 일이다.
 
 ## CI/CD
 
@@ -2148,3 +2176,40 @@ Node이고, `settings.json`에 연결되지 않는다(그건 `.claude/hooks/`의
 
 스킬은 MCP 서버와 마찬가지로 세션 시작 시 디스크에서 읽힌다 — 새로 추가하거나 수정한
 스킬을 호출하려면 세션 재시작이 필요하다.
+
+### 권한 설정
+
+`.claude/settings.local.json`에는 Paranoid Mode 권한 프로필(`permissions` 아래
+`allow`/`ask`/`deny`)이 들어 있다 — 2026-09-15 추가. 이전까지 로컬 권한 규칙을 담고
+있던 `.claude/claude.local.json`을 대체한 것인데, 그 파일명은 애초에 Claude Code가
+인식하는 이름이 아니었다(로컬 범위 설정 파일로 인식되는 이름은 `settings.local.json`
+하나뿐이다) — 즉 그 규칙들은 그동안 조용히 전혀 적용되지 않고 있었다. `.claude/
+settings.json`과 달리 gitignore 대상이다: 팀 공유 파일이 아니라 개인 로컬 오버라이드다:
+- **`allow`** — 좁고 이 프로젝트에 근거한 항목만 담았다: `npm` 일반형 추측이 아니라
+  루트/`frontend`/`admin` `package.json`에 실제로 있는 스크립트명, 읽기전용
+  `git`/`docker`/`kubectl`/`helm`/`terraform` 조회 명령, 그리고 이 저장소가 쓰는
+  의존성들의 공식 문서 도메인으로 범위를 좁힌 `WebFetch` 허용 목록
+- **`ask`** — 정당하지만 결과가 큰 것들: 의존성 변경, 모든 `migration:*` 스크립트,
+  `promote-superadmin`, `terraform apply`, `kubectl apply`/`helm install`/`upgrade`,
+  PR 생성·병합
+- **`deny`** — 승인 프롬프트를 띄워도 소용없이 막는다, Never Do Group 1–3이 코드에
+  적용하는 것과 같은 논리다: 자격증명 파일(`.env`, `~/.ssh`, `~/.aws`, `~/.docker`,
+  `*.tfvars`, `terraform.tfstate*`), 환경변수 전체 덤프(`env`, `printenv`, PowerShell
+  `Get-ChildItem Env:`), 파괴적인 `git` 조작(`push --force`, `reset --hard`,
+  `filter-branch`, `config --global`, `remote set-url`), 되돌릴 수 없는 클라우드/인프라
+  조작(`terraform destroy`, `aws * delete*`, `helm uninstall`, `kubectl delete`), 클라우드
+  메타데이터 SSRF 대상(`169.254.169.254`)
+- **PowerShell 대응** — `.claude/settings.json`의 기존 deny 규칙은 `Bash(...)` 도구만
+  매칭한다. Windows에서 `PowerShell`은 별도 도구 네임스페이스라 같은 문자열 접두사
+  규칙이 닿지 않으므로, Bash 쪽 파괴적 패턴(강제 push, hard reset, `Invoke-WebRequest`/
+  `iwr`로서의 `curl`/`wget`)을 로컬 파일에서 전부 `PowerShell(...)`로도 미러링했다 —
+  Bash 도구와 PowerShell 도구를 동시에 쓰는 이중 셸 환경에서만 필요한 조치다
+
+요청 없이 임의로 고치지 않고 그대로 남겨둔 알려진 공백(Scope Discipline): PowerShell의
+자유로운 플래그 순서가 단순 접두사 매칭을 무력화한다(`Remove-Item -Recurse -Force`는
+잡히지만 `Remove-Item <경로> -Recurse -Force`는 안 잡힌다 — 완전한 차단에는 sandbox
+기능이라는 다른 메커니즘이 필요하고, 이번에는 시도하지 않았다); `.claude/settings.json`에
+커밋된 `Read(./.env.*)`는 `.env.example`(시크릿이 아닌 무해한 템플릿)까지 부수적으로
+막는데, 이는 팀 공유 파일에 있던 기존 문제라 요청 없이는 건드리지 않았다; `sandbox.*`
+(실행 격리)는 `permissions`(접근 제어)와는 다른 관심사라 이번 작업에서는 설정하지
+않았다.

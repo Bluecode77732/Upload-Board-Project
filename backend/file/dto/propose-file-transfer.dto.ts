@@ -12,7 +12,9 @@ export class ProposeFileTransferDto {
   @Min(1)
   @ApiProperty({
     description:
-      'The user this file is being proposed to. Ownership does not move until that user accepts (ADR 0050).',
+      '이 파일을 제안받는 유저. 그 유저가 수락하기 전까지 소유권은 이동하지 않는다' +
+      '(ADR 0050). (The user this file is being proposed to. Ownership does not move ' +
+      'until that user accepts (ADR 0050).)',
     example: 2,
   })
   userId!: number;

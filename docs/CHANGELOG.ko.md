@@ -12,6 +12,31 @@
 
 ## [Unreleased]
 
+### 변경
+- **API 전체 표면의 Swagger 문서를 확장하고 한글화 (2026-09-16)** — 컨트롤러 11개에
+  걸친 엔드포인트 34개 전부에 `@ApiOperation` 요약을 추가했다(이전에는
+  `auth.controller.ts`의 `register`에만 있었다). `@ApiTags`/`@ApiOperation`/
+  `@ApiResponse`/`@ApiProperty`/`@ApiPropertyOptional` 문자열은 응답 DTO 세 개
+  (`FileResponseDto`/`PostResponseDto`/`CommentResponseDto` 포함) 전부 한글 요약 뒤에
+  괄호로 영문 원문을 병기하는 형식으로 통일했다 — 전체를 한글로만 새로 쓰거나
+  영문으로 남겨두는 대안 대신, 이 프로젝트에 이미 있는 두 이중 언어 선례(소스 코드
+  주석은 한글 전용, `.md` 문서는 별도 `.ko.md` 형제 파일)를 저울질해 이 방식을
+  선택했다. 근거 전문은 CLAUDE.md > Key Conventions > Swagger 참고. `@ApiTags` 값은
+  `'{한글} API ({Domain} API)'` 한 형식으로 통일했다(`health`/`metrics`만 나머지
+  아홉 컨트롤러가 쓰던 `'{Domain} API'` 형태를 따르지 않고 있었다). 각 서비스
+  메서드가 실제로 던지는 지점을 추측이 아니라 직접 추적하는 과정에서 실제 문서
+  버그도 발견해 함께 고쳤다: `POST /auth/signin`은 잘못된 자격 증명일 때 401로
+  문서화돼 있었지만 실제로는 `AuthService.validateUser`가 400
+  `AUTH_INVALID_CREDENTIALS`를 던지고 있었다; `POST /auth/register`는 400 응답
+  세 가지가 전부 빠져 있었다; `GET /user/:id`, `PATCH /user/:id`,
+  `PATCH /user/:id/role`은 `@ApiResponse`가 아예 없었다; `GET /file/:id`,
+  `PATCH /file/:id`, `DELETE /file/:id`도 `@ApiResponse`가 아예 없었다; 그리고
+  `POST /file/:id/transfer/accept`, `POST /file/:id/transfer/reject`,
+  `DELETE /file/:id/transfer`는 각각 실제 도달 가능한 404가 빠져 있었다. 스키마·
+  가드·라우트 변경은 없다 — 데코레이터만 바뀌었다. `pnpm run build`(`@nestjs/swagger`
+  CLI 플러그인을 실제로 거친다), `pnpm run lint:ci`, `pnpm test`(278/278) 모두
+  통과했다.
+
 ### 보안
 - **`trust proxy`를 앱의 VPC CIDR로 설정 (2026-09-14, [ADR
   0054](ADR/0054-per-route-rate-limit-tuning.ko.md)의 2026-09-10 addendum 해결)** —

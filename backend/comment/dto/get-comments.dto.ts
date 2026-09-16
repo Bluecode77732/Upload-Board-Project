@@ -11,7 +11,7 @@ export class GetCommentsDto {
   @Min(1)
   @Max(100)
   @ApiPropertyOptional({
-    description: 'Number of comments to return',
+    description: '반환할 댓글 개수. (Number of comments to return.)',
     default: 20,
     minimum: 1,
     maximum: 100,
@@ -22,7 +22,7 @@ export class GetCommentsDto {
   @IsInt()
   @Min(0)
   @ApiPropertyOptional({
-    description: 'Number of comments to skip',
+    description: '건너뛸 댓글 개수. (Number of comments to skip.)',
     default: 0,
     minimum: 0,
   })
