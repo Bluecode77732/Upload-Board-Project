@@ -1615,6 +1615,31 @@ Architecture Decisions above remain operative.
   Network Policy enforcement agent (a different engine than Calico) stays genuinely
   AWS-only-verifiable — the same residual ADR 0056 already carries, not a new one
   (ROADMAP.md §9)
+- `app.enableShutdownHooks()` is never called in `backend/main.ts` (grep-confirmed zero
+  hits), so TypeORM's own `onApplicationShutdown` hook — the code that closes the DB
+  connection pool cleanly — never runs. On SIGTERM the process just dies, and the OS
+  cleans up the connection pool instead of the application doing it.
+
+  **Reviewed 2026-09-16, decided: defer, not urgent.** Two reasons:
+
+  1. Every DB write in this app finishes inside a single-request transaction (the
+     QueryRunner or `dataSource.transaction()` patterns in Project-Specific Principles >
+     Transaction Boundary). If the connection drops mid-transaction, Postgres rolls it
+     back automatically — so an abrupt kill can't corrupt data, it only fails the one
+     request that was in flight (a retriable failure, not data loss or a connection leak).
+  2. There is currently no live deployment for this to matter against (all three
+     Terraform states destroyed 2026-08-28; currently not applied, per the Terraform/
+     infra entry above).
+
+  Turning the hook on wouldn't prevent damage — it would just make shutdown cleaner:
+  instead of the OS forcing the connection closed, the app would close it itself. That
+  matters more once this is redeployed to K8s, so it's slated for then (ROADMAP.md
+  §7/§9's redeploy work) rather than as a standalone task now. The change itself is one
+  line (`app.enableShutdownHooks();` before `app.listen(...)` in `main.ts`), so there was
+  no real alternative to weigh — only a timing call.
+
+  No ADR: like the account-enumeration entry above, nothing in the codebase changed and
+  there's no architectural alternative to record.
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for
