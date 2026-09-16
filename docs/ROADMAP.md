@@ -1469,6 +1469,18 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   as missing too; both are actually present, only 0052/0054 are not). Left unbackfilled — out of
   scope for the task that found it. Backfill when explicitly requested, following the existing
   `### Security`/`### Changed` entry format each ADR's section already uses.
+- ~~App-size / capacity optimization~~ — **reviewed 2026-09-16: not needed.** Checked two
+  things directly instead of assuming: uploaded-file storage capacity, and the app's own
+  code/image size. Storage: [ADR 0049](ADR/0049-performance-capacity-criteria.md) D4 already
+  rejected an absolute disk ceiling in favor of usage-rate monitoring, and nothing has changed
+  that call — there is still no live AWS deployment and `file/upload`/`file/temp`/the dev DB
+  are all empty, so there is no real usage to optimize against. Code/image size: dependencies
+  are already lean (3 production packages in `frontend/`, 7 in `admin/`, nothing heavyweight in
+  `backend/`), the built output is small (`dist` 1.7M, `frontend/dist` 306K, `admin/dist`
+  342K), and the `Dockerfile` is already a multi-stage build on a `-slim` base with dev
+  dependencies pruned — distroless was already weighed and deferred with a stated reason (ADR
+  0030). No code changed. Revisit only once real deployment traffic, or a concrete measured
+  problem (a chunk-size warning, a bloated pushed image), actually shows up.
 
 ## 8. Advisory notes
 
