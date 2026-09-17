@@ -3,11 +3,11 @@
 // 근거: ADR 0031 — 이전에는 이 API가 "프로세스가 살아있다"거나 "트래픽을 보내도 안전하다"를 알릴 방법이 전혀 없었다.
 
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
-import { ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { HealthService } from './health.service';
 
-@ApiTags('health')
+@ApiTags('헬스 API (Health API)')
 @Controller('health')
 // kubelet의 liveness/readiness probe는 파드가 떠 있는 내내 초 단위로 영구 반복 호출하도록
 // 설계돼 있다 — 전역 요청 횟수 제한(ADR 0053)에 걸리면 정상 프로세스가 재시작될 수 있다.
@@ -19,7 +19,14 @@ export class HealthController {
   // 이유: 오케스트레이터/Docker HEALTHCHECK가 이 응답 없이는 컨테이너를 재시작해야 할지 판단할 수 없다.
   // 방법: 의존성 확인 없이 즉시 200을 반환한다 — DB 등 외부 상태가 잠깐 흔들려도 재시작 루프를 유발하지 않는다(ADR 0031).
   @Get('live')
-  @ApiResponse({ status: 200, description: 'Process is running.' })
+  @ApiOperation({
+    summary:
+      '프로세스 생존 여부를 알린다(liveness). (Report process liveness.)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '프로세스가 실행 중이다. (Process is running.)',
+  })
   live() {
     return { status: 'ok' };
   }
@@ -28,8 +35,18 @@ export class HealthController {
   // 이유: DB가 끊긴 상태에서도 liveness만으로 트래픽을 계속 보내면 매 요청이 개별적으로 실패한다.
   // 방법: HealthService에 DB ping을 위임하고, 실패 시 503으로 변환해 오케스트레이터가 이 인스턴스로의 라우팅을 멈추게 한다.
   @Get('ready')
-  @ApiResponse({ status: 200, description: 'Ready to receive traffic.' })
-  @ApiResponse({ status: 503, description: 'A dependency is unreachable.' })
+  @ApiOperation({
+    summary:
+      '트래픽 수신 준비 여부를 알린다(readiness). (Report readiness to receive traffic.)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '트래픽을 받을 준비가 됐다. (Ready to receive traffic.)',
+  })
+  @ApiResponse({
+    status: 503,
+    description: '의존 리소스에 연결할 수 없다. (A dependency is unreachable.)',
+  })
   async ready() {
     const isReady = await this.healthService.checkDatabase();
     if (!isReady) {

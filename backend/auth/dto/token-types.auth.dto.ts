@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class bearerTokenType {
   @ApiProperty({
-    description: 'JWT access token',
+    description: 'JWT 액세스 토큰. (JWT access token.)',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
   accessToken: string;

@@ -96,3 +96,10 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
+
+# Claude Code 로컬 권한 설정 — 개발자 머신별 Paranoid Mode 권한(allow/ask/deny)을 담은
+# 파일로, 팀 공유용 .claude/settings.json과 달리 개인 로컬 오버라이드라 커밋하지 않는다.
+# claude.local.json은 이전에 쓰이던 비표준 파일명(Claude Code가 인식하는 로컬 설정
+# 파일명은 settings.local.json뿐)이 남아 있는 경우까지 함께 막기 위해 같이 올려둔다
+/.claude/settings.local.json
+/.claude/claude.local.json

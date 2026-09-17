@@ -22,7 +22,7 @@ export class UploadFileDto {
   @IsString()
   @IsNotEmpty()
   @ApiProperty({
-    description: 'File title',
+    description: '파일 제목. (File title.)',
     example: 'my-video-title',
   })
   title!: string;
@@ -34,7 +34,9 @@ export class UploadFileDto {
   })
   @ApiProperty({
     description:
-      'Filename returned from POST /upload/attach, echoed back verbatim. Each filename can be claimed once.',
+      'POST /upload/attach가 반환한 파일명을 그대로 되돌려준다. 각 파일명은 한 번만 ' +
+      '청구할 수 있다. (Filename returned from POST /upload/attach, echoed back ' +
+      'verbatim. Each filename can be claimed once.)',
     example: 'temp_67ff0c79-a1f0-4d4f-865c-681af920378d_1764581241716.mp4',
   })
   filePath!: string;
@@ -43,7 +45,10 @@ export class UploadFileDto {
   @IsEnum(FileVisibility)
   @ApiPropertyOptional({
     description:
-      "Initial visibility for the promoted file. Omit to default to 'private'. Setting 'unlisted' generates a share token at creation (ADR 0025 D1).",
+      "승격된 파일의 초기 공개범위. 생략하면 'private'가 기본값이다. 'unlisted'로 " +
+      '설정하면 생성 시점에 공유 토큰이 만들어진다(ADR 0025 D1). (Initial visibility ' +
+      "for the promoted file. Omit to default to 'private'. Setting 'unlisted' " +
+      'generates a share token at creation (ADR 0025 D1).)',
     enum: FileVisibility,
   })
   visibility?: FileVisibility;

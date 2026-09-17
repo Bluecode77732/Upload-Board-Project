@@ -29,7 +29,7 @@ export class GetPostsDto {
   @Min(1)
   @Max(100)
   @ApiPropertyOptional({
-    description: 'Number of posts to return',
+    description: '반환할 게시글 개수. (Number of posts to return.)',
     default: 20,
     minimum: 1,
     maximum: 100,
@@ -40,7 +40,7 @@ export class GetPostsDto {
   @IsInt()
   @Min(0)
   @ApiPropertyOptional({
-    description: 'Number of posts to skip',
+    description: '건너뛸 게시글 개수. (Number of posts to skip.)',
     default: 0,
     minimum: 0,
   })
@@ -53,7 +53,10 @@ export class GetPostsDto {
   @MaxLength(100)
   @ApiPropertyOptional({
     description:
-      'Case-insensitive partial match on the title. Wildcards are escaped, so % and _ match literally. Blank or whitespace-only is treated as absent.',
+      '제목에 대한 대소문자 무시 부분 일치. 와일드카드는 이스케이프되어 %와 _가 문자 ' +
+      '그대로 매칭된다. 공백뿐이거나 비어 있으면 없는 것으로 취급한다. ' +
+      '(Case-insensitive partial match on the title. Wildcards are escaped, so % and _ ' +
+      'match literally. Blank or whitespace-only is treated as absent.)',
     maxLength: 100,
     example: 'holiday',
   })
@@ -62,7 +65,9 @@ export class GetPostsDto {
   @IsOptional()
   @IsIn(POST_SORT_FIELDS)
   @ApiPropertyOptional({
-    description: 'Column to sort by. Only these keys are accepted.',
+    description:
+      '정렬 기준 컬럼. 이 값들만 허용된다. (Column to sort by. Only these keys are ' +
+      'accepted.)',
     enum: POST_SORT_FIELDS,
     default: 'createdAt',
   })
@@ -71,7 +76,7 @@ export class GetPostsDto {
   @IsOptional()
   @IsIn(SORT_ORDERS)
   @ApiPropertyOptional({
-    description: 'Sort direction.',
+    description: '정렬 방향. (Sort direction.)',
     enum: SORT_ORDERS,
     default: 'DESC',
   })
@@ -81,7 +86,9 @@ export class GetPostsDto {
   @IsInt()
   @Min(1)
   @ApiPropertyOptional({
-    description: 'Return only the posts written by this user.',
+    description:
+      '이 유저가 작성한 게시글만 반환한다. (Return only the posts written by this ' +
+      'user.)',
     minimum: 1,
   })
   creatorId?: number;

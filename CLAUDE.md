@@ -1615,6 +1615,31 @@ Architecture Decisions above remain operative.
   Network Policy enforcement agent (a different engine than Calico) stays genuinely
   AWS-only-verifiable — the same residual ADR 0056 already carries, not a new one
   (ROADMAP.md §9)
+- `app.enableShutdownHooks()` is never called in `backend/main.ts` (grep-confirmed zero
+  hits), so TypeORM's own `onApplicationShutdown` hook — the code that closes the DB
+  connection pool cleanly — never runs. On SIGTERM the process just dies, and the OS
+  cleans up the connection pool instead of the application doing it.
+
+  **Reviewed 2026-09-16, decided: defer, not urgent.** Two reasons:
+
+  1. Every DB write in this app finishes inside a single-request transaction (the
+     QueryRunner or `dataSource.transaction()` patterns in Project-Specific Principles >
+     Transaction Boundary). If the connection drops mid-transaction, Postgres rolls it
+     back automatically — so an abrupt kill can't corrupt data, it only fails the one
+     request that was in flight (a retriable failure, not data loss or a connection leak).
+  2. There is currently no live deployment for this to matter against (all three
+     Terraform states destroyed 2026-08-28; currently not applied, per the Terraform/
+     infra entry above).
+
+  Turning the hook on wouldn't prevent damage — it would just make shutdown cleaner:
+  instead of the OS forcing the connection closed, the app would close it itself. That
+  matters more once this is redeployed to K8s, so it's slated for then (ROADMAP.md
+  §7/§9's redeploy work) rather than as a standalone task now. The change itself is one
+  line (`app.enableShutdownHooks();` before `app.listen(...)` in `main.ts`), so there was
+  no real alternative to weigh — only a timing call.
+
+  No ADR: like the account-enumeration entry above, nothing in the codebase changed and
+  there's no architectural alternative to record.
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for
@@ -1925,8 +1950,37 @@ const mockFileRepository = {
 Swagger *is* the API documentation (ADR 0009), so these decorators are mandatory, not
 cosmetic — a missing or wrong one is a documentation bug caught in Result Review.
 - Every controller: `@ApiTags`; protected controllers: `@ApiBearerAuth` at class level
-- Endpoints document status codes via `@ApiResponse`; Basic-token endpoints use `@ApiBasicAuth`
+- Every endpoint: `@ApiOperation({ summary: ... })` (added 2026-09-16 — before this, only
+  `auth.controller.ts`'s `register` had one, so `/doc`'s endpoint list showed no summary
+  line for any other route)
+- Endpoints document every status code the underlying service can actually throw via
+  `@ApiResponse` (verified against the service method's real throw sites, not guessed —
+  Hallucination Prevention #1); Basic-token endpoints use `@ApiBasicAuth`
 - Swagger UI at `/doc` with `persistAuthorization: true`
+
+**Bilingual text convention (decided 2026-09-16)**: `@ApiTags`/`@ApiOperation`/
+`@ApiResponse`/`@ApiProperty`/`@ApiPropertyOptional` text is a Korean summary followed by
+the English original in parentheses — `'<한글 요약>. (<English original>)'`. Chosen over a
+full Korean-only rewrite or leaving the surface English-only, weighing this project's two
+existing bilingual precedents: source-code comments (Korean-only, no English pair — File
+Creation Convention) vs. `.md` docs (fully bilingual via a separate `.ko.md` sibling —
+Documentation Convention). Swagger has no sibling-file mechanism — the same string renders
+in the same `/doc` page for every reader — so this carries the `.ko.md` convention's "keep
+both languages, lose nothing" spirit into one inline string instead of a second file. The
+English half is the **original** wording, not a re-translation, so nothing is lost;
+`ErrorCode` names, ADR citations, and other identifiers stay verbatim in both halves (they
+are identifiers, not prose — Documentation Convention's "keep identifiers verbatim" rule
+applies here too). `@ApiTags` values additionally follow one shape,
+`'{한글} API ({Domain} API)'` — `health`/`metrics` were the only two controllers not
+already using the `'{Domain} API'` pattern the other nine did.
+- A `PartialType`/`OmitType`-derived DTO (`UpdateUserDto`, `UpdateCommentDto`,
+  `UpdatePostDto`) inherits its base class's `@ApiProperty` metadata automatically — do
+  not add redundant decorators to it.
+- The `@nestjs/swagger` CLI plugin (`nest-cli.json`'s `compilerOptions.plugins`) fills in
+  a schema for an undecorated DTO field or an inferred handler return type on its own, but
+  never a description — decorating a response DTO (`FileResponseDto`, `PostResponseDto`,
+  `CommentResponseDto`) still adds real, visible documentation on top of what the plugin
+  already infers.
 
 ## CI/CD
 
@@ -2084,3 +2138,40 @@ prose into invocable, step-by-step workflows:
 
 Skills are read from disk at session start, same as MCP servers — a session restart is
 needed before a newly added or edited skill is invocable.
+
+### Permissions
+
+`.claude/settings.local.json` holds a Paranoid Mode permission profile (`allow`/`ask`/`deny`
+under `permissions`) — added 2026-09-15. It replaces `.claude/claude.local.json`, which had
+carried the project's local permission rules under a filename Claude Code never actually
+loads (the only recognized local-scope file is `settings.local.json`) — those rules had
+silently never applied. Gitignored, unlike `.claude/settings.json`: a personal local
+override, not a team-shared file:
+- **`allow`** — narrow and project-grounded: the real script names from root/`frontend`/
+  `admin` `package.json` (not generic `npm` guesses), read-only `git`/`docker`/`kubectl`/
+  `helm`/`terraform` inspection, and a `WebFetch` domain allowlist scoped to this repo's own
+  dependencies' official docs
+- **`ask`** — legitimate but consequential: dependency changes, every `migration:*` script,
+  `promote-superadmin`, `terraform apply`, `kubectl apply`/`helm install`/`upgrade`, PR
+  creation/merge
+- **`deny`** — blocks even past a prompt, the same reasoning Never Do Groups 1–3 apply to
+  code: credential files (`.env`, `~/.ssh`, `~/.aws`, `~/.docker`, `*.tfvars`,
+  `terraform.tfstate*`), whole-environment dumps (`env`, `printenv`, PowerShell
+  `Get-ChildItem Env:`), destructive `git` (`push --force`, `reset --hard`, `filter-branch`,
+  `config --global`, `remote set-url`), irreversible cloud/infra ops (`terraform destroy`,
+  `aws * delete*`, `helm uninstall`, `kubectl delete`), and the cloud-metadata SSRF target
+  (`169.254.169.254`)
+- **PowerShell parity** — `.claude/settings.json`'s deny rules only match the `Bash(...)`
+  tool; on Windows, `PowerShell` is a separate tool namespace the same string-prefix rules
+  do not reach, so every Bash-side destructive pattern (force-push, hard-reset, `curl`/
+  `wget` as `Invoke-WebRequest`/`iwr`) is mirrored under `PowerShell(...)` in the local
+  file — specific to a dual-shell (Bash tool + PowerShell tool) environment
+
+Known gaps, left as-is rather than fixed without request (Scope Discipline): PowerShell's
+free flag ordering defeats simple prefix matching (`Remove-Item -Recurse -Force` is covered,
+`Remove-Item <path> -Recurse -Force` is not — full coverage needs the sandbox feature, a
+different mechanism, not attempted here); `.claude/settings.json`'s committed
+`Read(./.env.*)` also blocks `.env.example` (a harmless template, not a secret) as a side
+effect — pre-existing, in the team-shared file, left untouched without an explicit request;
+`sandbox.*` (execution isolation) is a distinct concern from `permissions` (access control)
+and was not configured in this pass.

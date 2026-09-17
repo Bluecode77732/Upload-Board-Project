@@ -12,6 +12,31 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Changed
+- **Swagger documentation expanded and Koreanized across the entire API surface
+  (2026-09-16)** — every one of the 34 endpoints across all 11 controllers gained an
+  `@ApiOperation` summary (previously only `auth.controller.ts`'s `register` had one),
+  and every `@ApiTags`/`@ApiOperation`/`@ApiResponse`/`@ApiProperty`/
+  `@ApiPropertyOptional` string (including the three response DTOs —
+  `FileResponseDto`/`PostResponseDto`/`CommentResponseDto`) now carries a Korean summary
+  followed by the original English text in parentheses — chosen over a Korean-only
+  rewrite or leaving the surface English-only after weighing this project's two existing
+  bilingual precedents (source comments: Korean-only; `.md` docs: separate `.ko.md`
+  sibling); see CLAUDE.md > Key Conventions > Swagger for the full rationale.
+  `@ApiTags` values are normalized to `'{한글} API ({Domain} API)'` (`health`/`metrics`
+  were the two controllers not already following the `'{Domain} API'` shape the other
+  nine used). Tracing each service method's actual throw sites (not guessed) surfaced
+  real documentation bugs along the way: `POST /auth/signin` documented 401 for invalid
+  credentials when `AuthService.validateUser` actually throws 400
+  `AUTH_INVALID_CREDENTIALS`; `POST /auth/register` was missing all three of its 400
+  cases; `GET /user/:id`, `PATCH /user/:id`, and `PATCH /user/:id/role` had no
+  `@ApiResponse` at all; `GET /file/:id`, `PATCH /file/:id`, and `DELETE /file/:id` had
+  no `@ApiResponse` at all; and `POST /file/:id/transfer/accept`,
+  `POST /file/:id/transfer/reject`, and `DELETE /file/:id/transfer` were each missing
+  their reachable 404. No schema, guard, or route change — decorators only. `pnpm run
+  build` (exercises the `@nestjs/swagger` CLI plugin), `pnpm run lint:ci`, and
+  `pnpm test` (278/278) all pass.
+
 ### Security
 - **`trust proxy` set to the app's VPC CIDR (2026-09-14, resolves the [ADR
   0054](ADR/0054-per-route-rate-limit-tuning.md) 2026-09-10 addendum)** — behind a reverse

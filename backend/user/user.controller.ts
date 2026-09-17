@@ -17,7 +17,12 @@ import { UpdateRoleDto } from './dto/update-role.dto';
 import { DeleteUserQueryDto } from './dto/delete-user-query.dto';
 import { GetUsersDto } from './dto/get-users.dto';
 import { LookupUserDto } from './dto/lookup-user.dto';
-import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from 'backend/auth/guard/jwt-auth.guard';
 import { RolesGuard } from 'backend/auth/guard/roles.guard';
 import { Roles } from 'backend/auth/decorator/roles.decorator';
@@ -25,7 +30,7 @@ import { AuthUser } from 'backend/auth/decorator/auth-user.decorator';
 import { UserRole } from 'backend/auth/role/role';
 
 @Controller('user')
-@ApiTags('User API')
+@ApiTags('유저 API (User API)')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @UseInterceptors(ClassSerializerInterceptor)
@@ -36,23 +41,41 @@ export class UserController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.admin)
+  @ApiOperation({
+    summary: '유저 목록을 조회한다(admin 전용). (List users (admin only).)',
+  })
   @ApiResponse({
     status: 200,
     description:
-      'A [users, totalCount] tuple. Defaults to the 20 newest accounts (createdAt DESC); ' +
+      '[users, totalCount] 튜플. 기본값은 최신 20개 계정(createdAt DESC)이며, take/skip ' +
+      '으로 페이지네이션한다(ROADMAP 실행 순서 #2). search는 이메일 대소문자 무시 부분 ' +
+      '매칭이고, sortBy(createdAt|email|id, 기본 createdAt)와 order(ASC|DESC, 기본 ' +
+      'DESC)가 정렬을 결정하며 id가 항상 타이브레이커로 추가된다(ADR 0021 대응). (A ' +
+      '[users, totalCount] tuple. Defaults to the 20 newest accounts (createdAt DESC); ' +
       'take/skip paginate (ROADMAP execution order #2). search does a case-insensitive ' +
       'partial match on email; sortBy (createdAt|email|id, default createdAt) and order ' +
-      '(ASC|DESC, default DESC) control sort, with id always added as a tiebreaker (ADR 0021 parity).',
+      '(ASC|DESC, default DESC) control sort, with id always added as a tiebreaker (ADR ' +
+      '0021 parity).)',
   })
   @ApiResponse({
     status: 400,
     description:
-      'VALIDATION_FAILED — take is out of 1–100, skip is negative, search exceeds 100 ' +
-      'characters, sortBy/order is not one of the accepted values, or the request carries a ' +
-      "query parameter GetUsersDto doesn't declare (e.g. a typo like ?orderBy=email). The " +
-      'global ValidationPipe runs forbidNonWhitelisted, so an unrecognized parameter is ' +
-      'rejected rather than silently ignored — the same strict-input stance GET /file already ' +
-      'takes (ADR 0021).',
+      'VALIDATION_FAILED — take가 1–100 범위를 벗어나거나, skip이 음수이거나, search가 ' +
+      '100자를 초과하거나, sortBy/order가 허용된 값이 아니거나, GetUsersDto가 선언하지 ' +
+      '않은 쿼리 파라미터가 실렸다(예: ?orderBy=email 같은 오타). 전역 ValidationPipe가 ' +
+      'forbidNonWhitelisted를 실행하므로 알 수 없는 파라미터는 조용히 무시되지 않고 ' +
+      '거부된다 — GET /file이 이미 취하는 것과 같은 엄격한 입력 태도다(ADR 0021). ' +
+      '(VALIDATION_FAILED — take is out of 1–100, skip is negative, search exceeds 100 ' +
+      'characters, sortBy/order is not one of the accepted values, or the request ' +
+      "carries a query parameter GetUsersDto doesn't declare (e.g. a typo like " +
+      '?orderBy=email). The global ValidationPipe runs forbidNonWhitelisted, so an ' +
+      'unrecognized parameter is rejected rather than silently ignored — the same ' +
+      'strict-input stance GET /file already takes (ADR 0021).)',
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'FORBIDDEN — admin 역할이 필요하다. (FORBIDDEN — admin role required.)',
   })
   // 목적: 검증된 페이지네이션 조건을 서비스에 그대로 넘긴다.
   // 이유: GetFilesDto/GetUsersDto 패턴을 따라 컨트롤러가 목록 조회 조건을 직접 해석하지 않게 한다.
@@ -62,14 +85,22 @@ export class UserController {
   }
 
   @Get('lookup')
+  @ApiOperation({
+    summary: '이메일로 유저를 조회한다. (Look up a user by email.)',
+  })
   @ApiResponse({
     status: 200,
     description:
-      'The user with this exact email (ADR 0050 — resolves a file-transfer proposal target). ' +
-      'Any authenticated user may call this — same per-user disclosure level as GET /user/:id, ' +
-      'just keyed by email instead of id.',
+      '이 이메일과 정확히 일치하는 유저다(ADR 0050 — 파일 이전 제안 대상 해석용). 인증된 ' +
+      '유저라면 누구나 호출할 수 있다 — GET /user/:id와 공개 수준은 같고, id 대신 ' +
+      '이메일로 조회할 뿐이다. (The user with this exact email (ADR 0050 — resolves a ' +
+      'file-transfer proposal target). Any authenticated user may call this — same ' +
+      'per-user disclosure level as GET /user/:id, just keyed by email instead of id.)',
   })
-  @ApiResponse({ status: 404, description: 'USER_NOT_FOUND.' })
+  @ApiResponse({
+    status: 404,
+    description: 'USER_NOT_FOUND — 존재하지 않는 이메일이다. (USER_NOT_FOUND.)',
+  })
   // 목적: 이메일로 유저를 조회해 숫자 id를 돌려준다.
   // 이유: 파일 이전 제안 폼은 상대방 이메일만 알고 id는 모르는 게 보통이다 — POST
   //       /file/:id/transfer가 숫자 userId만 받으므로 그 변환이 필요하다(ADR 0050).
@@ -80,6 +111,17 @@ export class UserController {
   }
 
   @Get(':id')
+  @ApiOperation({
+    summary: 'id로 유저 단건을 조회한다. (Get one user by id.)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '유저 엔티티. (The user entity.)',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'USER_NOT_FOUND — 존재하지 않는 유저다. (USER_NOT_FOUND)',
+  })
   // 목적: id로 단일 유저를 조회한다.
   // 이유: 없으면 404를 던지는 판정이 UserService.findOne에 이미 있다 — 컨트롤러가 중복하지 않는다.
   // 방법: 그대로 위임.
@@ -88,6 +130,25 @@ export class UserController {
   }
 
   @Patch(':id')
+  @ApiOperation({
+    summary: '계정 정보를 수정한다. (Update account details.)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '계정이 수정됐다. (The account was updated.)',
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'FORBIDDEN_NOT_OWNER — 본인이 아니고 admin 미만이면 다른 계정을 수정할 수 없다. ' +
+      'FORBIDDEN — admin 이상이어도 동급이거나 더 높은 role의 계정은 수정할 수 없다. ' +
+      '(FORBIDDEN_NOT_OWNER — below admin rank and not the account owner. FORBIDDEN — ' +
+      'admin or higher, but the target has an equal or higher role.)',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'USER_NOT_FOUND — 존재하지 않는 유저다. (USER_NOT_FOUND)',
+  })
   // 목적: 계정 정보 수정 요청을 권한 정보와 함께 서비스로 넘긴다.
   // 이유: "본인이거나 대상보다 낮은 role의 admin 이상"이라는 랭크 비교 판정은 대상 행을 이미
   //       읽는 UserService.update가 갖고 있어야 한다(RBAC 확장, Law of Demeter).
@@ -106,6 +167,29 @@ export class UserController {
   @Patch(':id/role')
   @UseGuards(RolesGuard)
   @Roles(UserRole.superadmin)
+  @ApiOperation({
+    summary:
+      '유저 role을 변경한다(superadmin 전용). (Change a user’s role (superadmin only).)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'role이 변경됐다. (The role was changed.)',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'AUTH_LAST_SUPERADMIN — 마지막 남은 superadmin은 강등할 수 없다. ' +
+      '(AUTH_LAST_SUPERADMIN — cannot demote the last remaining superadmin.)',
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'FORBIDDEN — superadmin 역할이 필요하다. (FORBIDDEN — superadmin role required.)',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'USER_NOT_FOUND — 존재하지 않는 유저다. (USER_NOT_FOUND)',
+  })
   // 목적: role 변경 요청을 서비스로 넘긴다 — UserEntity.role을 바꾸는 유일한 경로.
   // 이유: 마지막 superadmin 강등 방지 등 불변식은 UserService.updateRole의 트랜잭션 안에서만
   //       안전하게 판정할 수 있다(동시 요청 레이스 포함).
@@ -119,15 +203,41 @@ export class UserController {
   }
 
   @Delete(':id')
+  @ApiOperation({
+    summary: '계정을 삭제한다. (Delete an account.)',
+  })
   @ApiResponse({
     status: 200,
     description:
-      'The account is gone. With deleteFiles=true its files (rows and stored files) are gone with it — irreversibly.',
+      '계정이 삭제됐다. deleteFiles=true면 그 계정의 파일(행과 저장된 실물)도 함께, ' +
+      '비가역적으로 삭제된다. (The account is gone. With deleteFiles=true its files ' +
+      '(rows and stored files) are gone with it — irreversibly.)',
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'FORBIDDEN_NOT_OWNER — 본인이 아니고 admin 미만이면 다른 계정을 삭제할 수 없다. ' +
+      'FORBIDDEN — admin 이상이어도 동급이거나 더 높은 role의 계정은 삭제할 수 없다. ' +
+      '(FORBIDDEN_NOT_OWNER — below admin rank and not the account owner. FORBIDDEN — ' +
+      'admin or higher, but the target has an equal or higher role.)',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'USER_NOT_FOUND — 존재하지 않는 유저다. (USER_NOT_FOUND)',
   })
   @ApiResponse({
     status: 409,
     description:
-      "USER_HAS_FILES — the account still owns files and the request did not confirm the cascade. The message carries the file count so the client can warn before repeating with deleteFiles=true (ADR 0020). USER_FILES_IN_USE — the cascade was confirmed, but one of the account's files is attached to another user's post, so nothing was deleted; remove that post first (ADR 0024).",
+      '계정이 여전히 파일을 보유 중인데 요청이 연쇄 삭제를 확인하지 않았으면 ' +
+      'USER_HAS_FILES다. 메시지에 파일 개수가 실려 있어 클라이언트가 ' +
+      'deleteFiles=true로 재요청하기 전에 경고할 수 있다(ADR 0020). 연쇄 삭제는 ' +
+      '확인됐지만 그 계정의 파일 중 하나가 다른 유저의 게시글에 첨부돼 있어 아무것도 ' +
+      '지워지지 않았으면 USER_FILES_IN_USE다 — 그 게시글을 먼저 지워야 한다(ADR ' +
+      '0024). (USER_HAS_FILES — the account still owns files and the request did not ' +
+      'confirm the cascade. The message carries the file count so the client can warn ' +
+      'before repeating with deleteFiles=true (ADR 0020). USER_FILES_IN_USE — the ' +
+      "cascade was confirmed, but one of the account's files is attached to another " +
+      "user's post, so nothing was deleted; remove that post first (ADR 0024).)",
   })
   // 목적: 계정 삭제 요청을 권한 확인 후 서비스로 넘기고, 연쇄 삭제 동의 여부를 함께 전달한다.
   // 이유: 파일까지 지우는 경로는 비가역이므로, 확인 신호가 프론트 경고창이 아니라 요청 자체에 실려야 한다.

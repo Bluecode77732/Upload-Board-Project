@@ -35,9 +35,12 @@ export class AuditLogQueryDto {
   @Min(1)
   @ApiPropertyOptional({
     description:
-      'Return only records where this user was the actor, or was the target of a ' +
-      "user-targeting action (targetType='user' — ROLE_CHANGE, USER_DELETE). Records " +
-      'whose target is a file, post, or comment match only via the actor side.',
+      "이 유저가 행위자이거나, 유저-대상 행위(targetType='user' — ROLE_CHANGE, " +
+      'USER_DELETE)의 대상이었던 기록만 반환한다. 대상이 파일·게시글·댓글인 기록은 ' +
+      '행위자 쪽으로만 매칭된다. (Return only records where this user was the actor, ' +
+      "or was the target of a user-targeting action (targetType='user' — ROLE_CHANGE, " +
+      'USER_DELETE). Records whose target is a file, post, or comment match only via ' +
+      'the actor side.)',
     minimum: 1,
   })
   userId?: number;
@@ -47,7 +50,7 @@ export class AuditLogQueryDto {
   @Min(1)
   @Max(100)
   @ApiPropertyOptional({
-    description: 'Number of records to return',
+    description: '반환할 기록 개수. (Number of records to return.)',
     default: 20,
     minimum: 1,
     maximum: 100,
@@ -58,7 +61,7 @@ export class AuditLogQueryDto {
   @IsInt()
   @Min(0)
   @ApiPropertyOptional({
-    description: 'Number of records to skip',
+    description: '건너뛸 기록 개수. (Number of records to skip.)',
     default: 0,
     minimum: 0,
   })

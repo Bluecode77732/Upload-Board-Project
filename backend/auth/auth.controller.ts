@@ -31,7 +31,7 @@ import type { Request as ExpressRequest, Response } from 'express';
 const REFRESH_TOKEN_COOKIE = 'refreshToken';
 
 @Controller('auth')
-@ApiTags('Authentication API')
+@ApiTags('인증 API (Authentication API)')
 // register가 UserEntity를 반환하므로, 이게 없으면 @Exclude 필드(password,
 // refreshTokenHash)가 응답에 그대로 노출된다(Never Do Group 3).
 @UseInterceptors(ClassSerializerInterceptor)
@@ -43,11 +43,26 @@ export class AuthController {
 
   @Post('register')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({
+    summary:
+      'Basic 토큰(base64 email:password)으로 새 계정을 등록한다. (Register with Basic Token (base64 email:password).)',
+  })
   @ApiBasicAuth()
   @ApiBody({ type: CreateUserDto })
-  @ApiResponse({ status: 201, description: 'Created user.', type: UserEntity })
-  @ApiOperation({
-    description: 'Register with Basic Token (base64 email:password)',
+  @ApiResponse({
+    status: 201,
+    description: '계정이 생성됐다. (Created user.)',
+    type: UserEntity,
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'AUTH_BAD_TOKEN_FORMAT — Basic 토큰 형식이 올바르지 않다. AUTH_WEAK_PASSWORD — ' +
+      '비밀번호가 10자 미만이거나 대문자·소문자·숫자·기호를 모두 포함하지 않는다. ' +
+      'AUTH_EMAIL_TAKEN — 이미 등록된 이메일이다. (AUTH_BAD_TOKEN_FORMAT — the Basic ' +
+      'token is malformed. AUTH_WEAK_PASSWORD — the password is under 10 characters or ' +
+      'missing an uppercase letter, lowercase letter, digit, or symbol. AUTH_EMAIL_TAKEN ' +
+      '— this email is already registered.)',
   })
   // 목적: Basic 토큰 헤더를 그대로 서비스에 전달해 계정을 생성한다.
   // 이유: 회원가입 자격 증명은 body DTO가 아니라 헤더로 받기로 한 결정(ADR 0001) — 컨트롤러는
@@ -60,16 +75,28 @@ export class AuthController {
 
   @Post('signin')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Basic 토큰으로 로그인한다. (Sign in with a Basic token.)',
+  })
   @ApiBasicAuth()
   @ApiResponse({
     status: 201,
     description:
-      'Sign in succeeded. The refresh token is set as an httpOnly cookie (SameSite=Strict, Path=/auth/token); only the access token is returned in the body.',
+      '로그인 성공. 리프레시 토큰은 httpOnly 쿠키(SameSite=Strict, Path=/auth/token)로 ' +
+      '내려가며, 응답 본문에는 액세스 토큰만 실린다. (Sign in succeeded. The refresh ' +
+      'token is set as an httpOnly cookie (SameSite=Strict, Path=/auth/token); only the ' +
+      'access token is returned in the body.)',
     type: bearerTokenType,
     example: { accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
   })
-  @ApiResponse({ status: 400, description: 'Bad request.' })
-  @ApiResponse({ status: 401, description: 'Invalid credentials.' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'AUTH_BAD_TOKEN_FORMAT — Basic 토큰 형식이 올바르지 않다. ' +
+      'AUTH_INVALID_CREDENTIALS — 이메일 또는 비밀번호가 일치하지 않는다. ' +
+      '(AUTH_BAD_TOKEN_FORMAT — the Basic token is malformed. AUTH_INVALID_CREDENTIALS ' +
+      '— the email or password does not match.)',
+  })
   // 목적: Basic 토큰 로그인 — 액세스 토큰은 본문으로, 리프레시 토큰은 httpOnly 쿠키로 내려준다.
   // 이유: 리프레시 토큰은 응답 본문에 절대 실리지 않는다(ADR 0012) — XSS로 JS가 읽을 수 있는
   //       곳에 두지 않기 위함이다. 비밀번호 무차별 대입의 실제 진입점이라 전역 기본값보다
@@ -90,18 +117,27 @@ export class AuthController {
 
   @Post('token/refresh')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({
+    summary:
+      '쿠키의 리프레시 토큰을 회전시켜 새 액세스 토큰을 발급한다. (Rotate the ' +
+      'refresh-token cookie and issue a new access token.)',
+  })
   @ApiCookieAuth(REFRESH_TOKEN_COOKIE)
   @ApiResponse({
     status: 201,
     description:
-      'Rotates the refresh token (new httpOnly cookie) and returns a new access token.',
+      '리프레시 토큰을 회전시키고(새 httpOnly 쿠키) 새 액세스 토큰을 반환한다. ' +
+      '(Rotates the refresh token (new httpOnly cookie) and returns a new access token.)',
     type: bearerTokenType,
     example: { accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
   })
   @ApiResponse({
     status: 401,
     description:
-      'Missing/invalid refresh cookie (AUTH_TOKEN_INVALID) or reuse of a rotated-out token (AUTH_REFRESH_REUSED — session invalidated).',
+      '쿠키가 없거나 유효하지 않다(AUTH_TOKEN_INVALID), 또는 이미 회전되어 무효화된 ' +
+      '토큰이 재사용됐다(AUTH_REFRESH_REUSED — 세션이 무효화된다). (Missing/invalid ' +
+      'refresh cookie (AUTH_TOKEN_INVALID) or reuse of a rotated-out token ' +
+      '(AUTH_REFRESH_REUSED — session invalidated).)',
   })
   // 목적: 쿠키의 리프레시 토큰을 회전시켜 새 액세스 토큰을 발급한다.
   // 이유: 리프레시 토큰은 body/header가 아니라 쿠키로만 오가므로(ADR 0012), 컨트롤러가 직접
@@ -126,13 +162,22 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('signout')
+  @ApiOperation({
+    summary: '현재 세션을 종료한다. (Sign out of the current session.)',
+  })
   @ApiBearerAuth()
   @ApiResponse({
     status: 201,
     description:
-      'Signed out: the stored refresh-token hash is invalidated and the cookie is cleared.',
+      '로그아웃 완료 — 저장된 리프레시 토큰 해시가 무효화되고 쿠키도 지워진다. ' +
+      '(Signed out: the stored refresh-token hash is invalidated and the cookie is ' +
+      'cleared.)',
   })
-  @ApiResponse({ status: 401, description: 'Missing/invalid access token.' })
+  @ApiResponse({
+    status: 401,
+    description:
+      '액세스 토큰이 없거나 유효하지 않다. (Missing/invalid access token.)',
+  })
   // 목적: 현재 세션을 종료한다 — 서버 측 앵커와 브라우저 쿠키를 모두 지운다.
   // 이유: 앵커만 지우고 쿠키를 남기면 브라우저가 이미 무효화된 리프레시 토큰을 계속 들고 있게
   //       된다 — 두 쪽 다 지워야 실제로 "로그아웃"이 된다.

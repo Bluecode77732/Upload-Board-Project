@@ -11,6 +11,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiConsumes,
+  ApiOperation,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -47,7 +48,7 @@ const UPLOAD_ALLOWLIST = new Map<
 ]);
 
 @Controller('upload')
-@ApiTags('Upload API')
+@ApiTags('업로드 API (Upload API)')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class UploadController {
@@ -55,33 +56,38 @@ export class UploadController {
 
   @Post('attach')
   @Throttle({ default: { limit: 15, ttl: 60000 } })
+  @ApiOperation({
+    summary: '파일을 임시 저장소에 첨부한다. (Attach a file to temp storage.)',
+  })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
       type: 'object',
-      description: 'Attach exactly one of image, audio, or video.',
+      description:
+        'image/audio/video 중 정확히 하나만 첨부한다. (Attach exactly one of image, ' +
+        'audio, or video.)',
       properties: {
         image: {
           type: 'string',
           format: 'binary',
-          description: 'jpg, jpeg, png, or webp',
+          description: 'jpg, jpeg, png, 또는 webp. (jpg, jpeg, png, or webp.)',
         },
         audio: {
           type: 'string',
           format: 'binary',
-          description: 'mp3',
+          description: 'mp3. (mp3.)',
         },
         video: {
           type: 'string',
           format: 'binary',
-          description: 'mp4, mov, or webm',
+          description: 'mp4, mov, 또는 webm. (mp4, mov, or webm.)',
         },
       },
     },
   })
   @ApiResponse({
     status: 201,
-    description: 'Uploaded File Successfully.',
+    description: '업로드 성공. (Uploaded File Successfully.)',
     example: {
       filename: 'temp_67ff0c79-a1f0-4d4f-865c-681af920378d_1764581241716.mp4',
     },
@@ -89,16 +95,20 @@ export class UploadController {
   @ApiResponse({
     status: 400,
     description:
-      'Bad Request. No file attached, more than one of image/audio/video attached, ' +
-      'the file is larger than 100MB, the file is not an allowed type for its field ' +
-      '(image: jpg/jpeg/png/webp; audio: mp3; video: mp4/mov/webm), or the file was ' +
-      'rejected by malware scanning (ADR 0059).',
+      '파일이 첨부되지 않았거나, image/audio/video 중 둘 이상이 첨부됐거나, 파일이 ' +
+      '100MB를 초과하거나, 그 필드에 허용되지 않는 타입이거나(image: jpg/jpeg/png/webp; ' +
+      'audio: mp3; video: mp4/mov/webm), 악성코드 스캔에서 거부됐다(ADR 0059). ' +
+      '(Bad Request. No file attached, more than one of image/audio/video attached, the ' +
+      'file is larger than 100MB, the file is not an allowed type for its field (image: ' +
+      'jpg/jpeg/png/webp; audio: mp3; video: mp4/mov/webm), or the file was rejected by ' +
+      'malware scanning (ADR 0059).)',
   })
   @ApiResponse({
     status: 503,
     description:
-      'Service Unavailable. The malware scanner could not be reached or timed out ' +
-      '(ADR 0059) — the file was not scanned and was not saved.',
+      '악성코드 스캐너에 연결할 수 없거나 타임아웃됐다(ADR 0059) — 파일은 스캔되지 ' +
+      '않았고 저장되지도 않았다. (Service Unavailable. The malware scanner could not be ' +
+      'reached or timed out (ADR 0059) — the file was not scanned and was not saved.)',
   })
   @UseInterceptors(
     FileFieldsInterceptor(

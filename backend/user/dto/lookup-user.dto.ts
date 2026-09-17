@@ -10,7 +10,8 @@ import { IsEmail } from 'class-validator';
 export class LookupUserDto {
   @IsEmail()
   @ApiProperty({
-    description: 'Exact email to resolve to a user id.',
+    description:
+      '유저 id로 해석할 정확한 이메일. (Exact email to resolve to a user id.)',
     example: 'user@example.com',
   })
   email!: string;

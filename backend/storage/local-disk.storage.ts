@@ -2,9 +2,10 @@
 // 사용처: STORAGE_DRIVER=local(기본값)일 때 StorageModule의 팩토리가 생성한다 — 소비자가 직접 임포트하는 일은 없다.
 // 이유: ADR 0005의 디스크 메커니즘(temp_/granted_ 폴더, Range 읽기, 가드된 배치 unlink)이 포트 안에서 그대로 살아남아야 했다 — 그래야 이 ADR이 동작 변경이 아니라 호출부의 순수 리팩터링이 된다.
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import {
   access,
+  mkdir,
   readdir,
   rename,
   stat as fsStat,
@@ -33,8 +34,19 @@ const UPLOAD_PREFIX = 'file/upload/';
 const UNLINK_BATCH_SIZE = 100;
 
 @Injectable()
-export class LocalDiskStorage implements FileStorage {
+export class LocalDiskStorage implements FileStorage, OnModuleInit {
   private readonly logger = new Logger(LocalDiskStorage.name);
+
+  // 목적: file/temp, file/upload 두 저장 디렉터리가 실제로 존재함을 부팅 시점에 보장한다.
+  // 이유: saveTemp/promote는 두 디렉터리가 이미 있다는 전제로 바로 쓰기/rename하므로, 신규
+  //       클론이나 docker-compose 바인드 마운트(빈 ./file)로 디렉터리가 없으면 첫 업로드가
+  //       처리되지 않은 ENOENT로 죽는다 — 그 전제를 사람의 수동 준비가 아니라 코드 스스로
+  //       충족시킨다.
+  // 방법: 부팅 시 한 번, 두 경로에 mkdir(recursive: true) — 이미 존재하면 그대로 무해하다.
+  async onModuleInit(): Promise<void> {
+    await mkdir(join(process.cwd(), TEMP_DIR), { recursive: true });
+    await mkdir(join(process.cwd(), UPLOAD_DIR), { recursive: true });
+  }
 
   // 목적: 첨부 직후 temp 바이트를 file/temp 아래에 쓴다.
   // 이유: UploadService가 Multer memoryStorage로 받은 버퍼를 어딘가에 영속화해야 다음 청구 단계가 가능하다.

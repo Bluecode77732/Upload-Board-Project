@@ -32,7 +32,7 @@ export class GetUsersDto {
   @Min(1)
   @Max(100)
   @ApiPropertyOptional({
-    description: 'Number of users to return',
+    description: '반환할 유저 개수. (Number of users to return.)',
     default: 20,
     minimum: 1,
     maximum: 100,
@@ -43,7 +43,7 @@ export class GetUsersDto {
   @IsInt()
   @Min(0)
   @ApiPropertyOptional({
-    description: 'Number of users to skip',
+    description: '건너뛸 유저 개수. (Number of users to skip.)',
     default: 0,
     minimum: 0,
   })
@@ -56,7 +56,10 @@ export class GetUsersDto {
   @MaxLength(100)
   @ApiPropertyOptional({
     description:
-      'Case-insensitive partial match on the email. Wildcards are escaped, so % and _ match literally. Blank or whitespace-only is treated as absent.',
+      '이메일에 대한 대소문자 무시 부분 일치. 와일드카드는 이스케이프되어 %와 _가 ' +
+      '문자 그대로 매칭된다. 공백뿐이거나 비어 있으면 없는 것으로 취급한다. ' +
+      '(Case-insensitive partial match on the email. Wildcards are escaped, so % and _ ' +
+      'match literally. Blank or whitespace-only is treated as absent.)',
     maxLength: 100,
     example: 'user@example.com',
   })
@@ -65,7 +68,9 @@ export class GetUsersDto {
   @IsOptional()
   @IsIn(USER_SORT_FIELDS)
   @ApiPropertyOptional({
-    description: 'Column to sort by. Only these keys are accepted.',
+    description:
+      '정렬 기준 컬럼. 이 값들만 허용된다. (Column to sort by. Only these keys are ' +
+      'accepted.)',
     enum: USER_SORT_FIELDS,
     default: 'createdAt',
   })
@@ -74,7 +79,7 @@ export class GetUsersDto {
   @IsOptional()
   @IsIn(SORT_ORDERS)
   @ApiPropertyOptional({
-    description: 'Sort direction.',
+    description: '정렬 방향. (Sort direction.)',
     enum: SORT_ORDERS,
     default: 'DESC',
   })

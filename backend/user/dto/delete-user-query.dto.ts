@@ -18,7 +18,11 @@ export class DeleteUserQueryDto {
   @IsIn(DELETE_FILES_VALUES)
   @ApiPropertyOptional({
     description:
-      'Confirms the irreversible cascade: deletes the account together with every file it owns (rows and stored files). Omitted or "false", an account that still owns files is refused with 409 USER_HAS_FILES.',
+      '비가역적 연쇄 삭제를 확인한다: 계정과 함께 그 계정이 소유한 모든 파일(행과 ' +
+      '저장된 실물)을 지운다. 생략되거나 "false"이면, 여전히 파일을 보유한 계정은 ' +
+      '409 USER_HAS_FILES로 거부된다. (Confirms the irreversible cascade: deletes the ' +
+      'account together with every file it owns (rows and stored files). Omitted or ' +
+      '"false", an account that still owns files is refused with 409 USER_HAS_FILES.)',
     enum: DELETE_FILES_VALUES,
     default: 'false',
   })

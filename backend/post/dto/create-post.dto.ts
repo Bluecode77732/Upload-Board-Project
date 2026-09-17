@@ -17,7 +17,9 @@ export class CreatePostDto {
   @IsNotEmpty()
   @MaxLength(100)
   @ApiProperty({
-    description: 'Post title. Not unique — two authors may use the same one.',
+    description:
+      '게시글 제목. 고유하지 않다 — 두 작성자가 같은 제목을 쓸 수 있다. (Post title. ' +
+      'Not unique — two authors may use the same one.)',
     maxLength: 100,
     example: 'My holiday clip',
   })
@@ -27,7 +29,7 @@ export class CreatePostDto {
   @IsNotEmpty()
   @MaxLength(10000)
   @ApiProperty({
-    description: 'Post body.',
+    description: '게시글 본문. (Post body.)',
     maxLength: 10000,
     example: 'Filmed this last weekend.',
   })
@@ -40,7 +42,10 @@ export class CreatePostDto {
   @Min(1)
   @ApiPropertyOptional({
     description:
-      'Id of a file to attach. Must be a file the requester created, and one no other post already holds. Omit for a text-only post.',
+      '첨부할 파일의 id. 요청자가 만든 파일이어야 하고, 아직 다른 게시글이 갖고 있지 ' +
+      '않아야 한다. 생략하면 텍스트 전용 게시글이 된다. (Id of a file to attach. Must ' +
+      'be a file the requester created, and one no other post already holds. Omit for ' +
+      'a text-only post.)',
     minimum: 1,
     example: 12,
   })

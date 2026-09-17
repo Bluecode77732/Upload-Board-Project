@@ -9,6 +9,9 @@ import { UserRole } from 'backend/auth/role/role';
 export class UpdateRoleDto {
   @IsNotEmpty()
   @IsEnum(UserRole)
-  @ApiProperty({ enum: UserRole, description: 'Target role to assign' })
+  @ApiProperty({
+    enum: UserRole,
+    description: '부여할 대상 role. (Target role to assign.)',
+  })
   role!: UserRole;
 }
