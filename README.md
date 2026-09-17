@@ -64,24 +64,22 @@ pnpm install
 
 # 2. Configure environment
 cp .env.example .env        # then fill in DB credentials and token secrets
+#    The storage folders (file/temp/, file/upload/) no longer need to be
+#    created by hand — LocalDiskStorage creates them on boot if missing.
 
-# 3. Ensure the storage folders exist at the repo root:
-#      file/temp/    (temporary uploads)
-#      file/upload/  (promoted files)
-
-# 4. Create the database, then apply the schema via migrations (ADR 0006)
+# 3. Create the database, then apply the schema via migrations (ADR 0006)
 #    Create the database named in DB_DATABASE (createdb / pgAdmin), then:
 #      pnpm migration:run
 #    If your database already carries the schema from the pre-migration era:
 #      pnpm migration:run -- --fake     # marks the baseline as applied, once
 
-# 5. Run the dev server (port 3000)
+# 4. Run the dev server (port 3000)
 pnpm run start:dev
 
-# 6. Open Swagger UI
+# 5. Open Swagger UI
 #    http://localhost:3000/doc
 
-# 7. (optional) Promote a superadmin account — register it first via
+# 6. (optional) Promote a superadmin account — register it first via
 #    POST /auth/register, set SUPERADMIN_EMAIL to that address in .env, then:
 #      pnpm promote-superadmin
 #    (ADR 0013/0052 — a deliberate manual step, not automatic)

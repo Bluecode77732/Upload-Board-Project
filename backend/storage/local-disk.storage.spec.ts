@@ -7,6 +7,7 @@ jest.mock('fs/promises');
 jest.mock('fs');
 
 const access = fsPromises.access as unknown as jest.Mock;
+const mkdir = fsPromises.mkdir as unknown as jest.Mock;
 const readdir = fsPromises.readdir as unknown as jest.Mock;
 const rename = fsPromises.rename as unknown as jest.Mock;
 const stat = fsPromises.stat as unknown as jest.Mock;
@@ -24,6 +25,22 @@ describe('LocalDiskStorage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     storage = new LocalDiskStorage();
+  });
+
+  describe('onModuleInit', () => {
+    it('ensures both file/temp and file/upload exist', async () => {
+      mkdir.mockResolvedValue(undefined);
+
+      await storage.onModuleInit();
+
+      expect(mkdir).toHaveBeenCalledWith(join(process.cwd(), 'file', 'temp'), {
+        recursive: true,
+      });
+      expect(mkdir).toHaveBeenCalledWith(
+        join(process.cwd(), 'file', 'upload'),
+        { recursive: true },
+      );
+    });
   });
 
   describe('saveTemp', () => {

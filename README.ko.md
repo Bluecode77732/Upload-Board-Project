@@ -63,24 +63,22 @@ pnpm install
 
 # 2. 환경 설정
 cp .env.example .env        # DB 자격 증명과 토큰 시크릿을 채워 넣기
+#    저장 폴더(file/temp/, file/upload/)는 더 이상 직접 만들 필요가 없습니다 —
+#    LocalDiskStorage가 부팅 시 없으면 자동으로 생성합니다.
 
-# 3. 저장 폴더가 저장소 루트에 있는지 확인:
-#      file/temp/    (임시 업로드)
-#      file/upload/  (승격된 파일)
-
-# 4. 데이터베이스 생성 후 마이그레이션으로 스키마 적용 (ADR 0006)
+# 3. 데이터베이스 생성 후 마이그레이션으로 스키마 적용 (ADR 0006)
 #    DB_DATABASE에 지정한 데이터베이스를 만든 뒤(createdb / pgAdmin):
 #      pnpm migration:run
 #    마이그레이션 도입 이전의 스키마를 이미 가진 데이터베이스라면:
 #      pnpm migration:run -- --fake     # 베이스라인을 적용 완료로 표시(1회)
 
-# 5. 개발 서버 실행 (포트 3000)
+# 4. 개발 서버 실행 (포트 3000)
 pnpm run start:dev
 
-# 6. Swagger UI 열기
+# 5. Swagger UI 열기
 #    http://localhost:3000/doc
 
-# 7. (선택) superadmin 계정 승격 — POST /auth/register로 먼저 계정을 만들고,
+# 6. (선택) superadmin 계정 승격 — POST /auth/register로 먼저 계정을 만들고,
 #    .env의 SUPERADMIN_EMAIL을 그 주소로 설정한 뒤:
 #      pnpm promote-superadmin
 #    (ADR 0013/0052 — 자동이 아니라 의도적인 수동 단계다)
