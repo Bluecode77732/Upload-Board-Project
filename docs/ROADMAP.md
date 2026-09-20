@@ -1000,6 +1000,15 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   outside tester actually needs external access — see §6's Stage 4 table, "HTTPS
   termination" row, for the full record. Revisit only when that condition changes, not
   because anything here is still unbuilt.
+- Frontend hosting — **decided 2026-09-21, implementation not started**
+  ([ADR 0060](ADR/0060-frontend-same-alb-path-routing.md)): a separate nginx workload in
+  the same Helm release, path-routed on the one ALB beside the backend (same origin, so
+  no CORS and an unchanged refresh cookie). The build is the ADR's follow-up list —
+  `frontend/Dockerfile` + nginx config, Helm frontend templates and a per-path backend in
+  `ingress.yaml`, a frontend image in `docker-publish`, frontend tag resolution in
+  `deploy.sh`. It does not depend on whether the AWS stack is currently applied; the one
+  open verification (the `/` rule's priority under the AWS Load Balancer Controller)
+  needs a live ALB.
 - Istio (service mesh over the Kubernetes cluster) — **pulled from the Production DevOps
   stack introduction row and the Stage 4 component-status table** (moved 2026-08-31,
   developer decision after a scale-fit review run this session, independent of the

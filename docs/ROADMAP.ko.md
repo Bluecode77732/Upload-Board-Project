@@ -952,6 +952,14 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   선택**이다 — 2026-08-27에 확정된 대로, 외부 테스터가 실제로 필요해지기 전까지는
   `ingress.enabled`를 `false`로 둔다. 전체 기록은 §6 Stage 4 표의 "HTTPS termination"
   행 참고. 여기 뭔가 아직 안 만들어져서가 아니라, 그 조건이 바뀔 때만 재검토한다.
+- 프론트엔드 호스팅 — **2026-09-21 결정, 구현 미착수**
+  ([ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md)): 같은 Helm 릴리스의 별도
+  nginx 워크로드를 하나의 ALB에서 백엔드와 나란히 경로로 분기한다(same-origin이라 CORS가
+  필요 없고 refresh 쿠키도 그대로). 구현 범위는 ADR의 후속 작업 목록이다 —
+  `frontend/Dockerfile`과 nginx 설정, Helm 프론트엔드 템플릿과 `ingress.yaml`의 경로별
+  backend, `docker-publish`의 프론트엔드 이미지, `deploy.sh`의 프론트엔드 태그 해석.
+  AWS 스택이 지금 apply돼 있는지와는 무관하다. 남은 검증 하나(AWS Load Balancer
+  Controller에서 `/` 규칙의 우선순위)는 라이브 ALB가 있어야 한다.
 - Istio(Kubernetes 클러스터 위 서비스 메시) — **프로덕션 DevOps 스택 도입 행과 Stage 4
   구성요소 상태 표에서 제외**(2026-08-31 이동, 이번 세션에서 진행한 규모 적합성 검토 뒤
   개발자가 내린 결정 — ROADMAP 자체의 순서 계획과는 별개). **미착수 이유**: 이 프로젝트의
