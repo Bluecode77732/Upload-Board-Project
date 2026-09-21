@@ -24,7 +24,7 @@
    - 물리 업로드 변경      → `backend/upload/upload.module.ts`(Multer `memoryStorage`)와 `upload.controller.ts`(100MB 크기 제한)를 `backend/upload/upload.service.ts`(`stageTemp` — `temp_{uuid}_{timestamp}` 네이밍, `FileStorage` 포트 호출, ADR 0029 D4)와 함께 읽는다
    - 스토리지 어댑터 변경  → `backend/storage/file-storage.interface.ts`(`FileStorage` 포트 + `FILE_STORAGE` 토큰), `local-disk.storage.ts` / `s3.storage.ts`(두 구현체), `storage.module.ts`(`STORAGE_DRIVER` 기반 팩토리, ADR 0029)를 읽는다
    - 컨테이너/배포 변경    → `Dockerfile`(non-root `USER`, `HEALTHCHECK`, `CMD`에서 마이그레이션 제거 — ADR 0030/0032)과 `docker-compose.yml`(원샷 `migrate` 서비스)을 `backend/health/`(`GET /health/live`/`GET /health/ready` — ADR 0031)와 함께 읽는다
-   - Helm/K8s 배포 변경    → `k8s/helm/`(`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/명시적 경로 allow-list를 가진 기본 비활성 Ingress(ADR 0058, 백엔드 Service에는 `/` catch-all 없음 — ADR 0060(2026-09-21 승인, 아직 미구현)이 같은 Ingress에 별도 프론트엔드 Service로 범위를 좁힌 `/` 규칙 하나를 추가하며, 백엔드 Service는 계속 allow-list)/기본 비활성 NetworkPolicy, ADR 0056)과 그 `README.md`(Secret 생성 절차, `existingSecret` 전용 소비 방식)를 읽는다. `k8s/`엔 이 차트 밖의 매니페스트가 없다 — 예전 `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/`에 있던 독립 raw 매니페스트는 삭제됐다(ADR 0042); 차트 옆에 정적 매니페스트를 다시 추가하지 않는다(ADR 0037/0041/0042)
+   - Helm/K8s 배포 변경    → `k8s/helm/`(`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/명시적 경로 allow-list를 가진 기본 비활성 Ingress(ADR 0058, 백엔드 Service에는 `/` catch-all 없음 — ADR 0060(2026-09-21 구현)이 같은 Ingress에 별도 프론트엔드 Deployment+Service(`frontend.enabled`, 기본 false, `values-prod.yaml`에서 켬)로 범위를 좁힌 `/` 규칙(`service: frontend`) 하나를 추가하며, 백엔드 Service는 계속 allow-list)/기본 비활성 NetworkPolicy, ADR 0056)과 그 `README.md`(Secret 생성 절차, `existingSecret` 전용 소비 방식)를 읽는다. `k8s/`엔 이 차트 밖의 매니페스트가 없다 — 예전 `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/`에 있던 독립 raw 매니페스트는 삭제됐다(ADR 0042); 차트 옆에 정적 매니페스트를 다시 추가하지 않는다(ADR 0037/0041/0042)
    - Terraform/인프라 변경 → `k8s/infra/terraform/`은 하나가 아니라 독립된 3개의 root module이다 — `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM, `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — ALB Controller+ESO, 다른 두 state를 **모두** 읽는 유일한 state). 각 디렉토리는 `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`와 자신만의 state 파일을 가지는데, 그 state는 Terraform 기본값인 로컬 파일이 아니라 네이티브 락 + SSE-S3 암호화를 쓰는 S3에 저장된다(ADR 0057, ADR 0044 D3 amends — 2026-09-12 코드 완료, 버킷 생성과 실제 마이그레이션은 실제 배포 시점으로 유예) — 변경이 실제로 건드리는 디렉토리만 읽는다. `README.md`(`cluster` → `app-infra` → `addons` 3단계 apply 순서와 그 역순 destroy, `SecretStore`/`ExternalSecret`을 한 번만 수동으로 `kubectl apply`하는 단계, 그리고 앱 전용 ServiceAccount IRSA 배선을 다루는 "Known gap" 절 — `app-infra/main.tf`의 trust policy, `k8s/helm/`의 `serviceaccount.yaml`+`values-prod.yaml`, `deploy.sh`의 `HELM_RELEASE` 기본값이 2026-09-03부로 모두 `sharenpo`라는 같은 이름으로 고정돼 있음. 코드는 완성되고 검증됐지만 실제 AWS엔 한 번도 적용된 적 없음 — 이걸로 대체된 예전 `default` ServiceAccount IRSA annotate 방식은 그 trust policy가 적용되는 순간 더 이상 동작하지 않음)를 읽는다. 설계 기록: ADR 0038(업스트림 스캐폴딩, 재작성 유예) → ADR 0043(프로젝트 적응 — 2026-08-18 구현됨) → ADR 0044(3-state 분리 — 2026-08-20 구현됨, 세 디렉토리 모두 `terraform validate`/`fmt -check` 통과) → ADR 0057(state 백엔드 — S3 네이티브 락 + SSE-S3, DynamoDB·KMS 없이, ADR 0044 D3 amends — 2026-09-12 코드 완료, 미적용). **두 ADR의 Addendum은 이 설정을 실제 AWS에 `apply`한 적이 없다고 말하는데, 그건 작성 시점엔 사실이었다가, 한동안 거짓이었다가, 다시 사실이 됐다.** 세 state 전부 2026-08-25~27에 실제 apply됐다(살아 있는 EKS 클러스터, RDS 인스턴스, S3 버킷, Route53 존, ACM 인증서, 그리고 Helm으로 앱 자체까지 배포됨 — 같은 기간 그 실제 RDS를 상대로 발견·수정된 TLS 검증 결함은 ADR 0039의 Addendum에 기록돼 있다). 그 뒤 **2026-08-28에 전체 destroy**해서, 배포가 end-to-end로 검증된 뒤 AWS 과금을 멈췄다 — 지금은 이 스택에서 실재하거나 과금되는 게 아무것도 없다(`aws eks/rds/ec2/elb` describe 호출이 전부 빈 값/not-found를 반환함으로 확인됨). 현재 상태: 미적용. 어느 쪽이든 가정하지 말고, 셋 다에서 `terraform plan`을 돌려 확인할 것 — ADR의 Addendum도 이 줄도 특정 시점의 스냅샷일 뿐 실시간 상태가 아니다. ADR의 Addendum은 작성 시점의 사실을 기록한 것이므로 일부러 그대로 두었고, 정정은 여기와 ROADMAP.md 7절에 있다
    - 삭제 경로 변경        → `backend/user/user.service.ts`(`remove` — 확인된 연쇄 삭제), `backend/file/file.service.ts`(`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts`(`deletePost`, `deletePostsOfCreator`), `LocalDiskStorage.unlink`/`S3Storage.unlink`(`FileStorage` 포트를 통한 커밋 후 unlink, ADR 0020/0023/0029)를 읽는다
    - 게시글/게시판 변경    → `backend/post/post.service.ts`(`fileId`에 대한 claim 해석, `canManage`, ADR 0021 읽기 레이어 재사용)를 `FileService.assertAttachableBy` / `toResponse` — PostModule이 FileModule에 묻는 두 가지 질문 — 와 함께 읽는다(ADR 0023)
@@ -1647,6 +1647,15 @@ Architecture Decisions가 계속 유효하다.
   Policy 강제 에이전트(Calico와 다른 엔진)가 똑같이 동작하는지뿐이고, 이건
   ADR 0056이 이미 안고 있던 것과 같은 공백이지 새로 생긴 게 아니다
   (ROADMAP.md §9)
+- ADR 0060(2026-09-21) 구현 중 발견, **고치지 않았고 아직 일정 없음** — 자세한 내용은 그 ADR의 구현
+  addendum: (1) `frontend/`와 `admin/`에는 `packageManager` 핀이 없어서 corepack이 최신 pnpm을 받는다
+  — 당시 12.5.1이었고, `node:24.8.0`에 든 corepack 0.34.0이 이를 실행하지 못한다.
+  `frontend/Dockerfile`은 10.14.0을 스스로 고정하지만 `frontend-*`/`admin-*` CI 잡은 고정되지 않은
+  채다(2026-09-17엔 통과했으나 그 상태를 지켜 주는 게 없다). (2) AWS Load Balancer Controller의
+  `target-type` 기본값은 `instance`라서 `NodePort`/`LoadBalancer` Service가 필요한데, 이 차트의
+  Service는 `ClusterIP`이고 주석 처리된 prod annotation에도 `target-type: ip`가 없다 — Ingress를
+  켜면 그 값을 넣기 전까지 실패할 것으로 보인다(라이브 확인 전). (3) `docker-tag-cleanup.yml`은
+  `bluecode1775/sharenpo`만 정리해서 프론트엔드 저장소의 sha 태그는 쌓인다.
 - ~~`backend/main.ts`에 `app.enableShutdownHooks()` 호출이 없다~~ — **2026-09-21
   해결**([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md)): 2026-09-16
   검토에서는 이 한 줄 수정을 급하지 않다며 재배포 때로 미뤘다(요청 하나짜리 트랜잭션이라
@@ -2053,7 +2062,9 @@ CI: GitHub Actions(`.github/workflows/ci.yml`, ADR 0016)가 lint
 실제 push 전에 스모크 테스트 스텝(ADR 0048 D4)이 빌드된 amd64 이미지를
 일회용 `postgres:16` 서비스와 함께 기동시켜 Dockerfile 자체의
 `HEALTHCHECK`(`GET /health/live`)가 healthy가 될 때까지 확인한다 — 검증되지
-않은 이미지는 push되지 않는다. 워크플로 전역 `concurrency:
+않은 이미지는 push되지 않는다. 짝이 되는 `docker-publish-frontend` 잡(`needs: [frontend-lint, frontend-e2e]`, ADR 0060)이 SPA의 nginx 이미지
+`bluecode1775/sharenpo-frontend`를 같은 `:<sha>` 태그와 같은 브랜치별 분리로 발행하며, 푸시 전
+스모크 테스트가 딥링크 fallback, 없는 `/assets` 파일의 404, CSP 헤더를 확인한다. 워크플로 전역 `concurrency:
 cancel-in-progress` 블록(ADR 0048 D3)이 CI가 끝나기 전 같은 브랜치에 다시
 push되면 낡은 실행을 취소한다. 로컬 컨테이너화: 멀티 스테이지 `Dockerfile` +
 `docker-compose.yml`(ADR 0015; 2026-08-08 하드닝 — non-root `USER`,

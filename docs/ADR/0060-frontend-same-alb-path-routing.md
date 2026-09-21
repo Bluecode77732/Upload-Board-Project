@@ -1,6 +1,6 @@
 # ADR 0060: Frontend hosting — a separate nginx workload in the same Helm release, path-routed on the one ALB
 
-- Status: Accepted (design-only — no code change)
+- Status: Accepted — implemented (`helm lint`/`helm template`, a local image build, and a browser CSP check verified; live ALB, `kind`, and the CI job itself unverified)
 - Date: 2026-09-21
 - Amends: [ADR 0058](0058-ingress-path-allowlist.md) (D1's "no catch-all" now applies to the backend Service only; D2's reasons 3–4 no longer hold for the combined Ingress), [ADR 0010](0010-frontend-split-and-api-surface-freeze.md) (its "prod: `CORS_ORIGIN`" clause only)
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)
@@ -245,3 +245,47 @@ trade-off accepted.
    `/health/live`, `/metrics`, and `/doc` return the SPA's HTML (or 404) and
    never a backend response.
 7. **`admin/` hosting** — a separate decision (D4).
+
+### Addendum (2026-09-21) — implementation landed
+
+Follow-up items 1–4 landed; item 5 landed except the `vite.config.ts` comment (it needs explicit
+approval); item 6 is done for everything that needs no cluster; item 7 is still open.
+
+- **The "left to implementation" choices, now fixed.** `frontend.enabled` defaults to `false` in
+  `values.yaml` and `true` in `values-prod.yaml` (the `ingress`/`metrics.serviceMonitor`/
+  `networkPolicy` model). The image is `bluecode1775/sharenpo-frontend`, tagged `:<sha>` on every
+  push and `:latest` on `main` (ADR 0048's split); `deploy.sh` passes the backend's tag as
+  `frontend.image.tag`. `replicaCount` is 1. nginx sets the security headers at the server level and
+  the cache policy through `expires` — an `add_header` inside a location would silently drop the
+  server-level set. The CSP allows `https://*.amazonaws.com` for images, media, and `fetch` (the S3
+  presigned redirect) and `blob:` for private-file previews.
+- **`ingress.yaml`** takes an optional `service: app|frontend` per path (default `app`). A `frontend`
+  path is skipped while `frontend.enabled` is false, and any other value fails the render, so
+  existing values render as they did — the old seven-path recipe still renders unchanged.
+- **Two deviations found while implementing.**
+  (1) The frontend Service's port is named `web`, not `http`. `servicemonitor.yaml` selects Services
+  by `sharenpo.selectorLabels`, which every Service inherits through `sharenpo.labels`, and scrapes
+  the port named `http`; the same name here would have made Prometheus scrape nginx's `/metrics` —
+  the SPA fallback's HTML. The clamav Service escapes only because its port is named `clamd`.
+  (2) pnpm is pinned inside the Dockerfile (`corepack prepare pnpm@10.14.0`). `frontend/package.json`
+  has no `packageManager`, so corepack resolved the latest pnpm (12.5.1), which corepack 0.34.0 in
+  `node:24.8.0` cannot run (`bin/pnpm.cjs` missing). The `frontend-*` and `admin-*` CI jobs share
+  that unpinned setup — green on 2026-09-17, but nothing keeps them so. Pinning `package.json` in
+  `frontend/` and `admin/` is a separate decision.
+- **Found, not fixed.** (a) The AWS Load Balancer Controller's default `target-type` is `instance`,
+  which its docs say needs a `NodePort` or `LoadBalancer` Service. This chart's Services are
+  `ClusterIP` and the commented-out prod annotations don't set `target-type: ip`, so enabling the
+  Ingress is expected to fail for the backend's routes as much as the frontend's — not observed
+  live; listed in `k8s/helm/README.md`'s pending checks. (b) `docker-tag-cleanup.yml` prunes only
+  `bluecode1775/sharenpo`, so the frontend repository's sha tags accumulate.
+- **Verified.** `helm lint --strict` and `helm template` across `frontend.enabled` × `ingress.enabled`
+  (seven rules without the frontend, eight with `/` → `<release>-frontend:80`; a mistyped `service`
+  fails the render). A local `docker build` for amd64 and arm64: nginx runs as uid 101, `nginx -t`
+  passes, deep links fall back to `index.html`, a missing `/assets` file is a 404, hashed assets get
+  a one-year cache, and no dev origin is baked into the bundle. The SPA loads under the CSP in a real
+  browser (Playwright; its one console error is the 405 on `POST /auth/token/refresh`, because that
+  container has no backend). `actionlint` (with shellcheck) on the workflows; `bash -n` on
+  `deploy.sh`, with shellcheck reporting nothing in the changed region.
+- **Not verified.** `helm install --wait` (no `kind` on the implementing machine), the CI job itself
+  (never run on GitHub), the CSP against a real S3 presigned redirect, and the live-ALB ordering
+  check in follow-up 6.

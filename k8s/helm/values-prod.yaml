@@ -150,6 +150,13 @@ metrics:
 networkPolicy:
   enabled: true
 
+# 프론트엔드(SPA) nginx 워크로드(ADR 0060) — 실제 배포에서는 켠다. same-origin이라 CORS_ORIGIN을
+# 따로 두지 않는다(위 env에도 없다). 이미지 태그는 deploy.sh가 백엔드 image.tag와 같은 sha로
+# `--set frontend.image.tag=`를 덮어쓴다 — 여기 값(기본 "latest")은 deploy.sh를 거치지 않을 때의
+# 대비일 뿐이다.
+frontend:
+  enabled: true
+
 # HTTPS 종단(ADR 0034)은 ingress/ALB에서만 하고 앱 프로세스 안에서는 하지 않는다. 아래는
 # 실제로 켤 때 쓸 값의 참고 템플릿이다 — 전부 주석 처리돼 있고 ingress.enabled은 여전히
 # values.yaml 기본값(false)을 따른다. 외부 테스터가 실제로 필요해질 때까지 켜지 않기로 한
@@ -194,3 +201,8 @@ networkPolicy:
 #           pathType: Prefix
 #         - path: /audit-log
 #           pathType: Prefix
+#         # 프론트엔드(SPA, ADR 0060) — `service: frontend`라 프론트엔드 Service로 간다. 이걸
+#         # 빠뜨리면 API는 열리는데 화면(SPA)만 사라진다(배열을 통째로 덮어쓰기 때문).
+#         - path: /
+#           pathType: Prefix
+#           service: frontend

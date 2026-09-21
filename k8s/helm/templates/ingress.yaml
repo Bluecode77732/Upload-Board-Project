@@ -3,6 +3,12 @@ ingress.enabled이 false(기본값)면 이 파일은 아무것도 렌더링하�
 TLS 종료는 여기(ingress/ALB)에서만 하고 앱 프로세스 안에서는 하지 않는다(ADR 0034).
 실제로 켜려면 살아있는 클러스터·DNS·인증서 메커니즘이 필요 — values.yaml의
 ingress 블록 주석 참고.
+
+경로별 backend(ADR 0060 D2): 각 path는 선택적 `service` 키로 어느 Service로 갈지 고른다.
+생략하거나 "app"이면 이 차트의 백엔드 Service(ADR 0058 allow-list 전부), "frontend"면
+프론트엔드 Service(`/` 규칙). frontend.enabled가 false면 "frontend" 경로는 규칙 자체를
+만들지 않는다 — 없는 Service를 가리키는 규칙이 생기지 않게 하려는 것이다. 그 외의 값은
+오타가 조용히 백엔드로 라우팅되지 않도록 렌더링을 실패시킨다.
 */}}
 {{- if .Values.ingress.enabled -}}
 apiVersion: networking.k8s.io/v1
@@ -29,14 +35,25 @@ spec:
       http:
         paths:
           {{- range .paths }}
+          {{- $target := .service | default "app" }}
+          {{- if not (has $target (list "app" "frontend")) }}
+          {{- fail (printf "ingress path %s: service must be \"app\" or \"frontend\", got %q" .path $target) }}
+          {{- end }}
+          {{- if or (ne $target "frontend") $.Values.frontend.enabled }}
           - path: {{ .path }}
             pathType: {{ .pathType }}
             backend:
-              # 이 차트가 만드는 Service를 그대로 가리킨다 — 별도 백엔드 없음.
               service:
+                {{- if eq $target "frontend" }}
+                name: {{ include "sharenpo.fullname" $ }}-frontend
+                port:
+                  number: {{ $.Values.frontend.service.port }}
+                {{- else }}
                 name: {{ include "sharenpo.fullname" $ }}
                 port:
                   number: {{ $.Values.service.port }}
+                {{- end }}
+          {{- end }}
           {{- end }}
     {{- end }}
 {{- end }}

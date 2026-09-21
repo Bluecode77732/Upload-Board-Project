@@ -1,6 +1,9 @@
 {{ include "sharenpo.fullname" . }} 배포가 완료됐습니다.
 
 Service: {{ include "sharenpo.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+{{- if .Values.frontend.enabled }}
+프론트엔드 Service: {{ include "sharenpo.fullname" . }}-frontend.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.frontend.service.port }}
+{{- end }}
 
 {{- if not .Values.secrets.existingSecret }}
 

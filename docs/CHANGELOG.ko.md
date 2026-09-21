@@ -258,6 +258,27 @@
   코드 변경 없음 — 순수 문서.
 
 ### 추가
+- **프론트엔드를 API와 같은 ALB에서 호스팅 — 별도 nginx 워크로드를 경로로 분기
+  (2026-09-21, [ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md))** — 지금까지
+  `frontend/`를 호스팅하는 곳이 없었다: 이미지도, 차트 리소스도, CI 발행도 없었다. 이제
+  정적 파일 nginx 이미지로 빌드하고(`frontend/Dockerfile`, `nginx.conf`: SPA 딥링크 fallback,
+  없는 `/assets` 파일은 진짜 404, 해시 자산은 1년 캐시, 보안 헤더와 CSP — helmet은 API
+  응답에만 걸린다) 기존 Helm 릴리스 안에 자체 Deployment + Service로 띄운다. values로 켜고
+  끈다(`frontend.enabled`, 기본 `false`, `values-prod.yaml`이 켬). `templates/ingress.yaml`은
+  path마다 선택적 `service: app|frontend`를 받아서, Ingress 하나가 백엔드의 allow-list prefix
+  일곱 개와 프론트엔드용 `/` 규칙을 함께 담는다 — same-origin이라 CORS가 필요 없고 refresh
+  쿠키도 그대로다(ADR 0012가 미뤄 둔 도메인 간 쿠키 문제는 "필요 없음"으로 해소). 새
+  `docker-publish-frontend` CI 잡이 스모크 테스트(딥링크, 자산 404, CSP 헤더)를 통과한 뒤
+  `bluecode1775/sharenpo-frontend`를 백엔드 이미지와 같은 `:<sha>`로 발행하고, `deploy.sh`는
+  두 태그를 확인해 함께 넘긴다. 차트 버전은 0.4.0. 클러스터 없이 검증한 것: 플래그 조합별
+  `helm lint --strict`/`helm template`, amd64·arm64 로컬 이미지 빌드, 실제 브라우저에서 CSP
+  아래로 SPA가 뜨는지, `actionlint`. 검증하지 못한 것: `helm install --wait`(이 머신에는
+  `kind`가 없다), CI 잡 자체, 그리고 라이브 ALB가 필요한 모든 것 — AWS Load Balancer
+  Controller에서 `/` 규칙의 우선순위가 남은 유일한 의존이다. 하다가 발견했지만 고치지 않은
+  것: `frontend/`와 `admin/`의 `package.json`에 `packageManager` 핀이 없고(corepack이 pnpm
+  12.5.1을 받았는데 Node 이미지의 corepack이 그걸 실행하지 못한다 — Dockerfile이 10.14.0을
+  스스로 고정한다), 컨트롤러의 `target-type: instance` 기본값이 이 차트의 `ClusterIP`
+  Service와 맞지 않으며, `docker-tag-cleanup.yml`이 백엔드 저장소만 다룬다.
 - **Admin: 모든 페이지에 라이트/다크 토글 추가 (2026-09-08)** — 개발자의 직접 요청.
   `admin/src/store/theme.store.ts`(신규, zustand)가 `localStorage`(`admin-theme`)에서 초기
   테마를 읽고, 저장된 값이 없으면 `prefers-color-scheme`로 폴백한다. 토글하면 클래스와

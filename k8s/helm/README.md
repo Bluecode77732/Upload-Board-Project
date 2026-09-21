@@ -100,12 +100,14 @@ under a different release name renames every object with it; only the
 | `service.yaml` | Service | `ClusterIP`, port 3000 |
 | `configmap.yaml` | ConfigMap | Every key under `values.yaml`'s `env:` block |
 | `migration-job.yml` | Job (Helm hook) | Runs `migration:run` pre-install/pre-upgrade, mirrors `docker-compose.yml`'s `migrate` service (ADR 0032) |
-| `ingress.yaml` | Ingress | Disabled by default (`ingress.enabled: false`) — TLS terminates here, never in-process (ADR 0034). Path rules are an explicit allow-list of real controller prefixes, not a `/` catch-all — `/health`, `/metrics`, `/doc` are deliberately excluded (ADR 0058) |
+| `ingress.yaml` | Ingress | Disabled by default (`ingress.enabled: false`) — TLS terminates here, never in-process (ADR 0034). Path rules are an explicit allow-list of real controller prefixes for the backend Service, plus one `/` rule (`service: frontend`) for the frontend Service — `/health`, `/metrics`, `/doc` are deliberately not on the backend list and fall to the frontend's `/` (ADR 0058, ADR 0060) |
 | `serviceaccount.yaml` | ServiceAccount | Disabled by default (`serviceAccount.create: false` — Deployment runs as the namespace's `default` ServiceAccount, unchanged). Enable it to scope the S3 IRSA role to this app instead of every pod in the namespace — see "Dedicated ServiceAccount for IRSA" below |
 | `networkpolicy.yaml` | NetworkPolicy | Disabled by default (`networkPolicy.enabled: false`) — restricts the app pod's inbound/outbound traffic. See "NetworkPolicy" below (ADR 0056) |
 | `clamav-deployment.yaml` | Deployment | The `clamd` daemon `UploadService` scans uploads against — a single shared replica, not a per-app-pod sidecar (avoids duplicating the signature DB, ADR 0059 D6). Always renders, unlike `ingress`/`networkPolicy` |
 | `clamav-service.yaml` | Service | `ClusterIP`, port 3310 — `configmap.yaml` computes `CLAMD_HOST` from this Service's name directly, not from `values.yaml`'s `env` map |
 | `clamav-pvc.yaml` | PersistentVolumeClaim | Only renders when `clamav.persistence.enabled: true` (default `false` — signature DB re-downloads into an `emptyDir` on restart otherwise) |
+| `frontend-deployment.yaml` | Deployment | The SPA's static-file nginx (`frontend/Dockerfile`) — a separate Pod from the app, with its own selector labels so the backend Service never selects it. Disabled by default (`frontend.enabled: false`); `values-prod.yaml` turns it on (ADR 0060) |
+| `frontend-service.yaml` | Service | `ClusterIP`, port 80, named `web` rather than `http`: `servicemonitor.yaml` scrapes the port named `http` on every Service carrying `sharenpo.labels`, and nginx has no `/metrics`. The Ingress's `/` rule points here |
 
 `values.yaml` carries only keys a template actually reads — the unused
 `autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride` scaffold leftovers
@@ -270,7 +272,8 @@ Tear down when done: `helm uninstall netpol-test && kind delete cluster --name n
 
 TLS terminates at the Ingress/ALB, never in-process ([ADR 0034](../../docs/ADR/0034-https-termination-stance.md));
 `values.yaml`'s `ingress` block ships an explicit controller-prefix allow-list, not a `/`
-catch-all ([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.md)). `ingress.enabled`
+catch-all on the backend Service ([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.md)), plus one `/`
+rule for the frontend Service ([ADR 0060](../../docs/ADR/0060-frontend-same-alb-path-routing.md)). `ingress.enabled`
 stays `false` — a deliberate developer choice
 ([ROADMAP.md](../../docs/ROADMAP.md) > Unscheduled), not a missing dependency: while the
 stack was live 2026-08-27 the cluster, the domain (`sharenpo.cloud`), and a real ACM cert
@@ -296,22 +299,22 @@ Verifying without a live cluster (none exists right now):
 
 ```bash
 helm lint --strict . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
-  --set ingress.className=alb \
+  --set ingress.className=alb --set frontend.enabled=true \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
-  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]'
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"}]}]'
 helm template . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
-  --set ingress.className=alb \
+  --set ingress.className=alb --set frontend.enabled=true \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
-  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]' \
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"}]}]' \
   -s templates/ingress.yaml
 ```
 
 confirms the rendered `Ingress` carries `ingressClassName: alb`, the host, all seven
-allow-listed paths, and the annotations (verified 2026-09-13 — an earlier draft of this
+allow-listed backend paths plus the `/` frontend rule (2026-09-21), and the annotations (verified 2026-09-13 — an earlier draft of this
 recipe used `--set ingress.hosts[0].host=...`, which replaces the whole array element and
 silently drops every path; `--set-json` is what actually keeps them, per
 `k8s/infra/terraform/README.md`'s "Enabling the ALB ingress" section, which hit and fixed
@@ -330,6 +333,17 @@ annotations worked:
 - A browser accepts the certificate with no warnings for the same domain the ACM
   certificate was issued for (the `certificate-arn` annotation actually bound the right
   cert).
+- `curl https://<domain>/file` with no token answers the API's 401 JSON, not HTML, while
+  `/files`, `/posts/1`, and an unknown path answer the SPA's HTML — the `/` frontend rule
+  really sits below the API prefixes (ADR 0060; the controller's Exact-then-longest-Prefix
+  ordering has never been observed live). `/health/live`, `/metrics`, and `/doc` must also
+  answer the SPA's HTML (or 404), never a backend response.
+- The target group registers healthy targets. The controller's default
+  `alb.ingress.kubernetes.io/target-type` is `instance`, which its docs say needs a
+  `NodePort` or `LoadBalancer` Service; both Services in this chart are `ClusterIP`, and the
+  commented-out prod annotations don't set `target-type`. `ip` mode works with any Service
+  type, so expect to add `alb.ingress.kubernetes.io/target-type: ip` — found 2026-09-21
+  while implementing ADR 0060, not fixed here (it affects the backend's routes equally).
 
 None of this can be verified by `helm lint`/`helm template` — they only prove the YAML
 this repo renders is correct, never that the AWS Load Balancer Controller acts on it as
@@ -348,4 +362,21 @@ instead, and are not repeated in `values.yaml`.
 ```bash
 helm lint --strict .
 helm template . --set secrets.existingSecret=placeholder
+```
+
+The frontend workload (ADR 0060) renders only with `--set frontend.enabled=true`, and the `/`
+rule appears in the Ingress only then:
+
+```bash
+helm template . --set secrets.existingSecret=placeholder --set frontend.enabled=true \
+  --set ingress.enabled=true \
+  -s templates/ingress.yaml -s templates/frontend-deployment.yaml -s templates/frontend-service.yaml
+```
+
+The image needs no cluster either — build it and check the SPA fallback and the headers:
+
+```bash
+docker build -t sharenpo-frontend:local -f ../../frontend/Dockerfile ../../frontend
+docker run --rm -p 8080:8080 sharenpo-frontend:local
+# /  and  /posts/1 → 200 index.html;  /assets/missing.js → 404;  CSP + nosniff headers on every response
 ```

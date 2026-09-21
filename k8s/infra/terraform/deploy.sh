@@ -94,7 +94,10 @@ print_usage() {
   echo "                    쓰는 기본값). 매번 인자로 넘기기 번거로우면 이걸로 고정 가능"
   echo "  IMAGE_TAG         기본값: 비어 있음 (DEPLOY_BRANCH 조회 결과를 씀)."
   echo "                    명시하면 DEPLOY_BRANCH 조회 자체를 건너뛰고 그 태그를 강제로"
-  echo "                    씀 (예: 예전 sha로 롤백)"
+  echo "                    씀 (예: 예전 sha로 롤백). 백엔드와 프론트엔드 이미지에 같은 태그를"
+  echo "                    쓴다(ADR 0060) -- 프론트엔드 이미지가 없던 시점의 sha로 롤백하면"
+  echo "                    새 프론트엔드 파드가 이미지를 못 받으니, 그런 롤백은 이 스크립트"
+  echo "                    대신 helm을 직접 실행한다"
 }
 
 # 목적: terraform plan을 사람이 직접 읽고 확인한 뒤에만, 바로 그 plan을 적용한다.
@@ -416,6 +419,11 @@ apply_addons() {
 #   성공적으로 발행된 이미지가 아직 하나도 없는 경우, 이 에러가 바로 그걸
 #   알려준다). IMAGE_TAG를 명시하면 이 조회 전체를 건너뛰고 그 값을 그대로
 #   쓴다(예: 예전 sha로 롤백).
+#   프론트엔드 이미지(bluecode1775/sharenpo-frontend, ADR 0060)도 같은 sha 태그가
+#   있는지 똑같이 확인하고, 같은 태그를 --set frontend.image.tag로 함께 넘긴다 --
+#   두 이미지가 항상 같은 커밋에서 나온 쌍이라서 IMAGE_TAG 하나로 배포와 롤백을 다룰
+#   수 있다. IMAGE_TAG를 명시하면 확인 없이 두 이미지에 그대로 쓰므로, 프론트엔드
+#   이미지가 없던 시점의 sha로 롤백하면 새 프론트엔드 파드가 이미지를 못 받는다.
 deploy_helm() {
   local helm_dir="$SCRIPT_DIR/../../helm"
   local branch="${1:-$DEPLOY_BRANCH}"
@@ -439,18 +447,32 @@ deploy_helm() {
       exit 1
     fi
 
-    echo "==> 확인됨: $branch 최신 커밋 $resolved_tag 이미지가 Docker Hub에 존재합니다."
+    # 프론트엔드 이미지도 같은 sha 태그가 있어야 한다(ADR 0060). 백엔드와 같은 방식으로
+    # 확인하고, 없으면 백엔드만 조용히 새 버전으로 올라가는 대신 바로 중단한다. 저장소
+    # 자체가 아직 없어도 Hub API가 404를 돌려주므로 같은 메시지로 잡힌다.
+    local frontend_status_code
+    frontend_status_code="$(curl -s -o /dev/null -w "%{http_code}" \
+      "https://hub.docker.com/v2/repositories/bluecode1775/sharenpo-frontend/tags/${resolved_tag}/")"
+
+    if [ "$frontend_status_code" != "200" ]; then
+      echo "에러: $branch의 최신 커밋($resolved_tag)에 대한 프론트엔드 이미지가 Docker Hub에" >&2
+      echo "아직 없습니다 (HTTP $frontend_status_code). docker-publish-frontend 워크플로가" >&2
+      echo "아직 안 끝났거나 실패했을 수 있습니다. GitHub Actions 진행 상황을 확인하세요." >&2
+      exit 1
+    fi
+
+    echo "==> 확인됨: $branch 최신 커밋 $resolved_tag 의 백엔드·프론트엔드 이미지가 Docker Hub에 존재합니다."
   else
     echo "==> IMAGE_TAG=$resolved_tag 가 명시적으로 지정되어, 자동 조회를 건너뜁니다."
   fi
 
-  echo "==> Helm 배포: 릴리스 이름 $HELM_RELEASE ($helm_dir, values-prod.yaml + image.tag=$resolved_tag)"
+  echo "==> Helm 배포: 릴리스 이름 $HELM_RELEASE ($helm_dir, values-prod.yaml + image.tag=$resolved_tag + frontend.image.tag=$resolved_tag)"
   echo "    (secrets.existingSecret으로 참조하는 Secret이 이미 만들어져 있어야 합니다 -- README.md 참고)"
   # run_terraform_step과 같은 이유로 read 실패를 흡수한다.
   read -r -p "helm upgrade --install 을 실행할까요? [y/N] " answer || answer=""
 
   if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
-    (cd "$helm_dir" && helm upgrade --install "$HELM_RELEASE" . -f values-prod.yaml --set image.tag="$resolved_tag")
+    (cd "$helm_dir" && helm upgrade --install "$HELM_RELEASE" . -f values-prod.yaml --set image.tag="$resolved_tag" --set frontend.image.tag="$resolved_tag")
     (cd "$helm_dir" && helm status "$HELM_RELEASE")
   else
     echo "helm 단계에서 중단했습니다." >&2

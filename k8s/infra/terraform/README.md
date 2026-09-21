@@ -223,7 +223,11 @@ Either form resolves the branch's current HEAD commit and checks Docker Hub for 
 image tag before proceeding — a missing image (nothing published from that branch yet, or
 CI still running) aborts with a clear error instead of silently deploying something stale.
 `IMAGE_TAG=<tag>` remains as a raw override for anything neither branch's HEAD represents
-(e.g. rolling back to an older sha).
+(e.g. rolling back to an older sha). The frontend image (ADR 0060) uses the same tag: the lookup
+checks both `bluecode1775/sharenpo` and `bluecode1775/sharenpo-frontend`, and the helm step passes
+the tag as `image.tag` and `frontend.image.tag`. An explicit `IMAGE_TAG` skips the check for both,
+so rolling back to a sha from before the frontend image existed leaves the new frontend pod
+without an image — run helm by hand for that.
 
 **Plan/apply split** (ADR 0046 addendum, 2026-09-02): for `cluster`/`app-infra`/`addons`,
 `bash deploy.sh plan <state>` computes and saves the plan to a fixed, gitignored path
@@ -421,13 +425,14 @@ Controller must be running to reconcile the `Ingress` object) and
 helm upgrade sharenpo . \
   --reuse-values \
   --set ingress.enabled=true \
+  --set frontend.enabled=true \
   --set ingress.className=alb \
   --set ingress.annotations."kubernetes\.io/ingress\.class"=alb \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/scheme"=internet-facing \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=$(terraform -chdir=../infra/terraform/app-infra output -raw acm_certificate_arn) \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
-  --set-json 'ingress.hosts=[{"host":"<your-domain>","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]'
+  --set-json 'ingress.hosts=[{"host":"<your-domain>","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"}]}]'
 ```
 
 The last two annotations are what actually forces the HTTP→HTTPS redirect (found missing
@@ -439,7 +444,7 @@ also found and fixed in that same 2026-09-13 review: `--set` on an array index r
 whole element rather than merging into it, so a bare `.host` override silently rendered an
 `Ingress` with a real host and **zero paths** (verified by rendering it), exactly the
 "routing rules quietly vanish" failure ADR 0058 exists to prevent. `--set-json` supplies the
-full `hosts[0]` object — host and the complete ADR 0058 path list together — in one write.
+full `hosts[0]` object — host, the complete ADR 0058 path list, and the ADR 0060 `/` frontend rule together — in one write. Leave the last out and the SPA silently disappears while the API keeps working.
 
 For a checked-in, repeatable version of this instead of retyping `--set` flags on the
 command line, `k8s/helm/values-prod.yaml` carries the equivalent config (host, the full

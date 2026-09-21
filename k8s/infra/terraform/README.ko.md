@@ -222,7 +222,11 @@ bash deploy.sh helm         # 이제 인자 없이도 main을 배포
 태그가 있는지 진행 전에 확인합니다 — 이미지가 없으면(그 브랜치에서 아직 아무것도
 발행된 적 없거나 CI가 아직 도는 중) 조용히 낡은 걸로 진행하는 대신 명확한 에러로
 중단합니다. `IMAGE_TAG=<태그>`는 두 브랜치의 HEAD가 아닌 것(예: 예전 sha로 롤백)을
-쓸 때만의 raw override로 남아 있습니다. 아래 수동 순서는 스크립트가 자동화하는
+쓸 때만의 raw override로 남아 있습니다. 프론트엔드 이미지(ADR 0060)도 같은 태그를 씁니다 —
+조회는 `bluecode1775/sharenpo`와 `bluecode1775/sharenpo-frontend`를 둘 다 확인하고, helm 단계는
+그 태그를 `image.tag`와 `frontend.image.tag`로 함께 넘깁니다. `IMAGE_TAG`를 직접 지정하면 두
+이미지 모두 확인 없이 그대로 쓰므로, 프론트엔드 이미지가 없던 시점의 sha로 롤백하면 새 프론트엔드
+파드가 이미지를 받지 못합니다 — 그런 롤백은 helm을 직접 실행하세요. 아래 수동 순서는 스크립트가 자동화하는
 대상이자, 각 단계가 실제로 무엇을 하는지 보는 참고 자료로 남겨둡니다. 이 순서는
 최초 배포든, 전체 `terraform destroy`(아래) 이후의 완전 재배포든 똑같이 적용됩니다:
 
@@ -420,13 +424,14 @@ Controller가 `Ingress` 객체를 조정할 수 있는 상태가 되고 `app-inf
 helm upgrade sharenpo . \
   --reuse-values \
   --set ingress.enabled=true \
+  --set frontend.enabled=true \
   --set ingress.className=alb \
   --set ingress.annotations."kubernetes\.io/ingress\.class"=alb \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/scheme"=internet-facing \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=$(terraform -chdir=../infra/terraform/app-infra output -raw acm_certificate_arn) \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
-  --set-json 'ingress.hosts=[{"host":"<본인-도메인>","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]'
+  --set-json 'ingress.hosts=[{"host":"<본인-도메인>","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"}]}]'
 ```
 
 뒤의 두 annotation이 실제로 HTTP→HTTPS 강제 리다이렉트를 만드는 부분입니다(2026-09-13
@@ -438,7 +443,7 @@ Controller가 `ssl-redirect`가 리다이렉트할 대상인 80번 포트 리스
 교체해버려서, `.host`만 오버라이드하면 실제 도메인은 들어가지만 **경로가 하나도 없는**
 `Ingress`가 조용히 렌더링됩니다(실제로 렌더링해서 확인함) — ADR 0058이 막으려던 바로 그
 "라우팅 규칙이 조용히 사라지는" 실패입니다. `--set-json`은 `hosts[0]` 객체 전체(도메인과
-ADR 0058 경로 목록 전부)를 한 번에 써 넣어 이 문제를 피합니다.
+ADR 0058 경로 목록 전부, 그리고 ADR 0060의 `/` 프론트엔드 규칙)를 한 번에 써 넣어 이 문제를 피합니다. 마지막 규칙을 빼면 API는 그대로인데 SPA만 조용히 사라집니다.
 
 명령줄에 `--set`을 매번 다시 치는 대신 체크인된 반복 가능한 형태를 쓰려면,
 `k8s/helm/values-prod.yaml`에 같은 설정(도메인, ADR 0058 경로 목록 전체, 위와 동일한

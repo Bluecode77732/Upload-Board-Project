@@ -1,0 +1,25 @@
+{{- /* 프론트엔드 nginx용 ClusterIP 서비스(ADR 0060 D2/D3) — Ingress의 `/` 규칙이 가리키는 대상. frontend.enabled가 false면 렌더링하지 않는다. */}}
+{{- if .Values.frontend.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sharenpo.fullname" . }}-frontend
+  labels:
+    {{- include "sharenpo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.frontend.service.port }}
+      targetPort: http
+      protocol: TCP
+      {{- /* 포트 이름을 http가 아니라 web으로 둔다 — servicemonitor.yaml이 sharenpo.selectorLabels로
+      Service를 고르고 이름이 "http"인 포트의 /metrics를 긁는데, 이 Service도 sharenpo.labels를
+      달고 있어서 이름까지 http면 Prometheus가 nginx의 /metrics(SPA fallback HTML)를 긁으려다
+      타깃이 실패로 잡힌다. targetPort의 "http"는 Service 포트 이름이 아니라 컨테이너 포트 이름이라
+      상관없다. */}}
+      name: web
+  selector:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

@@ -118,6 +118,27 @@ pnpm preview  # serve the production build
 
 The dev server needs the backend running on `:3000` for API calls to succeed.
 
+### Production image (ADR 0060)
+
+`Dockerfile` builds the SPA and serves it from nginx on `:8080` (`nginx.conf`). Production is
+same-origin behind the ALB — `/` goes to this image, the API prefixes go to the backend — so
+`VITE_API_BASE` must stay **unset** in the image build: the `Dockerfile` pins it empty and
+`.dockerignore` keeps `.env*` out of the build context. Build and try it locally:
+
+```bash
+docker build -t sharenpo-frontend:local .   # from frontend/
+docker run --rm -p 8080:8080 sharenpo-frontend:local
+```
+
+- `nginx.conf` owns the SPA's security headers (helmet covers only API responses). Its CSP allows
+  `https://*.amazonaws.com` for images, media, and `fetch` because `STORAGE_DRIVER=s3` redirects
+  content reads to S3 — unverified in a browser.
+- A new top-level route must not start with an API prefix (`/auth`, `/user`, `/post`, `/comment`,
+  `/file`, `/upload`, `/audit-log`): the ALB would send it to the backend. `/posts` and `/files`
+  are fine — the match is by whole path segment.
+- `pnpm` is pinned inside the `Dockerfile` (`frontend/package.json` has no `packageManager`); read
+  ADR 0060's implementation addendum before changing that.
+
 **Stopping a backgrounded `pnpm dev`/`pnpm preview` does not free its port on Windows.**
 `pnpm` runs vite as a child process and Windows has no POSIX process-group signalling, so
 killing the task leaves an orphaned `node` holding the socket — the next `--strictPort`

@@ -1,6 +1,6 @@
 # ADR 0060: 프론트엔드 호스팅 — 같은 Helm 릴리스의 별도 nginx 워크로드를 하나의 ALB에서 경로로 분기
 
-- Status: Accepted (설계만 — 코드 변경 없음)
+- Status: Accepted — 구현 완료 (`helm lint`/`helm template`, 로컬 이미지 빌드, 브라우저 CSP 확인까지 검증. 라이브 ALB·`kind`·CI 잡 자체는 미검증)
 - Date: 2026-09-21
 - Amends: [ADR 0058](0058-ingress-path-allowlist.ko.md) (D1의 "catch-all 없음"은 이제 백엔드 Service에만 적용되고, D2의 3·4번 근거는 합쳐진 Ingress에서는 더 이상 성립하지 않는다), [ADR 0010](0010-frontend-split-and-api-surface-freeze.ko.md) ("prod: `CORS_ORIGIN`" 절만)
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.ko.md)
@@ -229,3 +229,47 @@ replica 수, nginx 보안 헤더의 정확한 구성, 캐시 정책.
    경로가 SPA의 HTML을 돌려주는지, `/health/live`·`/metrics`·`/doc`이 SPA의
    HTML(또는 404)을 돌려주고 백엔드 응답은 절대 돌려주지 않는지.
 7. **`admin/` 호스팅** — 별도 결정(D4).
+
+### Addendum (2026-09-21) — 구현 완료
+
+후속 작업 1~4번이 반영됐다. 5번은 `vite.config.ts` 주석만 빼고 반영됐고(명시적 승인이 필요하다),
+6번은 클러스터 없이 할 수 있는 검증까지 끝났으며, 7번은 아직 열려 있다.
+
+- **"구현 단계로 넘기는 것"으로 남겨 뒀던 선택을 확정했다.** `frontend.enabled`는 `values.yaml`에서
+  `false`, `values-prod.yaml`에서 `true`가 기본이다(`ingress`/`metrics.serviceMonitor`/
+  `networkPolicy`와 같은 모델). 이미지는 `bluecode1775/sharenpo-frontend`이고, 매 push마다 `:<sha>`,
+  `main`에는 `:latest`가 더 붙는다(ADR 0048의 분리). `deploy.sh`는 백엔드의 태그를
+  `frontend.image.tag`로 함께 넘긴다. `replicaCount`는 1이다. nginx는 보안 헤더를 server 레벨에서
+  설정하고 캐시 정책은 `expires`로 준다 — location 안에 `add_header`가 하나라도 있으면 server 레벨
+  헤더가 통째로 무시되기 때문이다. CSP는 이미지·미디어·`fetch`에 `https://*.amazonaws.com`(S3
+  presigned 리다이렉트)을, 비공개 파일 미리보기에는 `blob:`을 허용한다.
+- **`ingress.yaml`**은 path마다 선택적 `service: app|frontend`를 받는다(기본 `app`). `frontend` path는
+  `frontend.enabled`가 false인 동안 건너뛰고, 그 밖의 값은 렌더링을 실패시킨다 — 그래서 기존 values는
+  이전과 똑같이 렌더링되고, 예전 일곱 경로 레시피도 그대로 렌더링된다.
+- **구현하다가 발견한 어긋남 두 가지.**
+  (1) 프론트엔드 Service의 포트 이름은 `http`가 아니라 `web`이다. `servicemonitor.yaml`이 모든
+  Service가 `sharenpo.labels`로 물려받는 `sharenpo.selectorLabels`로 Service를 고르고 `http`라는
+  이름의 포트를 스크레이프하는데, 여기서도 같은 이름이면 Prometheus가 nginx의 `/metrics`(SPA
+  fallback의 HTML)를 스크레이프하게 된다. clamav Service는 포트 이름이 `clamd`라서 우연히 피해 갈
+  뿐이다.
+  (2) pnpm을 Dockerfile 안에서 고정했다(`corepack prepare pnpm@10.14.0`). `frontend/package.json`에는
+  `packageManager`가 없어서 corepack이 최신 pnpm(12.5.1)을 받았는데, `node:24.8.0`에 든 corepack
+  0.34.0이 그걸 실행하지 못한다(`bin/pnpm.cjs`가 없음). `frontend-*`/`admin-*` CI 잡도 같은 무고정
+  상태를 공유한다 — 2026-09-17에는 통과했지만 그 상태를 지켜 주는 장치가 없다. `frontend/`와
+  `admin/`의 `package.json`에 핀을 두는 건 별도 결정이다.
+- **발견했지만 고치지 않은 것.** (a) AWS Load Balancer Controller의 `target-type` 기본값은
+  `instance`이고, 공식 문서상 `NodePort`나 `LoadBalancer` Service가 필요하다. 이 차트의 Service는
+  `ClusterIP`이고 주석 처리된 prod annotation에도 `target-type: ip`가 없어서, Ingress를 켜면
+  프론트엔드뿐 아니라 백엔드 경로도 실패할 것으로 보인다 — 라이브 확인은 못 했고
+  `k8s/helm/README.md`의 미해결 점검 목록에 적어 뒀다. (b) `docker-tag-cleanup.yml`은
+  `bluecode1775/sharenpo`만 정리하므로 프론트엔드 저장소의 sha 태그는 쌓인다.
+- **검증한 것.** `frontend.enabled` × `ingress.enabled` 조합에 대한 `helm lint --strict`와
+  `helm template`(프론트엔드 없이 규칙 일곱 개, 있으면 `/` → `<release>-frontend:80`까지 여덟
+  개, 잘못 쓴 `service`는 렌더링 실패). amd64·arm64 로컬 `docker build`: nginx는 uid 101로 실행되고,
+  `nginx -t`가 통과하며, 딥링크는 `index.html`로 fallback되고, 없는 `/assets` 파일은 404이며, 해시가
+  붙은 자산은 1년 캐시되고, 번들에 개발용 origin이 구워지지 않았다. 실제 브라우저(Playwright)에서
+  CSP 아래로 SPA가 뜬다(콘솔 에러 1건은 그 컨테이너에 백엔드가 없어서 나는
+  `POST /auth/token/refresh`의 405). 워크플로에 대한 `actionlint`(shellcheck 포함), `deploy.sh`에
+  대한 `bash -n`(shellcheck는 바꾼 구간에서 지적 없음).
+- **검증하지 못한 것.** `helm install --wait`(구현한 머신에 `kind`가 없다), CI 잡 자체(GitHub에서
+  돈 적 없다), 실제 S3 presigned 리다이렉트에 대한 CSP, 그리고 후속 작업 6번의 라이브 ALB 순서 확인.

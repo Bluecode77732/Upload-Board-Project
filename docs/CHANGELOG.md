@@ -250,6 +250,29 @@ development line (package.json version).
   the §7 entries just never caught up with §6. No code change — pure documentation.
 
 ### Added
+- **Frontend hosted on the same ALB as the API — a separate nginx workload, path-routed
+  (2026-09-21, [ADR 0060](ADR/0060-frontend-same-alb-path-routing.md))** — nothing hosted
+  `frontend/` before: no image, no chart resources, no CI publish. It is now built into a
+  static-file nginx image (`frontend/Dockerfile`, `nginx.conf`: SPA deep-link fallback, a real
+  404 for a missing `/assets` file, a one-year cache on hashed assets, security headers and a
+  CSP — helmet only covers API responses) and runs as its own Deployment + Service in the
+  existing Helm release, values-gated (`frontend.enabled`, default `false`; `values-prod.yaml`
+  turns it on). `templates/ingress.yaml` takes an optional `service: app|frontend` per path,
+  so one Ingress carries the backend's seven allow-listed prefixes plus a `/` rule for the
+  frontend — same origin, so no CORS, and the refresh cookie is unchanged (ADR 0012's deferred
+  cross-domain question resolves as "not needed"). A new `docker-publish-frontend` CI job
+  publishes `bluecode1775/sharenpo-frontend` under the same `:<sha>` as the backend image after
+  a smoke test (deep link, asset 404, CSP header), and `deploy.sh` checks and passes both tags.
+  Chart version 0.4.0. Verified without a cluster: `helm lint --strict`/`helm template` across
+  the flag combinations, a local image build for amd64 and arm64, the SPA loading under the CSP
+  in a real browser, `actionlint`. Not verified: `helm install --wait` (no `kind` on the
+  machine), the CI job itself, and anything that needs a live ALB — the `/` rule's priority
+  under the AWS Load Balancer Controller is the one open dependency. Found along the way, not
+  fixed: the `frontend/` and `admin/` `package.json` files have no `packageManager` pin
+  (corepack resolved pnpm 12.5.1, which the Node image's corepack cannot run — the Dockerfile
+  pins 10.14.0 itself), the controller's default `target-type: instance` doesn't fit this
+  chart's `ClusterIP` Services, and `docker-tag-cleanup.yml` covers only the backend
+  repository.
 - **Admin: light/dark toggle on every page (2026-09-08)** — on direct developer request.
   `admin/src/store/theme.store.ts` (new, zustand) resolves the initial theme from
   `localStorage` (`admin-theme`) and falls back to `prefers-color-scheme` when nothing is

@@ -102,12 +102,14 @@ helm upgrade sharenpo . -f values-prod.yaml --set image.tag=<태그>
 | `service.yaml` | Service | `ClusterIP`, 포트 3000 |
 | `configmap.yaml` | ConfigMap | `values.yaml`의 `env:` 블록 아래 모든 키 |
 | `migration-job.yml` | Job (Helm hook) | pre-install/pre-upgrade 시점에 `migration:run` 실행, `docker-compose.yml`의 `migrate` 서비스를 본뜸(ADR 0032) |
-| `ingress.yaml` | Ingress | 기본 비활성(`ingress.enabled: false`) — TLS는 여기서 종료, 앱 내부에서는 안 함(ADR 0034). 경로 규칙은 `/` catch-all이 아니라 실제 컨트롤러 prefix의 명시적 allow-list다 — `/health`, `/metrics`, `/doc`은 의도적으로 제외(ADR 0058) |
+| `ingress.yaml` | Ingress | 기본 비활성(`ingress.enabled: false`) — TLS는 여기서 종료, 앱 내부에서는 안 함(ADR 0034). 경로 규칙은 백엔드 Service에 대해서는 `/` catch-all이 아니라 실제 컨트롤러 prefix의 명시적 allow-list이고, 프론트엔드 Service로 가는 `/` 규칙(`service: frontend`) 하나가 더해진다 — `/health`, `/metrics`, `/doc`은 백엔드 목록에서 의도적으로 빠져 프론트엔드의 `/`로 떨어진다(ADR 0058, ADR 0060) |
 | `serviceaccount.yaml` | ServiceAccount | 기본 비활성(`serviceAccount.create: false` — Deployment는 네임스페이스의 `default` ServiceAccount로 그대로 뜸). S3 IRSA 권한을 네임스페이스의 모든 pod가 아니라 이 앱에만 좁히려면 켠다 — 아래 "IRSA용 전용 ServiceAccount" 참고 |
 | `networkpolicy.yaml` | NetworkPolicy | 기본 비활성(`networkPolicy.enabled: false`) — 앱 파드의 인바운드/아웃바운드 트래픽을 제한한다. 아래 "NetworkPolicy" 참고(ADR 0056) |
 | `clamav-deployment.yaml` | Deployment | `UploadService`가 업로드를 검사하는 `clamd` 데몬 — 앱 파드마다 하나씩이 아니라 공유되는 단일 replica다(시그니처 DB 중복을 피함, ADR 0059 D6). `ingress`/`networkPolicy`와 달리 항상 렌더링된다 |
 | `clamav-service.yaml` | Service | `ClusterIP`, 포트 3310 — `configmap.yaml`이 `values.yaml`의 `env` 맵이 아니라 이 Service 이름에서 `CLAMD_HOST`를 직접 계산한다 |
 | `clamav-pvc.yaml` | PersistentVolumeClaim | `clamav.persistence.enabled: true`일 때만 렌더링된다(기본 `false` — 그렇지 않으면 재시작마다 `emptyDir`에 시그니처 DB를 다시 내려받는다) |
+| `frontend-deployment.yaml` | Deployment | SPA를 서빙하는 정적 파일 nginx(`frontend/Dockerfile`) — 앱과 별도 파드이며, 백엔드 Service가 절대 고르지 않도록 셀렉터 라벨을 따로 쓴다. 기본 비활성(`frontend.enabled: false`), `values-prod.yaml`이 켠다(ADR 0060) |
+| `frontend-service.yaml` | Service | `ClusterIP`, 포트 80. 포트 이름은 `http`가 아니라 `web`이다: `servicemonitor.yaml`이 `sharenpo.labels`를 단 모든 Service에서 `http`라는 이름의 포트를 스크레이프하는데 nginx에는 `/metrics`가 없기 때문이다. Ingress의 `/` 규칙이 가리키는 대상 |
 
 `values.yaml`엔 실제로 템플릿이 읽는 키만 남아 있습니다 — 어떤 템플릿도 소비하지
 않던 `autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride` 스캐폴딩
@@ -271,7 +273,7 @@ kubectl run curl-clamav --image=busybox:1.36 --restart=Never --rm -i \
 TLS는 ingress/ALB에서만 종료하고 앱 프로세스 안에서는 하지 않는다([ADR
 0034](../../docs/ADR/0034-https-termination-stance.ko.md)). `values.yaml`의
 `ingress` 블록은 `/` catch-all이 아니라 실제 컨트롤러 prefix의 명시적
-allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)).
+allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)). 다만 프론트엔드 Service로 가는 `/` 규칙 하나는 예외다([ADR 0060](../../docs/ADR/0060-frontend-same-alb-path-routing.ko.md)).
 `ingress.enabled`는 계속 `false`다 — 이건 뭔가 빠져서가 아니라 개발자가 확정한
 의도적 결정이다([ROADMAP.md](../../docs/ROADMAP.md) > Unscheduled): 스택이
 실제로 떠 있던 2026-08-27 당시엔 클러스터·도메인(`sharenpo.cloud`)·실제 ACM
@@ -298,21 +300,21 @@ allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)).
 
 ```bash
 helm lint --strict . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
-  --set ingress.className=alb \
+  --set ingress.className=alb --set frontend.enabled=true \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
-  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]'
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"}]}]'
 helm template . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
-  --set ingress.className=alb \
+  --set ingress.className=alb --set frontend.enabled=true \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
-  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]' \
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"}]}]' \
   -s templates/ingress.yaml
 ```
 
-렌더링된 `Ingress`에 `ingressClassName: alb`, 호스트, allow-list의 일곱 경로,
+렌더링된 `Ingress`에 `ingressClassName: alb`, 호스트, allow-list의 일곱 백엔드 경로와 프론트엔드 `/` 규칙(2026-09-21),
 annotation이 전부 의도대로 나오는지 확인한다(2026-09-13 검증 — 이 레시피의 이전 초안은
 `--set ingress.hosts[0].host=...`를 썼는데, 이건 배열 원소 전체를 교체해버려 경로가 다
 사라진다; `--set-json`이라야 실제로 유지된다 — `k8s/infra/terraform/README.md`의 "ALB
@@ -330,6 +332,17 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   실제로 동작하는지).
 - 브라우저가 ACM 인증서가 발급된 그 도메인에 대해 경고 없이 인증서를 신뢰하는지
   (`certificate-arn` annotation이 실제로 올바른 인증서를 붙였는지).
+- 토큰 없는 `curl https://<도메인>/file`이 HTML이 아니라 API의 401 JSON을 돌려주고,
+  `/files`·`/posts/1`·존재하지 않는 경로는 SPA의 HTML을 돌려주는지 — 프론트엔드 `/` 규칙이
+  실제로 API prefix들 아래에 놓이는지(ADR 0060, 컨트롤러의 Exact 다음 긴 Prefix 순서는
+  라이브에서 확인된 적이 없다). `/health/live`·`/metrics`·`/doc`도 SPA의 HTML(또는 404)이
+  나와야 하고 백엔드 응답이 나오면 안 된다.
+- 타깃 그룹에 healthy 타깃이 등록되는지. 컨트롤러의 `alb.ingress.kubernetes.io/target-type`
+  기본값은 `instance`인데 공식 문서상 `NodePort` 또는 `LoadBalancer` Service가 필요하다.
+  이 차트의 두 Service는 모두 `ClusterIP`이고, 주석 처리된 prod annotation에도
+  `target-type`이 없다. `ip` 모드는 Service 타입과 무관하게 동작하므로
+  `alb.ingress.kubernetes.io/target-type: ip`를 추가해야 할 가능성이 높다 — 2026-09-21에
+  ADR 0060을 구현하다가 발견했고 여기서는 고치지 않았다(백엔드 경로에도 똑같이 걸린다).
 
 이 중 어느 것도 `helm lint`/`helm template`로는 확인할 수 없다 — 이 둘은 이 저장소가
 렌더링하는 YAML이 올바르다는 것만 증명할 뿐, AWS Load Balancer Controller가 그 설정대로
@@ -348,4 +361,21 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
 ```bash
 helm lint --strict .
 helm template . --set secrets.existingSecret=placeholder
+```
+
+프론트엔드 워크로드(ADR 0060)는 `--set frontend.enabled=true`를 줘야만 렌더링되고, Ingress의
+`/` 규칙도 그때만 나타난다:
+
+```bash
+helm template . --set secrets.existingSecret=placeholder --set frontend.enabled=true \
+  --set ingress.enabled=true \
+  -s templates/ingress.yaml -s templates/frontend-deployment.yaml -s templates/frontend-service.yaml
+```
+
+이미지도 클러스터 없이 검증할 수 있다 — 빌드해서 SPA fallback과 헤더를 확인한다:
+
+```bash
+docker build -t sharenpo-frontend:local -f ../../frontend/Dockerfile ../../frontend
+docker run --rm -p 8080:8080 sharenpo-frontend:local
+# /, /posts/1 → 200 index.html;  /assets/missing.js → 404;  모든 응답에 CSP + nosniff 헤더
 ```
