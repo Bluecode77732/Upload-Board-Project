@@ -377,11 +377,12 @@ forbidNonWhitelisted + enableImplicitConversion`을 실행합니다. DTO에 선�
 
 ### 종료
 
-`bootstrap()`은 `listen()` 바로 앞에서 `app.enableShutdownHooks()`를 호출하므로, SIGTERM/SIGINT가
-오면 Nest의 종료 훅이 실행됩니다: TypeORM이 pg 풀을 닫고, 스케줄러가 스윕 크론 두 개를 멈춥니다.
-`node`가 PID 1인 컨테이너에서 특히 중요합니다 — 이 호출이 없으면 SIGTERM이 무시되어 `docker stop`이
-유예 시간을 다 기다린 뒤 SIGKILL로 끝났습니다([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md) —
-plain 호출로 지금은 충분한 이유와 `useProcessExit` 대안도 여기에 기록돼 있습니다).
+`bootstrap()`은 `listen()` 바로 앞에서 `app.enableShutdownHooks([], { useProcessExit: true })`를
+호출하므로, SIGTERM/SIGINT가 오면 Nest의 종료 훅이 실행됩니다: TypeORM이 pg 풀을 닫고, 스케줄러가
+스윕 크론 두 개를 멈춥니다. `node`가 PID 1인 컨테이너에서 특히 중요합니다 — 이 호출이 없으면
+SIGTERM이 무시되어 `docker stop`이 유예 시간을 다 기다린 뒤 SIGKILL로 끝났습니다
+([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md) — `useProcessExit: true`를 쓰는
+이유(PID 1은 Nest가 자기 자신에게 다시 보내는 시그널을 버립니다)도 여기에 기록돼 있습니다).
 
 ## 엔티티 (TypeORM)
 

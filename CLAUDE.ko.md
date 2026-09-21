@@ -1664,16 +1664,16 @@ Architecture Decisions가 계속 유효하다.
   죽는다"는 문장부터 틀렸다: 컨테이너에서 `node`가 PID 1이라 SIGTERM이 무시됐고,
   `docker stop`은 유예 시간을 끝까지 기다린 뒤 SIGKILL로 끝냈다 — 유예 10초에서 10.4초,
   종료 코드 137이었고, TypeORM의 `onApplicationShutdown`(pg 풀 닫기)도 한 번도 실행되지
-  않았다. `app.listen(...)` 앞에 `app.enableShutdownHooks();`를 넣으면 0.3~0.4초 만에 종료
-  코드 0으로 끝나고 `pg.Pool.end()`가 실행된다(로컬 Linux 컨테이너, 각 두 번 측정;
-  **Kubernetes에서는 검증하지 않았다** — 차트에 `terminationGracePeriodSeconds`가 없어
-  기본값 30초가 적용될 것으로 보이지만 예상일 뿐 측정한 값이 아니다). ADR이 기록한 두 가지는
-  계속 유효하다: plain 호출이 곧바로 끝나는 것은 정리 후 이벤트 루프를 붙잡는 것이 없기
-  때문일 뿐이고 — Nest가 자기 자신에게 보내는 시그널은 PID 1에서 버려지며, 실험에서 ref된
-  타이머 하나가 남자 다시 10.3초/137로 돌아갔다 — 그런 일이 생기면
-  `enableShutdownHooks([], { useProcessExit: true })`가 대안이다; 그리고 `OnModuleDestroy`는
-  어디에도 추가하지 않았다(누수를 보여주는 것이 없었다. `STORAGE_DRIVER=s3`를 실제로 켤 때
-  다시 확인할 대상은 `S3Storage`의 `S3Client`다)
+  않았다. `app.listen(...)` 앞에 `app.enableShutdownHooks([], { useProcessExit: true });`를
+  넣으면 약 0.4초 만에 종료 코드 0으로 끝나고 `pg.Pool.end()`가 실행된다(로컬 Linux
+  컨테이너와 로컬 `kind` 클러스터의 파드 — 파드 스펙에 기본값 30초 유예가 있다 —
+  **EKS/ALB에서는 검증하지 않았다**). 옵션은 의도적이다: Nest는 정리를 마치고 같은 시그널을
+  자기 자신에게 다시 보내 끝내는데 PID 1은 그 시그널을 버리므로, plain 호출은 이벤트 루프를
+  붙잡는 것이 없을 때에만 끝난다 — ref된 타이머 하나가 남자 plain은 Docker에서 10.4초/137,
+  파드에서 30.6초로 돌아갔고, 옵션을 쓰면 둘 다 0.4초였다. 그 대가(핸들이 누수돼도 더는
+  느린 종료로 드러나지 않는다)는 ADR의 Addendum에 있다. `OnModuleDestroy`는 어디에도
+  추가하지 않았다(누수를 보여주는 것이 없었다. `STORAGE_DRIVER=s3`를 실제로 켤 때 다시 확인할
+  대상은 `S3Storage`의 `S3Client`다)
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

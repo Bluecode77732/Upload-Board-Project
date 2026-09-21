@@ -240,11 +240,12 @@
   `app.enableShutdownHooks()`를 한 번도 호출하지 않았고, 컨테이너에서 `node`가 PID 1이라
   SIGTERM이 무시됐다: `docker stop`이 유예 시간 전체인 10.4초를 쓰고 SIGKILL, 종료 코드
   137로 끝났으며 TypeORM은 pg 풀을 닫지 못했다. 이제 `bootstrap()`이 `listen()` 바로 앞에서
-  이를 호출한다. 로컬 Linux 컨테이너에서 같은 종료가 0.3~0.4초, 종료 코드 0이고
-  `pg.Pool.end()`가 실행된다. Kubernetes에서는 검증하지 않았다. plain 호출은 정리 후 이벤트
-  루프를 붙잡는 것이 없는 동안에만 곧바로 끝난다 — 이 trade-off와 측정값, `useProcessExit`
-  대안은 ADR에 기록했다. 2026-09-16의 Known Gaps 항목을 닫는다(그 항목의 "프로세스가 그냥
-  죽는다"는 문장은 틀렸다).
+  `useProcessExit: true`와 함께 이를 호출한다. 로컬 Linux 컨테이너와 로컬 `kind` 클러스터의
+  파드에서 같은 종료가 약 0.4초, 종료 코드 0이고 `pg.Pool.end()`가 실행된다(EKS에서는 검증하지
+  않았다). 옵션을 둔 이유는 PID 1이 Nest가 자기 자신에게 다시 보내는 시그널을 버리기 때문이다:
+  옵션이 없으면 핸들 하나가 남는 순간 유예 시간 전체가 되살아난다(Docker에서 10.4초, 파드에서
+  30.6초). trade-off와 측정값은 ADR에 기록했다. 2026-09-16의 Known Gaps 항목을 닫는다(그
+  항목의 "프로세스가 그냥 죽는다"는 문장은 틀렸다).
 - **`ROADMAP.md`(+ko): §7의 낡은 "미착수" 항목 2건 추가 정정 (2026-09-08)** — 앞서
   고친 ARM/Graviton 건과 같은 유형의 버그. "AWS Secrets Manager+ESO 연동"과
   "Kubernetes Ingress/ALB + TLS 인증서 프로비저닝" 둘 다 여전히 "존재하지 않는

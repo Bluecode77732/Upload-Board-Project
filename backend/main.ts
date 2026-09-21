@@ -19,7 +19,8 @@ import helmet from 'helmet';
 //       적용해 모든 응답에 보안 헤더가 빠짐없이 붙게 하되, CSP의 script-src는 /doc(Swagger UI)의
 //       인라인 부트스트랩 스크립트가 실행되도록 완화한다(ADR 0055). 전역 ValidationPipe는 여기서
 //       등록하지 않는다 — AppModule의 APP_PIPE가 맡아 e2e도 같은 경로를 탄다. enableShutdownHooks()는
-//       listen 직전에 호출해 SIGTERM/SIGINT에서 Nest 종료 훅이 돌게 한다.
+//       listen 직전에 useProcessExit와 함께 호출해, SIGTERM/SIGINT에서 Nest 종료 훅이 돌고 정리가
+//       끝나면 곧바로 process.exit(0)으로 끝나게 한다.
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
@@ -76,7 +77,10 @@ async function bootstrap() {
 
   // SIGTERM/SIGINT에서 OnModuleDestroy/OnApplicationShutdown 훅(TypeORM DB 풀 정리, 스케줄러
   // 크론 정지)이 실제로 돌게 한다 — 호출하지 않으면 시그널 리스너가 없어 그 훅들이 실행되지 않는다.
-  app.enableShutdownHooks();
+  // useProcessExit: 정리 뒤 Nest가 같은 시그널을 자기 자신에게 다시 보내 끝내는 대신 process.exit(0)을
+  // 부른다 — 컨테이너의 PID 1(node)은 그 자기 전송 시그널을 버려서, 이벤트 루프를 붙잡는 핸들이
+  // 하나라도 남으면 유예 시간이 끝나 SIGKILL이 올 때까지 안 꺼지기 때문이다(ADR 0061 D3).
+  app.enableShutdownHooks([], { useProcessExit: true });
 
   await app.listen(configService.get<number>('PORT', 3000));
 }

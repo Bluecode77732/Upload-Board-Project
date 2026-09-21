@@ -231,12 +231,13 @@ development line (package.json version).
   0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md))** — `main.ts` never called
   `app.enableShutdownHooks()`, and because `node` is PID 1 in the container its SIGTERM was
   ignored: `docker stop` took 10.4 s (the whole grace period) and ended in SIGKILL, exit 137,
-  and TypeORM never closed the pg pool. `bootstrap()` now calls it right before `listen()`;
-  in a local Linux container the same stop takes 0.3–0.4 s, exit 0, with `pg.Pool.end()`
-  running. Not verified on Kubernetes. The plain call exits promptly only while nothing holds
-  the event loop open after cleanup — the ADR records that trade-off, the measurements and the
-  `useProcessExit` fallback. Closes the 2026-09-16 Known Gaps entry, whose "the process just
-  dies" line was wrong.
+  and TypeORM never closed the pg pool. `bootstrap()` now calls it right before `listen()`,
+  with `useProcessExit: true`; in a local Linux container and in a pod on a local `kind`
+  cluster the same stop takes about 0.4 s, exit 0, with `pg.Pool.end()` running (not verified
+  on EKS). The option is there because PID 1 discards the signal Nest re-sends to itself:
+  without it a lingering handle brings back the full grace period (10.4 s in Docker, 30.6 s in
+  a pod). The ADR records the trade-off and the measurements. Closes the 2026-09-16 Known
+  Gaps entry, whose "the process just dies" line was wrong.
 - **`ROADMAP.md`(+ko): two more stale "not started" §7 entries corrected (2026-09-08)**
   — same class of bug as the earlier ARM/Graviton fix. "AWS Secrets Manager + ESO wiring"
   and "Kubernetes Ingress/ALB + TLS certificate provisioning" both still said they were

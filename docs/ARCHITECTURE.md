@@ -366,12 +366,12 @@ object nobody claims is swept by `TempCleanupModule` once it ages past its TTL
 
 ### Shutdown
 
-`bootstrap()` calls `app.enableShutdownHooks()` right before `listen()`, so SIGTERM/SIGINT run
-Nest's shutdown hooks: TypeORM closes the pg pool and the scheduler stops the two sweep crons.
-It matters in the container, where `node` is PID 1 — without the call SIGTERM was ignored and
-`docker stop` waited out the grace period before SIGKILL
-([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md), which also records why the plain call
-is enough today and the `useProcessExit` fallback).
+`bootstrap()` calls `app.enableShutdownHooks([], { useProcessExit: true })` right before
+`listen()`, so SIGTERM/SIGINT run Nest's shutdown hooks: TypeORM closes the pg pool and the
+scheduler stops the two sweep crons. It matters in the container, where `node` is PID 1 —
+without the call SIGTERM was ignored and `docker stop` waited out the grace period before
+SIGKILL ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md), which also records why the
+call uses `useProcessExit: true` — PID 1 discards the signal Nest re-sends to itself).
 
 ## Entities (TypeORM)
 

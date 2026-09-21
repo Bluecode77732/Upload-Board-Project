@@ -1635,16 +1635,17 @@ Architecture Decisions above remain operative.
   entry's own "on SIGTERM the process just dies" was wrong: `node` is PID 1 in the
   container, so SIGTERM was ignored and `docker stop` waited out the whole grace period
   before SIGKILL ended it — 10.4 s and exit 137 with a 10 s grace, and TypeORM's
-  `onApplicationShutdown` (the pg pool close) never ran. With `app.enableShutdownHooks();`
-  before `app.listen(...)` it stops in 0.3–0.4 s, exit 0, and `pg.Pool.end()` runs (local
-  Linux container, two runs each; **not verified on Kubernetes** — the chart sets no
-  `terminationGracePeriodSeconds`, so the 30 s default should apply, expected not
-  measured). Two things the ADR records still bind: the plain call exits promptly only
-  because nothing holds the event loop open after cleanup — Nest's self-sent signal is
-  discarded on PID 1, and one lingering ref'd timer put it back to 10.3 s/137 in an
-  experiment — so `enableShutdownHooks([], { useProcessExit: true })` is the fallback if
-  that ever happens; and no `OnModuleDestroy` was added anywhere (nothing showed a leak;
-  `S3Storage`'s `S3Client` is the one to re-check when `STORAGE_DRIVER=s3` goes live)
+  `onApplicationShutdown` (the pg pool close) never ran. With
+  `app.enableShutdownHooks([], { useProcessExit: true });` before `app.listen(...)` it stops
+  in about 0.4 s, exit 0, and `pg.Pool.end()` runs (a local Linux container and a pod on a
+  local `kind` cluster, whose spec carries the default 30 s grace — **not verified on
+  EKS/the ALB**). The option is deliberate: Nest ends its cleanup by re-sending the signal
+  to itself, which PID 1 discards, so the plain call exits only while nothing holds the
+  event loop open — one lingering ref'd timer put plain back to 10.4 s/137 in Docker and
+  30.6 s in a pod, and with the option both stayed at 0.4 s. What that costs (a leaked
+  handle no longer shows up as a slow shutdown) is in the ADR's addendum. No
+  `OnModuleDestroy` was added anywhere (nothing showed a leak; `S3Storage`'s `S3Client` is
+  the one to re-check when `STORAGE_DRIVER=s3` goes live)
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for

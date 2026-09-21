@@ -1,6 +1,6 @@
 # ADR 0061: 우아한 종료 — `enableShutdownHooks()`와 PID 1로 뜬 Node
 
-- Status: Accepted — implemented, 로컬 Linux 컨테이너에서 검증(Kubernetes에서는 검증하지 않음)
+- Status: Accepted — implemented, 로컬 Linux 컨테이너와 로컬 `kind` 클러스터에서 검증(EKS에서는 검증하지 않음); D3는 Addendum으로 뒤집힘
 - Date: 2026-09-21
 - Extends: [ADR 0030](0030-container-non-root-and-arch-stance.ko.md) — 이번 측정의 대상이 된 컨테이너 구성(non-root, `CMD ["node", "dist/main"]`). 그쪽은 바뀌는 것이 없다
 - English: [0061-shutdown-hooks-and-pid1-sigterm.md](0061-shutdown-hooks-and-pid1-sigterm.md)
@@ -80,6 +80,8 @@ ref된 `setInterval` 하나를 추가한 프로브 변형(정리 후에도 남�
 지금과 같은 10초/30초 뒤 SIGKILL일 뿐 더 나빠지지 않는다. 그런 일이 생기면 그때 옵션을
 추가한다.
 
+*같은 날 나중에 뒤집었다 — 맨 끝의 Addendum을 볼 것. 옵션을 측정해 보고 채택했다.*
+
 ## Consequences
 
 절차와 `--stop-timeout 10`을 전부 같게 두고 측정했다:
@@ -108,3 +110,44 @@ ref된 `setInterval` 하나를 추가한 프로브 변형(정리 후에도 남�
 - 스키마, Joi, `.env.example`, 가드, Swagger 변경은 없다.
 - CLAUDE.md의 2026-09-16 Known Gaps 항목은 닫았고, "프로세스가 그냥 죽는다"는 문장은
   바로잡았다.
+
+### Addendum (2026-09-21, 같은 날 나중에) — `useProcessExit: true` 채택, 로컬 `kind` 클러스터에서 검증
+
+D3는 `useProcessExit: true`를 측정하지 않은 대안으로 남겨 뒀다. 측정해 보니 결론이 났고,
+그래서 호출은 이제 `app.enableShutdownHooks([], { useProcessExit: true })`다. 이것이 D3의
+결론과, 위 "측정하지 않은 것"의 "Kubernetes 자체" 항목을 대체한다(로컬 `kind` 클러스터는
+이제 측정했고, EKS는 아직이다).
+
+이미지와 프로브는 전부 같게 두고, plain과 옵션을 각각 ref된 타이머가 있을 때와 없을 때로
+측정했다:
+
+| | plain | `useProcessExit: true` |
+|---|---|---|
+| Docker, 정상 | 385 ms, 종료 코드 0 | 422 ms, 종료 코드 0 |
+| Docker, 타이머 남김 | 10,400 ms, 137 (SIGKILL +10,033 ms) | 409 ms, 종료 코드 0 |
+| `kind` 파드, 정상 | 1,187 ms, `exit` 이벤트 code 0 | 460 ms, code 0 |
+| `kind` 파드, 타이머 남김 | 30,568 ms, `exit` 이벤트 없음(유예 시간 뒤 SIGKILL) | 412 ms, code 0 |
+
+Docker 행은 `--stop-timeout 10`을 준 `docker stop`이다. `kind` 행은 `kubectl scale
+--replicas=0`부터 파드 오브젝트가 사라질 때까지의 시간이라 kubectl과 kubelet의 오버헤드가
+포함된다. 파드 스펙에는 `terminationGracePeriodSeconds: 30`이 있다 — 차트가 설정하지 않으므로
+이는 Kubernetes 기본값이며, 가정한 것이 아니라 실행 중인 파드에서 읽어 확인했다.
+
+바꾸는 이유: D3가 감수하기로 한 실패는 조용하고, 자동으로 잡아내는 것이 없다. plain은 이벤트
+루프를 붙잡는 것이 하나라도 생기는 날 — `S3Storage`를 실제로 켜는 것이 가장 유력한 후보다 —
+유예 시간 전체를 기다리는 방식으로 되돌아가고, 증상은 배포가 느려지는 것뿐이다. 옵션을 쓰면
+종료가 그 조건에 의존하지 않는다. 옵션 행에서는 모두 프로브가 `exit` 이벤트보다 먼저
+`pg.Pool.end()`를 기록했으므로, 풀 닫기와 크론 정지는 여전히 먼저 실행된다.
+
+감수하는 비용: `process.exit(0)`는 열린 핸들이 남아 있어도 프로세스를 끝내므로, 핸들 누수가
+더는 느린 종료로 드러나지 않는다. 종료 코드도 항상 0이다(Kubernetes는 신경 쓰지 않는다).
+
+측정 방법: `kind` v0.27.0(Kubernetes v1.32.2)을 전용 kubeconfig 파일로 띄워 `kubectl`/`helm`에
+실제 클러스터 컨텍스트가 아예 보이지 않게 했고, HEAD의 `k8s/helm` 차트를 `helm install`로
+설치했다(마이그레이션 hook 포함, `clamav`는 설치 후 0으로 내렸다 — 차트에 끄는 스위치가
+없다). Postgres 파드는 일회용, 시크릿은 생성한 값, 이미지는 로컬에서 빌드해 `kind load`로
+넣었다. 프로브는 ConfigMap으로 마운트하고 `NODE_OPTIONS`로 켰다. 종료된 컨테이너의 종료
+코드는 읽어 오지 못했다 — kubelet이 이미 가비지 컬렉션한 뒤였다 — 그래서 프로브의 `exit`
+이벤트로 대신했다: 있으면 프로세스가 스스로 나간 것이고, 없으면 SIGKILL이다.
+
+여전히 측정하지 않은 것: EKS와 ALB의 연결 드레이닝, 종료 중 처리 중인 요청, `S3Storage`.

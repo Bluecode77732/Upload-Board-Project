@@ -1,6 +1,6 @@
 # ADR 0061: Graceful Shutdown — `enableShutdownHooks()`, and Node as PID 1
 
-- Status: Accepted — implemented, verified in a local Linux container (not on Kubernetes)
+- Status: Accepted — implemented, verified in a local Linux container and on a local `kind` cluster (not on EKS); D3 reversed by the addendum
 - Date: 2026-09-21
 - Extends: [ADR 0030](0030-container-non-root-and-arch-stance.md) — the container shape this was measured against (non-root, `CMD ["node", "dist/main"]`); none of it changes
 - 한국어: [0061-shutdown-hooks-and-pid1-sigterm.ko.md](0061-shutdown-hooks-and-pid1-sigterm.ko.md)
@@ -79,6 +79,9 @@ Not chosen: the plain form is what the deferral named, it meets the goal today,
 leak later the failure is the same 10 s/30 s-then-SIGKILL that exists today — not worse. If
 that happens, add the option.
 
+*Reversed later the same day — see the addendum at the end. The option was measured and
+adopted.*
+
 ## Consequences
 
 Measured with the same procedure and `--stop-timeout 10` throughout:
@@ -107,3 +110,47 @@ Measured with the same procedure and `--stop-timeout 10` throughout:
 - No schema, Joi, `.env.example`, guard, or Swagger change.
 - CLAUDE.md's 2026-09-16 Known Gaps entry is closed, and its "the process just dies" line
   corrected.
+
+### Addendum (2026-09-21, later the same day) — `useProcessExit: true` adopted, verified on a local `kind` cluster
+
+D3 left `useProcessExit: true` as an unmeasured fallback. Measuring it settled the question,
+so the call is now `app.enableShutdownHooks([], { useProcessExit: true })`. This replaces
+D3's conclusion, and the "Kubernetes itself" item under "Not measured" above (a local `kind`
+cluster is now measured; EKS is not).
+
+Same images and probe throughout; plain versus the option, each with and without the ref'd
+timer:
+
+| | plain | `useProcessExit: true` |
+|---|---|---|
+| Docker, normal | 385 ms, exit 0 | 422 ms, exit 0 |
+| Docker, timer left running | 10,400 ms, 137 (SIGKILL at +10,033 ms) | 409 ms, exit 0 |
+| `kind` pod, normal | 1,187 ms, `exit` event code 0 | 460 ms, code 0 |
+| `kind` pod, timer left running | 30,568 ms, no `exit` event (SIGKILL after the grace period) | 412 ms, code 0 |
+
+Docker rows are `docker stop` with `--stop-timeout 10`. `kind` rows are the time from
+`kubectl scale --replicas=0` until the pod object is gone, so they include kubectl and
+kubelet overhead. The pod spec carries `terminationGracePeriodSeconds: 30` — the chart sets
+none, so that is Kubernetes' default, read back from the running pod rather than assumed.
+
+Why switch: the failure D3 accepted is silent and nothing automated catches it. Plain drifts
+back to a full grace-period wait the day anything keeps the event loop open — `S3Storage`
+going live is the likeliest candidate — and the only symptom is slower deploys. With the
+option the exit no longer depends on that. In every option row the probe logged
+`pg.Pool.end()` before the `exit` event, so the pool close and the cron stop still run first.
+
+What it costs, accepted: `process.exit(0)` ends the process even if a handle was left open,
+so a leaked handle no longer shows up as a slow shutdown; and the exit code is always 0
+(Kubernetes doesn't care).
+
+Method: `kind` v0.27.0 (Kubernetes v1.32.2) with a kubeconfig file of its own, so no real
+cluster context was visible to `kubectl`/`helm`; the chart at `k8s/helm` from HEAD installed
+with `helm install` (migration hook included; `clamav` scaled to 0 afterwards, the chart has
+no toggle for it); a throwaway Postgres pod; generated secrets; locally built images loaded
+with `kind load`. The probe was mounted from a ConfigMap and enabled through `NODE_OPTIONS`.
+The terminated container's exit code could not be read back — kubelet had already
+garbage-collected it — so the probe's `exit` event stands in: present means the process left
+on its own, absent means SIGKILL.
+
+Still not measured: EKS and the ALB's connection draining, requests in flight during
+shutdown, `S3Storage`.
