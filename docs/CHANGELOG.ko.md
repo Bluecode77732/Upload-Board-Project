@@ -13,6 +13,17 @@
 ## [Unreleased]
 
 ### 변경
+- **전역 `ValidationPipe` 옵션을 한 곳으로 모으고 `APP_PIPE`로 등록 (2026-09-21)** — 같은
+  옵션 네 개(`transform`, `whitelist`, `forbidNonWhitelisted`,
+  `enableImplicitConversion`)가 `main.ts`, `test/e2e-utils.ts`,
+  `delete-user-query.dto.spec.ts`에 손으로 복사돼 있었고, 스펙의 주석은 "main.ts와 정확히
+  같다"고 적혀 있었지만 그 말이 맞도록 유지하는 것은 사람의 몫이었다. 이제 옵션은
+  `backend/common/validation-pipe-options.ts`의 상수 하나에 있고, 파이프는 `AppModule`에서
+  `APP_FILTER`/`APP_GUARD` 옆의 `APP_PIPE` provider로 한 번만 등록한다. `main.ts`는 더 이상
+  `useGlobalPipes`를 호출하지 않고 `e2e-utils.ts`도 다시 등록하지 않는다 — e2e가 이제
+  운영과 같은 경로인 `AppModule`을 통해 파이프를 받는다. provider를 일부러 빼서 확인했다:
+  e2e 10건이 깨지고(`VALIDATION_FAILED` 단언이 전부 포함된다), 파일은 이후 바이트 단위로
+  동일하게 복원했다. 동작 변화는 없다 — `pnpm test` 279/279, `pnpm test:e2e` 76/76.
 - **API 전체 표면의 Swagger 문서를 확장하고 한글화 (2026-09-16)** — 컨트롤러 11개에
   걸친 엔드포인트 34개 전부에 `@ApiOperation` 요약을 추가했다(이전에는
   `auth.controller.ts`의 `register`에만 있었다). `@ApiTags`/`@ApiOperation`/
@@ -224,6 +235,16 @@
   필요함.
 
 ### 수정
+- **컨테이너가 SIGKILL을 기다리지 않고 SIGTERM에 종료 (2026-09-21, [ADR
+  0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md))** — `main.ts`가
+  `app.enableShutdownHooks()`를 한 번도 호출하지 않았고, 컨테이너에서 `node`가 PID 1이라
+  SIGTERM이 무시됐다: `docker stop`이 유예 시간 전체인 10.4초를 쓰고 SIGKILL, 종료 코드
+  137로 끝났으며 TypeORM은 pg 풀을 닫지 못했다. 이제 `bootstrap()`이 `listen()` 바로 앞에서
+  이를 호출한다. 로컬 Linux 컨테이너에서 같은 종료가 0.3~0.4초, 종료 코드 0이고
+  `pg.Pool.end()`가 실행된다. Kubernetes에서는 검증하지 않았다. plain 호출은 정리 후 이벤트
+  루프를 붙잡는 것이 없는 동안에만 곧바로 끝난다 — 이 trade-off와 측정값, `useProcessExit`
+  대안은 ADR에 기록했다. 2026-09-16의 Known Gaps 항목을 닫는다(그 항목의 "프로세스가 그냥
+  죽는다"는 문장은 틀렸다).
 - **`ROADMAP.md`(+ko): §7의 낡은 "미착수" 항목 2건 추가 정정 (2026-09-08)** — 앞서
   고친 ARM/Graviton 건과 같은 유형의 버그. "AWS Secrets Manager+ESO 연동"과
   "Kubernetes Ingress/ALB + TLS 인증서 프로비저닝" 둘 다 여전히 "존재하지 않는

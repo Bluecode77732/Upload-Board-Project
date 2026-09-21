@@ -13,6 +13,17 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Global `ValidationPipe` options single-sourced and registered as `APP_PIPE`
+  (2026-09-21)** — the same four options (`transform`, `whitelist`, `forbidNonWhitelisted`,
+  `enableImplicitConversion`) were hand-copied into `main.ts`, `test/e2e-utils.ts` and
+  `delete-user-query.dto.spec.ts`, whose comment said "exactly the same as main.ts" and was
+  kept true by hand. They now live in one constant, `backend/common/validation-pipe-options.ts`,
+  and the pipe is registered once, as an `APP_PIPE` provider in `AppModule` next to
+  `APP_FILTER`/`APP_GUARD`. `main.ts` no longer calls `useGlobalPipes` and `e2e-utils.ts` no
+  longer re-registers it — e2e now gets the pipe through `AppModule`, the same route as
+  production. Checked by removing the provider on purpose: 10 e2e cases fail (every
+  `VALIDATION_FAILED` assertion among them); the file was restored byte-identical afterwards.
+  No behavior change — `pnpm test` 279/279, `pnpm test:e2e` 76/76.
 - **Swagger documentation expanded and Koreanized across the entire API surface
   (2026-09-16)** — every one of the 34 endpoints across all 11 controllers gained an
   `@ApiOperation` summary (previously only `auth.controller.ts`'s `register` had one),
@@ -216,6 +227,16 @@ development line (package.json version).
   Redis-backed storage for one true per-route ceiling across replicas.
 
 ### Fixed
+- **Container now stops on SIGTERM instead of waiting for SIGKILL (2026-09-21, [ADR
+  0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md))** — `main.ts` never called
+  `app.enableShutdownHooks()`, and because `node` is PID 1 in the container its SIGTERM was
+  ignored: `docker stop` took 10.4 s (the whole grace period) and ended in SIGKILL, exit 137,
+  and TypeORM never closed the pg pool. `bootstrap()` now calls it right before `listen()`;
+  in a local Linux container the same stop takes 0.3–0.4 s, exit 0, with `pg.Pool.end()`
+  running. Not verified on Kubernetes. The plain call exits promptly only while nothing holds
+  the event loop open after cleanup — the ADR records that trade-off, the measurements and the
+  `useProcessExit` fallback. Closes the 2026-09-16 Known Gaps entry, whose "the process just
+  dies" line was wrong.
 - **`ROADMAP.md`(+ko): two more stale "not started" §7 entries corrected (2026-09-08)**
   — same class of bug as the earlier ARM/Graviton fix. "AWS Secrets Manager + ESO wiring"
   and "Kubernetes Ingress/ALB + TLS certificate provisioning" both still said they were

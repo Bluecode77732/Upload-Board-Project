@@ -76,14 +76,15 @@
 
 파급 범위가 큰 파일 — 편집 전 명시적 승인 필요(여기를 건드리면 저장소 전체로
 파급되므로, 파급 범위가 "이 파일만"으로 끝나는 법이 없다: `app.module.ts`는 모든
-모듈 + DB 연결을 연결하고, `main.ts`는 전역 부트스트랩/ValidationPipe/CORS이며,
-`*.entity.ts`는 DB 스키마 자체를 정의한다):
+모듈 + DB 연결 + 전역 `ValidationPipe`(`APP_PIPE`)를 연결하고, `main.ts`는 전역
+부트스트랩/CORS/종료 훅이며, `*.entity.ts`는 DB 스키마 자체를 정의한다):
 `app.module.ts`, `main.ts`, `*.entity.ts`
 
 다음 중 하나를 건드리는 것은 항상 "지시된 작업 범위를 벗어남"으로 취급한다 —
 각각이 *모든* 요청이나 엔드포인트의 동작을 지배하므로, 국소적으로 보이는 편집도
 전역적 파급력을 가진다:
-`main.ts`의 전역 `ValidationPipe` 옵션, `app.module.ts`의 Joi 검증 스키마,
+전역 `ValidationPipe` 옵션(`backend/common/validation-pipe-options.ts`, `app.module.ts`에서
+`APP_PIPE`로 연결), `app.module.ts`의 Joi 검증 스키마,
 공유 가드(`backend/auth/guard/`), `upload.module.ts`의 Multer 스토리지 설정
 
 변경이 지시된 작업을 넘어서는 파일을 건드려야 한다면, 영향받는 파일을 모두 먼저 나열하고 승인을 기다린다.
@@ -917,7 +918,8 @@ Conflict Protocol을 따른다.
 
 ### 경계 검증 & 응답 성형
 
-- Breakdown: 전역 `ValidationPipe`(`main.ts`)는 `transform + whitelist +
+- Breakdown: 전역 `ValidationPipe`(`app.module.ts`의 `APP_PIPE`, 옵션은
+  `backend/common/validation-pipe-options.ts`)는 `transform + whitelist +
   forbidNonWhitelisted + enableImplicitConversion`으로 동작한다 — DTO에
   선언되지 않은 요청 필드는 절대 서비스에 도달하지 않는다. 밖으로 나갈 때는
   `FileService.toResponse()`가 `FileEntity`를 `FileResponseDto`로 매핑하고
@@ -1199,8 +1201,8 @@ Conflict Protocol을 따른다.
   돌기 전까지는
   범위 밖이다
 - **보안 응답 헤더(landed 2026-09-11, [ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md))**:
-  `main.ts`의 `bootstrap()`에서 `helmet()`을 적용한다 — CORS/`cookieParser()`/전역
-  `ValidationPipe`보다 먼저 등록되는 첫 번째 미들웨어라, 모든 라우트가 OWASP 권장
+  `main.ts`의 `bootstrap()`에서 `helmet()`을 적용한다 — CORS/`cookieParser()`보다
+  먼저 등록되는 첫 번째 미들웨어라, 모든 라우트가 OWASP 권장
   헤더 집합(`Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`,
   `Strict-Transport-Security` 등)을 받는다. 이것은 Nest 가드가 아니라 Express 레벨
   미들웨어라 `ThrottlerGuard`/`JwtAuthGuard`/`RolesGuard`보다 먼저 실행되며 어떤
@@ -1645,30 +1647,24 @@ Architecture Decisions가 계속 유효하다.
   Policy 강제 에이전트(Calico와 다른 엔진)가 똑같이 동작하는지뿐이고, 이건
   ADR 0056이 이미 안고 있던 것과 같은 공백이지 새로 생긴 게 아니다
   (ROADMAP.md §9)
-- `backend/main.ts`에는 `app.enableShutdownHooks()` 호출이 없다(grep 0건 확인). 그래서
-  TypeORM이 원래 갖고 있는 `onApplicationShutdown` 훅 — DB 커넥션 풀을 깔끔히 닫아주는
-  코드 — 이 한 번도 실행되지 않는다. SIGTERM을 받으면 프로세스가 그냥 죽고, 커넥션
-  풀은 애플리케이션이 아니라 OS가 정리한다.
-
-  **2026-09-16 검토, 결정: 보류(급하지 않음).** 이유는 두 가지다.
-
-  1. 이 앱의 모든 DB 쓰기는 요청 하나짜리 트랜잭션 안에서 끝난다(QueryRunner 또는
-     `dataSource.transaction()` — Project-Specific Principles > Transaction Boundary
-     참고). 연결이 중간에 끊기면 Postgres가 그 트랜잭션을 알아서 롤백해준다. 그래서
-     프로세스가 갑자기 죽어도 데이터가 깨지지 않고, 그 순간 진행 중이던 요청 하나만
-     실패한다(재시도하면 그만인 실패지, 데이터 손실이나 커넥션 누수가 아니다).
-  2. 지금은 이 앱을 실제로 배포한 곳 자체가 없다(위 Terraform/infra 항목대로
-     2026-08-28에 세 상태 모두 destroy, 현재 미적용).
-
-  이 훅을 켜도 "피해를 막아주는" 게 아니라 "종료 방식을 더 깔끔하게 만들어주는" 것뿐
-  이다 — OS가 강제로 끊던 연결을 앱이 스스로 정리하고 닫는 방식으로 바꿔준다. 나중에
-  K8s에 다시 배포할 때는 이 차이가 실질적으로 의미가 커지므로, 그 시점(ROADMAP.md
-  §7/§9의 재배포 작업)에 같이 넣기로 했다. 구현 자체는 `main.ts`의 `app.listen(...)`
-  앞에 한 줄(`app.enableShutdownHooks();`)만 추가하면 끝이라, 저울질할 대안도 딱히
-  없었다 — "언제 넣을지"만 정하면 되는 문제였다.
-
-  ADR은 따로 쓰지 않았다: 위 계정 열거 항목과 마찬가지로 이번 검토로 코드가 바뀐 게
-  없고, 남길 아키텍처적 대안도 없기 때문이다.
+- ~~`backend/main.ts`에 `app.enableShutdownHooks()` 호출이 없다~~ — **2026-09-21
+  해결**([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md)): 2026-09-16
+  검토에서는 이 한 줄 수정을 급하지 않다며 재배포 때로 미뤘다(요청 하나짜리 트랜잭션이라
+  갑자기 죽어도 데이터가 깨지지 않고 — 끊긴 연결은 Postgres가 롤백한다 — 배포된 곳도
+  없었다). 코드를 쓰기 전에 먼저 측정해 보니 그 항목의 "SIGTERM을 받으면 프로세스가 그냥
+  죽는다"는 문장부터 틀렸다: 컨테이너에서 `node`가 PID 1이라 SIGTERM이 무시됐고,
+  `docker stop`은 유예 시간을 끝까지 기다린 뒤 SIGKILL로 끝냈다 — 유예 10초에서 10.4초,
+  종료 코드 137이었고, TypeORM의 `onApplicationShutdown`(pg 풀 닫기)도 한 번도 실행되지
+  않았다. `app.listen(...)` 앞에 `app.enableShutdownHooks();`를 넣으면 0.3~0.4초 만에 종료
+  코드 0으로 끝나고 `pg.Pool.end()`가 실행된다(로컬 Linux 컨테이너, 각 두 번 측정;
+  **Kubernetes에서는 검증하지 않았다** — 차트에 `terminationGracePeriodSeconds`가 없어
+  기본값 30초가 적용될 것으로 보이지만 예상일 뿐 측정한 값이 아니다). ADR이 기록한 두 가지는
+  계속 유효하다: plain 호출이 곧바로 끝나는 것은 정리 후 이벤트 루프를 붙잡는 것이 없기
+  때문일 뿐이고 — Nest가 자기 자신에게 보내는 시그널은 PID 1에서 버려지며, 실험에서 ref된
+  타이머 하나가 남자 다시 10.3초/137로 돌아갔다 — 그런 일이 생기면
+  `enableShutdownHooks([], { useProcessExit: true })`가 대안이다; 그리고 `OnModuleDestroy`는
+  어디에도 추가하지 않았다(누수를 보여주는 것이 없었다. `STORAGE_DRIVER=s3`를 실제로 켤 때
+  다시 확인할 대상은 `S3Storage`의 `S3Client`다)
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

@@ -79,13 +79,14 @@ Do not make any of the following unless explicitly requested:
 
 High-blast-radius files — require explicit approval before any edit (a change here
 radiates repo-wide, so the blast radius is never "just this file": `app.module.ts` wires
-every module + the DB connection, `main.ts` is the global bootstrap/ValidationPipe/CORS,
-`*.entity.ts` defines the DB schema itself):
+every module + the DB connection + the global `ValidationPipe` (`APP_PIPE`), `main.ts` is
+the global bootstrap/CORS/shutdown hooks, `*.entity.ts` defines the DB schema itself):
 `app.module.ts`, `main.ts`, `*.entity.ts`
 
 Touching any of the following always counts as "beyond the stated task" — each governs
 behavior for *every* request or endpoint, so a local-looking edit has global reach:
-the global `ValidationPipe` options in `main.ts`, the Joi validation schema in `app.module.ts`,
+the global `ValidationPipe` options (`backend/common/validation-pipe-options.ts`, wired as
+`APP_PIPE` in `app.module.ts`), the Joi validation schema in `app.module.ts`,
 shared guards (`backend/auth/guard/`), the Multer storage config in `upload.module.ts`
 
 If a change requires touching files beyond the stated task, list all affected files first and wait for approval.
@@ -913,7 +914,8 @@ effect), choose the pattern explicitly from this table — state the choice and 
 
 ### Boundary Validation & Response Shaping
 
-- Breakdown: the global `ValidationPipe` (`main.ts`) runs `transform + whitelist +
+- Breakdown: the global `ValidationPipe` (`APP_PIPE` in `app.module.ts`, options in
+  `backend/common/validation-pipe-options.ts`) runs `transform + whitelist +
   forbidNonWhitelisted + enableImplicitConversion` — a request field not declared on a
   DTO never reaches a service. Outward, `FileService.toResponse()` maps `FileEntity` to
   `FileResponseDto` (composing the public URL from `BASE_URL` via ConfigService), and
@@ -1175,7 +1177,7 @@ Do not suggest alternatives to these decisions without explicit request.
   until this app actually runs more than one replica
 - **Security response headers (landed 2026-09-11, [ADR 0055](docs/ADR/0055-helmet-security-headers.md))**:
   `helmet()` is applied in `main.ts`'s `bootstrap()` — the first middleware registered,
-  before CORS/`cookieParser()`/the global `ValidationPipe` — so every route carries the
+  before CORS/`cookieParser()` — so every route carries the
   OWASP-recommended header set (`Content-Security-Policy`, `X-Content-Type-Options`,
   `X-Frame-Options`, `Strict-Transport-Security`, etc.). This is Express-level middleware,
   not a Nest guard, so it runs ahead of `ThrottlerGuard`/`JwtAuthGuard`/`RolesGuard` and
@@ -1615,31 +1617,24 @@ Architecture Decisions above remain operative.
   Network Policy enforcement agent (a different engine than Calico) stays genuinely
   AWS-only-verifiable — the same residual ADR 0056 already carries, not a new one
   (ROADMAP.md §9)
-- `app.enableShutdownHooks()` is never called in `backend/main.ts` (grep-confirmed zero
-  hits), so TypeORM's own `onApplicationShutdown` hook — the code that closes the DB
-  connection pool cleanly — never runs. On SIGTERM the process just dies, and the OS
-  cleans up the connection pool instead of the application doing it.
-
-  **Reviewed 2026-09-16, decided: defer, not urgent.** Two reasons:
-
-  1. Every DB write in this app finishes inside a single-request transaction (the
-     QueryRunner or `dataSource.transaction()` patterns in Project-Specific Principles >
-     Transaction Boundary). If the connection drops mid-transaction, Postgres rolls it
-     back automatically — so an abrupt kill can't corrupt data, it only fails the one
-     request that was in flight (a retriable failure, not data loss or a connection leak).
-  2. There is currently no live deployment for this to matter against (all three
-     Terraform states destroyed 2026-08-28; currently not applied, per the Terraform/
-     infra entry above).
-
-  Turning the hook on wouldn't prevent damage — it would just make shutdown cleaner:
-  instead of the OS forcing the connection closed, the app would close it itself. That
-  matters more once this is redeployed to K8s, so it's slated for then (ROADMAP.md
-  §7/§9's redeploy work) rather than as a standalone task now. The change itself is one
-  line (`app.enableShutdownHooks();` before `app.listen(...)` in `main.ts`), so there was
-  no real alternative to weigh — only a timing call.
-
-  No ADR: like the account-enumeration entry above, nothing in the codebase changed and
-  there's no architectural alternative to record.
+- ~~`app.enableShutdownHooks()` is never called in `backend/main.ts`~~ — **resolved
+  2026-09-21** ([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.md)): the
+  2026-09-16 review had deferred the one-line fix to the redeploy as not urgent
+  (single-request transactions mean an abrupt kill can't corrupt data — Postgres rolls back
+  a dropped connection — and nothing was deployed). Measuring before writing it showed that
+  entry's own "on SIGTERM the process just dies" was wrong: `node` is PID 1 in the
+  container, so SIGTERM was ignored and `docker stop` waited out the whole grace period
+  before SIGKILL ended it — 10.4 s and exit 137 with a 10 s grace, and TypeORM's
+  `onApplicationShutdown` (the pg pool close) never ran. With `app.enableShutdownHooks();`
+  before `app.listen(...)` it stops in 0.3–0.4 s, exit 0, and `pg.Pool.end()` runs (local
+  Linux container, two runs each; **not verified on Kubernetes** — the chart sets no
+  `terminationGracePeriodSeconds`, so the 30 s default should apply, expected not
+  measured). Two things the ADR records still bind: the plain call exits promptly only
+  because nothing holds the event loop open after cleanup — Nest's self-sent signal is
+  discarded on PID 1, and one lingering ref'd timer put it back to 10.3 s/137 in an
+  experiment — so `enableShutdownHooks([], { useProcessExit: true })` is the fallback if
+  that ever happens; and no `OnModuleDestroy` was added anywhere (nothing showed a leak;
+  `S3Storage`'s `S3Client` is the one to re-check when `STORAGE_DRIVER=s3` goes live)
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for

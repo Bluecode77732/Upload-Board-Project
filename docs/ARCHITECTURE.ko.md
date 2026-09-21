@@ -328,7 +328,8 @@ Prometheus 스크레이프도 Bearer 토큰을 제시할 방법이 없기 때문
 
 ### 경계 검증
 
-전역 `ValidationPipe`(`backend/main.ts`)는 `transform + whitelist +
+전역 `ValidationPipe`(`backend/app.module.ts`의 `APP_PIPE`로 등록, 옵션은
+`backend/common/validation-pipe-options.ts`)는 `transform + whitelist +
 forbidNonWhitelisted + enableImplicitConversion`을 실행합니다. DTO에 선언되지 않은
 요청 필드는 서비스에 도달하지 못합니다 — 서비스는 검증된 입력을 신뢰하고 그 모양을
 다시 확인하지 않습니다.
@@ -373,6 +374,14 @@ forbidNonWhitelisted + enableImplicitConversion`을 실행합니다. DTO에 선�
 돌려줄 뿐, 경로를 스스로 고르지 않습니다([ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)).
 아무도 청구하지 않은 `temp_` 객체는 TTL을 넘기면 `TempCleanupModule`이
 치웁니다([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)).
+
+### 종료
+
+`bootstrap()`은 `listen()` 바로 앞에서 `app.enableShutdownHooks()`를 호출하므로, SIGTERM/SIGINT가
+오면 Nest의 종료 훅이 실행됩니다: TypeORM이 pg 풀을 닫고, 스케줄러가 스윕 크론 두 개를 멈춥니다.
+`node`가 PID 1인 컨테이너에서 특히 중요합니다 — 이 호출이 없으면 SIGTERM이 무시되어 `docker stop`이
+유예 시간을 다 기다린 뒤 SIGKILL로 끝났습니다([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md) —
+plain 호출로 지금은 충분한 이유와 `useProcessExit` 대안도 여기에 기록돼 있습니다).
 
 ## 엔티티 (TypeORM)
 

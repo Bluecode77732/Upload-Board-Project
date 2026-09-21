@@ -318,7 +318,8 @@ than the target, or an admin-only listing ([ADR 0007](ADR/0007-ownership-checks-
 
 ### Boundary validation
 
-The global `ValidationPipe` (`backend/main.ts`) runs `transform + whitelist +
+The global `ValidationPipe` (registered as `APP_PIPE` in `backend/app.module.ts`, options in
+`backend/common/validation-pipe-options.ts`) runs `transform + whitelist +
 forbidNonWhitelisted + enableImplicitConversion`. A request field a DTO doesn't declare never
 reaches a service — services trust validated input and don't re-check its shape.
 
@@ -362,6 +363,15 @@ by a DB row". Filenames are always server-generated — the client only ever ech
 never chooses a path itself ([ADR 0003](ADR/0003-two-phase-upload-contract.md)). A `temp_`
 object nobody claims is swept by `TempCleanupModule` once it ages past its TTL
 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)).
+
+### Shutdown
+
+`bootstrap()` calls `app.enableShutdownHooks()` right before `listen()`, so SIGTERM/SIGINT run
+Nest's shutdown hooks: TypeORM closes the pg pool and the scheduler stops the two sweep crons.
+It matters in the container, where `node` is PID 1 — without the call SIGTERM was ignored and
+`docker stop` waited out the grace period before SIGKILL
+([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md), which also records why the plain call
+is enough today and the `useProcessExit` fallback).
 
 ## Entities (TypeORM)
 

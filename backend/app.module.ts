@@ -1,8 +1,9 @@
-import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { Module, ValidationPipe } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { FileModule } from './file/file.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AllExceptionsFilter } from './common/filter/all-exceptions.filter';
+import { VALIDATION_PIPE_OPTIONS } from './common/validation-pipe-options';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
@@ -180,6 +181,15 @@ import { join } from 'node:path';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    // 목적: 모든 라우트에 전역 ValidationPipe(whitelist + forbidNonWhitelisted)를 강제한다.
+    // 이유: main.ts의 useGlobalPipes는 Test.createTestingModule에 적용되지 않아 e2e-utils가 옵션을
+    //       손으로 복사해 왔고, 사본이 어긋나도 알아챌 방법이 없었다.
+    // 방법: 옵션은 VALIDATION_PIPE_OPTIONS 단일 출처다. useClass: ValidationPipe로는 옵션을 넘길 수
+    //       없어 useValue로 인스턴스를 직접 만든다 — 앱 부팅과 e2e가 같은 등록 경로를 탄다.
+    {
+      provide: APP_PIPE,
+      useValue: new ValidationPipe(VALIDATION_PIPE_OPTIONS),
     },
   ],
 })
