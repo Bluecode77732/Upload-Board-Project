@@ -324,7 +324,7 @@ until Terraform is re-applied.
 **Pending — required before trusting this in production, not yet done because no live
 ALB Controller exists to test against:** rendering correctly is not the same as the ALB
 actually behaving as configured. Once `addons/`+`app-infra/` are re-applied and
-`ingress.enabled` is actually flipped on, verify explicitly rather than assuming the
+`ingress.enabled` is actually flipped on and the domain resolves to the ALB, verify explicitly rather than assuming the
 annotations worked:
 - `aws elbv2 describe-listeners` on the created ALB shows both a port-80 and a port-443
   listener (`listen-ports` actually took effect, not just rendered).
@@ -344,6 +344,25 @@ annotations worked:
   commented-out prod annotations don't set `target-type`. `ip` mode works with any Service
   type, so expect to add `alb.ingress.kubernetes.io/target-type: ip` — found 2026-09-21
   while implementing ADR 0060, not fixed here (it affects the backend's routes equally).
+- Sign in over the real HTTPS connection, then reload the page: the session survives. The
+  refresh cookie must arrive as `HttpOnly; Secure; SameSite=Strict; Path=/auth/token` and go
+  back on `POST /auth/token/refresh` — a `Secure` cookie only works when the browser's
+  connection is HTTPS, so this can't be seen anywhere else (ADR 0012, ADR 0034).
+- With `STORAGE_DRIVER=s3` (what `values-prod.yaml` sets): a private file's preview (blob
+  `fetch()` → the API's 302 → a presigned S3 URL) and a public/unlisted `<img>`/`<video>` all
+  load with no CSP or CORS error in the browser console. Two things must already be true: the
+  bucket has a CORS rule for the production origin (ADR 0036's rule, applied by hand on
+  2026-08-16, lists only the two localhost dev origins, and Terraform has no CORS resource), and
+  `frontend/nginx.conf`'s CSP allows `https://*.amazonaws.com` (ADR 0060 — a guess from CSP
+  semantics until seen in a browser).
+- The real client IP reaches the rate limiter (`trust proxy` = `10.0.0.0/16`, ADR 0054
+  addendum): from one client the sixth `POST /auth/signin` within a minute answers 429, while
+  a second client on another IP is not throttled at all. If every visitor shares one bucket,
+  the peer the app sees is not inside that CIDR.
+- Rollout and scraping: `kubectl rollout status` succeeds for both Deployments, the frontend
+  Service has a ready endpoint and the backend Service has none of the frontend's pods, and
+  Prometheus lists a target for the backend but none for the frontend (the `web` port name,
+  ADR 0060).
 
 None of this can be verified by `helm lint`/`helm template` — they only prove the YAML
 this repo renders is correct, never that the AWS Load Balancer Controller acts on it as

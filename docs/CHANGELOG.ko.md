@@ -275,7 +275,8 @@
   `helm lint --strict`/`helm template`, amd64·arm64 로컬 이미지 빌드, 실제 브라우저에서 CSP
   아래로 SPA가 뜨는지, `actionlint`. 검증하지 못한 것: `helm install --wait`(이 머신에는
   `kind`가 없다), CI 잡 자체, 그리고 라이브 ALB가 필요한 모든 것 — AWS Load Balancer
-  Controller에서 `/` 규칙의 우선순위가 남은 유일한 의존이다. 하다가 발견했지만 고치지 않은
+  Controller에서 `/` 규칙의 우선순위가 남은 주된 의존이다(라이브에서만 가능한 점검 전체는
+  `k8s/helm/README.md`에 있다). 하다가 발견했지만 고치지 않은
   것: `frontend/`와 `admin/`의 `package.json`에 `packageManager` 핀이 없고(corepack이 pnpm
   12.5.1을 받았는데 Node 이미지의 corepack이 그걸 실행하지 못한다 — Dockerfile이 10.14.0을
   스스로 고정한다), 컨트롤러의 `target-type: instance` 기본값이 이 차트의 `ClusterIP`

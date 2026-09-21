@@ -324,7 +324,7 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
 
 **미해결 — 실전 신뢰 전 필수, 지금은 검증할 살아있는 ALB Controller가 없어서 아직 안 함:**
 YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 동작하는 것은 별개다.
-`addons/`+`app-infra/`를 다시 apply하고 `ingress.enabled`를 실제로 켠 뒤엔, annotation이
+`addons/`+`app-infra/`를 다시 apply하고 `ingress.enabled`를 실제로 켜고 도메인이 ALB를 가리키게 한 뒤엔, annotation이
 먹혔다고 가정하지 말고 다음을 직접 확인한다:
 - `aws elbv2 describe-listeners`로 만들어진 ALB에 80번과 443번 리스너가 둘 다 있는지
   (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지).
@@ -343,6 +343,24 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   `target-type`이 없다. `ip` 모드는 Service 타입과 무관하게 동작하므로
   `alb.ingress.kubernetes.io/target-type: ip`를 추가해야 할 가능성이 높다 — 2026-09-21에
   ADR 0060을 구현하다가 발견했고 여기서는 고치지 않았다(백엔드 경로에도 똑같이 걸린다).
+- 실제 HTTPS 연결로 로그인한 뒤 페이지를 새로고침해도 세션이 유지되는지. refresh 쿠키가
+  `HttpOnly; Secure; SameSite=Strict; Path=/auth/token`으로 내려오고 `POST /auth/token/refresh`에
+  다시 실려 가야 한다 — `Secure` 쿠키는 브라우저 연결이 HTTPS일 때만 동작하므로 다른 곳에서는
+  볼 수 없다(ADR 0012, ADR 0034).
+- `STORAGE_DRIVER=s3`(`values-prod.yaml`이 설정하는 값)에서 비공개 파일의 미리보기(Blob
+  `fetch()` → API의 302 → presigned S3 URL)와 공개/unlisted 파일의 `<img>`/`<video>`가 모두
+  브라우저 콘솔에 CSP·CORS 에러 없이 로드되는지. 두 가지가 미리 갖춰져 있어야 한다: 버킷에 운영
+  origin에 대한 CORS 규칙이 있어야 하고(ADR 0036이 2026-08-16에 손으로 넣은 규칙은 localhost
+  개발 origin 두 개뿐이며 Terraform에는 CORS 리소스가 없다), `frontend/nginx.conf`의 CSP가
+  `https://*.amazonaws.com`을 허용해야 한다(ADR 0060 — 브라우저로 확인하기 전까지는 CSP
+  의미론에서 추정한 값이다).
+- 실제 클라이언트 IP가 rate limiter에 도달하는지(`trust proxy` = `10.0.0.0/16`, ADR 0054
+  addendum): 한 클라이언트에서 1분 안에 `POST /auth/signin`을 여섯 번째로 호출하면 429가 나오고,
+  다른 IP의 두 번째 클라이언트는 전혀 제한되지 않아야 한다. 모든 방문자가 하나의 버킷을
+  공유한다면 앱이 보는 peer가 그 CIDR 안에 있지 않다는 뜻이다.
+- 롤아웃과 스크레이프: 두 Deployment 모두 `kubectl rollout status`가 성공하고, 프론트엔드
+  Service에는 ready 엔드포인트가 있으며 백엔드 Service에는 프론트엔드 파드가 하나도 없고,
+  Prometheus에는 백엔드 타깃만 있고 프론트엔드 타깃은 없어야 한다(`web` 포트 이름, ADR 0060).
 
 이 중 어느 것도 `helm lint`/`helm template`로는 확인할 수 없다 — 이 둘은 이 저장소가
 렌더링하는 YAML이 올바르다는 것만 증명할 뿐, AWS Load Balancer Controller가 그 설정대로

@@ -271,5 +271,14 @@ replica 수, nginx 보안 헤더의 정확한 구성, 캐시 정책.
   CSP 아래로 SPA가 뜬다(콘솔 에러 1건은 그 컨테이너에 백엔드가 없어서 나는
   `POST /auth/token/refresh`의 405). 워크플로에 대한 `actionlint`(shellcheck 포함), `deploy.sh`에
   대한 `bash -n`(shellcheck는 바꾼 구간에서 지적 없음).
-- **검증하지 못한 것.** `helm install --wait`(구현한 머신에 `kind`가 없다), CI 잡 자체(GitHub에서
-  돈 적 없다), 실제 S3 presigned 리다이렉트에 대한 CSP, 그리고 후속 작업 6번의 라이브 ALB 순서 확인.
+- **검증하지 못한 것 — 라이브 배포 없이 가능한 것.** `helm install --wait`(구현한 머신에 `kind`가
+  없다. 로컬 클러스터면 된다)와 CI 잡 자체(푸시해야만 돈다. 첫 푸시가
+  `bluecode1775/sharenpo-frontend` Docker Hub 저장소를 자동으로 만든다고 가정했지만 아직 확인하지
+  못했다).
+- **검증하지 못한 것 — 라이브에서만 가능한 것.** `ingress.enabled`를 켜고 `addons/`와
+  `app-infra/`를 apply하고 도메인이 ALB를 가리키도록 한 뒤 배포해야만 볼 수 있다: (1) `/` 규칙이
+  API prefix들 아래에 놓이는지, (2) HTTP→HTTPS 리다이렉트와 인증서, 그리고 새로고침 뒤에도
+  `Secure` refresh 쿠키가 유지되는지, (3) CSP와 버킷의 CORS 규칙 아래에서 S3 presigned 리다이렉트가
+  되는지, (4) 실제 클라이언트 IP가 rate limiter에 도달하는지, (5) 두 Deployment가 롤아웃되고
+  Service가 의도대로 연결되며 백엔드만 스크레이프되는지. 통과 기준이 있는 체크리스트는
+  `k8s/helm/README.md`의 "Enabling HTTPS (Ingress)" 아래 미해결 목록이다.

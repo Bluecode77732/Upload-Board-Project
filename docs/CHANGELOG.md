@@ -268,7 +268,8 @@ development line (package.json version).
   the flag combinations, a local image build for amd64 and arm64, the SPA loading under the CSP
   in a real browser, `actionlint`. Not verified: `helm install --wait` (no `kind` on the
   machine), the CI job itself, and anything that needs a live ALB — the `/` rule's priority
-  under the AWS Load Balancer Controller is the one open dependency. Found along the way, not
+  under the AWS Load Balancer Controller is the main open dependency (the full live-only
+  checklist is in `k8s/helm/README.md`). Found along the way, not
   fixed: the `frontend/` and `admin/` `package.json` files have no `packageManager` pin
   (corepack resolved pnpm 12.5.1, which the Node image's corepack cannot run — the Dockerfile
   pins 10.14.0 itself), the controller's default `target-type: instance` doesn't fit this

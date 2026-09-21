@@ -958,9 +958,11 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   필요 없고 refresh 쿠키도 그대로). `frontend/Dockerfile`과 nginx 설정, values로 켜고 끄는
   프론트엔드 Deployment/Service와 `ingress.yaml`의 경로별 backend, `docker-publish-frontend`
   CI 잡, `deploy.sh`의 프론트엔드 태그 처리까지 반영됐고 클러스터 없이 할 수 있는 검증은
-  끝났다. 남은 것: `vite.config.ts` 주석(승인 필요), 첫 CI 실행, 라이브 ALB 점검(`/` 규칙의
-  우선순위와 ADR addendum이 짚은 `target-type` 기본값), 그리고 `admin/` 호스팅. AWS 스택이
-  지금 apply돼 있는지와는 무관하다.
+  끝났다. 남은 것: `vite.config.ts` 주석(승인 필요), 첫 CI 실행, 라이브 점검(`k8s/helm/README.md`
+  미해결 목록의 라이브 전용 점검 — `/` 우선순위, HTTPS와 `Secure` 쿠키, CSP/CORS 아래의 S3
+  리다이렉트, rate limit의 실제 클라이언트 IP, 롤아웃과 Prometheus 타깃 — 과 거기 함께 적힌
+  `target-type` 기본값, 운영 origin용 S3 CORS 규칙), 그리고 `admin/` 호스팅. AWS 스택이 지금
+  apply돼 있는지와는 무관하다.
 - Istio(Kubernetes 클러스터 위 서비스 메시) — **프로덕션 DevOps 스택 도입 행과 Stage 4
   구성요소 상태 표에서 제외**(2026-08-31 이동, 이번 세션에서 진행한 규모 적합성 검토 뒤
   개발자가 내린 결정 — ROADMAP 자체의 순서 계획과는 별개). **미착수 이유**: 이 프로젝트의

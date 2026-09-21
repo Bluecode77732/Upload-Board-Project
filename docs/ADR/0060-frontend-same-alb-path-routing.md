@@ -286,6 +286,15 @@ approval); item 6 is done for everything that needs no cluster; item 7 is still 
   browser (Playwright; its one console error is the 405 on `POST /auth/token/refresh`, because that
   container has no backend). `actionlint` (with shellcheck) on the workflows; `bash -n` on
   `deploy.sh`, with shellcheck reporting nothing in the changed region.
-- **Not verified.** `helm install --wait` (no `kind` on the implementing machine), the CI job itself
-  (never run on GitHub), the CSP against a real S3 presigned redirect, and the live-ALB ordering
-  check in follow-up 6.
+- **Not verified — possible without a live deploy.** `helm install --wait` (no `kind` on the
+  implementing machine; any local cluster would do) and the CI job itself (only a push runs it,
+  and the first push is assumed to create the `bluecode1775/sharenpo-frontend` Docker Hub
+  repository — not seen yet).
+- **Not verified — live-only.** Observable only after a deploy with `ingress.enabled` on,
+  `addons/` and `app-infra/` applied, and the domain resolving to the ALB: (1) the `/` rule
+  sitting below the API prefixes, (2) the HTTP→HTTPS redirect and the certificate, and the
+  `Secure` refresh cookie surviving a reload, (3) the S3 presigned redirect under the CSP and the
+  bucket's CORS rule, (4) the real client IP reaching the rate limiter, (5) both Deployments
+  rolling out with the Services wired as intended and only the backend scraped. The checklist
+  with pass criteria is the pending list under "Enabling HTTPS (Ingress)" in
+  `k8s/helm/README.md`.

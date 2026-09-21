@@ -1007,9 +1007,11 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   values-gated frontend Deployment/Service and a per-path backend in `ingress.yaml`, the
   `docker-publish-frontend` CI job, and frontend tag handling in `deploy.sh` are in place and
   verified without a cluster. Still open: the `vite.config.ts` comment (needs approval), a
-  first CI run, a live-ALB pass (the `/` rule's priority and the `target-type` default the
-  ADR's addendum flags), and `admin/` hosting. Independent of whether the AWS stack is
-  currently applied.
+  first CI run, a live pass (the live-only checks in `k8s/helm/README.md`'s pending list — `/`
+  priority, HTTPS and the `Secure` cookie, S3 redirect under CSP/CORS, real client IP for rate
+  limiting, rollout and Prometheus targets — plus the `target-type` default and the S3 CORS
+  rule for the production origin, both listed there), and `admin/` hosting. Independent of
+  whether the AWS stack is currently applied.
 - Istio (service mesh over the Kubernetes cluster) — **pulled from the Production DevOps
   stack introduction row and the Stage 4 component-status table** (moved 2026-08-31,
   developer decision after a scale-fit review run this session, independent of the
