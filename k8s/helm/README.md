@@ -301,17 +301,23 @@ Verifying without a live cluster (none exists right now):
 helm lint --strict . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
   --set ingress.className=alb --set frontend.enabled=true \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
   --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"}]}]'
 helm template . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
   --set ingress.className=alb --set frontend.enabled=true \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
   --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"}]}]' \
   -s templates/ingress.yaml
 ```
+
+The same flags also render `networkpolicy.yaml`'s ALB ingress-allow rule (ADR 0056
+addendum) — add `--set networkPolicy.enabled=true -s templates/networkpolicy.yaml` to
+see both rules (`podSelector: {}` and the new `ipBlock`) at once.
 
 confirms the rendered `Ingress` carries `ingressClassName: alb`, the host, all seven
 allow-listed backend paths plus the `/` frontend rule (2026-09-21), and the annotations (verified 2026-09-13 — an earlier draft of this
@@ -338,12 +344,19 @@ annotations worked:
   really sits below the API prefixes (ADR 0060; the controller's Exact-then-longest-Prefix
   ordering has never been observed live). `/health/live`, `/metrics`, and `/doc` must also
   answer the SPA's HTML (or 404), never a backend response.
-- The target group registers healthy targets. The controller's default
-  `alb.ingress.kubernetes.io/target-type` is `instance`, which its docs say needs a
-  `NodePort` or `LoadBalancer` Service; both Services in this chart are `ClusterIP`, and the
-  commented-out prod annotations don't set `target-type`. `ip` mode works with any Service
-  type, so expect to add `alb.ingress.kubernetes.io/target-type: ip` — found 2026-09-21
-  while implementing ADR 0060, not fixed here (it affects the backend's routes equally).
+- The target group registers healthy targets. `values-prod.yaml`'s commented annotation
+  block now sets `alb.ingress.kubernetes.io/target-type: ip` (added 2026-09-22 — the
+  controller's `instance` default needs a `NodePort`/`LoadBalancer` Service, and both
+  Services in this chart are `ClusterIP`); this only fixes the rendered annotation, not
+  whether the real ALB actually registers the pods as healthy.
+- With `networkPolicy.enabled: true` (what `values-prod.yaml` sets) and Ingress on,
+  `networkpolicy.yaml` renders a second ingress rule admitting the VPC CIDR on the app's
+  port (ADR 0056 addendum, added alongside the `target-type` fix above — the ALB's ENIs
+  aren't pods, so the existing same-namespace-only rule never let them through). Confirm
+  the ALB's target group is healthy (the same check as the bullet above) and, per ADR
+  0056 D2's standing caveat, that this is enforced by AWS's own VPC CNI Network Policy
+  agent and not just rendered — `kind`+Calico cannot simulate a real VPC CIDR, so this
+  rule has no non-live way to verify beyond `helm template`.
 - Sign in over the real HTTPS connection, then reload the page: the session survives. The
   refresh cookie must arrive as `HttpOnly; Secure; SameSite=Strict; Path=/auth/token` and go
   back on `POST /auth/token/refresh` — a `Secure` cookie only works when the browser's
@@ -351,10 +364,15 @@ annotations worked:
 - With `STORAGE_DRIVER=s3` (what `values-prod.yaml` sets): a private file's preview (blob
   `fetch()` → the API's 302 → a presigned S3 URL) and a public/unlisted `<img>`/`<video>` all
   load with no CSP or CORS error in the browser console. Two things must already be true: the
-  bucket has a CORS rule for the production origin (ADR 0036's rule, applied by hand on
-  2026-08-16, lists only the two localhost dev origins, and Terraform has no CORS resource), and
-  `frontend/nginx.conf`'s CSP allows `https://*.amazonaws.com` (ADR 0060 — a guess from CSP
-  semantics until seen in a browser).
+  bucket has a CORS rule for the production origin. `app-infra/main.tf` now declares one
+  (`aws_s3_bucket_cors_configuration.app`, added 2026-09-22, ADR 0036 addendum) —
+  code-complete but not yet applied, and applying it **replaces** the rule currently on
+  the bucket (the 2026-08-16 hand-run script's two localhost dev origins only, no
+  production entry) with the production origin only; re-add the dev origins by hand
+  again if local `STORAGE_DRIVER=s3` testing against the real bucket is still wanted
+  after that apply. Separately, `frontend/nginx.conf`'s CSP must allow
+  `https://*.amazonaws.com` (ADR 0060 — a guess from CSP semantics until seen in a
+  browser).
 - The real client IP reaches the rate limiter (`trust proxy` = `10.0.0.0/16`, ADR 0054
   addendum): from one client the sixth `POST /auth/signin` within a minute answers 429, while
   a second client on another IP is not throttled at all. If every visitor shares one bucket,

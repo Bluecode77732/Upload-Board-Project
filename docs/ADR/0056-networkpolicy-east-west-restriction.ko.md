@@ -1,6 +1,6 @@
 # ADR 0056: 클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy
 
-- Status: Accepted — implemented, kind+Calico 검증 완료
+- Status: Accepted — implemented, kind+Calico 검증 완료(2026-09-22 addendum의 ALB 인바운드 허용 규칙은 미검증 — 라이브 EKS 클러스터 필요)
 - Date: 2026-09-11
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)
 - English: [0056-networkpolicy-east-west-restriction.md](0056-networkpolicy-east-west-restriction.md)
@@ -151,3 +151,55 @@ IP를 테스트용으로만 `networkPolicy.egress.vpcCidr=<ip>/32`로 넘김 —
   AWS 자신의 Network Policy 에이전트 아래에서
   `/health/live`/`/health/ready`가 여전히 통과하는지 반드시 따로
   검증한다 — kind 결과를 그대로 가져다 쓰지 않는다.
+
+### 추가 기록 (2026-09-22) — Ingress를 켤 때 ALB 인바운드 허용 규칙 추가
+
+D2의 인바운드 규칙은 "같은 네임스페이스 파드만"이었고 ALB 트래픽을 위한 여지는
+없었다 — 이 ADR을 쓸 당시엔 Ingress가 아직 실제 라우팅 경로가 아니었다
+(`ingress.enabled`는 그때도 지금도 `false`다). 그 뒤 [ADR 0058](0058-ingress-path-allowlist.ko.md)와
+[ADR 0060](0060-frontend-same-alb-path-routing.ko.md)이 Ingress에 실제 형태를
+줬고(명시적 경로 allow-list, 그다음 같은 ALB를 공유하는 프론트엔드 Service),
+ADR 0060을 위해 `alb.ingress.kubernetes.io/target-type: ip`를 추가하면서(이
+차트의 두 Service가 전부 `ClusterIP`인데 컨트롤러 기본값 `instance`는
+`NodePort`/`LoadBalancer`가 필요해서) 이 공백이 그대로 드러났다: Ingress를
+켜는 순간 ALB 자신의 ENI가 `ip` 모드로 파드에 직접 닿으려 하는데, D2의 인바운드
+규칙에는 그걸 허용하는 항목이 없었다.
+
+`templates/networkpolicy.yaml`에 `.Values.ingress.enabled`가 `true`일 때만
+렌더링되는 인바운드 규칙을 하나 더 추가한다:
+
+```yaml
+- from:
+    - ipBlock:
+        cidr: {{ .Values.networkPolicy.egress.vpcCidr }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.service.port }}
+```
+
+같은 CIDR용 values 키를 새로 만드는 대신 `networkPolicy.egress.vpcCidr`(D3)를
+그대로 재사용한다. 두 규칙이 넓어지는 이유는 구조적으로 같다 — RDS(egress의 DB
+규칙)도 ALB ENI(이번 인바운드 규칙)도 파드가 아니라서 `podSelector`로 표현할
+수 없고, `NetworkPolicy`가 파드 아닌 트래픽에 쓸 수 있는 수단은 `ipBlock`뿐이다.
+
+**감수하는 확장 범위를 그대로 적는다**: `ingress.enabled`가 `true`인 동안, 이
+규칙은 ALB의 ENI뿐 아니라 VPC CIDR 안의 *무엇이든* 앱 포트에 닿을 수 있게
+허용한다 — 다른 모든 파드와 모든 노드도 같은 CIDR 안에 있고, 표준
+`NetworkPolicy`에는 "실제로 ALB에서 온 트래픽"만 골라내는 선택자가 없다(그런
+보안 그룹 기반 선택자는 상위 API에 없고, CNI 전용 확장이 있어야 하는데 이
+프로젝트는 그걸 쓰지 않는다). D2의 egress DB 규칙이 같은 이유로 이미 감수한
+트레이드오프와 같은 것이라 — 새로운 종류의 위험이 아니라 그것의 두 번째
+사례로 여기 기록해 둔다. `ingress.enabled`가 `false`인 동안(기본값이자 지금의
+`values-prod.yaml` 값 — ADR 0060의 "구현 단계로 넘기는 것" 목록도 아직 켜지
+않았다)은 이 규칙 자체가 렌더링되지 않으므로 오늘의 `networkPolicy.enabled:
+true` 상태는 그대로다.
+
+**검증하지 못했다.** `kind`+Calico(D4 자신의 레시피)는 이 정책의 나머지
+부분을 검증했던 것과 같은 방식으로 이 규칙을 대신 검증할 수 없다 — `kind`
+클러스터의 파드 CIDR은 실제 VPC CIDR과 아무 관계가 없어서, "`10.0.0.0/16`
+안의 ALB 아닌 주소"를 의미 있게 흉내 낼 방법이 없다. 실제 ALB Controller가
+떠 있는 라이브 EKS 클러스터가 필요하다: ALB의 타깃 그룹에 healthy 타깃이
+잡히는지(이 규칙이 함께 따라가는 `ip` 모드 수정)와, D2 자신이 이미 남긴
+단서대로 이게 Calico가 아니라 AWS 자신의 VPC CNI Network Policy 에이전트로
+동일하게 강제되는지 확인한다. `k8s/helm/README.md`("Enabling HTTPS
+(Ingress)")의 라이브 전용 미해결 점검 목록에 올려 뒀다.

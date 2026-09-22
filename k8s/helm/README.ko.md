@@ -302,17 +302,23 @@ allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)). 다
 helm lint --strict . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
   --set ingress.className=alb --set frontend.enabled=true \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
   --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"}]}]'
 helm template . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
   --set ingress.className=alb --set frontend.enabled=true \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
   --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"}]}]' \
   -s templates/ingress.yaml
 ```
+
+같은 플래그가 `networkpolicy.yaml`의 ALB 인바운드 허용 규칙(ADR 0056 addendum)도 함께
+렌더링한다 — `--set networkPolicy.enabled=true -s templates/networkpolicy.yaml`을 더하면
+두 규칙(`podSelector: {}`와 새 `ipBlock`)을 한 번에 볼 수 있다.
 
 렌더링된 `Ingress`에 `ingressClassName: alb`, 호스트, allow-list의 일곱 백엔드 경로와 프론트엔드 `/` 규칙(2026-09-21),
 annotation이 전부 의도대로 나오는지 확인한다(2026-09-13 검증 — 이 레시피의 이전 초안은
@@ -337,21 +343,32 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   실제로 API prefix들 아래에 놓이는지(ADR 0060, 컨트롤러의 Exact 다음 긴 Prefix 순서는
   라이브에서 확인된 적이 없다). `/health/live`·`/metrics`·`/doc`도 SPA의 HTML(또는 404)이
   나와야 하고 백엔드 응답이 나오면 안 된다.
-- 타깃 그룹에 healthy 타깃이 등록되는지. 컨트롤러의 `alb.ingress.kubernetes.io/target-type`
-  기본값은 `instance`인데 공식 문서상 `NodePort` 또는 `LoadBalancer` Service가 필요하다.
-  이 차트의 두 Service는 모두 `ClusterIP`이고, 주석 처리된 prod annotation에도
-  `target-type`이 없다. `ip` 모드는 Service 타입과 무관하게 동작하므로
-  `alb.ingress.kubernetes.io/target-type: ip`를 추가해야 할 가능성이 높다 — 2026-09-21에
-  ADR 0060을 구현하다가 발견했고 여기서는 고치지 않았다(백엔드 경로에도 똑같이 걸린다).
+- 타깃 그룹에 healthy 타깃이 등록되는지. `values-prod.yaml`의 주석 처리된 annotation
+  블록에 이제 `alb.ingress.kubernetes.io/target-type: ip`가 들어 있다(2026-09-22 추가 —
+  컨트롤러 기본값 `instance`는 `NodePort`/`LoadBalancer` Service가 필요한데 이 차트의
+  Service는 둘 다 `ClusterIP`다). 다만 이건 렌더링되는 annotation만 고친 것이고, 실제
+  ALB가 파드를 healthy로 등록하는지는 별개로 확인해야 한다.
+- `networkPolicy.enabled: true`(`values-prod.yaml`이 설정하는 값)와 Ingress가 함께 켜지면
+  `networkpolicy.yaml`이 VPC CIDR을 앱 포트에 허용하는 인바운드 규칙을 하나 더
+  렌더링한다(ADR 0056 addendum, 위 `target-type` 수정과 같은 시점에 추가 — ALB의 ENI는
+  파드가 아니라서 기존의 같은-네임스페이스 전용 규칙으로는 애초에 통과할 수 없었다).
+  위 항목과 같은 방식으로 ALB 타깃 그룹이 healthy인지 확인하고, ADR 0056 D2가 이미
+  남긴 단서대로 이게 실제로 AWS 자신의 VPC CNI Network Policy 에이전트로 강제되는지(단순
+  렌더링이 아니라)도 확인한다 — `kind`+Calico로는 실제 VPC CIDR을 흉내 낼 수 없어서, 이
+  규칙은 `helm template` 이상으로 검증할 방법이 없다.
 - 실제 HTTPS 연결로 로그인한 뒤 페이지를 새로고침해도 세션이 유지되는지. refresh 쿠키가
   `HttpOnly; Secure; SameSite=Strict; Path=/auth/token`으로 내려오고 `POST /auth/token/refresh`에
   다시 실려 가야 한다 — `Secure` 쿠키는 브라우저 연결이 HTTPS일 때만 동작하므로 다른 곳에서는
   볼 수 없다(ADR 0012, ADR 0034).
 - `STORAGE_DRIVER=s3`(`values-prod.yaml`이 설정하는 값)에서 비공개 파일의 미리보기(Blob
   `fetch()` → API의 302 → presigned S3 URL)와 공개/unlisted 파일의 `<img>`/`<video>`가 모두
-  브라우저 콘솔에 CSP·CORS 에러 없이 로드되는지. 두 가지가 미리 갖춰져 있어야 한다: 버킷에 운영
-  origin에 대한 CORS 규칙이 있어야 하고(ADR 0036이 2026-08-16에 손으로 넣은 규칙은 localhost
-  개발 origin 두 개뿐이며 Terraform에는 CORS 리소스가 없다), `frontend/nginx.conf`의 CSP가
+  브라우저 콘솔에 CSP·CORS 에러 없이 로드되는지. 버킷에 운영 origin에 대한 CORS 규칙이
+  있어야 한다. `app-infra/main.tf`에 이제 그 리소스가 있다
+  (`aws_s3_bucket_cors_configuration.app`, 2026-09-22 추가, ADR 0036 addendum) — 코드는
+  완성됐지만 아직 apply하지 않았고, apply하면 지금 버킷에 있는 규칙(2026-08-16에 손으로
+  돌린 스크립트의 localhost 개발 origin 두 개뿐, 운영 origin 없음)을 운영 origin 하나로
+  **교체**한다. apply 이후에도 실제 버킷을 상대로 한 로컬 `STORAGE_DRIVER=s3` 테스트가
+  필요하면 개발 origin을 다시 손으로 넣어야 한다. 별개로 `frontend/nginx.conf`의 CSP가
   `https://*.amazonaws.com`을 허용해야 한다(ADR 0060 — 브라우저로 확인하기 전까지는 CSP
   의미론에서 추정한 값이다).
 - 실제 클라이언트 IP가 rate limiter에 도달하는지(`trust proxy` = `10.0.0.0/16`, ADR 0054

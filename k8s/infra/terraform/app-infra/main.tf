@@ -152,6 +152,24 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app" {
   }
 }
 
+# ADR 0036 addendum(2026-09-22) — private/unlisted 파일의 presigned 리다이렉트를 브라우저가
+# blob으로 읽으려면(비공개 파일 미리보기) 이 CORS 규칙이 있어야 한다. 운영 origin은
+# ADR 0060으로 ALB 호스트 하나로 확정됐다(var.domain_name — values-prod.yaml의 BASE_URL과
+# 같은 값). 이 리소스는 버킷의 CORS 설정을 통째로 관장한다 — 2026-08-16에 손으로 돌렸던
+# localhost 개발 origin용 스크립트를 대체하는 게 아니라 apply 시점에 그 규칙을 통째로
+# 덮어쓴다. GET만 허용하는 이유는 presigned GetObject 응답을 읽는 게 이 프로젝트의 유일한
+# 교차 출처 읽기이기 때문이다(ADR 0036).
+resource "aws_s3_bucket_cors_configuration" "app" {
+  bucket = aws_s3_bucket.app.id
+
+  cors_rule {
+    allowed_methods = ["GET"]
+    allowed_origins = ["https://${var.domain_name}"]
+    allowed_headers = ["*"]
+    max_age_seconds = 300
+  }
+}
+
 data "aws_iam_policy_document" "app_assume_role" {
   statement {
     effect  = "Allow"

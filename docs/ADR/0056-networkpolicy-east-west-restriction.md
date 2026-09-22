@@ -1,6 +1,6 @@
 # ADR 0056: NetworkPolicy for cluster east-west traffic restriction
 
-- Status: Accepted — implemented, kind+Calico-verified
+- Status: Accepted — implemented, kind+Calico-verified (the 2026-09-22 addendum's ALB ingress-allow rule is unverified — needs a live EKS cluster)
 - Date: 2026-09-11
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)
 - 한국어: [0056-networkpolicy-east-west-restriction.ko.md](0056-networkpolicy-east-west-restriction.ko.md)
@@ -155,3 +155,57 @@ turned on.
   re-verify `/health/live`/`/health/ready` keep passing under AWS's own
   Network Policy agent specifically (D2/D4's caveat) — do not assume the kind
   result transfers.
+
+### Addendum (2026-09-22) — ALB ingress-allow rule added when Ingress is enabled
+
+D2's ingress rule was `same-namespace pods only`, with no accommodation for
+ALB traffic — Ingress was not yet a real routing path when this ADR was
+written (`ingress.enabled` was, and still is, `false`). [ADR 0058](0058-ingress-path-allowlist.md)
+and [ADR 0060](0060-frontend-same-alb-path-routing.md) since gave Ingress a
+real shape (an explicit path allow-list, then a frontend Service sharing the
+same ALB), and adding `alb.ingress.kubernetes.io/target-type: ip` for ADR
+0060 (both this chart's Services are `ClusterIP`; the controller's `instance`
+default needs `NodePort`/`LoadBalancer`) surfaced the gap directly: once
+Ingress is ever turned on, the ALB's own ENIs try to reach the pod in `ip`
+mode, and D2's ingress rule has no entry admitting them.
+
+`templates/networkpolicy.yaml` gains a second ingress rule, rendered only
+when `.Values.ingress.enabled` is `true`:
+
+```yaml
+- from:
+    - ipBlock:
+        cidr: {{ .Values.networkPolicy.egress.vpcCidr }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.service.port }}
+```
+
+It reuses `networkPolicy.egress.vpcCidr` (D3) rather than adding a second
+values key for the same CIDR. Both rules widen for the identical structural
+reason: neither RDS (the egress DB rule) nor an ALB ENI (this new ingress
+rule) is a pod, so `podSelector` cannot express either, and `ipBlock` is the
+only mechanism `NetworkPolicy` offers for non-pod traffic.
+
+**Accepted widening, stated plainly**: once `ingress.enabled` is `true`, this
+rule admits the app's port from *anything* in the VPC CIDR, not only the
+ALB's ENIs — every other pod and every node also sit inside that CIDR, and
+standard `NetworkPolicy` has no selector that picks out "traffic that
+actually came from the ALB" (no security-group-based selector exists in the
+upstream API; that needs a CNI-specific extension this project doesn't use).
+This is the same trade-off D2's egress DB rule already made, for the
+identical reason — recorded here as a second instance of it, not a new kind
+of risk. While `ingress.enabled` stays `false` (the default, and
+`values-prod.yaml`'s current value — ADR 0060's "left to implementation"
+list never turned it on), this rule does not render at all, so today's
+`networkPolicy.enabled: true` posture is unchanged.
+
+**Not verified.** `kind`+Calico (D4's own recipe) cannot stand in for this
+check the way it did for the rest of the policy — a `kind` cluster's pod CIDR
+has no relationship to a real VPC CIDR, so there is no way to simulate "a
+non-ALB address inside `10.0.0.0/16`" against it meaningfully. This needs a
+live EKS cluster with the real ALB Controller: confirm the ALB's target
+group shows healthy targets (the `ip`-mode fix this rule accompanies) and,
+per D2's own standing caveat, that AWS's VPC CNI Network Policy agent — not
+Calico — enforces the rule identically. Listed as a live-only pending check
+in `k8s/helm/README.md` ("Enabling HTTPS (Ingress)").

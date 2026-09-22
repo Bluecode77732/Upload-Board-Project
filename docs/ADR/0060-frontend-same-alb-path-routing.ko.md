@@ -257,12 +257,18 @@ replica 수, nginx 보안 헤더의 정확한 구성, 캐시 정책.
   0.34.0이 그걸 실행하지 못한다(`bin/pnpm.cjs`가 없음). `frontend-*`/`admin-*` CI 잡도 같은 무고정
   상태를 공유한다 — 2026-09-17에는 통과했지만 그 상태를 지켜 주는 장치가 없다. `frontend/`와
   `admin/`의 `package.json`에 핀을 두는 건 별도 결정이다.
-- **발견했지만 고치지 않은 것.** (a) AWS Load Balancer Controller의 `target-type` 기본값은
-  `instance`이고, 공식 문서상 `NodePort`나 `LoadBalancer` Service가 필요하다. 이 차트의 Service는
-  `ClusterIP`이고 주석 처리된 prod annotation에도 `target-type: ip`가 없어서, Ingress를 켜면
-  프론트엔드뿐 아니라 백엔드 경로도 실패할 것으로 보인다 — 라이브 확인은 못 했고
-  `k8s/helm/README.md`의 미해결 점검 목록에 적어 뒀다. (b) `docker-tag-cleanup.yml`은
-  `bluecode1775/sharenpo`만 정리하므로 프론트엔드 저장소의 sha 태그는 쌓인다.
+- **발견, 2026-09-22 해결.** AWS Load Balancer Controller의 `target-type` 기본값은
+  `instance`이고 공식 문서상 `NodePort`나 `LoadBalancer` Service가 필요한데, 이 차트의
+  Service는 `ClusterIP`다. `values-prod.yaml`의 주석 처리된 annotation 블록에 이제
+  `alb.ingress.kubernetes.io/target-type: ip`가 들어 있고, `k8s/helm/README.md`와
+  `k8s/infra/terraform/README.md`의 레시피도 함께 맞췄다 — 고치는 과정에서 두 번째로 겹치는
+  공백이 드러났다: `ip` 모드 ALB는 파드 IP로 직접 트래픽을 보내는데,
+  [ADR 0056](0056-networkpolicy-east-west-restriction.ko.md)의 NetworkPolicy(같은 네임스페이스
+  파드만 인바운드 허용)는 그걸 애초에 허용하지 않았다. 여기가 아니라 그 ADR 자신의 2026-09-22
+  addendum(`ingress.enabled`로 게이팅한 새 `ipBlock` 규칙)에서 함께 닫았다 — 둘 다 라이브에서만
+  검증 가능하며 `k8s/helm/README.md`의 미해결 점검 목록에 있다.
+- **발견했지만 고치지 않은 것.** `docker-tag-cleanup.yml`은 `bluecode1775/sharenpo`만
+  정리하므로 프론트엔드 저장소의 sha 태그는 쌓인다.
 - **검증한 것.** `frontend.enabled` × `ingress.enabled` 조합에 대한 `helm lint --strict`와
   `helm template`(프론트엔드 없이 규칙 일곱 개, 있으면 `/` → `<release>-frontend:80`까지 여덟
   개, 잘못 쓴 `service`는 렌더링 실패). amd64·arm64 로컬 `docker build`: nginx는 uid 101로 실행되고,

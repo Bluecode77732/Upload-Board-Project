@@ -314,3 +314,17 @@ yet in the bucket's CORS rule, and applying it still means running that
 script again by hand (or writing the Terraform resource, not decided here).
 This is listed as a live-only pending check in `k8s/helm/README.md`
 ("Enabling HTTPS (Ingress)"), not resolved here.
+
+### Addendum (2026-09-22) — the production origin is now coded, not yet applied
+
+`app-infra/main.tf` gains `aws_s3_bucket_cors_configuration.app`: `AllowedMethods = ["GET"]`,
+`AllowedOrigins = ["https://${var.domain_name}"]`, `AllowedHeaders = ["*"]`,
+`MaxAgeSeconds = 300` — the same shape as the 2026-08-16 hand-run script, scoped to the
+production origin the previous addendum fixed. Code-complete, not applied (no Terraform state
+in this project currently is — CLAUDE.md's Terraform entry). Deliberately **not** carrying the
+two `localhost` dev origins forward: `aws_s3_bucket_cors_configuration` is authoritative over
+whatever's on the bucket, so applying this replaces the hand-run script's rule outright, not
+merges with it — local `STORAGE_DRIVER=s3` testing against the real bucket needs the dev
+origins re-added by hand after that apply, same script as before, if it's still wanted. This
+is recorded as a pending live check in `k8s/helm/README.md` ("Enabling HTTPS (Ingress)"), not
+verified here.

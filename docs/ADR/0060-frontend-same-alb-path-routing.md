@@ -272,12 +272,18 @@ approval); item 6 is done for everything that needs no cluster; item 7 is still 
   `node:24.8.0` cannot run (`bin/pnpm.cjs` missing). The `frontend-*` and `admin-*` CI jobs share
   that unpinned setup — green on 2026-09-17, but nothing keeps them so. Pinning `package.json` in
   `frontend/` and `admin/` is a separate decision.
-- **Found, not fixed.** (a) The AWS Load Balancer Controller's default `target-type` is `instance`,
-  which its docs say needs a `NodePort` or `LoadBalancer` Service. This chart's Services are
-  `ClusterIP` and the commented-out prod annotations don't set `target-type: ip`, so enabling the
-  Ingress is expected to fail for the backend's routes as much as the frontend's — not observed
-  live; listed in `k8s/helm/README.md`'s pending checks. (b) `docker-tag-cleanup.yml` prunes only
-  `bluecode1775/sharenpo`, so the frontend repository's sha tags accumulate.
+- **Found, fixed 2026-09-22.** The AWS Load Balancer Controller's default `target-type` is
+  `instance`, which its docs say needs a `NodePort` or `LoadBalancer` Service; this chart's
+  Services are `ClusterIP`. `values-prod.yaml`'s commented annotation block now sets
+  `alb.ingress.kubernetes.io/target-type: ip`, and both `k8s/helm/README.md`'s and
+  `k8s/infra/terraform/README.md`'s recipes were updated to match — fixing it surfaced a second,
+  compounding gap: the `ip`-mode ALB sends traffic to pod IPs directly, which
+  [ADR 0056](0056-networkpolicy-east-west-restriction.md)'s NetworkPolicy (same-namespace-pods-only
+  ingress) never admitted. Closed together, in that ADR's own 2026-09-22 addendum (a new
+  `ingress.enabled`-gated `ipBlock` rule) rather than here — both live-verification-only, listed
+  in `k8s/helm/README.md`'s pending checks.
+- **Found, not fixed.** `docker-tag-cleanup.yml` prunes only `bluecode1775/sharenpo`, so the
+  frontend repository's sha tags accumulate.
 - **Verified.** `helm lint --strict` and `helm template` across `frontend.enabled` × `ingress.enabled`
   (seven rules without the frontend, eight with `/` → `<release>-frontend:80`; a mistyped `service`
   fails the render). A local `docker build` for amd64 and arm64: nginx runs as uid 101, `nginx -t`

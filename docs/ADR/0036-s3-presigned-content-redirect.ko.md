@@ -291,3 +291,18 @@ origin은 생기지 않는다.
 리소스를 새로 작성하거나, 여기서 결정하지 않음) 해야 한다. 이건
 `k8s/helm/README.md`("Enabling HTTPS (Ingress)")의 라이브 전용 미해결 점검
 목록에 올라 있을 뿐, 여기서 해결하지 않는다.
+
+### 추가 기록 (2026-09-22) — 운영 origin을 이제 코드화했다, 아직 apply는 안 함
+
+`app-infra/main.tf`에 `aws_s3_bucket_cors_configuration.app`을 추가한다:
+`AllowedMethods = ["GET"]`, `AllowedOrigins = ["https://${var.domain_name}"]`,
+`AllowedHeaders = ["*"]`, `MaxAgeSeconds = 300` — 2026-08-16에 손으로 돌린
+스크립트와 같은 모양이되, 바로 위 추가 기록이 확정한 운영 origin으로 좁혔다.
+코드는 완성됐지만 apply하지 않았다(이 프로젝트의 Terraform state는 지금 어느 것도
+적용된 게 없다 — CLAUDE.md의 Terraform 항목 참고). localhost 개발 origin 두 개는
+일부러 넘기지 않았다: `aws_s3_bucket_cors_configuration`은 버킷에 있는 규칙을
+통째로 관장하는 리소스라, 이걸 apply하면 손으로 돌린 스크립트의 규칙과 병합되는
+게 아니라 그대로 교체된다 — 실제 버킷을 상대로 한 로컬 `STORAGE_DRIVER=s3` 테스트가
+그 apply 이후에도 필요하면 같은 스크립트로 개발 origin을 다시 손으로 넣어야 한다.
+이건 `k8s/helm/README.md`("Enabling HTTPS (Ingress)")에 라이브 점검 항목으로
+올려 뒀을 뿐, 여기서 검증하지 않는다.

@@ -180,6 +180,13 @@ frontend:
 #     kubernetes.io/ingress.class: alb
 #     alb.ingress.kubernetes.io/scheme: internet-facing
 #     alb.ingress.kubernetes.io/certificate-arn: <app-infra `terraform output -raw acm_certificate_arn`>
+#     # 이 차트의 두 Service(app, frontend)는 전부 ClusterIP다 — 컨트롤러 기본값인
+#     # target-type: instance는 NodePort/LoadBalancer Service가 필요해서 이 조합에
+#     # 맞지 않는다(2026-09-21, ADR 0060 구현 중 발견). ip 모드는 Service 타입과
+#     # 무관하게 동작하므로 이 값이 없으면 타깃 그룹에 healthy 타깃이 하나도 안
+#     # 잡힐 것으로 예상된다(라이브 미검증) — networkpolicy.yaml의 ALB 인바운드
+#     # 허용 규칙(ADR 0056 addendum)도 이 모드를 전제로 한다.
+#     alb.ingress.kubernetes.io/target-type: ip
 #     # HTTP(80)->HTTPS(443) 강제 리다이렉트 — 두 리스너를 명시하지 않으면 ALB
 #     # Controller가 80 리스너 자체를 만들지 않아 리다이렉트할 대상이 없다.
 #     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
