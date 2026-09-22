@@ -451,7 +451,11 @@ Beyond the DB/JWT/hashing basics, a few groups exist for specific features:
   limits) for the e2e suite's several-hundred-request run, via a module-level `skipIf`
   ([ADR 0053](ADR/0053-global-rate-limiting.md), [ADR 0054](ADR/0054-per-route-rate-limit-tuning.md)).
 - **Optional**: `BASE_URL` (default `http://localhost:3000`), `CORS_ORIGIN` (unset = CORS
-  off; a comma-separated allowlist when a browser frontend needs it — ADR 0008).
+  off; a comma-separated allowlist when a browser frontend needs it —
+  [ADR 0008](ADR/0008-opt-in-cors.md). The deployed `frontend/` doesn't set this — it's
+  same-origin behind the same ALB as the API,
+  [ADR 0060](ADR/0060-frontend-same-alb-path-routing.md); `admin/`'s dev server and any other
+  cross-origin consumer still do).
 
 A new env var always means updating the Joi schema and `.env.example` together, in the same
 change.

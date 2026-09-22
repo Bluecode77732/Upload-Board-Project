@@ -122,7 +122,10 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 선택 (모두 Joi로 기본값이 검증되거나 각자의 조건으로 게이팅됨 — 예시를 포함한 전체
 목록은 `.env.example` 참고): `BASE_URL`(기본 `http://localhost:3000`; 공개 파일 URL
 조합에 사용), `PORT`(기본 `3000`), `CORS_ORIGIN`(미설정 = CORS 비활성; 콤마 구분
-허용 목록 — [ADR 0008](docs/ADR/0008-opt-in-cors.ko.md)), `SUPERADMIN_EMAIL`(미설정 =
+허용 목록 — [ADR 0008](docs/ADR/0008-opt-in-cors.ko.md); 배포된 `frontend/`는 이 값을
+설정하지 않는다 — API와 같은 ALB 뒤에서 same-origin으로 동작한다,
+[ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.ko.md) — `admin/`의 개발 서버나
+다른 cross-origin 소비자는 여전히 필요하다), `SUPERADMIN_EMAIL`(미설정 =
 비활성; 수동 `pnpm promote-superadmin` 단계의 대상 계정일 뿐 부팅 시 자동으로
 승격되지 않음 —
 [ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md)/[ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.ko.md)), `TEMP_SWEEP_ENABLED` /

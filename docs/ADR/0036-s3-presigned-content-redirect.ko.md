@@ -272,3 +272,22 @@ ADR 아래서는 정상)에만 매칭되고 최종 응답에는 매칭되지 않
 테스트한 뒤, 다시 원래대로 되돌리고 재기동함 — 환경은 발견했을 때와 정확히
 같은 상태로 남겨뒀다). 이로써 이 추가 기록은 마무리된다 — 두 후보 해결책 중
 남은 것이 없다.
+
+### 추가 기록 (2026-09-21) — 운영 origin은 이제 확정됐지만, 아직 아무도 적용하지 않았다
+
+바로 위 2026-08-16 추가 기록은 운영 CORS origin을 "배포가 착지하면 그때 추가"로
+남겨뒀다. 이제 [ADR 0060](0060-frontend-same-alb-path-routing.ko.md)이 그
+origin을 확정한다: 프론트엔드가 하나의 ALB 뒤에서 API와 same-origin으로 동작하므로,
+운영 origin은 정확히 그 ALB의 호스트(`values-prod.yaml`의 `BASE_URL`)다 — 이
+추가 기록의 앞선 항목이 가정했던 것과 달리, 나중에 따로 추가할 별도의 프론트엔드
+origin은 생기지 않는다.
+
+바뀌지 않은 것 두 가지: 버킷의 CORS 규칙은 여전히 2026-08-16의
+`PutBucketCorsCommand` 스크립트로, localhost 개발 origin 두 개에 대해 손으로 한
+번 적용한 상태 그대로다 — `k8s/infra/terraform/`(`aws_s3_bucket.app`을 소유한
+`app-infra/main.tf`) 어디에도 `aws_s3_bucket_cors_configuration` 리소스를
+만들거나 관리하는 코드가 없어서, 운영 origin은 아직 버킷의 CORS 규칙에 들어
+있지 않고, 적용하려면 여전히 그 스크립트를 다시 손으로 돌리거나(또는 Terraform
+리소스를 새로 작성하거나, 여기서 결정하지 않음) 해야 한다. 이건
+`k8s/helm/README.md`("Enabling HTTPS (Ingress)")의 라이브 전용 미해결 점검
+목록에 올라 있을 뿐, 여기서 해결하지 않는다.

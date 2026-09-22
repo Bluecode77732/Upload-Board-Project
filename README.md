@@ -124,7 +124,10 @@ Optional (all Joi-validated with a default, or gated by their own condition — 
 `.env.example` for the full list with examples): `BASE_URL` (default
 `http://localhost:3000`; composes public file URLs), `PORT` (default `3000`),
 `CORS_ORIGIN` (unset = CORS disabled; comma-separated allowlist —
-[ADR 0008](docs/ADR/0008-opt-in-cors.md)), `SUPERADMIN_EMAIL` (unset = disabled;
+[ADR 0008](docs/ADR/0008-opt-in-cors.md); the deployed `frontend/` doesn't set this — it's
+same-origin behind the same ALB as the API,
+[ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md) — `admin/`'s dev server and any
+other cross-origin consumer still need it), `SUPERADMIN_EMAIL` (unset = disabled;
 the target account for the manual `pnpm promote-superadmin` step, not an
 automatic boot-time promotion —
 [ADR 0013](docs/ADR/0013-rbac-and-audit-log.md)/[ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.md)), `TEMP_SWEEP_ENABLED` /

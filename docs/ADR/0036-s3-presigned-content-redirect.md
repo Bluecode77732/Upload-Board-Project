@@ -295,3 +295,22 @@ is shown. Verified 5/5 green under **both** `STORAGE_DRIVER=local` and
 tested, then flipped back and restarted again — the environment was left
 exactly as found). This closes the addendum: nothing from either candidate
 fix remains open.
+
+### Addendum (2026-09-21) — the production origin is now fixed, and nothing applies it yet
+
+The 2026-08-16 addendum above left the production CORS origin as "add it once
+deployment lands." [ADR 0060](0060-frontend-same-alb-path-routing.md) now
+fixes that origin: the frontend is same-origin with the API behind one ALB, so
+the production origin is exactly that ALB's host (`values-prod.yaml`'s
+`BASE_URL`) — there will not be a separate frontend origin to add later, as
+this addendum's predecessor assumed.
+
+Two things this does not change: the bucket's CORS rule is still the
+2026-08-16 `PutBucketCorsCommand` script, run once by hand against the two
+localhost dev origins — nothing in `k8s/infra/terraform/` (`app-infra/main.tf`,
+which owns `aws_s3_bucket.app`) creates or manages an
+`aws_s3_bucket_cors_configuration` resource, so the production origin is not
+yet in the bucket's CORS rule, and applying it still means running that
+script again by hand (or writing the Terraform resource, not decided here).
+This is listed as a live-only pending check in `k8s/helm/README.md`
+("Enabling HTTPS (Ingress)"), not resolved here.
