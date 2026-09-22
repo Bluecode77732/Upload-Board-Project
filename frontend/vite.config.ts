@@ -3,8 +3,10 @@ import react from '@vitejs/plugin-react'
 
 // 브라우저가 localhost:5173 단일 출처로 보이도록 하는 개발용 프록시: /auth,/file,/user,/upload,/post,/comment로
 // 오는 API 호출을 :3000의 백엔드로 전달한다. 이렇게 하면 CORS 없이도 리프레시 쿠키(SameSite=Strict, dev에서는
-// Secure 미설정)가 정상 동작한다 — same-origin 요청은 쿠키를 그대로 실어 보내며, 운영 환경에서는 실제 origin +
-// CORS를 쓴다.
+// Secure 미설정)가 정상 동작한다 — same-origin 요청은 쿠키를 그대로 실어 보낸다. 운영 환경도 같은 이유로
+// same-origin이다 — 별도 CORS 설정이 아니라, 이 앱의 빌드가 API와 같은 ALB 뒤에서 같은 origin으로
+// 서빙되기 때문이다(ADR 0060). dev의 프록시와 운영의 ALB 경로 분기는 서로 다른 메커니즘이지만 둘 다
+// "브라우저 관점에서 하나의 origin"이라는 같은 결과를 낸다.
 // '/post'와 '/file'은 일반 접두사가 아니라 정규식 문자열('^/post($|[/?])', '^/file($|[/?])')로 앵커링했다:
 // Vite는 일반 문자열 키를 `url.startsWith(context)`로 매칭하는데, 그러면 클라이언트 라우트인 "/posts/:id"와
 // "/files"(App.tsx)까지 백엔드 프록시로 삼켜버린다 — "/file/:id"가 이미 피하고 있는 것과 같은 종류의 충돌이다
