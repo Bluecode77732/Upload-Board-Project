@@ -150,11 +150,53 @@ Docker 행은 `--stop-timeout 10`을 준 `docker stop`이다. `kind` 행은 `kub
 코드는 읽어 오지 못했다 — kubelet이 이미 가비지 컬렉션한 뒤였다 — 그래서 프로브의 `exit`
 이벤트로 대신했다: 있으면 프로세스가 스스로 나간 것이고, 없으면 SIGKILL이다.
 
-여전히 측정하지 않은 것: EKS와 ALB, 종료 중 처리 중인 요청, `S3Storage`. 라이브 클러스터가
-필요한 점검 두 가지 — 운영 값(`STORAGE_DRIVER=s3`)에서 파드가 1~2초 안에 `Terminating`을
-벗어나는지, 롤링 업데이트 중 ALB가 `502`/`503`/`504`를 내지 않는지 — 는 `k8s/helm/README.md`의
+여전히 측정하지 않은 것: EKS와 ALB, 종료 중 처리 중인 요청. 라이브 클러스터가 필요한 점검
+두 가지 — 운영 값(`STORAGE_DRIVER=s3`)에서 파드가 1~2초 안에 `Terminating`을 벗어나는지,
+롤링 업데이트 중 ALB가 `502`/`503`/`504`를 내지 않는지 — 는 `k8s/helm/README.md`의
 "Enabling HTTPS (Ingress)" 아래 미해결 점검 목록에 통과 기준과 함께 있다. 실패할 가능성이 높은
 쪽은 두 번째다: 이번 변경 전에는 파드가 SIGTERM을 무시하고 SIGKILL까지 계속 돌았는데, 이것이
 (추론일 뿐 측정한 것은 아니지만) 우연히 ALB의 등록 해제 지연보다 길었을 것이다. 이제는 1초 안에
-종료하므로 그 지연 동안 라우팅된 요청이 거절될 수 있다. `preStop` sleep이 흔한 처방이다. 차트에는
-없고, 여기서 정하지 않는다.
+종료하므로 그 지연 동안 라우팅된 요청이 거절될 수 있다. 아래 Addendum이 `S3Storage`는 닫았고
+`preStop` 처방의 메커니즘도 시험했지만, 실제 ALB로는 아니다.
+
+### Addendum (2026-09-22) — `S3Storage`와 `preStop` 메커니즘을 따로 떼어 시험
+
+위 "여전히 측정하지 않은 것" 중 두 가지는 라이브 클러스터나 실제 AWS 접근 없이도 바로
+시험할 수 있는 것으로 드러났다.
+
+**`S3Storage`의 `S3Client`.** `@aws-sdk/client-s3`의 기본 request handler는 agent를
+`new https.Agent({ keepAlive: true, maxSockets, ... })`로 만든다 — `@smithy/node-http-handler`의
+번들된 소스를 읽어 확인했지 추측이 아니다. `keepAlive` agent는 응답이 끝난 뒤에도 소켓을 풀에
+ref된 채로 남겨 두는데, 이게 정확히 D2가 미확인으로 남겨 둔 핸들의 모양이다. Docker만 쓴
+프로브로 이 메커니즘을 평범한 `http.Agent({ keepAlive: true })`와 로컬 서버로 재현했다(TLS도
+AWS 네트워크도 자격 증명도 없다) — 소켓은 일부러 닫지 않고 열어 뒀다: `docker stop`은 여전히
+386 ms, 종료 코드 0, `pg.Pool.end()`와 `exit` 이벤트 모두 예상대로 찍혔다. 첫 Addendum의
+ref된 타이머 결과를 `S3Client`가 실제로 쓰는 구체적인 핸들 모양으로 일반화한 셈이다 — D2의
+"`STORAGE_DRIVER=s3`를 실제로 켤 때 다시 확인"은 종료 속도 면에서는 닫혔다. 시험하지 않은 것:
+실제 `S3Client` 인스턴스나 S3로의 진짜 요청.
+
+**`preStop`/`terminationGracePeriodSeconds` 메커니즘.** 앞과 같은 로컬 `kind` 클러스터에서
+`kubectl patch`로 돌고 있는 Deployment에 `lifecycle.preStop.exec`와
+`terminationGracePeriodSeconds`를 얹었다(차트에는 커밋하지 않았다 — 특정 값을 정하려는 게
+아니라 메커니즘 자체를 보려는 것이다). 두 번 실행하고 `kubectl get events -o json`과 절대
+시각을 남기는 프로브를 맞대조했다:
+
+- **유예가 sleep을 다 덮는 경우**(`preStop: sleep 5`, 유예 35초): scale-down부터 파드가
+  사라지기까지 5.7초 걸렸다. SIGTERM은 sleep이 끝난 뒤에야 왔고, 그 뒤 앱은 1초도 안 돼
+  종료했다 — ADR의 Pending 메모가 전제했던 메커니즘 그대로였다.
+- **유예가 sleep보다 짧은 경우**(`preStop: sleep 40`, 유예는 여전히 35초 — 일부러 부족하게
+  뒀다): `FailedPreStopHook`이 정확히 유예 35초 경계에서 떴고, kubelet은 **바로 그 순간**
+  (프로브 자체 타임스탬프로 10 ms 뒤) 메인 프로세스에 SIGTERM을 보냈다 — 아예 안 보낸 게
+  아니었다. 앱은 그래도 깔끔하게 종료했다 — `pg.Pool.end()`, 그다음 종료 코드 0 — 그로부터
+  약 0.5초 뒤. 파드가 사라지기까지 총 36.4초로, (끝내 완료되지 못한) preStop이 원래 쓰인
+  5초가 아니라 유예 시간 전체에 가까웠다.
+
+이건 위 문단과 `k8s/helm/README.md`의 미해결 점검 목록이 측정 전에 적어 뒀던 추론을
+정정한다: 적어도 이 `kind`/containerd 조합에서는, 부족한 `terminationGracePeriodSeconds`가
+비용을 치르는 지점은 앱이 지저분하게 SIGKILL당하는 게 아니라 배포 *시간*이었다(롤아웃이 유예
+시간 전체를 기다린다) — kubelet이 막힌 hook을 포기하는 순간에도 SIGTERM은 여전히 보냈고,
+앱이 그걸 받아 챌 만큼 빨랐기 때문이다. EKS의 containerd도 똑같이 동작하는지, 그리고 —
+진짜 열려 있는 질문인 — ALB가 (얼마나 길든) 유예 시간이 다 끝나기 전에 그 파드로의 라우팅을
+먼저 멈추는지는 둘 다 아직 확인하지 못했다. 이 ADR의 다른 측정에 쓴 `docker stop`의 유예/
+SIGKILL 방식에는 `preStop`에 대응하는 게 없어서, 이 두 시나리오는 `kind`에서만 돌려볼 수
+있었다.

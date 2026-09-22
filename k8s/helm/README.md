@@ -381,14 +381,17 @@ annotations worked:
   Service has a ready endpoint and the backend Service has none of the frontend's pods, and
   Prometheus lists a target for the backend but none for the frontend (the `web` port name,
   ADR 0060).
-- Pods stop promptly on EKS (ADR 0061). With `values-prod.yaml` (so `STORAGE_DRIVER=s3` and
-  the `S3Client` is in play, ADR 0061 D2), run `kubectl rollout restart deployment/<release>`
-  and watch `kubectl get pods -w`: each old backend pod should leave `Terminating` within a
-  second or two. One that sits there for the full 30 s (the chart sets no
-  `terminationGracePeriodSeconds`, so the default applies) was SIGKILLed — something kept the
-  process from exiting even with `useProcessExit: true`, so look for a shutdown path that never
-  reaches the hooks. Measured on a local `kind` cluster only: 0.4 s, against 30.6 s without
-  the option when a timer was left running.
+- Pods stop promptly on EKS (ADR 0061). With `values-prod.yaml` (so `STORAGE_DRIVER=s3`), run
+  `kubectl rollout restart deployment/<release>` and watch `kubectl get pods -w`: each old
+  backend pod should leave `Terminating` within a second or two. One that sits there for the
+  full 30 s (the chart sets no `terminationGracePeriodSeconds`, so the default applies) was
+  SIGKILLed — something kept the process from exiting even with `useProcessExit: true`, so look
+  for a shutdown path that never reaches the hooks. Measured on a local `kind` cluster only:
+  0.4 s, against 30.6 s without the option when a timer was left running. `S3Client` specifically
+  is a closed question already — a Docker-only test standing in for its default `keepAlive`
+  request agent (same handle shape, ADR 0061's second addendum) exited just as fast with the
+  socket left open on purpose — so this check is really about there being nothing else specific
+  to a live pod, not that handle.
 - No ALB errors during a rolling update (ADR 0061) — the check most likely to fail. Before
   the fix a pod ignored SIGTERM and kept running until SIGKILL, which (inference, not
   measured) outlasted the ALB's deregistration lag by accident; now it exits within a second,
@@ -397,9 +400,16 @@ annotations worked:
   from outside to an allow-listed route — `curl -s -o /dev/null -w '%{http_code}\n'
   https://<domain>/file` answers 401 with no token — and count `502`/`503`/`504`. `401` and
   `429` are the backend answering (429 is its own rate limit, so stay under 100 a minute).
-  Pass: none of the three. If they appear, the usual remedy is a `preStop` sleep on the app
-  container with `terminationGracePeriodSeconds` raised to cover it; the chart has neither
-  today, and it has not been tried — decide with the numbers in hand.
+  Pass: none of the three. If they appear, add a `preStop` sleep on the app container and raise
+  `terminationGracePeriodSeconds` to at least cover it. That *mechanism* is verified on a
+  throwaway `kind` deployment (not committed to the chart, ADR 0061's second addendum): with
+  grace covering the sleep, the pod left in 5.7 s as expected; with grace deliberately shorter
+  than the sleep, kubelet still sent SIGTERM the moment it gave up on the stuck hook, and the
+  app exited cleanly — the pod just took the full grace period (36.4 s) instead. So an
+  under-sized grace period here costs rollout time, not a raw SIGKILL of the app — on this
+  `kind`/containerd version, at least; not verified on EKS. None of this says what the sleep
+  duration should actually be — that needs the real ALB's drain-lag number, still unmeasured, so
+  the chart has neither setting today and it's still not decided.
 
 None of this can be verified by `helm lint`/`helm template` — they only prove the YAML
 this repo renders is correct, never that the AWS Load Balancer Controller acts on it as

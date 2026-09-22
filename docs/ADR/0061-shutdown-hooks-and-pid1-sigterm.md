@@ -152,12 +152,55 @@ The terminated container's exit code could not be read back — kubelet had alre
 garbage-collected it — so the probe's `exit` event stands in: present means the process left
 on its own, absent means SIGKILL.
 
-Still not measured: EKS and the ALB, requests in flight during shutdown, `S3Storage`. The
-two checks that need a live cluster — pods leaving `Terminating` within a second or two under
-the production values (`STORAGE_DRIVER=s3`), and no `502`/`503`/`504` from the ALB during a
-rolling update — are listed with pass criteria in the pending list under "Enabling HTTPS
-(Ingress)" in `k8s/helm/README.md`. The second is the one likely to fail: before this change a
-pod ignored SIGTERM and kept running until SIGKILL, which (inference, not measured) outlasted
-the ALB's deregistration lag by accident; now it exits within a second, so a request routed to
-it in that lag can be refused. A `preStop` sleep is the usual remedy. The chart has none, and
-it is not decided here.
+Still not measured: EKS and the ALB, requests in flight during shutdown. The two checks that
+need a live cluster — pods leaving `Terminating` within a second or two under the production
+values (`STORAGE_DRIVER=s3`), and no `502`/`503`/`504` from the ALB during a rolling update —
+are listed with pass criteria in the pending list under "Enabling HTTPS (Ingress)" in
+`k8s/helm/README.md`. The second is the one likely to fail: before this change a pod ignored
+SIGTERM and kept running until SIGKILL, which (inference, not measured) outlasted the ALB's
+deregistration lag by accident; now it exits within a second, so a request routed to it in
+that lag can be refused. The addendum below closes `S3Storage` and tests the `preStop` remedy's
+mechanism, but not against a real ALB.
+
+### Addendum (2026-09-22) — `S3Storage`, and the `preStop` mechanism, tested in isolation
+
+Two of the "Still not measured" items above turned out to be directly testable without a live
+cluster or real AWS access.
+
+**`S3Storage`'s `S3Client`.** `@aws-sdk/client-s3`'s default request handler builds its agent as
+`new https.Agent({ keepAlive: true, maxSockets, ... })` — confirmed by reading
+`@smithy/node-http-handler`'s bundled source, not assumed. A `keepAlive` agent leaves a ref'd
+socket in its pool after a response completes, exactly the kind of handle D2 flagged as
+unverified. A Docker-only probe reproduced that mechanism with a plain `http.Agent({ keepAlive:
+true })` against a local server (no TLS, no AWS network, no credentials) and left the socket
+open on purpose: `docker stop` still took 386 ms, exit 0, `pg.Pool.end()` and the `exit` event
+both logging as expected. This generalizes the ref'd-timer result in the first addendum to the
+concrete handle shape `S3Client` actually uses; D2's "re-check when `STORAGE_DRIVER=s3` goes
+live" item is closed as far as shutdown speed goes. Not tested: an actual `S3Client` instance
+or a real request to S3.
+
+**The `preStop`/`terminationGracePeriodSeconds` mechanism.** On the same local `kind` cluster as
+before, `kubectl patch` added a `lifecycle.preStop.exec` and a `terminationGracePeriodSeconds`
+to the running Deployment (not committed to the chart — this tests the mechanism, not a chosen
+duration). Two runs, `kubectl get events -o json` and an absolute-timestamp probe cross-checked
+against each other:
+
+- **Grace covers the sleep** (`preStop: sleep 5`, grace 35 s): scale-down to pod-gone took
+  5.7 s. SIGTERM arrived only once the sleep finished, then the app exited in well under a
+  second — the mechanism the ADR's Pending note assumed, confirmed.
+- **Grace is shorter than the sleep** (`preStop: sleep 40`, grace still 35 s — deliberately
+  insufficient): `FailedPreStopHook` fired at exactly the 35 s grace boundary, and kubelet sent
+  SIGTERM to the main process **at that same moment** (10 ms later, by the probe's own
+  timestamp) rather than never sending it. The app still exited cleanly — `pg.Pool.end()`, then
+  `exit` code 0 — about 0.5 s after that. Total time to pod-gone: 36.4 s, essentially the full
+  grace period, not the 5 s the (never-completing) preStop hook was written for.
+
+This corrects the inference in the paragraph above and in `k8s/helm/README.md`'s pending list,
+both written before this was measured: on this `kind`/containerd combination, an
+under-provisioned `terminationGracePeriodSeconds` cost deploy *time* (the rollout waits out the
+whole grace period), not an unclean SIGKILL of the app — because kubelet still delivered
+SIGTERM once it gave up on the stuck hook, and the app was fast enough to catch it. Whether EKS
+containerd behaves the same, and — the actual open question — whether the ALB stops routing to
+a pod before its grace period (however long) runs out, are both still unverified. `docker
+stop`'s own grace/SIGKILL semantics (used throughout this ADR's other measurements) has no
+`preStop` equivalent, so this pair of scenarios could only be run on `kind`.

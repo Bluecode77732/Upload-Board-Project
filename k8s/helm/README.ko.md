@@ -378,14 +378,17 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
 - 롤아웃과 스크레이프: 두 Deployment 모두 `kubectl rollout status`가 성공하고, 프론트엔드
   Service에는 ready 엔드포인트가 있으며 백엔드 Service에는 프론트엔드 파드가 하나도 없고,
   Prometheus에는 백엔드 타깃만 있고 프론트엔드 타깃은 없어야 한다(`web` 포트 이름, ADR 0060).
-- 파드가 EKS에서 곧바로 종료된다(ADR 0061). `values-prod.yaml`로(따라서 `STORAGE_DRIVER=s3`이고
-  `S3Client`가 실제로 쓰인다, ADR 0061 D2) `kubectl rollout restart deployment/<release>`를
-  실행하고 `kubectl get pods -w`를 지켜본다: 이전 백엔드 파드는 1~2초 안에 `Terminating`을
-  벗어나야 한다. 30초를 꽉 채우고 나가는 파드(차트가 `terminationGracePeriodSeconds`를
-  설정하지 않으므로 기본값이 적용된다)는 SIGKILL을 맞은 것이다 — `useProcessExit: true`가
-  있는데도 프로세스가 끝나지 못했다는 뜻이니, 종료 훅에 도달하지 못하는 종료 경로를 찾아야
-  한다. 측정은 로컬 `kind` 클러스터에서만 했다: 0.4초, 타이머를 남겨 둔 경우 옵션이 없으면
-  30.6초였다.
+- 파드가 EKS에서 곧바로 종료된다(ADR 0061). `values-prod.yaml`로(따라서 `STORAGE_DRIVER=s3`)
+  `kubectl rollout restart deployment/<release>`를 실행하고 `kubectl get pods -w`를
+  지켜본다: 이전 백엔드 파드는 1~2초 안에 `Terminating`을 벗어나야 한다. 30초를 꽉 채우고
+  나가는 파드(차트가 `terminationGracePeriodSeconds`를 설정하지 않으므로 기본값이
+  적용된다)는 SIGKILL을 맞은 것이다 — `useProcessExit: true`가 있는데도 프로세스가 끝나지
+  못했다는 뜻이니, 종료 훅에 도달하지 못하는 종료 경로를 찾아야 한다. 측정은 로컬 `kind`
+  클러스터에서만 했다: 0.4초, 타이머를 남겨 둔 경우 옵션이 없으면 30.6초였다. `S3Client`
+  자체는 이미 닫힌 질문이다 — 그 기본 `keepAlive` request agent를 대신한 Docker 전용 시험
+  (같은 핸들 모양, ADR 0061 두 번째 Addendum)이 소켓을 일부러 열어 둔 채로도 똑같이 빨리
+  종료했다 — 그러니 이 점검은 그 핸들이 아니라 실제 파드에만 있는 다른 무언가가 있는지를
+  보는 것에 가깝다.
 - 롤링 업데이트 중 ALB 오류가 없다(ADR 0061) — 실패할 가능성이 가장 높은 항목이다. 수정 전에는
   파드가 SIGTERM을 무시하고 SIGKILL까지 계속 돌았는데, 이것이 (추론일 뿐 측정한 것은 아니지만)
   우연히 ALB의 등록 해제 지연보다 길었을 것이다. 이제는 1초 안에 종료하므로, SIGTERM 이후 대상이
@@ -394,9 +397,16 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   초당 한 건쯤 요청을 보내고 — `curl -s -o /dev/null -w '%{http_code}\n'
   https://<domain>/file`은 토큰이 없으면 401이다 — `502`/`503`/`504`를 센다. `401`과 `429`는
   백엔드가 답한 것이다(429는 자체 rate limit이므로 분당 100건 미만을 유지한다). 통과 기준: 셋 다
-  없음. 나타나면 흔한 처방은 앱 컨테이너에 `preStop` sleep을 두고
-  `terminationGracePeriodSeconds`를 그만큼 늘리는 것이다. 차트에는 둘 다 지금 없고 시도해 본
-  적도 없다 — 숫자를 본 뒤에 정한다.
+  없음. 나타나면 앱 컨테이너에 `preStop` sleep을 두고 `terminationGracePeriodSeconds`를 적어도
+  그만큼 늘린다. 그 *메커니즘* 자체는 일회용 `kind` Deployment에서 검증했다(차트에는 커밋하지
+  않음, ADR 0061 두 번째 Addendum): 유예가 sleep을 다 덮으면 파드가 예상대로 5.7초 만에
+  사라졌고, 유예를 일부러 sleep보다 짧게 두어도 kubelet은 막힌 hook을 포기하는 순간 여전히
+  SIGTERM을 보냈고 앱은 깔끔하게 종료했다 — 다만 파드가 유예 시간 전체(36.4초)를 다 썼을
+  뿐이다. 그러니 여기서 유예가 부족하면 앱이 그대로 SIGKILL당하는 게 아니라 롤아웃 시간이
+  드는 것이다 — 적어도 이 `kind`/containerd 버전에서는 그렇다; EKS에서는 확인하지 않았다.
+  이 중 무엇도 sleep을 얼마로 둬야 하는지는 말해 주지 않는다 — 그건 아직 측정하지 못한 실제
+  ALB의 드레인 지연 숫자가 있어야 정할 수 있으므로, 차트에는 둘 다 지금 없고 여전히 정하지
+  않았다.
 
 이 중 어느 것도 `helm lint`/`helm template`로는 확인할 수 없다 — 이 둘은 이 저장소가
 렌더링하는 YAML이 올바르다는 것만 증명할 뿐, AWS Load Balancer Controller가 그 설정대로
