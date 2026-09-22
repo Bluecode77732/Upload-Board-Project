@@ -152,5 +152,12 @@ The terminated container's exit code could not be read back — kubelet had alre
 garbage-collected it — so the probe's `exit` event stands in: present means the process left
 on its own, absent means SIGKILL.
 
-Still not measured: EKS and the ALB's connection draining, requests in flight during
-shutdown, `S3Storage`.
+Still not measured: EKS and the ALB, requests in flight during shutdown, `S3Storage`. The
+two checks that need a live cluster — pods leaving `Terminating` within a second or two under
+the production values (`STORAGE_DRIVER=s3`), and no `502`/`503`/`504` from the ALB during a
+rolling update — are listed with pass criteria in the pending list under "Enabling HTTPS
+(Ingress)" in `k8s/helm/README.md`. The second is the one likely to fail: before this change a
+pod ignored SIGTERM and kept running until SIGKILL, which (inference, not measured) outlasted
+the ALB's deregistration lag by accident; now it exits within a second, so a request routed to
+it in that lag can be refused. A `preStop` sleep is the usual remedy. The chart has none, and
+it is not decided here.

@@ -363,6 +363,25 @@ annotations worked:
   Service has a ready endpoint and the backend Service has none of the frontend's pods, and
   Prometheus lists a target for the backend but none for the frontend (the `web` port name,
   ADR 0060).
+- Pods stop promptly on EKS (ADR 0061). With `values-prod.yaml` (so `STORAGE_DRIVER=s3` and
+  the `S3Client` is in play, ADR 0061 D2), run `kubectl rollout restart deployment/<release>`
+  and watch `kubectl get pods -w`: each old backend pod should leave `Terminating` within a
+  second or two. One that sits there for the full 30 s (the chart sets no
+  `terminationGracePeriodSeconds`, so the default applies) was SIGKILLed — something kept the
+  process from exiting even with `useProcessExit: true`, so look for a shutdown path that never
+  reaches the hooks. Measured on a local `kind` cluster only: 0.4 s, against 30.6 s without
+  the option when a timer was left running.
+- No ALB errors during a rolling update (ADR 0061) — the check most likely to fail. Before
+  the fix a pod ignored SIGTERM and kept running until SIGKILL, which (inference, not
+  measured) outlasted the ALB's deregistration lag by accident; now it exits within a second,
+  so a request the ALB routes to it after SIGTERM but before the target drains can be refused.
+  While `kubectl rollout restart deployment/<release>` runs, send about one request a second
+  from outside to an allow-listed route — `curl -s -o /dev/null -w '%{http_code}\n'
+  https://<domain>/file` answers 401 with no token — and count `502`/`503`/`504`. `401` and
+  `429` are the backend answering (429 is its own rate limit, so stay under 100 a minute).
+  Pass: none of the three. If they appear, the usual remedy is a `preStop` sleep on the app
+  container with `terminationGracePeriodSeconds` raised to cover it; the chart has neither
+  today, and it has not been tried — decide with the numbers in hand.
 
 None of this can be verified by `helm lint`/`helm template` — they only prove the YAML
 this repo renders is correct, never that the AWS Load Balancer Controller acts on it as

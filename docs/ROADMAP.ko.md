@@ -963,6 +963,15 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   리다이렉트, rate limit의 실제 클라이언트 IP, 롤아웃과 Prometheus 타깃 — 과 거기 함께 적힌
   `target-type` 기본값, 운영 origin용 S3 CORS 규칙), 그리고 `admin/` 호스팅. AWS 스택이 지금
   apply돼 있는지와는 무관하다.
+- EKS/ALB에서의 우아한 종료 — **2026-09-21 로컬 구현 및 검증**
+  ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md)): `useProcessExit: true`를 쓴
+  `enableShutdownHooks`를 Docker와 로컬 `kind` 클러스터에서 측정했다(파드가 10초/30초 유예
+  시간을 다 기다리는 대신 약 0.4초에 종료). 아직 열려 있는 것: 라이브 클러스터가 필요한 점검
+  두 가지 — 운영 값에서 파드가 1~2초 안에 `Terminating`을 벗어나는지, 롤링 업데이트 중 ALB가
+  `502`/`503`/`504`를 내지 않는지(실패할 가능성이 높은 쪽: 파드가 우연히 ALB의 등록 해제 지연
+  동안 계속 돌고 있었는데 이제는 그렇지 않다). 둘 다 `k8s/helm/README.md`의 미해결 점검 목록에
+  통과 기준과 함께 있고, 두 번째가 실패하면 `preStop` sleep이 흔한 처방이나 아직 정하지 않았다.
+  AWS 스택이 지금 apply돼 있는지와는 무관하다.
 - Istio(Kubernetes 클러스터 위 서비스 메시) — **프로덕션 DevOps 스택 도입 행과 Stage 4
   구성요소 상태 표에서 제외**(2026-08-31 이동, 이번 세션에서 진행한 규모 적합성 검토 뒤
   개발자가 내린 결정 — ROADMAP 자체의 순서 계획과는 별개). **미착수 이유**: 이 프로젝트의

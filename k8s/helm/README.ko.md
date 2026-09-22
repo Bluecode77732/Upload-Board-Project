@@ -361,6 +361,25 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
 - 롤아웃과 스크레이프: 두 Deployment 모두 `kubectl rollout status`가 성공하고, 프론트엔드
   Service에는 ready 엔드포인트가 있으며 백엔드 Service에는 프론트엔드 파드가 하나도 없고,
   Prometheus에는 백엔드 타깃만 있고 프론트엔드 타깃은 없어야 한다(`web` 포트 이름, ADR 0060).
+- 파드가 EKS에서 곧바로 종료된다(ADR 0061). `values-prod.yaml`로(따라서 `STORAGE_DRIVER=s3`이고
+  `S3Client`가 실제로 쓰인다, ADR 0061 D2) `kubectl rollout restart deployment/<release>`를
+  실행하고 `kubectl get pods -w`를 지켜본다: 이전 백엔드 파드는 1~2초 안에 `Terminating`을
+  벗어나야 한다. 30초를 꽉 채우고 나가는 파드(차트가 `terminationGracePeriodSeconds`를
+  설정하지 않으므로 기본값이 적용된다)는 SIGKILL을 맞은 것이다 — `useProcessExit: true`가
+  있는데도 프로세스가 끝나지 못했다는 뜻이니, 종료 훅에 도달하지 못하는 종료 경로를 찾아야
+  한다. 측정은 로컬 `kind` 클러스터에서만 했다: 0.4초, 타이머를 남겨 둔 경우 옵션이 없으면
+  30.6초였다.
+- 롤링 업데이트 중 ALB 오류가 없다(ADR 0061) — 실패할 가능성이 가장 높은 항목이다. 수정 전에는
+  파드가 SIGTERM을 무시하고 SIGKILL까지 계속 돌았는데, 이것이 (추론일 뿐 측정한 것은 아니지만)
+  우연히 ALB의 등록 해제 지연보다 길었을 것이다. 이제는 1초 안에 종료하므로, SIGTERM 이후 대상이
+  드레인되기 전에 ALB가 그 파드로 보낸 요청이 거절될 수 있다.
+  `kubectl rollout restart deployment/<release>`가 도는 동안 바깥에서 허용 목록에 있는 경로로
+  초당 한 건쯤 요청을 보내고 — `curl -s -o /dev/null -w '%{http_code}\n'
+  https://<domain>/file`은 토큰이 없으면 401이다 — `502`/`503`/`504`를 센다. `401`과 `429`는
+  백엔드가 답한 것이다(429는 자체 rate limit이므로 분당 100건 미만을 유지한다). 통과 기준: 셋 다
+  없음. 나타나면 흔한 처방은 앱 컨테이너에 `preStop` sleep을 두고
+  `terminationGracePeriodSeconds`를 그만큼 늘리는 것이다. 차트에는 둘 다 지금 없고 시도해 본
+  적도 없다 — 숫자를 본 뒤에 정한다.
 
 이 중 어느 것도 `helm lint`/`helm template`로는 확인할 수 없다 — 이 둘은 이 저장소가
 렌더링하는 YAML이 올바르다는 것만 증명할 뿐, AWS Load Balancer Controller가 그 설정대로

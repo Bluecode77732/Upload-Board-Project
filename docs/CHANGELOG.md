@@ -234,7 +234,8 @@ development line (package.json version).
   and TypeORM never closed the pg pool. `bootstrap()` now calls it right before `listen()`,
   with `useProcessExit: true`; in a local Linux container and in a pod on a local `kind`
   cluster the same stop takes about 0.4 s, exit 0, with `pg.Pool.end()` running (not verified
-  on EKS). The option is there because PID 1 discards the signal Nest re-sends to itself:
+  on EKS — the live checks, including whether the ALB refuses requests during a rolling update
+  now that pods exit at once, are in `k8s/helm/README.md`). The option is there because PID 1 discards the signal Nest re-sends to itself:
   without it a lingering handle brings back the full grace period (10.4 s in Docker, 30.6 s in
   a pod). The ADR records the trade-off and the measurements. Closes the 2026-09-16 Known
   Gaps entry, whose "the process just dies" line was wrong.

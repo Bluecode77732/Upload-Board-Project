@@ -1012,6 +1012,16 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   limiting, rollout and Prometheus targets — plus the `target-type` default and the S3 CORS
   rule for the production origin, both listed there), and `admin/` hosting. Independent of
   whether the AWS stack is currently applied.
+- Graceful shutdown on EKS/ALB — **built and verified locally 2026-09-21**
+  ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md)): `enableShutdownHooks` with
+  `useProcessExit: true`, measured in Docker and on a local `kind` cluster (pods stop in about
+  0.4 s instead of waiting out the 10 s/30 s grace period). Still open: the two checks that
+  need a live cluster — pods leaving `Terminating` within a second or two under the production
+  values, and no `502`/`503`/`504` from the ALB during a rolling update (the likelier failure:
+  pods used to keep running through the ALB's deregistration lag by accident, and no longer
+  do). Both are in `k8s/helm/README.md`'s pending list with pass criteria; a `preStop` sleep is
+  the usual remedy if the second fails, and is not decided. Independent of whether the AWS
+  stack is currently applied.
 - Istio (service mesh over the Kubernetes cluster) — **pulled from the Production DevOps
   stack introduction row and the Stage 4 component-status table** (moved 2026-08-31,
   developer decision after a scale-fit review run this session, independent of the
