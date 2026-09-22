@@ -304,3 +304,22 @@ approval); item 6 is done for everything that needs no cluster; item 7 is still 
   rolling out with the Services wired as intended and only the backend scraped. The checklist
   with pass criteria is the pending list under "Enabling HTTPS (Ingress)" in
   `k8s/helm/README.md`.
+
+### Addendum (2026-09-22) — B's cost claim, quantified
+
+Alternatives rejected > B said a per-subdomain ALB "costs more AWS-side change than A" —
+qualitative, and never priced. Asked directly and checked against AWS's own pricing page
+(not recalled): an Application Load Balancer bills two ways — an hourly charge per ALB
+running ("You are charged for each hour or partial hour that an Application Load Balancer is
+running," ~US$0.0225/hour in `us-east-1`), plus LCU usage metered on whichever of four
+dimensions is highest (new connections, active connections, processed bytes, rule
+evaluations) — "you are charged only on the dimension with the highest usage." Path rules,
+target groups, and target count carry no charge of their own; rule evaluations specifically
+have "the first 10 processed rules ... free" per hour, and this chart's Ingress renders eight.
+
+So D1's same-ALB design has one concrete, fixed saving over B: **one hourly ALB charge
+instead of two** — B would run a second ALB for the subdomain, doubling that fixed cost.
+Every other dimension (LCU, data transfer) is usage-metered and near-identical either way,
+since it's driven by real traffic, not by which ALB carries it — the fixed hourly charge is
+the only piece B's design multiplies. This confirms, with numbers, what "costs more" already
+said qualitatively; it changes no part of the decision.
