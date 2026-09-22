@@ -238,7 +238,18 @@ development line (package.json version).
   now that pods exit at once, are in `k8s/helm/README.md`). The option is there because PID 1 discards the signal Nest re-sends to itself:
   without it a lingering handle brings back the full grace period (10.4 s in Docker, 30.6 s in
   a pod). The ADR records the trade-off and the measurements. Closes the 2026-09-16 Known
-  Gaps entry, whose "the process just dies" line was wrong.
+  Gaps entry, whose "the process just dies" line was wrong. **2026-09-22 addendum**: two of
+  the still-open items turned out testable without a live cluster. A Docker-only analog for
+  `S3Storage`'s `S3Client` (same default `keepAlive` agent, confirmed by reading
+  `@smithy/node-http-handler`'s source) exited just as fast with a socket left open on
+  purpose, closing that concern for shutdown speed. On a local `kind` cluster, patching a
+  `preStop`/`terminationGracePeriodSeconds` combination onto a throwaway deployment (not
+  committed to the chart) showed that an under-provisioned grace period costs rollout time,
+  not an unclean kill — kubelet still delivered SIGTERM the moment it gave up on a stuck
+  `preStop` hook, and the app exited cleanly ~35 s late instead of the intended ~5 s. This
+  corrects the "outlasted the ALB's deregistration lag by accident" framing's implied
+  opposite (that insufficient grace means no SIGTERM at all) written before this was
+  measured; the real ALB drain-lag number is still unmeasured.
 - **`ROADMAP.md`(+ko): two more stale "not started" §7 entries corrected (2026-09-08)**
   — same class of bug as the earlier ARM/Graviton fix. "AWS Secrets Manager + ESO wiring"
   and "Kubernetes Ingress/ALB + TLS certificate provisioning" both still said they were

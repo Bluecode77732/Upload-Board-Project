@@ -1672,8 +1672,10 @@ Architecture Decisions가 계속 유효하다.
   붙잡는 것이 없을 때에만 끝난다 — ref된 타이머 하나가 남자 plain은 Docker에서 10.4초/137,
   파드에서 30.6초로 돌아갔고, 옵션을 쓰면 둘 다 0.4초였다. 그 대가(핸들이 누수돼도 더는
   느린 종료로 드러나지 않는다)는 ADR의 Addendum에 있다. `OnModuleDestroy`는 어디에도
-  추가하지 않았다(누수를 보여주는 것이 없었다. `STORAGE_DRIVER=s3`를 실제로 켤 때 다시 확인할
-  대상은 `S3Storage`의 `S3Client`다)
+  추가하지 않았다(누수를 보여주는 것이 없었다. `S3Storage`의 `S3Client`를 대신한 Docker
+  전용 시험 — 같은 기본 `keepAlive` agent 모양 — 도 소켓을 일부러 열어 둔 채로 똑같이 빨리
+  종료해 종료 속도 면에서는 닫혔다. 실제 `S3Client` 인스턴스는 여전히 시험하지 않았다,
+  ADR 0061 두 번째 Addendum)
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

@@ -1020,7 +1020,10 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   values, and no `502`/`503`/`504` from the ALB during a rolling update (the likelier failure:
   pods used to keep running through the ALB's deregistration lag by accident, and no longer
   do). Both are in `k8s/helm/README.md`'s pending list with pass criteria; a `preStop` sleep is
-  the usual remedy if the second fails, and is not decided. Independent of whether the AWS
+  the usual remedy if the second fails. The mechanism itself was tested on `kind` afterward
+  (2026-09-22): an under-provisioned grace period costs rollout time, not an unclean kill —
+  kubelet still sends SIGTERM once it gives up on a stuck `preStop` hook. The sleep duration
+  still isn't decided; it needs the real ALB's drain-lag number. Independent of whether the AWS
   stack is currently applied.
 - Istio (service mesh over the Kubernetes cluster) — **pulled from the Production DevOps
   stack introduction row and the Stage 4 component-status table** (moved 2026-08-31,

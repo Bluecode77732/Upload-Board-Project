@@ -1644,8 +1644,10 @@ Architecture Decisions above remain operative.
   event loop open — one lingering ref'd timer put plain back to 10.4 s/137 in Docker and
   30.6 s in a pod, and with the option both stayed at 0.4 s. What that costs (a leaked
   handle no longer shows up as a slow shutdown) is in the ADR's addendum. No
-  `OnModuleDestroy` was added anywhere (nothing showed a leak; `S3Storage`'s `S3Client` is
-  the one to re-check when `STORAGE_DRIVER=s3` goes live)
+  `OnModuleDestroy` was added anywhere (nothing showed a leak; a Docker-only analog for
+  `S3Storage`'s `S3Client` — the same default `keepAlive` agent shape — exited just as fast
+  with a socket left open on purpose, closing this for shutdown speed; a real `S3Client`
+  instance is still untested, ADR 0061's second addendum)
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for
