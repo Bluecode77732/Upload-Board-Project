@@ -106,3 +106,6 @@ terraform.rc
 # 위 settings.local.json의 allow/ask/deny 판단 근거를 적어둔 개인 메모 — 그 파일과
 # 마찬가지로 팀 공유 문서(CLAUDE.md)가 아니라 개인 로컬 참고용이라 커밋하지 않는다
 /.claude/settings.local.md
+# settings.local.json에 등록한 개인 PreToolUse 훅과 그 테스트 — 훅이 무엇을 막고 무엇을
+# 무인으로 허용하는지가 코드에 그대로 드러나서, 공개 저장소에 올리지 않는다
+/.claude/hooks/local/
