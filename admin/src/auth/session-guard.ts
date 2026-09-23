@@ -34,7 +34,9 @@ const assertSessionUser = (userId: number): boolean => {
 const rejectSession = () => {
     useAuthStore.getState().clearTokens();
     clearSessionUser();
-    window.location.replace('/');
+    // ADR 0062: 운영 빌드에서 이 앱은 `/admin/`에서 서빙된다 — 하드코딩된 '/'는 같은 ALB의
+    // frontend/ Service로 떨어진다. BASE_URL은 이 앱 자신의 루트('/' 또는 '/admin/')다.
+    window.location.replace(import.meta.env.BASE_URL);
 };
 
 const doRefresh = async (): Promise<string | null> => {
@@ -42,7 +44,9 @@ const doRefresh = async (): Promise<string | null> => {
         // refreshToken 쿠키는 credentials: 'include'를 통해 자동으로 전송된다.
         // axios.ts가 refreshAccessTokenSafely()를 호출하는 구조라 순환 참조를 피하기 위해
         // api/axios.ts의 axios 인스턴스 대신 fetch를 직접 사용한다.
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/token/refresh`, {
+        // ADR 0062: VITE_API_URL이 미설정(same-origin 운영 빌드)이면 `?? ''`이 없을 때
+        // 템플릿 리터럴이 문자 그대로 "undefined"를 넣어 "undefined/auth/..."가 된다.
+        const res = await fetch(`${import.meta.env.VITE_API_URL ?? ''}/auth/token/refresh`, {
             method: 'POST',
             credentials: 'include',
         });

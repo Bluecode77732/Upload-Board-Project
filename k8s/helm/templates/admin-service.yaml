@@ -1,0 +1,24 @@
+{{- /* admin 콘솔 nginx용 ClusterIP 서비스(ADR 0062 D1) — Ingress의 `/admin` 규칙이 가리키는 대상. admin.enabled가 false면 렌더링하지 않는다. */}}
+{{- if .Values.admin.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sharenpo.fullname" . }}-admin
+  labels:
+    {{- include "sharenpo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.admin.service.port }}
+      targetPort: http
+      protocol: TCP
+      {{- /* frontend-service.yaml과 같은 이유로 포트 이름을 http가 아니라 web으로 둔다 —
+      servicemonitor.yaml이 sharenpo.selectorLabels로 Service를 고르고 이름이 "http"인
+      포트의 /metrics를 긁는데, 이 Service도 sharenpo.labels를 달고 있어서 이름까지 http면
+      Prometheus가 nginx의 /metrics(SPA fallback HTML)를 긁으려다 타깃이 실패로 잡힌다. */}}
+      name: web
+  selector:
+    app.kubernetes.io/name: admin
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

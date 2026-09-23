@@ -157,6 +157,13 @@ networkPolicy:
 frontend:
   enabled: true
 
+# admin 콘솔 nginx 워크로드(ADR 0062) — 실제 배포에서는 켠다. same-origin이라 CORS_ORIGIN을
+# 따로 두지 않는다(위 env에도 없다). 이미지 태그는 deploy.sh가 백엔드·frontend image.tag와 같은
+# sha로 `--set admin.image.tag=`를 덮어쓴다 — 여기 값(기본 "latest")은 deploy.sh를 거치지
+# 않을 때의 대비일 뿐이다.
+admin:
+  enabled: true
+
 # HTTPS 종단(ADR 0034)은 ingress/ALB에서만 하고 앱 프로세스 안에서는 하지 않는다. 아래는
 # 실제로 켤 때 쓸 값의 참고 템플릿이다 — 전부 주석 처리돼 있고 ingress.enabled은 여전히
 # values.yaml 기본값(false)을 따른다. 외부 테스터가 실제로 필요해질 때까지 켜지 않기로 한
@@ -180,7 +187,7 @@ frontend:
 #     kubernetes.io/ingress.class: alb
 #     alb.ingress.kubernetes.io/scheme: internet-facing
 #     alb.ingress.kubernetes.io/certificate-arn: <app-infra `terraform output -raw acm_certificate_arn`>
-#     # 이 차트의 두 Service(app, frontend)는 전부 ClusterIP다 — 컨트롤러 기본값인
+#     # 이 차트의 세 Service(app, frontend, admin)는 전부 ClusterIP다 — 컨트롤러 기본값인
 #     # target-type: instance는 NodePort/LoadBalancer Service가 필요해서 이 조합에
 #     # 맞지 않는다(2026-09-21, ADR 0060 구현 중 발견). ip 모드는 Service 타입과
 #     # 무관하게 동작하므로 이 값이 없으면 타깃 그룹에 healthy 타깃이 하나도 안
@@ -213,3 +220,8 @@ frontend:
 #         - path: /
 #           pathType: Prefix
 #           service: frontend
+#         # admin 콘솔(ADR 0062) — `service: admin`이라 admin Service로 간다. 이걸 빠뜨리면
+#         # 운영자 콘솔에 닿을 방법이 없어진다(배열을 통째로 덮어쓰기 때문).
+#         - path: /admin
+#           pathType: Prefix
+#           service: admin

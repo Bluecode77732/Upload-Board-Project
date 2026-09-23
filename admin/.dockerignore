@@ -1,0 +1,19 @@
+# 빌드 산출물과 의존성(이미지 안에서 다시 설치·빌드된다)
+node_modules
+dist
+
+# 이미지 빌드에 쓰이지 않는다 — tsc -b는 src/와 vite.config.ts만 본다(tsconfig.app/node.json)
+e2e
+playwright.config.ts
+test-results
+
+# 로컬 설정은 이미지에 굽지 않는다. 특히 VITE_API_URL이 든 .env가 섞이면 운영 번들이
+# 개발용 origin으로 요청하게 된다(same-origin 배포, ADR 0062 D1).
+.env
+.env.*
+
+# 문서와 Docker 메타
+*.md
+Dockerfile
+.dockerignore
+vercel.json

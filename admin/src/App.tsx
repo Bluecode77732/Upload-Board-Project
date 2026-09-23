@@ -7,7 +7,7 @@ import LogsPage from './pages/logs-page';
 
 function App() {
     return (
-        <BrowserRouter>
+        <BrowserRouter basename={import.meta.env.BASE_URL}>
             <Routes>
                 <Route path='/' element={<LoginPage />} />
                 <Route path='/dashboard' element={
