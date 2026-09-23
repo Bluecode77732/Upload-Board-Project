@@ -103,3 +103,6 @@ terraform.rc
 # 파일명은 settings.local.json뿐)이 남아 있는 경우까지 함께 막기 위해 같이 올려둔다
 /.claude/settings.local.json
 /.claude/claude.local.json
+# 위 settings.local.json의 allow/ask/deny 판단 근거를 적어둔 개인 메모 — 그 파일과
+# 마찬가지로 팀 공유 문서(CLAUDE.md)가 아니라 개인 로컬 참고용이라 커밋하지 않는다
+/.claude/settings.local.md

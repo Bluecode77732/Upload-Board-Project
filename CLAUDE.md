@@ -2152,37 +2152,11 @@ needed before a newly added or edited skill is invocable.
 
 ### Permissions
 
-`.claude/settings.local.json` holds a Paranoid Mode permission profile (`allow`/`ask`/`deny`
-under `permissions`) — added 2026-09-15. It replaces `.claude/claude.local.json`, which had
-carried the project's local permission rules under a filename Claude Code never actually
-loads (the only recognized local-scope file is `settings.local.json`) — those rules had
-silently never applied. Gitignored, unlike `.claude/settings.json`: a personal local
-override, not a team-shared file:
-- **`allow`** — narrow and project-grounded: the real script names from root/`frontend`/
-  `admin` `package.json` (not generic `npm` guesses), read-only `git`/`docker`/`kubectl`/
-  `helm`/`terraform` inspection, and a `WebFetch` domain allowlist scoped to this repo's own
-  dependencies' official docs
-- **`ask`** — legitimate but consequential: dependency changes, every `migration:*` script,
-  `promote-superadmin`, `terraform apply`, `kubectl apply`/`helm install`/`upgrade`, PR
-  creation/merge
-- **`deny`** — blocks even past a prompt, the same reasoning Never Do Groups 1–3 apply to
-  code: credential files (`.env`, `~/.ssh`, `~/.aws`, `~/.docker`, `*.tfvars`,
-  `terraform.tfstate*`), whole-environment dumps (`env`, `printenv`, PowerShell
-  `Get-ChildItem Env:`), destructive `git` (`push --force`, `reset --hard`, `filter-branch`,
-  `config --global`, `remote set-url`), irreversible cloud/infra ops (`terraform destroy`,
-  `aws * delete*`, `helm uninstall`, `kubectl delete`), and the cloud-metadata SSRF target
-  (`169.254.169.254`)
-- **PowerShell parity** — `.claude/settings.json`'s deny rules only match the `Bash(...)`
-  tool; on Windows, `PowerShell` is a separate tool namespace the same string-prefix rules
-  do not reach, so every Bash-side destructive pattern (force-push, hard-reset, `curl`/
-  `wget` as `Invoke-WebRequest`/`iwr`) is mirrored under `PowerShell(...)` in the local
-  file — specific to a dual-shell (Bash tool + PowerShell tool) environment
-
-Known gaps, left as-is rather than fixed without request (Scope Discipline): PowerShell's
-free flag ordering defeats simple prefix matching (`Remove-Item -Recurse -Force` is covered,
-`Remove-Item <path> -Recurse -Force` is not — full coverage needs the sandbox feature, a
-different mechanism, not attempted here); `.claude/settings.json`'s committed
-`Read(./.env.*)` also blocks `.env.example` (a harmless template, not a secret) as a side
-effect — pre-existing, in the team-shared file, left untouched without an explicit request;
-`sandbox.*` (execution isolation) is a distinct concern from `permissions` (access control)
-and was not configured in this pass.
+`.claude/settings.local.json` holds a personal, machine-local Claude Code permission
+profile — gitignored, unlike `.claude/settings.json`, so it is never a team-shared file.
+Its rationale (what's in `allow`/`ask`/`deny` and why) lives in `.claude/settings.local.md`
+next to it, not here — that note is gitignored too (2026-09-23 decision): a team-shared,
+committed doc is the wrong home for one developer's local tool config, and the earlier
+version of this section only existed here because it was folded, undisclosed, into an
+unrelated Swagger-documentation commit (`005d9c9`, 2026-09-16) rather than being placed
+deliberately.

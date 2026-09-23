@@ -2212,37 +2212,10 @@ Node이고, `settings.json`에 연결되지 않는다(그건 `.claude/hooks/`의
 
 ### 권한 설정
 
-`.claude/settings.local.json`에는 Paranoid Mode 권한 프로필(`permissions` 아래
-`allow`/`ask`/`deny`)이 들어 있다 — 2026-09-15 추가. 이전까지 로컬 권한 규칙을 담고
-있던 `.claude/claude.local.json`을 대체한 것인데, 그 파일명은 애초에 Claude Code가
-인식하는 이름이 아니었다(로컬 범위 설정 파일로 인식되는 이름은 `settings.local.json`
-하나뿐이다) — 즉 그 규칙들은 그동안 조용히 전혀 적용되지 않고 있었다. `.claude/
-settings.json`과 달리 gitignore 대상이다: 팀 공유 파일이 아니라 개인 로컬 오버라이드다:
-- **`allow`** — 좁고 이 프로젝트에 근거한 항목만 담았다: `npm` 일반형 추측이 아니라
-  루트/`frontend`/`admin` `package.json`에 실제로 있는 스크립트명, 읽기전용
-  `git`/`docker`/`kubectl`/`helm`/`terraform` 조회 명령, 그리고 이 저장소가 쓰는
-  의존성들의 공식 문서 도메인으로 범위를 좁힌 `WebFetch` 허용 목록
-- **`ask`** — 정당하지만 결과가 큰 것들: 의존성 변경, 모든 `migration:*` 스크립트,
-  `promote-superadmin`, `terraform apply`, `kubectl apply`/`helm install`/`upgrade`,
-  PR 생성·병합
-- **`deny`** — 승인 프롬프트를 띄워도 소용없이 막는다, Never Do Group 1–3이 코드에
-  적용하는 것과 같은 논리다: 자격증명 파일(`.env`, `~/.ssh`, `~/.aws`, `~/.docker`,
-  `*.tfvars`, `terraform.tfstate*`), 환경변수 전체 덤프(`env`, `printenv`, PowerShell
-  `Get-ChildItem Env:`), 파괴적인 `git` 조작(`push --force`, `reset --hard`,
-  `filter-branch`, `config --global`, `remote set-url`), 되돌릴 수 없는 클라우드/인프라
-  조작(`terraform destroy`, `aws * delete*`, `helm uninstall`, `kubectl delete`), 클라우드
-  메타데이터 SSRF 대상(`169.254.169.254`)
-- **PowerShell 대응** — `.claude/settings.json`의 기존 deny 규칙은 `Bash(...)` 도구만
-  매칭한다. Windows에서 `PowerShell`은 별도 도구 네임스페이스라 같은 문자열 접두사
-  규칙이 닿지 않으므로, Bash 쪽 파괴적 패턴(강제 push, hard reset, `Invoke-WebRequest`/
-  `iwr`로서의 `curl`/`wget`)을 로컬 파일에서 전부 `PowerShell(...)`로도 미러링했다 —
-  Bash 도구와 PowerShell 도구를 동시에 쓰는 이중 셸 환경에서만 필요한 조치다
-
-요청 없이 임의로 고치지 않고 그대로 남겨둔 알려진 공백(Scope Discipline): PowerShell의
-자유로운 플래그 순서가 단순 접두사 매칭을 무력화한다(`Remove-Item -Recurse -Force`는
-잡히지만 `Remove-Item <경로> -Recurse -Force`는 안 잡힌다 — 완전한 차단에는 sandbox
-기능이라는 다른 메커니즘이 필요하고, 이번에는 시도하지 않았다); `.claude/settings.json`에
-커밋된 `Read(./.env.*)`는 `.env.example`(시크릿이 아닌 무해한 템플릿)까지 부수적으로
-막는데, 이는 팀 공유 파일에 있던 기존 문제라 요청 없이는 건드리지 않았다; `sandbox.*`
-(실행 격리)는 `permissions`(접근 제어)와는 다른 관심사라 이번 작업에서는 설정하지
-않았다.
+`.claude/settings.local.json`에는 개인·개발자 머신별 Claude Code 권한 프로필이 들어
+있다 — `.claude/settings.json`과 달리 gitignore 대상이라 팀과 공유되지 않는다. 그
+근거(`allow`/`ask`/`deny`에 뭐가 왜 있는지)는 여기가 아니라 바로 옆 `.claude/
+settings.local.md`에 적어둔다 — 그 메모도 gitignore 대상이다(2026-09-23 결정). 팀
+공유·커밋 대상 문서는 한 개발자의 개인 도구 설정을 담을 자리가 아니고, 이 절의 예전
+버전이 여기 있었던 것도 애초에 무관한 Swagger 문서화 커밋(`005d9c9`, 2026-09-16)에
+곁다리로, 의도적 배치 없이 묻어 들어간 것이었다.
