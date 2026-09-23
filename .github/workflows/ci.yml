@@ -588,3 +588,93 @@ jobs:
           --push
           --cache-from type=gha,scope=frontend
           ./frontend
+
+  # admin 콘솔 이미지 publish(ADR 0062) — admin/Dockerfile의 정적 파일 nginx 이미지를 백엔드·
+  # frontend 이미지와 같은 :<git-sha> 태그로 올린다. docker-publish-frontend와 같은 이유의
+  # 대칭 — 이 이미지가 담는 admin/ 소스를 검증하는 job에만 건다.
+  docker-publish-admin:
+    needs: [admin-lint-and-unit, admin-e2e]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      # frontend와 같은 이유(위 docker-publish-frontend의 같은 스텝 주석 참고).
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      # 태그/플랫폼 분리는 docker-publish/docker-publish-frontend와 동일하다(ADR 0048 D2).
+      - name: Compute image tags and platforms
+        id: image
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "tags=-t bluecode1775/sharenpo-admin:latest -t bluecode1775/sharenpo-admin:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "platforms=linux/amd64,linux/arm64" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=-t bluecode1775/sharenpo-admin:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "platforms=linux/amd64" >> "$GITHUB_OUTPUT"
+          fi
+      # 캐시 scope를 따로 둔다 — frontend/backend와 캐시를 공유하면 서로 덮어쓴다.
+      - name: Build amd64 image for smoke test
+        run: >-
+          docker buildx build
+          --platform linux/amd64
+          -t sharenpo-admin:smoke-test
+          -f ./admin/Dockerfile
+          --target production
+          --load
+          --cache-to type=gha,scope=admin,mode=max
+          --cache-from type=gha,scope=admin
+          ./admin
+      - name: Run smoke test container
+        run: docker run -d --name smoke-test -p 8080:8080 sharenpo-admin:smoke-test
+      # 이미지 자체의 HEALTHCHECK(admin/Dockerfile)를 폴링한다 — 다른 두 publish job과 같은 방식.
+      - name: Wait for smoke test container health
+        run: |
+          for i in $(seq 1 18); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' smoke-test)"
+            if [ "$status" = "healthy" ]; then
+              echo "Liveness check passed"
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Status}}' smoke-test)" != "running" ]; then
+              echo "Smoke test failed: container exited" >&2
+              docker logs smoke-test >&2
+              exit 1
+            fi
+            echo "Waiting for container health ($i/18): $status"
+            sleep 5
+          done
+          echo "Smoke test failed: container did not become healthy in time" >&2
+          docker logs smoke-test >&2
+          exit 1
+      # frontend와 같은 구조지만 /admin/ prefix로 서빙된다(ADR 0062 D5) — 끝 슬래시 없는
+      # /admin의 301 리다이렉트도 함께 확인한다(nginx.conf의 전용 location).
+      - name: Verify admin SPA serving (redirect, deep link, missing asset, security headers)
+        run: |
+          fail() { echo "Smoke test failed: $1" >&2; docker logs smoke-test >&2; exit 1; }
+          code="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/admin)"
+          [ "$code" = "301" ] || fail "GET /admin returned $code, expected 301 (bare /admin must redirect to /admin/)"
+          curl -sf http://localhost:8080/admin/ | grep -q '<div id="root">' || fail "GET /admin/ did not return the SPA index.html"
+          curl -sf http://localhost:8080/admin/dashboard | grep -q '<div id="root">' || fail "deep link /admin/dashboard did not fall back to index.html"
+          code="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/admin/assets/does-not-exist.js)"
+          [ "$code" = "404" ] || fail "missing asset returned $code, expected 404 (the SPA fallback must not swallow /admin/assets)"
+          curl -sI http://localhost:8080/admin/ | grep -qi '^content-security-policy:' || fail "Content-Security-Policy header is missing"
+          echo "Smoke test passed (redirect, SPA index, deep-link fallback, asset 404, security headers)"
+      - name: Stop smoke test container
+        if: always()
+        run: docker rm -f smoke-test || true
+      - name: Build and push Docker image
+        run: >-
+          docker buildx build
+          --platform ${{ steps.image.outputs.platforms }}
+          ${{ steps.image.outputs.tags }}
+          -f ./admin/Dockerfile
+          --target production
+          --push
+          --cache-from type=gha,scope=admin
+          ./admin
