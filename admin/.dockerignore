@@ -16,4 +16,3 @@ test-results
 *.md
 Dockerfile
 .dockerignore
-vercel.json

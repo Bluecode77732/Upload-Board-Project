@@ -49,7 +49,7 @@ rather than a rewrite from scratch.
 | | |
 |---|---|
 | Provenance | Chat Project admin console, imported 2026-07-30; role-management slice adapted 2026-08-06 |
-| Adapted to this API? | **Yes** — login/dashboard/users/logs (see "What was adapted"). `vercel.json`'s dead Chat Project CSP host was fixed 2026-08-13 (see "Provenance cleanup" below); there is still no deploy target |
+| Adapted to this API? | **Yes** — login/dashboard/users/logs (see "What was adapted"). Deploy target: same-ALB `/admin` subpath via Docker+nginx ([ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.md), see "Provenance cleanup" below) — the Helm chart and Docker image are in place, CI publish and `deploy.sh` wiring are not yet |
 | Wired into root tooling? | **No** — outside the lint glob, Jest `roots`, `tsconfig.build.json`, `docker-compose.yml`, and CI. This is deliberate (ADR 0022), not a gap |
 | Dependencies | Own `package.json` / `node_modules`; **not** a pnpm workspace (same precedent as `frontend/`). `@apollo/client`, `graphql`, and `rxjs` were dropped with the chat-domain deletion |
 | Runs today? | Yes, against a real backend on `:3000` — see "Local commands" for the one-time `CORS_ORIGIN` setup this needs (admin runs on its own origin, `:5174`, unlike `frontend/`'s same-origin Vite proxy) |
@@ -114,6 +114,25 @@ adaptation below — colors and layout are otherwise untouched:
   exists. Vercel stays the intended deploy target for this console (confirmed with the developer);
   no actual deployment has been set up.
 
+## Provenance cleanup (2026-09-23)
+
+The Vercel line above and the "no deploy target" row in the table below were both correct when
+written (2026-08-13) — Vercel had never been built out, just named as the intent. Both went
+stale once [ADR 0060](../docs/ADR/0060-frontend-same-alb-path-routing.md) (2026-09-21) picked a
+same-ALB deploy path for `frontend/` and [ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.md)
+(2026-09-23) extended the same mechanism to this console as a third path-routed workload at
+`/admin`. `admin/vercel.json` is deleted — it was never behind a live deployment, and leaving it
+in place read as a live plan after the plan changed.
+
+Checked directly against the working tree rather than assumed, as of this same date:
+`admin/Dockerfile`, `admin/nginx.conf`, the build-conditional Vite `base`/`basename` fix
+(ADR 0062 D2/D3), and `session-guard.ts`'s hard-navigation fix (D4) exist, as do the Helm chart's
+`admin-deployment.yaml`/`admin-service.yaml` and the matching `ingress.yaml`/`values.yaml`
+changes (D1). `docker-publish-admin` (CI), `deploy.sh`'s third `--set admin.image.tag=`, and
+`docker-tag-cleanup.yml`'s `sharenpo-admin` entry (D6) do not yet, and none of the above has run
+against a live ALB. This paragraph is a snapshot of that date, not a promise to stay current —
+see ADR 0062's own status line and "Follow-up work" section for the up-to-date picture.
+
 ## What was adapted
 
 Every row below was *correct* in the Chat Project — each was a defect only relative to this
@@ -141,11 +160,11 @@ findings; one backend change landed in between — see the `FORBIDDEN` row).
 | Per-user audit slice | Users page's detail panel fetched `GET /audit-log?userId=…` | No `userId` filter exists | **Dropped**, not approximated — see "Open items" below. ~~Dropped~~ **restored 2026-08-12**: now that `AuditLogQueryDto` has `userId`, the detail panel fetches `GET /audit-log?userId={id}&take=5` for a "Recent activity" section — the actor, or the target of a user-targeting action (`targetType = 'user'`, [ADR 0045](../docs/ADR/0045-audit-log-target-type.md)), so a file/post/comment id colliding with this user's id no longer appears here |
 | User deletion | `DELETE /user/:id`, no confirmation | `?deleteFiles=true` required when the account owns files, else 409 `USER_HAS_FILES` ([ADR 0020](../docs/ADR/0020-account-deletion-cascade.md)) | `deleteUser()` catches `USER_HAS_FILES`, shows the file count from the response `message`, and re-confirms before retrying with `?deleteFiles=true` |
 | Error handling | Ad-hoc status/message checks | Frozen `{ code, message }` contract — branch on `code` ([ADR 0011](../docs/ADR/0011-error-code-contract.md)) | `users-page.tsx` reads `err.response.data.code` via `axios.isAxiosError` for every branch (`AUTH_LAST_SUPERADMIN`, `USER_HAS_FILES`, `USER_FILES_IN_USE`, `FORBIDDEN`) |
-| Deploy config | `vercel.json` with a CSP pinned to the Chat Project's Railway host | **No deploy target**; AWS is a Stage 4 roadmap item | Left untouched, as before — out of scope for this pass |
+| Deploy config | `vercel.json` with a CSP pinned to the Chat Project's Railway host | Same-ALB `/admin` subpath via Docker+nginx, same mechanism as `frontend/` ([ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.md), extending [ADR 0060](../docs/ADR/0060-frontend-same-alb-path-routing.md)) | `vercel.json` deleted 2026-09-23 (see "Provenance cleanup" above); `admin/Dockerfile`/`nginx.conf` and the Helm chart's `admin-deployment.yaml`/`admin-service.yaml` added — CI publish and `deploy.sh` wiring still pending |
 
-The row above reflects the 2026-08-06 functional-adaptation pass only; `vercel.json`'s dead CSP
-host was fixed separately on 2026-08-13 (see "Provenance cleanup" above) — there is still no
-deploy target for this console.
+The row above reflects the 2026-08-06 functional-adaptation pass only; the Deploy config row was
+corrected 2026-09-23 once ADR 0062 actually picked a deploy target (see "Provenance cleanup"
+above) — until then it accurately said there wasn't one.
 
 ## Two decisions made for this adaptation
 
@@ -234,6 +253,10 @@ first render, so there is no flash of the wrong theme.
 
 ## Related decisions
 
+- [ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.md) — this console's deploy target:
+  same-ALB `/admin` subpath, extending [ADR 0060](../docs/ADR/0060-frontend-same-alb-path-routing.md)'s
+  pattern for `frontend/`. Supersedes the never-built Vercel plan the 2026-08-13 provenance note
+  still assumed (corrected above, 2026-09-23)
 - [ADR 0022](../docs/ADR/0022-admin-console-import-from-chat-project.md) — the import; amends
   ADR 0010's admin-placement clause
 - [ADR 0028](../docs/ADR/0028-access-token-role-claim.md) — added the access-token `role` claim
