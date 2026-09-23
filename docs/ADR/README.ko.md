@@ -69,6 +69,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0059](0059-upload-malware-scanning-clamav.ko.md) | 업로드 악성코드 스캔 — temp 쓰기 전 동기 ClamAV 게이트 | 승인됨 — 구현 완료, 라이브+CI+kind/Calico 검증 완료 | 2026-09-14 |
 | [0060](0060-frontend-same-alb-path-routing.ko.md) | 프론트엔드 호스팅 — 같은 Helm 릴리스의 별도 nginx 워크로드를 하나의 ALB에서 경로로 분기, 0058·0010 amend, 0041 확장 | 승인됨 — 구현 완료, helm template/lint·로컬 이미지 검증 (라이브 ALB 미검증) | 2026-09-21 |
 | [0061](0061-shutdown-hooks-and-pid1-sigterm.ko.md) | 우아한 종료 — `enableShutdownHooks()`와 SIGTERM을 무시하던 PID 1 node, 0030 확장 | 승인됨 — 구현 완료, 컨테이너·`kind` 검증 완료(EKS 미검증) | 2026-09-21 |
+| [0062](0062-admin-same-alb-subpath-routing.ko.md) | admin 콘솔 호스팅 — 같은 ALB의 세 번째 워크로드, `/admin` 서브패스, 0060·0058 확장 | 승인됨 — 구현 완료, helm template/lint·로컬 이미지 검증 (라이브 ALB 미검증) | 2026-09-23 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고
