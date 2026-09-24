@@ -198,3 +198,17 @@ admin 파드가 Ready라는 것은 probe(`GET /admin/`)가 `alias` 설정을 거
 `target-type: ip`, ALB용 NetworkPolicy 인바운드 규칙, HTTPS/리다이렉트(점검 목록은
 `k8s/helm/README.md`); GitHub Actions에서의 `docker-publish-admin`; 실제 Docker Hub 이미지를
 대상으로 한 `deploy.sh`의 admin 태그 확인; 세 이미지로 하는 `helm upgrade`와 롤백.
+
+## Addendum (2026-09-25): 운영 이미지 브라우저 확인
+
+제가 Playwright로 실제 `sharenpo-admin:local` 이미지(nginx, CSP 헤더 켜짐)를 로컬 포트에 띄워
+확인했고, 컨테이너 뒤에 백엔드는 없었다. 그래서 `/auth/*` 요청은 nginx 자신의 404로 응답하고,
+바로 이것이 세션 거부 경로를 구동한다.
+
+| 확인 | 결과 |
+|---|---|
+| `/admin/` | 로그인 폼이 렌더링된다(제목 "Admin Login", 이메일·비밀번호 입력, "Sign In"), 탭 제목 "Sharenpo Admin". 콘솔: 오류 0, 경고 0 — CSP 위반이 없다. JS·CSS·favicon 모두 `/admin/…` 아래로 요청되고 200이다. |
+| `/admin` | 301을 따라가 `/admin/`에 도착했다. |
+| `/admin/dashboard` 직접 진입 | SPA 폴백 200. 라우터가 `/admin/` basename 아래에서 `/dashboard`를 매칭했다(보호 라우트가 refresh를 호출함). `POST /auth/token/refresh`는 슬래시로 시작하는 같은 출처 상대 URL로 나가 404를 받았다. 이어서 거부된 세션은 사이트 루트 `/`(이 컨테이너에서는 404)가 아니라 `/admin/`(로그인 폼)으로 이동했다. |
+
+확인하지 않은 것: 컨테이너 뒤에 백엔드가 없었으므로 로그인 흐름과 그 뒤의 페이지들.

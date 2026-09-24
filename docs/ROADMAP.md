@@ -1006,12 +1006,21 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   no CORS and an unchanged refresh cookie). `frontend/Dockerfile` + nginx config, the
   values-gated frontend Deployment/Service and a per-path backend in `ingress.yaml`, the
   `docker-publish-frontend` CI job, and frontend tag handling in `deploy.sh` are in place and
-  verified without a cluster. Still open: the `vite.config.ts` comment (needs approval), a
-  first CI run, a live pass (the live-only checks in `k8s/helm/README.md`'s pending list — `/`
+  verified without a cluster (and, from 2026-09-24, in-cluster on Docker Desktop's Kubernetes —
+  see the admin bullet below). Still open: a first CI run, a live pass (the live-only checks in `k8s/helm/README.md`'s pending list — `/`
   priority, HTTPS and the `Secure` cookie, S3 redirect under CSP/CORS, real client IP for rate
   limiting, rollout and Prometheus targets — plus the `target-type` default and the S3 CORS
-  rule for the production origin, both listed there), and `admin/` hosting. Independent of
-  whether the AWS stack is currently applied.
+  rule for the production origin, both listed there). Independent of whether the AWS stack is
+  currently applied.
+- Admin console hosting — **decided and built 2026-09-23**
+  ([ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md)): the frontend's mechanism again, a
+  third values-gated nginx workload with a `/admin` rule on the one ALB (served under `/admin/`
+  with `alias`; the Vite `base` and the router `basename` follow). `admin/Dockerfile` + nginx
+  config, the Helm Deployment/Service, `docker-publish-admin`, `deploy.sh` and the tag-cleanup
+  matrix are in place. `helm install --wait` passed on Docker Desktop's Kubernetes (run by the
+  developer, 2026-09-24) and the image was exercised in a real browser (2026-09-25). Still open:
+  a first CI run of `docker-publish-admin`, and the live pass — the `/admin` rule's priority
+  against `/` and the API prefixes, plus the rest of the list in `k8s/helm/README.md`.
 - Graceful shutdown on EKS/ALB — **built and verified locally 2026-09-21**
   ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md)): `enableShutdownHooks` with
   `useProcessExit: true`, measured in Docker and on a local `kind` cluster (pods stop in about

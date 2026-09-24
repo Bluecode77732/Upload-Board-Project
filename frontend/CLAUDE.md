@@ -134,10 +134,11 @@ docker run --rm -p 8080:8080 sharenpo-frontend:local
   `https://*.amazonaws.com` for images, media, and `fetch` because `STORAGE_DRIVER=s3` redirects
   content reads to S3 — unverified in a browser.
 - A new top-level route must not start with an API prefix (`/auth`, `/user`, `/post`, `/comment`,
-  `/file`, `/upload`, `/audit-log`): the ALB would send it to the backend. `/posts` and `/files`
-  are fine — the match is by whole path segment.
-- `pnpm` is pinned inside the `Dockerfile` (`frontend/package.json` has no `packageManager`); read
-  ADR 0060's implementation addendum before changing that.
+  `/file`, `/upload`, `/audit-log`) or with `/admin`: the ALB would send it to the backend, or to
+  the admin console (ADR 0062). `/posts` and `/files` are fine — the match is by whole path segment.
+- `pnpm` is pinned in `frontend/package.json` (`packageManager`) and again inside the `Dockerfile`
+  — the Node image's corepack cannot run the latest pnpm; read ADR 0060's implementation
+  addendum before changing that.
 
 **Stopping a backgrounded `pnpm dev`/`pnpm preview` does not free its port on Windows.**
 `pnpm` runs vite as a child process and Windows has no POSIX process-group signalling, so

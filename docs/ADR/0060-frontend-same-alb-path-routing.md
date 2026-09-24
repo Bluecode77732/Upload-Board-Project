@@ -323,3 +323,12 @@ Every other dimension (LCU, data transfer) is usage-metered and near-identical e
 since it's driven by real traffic, not by which ALB carries it — the fixed hourly charge is
 the only piece B's design multiplies. This confirms, with numbers, what "costs more" already
 said qualitatively; it changes no part of the decision.
+
+### Addendum (2026-09-25) — follow-up 7 resolved
+
+Follow-up 7 (`admin/` hosting) is resolved by
+[ADR 0062](0062-admin-same-alb-subpath-routing.md): the same mechanism, a third values-gated
+workload reached by a `/admin` rule on the same Ingress. D4's exclusion no longer applies.
+Nothing decided here changes — `/admin` collides with neither the seven API prefixes nor the
+SPA's routes, and the ordering assumption under "Residual, unverified" (never observed live)
+now covers `/admin` too.

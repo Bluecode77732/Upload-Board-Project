@@ -463,9 +463,10 @@ DB/JWT/해싱 같은 기본값 말고도, 특정 기능을 위한 그룹이 몇 
   ([ADR 0053](ADR/0053-global-rate-limiting.ko.md), [ADR 0054](ADR/0054-per-route-rate-limit-tuning.ko.md)).
 - **선택 사항**: `BASE_URL`(기본 `http://localhost:3000`), `CORS_ORIGIN`(미설정 =
   CORS 꺼짐; 브라우저 프론트엔드가 필요할 때 콤마로 구분한 허용 목록 —
-  [ADR 0008](ADR/0008-opt-in-cors.ko.md). 배포된 `frontend/`는 이 값을 설정하지 않는다 —
-  API와 같은 ALB 뒤에서 same-origin으로 동작한다,
-  [ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md); `admin/`의 개발 서버나 다른
+  [ADR 0008](ADR/0008-opt-in-cors.ko.md). 배포된 `frontend/`와 `admin/`은 이 값을 설정하지
+  않는다 — 둘 다 API와 같은 ALB 뒤에서 same-origin으로 동작한다,
+  [ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md),
+  [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md); `admin/`의 개발 서버나 다른
   cross-origin 소비자는 여전히 설정한다).
 
 새 환경변수를 추가할 때는 항상 Joi 스키마와 `.env.example`을 같은 변경에서 함께

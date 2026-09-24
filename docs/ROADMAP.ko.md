@@ -958,11 +958,21 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   필요 없고 refresh 쿠키도 그대로). `frontend/Dockerfile`과 nginx 설정, values로 켜고 끄는
   프론트엔드 Deployment/Service와 `ingress.yaml`의 경로별 backend, `docker-publish-frontend`
   CI 잡, `deploy.sh`의 프론트엔드 태그 처리까지 반영됐고 클러스터 없이 할 수 있는 검증은
-  끝났다. 남은 것: `vite.config.ts` 주석(승인 필요), 첫 CI 실행, 라이브 점검(`k8s/helm/README.md`
+  끝났고(2026-09-24부터는 Docker Desktop Kubernetes 클러스터 안에서도 — 아래 admin 항목 참고),
+  남은 것: 첫 CI 실행, 라이브 점검(`k8s/helm/README.md`
   미해결 목록의 라이브 전용 점검 — `/` 우선순위, HTTPS와 `Secure` 쿠키, CSP/CORS 아래의 S3
   리다이렉트, rate limit의 실제 클라이언트 IP, 롤아웃과 Prometheus 타깃 — 과 거기 함께 적힌
-  `target-type` 기본값, 운영 origin용 S3 CORS 규칙), 그리고 `admin/` 호스팅. AWS 스택이 지금
-  apply돼 있는지와는 무관하다.
+  `target-type` 기본값, 운영 origin용 S3 CORS 규칙). AWS 스택이 지금 apply돼 있는지와는
+  무관하다.
+- Admin 콘솔 호스팅 — **2026-09-23 결정 및 구현**
+  ([ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)): 프론트엔드와 같은 방식으로, 하나의
+  ALB에서 `/admin` 규칙이 가리키는 세 번째 values 게이팅 nginx 워크로드다(`alias`로 `/admin/`
+  아래에서 서빙하고, Vite `base`와 라우터 `basename`이 이를 따른다). `admin/Dockerfile`과 nginx
+  설정, Helm Deployment/Service, `docker-publish-admin`, `deploy.sh`, 태그 정리 matrix까지
+  반영됐다. Docker Desktop Kubernetes에서 `helm install --wait`가 통과했고(개발자가 실행,
+  2026-09-24), 이미지를 실제 브라우저로도 확인했다(2026-09-25). 남은 것: `docker-publish-admin`의
+  첫 CI 실행, 그리고 라이브 점검 — `/`와 API prefix 대비 `/admin` 규칙의 우선순위, 그 밖에
+  `k8s/helm/README.md` 목록 전체.
 - EKS/ALB에서의 우아한 종료 — **2026-09-21 로컬 구현 및 검증**
   ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md)): `useProcessExit: true`를 쓴
   `enableShutdownHooks`를 Docker와 로컬 `kind` 클러스터에서 측정했다(파드가 10초/30초 유예

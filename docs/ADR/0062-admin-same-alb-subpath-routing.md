@@ -193,3 +193,17 @@ Still unverified: everything that needs an ALB — rule ordering between `/`, `/
 prefixes, `target-type: ip`, the NetworkPolicy ingress rule for the ALB, and HTTPS/redirects
 (checklist in `k8s/helm/README.md`); `docker-publish-admin` on GitHub Actions; `deploy.sh`'s admin
 tag check against a real Docker Hub image; `helm upgrade` and rollback with three images.
+
+## Addendum (2026-09-25): browser check of the production image
+
+Run by me with Playwright against the real `sharenpo-admin:local` image (nginx, CSP header on)
+started on a local port, with no backend behind it. Requests to `/auth/*` therefore answer nginx's
+own 404, which is what exercises the rejected-session path.
+
+| Check | Result |
+|---|---|
+| `/admin/` | The login form renders (heading "Admin Login", email and password fields, "Sign In"), title "Sharenpo Admin". Console: 0 errors, 0 warnings, so no CSP violation. JS, CSS and favicon are all requested under `/admin/…` and answer 200. |
+| `/admin` | Followed the 301 and landed on `/admin/`. |
+| `/admin/dashboard` opened directly | SPA fallback 200. The router matched `/dashboard` under the `/admin/` basename (the protected route called refresh). `POST /auth/token/refresh` went to a relative same-origin URL and got 404. The rejected session then navigated to `/admin/` (the login form), not to the site root `/`, which answers 404 in this container. |
+
+Not covered: the login flow and the pages behind it, since no backend ran behind the container.

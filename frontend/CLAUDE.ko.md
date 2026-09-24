@@ -135,10 +135,11 @@ docker run --rm -p 8080:8080 sharenpo-frontend:local
   `STORAGE_DRIVER=s3`에서 콘텐츠 읽기가 S3로 리다이렉트되므로 이미지·미디어·`fetch`에
   `https://*.amazonaws.com`을 허용한다 — 브라우저로는 확인 전이다.
 - 새 최상위 라우트는 API prefix(`/auth`, `/user`, `/post`, `/comment`, `/file`, `/upload`,
-  `/audit-log`)로 시작하면 안 된다: ALB가 백엔드로 보내 버린다. `/posts`와 `/files`는
-  괜찮다 — 매칭은 경로 세그먼트 단위다.
-- `pnpm`은 `Dockerfile` 안에서 고정한다(`frontend/package.json`에 `packageManager`가 없다).
-  바꾸기 전에 ADR 0060의 구현 addendum을 읽을 것.
+  `/audit-log`)나 `/admin`으로 시작하면 안 된다: ALB가 백엔드나 admin 콘솔(ADR 0062)로 보내
+  버린다. `/posts`와 `/files`는 괜찮다 — 매칭은 경로 세그먼트 단위다.
+- `pnpm`은 `frontend/package.json`(`packageManager`)과 `Dockerfile` 안에서 각각 고정한다 —
+  Node 이미지의 corepack이 최신 pnpm을 실행하지 못한다. 바꾸기 전에 ADR 0060의 구현
+  addendum을 읽을 것.
 
 **Windows에서는 백그라운드로 띄운 `pnpm dev`/`pnpm preview`를 멈춰도 포트가
 풀리지 않는다.** `pnpm`이 vite를 자식 프로세스로 실행하고 Windows에는 POSIX

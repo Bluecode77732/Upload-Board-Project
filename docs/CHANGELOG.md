@@ -287,6 +287,27 @@ development line (package.json version).
   pins 10.14.0 itself), the controller's default `target-type: instance` doesn't fit this
   chart's `ClusterIP` Services, and `docker-tag-cleanup.yml` covers only the backend
   repository.
+- **Admin console hosted on the same ALB, at `/admin` (2026-09-23,
+  [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md))** — `admin/` had no deploy path: no
+  image, no chart resources, no CI publish. It now builds into a static-file nginx image
+  (`admin/Dockerfile`, `nginx.conf`) that serves under `/admin/` with `alias` — the ALB
+  Controller does not rewrite paths — and runs as a third values-gated Deployment + Service
+  (`admin.enabled`; `values-prod.yaml` turns it on) reached by a `/admin` rule (`service: admin`)
+  on the same Ingress. The Vite `base` is `/admin/` for `vite build` only (`pnpm dev` is
+  unchanged) and `BrowserRouter` takes `basename={import.meta.env.BASE_URL}`. Two real bugs in
+  `session-guard.ts` were fixed on the way — a rejected session navigated to a hardcoded `/`
+  (which is now the frontend's), and the refresh URL became `undefined/auth/token/refresh` when
+  `VITE_API_URL` is unset — and two specs pin them. `docker-publish-admin` (CI), `deploy.sh`'s
+  third tag check and `--set admin.image.tag=`, and a `sharenpo-admin` entry in
+  `docker-tag-cleanup.yml` follow the frontend's pattern; the same window closed the three
+  leftovers noted under ADR 0060 above (`packageManager` pins, `target-type: ip` in the prod
+  Ingress template, tag cleanup). Verified: admin `pnpm test` (24), `lint`, `build`; a local
+  image build with curl checks and a real-browser pass (login form renders, no console errors
+  under the CSP, a deep link ends on `/admin/`); `helm lint --strict`/`helm template` across the
+  flag combinations; `actionlint`; and `helm install --wait` on Docker Desktop's Kubernetes (run
+  by the developer, reported as matching). Not verified: anything that needs a live ALB
+  (including the `/admin` rule's priority against `/`), the CI job itself, and `deploy.sh`
+  against a real published image.
 - **Admin: light/dark toggle on every page (2026-09-08)** — on direct developer request.
   `admin/src/store/theme.store.ts` (new, zustand) resolves the initial theme from
   `localStorage` (`admin-theme`) and falls back to `prefers-color-scheme` when nothing is

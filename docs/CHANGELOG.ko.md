@@ -293,6 +293,26 @@
   12.5.1을 받았는데 Node 이미지의 corepack이 그걸 실행하지 못한다 — Dockerfile이 10.14.0을
   스스로 고정한다), 컨트롤러의 `target-type: instance` 기본값이 이 차트의 `ClusterIP`
   Service와 맞지 않으며, `docker-tag-cleanup.yml`이 백엔드 저장소만 다룬다.
+- **Admin 콘솔을 같은 ALB의 `/admin`에 호스팅 (2026-09-23,
+  [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md))** — `admin/`에는 배포 경로가
+  없었다: 이미지도, 차트 리소스도, CI 발행도 없었다. 이제 정적 파일 nginx 이미지
+  (`admin/Dockerfile`, `nginx.conf`)로 빌드되어 `alias`로 `/admin/` 아래에서 서빙되고 — ALB
+  Controller는 경로를 재작성하지 않는다 — 같은 Ingress의 `/admin` 규칙(`service: admin`)이
+  가리키는 세 번째 values 게이팅 Deployment + Service(`admin.enabled`, `values-prod.yaml`이
+  켠다)로 동작한다. Vite `base`는 `vite build`일 때만 `/admin/`이고(`pnpm dev`는 그대로),
+  `BrowserRouter`는 `basename={import.meta.env.BASE_URL}`을 받는다. 그 과정에서
+  `session-guard.ts`의 실제 버그 두 개를 고쳤다 — 세션이 거부되면 하드코딩된 `/`(이제 frontend의
+  경로)로 이동했고, `VITE_API_URL`이 없으면 refresh URL이 `undefined/auth/token/refresh`가
+  됐다 — 그리고 spec 두 개가 이를 고정한다. `docker-publish-admin`(CI), `deploy.sh`의 세 번째
+  태그 확인과 `--set admin.image.tag=`, `docker-tag-cleanup.yml`의 `sharenpo-admin` 항목은
+  frontend의 방식을 따르고, 같은 시기에 위 ADR 0060 항목에 적어 둔 세 가지 미해결 사항
+  (`packageManager` 핀, 운영 Ingress 템플릿의 `target-type: ip`, 태그 정리)도 해소했다.
+  검증한 것: admin `pnpm test`(24), `lint`, `build`; 로컬 이미지 빌드와 curl 확인, 실제 브라우저
+  확인(로그인 폼 렌더링, CSP 아래 콘솔 오류 없음, 딥링크가 `/admin/`으로 이동); 플래그 조합별
+  `helm lint --strict`/`helm template`; `actionlint`; Docker Desktop Kubernetes에서의
+  `helm install --wait`(개발자가 실행하고 일치한다고 보고함). 검증하지 못한 것: 라이브 ALB가
+  필요한 모든 것(`/`에 대한 `/admin` 규칙의 우선순위 포함), CI 잡 자체, 실제로 발행된
+  이미지를 대상으로 한 `deploy.sh`.
 - **Admin: 모든 페이지에 라이트/다크 토글 추가 (2026-09-08)** — 개발자의 직접 요청.
   `admin/src/store/theme.store.ts`(신규, zustand)가 `localStorage`(`admin-theme`)에서 초기
   테마를 읽고, 저장된 값이 없으면 `prefers-color-scheme`로 폴백한다. 토글하면 클래스와
