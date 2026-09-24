@@ -1651,8 +1651,9 @@ Architecture Decisions가 계속 유효하다.
   2026-09-22/23에 해결**: (1) `frontend/`와 `admin/`의 `package.json`에 `packageManager:
   pnpm@10.14.0`을 고정했다(`3238f06`) — 그 전에는 corepack이 최신 pnpm(당시 12.5.1)을 받았고
   `node:24.8.0`에 든 corepack 0.34.0이 이를 실행하지 못했다. `frontend/Dockerfile`과
-  `admin/Dockerfile`은 10.14.0을 여전히 스스로 고정한다. 고정 이후 CI 잡의 동작은 아직
-  Actions에서 확인하지 못했다. (2) 운영 Ingress annotation 템플릿에 이제 `target-type: ip`가
+  `admin/Dockerfile`은 10.14.0을 여전히 스스로 고정한다. CI 잡도 이 핀을 따르며 Actions에서
+  확인했다(run 36065808388, 2026-09-25: `frontend-lint`와 `admin-lint-and-unit` 모두 corepack이
+  `pnpm-10.14.0.tgz`를 받았다). (2) 운영 Ingress annotation 템플릿에 이제 `target-type: ip`가
   들어 있다(컨트롤러 기본값 `instance`는 `NodePort`/`LoadBalancer` Service가 필요한데 이 차트의
   Service는 `ClusterIP`다). ALB용 NetworkPolicy 인바운드 규칙도 함께 들어갔다
   ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) addendum) — 코드와

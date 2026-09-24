@@ -310,9 +310,11 @@
   차트 버전은 0.5.0. 검증한 것: admin `pnpm test`(24), `lint`, `build`; 로컬 이미지 빌드와 curl 확인, 실제 브라우저
   확인(로그인 폼 렌더링, CSP 아래 콘솔 오류 없음, 딥링크가 `/admin/`으로 이동); 플래그 조합별
   `helm lint --strict`/`helm template`; `actionlint`; Docker Desktop Kubernetes에서의
-  `helm install --wait`(개발자가 실행하고 일치한다고 보고함). 검증하지 못한 것: 라이브 ALB가
-  필요한 모든 것(`/`에 대한 `/admin` 규칙의 우선순위 포함), CI 잡 자체, 실제로 발행된
-  이미지를 대상으로 한 `deploy.sh`.
+  `helm install --wait`(개발자가 실행하고 일치한다고 보고함), 그리고 `dev`의 CI 실행(2026-09-25,
+  run `36065808388`, 9개 잡 모두 통과: `docker-publish-admin`의 스모크 테스트와 이미지 push,
+  `admin-e2e` 11 passed, 단위 테스트 24개, `packageManager` 핀에 따른 pnpm 10.14.0). 검증하지 못한
+  것: 라이브 ALB가 필요한 모든 것(`/`에 대한 `/admin` 규칙의 우선순위 포함), `main` 브랜치의 발행
+  경로(`:latest`, arm64), 실제로 발행된 이미지를 대상으로 한 `deploy.sh`.
 - **Admin: 모든 페이지에 라이트/다크 토글 추가 (2026-09-08)** — 개발자의 직접 요청.
   `admin/src/store/theme.store.ts`(신규, zustand)가 `localStorage`(`admin-theme`)에서 초기
   테마를 읽고, 저장된 값이 없으면 `prefers-color-scheme`로 폴백한다. 토글하면 클래스와

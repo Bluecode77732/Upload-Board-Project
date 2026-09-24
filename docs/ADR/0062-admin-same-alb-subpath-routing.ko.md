@@ -1,7 +1,8 @@
 # ADR 0062: admin 콘솔 호스팅 — 같은 ALB의 세 번째 워크로드, `/admin` 서브패스
 
 - Status: Accepted — 구현 완료(`helm lint`/`helm template`, `pnpm test`, 로컬 이미지 빌드와
-  `/admin/*` curl 확인, Docker Desktop Kubernetes에서의 `helm install --wait`까지 검증.
+  `/admin/*` curl 확인, Docker Desktop Kubernetes에서의 `helm install --wait`, `dev`에서 돈
+  CI(스모크 테스트와 이미지 push)까지 검증.
   라이브 ALB는 미검증)
 - Date: 2026-09-23
 - Extends: [ADR 0060](0060-frontend-same-alb-path-routing.ko.md) (D4의 "`admin/`은 이 결정
@@ -212,3 +213,21 @@ admin 파드가 Ready라는 것은 probe(`GET /admin/`)가 `alias` 설정을 거
 | `/admin/dashboard` 직접 진입 | SPA 폴백 200. 라우터가 `/admin/` basename 아래에서 `/dashboard`를 매칭했다(보호 라우트가 refresh를 호출함). `POST /auth/token/refresh`는 슬래시로 시작하는 같은 출처 상대 URL로 나가 404를 받았다. 이어서 거부된 세션은 사이트 루트 `/`(이 컨테이너에서는 404)가 아니라 `/admin/`(로그인 폼)으로 이동했다. |
 
 확인하지 않은 것: 컨테이너 뒤에 백엔드가 없었으므로 로그인 흐름과 그 뒤의 페이지들.
+
+## Addendum (2026-09-25): CI 첫 실행
+
+후속 작업 2를 해소한다. `c0b309d`를 `dev`에 push하자(개발자가 직접 push) CI 워크플로가
+돌았고(run `36065808388`) 9개 잡이 모두 통과했다. 실행 기록과 Docker Hub에서 읽은 결과:
+
+| 확인 | 결과 |
+|---|---|
+| `docker-publish-admin` | 모든 단계가 통과했다. 러너의 스모크 테스트가 `Liveness check passed`와 `Smoke test passed (redirect, SPA index, deep-link fallback, asset 404, security headers)`를 출력했고, 이어서 이미지가 `bluecode1775/sharenpo-admin:<sha>`로 빌드·push됐다. |
+| Docker Hub | `docker manifest inspect bluecode1775/sharenpo-admin:<sha>`가 성공한다(`amd64`와 `unknown/unknown` 항목 — buildx가 attestation manifest를 이렇게 나열한다). frontend·백엔드 이미지도 같은 태그로 있다. |
+| `admin-e2e` | 11 passed. `vite.config.ts`의 `base` 변경 뒤에 돌았다(e2e는 `base`가 `/`로 남는 dev 서버를 구동한다). |
+| `admin-lint-and-unit` | lint 오류 0(`protected-route.tsx`의 기존 경고는 그대로), 단위 테스트 24개 통과. |
+| pnpm 핀 | `frontend-lint`와 `admin-lint-and-unit` 모두 corepack이 `pnpm-10.14.0.tgz`를 받았으므로 `packageManager` 필드가 CI에서 효력이 있다. |
+
+아직 실행되지 않은 것: `main` 경로(`:latest`와 `linux/arm64` 빌드) — 이번 실행은 `linux/amd64`만
+빌드하는 `dev`였다; `main`의 사본이 스케줄로 돌리는 `docker-tag-cleanup.yml`의 `sharenpo-admin`
+항목; 이제 존재하는 이미지를 대상으로 한 `deploy.sh`의 admin 태그 확인; 그리고 라이브 ALB가 필요한
+모든 것.

@@ -1,6 +1,6 @@
 # ADR 0060: Frontend hosting — a separate nginx workload in the same Helm release, path-routed on the one ALB
 
-- Status: Accepted — implemented (`helm lint`/`helm template`, a local image build, and a browser CSP check verified; live ALB, `kind`, and the CI job itself unverified)
+- Status: Accepted — implemented (`helm lint`/`helm template`, a local image build, a browser CSP check, `helm install --wait` on Docker Desktop's Kubernetes ([ADR 0062](0062-admin-same-alb-subpath-routing.md) addendum, 2026-09-24), and the `docker-publish-frontend` CI job (2026-09-25) verified; live ALB unverified)
 - Date: 2026-09-21
 - Amends: [ADR 0058](0058-ingress-path-allowlist.md) (D1's "no catch-all" now applies to the backend Service only; D2's reasons 3–4 no longer hold for the combined Ingress), [ADR 0010](0010-frontend-split-and-api-surface-freeze.md) (its "prod: `CORS_ORIGIN`" clause only)
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)

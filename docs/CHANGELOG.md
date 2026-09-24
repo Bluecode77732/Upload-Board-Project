@@ -305,9 +305,11 @@ development line (package.json version).
   image build with curl checks and a real-browser pass (login form renders, no console errors
   under the CSP, a deep link ends on `/admin/`); `helm lint --strict`/`helm template` across the
   flag combinations; `actionlint`; and `helm install --wait` on Docker Desktop's Kubernetes (run
-  by the developer, reported as matching). Not verified: anything that needs a live ALB
-  (including the `/admin` rule's priority against `/`), the CI job itself, and `deploy.sh`
-  against a real published image.
+  by the developer, reported as matching), plus a CI run on `dev` (2026-09-25, run
+  `36065808388`, nine jobs green: `docker-publish-admin`'s smoke test and image push, `admin-e2e`
+  11 passed, 24 unit tests, pnpm 10.14.0 through the `packageManager` pin). Not verified: anything
+  that needs a live ALB (including the `/admin` rule's priority against `/`), the `main`-branch
+  publish path (`:latest`, arm64), and `deploy.sh` against a real published image.
 - **Admin: light/dark toggle on every page (2026-09-08)** — on direct developer request.
   `admin/src/store/theme.store.ts` (new, zustand) resolves the initial theme from
   `localStorage` (`admin-theme`) and falls back to `prefers-color-scheme` when nothing is

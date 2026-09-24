@@ -1,6 +1,6 @@
 # ADR 0060: 프론트엔드 호스팅 — 같은 Helm 릴리스의 별도 nginx 워크로드를 하나의 ALB에서 경로로 분기
 
-- Status: Accepted — 구현 완료 (`helm lint`/`helm template`, 로컬 이미지 빌드, 브라우저 CSP 확인까지 검증. 라이브 ALB·`kind`·CI 잡 자체는 미검증)
+- Status: Accepted — 구현 완료 (`helm lint`/`helm template`, 로컬 이미지 빌드, 브라우저 CSP 확인, Docker Desktop Kubernetes에서의 `helm install --wait`([ADR 0062](0062-admin-same-alb-subpath-routing.ko.md) addendum, 2026-09-24), `docker-publish-frontend` CI 잡(2026-09-25)까지 검증. 라이브 ALB는 미검증)
 - Date: 2026-09-21
 - Amends: [ADR 0058](0058-ingress-path-allowlist.ko.md) (D1의 "catch-all 없음"은 이제 백엔드 Service에만 적용되고, D2의 3·4번 근거는 합쳐진 Ingress에서는 더 이상 성립하지 않는다), [ADR 0010](0010-frontend-split-and-api-surface-freeze.ko.md) ("prod: `CORS_ORIGIN`" 절만)
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.ko.md)

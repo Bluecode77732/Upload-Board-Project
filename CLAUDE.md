@@ -1621,8 +1621,9 @@ Architecture Decisions above remain operative.
   resolved 2026-09-22/23**: (1) `packageManager: pnpm@10.14.0` is now pinned in `frontend/`'s and
   `admin/`'s `package.json` (`3238f06`) — before that, corepack resolved the latest pnpm (12.5.1 at
   the time), which corepack 0.34.0 in `node:24.8.0` cannot run. `frontend/Dockerfile` and
-  `admin/Dockerfile` still pin 10.14.0 themselves; how the CI jobs behave with the pin is not yet
-  confirmed on Actions. (2) The prod Ingress annotation template now sets `target-type: ip` (the
+  `admin/Dockerfile` still pin 10.14.0 themselves. The CI jobs pick up the pin, confirmed on Actions
+  (run 36065808388, 2026-09-25: `frontend-lint` and `admin-lint-and-unit` had corepack download
+  `pnpm-10.14.0.tgz`). (2) The prod Ingress annotation template now sets `target-type: ip` (the
   controller's `instance` default needs a `NodePort`/`LoadBalancer` Service, and this chart's are
   `ClusterIP`), together with the NetworkPolicy ingress rule for the ALB
   ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.md) addendum) — coded and rendered,

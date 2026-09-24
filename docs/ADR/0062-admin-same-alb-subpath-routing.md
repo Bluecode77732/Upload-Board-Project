@@ -1,6 +1,6 @@
 # ADR 0062: Admin console hosting — a third workload on the same ALB, at `/admin`
 
-- Status: Accepted — implemented (`helm lint`/`helm template`, `pnpm test`, a local image build and curl checks against `/admin/*`, and `helm install --wait` on Docker Desktop's Kubernetes verified; live ALB unverified)
+- Status: Accepted — implemented (`helm lint`/`helm template`, `pnpm test`, a local image build and curl checks against `/admin/*`, `helm install --wait` on Docker Desktop's Kubernetes, and a CI run on `dev` (smoke test and image push) verified; live ALB unverified)
 - Date: 2026-09-23
 - Extends: [ADR 0060](0060-frontend-same-alb-path-routing.md) (D4's "`admin/` is outside this decision" is now resolved — same mechanism, a second app), [ADR 0058](0058-ingress-path-allowlist.md) (one more allow-listed prefix)
 - Relates to: [ADR 0010](0010-frontend-split-and-api-surface-freeze.md) (admin stays a separate app — this adds a deploy path, not a route inside `frontend/`), [ADR 0022](0022-admin-console-import-from-chat-project.md)
@@ -207,3 +207,21 @@ own 404, which is what exercises the rejected-session path.
 | `/admin/dashboard` opened directly | SPA fallback 200. The router matched `/dashboard` under the `/admin/` basename (the protected route called refresh). `POST /auth/token/refresh` went to a relative same-origin URL and got 404. The rejected session then navigated to `/admin/` (the login form), not to the site root `/`, which answers 404 in this container. |
 
 Not covered: the login flow and the pages behind it, since no backend ran behind the container.
+
+## Addendum (2026-09-25): CI first run
+
+Resolves Follow-up 2. Pushing `c0b309d` to `dev` (done by the developer) ran the CI workflow, run
+`36065808388`, and all nine jobs passed. Read from the run and from Docker Hub:
+
+| Check | Result |
+|---|---|
+| `docker-publish-admin` | Every step passed. The runner's smoke test printed `Liveness check passed` and `Smoke test passed (redirect, SPA index, deep-link fallback, asset 404, security headers)`, then the image was built and pushed as `bluecode1775/sharenpo-admin:<sha>`. |
+| Docker Hub | `docker manifest inspect bluecode1775/sharenpo-admin:<sha>` succeeds (`amd64` plus an `unknown/unknown` entry, which is how buildx lists an attestation manifest). The frontend and backend images exist under the same tag. |
+| `admin-e2e` | 11 passed, run after the `vite.config.ts` `base` change (the e2e drives the dev server, where `base` stays `/`). |
+| `admin-lint-and-unit` | Lint has 0 errors (the existing warning in `protected-route.tsx` remains); 24 unit tests passed. |
+| pnpm pin | `frontend-lint` and `admin-lint-and-unit` both had corepack download `pnpm-10.14.0.tgz`, so the `packageManager` field takes effect in CI. |
+
+Still not exercised: the `main` path (`:latest` and the `linux/arm64` build), because this run was on
+`dev`, which builds `linux/amd64` only; the `sharenpo-admin` entry in `docker-tag-cleanup.yml`, which
+runs on a schedule from `main`'s copy; `deploy.sh`'s admin tag check against the image that now
+exists; and everything that needs a live ALB.
