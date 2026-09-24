@@ -223,11 +223,12 @@ Either form resolves the branch's current HEAD commit and checks Docker Hub for 
 image tag before proceeding — a missing image (nothing published from that branch yet, or
 CI still running) aborts with a clear error instead of silently deploying something stale.
 `IMAGE_TAG=<tag>` remains as a raw override for anything neither branch's HEAD represents
-(e.g. rolling back to an older sha). The frontend image (ADR 0060) uses the same tag: the lookup
-checks both `bluecode1775/sharenpo` and `bluecode1775/sharenpo-frontend`, and the helm step passes
-the tag as `image.tag` and `frontend.image.tag`. An explicit `IMAGE_TAG` skips the check for both,
-so rolling back to a sha from before the frontend image existed leaves the new frontend pod
-without an image — run helm by hand for that.
+(e.g. rolling back to an older sha). The frontend image (ADR 0060) and the admin image (ADR 0062)
+use the same tag: the lookup checks `bluecode1775/sharenpo`, `bluecode1775/sharenpo-frontend` and
+`bluecode1775/sharenpo-admin`, and the helm step passes the tag as `image.tag`, `frontend.image.tag`
+and `admin.image.tag`. An explicit `IMAGE_TAG` skips the check for all three, so rolling back to a
+sha from before the frontend or admin image existed leaves that pod without an image — run helm by
+hand for that.
 
 **Plan/apply split** (ADR 0046 addendum, 2026-09-02): for `cluster`/`app-infra`/`addons`,
 `bash deploy.sh plan <state>` computes and saves the plan to a fixed, gitignored path

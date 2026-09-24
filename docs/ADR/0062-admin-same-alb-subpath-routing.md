@@ -1,6 +1,6 @@
 # ADR 0062: Admin console hosting — a third workload on the same ALB, at `/admin`
 
-- Status: Accepted — implemented (`helm lint`/`helm template`, `pnpm test`, a local image build and curl checks against `/admin/*` verified; live ALB unverified)
+- Status: Accepted — implemented (`helm lint`/`helm template`, `pnpm test`, a local image build and curl checks against `/admin/*`, and `helm install --wait` on Docker Desktop's Kubernetes verified; live ALB unverified)
 - Date: 2026-09-23
 - Extends: [ADR 0060](0060-frontend-same-alb-path-routing.md) (D4's "`admin/` is outside this decision" is now resolved — same mechanism, a second app), [ADR 0058](0058-ingress-path-allowlist.md) (one more allow-listed prefix)
 - Relates to: [ADR 0010](0010-frontend-split-and-api-surface-freeze.md) (admin stays a separate app — this adds a deploy path, not a route inside `frontend/`), [ADR 0022](0022-admin-console-import-from-chat-project.md)
@@ -161,3 +161,35 @@ third entry — the same reasoning ADR 0060's addendum already recorded for addi
 2. **CI first run** — `docker-publish-admin` has never executed on GitHub Actions; the first
    push creates `bluecode1775/sharenpo-admin` on Docker Hub (unseen, same as `-frontend`'s
    history).
+
+## Addendum (2026-09-24): local-cluster verification
+
+Narrows Follow-up 1: the local-cluster half is done, so what remains needs a live ALB.
+
+`helm install --wait` ran on Docker Desktop's Kubernetes (`docker-desktop` context, v1.34.1) as
+release `c13` in a throwaway namespace, with `frontend` and `admin` enabled and Ingress and
+NetworkPolicy off. The developer ran the commands (recipe: `k8s/helm/README.md` > "Verifying on
+Docker Desktop's Kubernetes") and reported that the output matched every expected value below. From
+the session I could confirm only that the cluster was `Ready`, that the namespace, Postgres and
+Secret were created, that the release and namespace were gone afterwards, and that the backend
+image built from current source existed locally; the raw command output was not seen.
+
+Images: backend and admin built from current source, frontend built two days earlier and not
+rebuilt for this run, all with `pullPolicy=Never`. A throwaway `postgres:16` stood in for RDS.
+
+| Check | Expected, and reported as matching |
+|---|---|
+| `helm install --wait --timeout=600s` | `STATUS: deployed` |
+| Pods | app, frontend, admin, clamav and postgres all `Running` |
+| Endpoints | `c13`, `c13-frontend` and `c13-admin` one address each, all different — the backend Service selects neither SPA pod |
+| admin Service, in-cluster curl | `/admin` 301, `/admin/` 200, `/admin/dashboard` 200, `/admin/assets/nope.js` 404, `/` 404 |
+| frontend Service | `/` 200, `/posts/1` 200, `/assets/nope.js` 404 |
+| backend Service | `:3000/health/ready` 200 |
+
+A ready admin pod means its probe (`GET /admin/`) passes through the `alias` config, and the
+distinct endpoints show the selector labels keep the three workloads apart (D1, D5).
+
+Still unverified: everything that needs an ALB — rule ordering between `/`, `/admin` and the API
+prefixes, `target-type: ip`, the NetworkPolicy ingress rule for the ALB, and HTTPS/redirects
+(checklist in `k8s/helm/README.md`); `docker-publish-admin` on GitHub Actions; `deploy.sh`'s admin
+tag check against a real Docker Hub image; `helm upgrade` and rollback with three images.

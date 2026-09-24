@@ -17,6 +17,9 @@ Kubernetes용으로 패키징합니다. 이 차트가 별도 `helm/` 폴더가 �
 `postgres:16`, 그리고 `/health/live`/`/health/ready`/`/doc` 모두 Service를
 통해 `200`을 응답했습니다. 이 실행에서 실제 버그 2개를 발견해 고쳤습니다(hook
 순서, 빈 문자열 env var — 커밋 `0326199`).
+2026-09-24에는 `frontend`·`admin` 워크로드를 켠 상태로 Docker Desktop Kubernetes에서
+다시 검증했습니다(ADR 0062) — 이 문서 끝의 "Docker Desktop Kubernetes에서 검증하기"를
+참고하세요.
 **2026-08-17에 실제 배포 시작 → 2026-08-27에 안정화 → 2026-08-28에 철거**: 릴리스
 `upload-board`가 `k8s/infra/terraform/cluster/`가 만든 실제 AWS/EKS 클러스터에서
 동작했습니다(revision 5, `STATUS: deployed`) — 전체 경위는
@@ -472,3 +475,60 @@ docker run --rm -p 8080:8080 sharenpo-admin:local
 # /admin(슬래시 없음) → /admin/로 301;  /admin/, /admin/dashboard → 200 index.html;
 # /admin/assets/missing.js → 404;  /(admin 밖) → 404;  모든 응답에 CSP + nosniff 헤더
 ```
+
+## Docker Desktop Kubernetes에서 검증하기
+
+2026-09-24에 검증했습니다(ADR 0062). `frontend`와 `admin`은 켜고 Ingress와 NetworkPolicy는
+껐습니다 — Docker Desktop에는 ALB Controller가 없고, 기본 CNI는 `NetworkPolicy`를 강제하지
+않습니다. kubeconfig에 실제 EKS 컨텍스트가 함께 있을 수 있어서 모든 명령에
+`--context docker-desktop` / `--kube-context docker-desktop`을 명시합니다. Git Bash 기준이고,
+`cd`가 따로 없으면 저장소 루트에서 실행합니다.
+
+```bash
+# 1. 일회용 네임스페이스, RDS 자리를 대신할 Postgres, Secret(CI가 이미 커밋해 둔 공개 더미 값)
+kubectl --context docker-desktop create namespace c13-verify
+kubectl --context docker-desktop -n c13-verify run postgres --image=postgres:16 --image-pull-policy=IfNotPresent --restart=Never --env=POSTGRES_USER=sharenpo --env=POSTGRES_PASSWORD=sharenpo_pw --env=POSTGRES_DB=sharenpo --port=5432 --labels=app=postgres
+kubectl --context docker-desktop -n c13-verify expose pod postgres --port=5432 --target-port=5432
+kubectl --context docker-desktop -n c13-verify create secret generic c13-secrets --from-literal=DB_USERNAME=sharenpo --from-literal=DB_PASSWORD=sharenpo_pw --from-literal='ACCESS_TOKEN_SECRET=Ci-Access-Secret-2026-For-E2E-Test!' --from-literal='REFRESH_TOKEN_SECRET=Ci-Refresh-Secret-2026-For-E2E-Test!'
+
+# 2. 현재 소스로 이미지 빌드 — Docker Desktop의 Kubernetes는 로컬 Docker 이미지 저장소를 그대로 읽으므로 push나 load 단계가 없다
+docker build -t sharenpo-c13:local -f Dockerfile .
+docker build -t sharenpo-frontend:local -f frontend/Dockerfile frontend
+docker build -t sharenpo-admin:local -f admin/Dockerfile admin
+
+# 3. 설치 (새 ClamAV 파드가 시그니처 DB를 내려받으므로 수 분 걸릴 수 있다)
+cd k8s/helm
+helm --kube-context docker-desktop -n c13-verify install c13 . --set secrets.existingSecret=c13-secrets --set env.DB_HOST=postgres --set env.DB_DATABASE=sharenpo --set env.BASE_URL=http://localhost:3000 --set image.repository=sharenpo-c13 --set image.tag=local --set image.pullPolicy=Never --set frontend.enabled=true --set frontend.image.repository=sharenpo-frontend --set frontend.image.tag=local --set frontend.image.pullPolicy=Never --set admin.enabled=true --set admin.image.repository=sharenpo-admin --set admin.image.tag=local --set admin.image.pullPolicy=Never --wait --timeout=600s
+
+# 4. 파드, Service, 엔드포인트
+kubectl --context docker-desktop -n c13-verify get pods,svc,endpoints
+
+# 5. 클러스터 내부에서 각 Service로 요청 (명령이 끝나면 이 파드는 삭제된다)
+kubectl --context docker-desktop -n c13-verify run curl --image=curlimages/curl:latest --image-pull-policy=IfNotPresent --restart=Never --rm -i --command -- sh -c 'for u in c13-admin/admin c13-admin/admin/ c13-admin/admin/dashboard c13-admin/admin/assets/nope.js c13-admin/ c13-frontend/ c13-frontend/posts/1 c13-frontend/assets/nope.js c13:3000/health/ready; do printf "%s -> " $u; curl -s -o /dev/null -w "%{http_code}\n" http://$u; done'
+
+# 6. 정리
+helm --kube-context docker-desktop -n c13-verify uninstall c13
+kubectl --context docker-desktop delete namespace c13-verify
+```
+
+기대값: `STATUS: deployed`; app·frontend·admin·clamav·postgres 파드가 `Running`; `c13`,
+`c13-frontend`, `c13-admin`이 각각 엔드포인트 주소 하나씩이고 모두 서로 다름; 이어서 `/admin` 301,
+`/admin/` 200, `/admin/dashboard` 200, `/admin/assets/nope.js` 404, `c13-admin/` 404, frontend `/`
+200, `/posts/1` 200, `/assets/nope.js` 404, `c13:3000/health/ready` 200. 2026-09-24 실행은 이틀
+전에 빌드한 `sharenpo-frontend:local`을 그대로 썼고 위 값이 모두 일치했습니다.
+
+**Kubernetes가 "Starting"에서 벗어나지 않을 때**(Docker Desktop 4.48.0, WSL 커널 `6.18.33.2`,
+2026-09-24에 확인): Docker Desktop 로그(`%LOCALAPPDATA%\Docker\log\host\com.docker.backend.exe.log`)에
+`kubelet`이 시작 몇 초 뒤 `cgroup ["kubepods"] has some missing controllers: cpuset`으로 종료되는
+기록이 남습니다. `docker-desktop` WSL 배포판 안에서 `cpuset`은 `cgroup.controllers`에는 있었지만
+`cgroup.subtree_control`에는 없었습니다. 효과가 있었던 방법:
+
+```bash
+wsl -d docker-desktop -e sh -c 'echo +cpuset > /sys/fs/cgroup/cgroup.subtree_control'
+```
+
+그런 다음 Settings > Kubernetes에서 "Enable Kubernetes"는 체크한 채로 **Reset Kubernetes Cluster**를
+누릅니다(체크를 껐다가 Apply & Restart를 누르는 방법은 클러스터가 "Starting"인 동안 비활성화됩니다).
+클러스터는 reset 뒤 약 26초 만에 `Ready`가 됐습니다. 이 설정은 유지되지 않습니다 — Docker Desktop
+VM이 재시작되면(`wsl --shutdown`, Docker Desktop 종료) 사라지므로 다시 해야 합니다. `cpuset`이 기본으로
+위임되지 않는 이유는 확인하지 못했습니다.

@@ -15,6 +15,9 @@ for its scaffold history.
 fix), a throwaway `postgres:16`, and `/health/live`/`/health/ready`/`/doc` all
 answered `200` through the Service. That run found and fixed two real bugs
 (hook ordering, empty-string env vars — commit `0326199`).
+Re-verified 2026-09-24 on Docker Desktop's Kubernetes with the `frontend` and `admin`
+workloads enabled (ADR 0062) — see "Verifying on Docker Desktop's Kubernetes" at the end of
+this file.
 **Deployed for real 2026-08-17 → stable 2026-08-27, torn down 2026-08-28**: the
 release `upload-board` ran on the real AWS/EKS cluster from
 `k8s/infra/terraform/cluster/` (revision 5, `STATUS: deployed`) — see
@@ -475,3 +478,59 @@ docker run --rm -p 8080:8080 sharenpo-admin:local
 # /admin (no slash) → 301 to /admin/;  /admin/  and  /admin/dashboard → 200 index.html;
 # /admin/assets/missing.js → 404;  /  (outside /admin) → 404;  CSP + nosniff headers on every response
 ```
+
+## Verifying on Docker Desktop's Kubernetes
+
+Verified 2026-09-24 (ADR 0062) with `frontend` and `admin` enabled and Ingress and NetworkPolicy
+off — Docker Desktop has no ALB Controller, and its default CNI doesn't enforce `NetworkPolicy`.
+Every command pins `--context docker-desktop` / `--kube-context docker-desktop` because a real EKS
+context can sit in the same kubeconfig. Git Bash, from the repo root unless a `cd` says otherwise.
+
+```bash
+# 1. Throwaway namespace, a Postgres standing in for RDS, and a Secret (the public dummy values CI already commits)
+kubectl --context docker-desktop create namespace c13-verify
+kubectl --context docker-desktop -n c13-verify run postgres --image=postgres:16 --image-pull-policy=IfNotPresent --restart=Never --env=POSTGRES_USER=sharenpo --env=POSTGRES_PASSWORD=sharenpo_pw --env=POSTGRES_DB=sharenpo --port=5432 --labels=app=postgres
+kubectl --context docker-desktop -n c13-verify expose pod postgres --port=5432 --target-port=5432
+kubectl --context docker-desktop -n c13-verify create secret generic c13-secrets --from-literal=DB_USERNAME=sharenpo --from-literal=DB_PASSWORD=sharenpo_pw --from-literal='ACCESS_TOKEN_SECRET=Ci-Access-Secret-2026-For-E2E-Test!' --from-literal='REFRESH_TOKEN_SECRET=Ci-Refresh-Secret-2026-For-E2E-Test!'
+
+# 2. Images from current source — Docker Desktop's Kubernetes reads the local Docker image store, so there is no push or load step
+docker build -t sharenpo-c13:local -f Dockerfile .
+docker build -t sharenpo-frontend:local -f frontend/Dockerfile frontend
+docker build -t sharenpo-admin:local -f admin/Dockerfile admin
+
+# 3. Install (a fresh ClamAV pod downloads its signature DB, so allow several minutes)
+cd k8s/helm
+helm --kube-context docker-desktop -n c13-verify install c13 . --set secrets.existingSecret=c13-secrets --set env.DB_HOST=postgres --set env.DB_DATABASE=sharenpo --set env.BASE_URL=http://localhost:3000 --set image.repository=sharenpo-c13 --set image.tag=local --set image.pullPolicy=Never --set frontend.enabled=true --set frontend.image.repository=sharenpo-frontend --set frontend.image.tag=local --set frontend.image.pullPolicy=Never --set admin.enabled=true --set admin.image.repository=sharenpo-admin --set admin.image.tag=local --set admin.image.pullPolicy=Never --wait --timeout=600s
+
+# 4. Pods, Services and endpoints
+kubectl --context docker-desktop -n c13-verify get pods,svc,endpoints
+
+# 5. In-cluster requests to each Service (the pod is removed when the command ends)
+kubectl --context docker-desktop -n c13-verify run curl --image=curlimages/curl:latest --image-pull-policy=IfNotPresent --restart=Never --rm -i --command -- sh -c 'for u in c13-admin/admin c13-admin/admin/ c13-admin/admin/dashboard c13-admin/admin/assets/nope.js c13-admin/ c13-frontend/ c13-frontend/posts/1 c13-frontend/assets/nope.js c13:3000/health/ready; do printf "%s -> " $u; curl -s -o /dev/null -w "%{http_code}\n" http://$u; done'
+
+# 6. Tear down
+helm --kube-context docker-desktop -n c13-verify uninstall c13
+kubectl --context docker-desktop delete namespace c13-verify
+```
+
+Expected: `STATUS: deployed`; app, frontend, admin, clamav and postgres pods `Running`; `c13`,
+`c13-frontend` and `c13-admin` each with one endpoint address, all different; then `/admin` 301,
+`/admin/` 200, `/admin/dashboard` 200, `/admin/assets/nope.js` 404, `c13-admin/` 404, frontend `/`
+200, `/posts/1` 200, `/assets/nope.js` 404, and `c13:3000/health/ready` 200. The 2026-09-24 run
+reused a two-day-old `sharenpo-frontend:local` and matched all of these.
+
+**If Kubernetes never leaves "Starting"** (seen on Docker Desktop 4.48.0 with WSL kernel
+`6.18.33.2`, 2026-09-24): the Docker Desktop log (`%LOCALAPPDATA%\Docker\log\host\com.docker.backend.exe.log`)
+shows `kubelet` exiting a few seconds after start with `cgroup ["kubepods"] has some missing
+controllers: cpuset`. Inside the `docker-desktop` WSL distro `cpuset` was in `cgroup.controllers`
+but not in `cgroup.subtree_control`. What worked:
+
+```bash
+wsl -d docker-desktop -e sh -c 'echo +cpuset > /sys/fs/cgroup/cgroup.subtree_control'
+```
+
+then Settings > Kubernetes > **Reset Kubernetes Cluster** with "Enable Kubernetes" left checked
+(unchecking it and pressing Apply & Restart is disabled while the cluster shows "Starting"). The
+cluster was `Ready` about 26 seconds after the reset. The setting is not persistent: it is lost when
+the Docker Desktop VM restarts (`wsl --shutdown`, quitting Docker Desktop), and it has to be
+repeated. Why `cpuset` isn't delegated by default was not determined.

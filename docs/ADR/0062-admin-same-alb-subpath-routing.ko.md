@@ -1,7 +1,8 @@
 # ADR 0062: admin 콘솔 호스팅 — 같은 ALB의 세 번째 워크로드, `/admin` 서브패스
 
 - Status: Accepted — 구현 완료(`helm lint`/`helm template`, `pnpm test`, 로컬 이미지 빌드와
-  `/admin/*` curl 확인까지 검증. 라이브 ALB는 미검증)
+  `/admin/*` curl 확인, Docker Desktop Kubernetes에서의 `helm install --wait`까지 검증.
+  라이브 ALB는 미검증)
 - Date: 2026-09-23
 - Extends: [ADR 0060](0060-frontend-same-alb-path-routing.ko.md) (D4의 "`admin/`은 이 결정
   밖"이 이제 해소됨 — 같은 메커니즘, 두 번째 앱), [ADR 0058](0058-ingress-path-allowlist.ko.md)
@@ -165,3 +166,35 @@ ADR 0060 addendum이 이미 기록한 것과 같은 이유다.
 2. **CI 첫 실행** — `docker-publish-admin`은 GitHub Actions에서 돈 적이 없다. 첫 push가
    Docker Hub에 `bluecode1775/sharenpo-admin`을 만든다(아직 본 적 없음, `-frontend`가
    겪었던 것과 같은 이력).
+
+## Addendum (2026-09-24): 로컬 클러스터 검증
+
+후속 작업 1을 좁힌다: 로컬 클러스터 쪽은 끝났고, 남은 것은 라이브 ALB가 필요한 부분뿐이다.
+
+`helm install --wait`를 Docker Desktop의 Kubernetes(`docker-desktop` 컨텍스트, v1.34.1)에서
+일회용 네임스페이스에 릴리스 `c13`으로 실행했다. `frontend`와 `admin`은 켜고 Ingress와
+NetworkPolicy는 껐다. 명령은 개발자가 직접 실행했고(절차: `k8s/helm/README.md` >
+"Docker Desktop Kubernetes에서 검증하기"), 아래 예상값과 출력이 모두 일치했다고 보고했다.
+세션에서 직접 확인한 것은 클러스터가 `Ready`였다는 점, 네임스페이스·Postgres·Secret이
+만들어졌다는 점, 이후 릴리스와 네임스페이스가 사라졌다는 점, 현재 소스로 빌드한 백엔드
+이미지가 로컬에 있었다는 점뿐이며, 명령 출력 원문은 보지 못했다.
+
+이미지: 백엔드와 admin은 현재 소스로 빌드했고, frontend는 이틀 전에 빌드한 것을 이번에
+다시 빌드하지 않고 썼다. 모두 `pullPolicy=Never`다. RDS 자리에는 일회용 `postgres:16`을 썼다.
+
+| 확인 | 예상값(일치한다고 보고됨) |
+|---|---|
+| `helm install --wait --timeout=600s` | `STATUS: deployed` |
+| 파드 | app, frontend, admin, clamav, postgres 모두 `Running` |
+| 엔드포인트 | `c13`, `c13-frontend`, `c13-admin` 각각 주소 하나씩, 모두 서로 다름 — 백엔드 Service가 SPA 파드를 고르지 않는다 |
+| admin Service, 클러스터 내부 curl | `/admin` 301, `/admin/` 200, `/admin/dashboard` 200, `/admin/assets/nope.js` 404, `/` 404 |
+| frontend Service | `/` 200, `/posts/1` 200, `/assets/nope.js` 404 |
+| 백엔드 Service | `:3000/health/ready` 200 |
+
+admin 파드가 Ready라는 것은 probe(`GET /admin/`)가 `alias` 설정을 거쳐 통과한다는 뜻이고,
+엔드포인트가 서로 다르다는 것은 셀렉터 라벨이 세 워크로드를 분리한다는 뜻이다(D1, D5).
+
+아직 확인하지 않은 것: ALB가 필요한 모든 것 — `/`, `/admin`, API prefix 사이의 규칙 순서,
+`target-type: ip`, ALB용 NetworkPolicy 인바운드 규칙, HTTPS/리다이렉트(점검 목록은
+`k8s/helm/README.md`); GitHub Actions에서의 `docker-publish-admin`; 실제 Docker Hub 이미지를
+대상으로 한 `deploy.sh`의 admin 태그 확인; 세 이미지로 하는 `helm upgrade`와 롤백.

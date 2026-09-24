@@ -222,10 +222,11 @@ bash deploy.sh helm         # 이제 인자 없이도 main을 배포
 태그가 있는지 진행 전에 확인합니다 — 이미지가 없으면(그 브랜치에서 아직 아무것도
 발행된 적 없거나 CI가 아직 도는 중) 조용히 낡은 걸로 진행하는 대신 명확한 에러로
 중단합니다. `IMAGE_TAG=<태그>`는 두 브랜치의 HEAD가 아닌 것(예: 예전 sha로 롤백)을
-쓸 때만의 raw override로 남아 있습니다. 프론트엔드 이미지(ADR 0060)도 같은 태그를 씁니다 —
-조회는 `bluecode1775/sharenpo`와 `bluecode1775/sharenpo-frontend`를 둘 다 확인하고, helm 단계는
-그 태그를 `image.tag`와 `frontend.image.tag`로 함께 넘깁니다. `IMAGE_TAG`를 직접 지정하면 두
-이미지 모두 확인 없이 그대로 쓰므로, 프론트엔드 이미지가 없던 시점의 sha로 롤백하면 새 프론트엔드
+쓸 때만의 raw override로 남아 있습니다. 프론트엔드 이미지(ADR 0060)와 admin 이미지(ADR 0062)도
+같은 태그를 씁니다 — 조회는 `bluecode1775/sharenpo`, `bluecode1775/sharenpo-frontend`,
+`bluecode1775/sharenpo-admin`을 모두 확인하고, helm 단계는 그 태그를 `image.tag`,
+`frontend.image.tag`, `admin.image.tag`로 함께 넘깁니다. `IMAGE_TAG`를 직접 지정하면 세 이미지
+모두 확인 없이 그대로 쓰므로, 프론트엔드나 admin 이미지가 없던 시점의 sha로 롤백하면 그
 파드가 이미지를 받지 못합니다 — 그런 롤백은 helm을 직접 실행하세요. 아래 수동 순서는 스크립트가 자동화하는
 대상이자, 각 단계가 실제로 무엇을 하는지 보는 참고 자료로 남겨둡니다. 이 순서는
 최초 배포든, 전체 `terraform destroy`(아래) 이후의 완전 재배포든 똑같이 적용됩니다:
