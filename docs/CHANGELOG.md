@@ -301,7 +301,7 @@ development line (package.json version).
   third tag check and `--set admin.image.tag=`, and a `sharenpo-admin` entry in
   `docker-tag-cleanup.yml` follow the frontend's pattern; the same window closed the three
   leftovers noted under ADR 0060 above (`packageManager` pins, `target-type: ip` in the prod
-  Ingress template, tag cleanup). Verified: admin `pnpm test` (24), `lint`, `build`; a local
+  Ingress template, tag cleanup). Chart version 0.5.0. Verified: admin `pnpm test` (24), `lint`, `build`; a local
   image build with curl checks and a real-browser pass (login form renders, no console errors
   under the CSP, a deep link ends on `/admin/`); `helm lint --strict`/`helm template` across the
   flag combinations; `actionlint`; and `helm install --wait` on Docker Desktop's Kubernetes (run

@@ -8,11 +8,10 @@
 # ============================================================================
 FROM --platform=$BUILDPLATFORM node:24.8.0-slim AS build
 WORKDIR /app
-# frontend/package.json에는 packageManager 핀이 없어서 corepack이 "최신" pnpm을 받는데, 그
-# 최신(12.5.1)이 이 Node 이미지의 corepack 0.34.0과 맞지 않아 install이 바로 실패했다
-# (bin/pnpm.cjs를 못 찾음, 2026-09-21 실측). 루트 package.json과 같은 10.14.0(ADR 0014)으로
-# 이미지 안에서만 고정한다. 정공법은 package.json에 핀을 두는 것이지만 frontend/의 다른 CI 잡과
-# 로컬 개발에도 영향을 주는 변경이라 이 Dockerfile 작업에 끼우지 않고 별도 결정으로 남긴다.
+# frontend/package.json에 packageManager 핀이 없던 2026-09-21에는 corepack이 "최신" pnpm을
+# 받았는데, 그 최신(12.5.1)이 이 Node 이미지의 corepack 0.34.0과 맞지 않아 install이 바로
+# 실패했다(bin/pnpm.cjs를 못 찾음, 실측). 지금은 package.json에도 같은 10.14.0 핀(ADR 0014)이
+# 있다. 이 줄은 그 핀과 별개로 이미지 빌드가 항상 이 버전을 쓰게 남겨 둔 것이다.
 RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 
 # 루트 Dockerfile과 같은 이유: pnpm의 확인 프롬프트가 stdin 없는 RUN 단계를 영원히 막는다.

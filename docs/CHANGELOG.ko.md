@@ -307,7 +307,7 @@
   태그 확인과 `--set admin.image.tag=`, `docker-tag-cleanup.yml`의 `sharenpo-admin` 항목은
   frontend의 방식을 따르고, 같은 시기에 위 ADR 0060 항목에 적어 둔 세 가지 미해결 사항
   (`packageManager` 핀, 운영 Ingress 템플릿의 `target-type: ip`, 태그 정리)도 해소했다.
-  검증한 것: admin `pnpm test`(24), `lint`, `build`; 로컬 이미지 빌드와 curl 확인, 실제 브라우저
+  차트 버전은 0.5.0. 검증한 것: admin `pnpm test`(24), `lint`, `build`; 로컬 이미지 빌드와 curl 확인, 실제 브라우저
   확인(로그인 폼 렌더링, CSP 아래 콘솔 오류 없음, 딥링크가 `/admin/`으로 이동); 플래그 조합별
   `helm lint --strict`/`helm template`; `actionlint`; Docker Desktop Kubernetes에서의
   `helm install --wait`(개발자가 실행하고 일치한다고 보고함). 검증하지 못한 것: 라이브 ALB가
