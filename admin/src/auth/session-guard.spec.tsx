@@ -166,3 +166,55 @@ describe('admin session-owner lifecycle', () => {
         expect(sessionStorage.getItem(SESSION_USER_KEY)).toBeNull();
     });
 });
+
+// ADR 0062 D4: 운영 빌드는 같은 ALB 아래 `/admin/`에서 서빙된다. 위 describe는 Vitest 기본값인
+// BASE_URL('/')에서만 돌아서, 하드코딩된 '/'로 되돌려도 통과한다 — 이 describe가 그 회귀를 잡는다.
+describe('admin session-guard under a subpath deployment', () => {
+    beforeEach(() => {
+        sessionStorage.clear();
+        useAuthStore.getState().clearTokens();
+        Object.defineProperty(window, 'location', {
+            configurable: true,
+            value: { ...window.location, replace: vi.fn() },
+        });
+    });
+
+    afterEach(() => {
+        sessionStorage.clear();
+        useAuthStore.getState().clearTokens();
+        vi.unstubAllGlobals();
+        vi.unstubAllEnvs();
+    });
+
+    it("sends a rejected session back to this app's own base path, not the site root.", async () => {
+        vi.stubEnv('BASE_URL', '/admin/');
+        recordSessionUser(1);
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => ({ accessToken: makeAccessToken(2) }),
+            }),
+        );
+
+        await expect(refreshAccessTokenSafely()).resolves.toBeNull();
+        expect(window.location.replace).toHaveBeenCalledWith('/admin/');
+    });
+
+    it('requests a same-origin refresh URL when VITE_API_URL is unset.', async () => {
+        vi.stubEnv('VITE_API_URL', undefined);
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ accessToken: makeAccessToken(1) }),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+
+        await refreshAccessTokenSafely();
+
+        // `?? ''`가 없으면 템플릿 리터럴이 "undefined/auth/token/refresh"를 만든다.
+        expect(fetchMock).toHaveBeenCalledWith(
+            '/auth/token/refresh',
+            expect.objectContaining({ method: 'POST', credentials: 'include' }),
+        );
+    });
+});
