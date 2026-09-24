@@ -49,7 +49,7 @@ rather than a rewrite from scratch.
 | | |
 |---|---|
 | Provenance | Chat Project admin console, imported 2026-07-30; role-management slice adapted 2026-08-06 |
-| Adapted to this API? | **Yes** — login/dashboard/users/logs (see "What was adapted"). Deploy target: same-ALB `/admin` subpath via Docker+nginx ([ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.md), see "Provenance cleanup" below) — the Helm chart and Docker image are in place, CI publish and `deploy.sh` wiring are not yet |
+| Adapted to this API? | **Yes** — login/dashboard/users/logs (see "What was adapted"). Deploy target: same-ALB `/admin` subpath via Docker+nginx ([ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.md), see "Provenance cleanup" below) — the Helm chart, Docker image, CI publish and `deploy.sh` wiring are in place; nothing has run against a live ALB yet |
 | Wired into root tooling? | **No** — outside the lint glob, Jest `roots`, `tsconfig.build.json`, `docker-compose.yml`, and CI. This is deliberate (ADR 0022), not a gap |
 | Dependencies | Own `package.json` / `node_modules`; **not** a pnpm workspace (same precedent as `frontend/`). `@apollo/client`, `graphql`, and `rxjs` were dropped with the chat-domain deletion |
 | Runs today? | Yes, against a real backend on `:3000` — see "Local commands" for the one-time `CORS_ORIGIN` setup this needs (admin runs on its own origin, `:5174`, unlike `frontend/`'s same-origin Vite proxy) |
@@ -129,8 +129,8 @@ Checked directly against the working tree rather than assumed, as of this same d
 (ADR 0062 D2/D3), and `session-guard.ts`'s hard-navigation fix (D4) exist, as do the Helm chart's
 `admin-deployment.yaml`/`admin-service.yaml` and the matching `ingress.yaml`/`values.yaml`
 changes (D1). `docker-publish-admin` (CI), `deploy.sh`'s third `--set admin.image.tag=`, and
-`docker-tag-cleanup.yml`'s `sharenpo-admin` entry (D6) do not yet, and none of the above has run
-against a live ALB. This paragraph is a snapshot of that date, not a promise to stay current —
+`docker-tag-cleanup.yml`'s `sharenpo-admin` entry (D6) did not exist yet when this was written
+(they landed later that day), and none of it has run against a live ALB. This paragraph is a snapshot of that date, not a promise to stay current —
 see ADR 0062's own status line and "Follow-up work" section for the up-to-date picture.
 
 ## What was adapted
@@ -160,7 +160,7 @@ findings; one backend change landed in between — see the `FORBIDDEN` row).
 | Per-user audit slice | Users page's detail panel fetched `GET /audit-log?userId=…` | No `userId` filter exists | **Dropped**, not approximated — see "Open items" below. ~~Dropped~~ **restored 2026-08-12**: now that `AuditLogQueryDto` has `userId`, the detail panel fetches `GET /audit-log?userId={id}&take=5` for a "Recent activity" section — the actor, or the target of a user-targeting action (`targetType = 'user'`, [ADR 0045](../docs/ADR/0045-audit-log-target-type.md)), so a file/post/comment id colliding with this user's id no longer appears here |
 | User deletion | `DELETE /user/:id`, no confirmation | `?deleteFiles=true` required when the account owns files, else 409 `USER_HAS_FILES` ([ADR 0020](../docs/ADR/0020-account-deletion-cascade.md)) | `deleteUser()` catches `USER_HAS_FILES`, shows the file count from the response `message`, and re-confirms before retrying with `?deleteFiles=true` |
 | Error handling | Ad-hoc status/message checks | Frozen `{ code, message }` contract — branch on `code` ([ADR 0011](../docs/ADR/0011-error-code-contract.md)) | `users-page.tsx` reads `err.response.data.code` via `axios.isAxiosError` for every branch (`AUTH_LAST_SUPERADMIN`, `USER_HAS_FILES`, `USER_FILES_IN_USE`, `FORBIDDEN`) |
-| Deploy config | `vercel.json` with a CSP pinned to the Chat Project's Railway host | Same-ALB `/admin` subpath via Docker+nginx, same mechanism as `frontend/` ([ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.md), extending [ADR 0060](../docs/ADR/0060-frontend-same-alb-path-routing.md)) | `vercel.json` deleted 2026-09-23 (see "Provenance cleanup" above); `admin/Dockerfile`/`nginx.conf` and the Helm chart's `admin-deployment.yaml`/`admin-service.yaml` added — CI publish and `deploy.sh` wiring still pending |
+| Deploy config | `vercel.json` with a CSP pinned to the Chat Project's Railway host | Same-ALB `/admin` subpath via Docker+nginx, same mechanism as `frontend/` ([ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.md), extending [ADR 0060](../docs/ADR/0060-frontend-same-alb-path-routing.md)) | `vercel.json` deleted 2026-09-23 (see "Provenance cleanup" above); `admin/Dockerfile`/`nginx.conf` and the Helm chart's `admin-deployment.yaml`/`admin-service.yaml` added — CI publish and `deploy.sh` wiring (D6) followed the same day |
 
 The row above reflects the 2026-08-06 functional-adaptation pass only; the Deploy config row was
 corrected 2026-09-23 once ADR 0062 actually picked a deploy target (see "Provenance cleanup"

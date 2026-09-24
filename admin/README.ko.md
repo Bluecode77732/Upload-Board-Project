@@ -47,7 +47,7 @@ REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" �
 | | |
 |---|---|
 | 출처 | Chat Project admin 콘솔, 2026-07-30 이식; 역할 관리 부분 2026-08-06 적응 |
-| 이 API에 적응됐는가? | **그렇다** — 로그인/대시보드/사용자/로그("무엇을 적응시켰는가" 참고). 배포 대상: 같은 ALB의 `/admin` 서브패스, Docker+nginx([ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.ko.md), 아래 "출처 정리" 참고) — Helm 차트와 Docker 이미지는 준비됐지만 CI 배포·`deploy.sh` 연동은 아직이다 |
+| 이 API에 적응됐는가? | **그렇다** — 로그인/대시보드/사용자/로그("무엇을 적응시켰는가" 참고). 배포 대상: 같은 ALB의 `/admin` 서브패스, Docker+nginx([ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.ko.md), 아래 "출처 정리" 참고) — Helm 차트, Docker 이미지, CI 발행, `deploy.sh` 연동까지 준비됐고 실제 ALB에서 돌려 본 적은 없다 |
 | 루트 도구 체계에 연결됐는가? | **아니다** — 린트 glob, Jest `roots`, `tsconfig.build.json`, `docker-compose.yml`, CI 모두의 바깥이다. 이것은 의도된 것이지(ADR 0022) 빈틈이 아니다 |
 | 의존성 | 자체 `package.json` / `node_modules`. pnpm 워크스페이스가 **아니다**(`frontend/`와 같은 선례). 채팅 도메인 삭제와 함께 `@apollo/client`, `graphql`, `rxjs`를 제거했다 |
 | 지금 실행되는가? | 그렇다, 실제 백엔드(`:3000`)를 대상으로 동작한다 — 필요한 일회성 `CORS_ORIGIN` 설정은 "로컬 명령" 참고(`admin`은 `frontend/`의 동일 출처 Vite 프록시와 달리 자체 출처 `:5174`에서 동작한다) |
@@ -124,8 +124,8 @@ Chat Project 이식의 흔적 중 남아있던, 아래 기능 적응과는 무�
 빌드 조건부 Vite `base`/`basename` 수정(ADR 0062 D2/D3), `session-guard.ts`의 하드 네비게이션
 수정(D4)은 이미 존재하고, Helm 차트의 `admin-deployment.yaml`/`admin-service.yaml`과 그에 맞춘
 `ingress.yaml`/`values.yaml` 변경(D1)도 존재한다. `docker-publish-admin`(CI), `deploy.sh`의
-세 번째 `--set admin.image.tag=`, `docker-tag-cleanup.yml`의 `sharenpo-admin` 항목(D6)은 아직
-없고, 위 어느 것도 실제 ALB에 대해 검증된 적은 없다. 이 문단은 이 날짜 기준 스냅샷일 뿐 계속
+세 번째 `--set admin.image.tag=`, `docker-tag-cleanup.yml`의 `sharenpo-admin` 항목(D6)은 이 글을
+쓸 때는 아직 없었고(같은 날 뒤에 들어갔다), 위 어느 것도 실제 ALB에 대해 검증된 적은 없다. 이 문단은 이 날짜 기준 스냅샷일 뿐 계속
 최신 상태로 유지하겠다는 약속이 아니다 — 최신 현황은 ADR 0062 자체의 상태 줄과 "Follow-up
 work" 절을 참고할 것.
 
@@ -156,7 +156,7 @@ work" 절을 참고할 것.
 | 사용자별 감사 조각 | 사용자 페이지 상세 패널이 `GET /audit-log?userId=…`를 호출 | `userId` 필터가 존재하지 않는다 | **근사하지 않고 제거했다** — 아래 "열린 사항" 참고. ~~제거~~ **2026-08-12 복원**: `AuditLogQueryDto`에 `userId`가 생기면서, 상세 패널이 `GET /audit-log?userId={id}&take=5`를 호출해 "Recent activity" 절을 보여준다 — 매칭 대상은 actor, 그리고 사용자를 대상으로 하는 action(`targetType = 'user'`, [ADR 0045](../docs/ADR/0045-audit-log-target-type.ko.md))의 target이므로, 이 사용자의 id와 값이 같은 파일·게시글·댓글 기록은 더 이상 여기 나타나지 않는다 |
 | 사용자 삭제 | 확인 없는 `DELETE /user/:id` | 계정이 파일을 가진 경우 `?deleteFiles=true` 필수, 없으면 409 `USER_HAS_FILES` ([ADR 0020](../docs/ADR/0020-account-deletion-cascade.ko.md)) | `deleteUser()`가 `USER_HAS_FILES`를 잡아 응답 `message`의 파일 개수를 보여주고, 재확인 후 `?deleteFiles=true`로 재시도한다 |
 | 에러 처리 | 그때그때의 상태 코드·메시지 검사 | 동결된 `{ code, message }` 계약 — `code`로 분기 ([ADR 0011](../docs/ADR/0011-error-code-contract.ko.md)) | `users-page.tsx`는 모든 분기(`AUTH_LAST_SUPERADMIN`, `USER_HAS_FILES`, `USER_FILES_IN_USE`, `FORBIDDEN`)에서 `axios.isAxiosError`로 `err.response.data.code`를 읽는다 |
-| 배포 설정 | CSP가 Chat Project의 Railway 호스트로 고정된 `vercel.json` | 같은 ALB의 `/admin` 서브패스, `frontend/`와 같은 방식(Docker+nginx, [ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.ko.md), [ADR 0060](../docs/ADR/0060-frontend-same-alb-path-routing.ko.md) 확장) | `vercel.json`은 2026-09-23 삭제했다(위 "출처 정리" 참고); `admin/Dockerfile`/`nginx.conf`와 Helm 차트의 `admin-deployment.yaml`/`admin-service.yaml`을 추가했다 — CI 배포와 `deploy.sh` 연동은 아직 남았다 |
+| 배포 설정 | CSP가 Chat Project의 Railway 호스트로 고정된 `vercel.json` | 같은 ALB의 `/admin` 서브패스, `frontend/`와 같은 방식(Docker+nginx, [ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.ko.md), [ADR 0060](../docs/ADR/0060-frontend-same-alb-path-routing.ko.md) 확장) | `vercel.json`은 2026-09-23 삭제했다(위 "출처 정리" 참고); `admin/Dockerfile`/`nginx.conf`와 Helm 차트의 `admin-deployment.yaml`/`admin-service.yaml`을 추가했다 — CI 발행과 `deploy.sh` 연동(D6)은 같은 날 이어서 들어갔다 |
 
 위 표는 2026-08-06 기능 적응 작업만을 반영한다; Deploy config 행은 ADR 0062가 실제로 배포
 대상을 정한 2026-09-23에 고쳤다(위 "출처 정리" 참고) — 그 전까지는 배포 대상이 없다는 말이
