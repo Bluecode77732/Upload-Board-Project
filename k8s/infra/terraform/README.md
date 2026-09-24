@@ -427,6 +427,7 @@ helm upgrade sharenpo . \
   --reuse-values \
   --set ingress.enabled=true \
   --set frontend.enabled=true \
+  --set admin.enabled=true \
   --set ingress.className=alb \
   --set ingress.annotations."kubernetes\.io/ingress\.class"=alb \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/scheme"=internet-facing \
@@ -434,7 +435,7 @@ helm upgrade sharenpo . \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
-  --set-json 'ingress.hosts=[{"host":"<your-domain>","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"}]}]'
+  --set-json 'ingress.hosts=[{"host":"<your-domain>","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"},{"path":"/admin","pathType":"Prefix","service":"admin"}]}]'
 ```
 
 The last two annotations are what actually forces the HTTP→HTTPS redirect (found missing
@@ -446,7 +447,7 @@ also found and fixed in that same 2026-09-13 review: `--set` on an array index r
 whole element rather than merging into it, so a bare `.host` override silently rendered an
 `Ingress` with a real host and **zero paths** (verified by rendering it), exactly the
 "routing rules quietly vanish" failure ADR 0058 exists to prevent. `--set-json` supplies the
-full `hosts[0]` object — host, the complete ADR 0058 path list, and the ADR 0060 `/` frontend rule together — in one write. Leave the last out and the SPA silently disappears while the API keeps working.
+full `hosts[0]` object — host, the complete ADR 0058 path list, the ADR 0060 `/` frontend rule, and the ADR 0062 `/admin` admin rule together — in one write. Leave the frontend rule out and the SPA silently disappears while the API keeps working; leave the admin rule out and `/admin` falls through to the frontend's `/` rule, so the console never loads.
 
 For a checked-in, repeatable version of this instead of retyping `--set` flags on the
 command line, `k8s/helm/values-prod.yaml` carries the equivalent config (host, the full
