@@ -24,7 +24,7 @@ Before making any change:
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer `memoryStorage`) and `upload.controller.ts` (100MB size limit) together with `backend/upload/upload.service.ts` (`stageTemp` — `temp_{uuid}_{timestamp}` naming, calls the `FileStorage` port, ADR 0029 D4)
    - Storage adapter change→ read `backend/storage/file-storage.interface.ts` (the `FileStorage` port + `FILE_STORAGE` token), `local-disk.storage.ts` / `s3.storage.ts` (the two implementations), and `storage.module.ts` (the `STORAGE_DRIVER`-keyed factory, ADR 0029)
    - Container/deploy change→ read `Dockerfile` (non-root `USER`, `HEALTHCHECK`, migration removed from `CMD` — ADR 0030/0032) and `docker-compose.yml` (the one-shot `migrate` service) together with `backend/health/` (`GET /health/live`/`GET /health/ready` — ADR 0031)
-   - Helm/K8s deploy change→ read `k8s/helm/` (`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/disabled-by-default Ingress with an explicit path allow-list (ADR 0058, no `/` catch-all on the backend Service — ADR 0060, landed 2026-09-21, adds one `/` rule (`service: frontend`) scoped to a values-gated frontend Deployment+Service (`frontend.enabled`, default false, on in `values-prod.yaml`) on the same Ingress; the backend Service stays allow-listed)/disabled-by-default NetworkPolicy, ADR 0056) and its `README.md` (Secret creation runbook, `existingSecret`-only consumption). `k8s/` holds no manifests outside this chart — the standalone raw manifests once at `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/` were deleted (ADR 0042); do not re-add static manifests alongside the chart (ADR 0037/0041/0042)
+   - Helm/K8s deploy change→ read `k8s/helm/` (`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/disabled-by-default Ingress with an explicit path allow-list (ADR 0058, no `/` catch-all on the backend Service — ADR 0060, landed 2026-09-21, adds one `/` rule (`service: frontend`) scoped to a values-gated frontend Deployment+Service (`frontend.enabled`, default false, on in `values-prod.yaml`) on the same Ingress, and ADR 0062 (2026-09-23) adds a third the same way — one `/admin` rule (`service: admin`) to a values-gated admin Deployment+Service (`admin.enabled`, default false, on in `values-prod.yaml`), served under `/admin/` by nginx `alias`; the backend Service stays allow-listed)/disabled-by-default NetworkPolicy, ADR 0056) and its `README.md` (Secret creation runbook, `existingSecret`-only consumption). `k8s/` holds no manifests outside this chart — the standalone raw manifests once at `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/` were deleted (ADR 0042); do not re-add static manifests alongside the chart (ADR 0037/0041/0042)
    - Terraform/infra change  → `k8s/infra/terraform/` is three independent root modules, not one — `cluster/` (`module.vpc`+`module.eks`), `app-infra/` (RDS/S3+IRSA/Secrets Manager/Route53+ACM, reads `cluster/` via `terraform_remote_state`), `addons/` (`module.eks_blueprints_addons` — ALB Controller+ESO, the only state reading **both** other states). Each is `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` with its own state file, stored in S3 with native locking and SSE-S3 encryption rather than Terraform's local-file default (ADR 0057, amends ADR 0044 D3 — code-complete 2026-09-12, bucket creation and the actual migration deferred to real deployment time); read the one(s) the change actually touches. Read `README.md` (the three-step `cluster` → `app-infra` → `addons` apply order and its destroy-order reversal, the `SecretStore`/`ExternalSecret` one-time manual `kubectl apply` step, and the "Known gap" section covering the app's dedicated-ServiceAccount IRSA wiring — `app-infra/main.tf`'s trust policy, `k8s/helm/`'s `serviceaccount.yaml`+`values-prod.yaml`, and `deploy.sh`'s `HELM_RELEASE` default all pinned to the name `sharenpo` as of 2026-09-03, code-complete and validated but never applied against real AWS; the old `default`-ServiceAccount IRSA annotation this superseded is now dead once that trust policy is ever applied). Design record: ADR 0038 (upstream scaffold, deferred rewrite) → ADR 0043 (project adaptation — implemented 2026-08-18) → ADR 0044 (three-state split — implemented 2026-08-20, `terraform validate`/`fmt -check` pass in all three directories) → ADR 0057 (state backend — S3 native lock + SSE-S3, no DynamoDB/KMS, amends 0044 D3 — code-complete 2026-09-12, not applied). **Both ADRs' addenda say this config had never been `apply`d against real AWS — that was true when written, then briefly false, then true again.** All three states were applied 2026-08-25–27 (a live EKS cluster, RDS instance, S3 bucket, Route53 zone, ACM certificate, plus the app itself deployed via Helm — ADR 0039's Addendum records a same-window TLS-verification defect found and fixed against that live RDS), then **fully destroyed 2026-08-28** to stop the ongoing AWS bill once the deploy was proven end-to-end — nothing from this stack currently exists or costs money (verified via `aws eks/rds/ec2/elb` describe calls returning empty/not-found across the board). Currently: not applied. Before assuming either state, run `terraform plan` in each of the three directories — the ADR addenda and this line are both point-in-time snapshots, not live state. The ADR addenda are deliberately left as written — they record what was true when written; the correction lives here and in ROADMAP.md §7
    - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `LocalDiskStorage.unlink`/`S3Storage.unlink` (post-commit unlink through the `FileStorage` port, ADR 0020/0023/0029)
    - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
@@ -1617,16 +1617,18 @@ Architecture Decisions above remain operative.
   Network Policy enforcement agent (a different engine than Calico) stays genuinely
   AWS-only-verifiable — the same residual ADR 0056 already carries, not a new one
   (ROADMAP.md §9)
-- Found while implementing ADR 0060 (2026-09-21), **not fixed, not yet scheduled** — details in that
-  ADR's implementation addendum: (1) `frontend/` and `admin/` have no `packageManager` pin, so
-  corepack resolves the latest pnpm — 12.5.1 at the time, which corepack 0.34.0 (the one in
-  `node:24.8.0`) cannot run; `frontend/Dockerfile` pins 10.14.0 itself, but the `frontend-*` and
-  `admin-*` CI jobs stay unpinned (green on 2026-09-17, nothing keeps them so). (2) The AWS Load
-  Balancer Controller's default `target-type` is `instance`, which needs a `NodePort`/`LoadBalancer`
-  Service — this chart's Services are `ClusterIP` and the commented-out prod annotations don't set
-  `target-type: ip`, so enabling the Ingress is expected to fail until they do (not observed live).
-  (3) `docker-tag-cleanup.yml` prunes only `bluecode1775/sharenpo`; the frontend repository's sha
-  tags accumulate.
+- ~~Found while implementing ADR 0060 (2026-09-21), not fixed, not yet scheduled~~ — **all three
+  resolved 2026-09-22/23**: (1) `packageManager: pnpm@10.14.0` is now pinned in `frontend/`'s and
+  `admin/`'s `package.json` (`3238f06`) — before that, corepack resolved the latest pnpm (12.5.1 at
+  the time), which corepack 0.34.0 in `node:24.8.0` cannot run. `frontend/Dockerfile` and
+  `admin/Dockerfile` still pin 10.14.0 themselves; how the CI jobs behave with the pin is not yet
+  confirmed on Actions. (2) The prod Ingress annotation template now sets `target-type: ip` (the
+  controller's `instance` default needs a `NodePort`/`LoadBalancer` Service, and this chart's are
+  `ClusterIP`), together with the NetworkPolicy ingress rule for the ALB
+  ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.md) addendum) — coded and rendered,
+  **not observed against a live ALB**. (3) `docker-tag-cleanup.yml` now prunes `sharenpo-frontend`
+  (`3238f06`) and `sharenpo-admin` (`3ed7e8b`, ADR 0062 D6) as well. The `admin/` hosting ADR 0060
+  left open landed as [ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.md) (2026-09-23).
 - ~~`app.enableShutdownHooks()` is never called in `backend/main.ts`~~ — **resolved
   2026-09-21** ([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.md)): the
   2026-09-16 review had deferred the one-line fix to the redeploy as not urgent
@@ -1687,8 +1689,10 @@ slice now does describe this repo's contracts**; verify current behavior against
 remnant (Apollo/`/graphql`, rooms, ban/force-logout) was deleted in the same pass,
 not adapted — nothing chat-related remains to be read as reference material. It is
 still wired into no root tooling (outside the lint glob, Jest `roots`,
-`tsconfig.build.json`, compose, and CI) and still carries its own `package.json` and
-tooling, like `frontend/`. **This is now the sole admin surface** — the other
+`tsconfig.build.json`, and compose) and still carries its own `package.json` and
+tooling, like `frontend/` — its CI jobs (`admin-lint-and-unit`, `admin-e2e`,
+`docker-publish-admin`) run inside `admin/` with their own install, and it deploys as a third
+workload on the same ALB at `/admin` ([ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.md)). **This is now the sole admin surface** — the other
 candidate, `frontend/src/features/admin/AdminPage.tsx` (a 17-line stub with no
 backend calls), was deleted 2026-08-06 once this console's adaptation proved the
 import was not "mostly deletable," settling Stage 5's last open row (ROADMAP.md
@@ -2006,7 +2010,7 @@ service and polls the Dockerfile's own `HEALTHCHECK` (`GET /health/live`) until
 healthy — the image is never pushed unproven. A sibling `docker-publish-frontend` job (`needs: [frontend-lint, frontend-e2e]`, ADR 0060) publishes the SPA's nginx image
 `bluecode1775/sharenpo-frontend` under the same `:<sha>` tag and the same branch-aware split; its
 smoke test checks the deep-link fallback, a 404 for a missing `/assets` file, and the CSP header
-before the push. A workflow-wide `concurrency:
+before the push. A `docker-publish-admin` job (`needs: [admin-lint-and-unit, admin-e2e]`, ADR 0062) does the same for `bluecode1775/sharenpo-admin`, its smoke test adjusted to the `/admin/` prefix (a 301 from bare `/admin`). A workflow-wide `concurrency:
 cancel-in-progress` block (ADR 0048 D3) cancels a superseded run when a branch
 gets pushed to again before its CI finishes. Local containerization: a
 multi-stage `Dockerfile` + `docker-compose.yml` (ADR 0015; hardened 2026-08-08 —
