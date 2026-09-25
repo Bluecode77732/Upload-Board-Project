@@ -150,6 +150,15 @@ metrics:
 networkPolicy:
   enabled: true
 
+# clamd 이미지(ADR 0059). values.yaml 기본값 clamav/clamav:stable은 Docker Hub에 linux/amd64만
+# 있어서(2026-09-25 조회), 상시 노드가 graviton(arm64)인 이 오버레이에서는 그대로 두면 이미지를
+# 못 받는다. -debian 접미 태그는 amd64/arm64/ppc64le 멀티아치다. 로컬 kind·Docker Desktop과 CI는
+# amd64라 values.yaml 기본값을 계속 쓴다. clamdcheck.sh 프로브·/var/lib/clamav 경로가 이 태그에도
+# 있는지는 배포 전 로컬 amd64 실행으로 확인한다.
+clamav:
+  image:
+    tag: stable-debian
+
 # 프론트엔드(SPA) nginx 워크로드(ADR 0060) — 실제 배포에서는 켠다. same-origin이라 CORS_ORIGIN을
 # 따로 두지 않는다(위 env에도 없다). 이미지 태그는 deploy.sh가 백엔드 image.tag와 같은 sha로
 # `--set frontend.image.tag=`를 덮어쓴다 — 여기 값(기본 "latest")은 deploy.sh를 거치지 않을 때의
