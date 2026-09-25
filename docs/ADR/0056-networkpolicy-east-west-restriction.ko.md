@@ -1,6 +1,6 @@
 # ADR 0056: 클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy
 
-- Status: Accepted — implemented, kind+Calico 검증 완료(2026-09-22 addendum의 ALB 인바운드 허용 규칙은 미검증 — 라이브 EKS 클러스터 필요)
+- Status: Accepted — implemented, kind+Calico 검증 완료(2026-09-22 addendum의 ALB 인바운드 허용 규칙은 미검증 — 라이브 EKS 클러스터 필요). 2026-09-26 추가 기록에서 AWS 에이전트를 켜기로 결정했고, 그 코드 변경과 라이브 검증은 후속 작업
 - Date: 2026-09-11
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)
 - English: [0056-networkpolicy-east-west-restriction.md](0056-networkpolicy-east-west-restriction.md)
@@ -203,3 +203,52 @@ true` 상태는 그대로다.
 단서대로 이게 Calico가 아니라 AWS 자신의 VPC CNI Network Policy 에이전트로
 동일하게 강제되는지 확인한다. `k8s/helm/README.md`("Enabling HTTPS
 (Ingress)")의 라이브 전용 미해결 점검 목록에 올려 뒀다.
+
+### 추가 기록 (2026-09-26) — VPC CNI 에이전트를 켜기로 함. 코드 변경과 라이브 검증은 후속 작업
+
+Context와 D1이 하나를 열어 뒀다. `values-prod.yaml`이 `networkPolicy.enabled: true`로 켜 뒀지만
+`cluster/main.tf`의 `vpc-cni` 애드온이 기본 설정으로 돌아서, 규칙을 강제하는 Network Policy
+에이전트가 꺼져 있고 정책은 작성만 된 채 아무 효과가 없다. **개발자가 2026-09-26에 결정했다:
+강제를 켠다.** 정책을 효과 없이 두지 않겠다는 것이다. 대안이던 `vpc-cni = {}` 유지는 코드도
+필요 없고 트래픽을 막을 위험도 없지만, `values-prod.yaml`이 켜져 있다고 말하는 방화벽이 아무
+일도 하지 않는 채로 남는다. D1대로 에이전트가 켜지는 순간 차트를 다시 바꾸지 않고도 정책이
+효력을 갖는다.
+
+**여기에는 결정만 기록한다. `cluster/main.tf`는 아직 바뀌지 않았다.**
+
+켜는 데 필요한 것은 AWS의 EKS 문서(2026-09-26에 읽음, 실행해 보지는 않음)에 따르면 다음과 같다.
+
+- 애드온 설정값 `{"enableNetworkPolicy": "true"}` — 이 저장소에서는 `cluster/main.tf`의
+  `cluster_addons.vpc-cni.configuration_values = jsonencode({ enableNetworkPolicy = "true" })`다.
+  (`k8s/infra/terraform/README.md`가 예전에 적은 `ENABLE_NETWORK_POLICY`는 self-managed
+  애드온의 설정이지, 관리형 애드온의 키가 아니다.)
+- VPC CNI `v1.14.0-eksbuild.3` 이상, 노드 커널 `5.10` 이상(EKS 최적화 Amazon Linux AMI는
+  이미 충족). 지금 `vpc-cni = {}`가 어떤 버전으로 해석되는지는 확인하지 못했다. Kubernetes
+  `1.34`에서는 훨씬 새로운 버전일 가능성이 매우 높다.
+- 기본값인 "standard 모드": 새 파드는 정책이 붙기 전까지 전부 허용 상태로 시작한다.
+  `strict` 모드(기본 거부)는 택하지 않는다 — CoreDNS를 포함해 파드가 닿는 모든 대상에
+  정책이 있어야 하기 때문이다.
+- 에이전트가 노드 포트 `8162`(메트릭)와 `8163`(상태 확인 프로브)를 쓴다. 이미 그 포트를 쓰는
+  앱은 실패한다.
+
+**후속 작업**(아직 하나도 하지 않았다):
+
+1. 코드: 위 `cluster/main.tf` 변경, 이어서 `cluster/`에서 `terraform init -backend=false`,
+   `fmt -check`, `validate` — `plan`과 `apply`는 하지 않는다.
+2. 에이전트를 켠 뒤의 라이브 검증(개발자가 실행하고 세션은 보고받은 내용을 기록한다).
+   `k8s/helm/README.md`의 Pending 목록에도 있다:
+   1. `aws-node` 파드가 컨테이너 두 개(에이전트가 두 번째)로 떠 있고 VPC CNI 버전이
+      `v1.14.0-eksbuild.3` 이상인지.
+   2. 앱 파드가 Ready가 되고 `/health/live`, `/health/ready`가 계속 통과하는지 — kubelet
+      프로브가 막히지 않는지(`aws/amazon-vpc-cni-k8s#2571`).
+   3. ALB 타깃 그룹이 healthy인지(위의 VPC CIDR 인바운드 규칙).
+   4. 다른 네임스페이스의 파드가 앱 파드에 닿지 못하고(타임아웃), 허용 목록에 없는 포트로 나가는
+      egress도 타임아웃되는지 — 렌더링만이 아니라 강제가 실제로 동작하는지.
+   5. 허용 경로가 동작하는지: DNS, 데이터베이스(5432), clamd(3310), HTTPS/443(S3).
+      EICAR 업로드는 거부되고 정상 파일은 통과하는지(ADR 0059의 AWS 전용 잔여 검증).
+   6. Prometheus가 백엔드를 계속 스크레이프하는지. 인바운드 규칙은 같은 네임스페이스 파드와
+      `ingress.enabled`가 true일 때의 VPC CIDR만 허용하는데 Prometheus는 다른 네임스페이스에서
+      돌기 때문에, Ingress가 꺼져 있으면 스크레이프가 막힐 수 있다. 템플릿에서 추론한 것이며
+      관찰한 적은 없다.
+   7. ExternalDNS, External Secrets, ALB Controller가 영향받지 않는지: 정책의 `podSelector`는
+      앱 라벨뿐이다.

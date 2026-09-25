@@ -1,6 +1,6 @@
 # ADR 0056: NetworkPolicy for cluster east-west traffic restriction
 
-- Status: Accepted — implemented, kind+Calico-verified (the 2026-09-22 addendum's ALB ingress-allow rule is unverified — needs a live EKS cluster)
+- Status: Accepted — implemented, kind+Calico-verified (the 2026-09-22 addendum's ALB ingress-allow rule is unverified — needs a live EKS cluster); the 2026-09-26 addendum decides to turn the AWS agent on — its code change and live checks are follow-up work
 - Date: 2026-09-11
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)
 - 한국어: [0056-networkpolicy-east-west-restriction.ko.md](0056-networkpolicy-east-west-restriction.ko.md)
@@ -209,3 +209,52 @@ group shows healthy targets (the `ip`-mode fix this rule accompanies) and,
 per D2's own standing caveat, that AWS's VPC CNI Network Policy agent — not
 Calico — enforces the rule identically. Listed as a live-only pending check
 in `k8s/helm/README.md` ("Enabling HTTPS (Ingress)").
+
+### Addendum (2026-09-26) — The VPC CNI agent will be turned on; the code change and the live checks are follow-up work
+
+The Context and D1 left one thing open: `values-prod.yaml` sets `networkPolicy.enabled: true`,
+but `cluster/main.tf`'s `vpc-cni` add-on runs with its defaults, so the Network Policy agent
+that enforces the rule is off and the policy is written but inert. **Decided by the developer
+on 2026-09-26: turn enforcement on**, rather than leave the policy inert. The alternative —
+keeping `vpc-cni = {}` — costs no code and cannot block any traffic, but leaves a firewall that
+`values-prod.yaml` says is on doing nothing. Per D1 the policy then takes effect the moment the
+agent is on, with no second chart change.
+
+**Only the decision is recorded here. Nothing in `cluster/main.tf` has changed yet.**
+
+What turning it on takes, from AWS's EKS documentation (read 2026-09-26; not run):
+
+- The add-on configuration value `{"enableNetworkPolicy": "true"}` — in this repo,
+  `cluster_addons.vpc-cni.configuration_values = jsonencode({ enableNetworkPolicy = "true" })`
+  in `cluster/main.tf`. (The `ENABLE_NETWORK_POLICY` that `k8s/infra/terraform/README.md`
+  used to name is the self-managed add-on's setting, not the managed add-on's key.)
+- VPC CNI `v1.14.0-eksbuild.3` or later, and node kernel `5.10` or later (the EKS-optimized
+  Amazon Linux AMIs already have it). What `vpc-cni = {}` resolves to today was not checked;
+  on Kubernetes `1.34` it is very likely newer.
+- The default "standard mode": a new pod starts with allow-all until its policies attach.
+  `strict` mode (default-deny) is not chosen — it needs a policy for every endpoint a pod
+  touches, CoreDNS included.
+- The agent binds node ports `8162` (metrics) and `8163` (health probes); an app already using
+  them fails.
+
+**Follow-up work** (none of it done):
+
+1. Code: the `cluster/main.tf` change above, then `terraform init -backend=false`,
+   `fmt -check` and `validate` in `cluster/` — no `plan` or `apply`.
+2. Live checks once the agent is on (the developer runs them; the session records what is
+   reported). They are also in `k8s/helm/README.md`'s Pending list:
+   1. `aws-node` pods show two containers (the agent is the second) and the VPC CNI version is
+      `v1.14.0-eksbuild.3` or later.
+   2. The app pods become Ready and `/health/live` and `/health/ready` keep passing — kubelet's
+      probes are not blocked (`aws/amazon-vpc-cni-k8s#2571`).
+   3. The ALB's target group is healthy (the VPC-CIDR ingress rule above).
+   4. A pod in another namespace cannot reach the app pod (times out), and egress to a port
+      that is not allow-listed times out — the enforcement is real, not just rendered.
+   5. The allowed paths work: DNS, the database (5432), clamd (3310) and HTTPS/443 (S3). An
+      EICAR upload is refused and a clean file passes (ADR 0059's AWS-only residual).
+   6. Prometheus still scrapes the backend. The ingress rule admits same-namespace pods, plus
+      the VPC CIDR when `ingress.enabled` is true, and Prometheus runs in another namespace —
+      so with Ingress off the scrape may be blocked. An inference from the template, not
+      observed.
+   7. ExternalDNS, External Secrets and the ALB Controller are unaffected: the policy's
+      `podSelector` is the app's labels only.

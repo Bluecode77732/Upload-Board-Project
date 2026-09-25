@@ -376,6 +376,17 @@ ALB (ADR 0063), verify explicitly rather than assuming the annotations worked:
   0056 D2's standing caveat, that this is enforced by AWS's own VPC CNI Network Policy
   agent and not just rendered — `kind`+Calico cannot simulate a real VPC CIDR, so this
   rule has no non-live way to verify beyond `helm template`.
+- Once the VPC CNI Network Policy agent is on (decided 2026-09-26, `cluster/main.tf` not
+  changed yet — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md)
+  Addendum), also confirm enforcement is real and nothing legitimate is blocked: `aws-node`
+  pods show two containers and the VPC CNI version is `v1.14.0-eksbuild.3` or later; app pods
+  become Ready with `/health/live` and `/health/ready` passing (kubelet probes not blocked,
+  `aws/amazon-vpc-cni-k8s#2571`); a pod in another namespace cannot reach the app pod and a
+  non-allow-listed egress port times out; DNS, the database (5432), clamd (3310) and HTTPS/443
+  (S3) work, an EICAR upload is refused and a clean file passes; Prometheus still scrapes the
+  backend (the ingress rule admits same-namespace pods, plus the VPC CIDR only when Ingress is
+  on — so with Ingress off the scrape may be blocked; an inference, not observed);
+  ExternalDNS, External Secrets and the ALB Controller are unaffected.
 - Sign in over the real HTTPS connection, then reload the page: the session survives. The
   refresh cookie must arrive as `HttpOnly; Secure; SameSite=Strict; Path=/auth/token` and go
   back on `POST /auth/token/refresh` — a `Secure` cookie only works when the browser's

@@ -1518,8 +1518,10 @@ Architecture Decisions above remain operative.
   matching `cluster/main.tf`'s `var.vpc_cidr`), and HTTPS/443 (S3/AWS API — no VPC
   endpoint exists to scope this further). `values-prod.yaml` turns it on, but it's
   currently inert against the real (torn-down) EKS target: `cluster/main.tf`'s `vpc-cni`
-  addon doesn't enable the VPC CNI Network Policy enforcement agent yet — a separate,
-  unscheduled Terraform task. **Live-verified 2026-09-11** against a throwaway `kind`
+  addon doesn't enable the VPC CNI Network Policy enforcement agent yet — **decided
+  2026-09-26 to enable it** (ADR 0056 Addendum; the add-on value is `enableNetworkPolicy`),
+  but that `cluster/main.tf` change is not made and it, plus the live checks, are follow-up
+  work. **Live-verified 2026-09-11** against a throwaway `kind`
   cluster with Calico installed (`kind`'s own CNI doesn't enforce `NetworkPolicy`) and a
   throwaway `postgres:16` standing in for RDS: `helm install --wait` succeeded (kubelet's
   liveness/readiness probes — which check DB connectivity, ADR 0031 — reached the pod

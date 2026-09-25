@@ -442,8 +442,13 @@ pod's east-west traffic, and `values-prod.yaml` already sets `networkPolicy.enab
 not enabled, so applying this against the real EKS cluster today creates the
 `NetworkPolicy` object but doesn't enforce it.
 
-Turning enforcement on is a `cluster_addons.vpc-cni.configuration_values` change (setting
-`ENABLE_NETWORK_POLICY`) — not yet made, and not part of this ADR's scope. Before making
+Turning enforcement on is a `cluster_addons.vpc-cni.configuration_values` change. **Decided
+2026-09-26 to do it** ([ADR 0056's 2026-09-26 Addendum](../../../docs/ADR/0056-networkpolicy-east-west-restriction.md)):
+the managed add-on's setting is `{"enableNetworkPolicy": "true"}` (the
+`ENABLE_NETWORK_POLICY` this section used to name is the self-managed add-on's setting).
+**The change is not made yet** — `cluster/main.tf` still has `vpc-cni = {}` — and it, plus
+the live checks, are follow-up work listed in that Addendum and in `k8s/helm/README.md`'s
+Pending list. Before making
 that change against a real cluster, re-verify `/health/live`/`/health/ready` still pass
 under AWS's own Network Policy agent specifically: the kind+Calico verification ADR 0056
 already ran proves the policy's shape is correct, but Calico and AWS's agent are different

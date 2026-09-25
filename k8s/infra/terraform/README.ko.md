@@ -439,9 +439,13 @@ east-west 트래픽을 제한하고, `values-prod.yaml`은 이미 `networkPolicy
 있지 않습니다 — 지금 이대로 실제 EKS 클러스터에 적용해도 `NetworkPolicy` 오브젝트는
 생성되지만 강제되지는 않습니다.
 
-강제를 켜는 건 `cluster_addons.vpc-cni.configuration_values`를 바꿔
-`ENABLE_NETWORK_POLICY`를 설정하는 작업입니다 — 아직 하지 않았고, 이 ADR의 범위에도
-포함되지 않습니다. 실제 클러스터에 그 변경을 적용하기 전에는 AWS 자신의 Network
+강제를 켜는 건 `cluster_addons.vpc-cni.configuration_values`를 바꾸는 작업입니다.
+**2026-09-26에 켜기로 결정했습니다**([ADR 0056의 2026-09-26 추가 기록](../../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)):
+관리형 애드온의 설정값은 `{"enableNetworkPolicy": "true"}`입니다(이 절이 예전에 적은
+`ENABLE_NETWORK_POLICY`는 self-managed 애드온의 설정입니다). **아직 변경하지 않았고**
+`cluster/main.tf`는 여전히 `vpc-cni = {}`입니다. 그 변경과 라이브 검증은 후속 작업이며, 그
+추가 기록과 `k8s/helm/README.md`의 Pending 목록에 정리돼 있습니다. 실제 클러스터에 그 변경을
+적용하기 전에는 AWS 자신의 Network
 Policy 에이전트 아래에서 `/health/live`/`/health/ready`가 여전히 통과하는지 반드시
 다시 검증하세요: ADR 0056이 이미 돌린 kind+Calico 검증은 정책의 모양이 맞다는 것만
 증명합니다 — Calico와 AWS 에이전트는 서로 다른 강제 엔진이고, 실제로 이 CNI에서

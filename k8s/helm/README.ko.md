@@ -375,6 +375,17 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   남긴 단서대로 이게 실제로 AWS 자신의 VPC CNI Network Policy 에이전트로 강제되는지(단순
   렌더링이 아니라)도 확인한다 — `kind`+Calico로는 실제 VPC CIDR을 흉내 낼 수 없어서, 이
   규칙은 `helm template` 이상으로 검증할 방법이 없다.
+- VPC CNI Network Policy 에이전트를 켠 뒤에는(2026-09-26에 결정, `cluster/main.tf`는 아직
+  바뀌지 않음 — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)
+  추가 기록) 강제가 실제로 동작하고 정당한 트래픽이 막히지 않는지도 확인한다: `aws-node` 파드가
+  컨테이너 두 개로 떠 있고 VPC CNI 버전이 `v1.14.0-eksbuild.3` 이상인지, 앱 파드가 Ready가 되고
+  `/health/live`·`/health/ready`가 통과하는지(kubelet 프로브가 막히지 않는지,
+  `aws/amazon-vpc-cni-k8s#2571`), 다른 네임스페이스의 파드가 앱 파드에 닿지 못하고 허용 목록에 없는
+  egress 포트가 타임아웃되는지, DNS·데이터베이스(5432)·clamd(3310)·HTTPS/443(S3)이 동작하고 EICAR
+  업로드는 거부되며 정상 파일은 통과하는지, Prometheus가 백엔드를 계속 스크레이프하는지(인바운드
+  규칙은 같은 네임스페이스 파드와 Ingress가 켜졌을 때의 VPC CIDR만 허용하므로 Ingress가 꺼져
+  있으면 스크레이프가 막힐 수 있다 — 추론이며 관찰한 적 없음), ExternalDNS·External Secrets·ALB
+  Controller가 영향받지 않는지.
 - 실제 HTTPS 연결로 로그인한 뒤 페이지를 새로고침해도 세션이 유지되는지. refresh 쿠키가
   `HttpOnly; Secure; SameSite=Strict; Path=/auth/token`으로 내려오고 `POST /auth/token/refresh`에
   다시 실려 가야 한다 — `Secure` 쿠키는 브라우저 연결이 HTTPS일 때만 동작하므로 다른 곳에서는
