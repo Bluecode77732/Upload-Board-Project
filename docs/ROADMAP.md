@@ -823,7 +823,7 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   34 destroy** including `aws_eks_cluster.this[0] must be replaced`. Nothing was applied and
   the defaults were reverted. **Why deferred rather than scheduled**: AWS resource names are
   not product branding — every user-visible surface is already `Sharenpo`, and the domain
-  layer specifically was already `sharenpo.com` (Route53 + ACM) with an IAM user
+  layer specifically was already `sharenpo.cloud` (Route53 + ACM) with an IAM user
   `sharenpo-user`, so nothing a user touches depends on this. The cost also does not grow by
   waiting: renaming costs a cluster rebuild plus a database migration whenever it is done, and
   it becomes **free** if the infrastructure is ever rebuilt for another reason (a region move,

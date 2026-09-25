@@ -954,7 +954,7 @@
   되돌렸다. 그 README에서 남긴 것은 릴리스명 변경뿐인데, 릴리스명은 AWS 리소스 이름이 아니기
   때문이다. S3 버킷은 애초에 위험하지 않았다 — `s3_bucket_name`은 기본값이 없어 apply 때 주입되는
   값이라 plan에서도 in-place 갱신으로 찍혔다. 도메인 계층은 이미 새 이름이었다(Route53 존과 ACM
-  인증서가 `sharenpo.com`, IAM 사용자가 `sharenpo-user`). 따라서 이 보류에 걸리는 사용자 대면
+  인증서가 `sharenpo.cloud`, IAM 사용자가 `sharenpo-user`). 따라서 이 보류에 걸리는 사용자 대면
   표면은 없다. 후속 항은 [ROADMAP.ko.md](ROADMAP.ko.md) §7에 남겼다.
   **검증**: `pnpm lint` 0 에러, 단위 테스트 220/220, 세 패키지 `pnpm build` 모두 통과,
   `helm lint`/`helm template`, `docker compose config`, 그리고 실제 프로덕션 빌드로 렌더한

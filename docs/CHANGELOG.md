@@ -951,7 +951,7 @@ development line (package.json version).
   applied and the variable defaults were reverted; only the Helm release name in that README
   was kept, since it is not an AWS resource name. The S3 bucket was never at risk:
   `s3_bucket_name` has no default and is supplied per apply, and the plan showed it updated
-  in place. The domain layer was already on the new name (`sharenpo.com` Route53 zone and ACM
+  in place. The domain layer was already on the new name (`sharenpo.cloud` Route53 zone and ACM
   certificate, IAM user `sharenpo-user`), so no user-visible surface depends on the deferral.
   Follow-up recorded in [ROADMAP.md](ROADMAP.md) §7.
   **Verified**: `pnpm lint` at 0 errors, 220/220 unit tests, `pnpm build` green in all three

@@ -784,7 +784,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   스냅샷 없는 데이터 소멸을 뜻한다. `cluster`는 **34 add / 20 change / 34 destroy**이며
   `aws_eks_cluster.this[0] must be replaced`가 포함된다. 아무것도 apply하지 않았고 기본값은
   되돌렸다. **일정에 넣지 않고 보류한 이유**: AWS 리소스 이름은 브랜딩이 아니다. 사용자에게
-  보이는 표면은 이미 전부 `Sharenpo`이고, 특히 도메인 계층은 이미 `sharenpo.com`(Route53 +
+  보이는 표면은 이미 전부 `Sharenpo`이고, 특히 도메인 계층은 이미 `sharenpo.cloud`(Route53 +
   ACM)에 IAM 사용자도 `sharenpo-user`라, 사용자가 만지는 것 중 이 항목에 걸리는 게 없다.
   미룬다고 비용이 커지지도 않는다 — 언제 하든 클러스터 재구축과 데이터베이스 마이그레이션이
   들고, 다른 이유로 인프라를 새로 세우는 시점(리전 이동, 환경 재구축, remote state 전환)에는
