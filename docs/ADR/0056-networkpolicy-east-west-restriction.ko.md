@@ -1,6 +1,6 @@
 # ADR 0056: 클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy
 
-- Status: Accepted — implemented, kind+Calico 검증 완료(2026-09-22 addendum의 ALB 인바운드 허용 규칙은 미검증 — 라이브 EKS 클러스터 필요). 2026-09-26 추가 기록에서 AWS 에이전트를 켜기로 결정했고, 그 코드 변경과 라이브 검증은 후속 작업
+- Status: Accepted — implemented, kind+Calico 검증 완료(2026-09-22 addendum의 ALB 인바운드 허용 규칙은 미검증 — 라이브 EKS 클러스터 필요). 2026-09-26 추가 기록에서 AWS 에이전트를 코드로 켰고(`cluster/main.tf`, `terraform validate`/`fmt -check` 통과, 미적용), 라이브 검증은 후속 작업
 - Date: 2026-09-11
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)
 - English: [0056-networkpolicy-east-west-restriction.md](0056-networkpolicy-east-west-restriction.md)
@@ -204,7 +204,7 @@ true` 상태는 그대로다.
 동일하게 강제되는지 확인한다. `k8s/helm/README.md`("Enabling HTTPS
 (Ingress)")의 라이브 전용 미해결 점검 목록에 올려 뒀다.
 
-### 추가 기록 (2026-09-26) — VPC CNI 에이전트를 켜기로 함. 코드 변경과 라이브 검증은 후속 작업
+### 추가 기록 (2026-09-26) — VPC CNI 에이전트를 코드로 켬. 적용과 라이브 검증은 후속 작업
 
 Context와 D1이 하나를 열어 뒀다. `values-prod.yaml`이 `networkPolicy.enabled: true`로 켜 뒀지만
 `cluster/main.tf`의 `vpc-cni` 애드온이 기본 설정으로 돌아서, 규칙을 강제하는 Network Policy
@@ -214,7 +214,8 @@ Context와 D1이 하나를 열어 뒀다. `values-prod.yaml`이 `networkPolicy.e
 일도 하지 않는 채로 남는다. D1대로 에이전트가 켜지는 순간 차트를 다시 바꾸지 않고도 정책이
 효력을 갖는다.
 
-**여기에는 결정만 기록한다. `cluster/main.tf`는 아직 바뀌지 않았다.**
+**변경은 이제 `cluster/main.tf`에 들어 있다**(`vpc-cni`의 `configuration_values`).
+`cluster/`에서 `terraform validate`와 `fmt -check`가 통과했고, plan이나 apply를 한 적은 없다.
 
 켜는 데 필요한 것은 AWS의 EKS 문서(2026-09-26에 읽음, 실행해 보지는 않음)에 따르면 다음과 같다.
 
@@ -223,18 +224,22 @@ Context와 D1이 하나를 열어 뒀다. `values-prod.yaml`이 `networkPolicy.e
   (`k8s/infra/terraform/README.md`가 예전에 적은 `ENABLE_NETWORK_POLICY`는 self-managed
   애드온의 설정이지, 관리형 애드온의 키가 아니다.)
 - VPC CNI `v1.14.0-eksbuild.3` 이상, 노드 커널 `5.10` 이상(EKS 최적화 Amazon Linux AMI는
-  이미 충족). 지금 `vpc-cni = {}`가 어떤 버전으로 해석되는지는 확인하지 못했다. Kubernetes
-  `1.34`에서는 훨씬 새로운 버전일 가능성이 매우 높다.
+  이미 충족). 애드온 버전은 비워 두어서 모듈이 클러스터 Kubernetes 버전의 기본 버전을
+  고른다(`terraform-aws-modules/eks` `v20.37.2`가 `aws_eks_addon_version`에
+  `most_recent = null`을 넘기고, 그러면 기본 버전이 돌아온다). EKS API는 2026-09-26에
+  `1.34`의 기본 버전이 `v1.22.4-eksbuild.3`(최신은 `v1.23.1`)이라고 답했고, 최소 요건보다
+  훨씬 높다. 기본 버전은 `apply` 전에 바뀔 수 있다.
 - 기본값인 "standard 모드": 새 파드는 정책이 붙기 전까지 전부 허용 상태로 시작한다.
   `strict` 모드(기본 거부)는 택하지 않는다 — CoreDNS를 포함해 파드가 닿는 모든 대상에
   정책이 있어야 하기 때문이다.
 - 에이전트가 노드 포트 `8162`(메트릭)와 `8163`(상태 확인 프로브)를 쓴다. 이미 그 포트를 쓰는
   앱은 실패한다.
 
-**후속 작업**(아직 하나도 하지 않았다):
+**후속 작업**:
 
-1. 코드: 위 `cluster/main.tf` 변경, 이어서 `cluster/`에서 `terraform init -backend=false`,
-   `fmt -check`, `validate` — `plan`과 `apply`는 하지 않는다.
+1. 코드 — 2026-09-26에 완료: 위 `cluster/main.tf` 변경. `cluster/`에서 `terraform init
+   -backend=false`, `fmt -check`, `validate`가 통과했다. 적용은 나머지 스택과 함께
+   한다(`deploy.sh cluster`).
 2. 에이전트를 켠 뒤의 라이브 검증(개발자가 실행하고 세션은 보고받은 내용을 기록한다).
    `k8s/helm/README.md`의 Pending 목록에도 있다:
    1. `aws-node` 파드가 컨테이너 두 개(에이전트가 두 번째)로 떠 있고 VPC CNI 버전이

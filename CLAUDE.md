@@ -1516,12 +1516,11 @@ Architecture Decisions above remain operative.
   pod's ingress to same-namespace pods only and default-denies egress except DNS
   (CoreDNS), DB (`networkPolicy.egress.vpcCidr:dbPort`, default `10.0.0.0/16:5432`
   matching `cluster/main.tf`'s `var.vpc_cidr`), and HTTPS/443 (S3/AWS API — no VPC
-  endpoint exists to scope this further). `values-prod.yaml` turns it on, but it's
-  currently inert against the real (torn-down) EKS target: `cluster/main.tf`'s `vpc-cni`
-  addon doesn't enable the VPC CNI Network Policy enforcement agent yet — **decided
-  2026-09-26 to enable it** (ADR 0056 Addendum; the add-on value is `enableNetworkPolicy`),
-  but that `cluster/main.tf` change is not made and it, plus the live checks, are follow-up
-  work. **Live-verified 2026-09-11** against a throwaway `kind`
+  endpoint exists to scope this further). `values-prod.yaml` turns it on, and
+  `cluster/main.tf`'s `vpc-cni` addon now enables the VPC CNI Network Policy enforcement
+  agent too (`enableNetworkPolicy`, 2026-09-26, ADR 0056 Addendum) — code-complete
+  (`terraform validate`/`fmt -check` pass) and never applied, so it is unverified on a live
+  cluster; the live checks are follow-up work. **Live-verified 2026-09-11** against a throwaway `kind`
   cluster with Calico installed (`kind`'s own CNI doesn't enforce `NetworkPolicy`) and a
   throwaway `postgres:16` standing in for RDS: `helm install --wait` succeeded (kubelet's
   liveness/readiness probes — which check DB connectivity, ADR 0031 — reached the pod

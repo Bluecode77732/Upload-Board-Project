@@ -441,23 +441,23 @@ annotate하지 않고 대신 `sharenpo` ServiceAccount를 만들고 annotate함)
 같이 쓰면, 반대 방향으로 IRSA가 깨집니다 — Terraform 쪽과 Helm 쪽은 항상
 같은 커밋에서 함께 배포하세요.
 
-## 알려진 한계: NetworkPolicy가 아직 강제되지 않음(vpc-cni Network Policy 에이전트 꺼짐)
+## 알려진 한계: NetworkPolicy 강제는 코드가 완성됐지만 한 번도 적용되지 않음(vpc-cni Network Policy 에이전트)
 
 `k8s/helm/`의 `templates/networkpolicy.yaml`([ADR
 0056](../../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md))은 앱 파드의
 east-west 트래픽을 제한하고, `values-prod.yaml`은 이미 `networkPolicy.enabled: true`로
-켜둔 상태입니다. 다만 `cluster/main.tf`의 `vpc-cni` 애드온은 기본 설정 그대로라
-(`cluster_addons = { vpc-cni = {} }`) VPC CNI의 Network Policy 강제 에이전트가 켜져
-있지 않습니다 — 지금 이대로 실제 EKS 클러스터에 적용해도 `NetworkPolicy` 오브젝트는
-생성되지만 강제되지는 않습니다.
+켜둔 상태입니다. 다만 2026-09-26까지 `cluster/main.tf`의 `vpc-cni` 애드온은 기본 설정
+그대로여서(`cluster_addons = { vpc-cni = {} }`) VPC CNI의 Network Policy 강제 에이전트가
+꺼져 있었고, 그대로 실제 EKS 클러스터에 적용하면 `NetworkPolicy` 오브젝트는 생성되지만
+강제되지는 않았습니다.
 
 강제를 켜는 건 `cluster_addons.vpc-cni.configuration_values`를 바꾸는 작업입니다.
 **2026-09-26에 켜기로 결정했습니다**([ADR 0056의 2026-09-26 추가 기록](../../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)):
 관리형 애드온의 설정값은 `{"enableNetworkPolicy": "true"}`입니다(이 절이 예전에 적은
-`ENABLE_NETWORK_POLICY`는 self-managed 애드온의 설정입니다). **아직 변경하지 않았고**
-`cluster/main.tf`는 여전히 `vpc-cni = {}`입니다. 그 변경과 라이브 검증은 후속 작업이며, 그
-추가 기록과 `k8s/helm/README.md`의 Pending 목록에 정리돼 있습니다. 실제 클러스터에 그 변경을
-적용하기 전에는 AWS 자신의 Network
+`ENABLE_NETWORK_POLICY`는 self-managed 애드온의 설정입니다). **변경은 끝났고**
+`cluster/main.tf`에 설정돼 있습니다(`terraform validate`와 `fmt -check`는 통과했고, 적용한 적은
+없습니다). 라이브 검증은 후속 작업이며, 그 추가 기록과 `k8s/helm/README.md`의 Pending 목록에
+정리돼 있습니다. 실제 클러스터에 그 변경을 적용하기 전에는 AWS 자신의 Network
 Policy 에이전트 아래에서 `/health/live`/`/health/ready`가 여전히 통과하는지 반드시
 다시 검증하세요: ADR 0056이 이미 돌린 kind+Calico 검증은 정책의 모양이 맞다는 것만
 증명합니다 — Calico와 AWS 에이전트는 서로 다른 강제 엔진이고, 실제로 이 CNI에서

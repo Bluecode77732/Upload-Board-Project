@@ -442,23 +442,23 @@ current Helm chart/`values-prod.yaml` (which no longer annotates `default`,
 and instead creates+annotates a `sharenpo` ServiceAccount), IRSA breaks the
 other way — keep the Terraform and Helm sides deployed from the same commit.
 
-## Known gap: NetworkPolicy is not yet enforced (vpc-cni Network Policy agent off)
+## Known gap: NetworkPolicy enforcement is code-complete but never applied (vpc-cni Network Policy agent)
 
 `k8s/helm/`'s `templates/networkpolicy.yaml` ([ADR
 0056](../../../docs/ADR/0056-networkpolicy-east-west-restriction.md)) restricts the app
 pod's east-west traffic, and `values-prod.yaml` already sets `networkPolicy.enabled: true`.
-`cluster/main.tf`'s `vpc-cni` addon, though, uses its default configuration
-(`cluster_addons = { vpc-cni = {} }`) — the VPC CNI's Network Policy enforcement agent is
-not enabled, so applying this against the real EKS cluster today creates the
-`NetworkPolicy` object but doesn't enforce it.
+Until 2026-09-26, though, `cluster/main.tf`'s `vpc-cni` addon used its default configuration
+(`cluster_addons = { vpc-cni = {} }`), so the VPC CNI's Network Policy enforcement agent was
+off and applying this against the real EKS cluster created the `NetworkPolicy` object without
+enforcing it.
 
 Turning enforcement on is a `cluster_addons.vpc-cni.configuration_values` change. **Decided
 2026-09-26 to do it** ([ADR 0056's 2026-09-26 Addendum](../../../docs/ADR/0056-networkpolicy-east-west-restriction.md)):
 the managed add-on's setting is `{"enableNetworkPolicy": "true"}` (the
 `ENABLE_NETWORK_POLICY` this section used to name is the self-managed add-on's setting).
-**The change is not made yet** — `cluster/main.tf` still has `vpc-cni = {}` — and it, plus
-the live checks, are follow-up work listed in that Addendum and in `k8s/helm/README.md`'s
-Pending list. Before making
+**The change is made** — `cluster/main.tf` sets it; `terraform validate` and `fmt -check`
+pass, and it has never been applied — and the live checks are follow-up work listed in that
+Addendum and in `k8s/helm/README.md`'s Pending list. Before applying
 that change against a real cluster, re-verify `/health/live`/`/health/ready` still pass
 under AWS's own Network Policy agent specifically: the kind+Calico verification ADR 0056
 already ran proves the policy's shape is correct, but Calico and AWS's agent are different

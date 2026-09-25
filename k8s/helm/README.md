@@ -376,8 +376,8 @@ ALB (ADR 0063), verify explicitly rather than assuming the annotations worked:
   0056 D2's standing caveat, that this is enforced by AWS's own VPC CNI Network Policy
   agent and not just rendered — `kind`+Calico cannot simulate a real VPC CIDR, so this
   rule has no non-live way to verify beyond `helm template`.
-- Once the VPC CNI Network Policy agent is on (decided 2026-09-26, `cluster/main.tf` not
-  changed yet — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md)
+- Once the VPC CNI Network Policy agent is on (set in `cluster/main.tf` on 2026-09-26, code-complete and never
+  applied — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md)
   Addendum), also confirm enforcement is real and nothing legitimate is blocked: `aws-node`
   pods show two containers and the VPC CNI version is `v1.14.0-eksbuild.3` or later; app pods
   become Ready with `/health/live` and `/health/ready` passing (kubelet probes not blocked,

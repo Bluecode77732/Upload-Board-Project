@@ -1548,11 +1548,10 @@ Architecture Decisions가 계속 유효하다.
   (`networkPolicy.egress.vpcCidr:dbPort`, 기본값 `10.0.0.0/16:5432` —
   `cluster/main.tf`의 `var.vpc_cidr`과 동일), HTTPS/443(S3·AWS API — 이를 더 좁힐
   VPC 엔드포인트가 없음)만 명시적으로 허용하고 나머지는 기본 거부한다.
-  `values-prod.yaml`에서 이미 켜뒀지만, 실제(현재는 철거된) EKS 대상에는 아직
-  무효하다 — `cluster/main.tf`의 `vpc-cni` 애드온이 VPC CNI Network Policy 강제
-  에이전트를 아직 켜지 않았다. 2026-09-26에 켜기로 결정했으나(ADR 0056 추가 기록, 애드온 값은
-  `enableNetworkPolicy`) 그 `cluster/main.tf` 변경은 아직 하지 않았고, 변경과 라이브 검증은
-  후속 작업이다.
+  `values-prod.yaml`에서 이미 켜뒀고, `cluster/main.tf`의 `vpc-cni` 애드온도 이제 VPC CNI
+  Network Policy 강제 에이전트를 켠다(`enableNetworkPolicy`, 2026-09-26, ADR 0056 추가 기록) —
+  코드는 완성됐고(`terraform validate`/`fmt -check` 통과) 한 번도 적용된 적 없어서 라이브
+  클러스터에서는 미검증이며, 라이브 검증은 후속 작업이다.
   **2026-09-11 실제 검증**: Calico를 설치한 throwaway `kind` 클러스터(`kind`의
   기본 CNI는 `NetworkPolicy`를 강제하지 않음)와 RDS를 대신하는 throwaway
   `postgres:16`에 대해 검증했다 — `helm install --wait`가 성공했고(kubelet의

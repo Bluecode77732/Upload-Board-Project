@@ -63,7 +63,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0053](0053-global-rate-limiting.ko.md) | `@nestjs/throttler`를 통한 전역 요청 횟수 제한 — 최초의 전역 `APP_GUARD`, health/metrics 예외 | 승인됨 — 구현됨, e2e 검증 완료 | 2026-09-10 |
 | [0054](0054-per-route-rate-limit-tuning.ko.md) | 라우트별 요청 횟수 제한 차등화 — auth/upload 강화, skipIf 기반 우회, 0053 amend | 승인됨 — 구현됨, e2e 검증 완료 | 2026-09-10 |
 | [0055](0055-helmet-security-headers.ko.md) | `helmet`을 통한 보안 응답 헤더 — 전역 미들웨어, Swagger UI를 위해 CSP script-src 완화 | 승인됨 — 구현됨, 라이브 검증 완료 | 2026-09-11 |
-| [0056](0056-networkpolicy-east-west-restriction.ko.md) | 클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy — 아웃바운드 중심, 기본 비활성 게이팅, 0041 확장 | 승인됨 — 구현됨, kind+Calico 검증 완료. 2026-09-26 추가 기록: AWS 에이전트를 켜기로 결정, 코드와 라이브 검증은 후속 | 2026-09-11 |
+| [0056](0056-networkpolicy-east-west-restriction.ko.md) | 클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy — 아웃바운드 중심, 기본 비활성 게이팅, 0041 확장 | 승인됨 — 구현됨, kind+Calico 검증 완료. 2026-09-26 추가 기록: AWS 에이전트를 코드로 켬(`validate`/`fmt -check` 통과, 미적용), 라이브 검증은 후속 | 2026-09-11 |
 | [0057](0057-terraform-state-backend-s3-native-lock.ko.md) | Terraform state 백엔드 — S3 네이티브 락, DynamoDB·KMS 없이, 0044 amends | 승인됨 — 코드 완료, 미적용 | 2026-09-12 |
 | [0058](0058-ingress-path-allowlist.ko.md) | Ingress 경로 allow-list — health·metrics·docs 차단, 0041 extends | 승인됨 — 구현 완료, helm template/lint 검증 | 2026-09-13 |
 | [0059](0059-upload-malware-scanning-clamav.ko.md) | 업로드 악성코드 스캔 — temp 쓰기 전 동기 ClamAV 게이트 | 승인됨 — 구현 완료, 라이브+CI+kind/Calico 검증 완료 | 2026-09-14 |

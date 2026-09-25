@@ -375,8 +375,8 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   남긴 단서대로 이게 실제로 AWS 자신의 VPC CNI Network Policy 에이전트로 강제되는지(단순
   렌더링이 아니라)도 확인한다 — `kind`+Calico로는 실제 VPC CIDR을 흉내 낼 수 없어서, 이
   규칙은 `helm template` 이상으로 검증할 방법이 없다.
-- VPC CNI Network Policy 에이전트를 켠 뒤에는(2026-09-26에 결정, `cluster/main.tf`는 아직
-  바뀌지 않음 — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)
+- VPC CNI Network Policy 에이전트를 켠 뒤에는(2026-09-26에 `cluster/main.tf`에 설정, 코드 완성·
+  미적용 — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)
   추가 기록) 강제가 실제로 동작하고 정당한 트래픽이 막히지 않는지도 확인한다: `aws-node` 파드가
   컨테이너 두 개로 떠 있고 VPC CNI 버전이 `v1.14.0-eksbuild.3` 이상인지, 앱 파드가 Ready가 되고
   `/health/live`·`/health/ready`가 통과하는지(kubelet 프로브가 막히지 않는지,

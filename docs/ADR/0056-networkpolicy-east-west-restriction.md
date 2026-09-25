@@ -1,6 +1,6 @@
 # ADR 0056: NetworkPolicy for cluster east-west traffic restriction
 
-- Status: Accepted — implemented, kind+Calico-verified (the 2026-09-22 addendum's ALB ingress-allow rule is unverified — needs a live EKS cluster); the 2026-09-26 addendum decides to turn the AWS agent on — its code change and live checks are follow-up work
+- Status: Accepted — implemented, kind+Calico-verified (the 2026-09-22 addendum's ALB ingress-allow rule is unverified — needs a live EKS cluster); the 2026-09-26 addendum turns the AWS agent on in code (`cluster/main.tf`; `terraform validate`/`fmt -check` pass, never applied) — its live checks are follow-up work
 - Date: 2026-09-11
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)
 - 한국어: [0056-networkpolicy-east-west-restriction.ko.md](0056-networkpolicy-east-west-restriction.ko.md)
@@ -210,7 +210,7 @@ per D2's own standing caveat, that AWS's VPC CNI Network Policy agent — not
 Calico — enforces the rule identically. Listed as a live-only pending check
 in `k8s/helm/README.md` ("Enabling HTTPS (Ingress)").
 
-### Addendum (2026-09-26) — The VPC CNI agent will be turned on; the code change and the live checks are follow-up work
+### Addendum (2026-09-26) — The VPC CNI agent is turned on in code; applying it and the live checks are follow-up work
 
 The Context and D1 left one thing open: `values-prod.yaml` sets `networkPolicy.enabled: true`,
 but `cluster/main.tf`'s `vpc-cni` add-on runs with its defaults, so the Network Policy agent
@@ -220,7 +220,8 @@ keeping `vpc-cni = {}` — costs no code and cannot block any traffic, but leave
 `values-prod.yaml` says is on doing nothing. Per D1 the policy then takes effect the moment the
 agent is on, with no second chart change.
 
-**Only the decision is recorded here. Nothing in `cluster/main.tf` has changed yet.**
+**The change is now in `cluster/main.tf`** (`vpc-cni` with `configuration_values`).
+`terraform validate` and `fmt -check` pass in `cluster/`; it has never been planned or applied.
 
 What turning it on takes, from AWS's EKS documentation (read 2026-09-26; not run):
 
@@ -229,18 +230,22 @@ What turning it on takes, from AWS's EKS documentation (read 2026-09-26; not run
   in `cluster/main.tf`. (The `ENABLE_NETWORK_POLICY` that `k8s/infra/terraform/README.md`
   used to name is the self-managed add-on's setting, not the managed add-on's key.)
 - VPC CNI `v1.14.0-eksbuild.3` or later, and node kernel `5.10` or later (the EKS-optimized
-  Amazon Linux AMIs already have it). What `vpc-cni = {}` resolves to today was not checked;
-  on Kubernetes `1.34` it is very likely newer.
+  Amazon Linux AMIs already have it). The add-on version is left unset, so the module picks
+  the default for the cluster's Kubernetes version (`terraform-aws-modules/eks` `v20.37.2`
+  passes `most_recent = null` to `aws_eks_addon_version`, which returns the default). EKS's
+  API said on 2026-09-26 that the default for `1.34` is `v1.22.4-eksbuild.3` (newest
+  `v1.23.1`) — well above the minimum. The default can change before an `apply`.
 - The default "standard mode": a new pod starts with allow-all until its policies attach.
   `strict` mode (default-deny) is not chosen — it needs a policy for every endpoint a pod
   touches, CoreDNS included.
 - The agent binds node ports `8162` (metrics) and `8163` (health probes); an app already using
   them fails.
 
-**Follow-up work** (none of it done):
+**Follow-up work:**
 
-1. Code: the `cluster/main.tf` change above, then `terraform init -backend=false`,
-   `fmt -check` and `validate` in `cluster/` — no `plan` or `apply`.
+1. Code — done 2026-09-26: the `cluster/main.tf` change above; `terraform init
+   -backend=false`, `fmt -check` and `validate` pass in `cluster/`. Applying it comes with the
+   rest of the stack (`deploy.sh cluster`).
 2. Live checks once the agent is on (the developer runs them; the session records what is
    reported). They are also in `k8s/helm/README.md`'s Pending list:
    1. `aws-node` pods show two containers (the agent is the second) and the VPC CNI version is
