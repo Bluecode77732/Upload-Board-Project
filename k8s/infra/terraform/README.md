@@ -264,6 +264,16 @@ and `admin.image.tag`. An explicit `IMAGE_TAG` skips the check for all three, so
 sha from before the frontend or admin image existed leaves that pod without an image — run helm by
 hand for that.
 
+**Test deployment vs real deployment** ([ADR 0048](../../../docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.md)
+Addendum, 2026-09-26): `dev` images are `amd64`-only and the only nodes that run are `arm64`
+(Graviton), so a `dev` deploy to this cluster passes the tag check and then fails at pod start —
+the bare `bash deploy.sh helm` default above is for tests, not for this cluster. Use `dev` for
+tests (local, `kind`, Docker Desktop) and deploy for real from `main`, whose images carry `arm64`
+too: merge `dev` into `main`, wait for CI to publish all three images, then
+`bash deploy.sh helm main`. The script checks that a tag exists, not which platforms it carries,
+and both branches use the same cluster and `values-prod.yaml`, so nothing in it stops the wrong
+choice.
+
 **Plan/apply split** (ADR 0046 addendum, 2026-09-02): for `cluster`/`app-infra`/`addons`,
 `bash deploy.sh plan <state>` computes and saves the plan to a fixed, gitignored path
 and exits — no apply. `bash deploy.sh apply <state>` re-shows that saved plan and still

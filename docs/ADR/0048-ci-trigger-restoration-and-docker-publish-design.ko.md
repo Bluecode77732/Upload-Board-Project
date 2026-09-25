@@ -197,3 +197,30 @@ header"로 즉시 실패하기 시작했다. 이는 Docker Hub 자격증명 문�
   같은 `postgres:16` 서비스를 대상으로 실행한다. 이건 스모크 테스트
   자체의 검증 내용을 바꾸는 게 아니라, 그보다 한 단계 앞선 별개의 갭을
   닫는 것이다 — 두 체크가 돌기도 전에 깨진 마이그레이션을 미리 잡는다.
+
+### Addendum (2026-09-26) — `dev` 이미지는 테스트용이고, 실제 배포는 `main`을 쓴다
+
+D2는 `dev`를 `amd64`로만 빌드하게 했다. 그런데 그 이미지가 배포될 클러스터는 `arm64`만 돈다.
+`cluster/main.tf`의 `graviton` 그룹(`AL2023_ARM_64_STANDARD`, `t4g.medium`)만 노드가 있고,
+`x64` 그룹은 desired 0이며(ADR 0043 D3), 차트에는 `nodeSelector`도 없다. D2(2026-08-30)는
+`dev`에 arm64 빌드가 없을 때 CI가 잃는 것만 따졌고, `deploy.sh`가 브랜치를 조회해 `dev`를
+기본값으로 삼게 된 것(2026-09-04)보다 앞선 결정이다. 둘이 합쳐져 어느 결정도 보지 못한 불일치가
+생겼다. 2026-09-25에 Docker Hub 공개 API로 읽은 결과: `origin/dev`의 `:<sha>` 태그는
+`sharenpo`·`sharenpo-frontend`·`sharenpo-admin` 모두 `linux/amd64`뿐이다. `main`의 백엔드
+태그는 `linux/amd64`와 `linux/arm64`를 함께 담고 있지만, `main`에는 frontend·admin 태그가
+아예 없다(그 발행 잡이 `main`에서 돈 적이 없다).
+
+**개발자가 2026-09-26에 결정했다:** `dev` 이미지는 테스트용(로컬, `kind`, Docker Desktop, CI)이고
+D2가 말한 대로 빌드 속도를 위해 `amd64`로만 둔다. 실제 배포는 `arm64`도 담은 `main` 이미지를 쓴다.
+
+`deploy.sh`가 이미 하는 일(코드를 읽은 것이며 실행하지는 않음): `bash deploy.sh helm main`(또는
+`DEPLOY_BRANCH=main`)은 `origin/main`의 HEAD를 조회해 Docker Hub에서 백엔드·frontend·admin 태그를
+확인하고, 인자 없는 `bash deploy.sh helm`은 `dev`에 대해 같은 일을 한다. 이것이 구분하는 것은
+*이미지 출처*뿐이다. 클러스터, 네임스페이스, `values-prod.yaml`은 어느 쪽이든 같다. 태그가
+존재하는지만 확인하고 **어느 플랫폼을 담았는지는 확인하지 않으므로**, `dev` 태그를 `arm64`
+노드에 배포하면 검사는 통과하고 나중에 파드가 뜰 때 실패한다. 이를 막는 장치는 없다. 하나 더하는 것
+(예: 브랜치가 `main`이 아니면 경고)은 결정하지 않았고 하지 않았다.
+
+첫 실제 배포 전에는 `dev`를 `main`에 머지하고, `main`의 CI가 세 이미지를 모두 발행해야 한다.
+frontend·admin의 `arm64` 빌드는 지금까지 "빌드가 끝났다"까지만 확인됐고(D2), `arm64` 런타임
+근거가 있는 이미지는 백엔드뿐이다 — 2026-08-25~27 배포에서 Graviton 노드 위에서 돌았다.

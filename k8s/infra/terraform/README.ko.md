@@ -260,7 +260,19 @@ bash deploy.sh helm         # 이제 인자 없이도 main을 배포
 `bluecode1775/sharenpo-admin`을 모두 확인하고, helm 단계는 그 태그를 `image.tag`,
 `frontend.image.tag`, `admin.image.tag`로 함께 넘깁니다. `IMAGE_TAG`를 직접 지정하면 세 이미지
 모두 확인 없이 그대로 쓰므로, 프론트엔드나 admin 이미지가 없던 시점의 sha로 롤백하면 그
-파드가 이미지를 받지 못합니다 — 그런 롤백은 helm을 직접 실행하세요. 아래 수동 순서는 스크립트가 자동화하는
+파드가 이미지를 받지 못합니다 — 그런 롤백은 helm을 직접 실행하세요.
+
+**테스트 배포와 실제 배포**([ADR 0048](../../../docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)
+Addendum, 2026-09-26): `dev` 이미지는 `amd64`뿐이고 실제로 도는 노드는 `arm64`(Graviton)뿐이라,
+`dev`를 이 클러스터에 배포하면 태그 확인은 통과하고 파드가 뜰 때 실패합니다 — 위의 인자 없는
+`bash deploy.sh helm` 기본값은 테스트용이지 이 클러스터용이 아닙니다. `dev`는 테스트(로컬,
+`kind`, Docker Desktop)에 쓰고, 실제 배포는 `arm64`도 담은 `main` 이미지로 합니다: `dev`를
+`main`에 머지하고, CI가 세 이미지를 모두 발행할 때까지 기다린 뒤 `bash deploy.sh helm main`을
+실행합니다. 스크립트는 태그가 존재하는지만 확인하고 어느 플랫폼을 담았는지는 확인하지 않으며,
+두 브랜치가 같은 클러스터와 `values-prod.yaml`을 쓰므로 잘못된 선택을 스크립트가 막아 주지는
+않습니다.
+
+아래 수동 순서는 스크립트가 자동화하는
 대상이자, 각 단계가 실제로 무엇을 하는지 보는 참고 자료로 남겨둡니다. 이 순서는
 최초 배포든, 전체 `terraform destroy`(아래) 이후의 완전 재배포든 똑같이 적용됩니다:
 
