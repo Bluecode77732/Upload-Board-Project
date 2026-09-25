@@ -309,6 +309,17 @@ locals {
 resource "aws_route53_zone" "app" {
   name = var.domain_name
   tags = local.tags
+
+  # ADR 0063 D4 — Terraform 밖에서 만든 재사용 위임 세트를 물리면 zone을 다시 만들어도 같은
+  # 네임서버 4개를 받는다. 세트는 일부러 이 state의 리소스가 아니다(aws_route53_delegation_set을
+  # 쓰면 destroy 때 함께 지워져 고정의 의미가 없다). null이면 기존처럼 zone마다 새 네임서버.
+  delegation_set_id = var.delegation_set_id
+
+  # ADR 0063 D3 — ALB로 가는 레코드는 ExternalDNS가 만든다(addons/). 그 레코드는 이 state가
+  # 모르므로, 남아 있으면 zone destroy가 실패한다. true면 zone 안의 모든 레코드를 함께 지운다 —
+  # 이 zone은 이 앱 전용이라 감수한다. ExternalDNS의 policy=sync가 먼저 지워 주겠지만 그것은
+  # 1분 주기와 파드 생존에 달려 있어 destroy의 성공 조건으로 삼지 않는다.
+  force_destroy = true
 }
 
 resource "aws_acm_certificate" "app" {

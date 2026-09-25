@@ -288,7 +288,8 @@ allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)). 다
 켜기 전 필요한 선행 조건 두 가지, 지금은 둘 다 미충족이다(Terraform 3-state
 전부 destroy 상태):
 - `addons/` apply — AWS Load Balancer Controller가 클러스터 안에 떠 있어야
-  `Ingress` 객체를 처리할 수 있다.
+  `Ingress` 객체를 처리할 수 있다. 같은 state가 ExternalDNS도 설치하며, ExternalDNS가
+  도메인을 ALB로 향하게 하는 DNS 레코드를 만든다([ADR 0063](../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)).
 - `app-infra/` apply — `domain_name`의 ACM 인증서가 `ISSUED` 상태여야 한다
   (`terraform output -raw acm_certificate_arn`).
 
@@ -336,8 +337,14 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
 
 **미해결 — 실전 신뢰 전 필수, 지금은 검증할 살아있는 ALB Controller가 없어서 아직 안 함:**
 YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 동작하는 것은 별개다.
-`addons/`+`app-infra/`를 다시 apply하고 `ingress.enabled`를 실제로 켜고 도메인이 ALB를 가리키게 한 뒤엔, annotation이
-먹혔다고 가정하지 말고 다음을 직접 확인한다:
+`addons/`+`app-infra/`를 다시 apply하고, `ingress.enabled`를 실제로 켜고, ExternalDNS가
+도메인을 ALB로 향하게 만든 뒤(ADR 0063)에는, annotation이 먹혔다고 가정하지 말고 다음을
+직접 확인한다:
+- 그 zone에 대한 `aws route53 list-resource-record-sets`에 도메인이 ALB를 가리키는 alias `A`
+  레코드와 ExternalDNS의 `TXT` 소유 레코드가 `Ingress`가 생긴 지 몇 분 안에 보이고, `Ingress`를
+  지운 뒤에는 사라지는지(또는 zone의 `force_destroy`가 지우는지). 명령은
+  `k8s/infra/terraform/README.md`의 "Enabling the ALB ingress"에 있다. 라이브에서 관찰한
+  적 없음(ADR 0063).
 - `aws elbv2 describe-listeners`로 만들어진 ALB에 80번과 443번 리스너가 둘 다 있는지
   (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지).
 - `curl -I http://<도메인>`이 `https://` URL로 `301`/`302`를 반환하는지(`ssl-redirect`가

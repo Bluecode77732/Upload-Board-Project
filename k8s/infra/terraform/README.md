@@ -21,7 +21,9 @@ was proven, everything was destroyed 2026-08-28 to stop the AWS bill — no EKS
 cluster, RDS instance, S3 bucket, Route53 zone, NAT gateway, or EC2 instance
 from this stack currently exists (verified via `aws eks/rds/ec2/elb` describe
 calls, all empty/not-found). `terraform validate` and `terraform fmt -check`
-still pass in all three state directories.
+still pass in all three state directories. The ExternalDNS record and name-server pinning
+([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)) are
+code-complete in `app-infra/`, `addons/`, and `deploy.sh` and, like the rest, unapplied.
 
 This status is a snapshot, not a promise — a future `apply` can make it true
 again in minutes, and someone re-reading this file later should re-verify
@@ -42,7 +44,7 @@ the fuller history and the deferred identifier rename (ADR 0043 D1).
 k8s/infra/terraform/
 ├── cluster/       module.vpc + module.eks
 ├── app-infra/      RDS + S3/IRSA + Secrets Manager + Route53/ACM
-└── addons/         module.eks_blueprints_addons (ALB Controller + ESO)
+└── addons/         module.eks_blueprints_addons (ALB Controller + ESO + ExternalDNS)
 ```
 
 Each directory is an independent Terraform root module with its own local
@@ -56,9 +58,11 @@ just convention (ADR 0044 D2):
    OIDC provider) for the RDS security group and the S3 IRSA role's trust
    policy.
 3. **`addons/`** last — the only state that reads **both** others: EKS
-   connection details from `cluster/`, and the Secrets Manager ARN from
-   `app-infra/` (`external_secrets_secrets_manager_arns`). This is why it
-   cannot run before `app-infra/` exists.
+   connection details from `cluster/`, and from `app-infra/` the Secrets
+   Manager ARN (`external_secrets_secrets_manager_arns`) and the Route53
+   zone's ARN and name (`external_dns_route53_zone_arns` and ExternalDNS's
+   `domainFilters`, [ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)).
+   This is why it cannot run before `app-infra/` exists.
 
 Each state's own `terraform.tfstate` — and, for `app-infra/`/`addons/`, the
 `terraform_remote_state` reads of the other states' outputs — live in an S3
@@ -110,6 +114,31 @@ that was considered and rejected for this bucket specifically).
    either delegate it to the zone this config creates (point your
    registrar's nameservers at the `route53_zone_name_servers` output) or run
    `apply` once first just to get that output, then delegate.
+
+   **Or pin the name servers once** ([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)
+   D4) — worth it if you will destroy and re-`apply` more than once. Create a
+   reusable delegation set outside Terraform, put its four name servers at
+   the registrar once, and give its ID to `app-infra/`; every zone created
+   afterwards gets the same four, so the delegation below never repeats. The
+   domain's own registration stays where it is (Route53 Domains is not
+   involved):
+   ```sh
+   aws route53 create-reusable-delegation-set --caller-reference sharenpo-ns-1
+   ```
+   The output's `DelegationSet.NameServers` are the four values for the
+   registrar. `DelegationSet.Id` looks like `/delegationset/N1PA6795SAMPLE` —
+   keep only the part after the last `/` (the `delegation_set_id` variable
+   rejects the prefix, because the AWS provider stores the ID without it).
+   Pass it as `DELEGATION_SET_ID=<id>` to `deploy.sh`, or as
+   `-var="delegation_set_id=<id>"` by hand. To read the name servers again
+   later: `aws route53 get-reusable-delegation-set --id <id> --query
+   'DelegationSet.NameServers'`. Leave the set alone: it is not part of any
+   state, so `terraform destroy` does not touch it, and AWS lets you delete
+   it only once no zone uses it. When you run `plan` and `apply` separately
+   through `deploy.sh`, give both the same `DELEGATION_SET_ID`. This has not
+   been run against real AWS yet.
+
+   Without a delegation set (the variable unset), this is what applies:
    ⚠️ **This delegation must be redone after every `terraform destroy` +
    re-`apply` of `app-infra/`, not just the first time** — AWS assigns a
    brand-new set of 4 nameservers to every newly created hosted zone, even
@@ -165,10 +194,13 @@ export TFSTATE_BUCKET_NAME=<globally-unique-tfstate-bucket-name>  # bootstrapped
 # 1. cluster
 bash deploy.sh cluster
 
-# 2. app-infra (needs a purchased domain; this apply pauses mid-run for NS
-#    delegation — see "Before you apply anything" below before running it)
+# 2. app-infra (needs a purchased domain. Without DELEGATION_SET_ID this apply
+#    pauses mid-run for NS delegation; with the reusable delegation set from
+#    "Before you apply anything" below — its name servers already at your
+#    registrar — it should not have to wait on the registrar (not yet run).
+#    See that section before running it)
 S3_BUCKET_NAME=<globally-unique-bucket-name> DOMAIN_NAME=<your-domain> \
-  bash deploy.sh app-infra
+  DELEGATION_SET_ID=<set-id-without-prefix> bash deploy.sh app-infra
 
 # 3. addons
 bash deploy.sh addons
@@ -191,8 +223,10 @@ sequence skips no approval gate, it only orders the commands.
 order below plus `helm upgrade --install` in one script — plan-then-confirm on every
 apply, no `-auto-approve` ([ADR 0046](../../../docs/ADR/0046-deploy-sequence-automation.md)).
 Run `bash deploy.sh all` (or `cluster`/`app-infra`/`addons`/`helm` individually; `--help`
-for env vars). It does **not** cover domain purchase/NS delegation, the ESO secret sync,
-or enabling `Ingress` — those stay manual, covered further down this file. The app's S3
+for env vars). It does **not** cover domain purchase, creating the reusable delegation set
+and putting its name servers at the registrar, the ESO secret sync, or enabling `Ingress` —
+those stay manual, covered further down this file. The optional `DELEGATION_SET_ID` is passed
+through to every `app-infra` plan/apply ([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md) D4). The app's S3
 IRSA role is wired automatically as of 2026-09-03 — `deploy.sh`'s `HELM_RELEASE` defaults
 to `sharenpo`, matching both `values-prod.yaml`'s `serviceAccount.create: true` and
 `app-infra/main.tf`'s trust policy, so no separate manual annotation step is needed on
@@ -266,6 +300,8 @@ terraform init -backend-config="bucket=<globally-unique-tfstate-bucket-name>"
 # These values are NEW every time this zone is (re-)created — after a
 # `terraform destroy` + re-apply, old nameserver values no longer point
 # anywhere and must be replaced at the registrar again.
+# Optional (ADR 0063 D4): add -var="delegation_set_id=<set-id-without-prefix>" to
+# pin the zone's name servers — see "Before you apply anything" above.
 terraform apply \
   -var="s3_bucket_name=<globally-unique-bucket-name>" \
   -var="domain_name=<your-domain>" \
@@ -464,6 +500,26 @@ deployment of the load balancer; nothing further happens on "AWS's side" as a se
 step. From then on, at runtime, a user's browser connects to that ALB over HTTPS; ALB → Service → pod
 stays plain HTTP inside the cluster's private network, per ADR 0034's trust boundary.
 
+**The DNS record** ([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)).
+Nothing in Terraform creates the record that points the domain at that ALB — ExternalDNS
+does, installed by `addons/`. It watches `Ingress` hosts and, for a host inside the zone
+(its `domainFilters` is the zone's name), creates an ALIAS record to the ALB plus TXT
+ownership records; `policy: sync` removes them again when the `Ingress` goes away. So the
+`Ingress` host must be `var.domain_name` or a name under it, which the `--set-json` `hosts`
+above already does. It polls (`interval: 1m`), so allow a few minutes after the ALB appears.
+To check (you run it; use the zone ID without the `/hostedzone/` prefix):
+
+```sh
+aws route53 list-hosted-zones-by-name --dns-name <your-domain> \
+  --query 'HostedZones[0].Id' --output text
+aws route53 list-resource-record-sets --hosted-zone-id <that Id, without /hostedzone/> \
+  --query 'ResourceRecordSets[].[Name,Type,AliasTarget.DNSName]' --output table
+```
+
+Expect an alias `A` record for the domain pointing at the ALB's DNS name, plus `TXT` records
+carrying `external-dns/owner=<cluster name>`. None of this has been observed against a live
+cluster yet (ADR 0063 Consequences lists what is still open).
+
 ## What each state provisions
 
 | State | Resource | Purpose | ADR 0043 decision |
@@ -473,8 +529,9 @@ stays plain HTTP inside the cluster's private network, per ADR 0034's trust boun
 | `app-infra/` | `aws_db_instance.db` | RDS PostgreSQL, private subnets, reachable only from EKS nodes on 5432 | D2 |
 | `app-infra/` | `aws_s3_bucket.app` + IRSA role | Private bucket for `STORAGE_DRIVER=s3`, app pod's S3 credentials | D8 |
 | `app-infra/` | `aws_secretsmanager_secret.app` | The four values the Helm chart's `secrets.existingSecret` needs | D7 |
-| `app-infra/` | `aws_route53_zone.app` + `aws_acm_certificate.app` | DNS zone and DNS-validated TLS certificate for the ALB ingress | D4, D5 |
+| `app-infra/` | `aws_route53_zone.app` + `aws_acm_certificate.app` | DNS zone and DNS-validated TLS certificate for the ALB ingress; the zone can take a reusable delegation set and has `force_destroy = true` | D4, D5; [ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md) D3, D4 |
 | `addons/` | `module.eks_blueprints_addons` | AWS Load Balancer Controller + External Secrets Operator (both via the module's built-in flags) | D6, D7, D9 |
+| `addons/` | ExternalDNS (`enable_external_dns`, same module) | Creates and removes the ALB's DNS record from `Ingress` hosts, scoped to the `app-infra/` zone | [ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md) D1–D3 |
 
 **Removed from the original scaffold, not kept commented out** (D6): the
 `istio-system` namespace, the `istio-base`/`istiod`/`istio-ingress` Helm
@@ -507,6 +564,13 @@ page (the live deployment's release is currently named `upload-board`):
 helm list -A
 helm uninstall <release-name> -n <namespace>
 ```
+
+The zone in `app-infra/` has `force_destroy = true` ([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)
+D3), so its `destroy` also removes records Terraform does not know about — the ALIAS and TXT
+records ExternalDNS made. Uninstalling the Helm release first lets ExternalDNS's `policy: sync`
+remove them on its own within a minute or so, but the destroy no longer depends on that. A
+reusable delegation set, if you use one, is in no state and survives all three destroys; it
+stays until you delete it by hand, which AWS allows only when no zone uses it.
 
 `app-infra/`'s `s3_bucket_name`/`domain_name` have no default (a globally
 unique bucket/domain name can't have a safe one), so its `destroy` needs the

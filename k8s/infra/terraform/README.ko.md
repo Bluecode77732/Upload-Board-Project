@@ -22,7 +22,10 @@ apply돼서 end-to-end로 정상 동작까지 확인됐습니다(그 실제 RDS�
 클러스터, RDS 인스턴스, S3 버킷, Route53 존, NAT 게이트웨이, EC2 인스턴스
 어느 것도 지금 존재하지 않습니다(`aws eks/rds/ec2/elb` describe 호출이 전부
 빈 값/not-found로 확인됨). 세 state 디렉터리 모두 `terraform validate`,
-`terraform fmt -check`는 여전히 통과합니다.
+`terraform fmt -check`는 여전히 통과합니다. ExternalDNS 레코드와 네임서버 고정
+([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md))은
+`app-infra/`, `addons/`, `deploy.sh`에 코드 작성까지 끝났고, 나머지와 마찬가지로 apply는
+안 된 상태입니다.
 
 이 상태 설명도 스냅샷일 뿐 확정된 사실이 아닙니다 — 나중에 다시 apply하면
 몇 분 안에 이 문단이 틀린 말이 됩니다. 이 문단을 나중에 다시 읽는 사람은
@@ -43,7 +46,7 @@ apply돼서 end-to-end로 정상 동작까지 확인됐습니다(그 실제 RDS�
 k8s/infra/terraform/
 ├── cluster/       module.vpc + module.eks
 ├── app-infra/      RDS + S3/IRSA + Secrets Manager + Route53/ACM
-└── addons/         module.eks_blueprints_addons (ALB Controller + ESO)
+└── addons/         module.eks_blueprints_addons (ALB Controller + ESO + ExternalDNS)
 ```
 
 각 디렉터리는 독립된 Terraform root 모듈이고 각자 로컬 state 파일
@@ -56,9 +59,12 @@ k8s/infra/terraform/
    `cluster/`의 출력값(VPC/서브넷 ID, EKS 노드 보안 그룹, OIDC 프로바이더)을
    `terraform_remote_state`로 읽습니다.
 3. **`addons/`** 마지막 — 둘 다를 읽는 유일한 state입니다: `cluster/`에서
-   EKS 연결 정보를, `app-infra/`에서 Secrets Manager ARN을
-   (`external_secrets_secrets_manager_arns`) 읽습니다. `app-infra/`가
-   존재하기 전에는 이 state를 먼저 apply할 수 없는 이유입니다.
+   EKS 연결 정보를, `app-infra/`에서 Secrets Manager ARN
+   (`external_secrets_secrets_manager_arns`)과 Route53 영역의 ARN·이름
+   (`external_dns_route53_zone_arns`와 ExternalDNS의 `domainFilters`,
+   [ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md))을
+   읽습니다. `app-infra/`가 존재하기 전에는 이 state를 먼저 apply할 수 없는
+   이유입니다.
 
 각 state 자신의 `terraform.tfstate`, 그리고 `app-infra/`/`addons/`가 다른
 state의 출력값을 읽는 `terraform_remote_state`도 Terraform 기본값인 로컬
@@ -109,6 +115,28 @@ aws s3api put-public-access-block --bucket <그-버킷-이름> \
    등록기관), 이 설정이 만드는 영역에 위임하세요(`route53_zone_name_servers`
    출력값을 등록기관의 네임서버로 지정). 그 출력값을 얻기 위해 먼저 한 번
    apply한 뒤 위임해도 됩니다.
+
+   **또는 네임서버를 한 번만 고정하세요**([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)
+   D4) — destroy와 재apply를 두 번 이상 할 거라면 그럴 만합니다. Terraform 밖에서 재사용
+   위임 세트를 만들고, 그 네임서버 4개를 등록기관에 한 번만 넣은 뒤, 세트 ID를
+   `app-infra/`에 넘기세요. 이후 만드는 zone은 모두 같은 네임서버 4개를 받으므로 아래
+   위임이 다시 필요하지 않습니다. 도메인 등록 자체는 지금 있는 곳에 그대로 두면 됩니다
+   (Route53 Domains는 쓰지 않습니다):
+   ```sh
+   aws route53 create-reusable-delegation-set --caller-reference sharenpo-ns-1
+   ```
+   출력의 `DelegationSet.NameServers`가 등록기관에 넣을 4개 값입니다.
+   `DelegationSet.Id`는 `/delegationset/N1PA6795SAMPLE` 같은 모양인데, 마지막 `/` 뒤의
+   부분만 남기세요(AWS provider가 접두사 없는 ID를 저장하므로 `delegation_set_id` 변수는
+   접두사가 붙은 값을 거부합니다). `deploy.sh`에는 `DELEGATION_SET_ID=<id>`로, 손으로
+   실행할 때는 `-var="delegation_set_id=<id>"`로 넘깁니다. 나중에 네임서버를 다시 보려면
+   `aws route53 get-reusable-delegation-set --id <id> --query
+   'DelegationSet.NameServers'`를 쓰세요. 세트는 건드리지 마세요. 어떤 state에도 속하지
+   않아서 `terraform destroy`가 지우지 않고, AWS는 그 세트를 쓰는 zone이 하나도 없을 때만
+   삭제를 허용합니다. `deploy.sh`로 `plan`과 `apply`를 나눠 실행할 때는 두 명령에 같은
+   `DELEGATION_SET_ID`를 주세요. 실제 AWS에서 실행해 본 적은 아직 없습니다.
+
+   위임 세트를 쓰지 않을 때(변수를 지정하지 않았을 때)는 다음이 적용됩니다:
    ⚠️ **이 위임은 최초 1회만이 아니라, `app-infra/`를 `terraform destroy` 후
    재apply할 때마다 매번 다시 해야 합니다** — 같은 도메인이어도 새로 만들어진
    hosted zone마다 AWS가 완전히 새로운 네임서버 4개를 발급합니다. `app-infra/`
@@ -163,10 +191,12 @@ export TFSTATE_BUCKET_NAME=<전역적으로-유일한-tfstate-버킷-이름>  # 
 # 1. cluster
 bash deploy.sh cluster
 
-# 2. app-infra (도메인이 미리 구매돼 있어야 함; 이 apply는 실행 도중 NS 위임을
-#    기다리며 멈춤 — 실행 전에 아래 "apply 전에 확인할 것" 먼저 읽으세요)
+# 2. app-infra (도메인이 미리 구매돼 있어야 함; DELEGATION_SET_ID 없이는 이 apply가
+#    실행 도중 NS 위임을 기다리며 멈춤. 아래 "apply 전에 확인할 것"의 재사용 위임 세트를
+#    쓰고 그 네임서버를 이미 등록기관에 넣어 뒀다면 등록기관을 기다릴 필요가 없을
+#    것임(아직 실행해 보지 않음). 실행 전에 그 절부터 읽으세요)
 S3_BUCKET_NAME=<전역적으로-유일한-버킷-이름> DOMAIN_NAME=<도메인> \
-  bash deploy.sh app-infra
+  DELEGATION_SET_ID=<접두사-없는-세트-ID> bash deploy.sh app-infra
 
 # 3. addons
 bash deploy.sh addons
@@ -190,8 +220,11 @@ bash deploy.sh helm
 게이트가 걸려 있고 `-auto-approve`는 없습니다
 ([ADR 0046](../../../docs/ADR/0046-deploy-sequence-automation.md)). `bash deploy.sh
 all`을 실행하거나(또는 `cluster`/`app-infra`/`addons`/`helm` 개별 실행; 환경변수는
-`--help` 참고). 도메인 구매/NS 위임, ESO 시크릿 동기화, `Ingress` 활성화는 다루지
-**않습니다** — 이들은 이 문서 아래쪽에 나오는 대로 여전히 수동입니다. 앱의 S3 IRSA
+`--help` 참고). 도메인 구매, 재사용 위임 세트 생성과 그 네임서버의 등록기관 입력,
+ESO 시크릿 동기화, `Ingress` 활성화는 다루지 **않습니다** — 이들은 이 문서 아래쪽에
+나오는 대로 여전히 수동입니다. 선택 환경변수 `DELEGATION_SET_ID`는 `app-infra`의 모든
+plan/apply에 그대로 전달됩니다([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)
+D4). 앱의 S3 IRSA
 역할은 2026-09-03부터 자동으로 배선됩니다 — `deploy.sh`의 `HELM_RELEASE` 기본값이
 `sharenpo`로 바뀌어 `values-prod.yaml`의 `serviceAccount.create: true`,
 `app-infra/main.tf`의 trust policy와 모두 맞아떨어지므로, `deploy.sh
@@ -263,6 +296,8 @@ terraform init -backend-config="bucket=<전역적으로-유일한-tfstate-버킷
 # 이 값들은 이 zone이 (재)생성될 때마다 매번 새로 발급됩니다 —
 # `terraform destroy` 후 재apply하면 예전 네임서버 값은 더 이상 아무 데도
 # 안 가리키니 등록기관에서 다시 교체해야 합니다.
+# 선택(ADR 0063 D4): zone의 네임서버를 고정하려면 -var="delegation_set_id=<접두사-없는-세트-ID>"를
+# 더하세요 — 위 "아무거나 apply하기 전에 준비할 것" 참고.
 terraform apply \
   -var="s3_bucket_name=<전역적으로-유일한-버킷-이름>" \
   -var="domain_name=<본인-도메인>" \
@@ -464,6 +499,27 @@ API를 직접 호출해 인증서가 이미 HTTPS 리스너에 붙은 상태의 
 Service → Pod 구간은 ADR 0034의 트러스트 바운더리에 따라 클러스터 내부망 안에서
 평문 HTTP로 남습니다.
 
+**DNS 레코드**([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)).
+Terraform은 도메인을 그 ALB로 향하게 하는 레코드를 만들지 않습니다 — `addons/`가 설치하는
+ExternalDNS가 만듭니다. `Ingress`의 host를 지켜보다가 영역 안에 있는 host(ExternalDNS의
+`domainFilters`가 영역 이름입니다)에 대해 ALB를 가리키는 ALIAS 레코드와 소유 표시용 TXT
+레코드를 만들고, `policy: sync`가 `Ingress`가 사라지면 그 레코드를 다시 지웁니다. 그래서
+`Ingress`의 host는 `var.domain_name`이거나 그 아래 이름이어야 하는데, 위 `--set-json`의
+`hosts`가 이미 그렇게 되어 있습니다. 주기적으로 조회하므로(`interval: 1m`) ALB가 생긴 뒤
+몇 분은 기다리세요. 확인하는 방법은 다음과 같습니다(직접 실행하세요. 영역 ID는
+`/hostedzone/` 접두사를 뗀 값을 씁니다):
+
+```sh
+aws route53 list-hosted-zones-by-name --dns-name <본인-도메인> \
+  --query 'HostedZones[0].Id' --output text
+aws route53 list-resource-record-sets --hosted-zone-id <위 Id에서 /hostedzone/를 뗀 값> \
+  --query 'ResourceRecordSets[].[Name,Type,AliasTarget.DNSName]' --output table
+```
+
+도메인에 대해 ALB의 DNS 이름을 가리키는 alias `A` 레코드와, `external-dns/owner=<클러스터 이름>`이
+들어간 `TXT` 레코드가 보여야 합니다. 이 중 어느 것도 실제 클러스터에서 관찰한 적은 아직
+없습니다(아직 열려 있는 항목은 ADR 0063 Consequences 참고).
+
 ## 각 state가 만드는 것
 
 | State | 리소스 | 목적 | ADR 0043 결정 |
@@ -473,8 +529,9 @@ Service → Pod 구간은 ADR 0034의 트러스트 바운더리에 따라 클러
 | `app-infra/` | `aws_db_instance.db` | RDS PostgreSQL, private 서브넷, EKS 노드에서만 5432로 접근 가능 | D2 |
 | `app-infra/` | `aws_s3_bucket.app` + IRSA 역할 | `STORAGE_DRIVER=s3`용 private 버킷, 앱 파드의 S3 자격증명 | D8 |
 | `app-infra/` | `aws_secretsmanager_secret.app` | Helm 차트의 `secrets.existingSecret`이 필요로 하는 네 값 | D7 |
-| `app-infra/` | `aws_route53_zone.app` + `aws_acm_certificate.app` | ALB ingress용 DNS 영역과 DNS 검증된 TLS 인증서 | D4, D5 |
+| `app-infra/` | `aws_route53_zone.app` + `aws_acm_certificate.app` | ALB ingress용 DNS 영역과 DNS 검증된 TLS 인증서. 영역은 재사용 위임 세트를 받을 수 있고 `force_destroy = true`다 | D4, D5; [ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md) D3, D4 |
 | `addons/` | `module.eks_blueprints_addons` | AWS Load Balancer Controller + External Secrets Operator(둘 다 모듈 내장 플래그로 설치) | D6, D7, D9 |
+| `addons/` | ExternalDNS(`enable_external_dns`, 같은 모듈) | `Ingress` host를 보고 ALB의 DNS 레코드를 만들고 지운다. 범위는 `app-infra/`의 영역 하나 | [ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md) D1–D3 |
 
 **원래 스캐폴드에서 제거됐고, 주석 처리로 남기지 않음**(D6): `istio-system`
 네임스페이스, `istio-base`/`istiod`/`istio-ingress` Helm 릴리스, Istio 전용
@@ -505,6 +562,13 @@ Helm 릴리스를 먼저 제거하고, AWS 콘솔에서 ALB와 그 보안 그룹
 helm list -A
 helm uninstall <릴리스-이름> -n <네임스페이스>
 ```
+
+`app-infra/`의 영역은 `force_destroy = true`([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)
+D3)라서, `destroy`가 Terraform이 모르는 레코드, 즉 ExternalDNS가 만든 ALIAS·TXT 레코드도
+함께 지웁니다. Helm 릴리스를 먼저 제거하면 ExternalDNS의 `policy: sync`가 1분 안팎에 스스로
+지워 주지만, 이제 destroy가 그것에 의존하지는 않습니다. 재사용 위임 세트를 쓴다면 그것은
+어떤 state에도 없어서 세 번의 destroy를 모두 거치고도 남습니다. 직접 지울 때까지 유지되며,
+AWS는 그 세트를 쓰는 zone이 하나도 없을 때만 삭제를 허용합니다.
 
 `app-infra/`의 `s3_bucket_name`/`domain_name`은 기본값이 없어서(전역적으로
 유일해야 하는 버킷/도메인 이름엔 안전한 기본값을 둘 수 없음) `destroy`도

@@ -289,7 +289,8 @@ access. Re-confirmed 2026-09-13.
 Two preconditions before it can do anything, both currently unmet (all three Terraform
 states are destroyed):
 - `addons/` applied — the AWS Load Balancer Controller has to be running in-cluster to
-  reconcile an `Ingress` object at all.
+  reconcile an `Ingress` object at all. The same state installs ExternalDNS, which creates
+  the domain's DNS record for the ALB ([ADR 0063](../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)).
 - `app-infra/` applied — the ACM certificate for `domain_name` has to reach `ISSUED`
   (`terraform output -raw acm_certificate_arn`).
 
@@ -336,9 +337,14 @@ until Terraform is re-applied.
 
 **Pending — required before trusting this in production, not yet done because no live
 ALB Controller exists to test against:** rendering correctly is not the same as the ALB
-actually behaving as configured. Once `addons/`+`app-infra/` are re-applied and
-`ingress.enabled` is actually flipped on and the domain resolves to the ALB, verify explicitly rather than assuming the
-annotations worked:
+actually behaving as configured. Once `addons/`+`app-infra/` are re-applied,
+`ingress.enabled` is actually flipped on, and ExternalDNS has made the domain resolve to the
+ALB (ADR 0063), verify explicitly rather than assuming the annotations worked:
+- `aws route53 list-resource-record-sets` for the zone shows an alias `A` record for the domain
+  pointing at the ALB plus ExternalDNS's `TXT` ownership records within a few minutes of the
+  `Ingress` appearing, and they are gone after it is removed (or the zone's `force_destroy`
+  clears them). The command is in `k8s/infra/terraform/README.md` > "Enabling the ALB
+  ingress". Never observed live (ADR 0063).
 - `aws elbv2 describe-listeners` on the created ALB shows both a port-80 and a port-443
   listener (`listen-ports` actually took effect, not just rendered).
 - `curl -I http://<domain>` returns a `301`/`302` to the `https://` URL (`ssl-redirect`

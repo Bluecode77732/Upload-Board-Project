@@ -45,8 +45,18 @@ output "external_secrets_manifest" {
 }
 
 output "route53_zone_name_servers" {
-  description = "도메인 등록기관(또는 기존 registrar)에 지정해야 할 네임서버 목록 — ACM DNS 검증의 전제조건(ADR 0043 D5)"
+  description = "도메인 등록기관(또는 기존 registrar)에 지정해야 할 네임서버 목록 — ACM DNS 검증의 전제조건(ADR 0043 D5). delegation_set_id를 쓰면 zone을 다시 만들어도 같은 값이다(ADR 0063 D4)"
   value       = aws_route53_zone.app.name_servers
+}
+
+output "route53_zone_arn" {
+  description = "Route53 호스팅 영역 ARN — addons/가 remote_state로 읽어 ExternalDNS의 IAM 범위를 이 zone 하나로 좁힌다(external_dns_route53_zone_arns, ADR 0063 D1)"
+  value       = aws_route53_zone.app.arn
+}
+
+output "route53_zone_name" {
+  description = "Route53 호스팅 영역 이름(도메인) — addons/가 remote_state로 읽어 ExternalDNS의 domainFilters에 쓴다(ADR 0063 D2)"
+  value       = aws_route53_zone.app.name
 }
 
 output "acm_certificate_arn" {

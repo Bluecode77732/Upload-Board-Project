@@ -57,6 +57,21 @@ variable "domain_name" {
   type        = string
 }
 
+# ADR 0063 D4 — 값이 없어도(null) 동작은 기존과 같다: zone을 만들 때마다 새 네임서버 4개를
+# 받는다. `/delegationset/` 접두사를 막는 validation은 일부러 둔 것이다 — provider는 zone의
+# state에 접두사 없는 ID를 저장하는데(zone.go의 cleanDelegationSetID), 접두사가 붙은 값을
+# 넣으면 설정과 state가 어긋나 plan이 계속 diff를 낼 수 있다.
+variable "delegation_set_id" {
+  description = "Terraform 밖에서 미리 만든 재사용 위임 세트의 ID(`aws route53 create-reusable-delegation-set`가 출력하는 Id에서 `/delegationset/` 접두사를 뗀 값). 지정하면 Route53 zone이 그 세트의 네임서버 4개를 받아, zone을 다시 만들어도 등록기관에 넣은 네임서버가 바뀌지 않는다(ADR 0063 D4). null이면 zone마다 새 네임서버를 받는다"
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.delegation_set_id == null ? true : !startswith(var.delegation_set_id, "/")
+    error_message = "delegation_set_id는 CLI가 출력한 Id에서 `/delegationset/` 접두사를 뗀 값이어야 한다(예: N1PA6795SAMPLE)."
+  }
+}
+
 variable "tags" {
   description = "모든 리소스에 추가로 붙일 태그 — local.tags의 Blueprint/GithubRepo 태그에 더해진다"
   type        = map(string)
