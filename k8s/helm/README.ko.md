@@ -352,9 +352,11 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md) 추가 기록). 로컬에서
   실행해 차트가 전제한 두 가지를 확인한다: `clamdcheck.sh`가 있는지(두 프로브가 호출한다)와
   `/var/lib/clamav`가 서명 폴더인지. 둘 중 하나라도 없으면 clamd 파드가 Ready가 되지 않고 모든
-  업로드가 `503 UPLOAD_SCAN_UNAVAILABLE`로 답한다. 로컬 실행은 `amd64`이고, `arm64`는
-  라이브에서만 드러난다 — Graviton 노드에서 `clamav` Deployment가 Ready가 되는지, EICAR 업로드가
-  `400 UPLOAD_MALWARE_DETECTED`로 답하는지, 정상 파일이 통과하는지.
+  업로드가 `503 UPLOAD_SCAN_UNAVAILABLE`로 답한다. `--platform linux/arm64`로도 한 번
+  실행해 본다: Docker Desktop의 플랫폼 목록에 `linux/arm64`가 있다(에뮬레이션이라 느리고
+  Graviton 하드웨어도 아니며, 여기서 실행해 보지는 않았다). 라이브에서만 드러나는 것: Graviton
+  노드에서 `clamav` Deployment가 Ready가 되는지, EICAR 업로드가 `400 UPLOAD_MALWARE_DETECTED`로
+  답하는지, 정상 파일이 통과하는지.
 - `aws elbv2 describe-listeners`로 만들어진 ALB에 80번과 443번 리스너가 둘 다 있는지
   (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지).
 - `curl -I http://<도메인>`이 `https://` URL로 `301`/`302`를 반환하는지(`ssl-redirect`가
