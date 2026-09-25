@@ -988,6 +988,18 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   지저분하게 죽지는 않는다 — kubelet은 막힌 `preStop` hook을 포기하는 순간에도 SIGTERM을
   여전히 보낸다. sleep을 얼마로 둘지는 여전히 정하지 않았다 — 실제 ALB의 드레인 지연 숫자가
   있어야 한다. AWS 스택이 지금 apply돼 있는지와는 무관하다.
+- 배포 전 준비 — **2026-09-25/26 결정 및 코드 작성, 적용된 것은 없음**: ExternalDNS로 만드는 ALB의
+  DNS 레코드와 zone 네임서버를 고정하는 재사용 위임 세트([ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)),
+  켜 둔 VPC CNI Network Policy 에이전트([ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md)
+  추가 기록), 그리고 실제 배포가 어떤 이미지를 쓰는가 — `dev` 이미지는 `amd64`뿐이고 실제로 도는
+  노드는 `arm64`뿐이라 실제 배포는 `main`을 쓴다([ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)
+  추가 기록). `app-infra/`, `addons/`, `cluster/`에서 `terraform validate`/`fmt -check`가
+  통과했고 plan·apply는 한 적이 없다. 첫 실제 배포 전에 남은 것: `dev`를 `main`에 머지하고 CI가
+  세 이미지를 모두 발행하게 하기, ClamAV `stable-debian` 이미지를 로컬에서 띄워 `clamdcheck.sh`와
+  `/var/lib/clamav` 확인하기, tfstate 버킷과 재사용 위임 세트를 만들고 Gabia가 그 네임서버를
+  가리키게 하기, push. 배포 시점에 라이브로만 확인되는 것: ADR 0063의 Consequences, ADR 0056의
+  추가 기록, `k8s/helm/README.md` 미해결 목록의 점검, 그리고 노드 용량(`t4g.medium` 2대, clamd·
+  ExternalDNS·frontend·admin이 더해진 상태로는 측정한 적 없음).
 - Istio(Kubernetes 클러스터 위 서비스 메시) — **프로덕션 DevOps 스택 도입 행과 Stage 4
   구성요소 상태 표에서 제외**(2026-08-31 이동, 이번 세션에서 진행한 규모 적합성 검토 뒤
   개발자가 내린 결정 — ROADMAP 자체의 순서 계획과는 별개). **미착수 이유**: 이 프로젝트의

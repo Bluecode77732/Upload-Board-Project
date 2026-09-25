@@ -1037,6 +1037,21 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   kubelet still sends SIGTERM once it gives up on a stuck `preStop` hook. The sleep duration
   still isn't decided; it needs the real ALB's drain-lag number. Independent of whether the AWS
   stack is currently applied.
+- Pre-deployment readiness — **decided and coded 2026-09-25/26, none of it applied**: the ALB's
+  DNS record via ExternalDNS plus a reusable delegation set that pins the zone's name servers
+  ([ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md)), the VPC CNI Network Policy
+  agent turned on ([ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md) Addendum), and
+  which image a real deployment uses — `dev` images are `amd64`-only and the only nodes that run
+  are `arm64`, so a real deployment uses `main`
+  ([ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md) Addendum).
+  `terraform validate`/`fmt -check` pass in `app-infra/`, `addons/` and `cluster/`; nothing has
+  been planned or applied. Still open before a first real deployment: merge `dev` into `main` and
+  let CI publish all three images; run the ClamAV `stable-debian` image locally and check
+  `clamdcheck.sh` and `/var/lib/clamav`; create the tfstate bucket and the reusable delegation
+  set and point Gabia at its name servers; push. Live-only at deploy time: the checks in ADR
+  0063's Consequences, ADR 0056's Addendum and `k8s/helm/README.md`'s pending list, plus node
+  capacity (two `t4g.medium` nodes, never measured with clamd, ExternalDNS, the frontend and the
+  admin console added).
 - Istio (service mesh over the Kubernetes cluster) — **pulled from the Production DevOps
   stack introduction row and the Stage 4 component-status table** (moved 2026-08-31,
   developer decision after a scale-fit review run this session, independent of the

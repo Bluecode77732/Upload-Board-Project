@@ -495,7 +495,9 @@ elsewhere, so it doesn't go stale in two places at once.
   CD step — nothing in CI ever runs `helm upgrade`.
 - **Cloud deploy**: a Helm chart (`k8s/helm/`) and three separate Terraform root modules
   (`k8s/infra/terraform/`) can stand up a real EKS cluster with Prometheus/Grafana wired in
-  (ADR 0041–0044, [ADR 0047](ADR/0047-observability-prometheus-grafana.md)). This has already
+  (ADR 0041–0044, [ADR 0047](ADR/0047-observability-prometheus-grafana.md); the ALB's DNS record
+  comes from ExternalDNS and the zone's name servers can be pinned with a reusable delegation
+  set, [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md)). This has already
   been proven end to end once — then torn down to stop the AWS bill. Whether that
   infrastructure currently exists is a point-in-time fact, not something to assume from this
   paragraph; see `CLAUDE.md`'s Terraform entry or run `terraform plan` in each of the three

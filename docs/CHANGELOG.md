@@ -13,6 +13,22 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **VPC CNI Network Policy agent turned on (2026-09-26,
+  [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md) Addendum)** — `values-prod.yaml`
+  already set `networkPolicy.enabled: true`, but `vpc-cni` ran with its defaults, so the policy
+  was written and not enforced. `cluster/main.tf` now passes `enableNetworkPolicy` to the add-on
+  (standard mode; the add-on version stays the EKS default, `v1.22.4-eksbuild.3` for `1.34` when
+  read, above the `v1.14.0-eksbuild.3` minimum). Also corrected an earlier wording:
+  `ENABLE_NETWORK_POLICY` is the self-managed add-on's setting. Code-complete (`terraform
+  validate`/`fmt -check` pass in `cluster/`), never applied; seven live checks are listed in the
+  Addendum and `k8s/helm/README.md`, including that "another namespace times out" holds only
+  with Ingress off.
+- **A `dev` image is for tests; a real deployment uses `main` (2026-09-26,
+  [ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md) Addendum)** — `dev`
+  builds `amd64` only (D2), the only nodes that run are `arm64`, and `deploy.sh helm` defaults to
+  `dev`, so a default deploy passes its tag check and fails at pod start. Read from Docker Hub:
+  `dev`'s three images are `amd64`-only; `main`'s backend carries both and `main` has no frontend
+  or admin image yet. Documentation only — `deploy.sh` got no guard.
 - **Global `ValidationPipe` options single-sourced and registered as `APP_PIPE`
   (2026-09-21)** — the same four options (`transform`, `whitelist`, `forbidNonWhitelisted`,
   `enableImplicitConversion`) were hand-copied into `main.ts`, `test/e2e-utils.ts` and
@@ -227,6 +243,10 @@ development line (package.json version).
   Redis-backed storage for one true per-route ceiling across replicas.
 
 ### Fixed
+- **`sharenpo.com` → `sharenpo.cloud` in `ROADMAP.md` and this file (2026-09-25)** — an
+  08-25 entry named the live Route53 zone's domain `sharenpo.com`; that name never appears in
+  code and is unregistered, while `sharenpo.cloud` is what the first live deployment used.
+  Corrected from indirect evidence — the destroyed state could not be read.
 - **Container now stops on SIGTERM instead of waiting for SIGKILL (2026-09-21, [ADR
   0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md))** — `main.ts` never called
   `app.enableShutdownHooks()`, and because `node` is PID 1 in the container its SIGTERM was
@@ -263,6 +283,19 @@ development line (package.json version).
   the §7 entries just never caught up with §6. No code change — pure documentation.
 
 ### Added
+- **ALB DNS record via ExternalDNS, and a reusable delegation set that pins the zone's name
+  servers (2026-09-25, [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md))** —
+  nothing created the record that points the domain at the ALB, and a new Route53 zone gets four
+  new name servers every time, so each apply → destroy cycle meant editing the registrar again.
+  `addons/` now enables ExternalDNS (chart `1.22.0`, `policy: sync`, scoped by IRSA to the one
+  zone), which creates and removes the ALIAS record from `Ingress` hosts; `app-infra/` takes an
+  optional `delegation_set_id` (a set created once outside Terraform, so its name servers survive
+  a destroy), sets the zone's `force_destroy = true`, and outputs the zone's ARN and name;
+  `deploy.sh` passes `DELEGATION_SET_ID` to every `app-infra` plan/apply. A hand-made Alias record
+  and a Terraform-managed one were weighed and rejected (ADR 0063, Alternatives rejected).
+  Verified: `terraform init -backend=false`/`fmt -check`/`validate` in `app-infra/` and
+  `addons/`, the new variable's validation in an isolated config, `bash -n`. Not planned or
+  applied; the live-only checks are in the ADR's Consequences.
 - **Frontend hosted on the same ALB as the API — a separate nginx workload, path-routed
   (2026-09-21, [ADR 0060](ADR/0060-frontend-same-alb-path-routing.md))** — nothing hosted
   `frontend/` before: no image, no chart resources, no CI publish. It is now built into a

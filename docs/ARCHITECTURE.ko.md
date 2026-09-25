@@ -509,7 +509,9 @@ Bearer 토큰이 새로고침해도 남습니다)([ADR 0009](ADR/0009-rest-only-
   없습니다.
 - **클라우드 배포**: Helm 차트(`k8s/helm/`)와 별개의 Terraform 루트 모듈 세 개
   (`k8s/infra/terraform/`)로 Prometheus/Grafana까지 붙은 실제 EKS 클러스터를 띄울 수
-  있습니다(ADR 0041–0044, [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md)).
+  있습니다(ADR 0041–0044, [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md). ALB로 가는
+  DNS 레코드는 ExternalDNS가 만들고, zone의 네임서버는 재사용 위임 세트로 고정할 수 있습니다:
+  [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)).
   이미 한 번 끝까지 검증됐고, 그 뒤 AWS 비용을 막으려고 다시 정리됐습니다. 지금 이
   인프라가 실제로 떠 있는지는 이 문단만 보고 판단할 일이 아니라 그때그때의
   사실입니다 — `CLAUDE.md`의 Terraform 항목을 보거나 세 디렉터리에서 각각

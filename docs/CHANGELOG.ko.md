@@ -13,6 +13,22 @@
 ## [Unreleased]
 
 ### 변경
+- **VPC CNI Network Policy 에이전트를 켬 (2026-09-26,
+  [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록)** —
+  `values-prod.yaml`은 이미 `networkPolicy.enabled: true`였지만 `vpc-cni`가 기본 설정이라 정책이
+  작성만 되고 집행되지 않았다. 이제 `cluster/main.tf`가 애드온에 `enableNetworkPolicy`를
+  넘긴다(standard 모드, 애드온 버전은 EKS 기본값 그대로 — 조회 당시 1.34의 기본은
+  `v1.22.4-eksbuild.3`으로 최소 요건 `v1.14.0-eksbuild.3` 이상). 앞서 적은
+  `ENABLE_NETWORK_POLICY`가 self-managed 애드온의 설정이라는 점도 바로잡았다. 코드는
+  완성(`cluster/`에서 `terraform validate`/`fmt -check` 통과)했고 적용한 적은 없다. 라이브 검증
+  7건은 추가 기록과 `k8s/helm/README.md`에 있으며, "다른 네임스페이스에서 타임아웃"은 Ingress가
+  꺼져 있을 때만 성립한다는 조건도 적었다.
+- **`dev` 이미지는 테스트용, 실제 배포는 `main` (2026-09-26,
+  [ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md) 추가 기록)** —
+  `dev`는 `amd64`만 빌드하고(D2), 실제로 도는 노드는 `arm64`뿐인데 `deploy.sh helm`의 기본값이
+  `dev`라서, 기본값으로 배포하면 태그 확인은 통과하고 파드가 뜰 때 실패한다. Docker Hub 조회
+  결과 `dev`의 이미지 3종은 `amd64`뿐이고, `main`은 백엔드만 둘 다 담았고 frontend·admin
+  이미지는 아직 없다. 문서만 바꿨다 — `deploy.sh`에 장치는 더하지 않았다.
 - **전역 `ValidationPipe` 옵션을 한 곳으로 모으고 `APP_PIPE`로 등록 (2026-09-21)** — 같은
   옵션 네 개(`transform`, `whitelist`, `forbidNonWhitelisted`,
   `enableImplicitConversion`)가 `main.ts`, `test/e2e-utils.ts`,
@@ -235,6 +251,10 @@
   필요함.
 
 ### 수정
+- **`ROADMAP.md`·이 파일의 `sharenpo.com`을 `sharenpo.cloud`로 정정 (2026-09-25)** — 08-25
+  기록이 라이브 Route53 zone의 도메인을 `sharenpo.com`이라고 적었는데, 그 이름은 코드에 한 번도
+  나온 적이 없고 미등록이며 첫 라이브 배포가 쓴 것은 `sharenpo.cloud`다. 파괴된 state를 읽을 수
+  없어서 간접 증거로 정정했다.
 - **컨테이너가 SIGKILL을 기다리지 않고 SIGTERM에 종료 (2026-09-21, [ADR
   0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md))** — `main.ts`가
   `app.enableShutdownHooks()`를 한 번도 호출하지 않았고, 컨테이너에서 `node`가 PID 1이라
@@ -271,6 +291,18 @@
   코드 변경 없음 — 순수 문서.
 
 ### 추가
+- **ExternalDNS로 ALB DNS 레코드를 만들고, 재사용 위임 세트로 zone 네임서버를 고정
+  (2026-09-25, [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md))** — 도메인을
+  ALB로 잇는 레코드를 만드는 곳이 없었고, Route53 zone은 새로 만들 때마다 네임서버 4개가 바뀌어서
+  apply → destroy를 한 번 돌 때마다 등록기관을 다시 고쳐야 했다. 이제 `addons/`가 ExternalDNS를
+  켜서(차트 `1.22.0`, `policy: sync`, IRSA로 zone 하나에만 권한) `Ingress` host를 보고 ALIAS
+  레코드를 만들고 지운다. `app-infra/`는 선택 변수 `delegation_set_id`(Terraform 밖에서 한 번
+  만든 세트라 destroy해도 네임서버가 유지됨)를 받고, zone에 `force_destroy = true`를 걸고, zone의
+  ARN과 이름을 출력한다. `deploy.sh`는 `DELEGATION_SET_ID`를 모든 `app-infra` plan/apply에 넘긴다.
+  손으로 만드는 Alias 레코드와 Terraform 관리 방식은 검토 후 기각했다(ADR 0063 Alternatives
+  rejected). 검증: `app-infra/`·`addons/`의 `terraform init -backend=false`/`fmt -check`/`validate`,
+  격리된 설정에서의 변수 validation, `bash -n`. plan·apply는 하지 않았고, 라이브에서만 확인되는
+  항목은 ADR의 Consequences에 있다.
 - **프론트엔드를 API와 같은 ALB에서 호스팅 — 별도 nginx 워크로드를 경로로 분기
   (2026-09-21, [ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md))** — 지금까지
   `frontend/`를 호스팅하는 곳이 없었다: 이미지도, 차트 리소스도, CI 발행도 없었다. 이제
