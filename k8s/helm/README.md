@@ -381,7 +381,8 @@ ALB (ADR 0063), verify explicitly rather than assuming the annotations worked:
   Addendum), also confirm enforcement is real and nothing legitimate is blocked: `aws-node`
   pods show two containers and the VPC CNI version is `v1.14.0-eksbuild.3` or later; app pods
   become Ready with `/health/live` and `/health/ready` passing (kubelet probes not blocked,
-  `aws/amazon-vpc-cni-k8s#2571`); a pod in another namespace cannot reach the app pod and a
+  `aws/amazon-vpc-cni-k8s#2571`); with Ingress off a pod in another namespace cannot reach the
+  app pod (with Ingress on the VPC-CIDR rule admits it, so no timeout is expected there) and a
   non-allow-listed egress port times out; DNS, the database (5432), clamd (3310) and HTTPS/443
   (S3) work, an EICAR upload is refused and a clean file passes; Prometheus still scrapes the
   backend (the ingress rule admits same-namespace pods, plus the VPC CIDR only when Ingress is

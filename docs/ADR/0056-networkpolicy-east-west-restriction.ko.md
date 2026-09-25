@@ -247,8 +247,10 @@ Context와 D1이 하나를 열어 뒀다. `values-prod.yaml`이 `networkPolicy.e
    2. 앱 파드가 Ready가 되고 `/health/live`, `/health/ready`가 계속 통과하는지 — kubelet
       프로브가 막히지 않는지(`aws/amazon-vpc-cni-k8s#2571`).
    3. ALB 타깃 그룹이 healthy인지(위의 VPC CIDR 인바운드 규칙).
-   4. 다른 네임스페이스의 파드가 앱 파드에 닿지 못하고(타임아웃), 허용 목록에 없는 포트로 나가는
-      egress도 타임아웃되는지 — 렌더링만이 아니라 강제가 실제로 동작하는지.
+   4. `ingress.enabled: false`일 때 다른 네임스페이스의 파드가 앱 파드에 닿지 못하고(타임아웃),
+      허용 목록에 없는 포트로 나가는 egress도 타임아웃되는지 — 렌더링만이 아니라 강제가 실제로
+      동작하는지. Ingress가 켜져 있으면 위의 VPC CIDR 규칙이 다른 네임스페이스의 파드도
+      허용하므로(감수한 확장) 타임아웃이 나오지 않는 것이 정상이다.
    5. 허용 경로가 동작하는지: DNS, 데이터베이스(5432), clamd(3310), HTTPS/443(S3).
       EICAR 업로드는 거부되고 정상 파일은 통과하는지(ADR 0059의 AWS 전용 잔여 검증).
    6. Prometheus가 백엔드를 계속 스크레이프하는지. 인바운드 규칙은 같은 네임스페이스 파드와

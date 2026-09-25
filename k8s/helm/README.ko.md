@@ -380,8 +380,9 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   추가 기록) 강제가 실제로 동작하고 정당한 트래픽이 막히지 않는지도 확인한다: `aws-node` 파드가
   컨테이너 두 개로 떠 있고 VPC CNI 버전이 `v1.14.0-eksbuild.3` 이상인지, 앱 파드가 Ready가 되고
   `/health/live`·`/health/ready`가 통과하는지(kubelet 프로브가 막히지 않는지,
-  `aws/amazon-vpc-cni-k8s#2571`), 다른 네임스페이스의 파드가 앱 파드에 닿지 못하고 허용 목록에 없는
-  egress 포트가 타임아웃되는지, DNS·데이터베이스(5432)·clamd(3310)·HTTPS/443(S3)이 동작하고 EICAR
+  `aws/amazon-vpc-cni-k8s#2571`), Ingress가 꺼져 있을 때 다른 네임스페이스의 파드가 앱 파드에 닿지
+  못하고(Ingress가 켜지면 VPC CIDR 규칙이 허용하므로 타임아웃이 나오지 않는 게 정상) 허용
+  목록에 없는 egress 포트가 타임아웃되는지, DNS·데이터베이스(5432)·clamd(3310)·HTTPS/443(S3)이 동작하고 EICAR
   업로드는 거부되며 정상 파일은 통과하는지, Prometheus가 백엔드를 계속 스크레이프하는지(인바운드
   규칙은 같은 네임스페이스 파드와 Ingress가 켜졌을 때의 VPC CIDR만 허용하므로 Ingress가 꺼져
   있으면 스크레이프가 막힐 수 있다 — 추론이며 관찰한 적 없음), ExternalDNS·External Secrets·ALB

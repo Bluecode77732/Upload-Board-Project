@@ -253,8 +253,10 @@ What turning it on takes, from AWS's EKS documentation (read 2026-09-26; not run
    2. The app pods become Ready and `/health/live` and `/health/ready` keep passing — kubelet's
       probes are not blocked (`aws/amazon-vpc-cni-k8s#2571`).
    3. The ALB's target group is healthy (the VPC-CIDR ingress rule above).
-   4. A pod in another namespace cannot reach the app pod (times out), and egress to a port
-      that is not allow-listed times out — the enforcement is real, not just rendered.
+   4. With `ingress.enabled: false`, a pod in another namespace cannot reach the app pod
+      (times out), and egress to a port that is not allow-listed times out — the enforcement
+      is real, not just rendered. With Ingress on, the VPC-CIDR rule above admits other
+      namespaces' pods too (the accepted widening), so no timeout is expected there.
    5. The allowed paths work: DNS, the database (5432), clamd (3310) and HTTPS/443 (S3). An
       EICAR upload is refused and a clean file passes (ADR 0059's AWS-only residual).
    6. Prometheus still scrapes the backend. The ingress rule admits same-namespace pods, plus
