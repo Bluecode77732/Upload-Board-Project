@@ -224,3 +224,6 @@ D2가 말한 대로 빌드 속도를 위해 `amd64`로만 둔다. 실제 배포�
 첫 실제 배포 전에는 `dev`를 `main`에 머지하고, `main`의 CI가 세 이미지를 모두 발행해야 한다.
 frontend·admin의 `arm64` 빌드는 지금까지 "빌드가 끝났다"까지만 확인됐고(D2), `arm64` 런타임
 근거가 있는 이미지는 백엔드뿐이다 — 2026-08-25~27 배포에서 Graviton 노드 위에서 돌았다.
+frontend·admin의 런타임 베이스 `nginxinc/nginx-unprivileged:1.28-alpine`은 Docker Hub에
+`linux/arm64`가 있고(2026-09-26에 읽음) 빌드 단계는 `$BUILDPLATFORM`으로 고정돼 있으므로, 검증되지
+않은 것은 베이스가 아니라 Graviton에서의 런타임이다.

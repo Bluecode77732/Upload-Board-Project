@@ -228,4 +228,7 @@ one (for example a warning when the branch is not `main`) is not decided and not
 Before the first real deployment: `dev` has to be merged into `main`, and CI on `main` has to
 publish all three images. The frontend and admin `arm64` builds have only ever been checked as
 "the build completed" (D2); the backend is the one image with `arm64` runtime evidence — it ran
-on the Graviton nodes in the 2026-08-25–27 deployment.
+on the Graviton nodes in the 2026-08-25–27 deployment. The frontend and admin runtime base,
+`nginxinc/nginx-unprivileged:1.28-alpine`, lists `linux/arm64` on Docker Hub (read 2026-09-26)
+and their build stage is pinned to `$BUILDPLATFORM`, so what is unproven is their runtime on
+Graviton, not their base.

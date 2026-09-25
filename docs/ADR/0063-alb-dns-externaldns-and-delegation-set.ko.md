@@ -40,6 +40,10 @@ zone과 ACM 검증 레코드만 만든다(`app-infra/main.tf`의 "DNS + TLS" 블
   레코드가 되고 zone apex에서도 동작한다. `v0.22.0`의 AWS provider에 그 경로가 있다
   (`AliasTarget`, `useAlias`). `ListTagsForResources` 호출(`v0.14.0`은 단수형)은 zone 태그
   필터를 설정했을 때만 실행되며, 이 설계는 태그 필터를 쓰지 않는다.
+- **ExternalDNS 이미지.** 차트의 이미지 태그는 `v` + `appVersion`이 기본값이라 `1.22.0`은
+  `registry.k8s.io/external-dns/external-dns:v0.22.0`을 실행하고, 그 레지스트리 인덱스에는
+  `linux/amd64`, `linux/arm64`, `linux/arm`이 있다(2026-09-26에 읽음) — 클러스터에서 실제로 도는
+  노드는 `arm64`뿐이다.
 - **Terraform.** provider `5.100.0`에 `aws_route53_zone.force_destroy`가 있다: "destroy all
   records (possibly managed outside of Terraform) in the zone when destroying the zone".
 - **재사용 위임 세트**(AWS CLI에 포함된 API 모델). 세트는 여러 zone이 재사용할 수 있는

@@ -41,6 +41,10 @@ documentation, not memory. Nothing was run against AWS.
   ALIAS record, at the zone apex too. The AWS provider at `v0.22.0` has that path
   (`AliasTarget`, `useAlias`). Its `ListTagsForResources` call (the singular form in `v0.14.0`)
   runs only when a zone-tag filter is set; this design sets none.
+- **ExternalDNS image.** The chart's image tag defaults to `v` + its `appVersion`, so `1.22.0`
+  runs `registry.k8s.io/external-dns/external-dns:v0.22.0`, whose registry index lists
+  `linux/amd64`, `linux/arm64` and `linux/arm` (read 2026-09-26) — the only nodes that run in the
+  cluster are `arm64`.
 - **Terraform.** `aws_route53_zone.force_destroy` exists in provider `5.100.0`: "destroy all
   records (possibly managed outside of Terraform) in the zone when destroying the zone".
 - **Reusable delegation sets** (the API model shipped with the AWS CLI). A set is four name

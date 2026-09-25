@@ -274,6 +274,15 @@ too: merge `dev` into `main`, wait for CI to publish all three images, then
 and both branches use the same cluster and `values-prod.yaml`, so nothing in it stops the wrong
 choice.
 
+**Two more things `deploy.sh` does not guard.** Its `helm` step passes no `--kube-context`, so it
+uses whichever `kubectl` context is current, and a kubeconfig keeps the contexts of clusters that
+have since been torn down — run `kubectl config current-context` first and pass
+`--context`/`--kube-context` on every command you run by hand. And node capacity is unmeasured:
+`cluster/main.tf` gives two `t4g.medium` nodes about 17 pod slots each (its own comment), and this
+is the first deployment where clamd, ExternalDNS, the frontend and the admin console run next to
+the ALB Controller, External Secrets and the monitoring stack — if pods stay `Pending` with
+`FailedScheduling`, raise `node_desired_size_graviton`.
+
 **Plan/apply split** (ADR 0046 addendum, 2026-09-02): for `cluster`/`app-infra`/`addons`,
 `bash deploy.sh plan <state>` computes and saves the plan to a fixed, gitignored path
 and exits — no apply. `bash deploy.sh apply <state>` re-shows that saved plan and still
@@ -573,7 +582,8 @@ the ALB's security groups can outlive the command. Uninstall the Helm
 release first, confirm the ALB and its security groups are gone in the AWS
 console, then destroy in the order above. Check the actual release name —
 it need not match the chart name `sharenpo` used in the examples on this
-page (the live deployment's release is currently named `upload-board`):
+page (`deploy.sh` installs under `sharenpo` by default and the app's IRSA trust policy needs
+that name; the 2026-08 deployment, since torn down, was called `upload-board`):
 
 ```sh
 helm list -A

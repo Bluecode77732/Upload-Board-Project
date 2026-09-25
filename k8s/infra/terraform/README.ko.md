@@ -272,6 +272,15 @@ Addendum, 2026-09-26): `dev` 이미지는 `amd64`뿐이고 실제로 도는 노�
 두 브랜치가 같은 클러스터와 `values-prod.yaml`을 쓰므로 잘못된 선택을 스크립트가 막아 주지는
 않습니다.
 
+**`deploy.sh`가 막아 주지 않는 것이 두 가지 더 있습니다.** `helm` 단계는 `--kube-context`를
+넘기지 않아서 `kubectl`의 현재 컨텍스트를 그대로 쓰는데, kubeconfig에는 이미 철거된
+클러스터의 컨텍스트가 남아 있습니다 — 먼저 `kubectl config current-context`를 확인하고 손으로
+실행하는 명령마다 `--context`/`--kube-context`를 붙이세요. 그리고 노드 용량은 측정한 적이
+없습니다. `cluster/main.tf`는 `t4g.medium` 노드 2대에 노드당 파드 슬롯 약 17개(그 파일의 주석)를
+주는데, 이번이 clamd·ExternalDNS·frontend·admin 콘솔이 ALB Controller, External Secrets, 모니터링
+스택과 함께 도는 첫 배포입니다 — 파드가 `FailedScheduling`으로 `Pending`에 머물면
+`node_desired_size_graviton`을 올리세요.
+
 아래 수동 순서는 스크립트가 자동화하는
 대상이자, 각 단계가 실제로 무엇을 하는지 보는 참고 자료로 남겨둡니다. 이 순서는
 최초 배포든, 전체 `terraform destroy`(아래) 이후의 완전 재배포든 똑같이 적용됩니다:
@@ -572,7 +581,8 @@ ALB ingress를 한 번이라도 켰다면, 원래 Istio 예제와 같은 이유�
 Helm 릴리스를 먼저 제거하고, AWS 콘솔에서 ALB와 그 보안 그룹이 실제로
 사라졌는지 확인한 뒤 위 순서대로 destroy하세요. 실제 릴리스 이름부터
 확인하세요 — 이 문서 예시가 쓰는 차트 이름 `sharenpo`와 같을 필요는
-없습니다(현재 라이브 배포의 릴리스 이름은 `upload-board`입니다):
+없습니다(`deploy.sh`는 기본으로 `sharenpo`라는 이름으로 설치하고 앱의 IRSA 신뢰 정책도 그
+이름이 필요합니다. 2026-08 배포는 `upload-board`였고 지금은 철거됐습니다):
 
 ```sh
 helm list -A

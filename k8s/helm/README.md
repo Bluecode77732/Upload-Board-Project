@@ -345,6 +345,16 @@ ALB (ADR 0063), verify explicitly rather than assuming the annotations worked:
   `Ingress` appearing, and they are gone after it is removed (or the zone's `force_destroy`
   clears them). The command is in `k8s/infra/terraform/README.md` > "Enabling the ALB
   ingress". Never observed live (ADR 0063).
+- Before the first deploy, on your machine (no cluster needed): `values-prod.yaml` runs ClamAV
+  as `clamav/clamav:stable-debian`, not the `stable` tag the chart was verified with — `stable`
+  lists `linux/amd64` alone on Docker Hub and the only nodes that run are `arm64`, while
+  `stable-debian` lists amd64, arm64 and ppc64le (read 2026-09-25;
+  [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md) Addendum). Run it locally
+  and confirm the two things the chart assumes: `clamdcheck.sh` exists (both probes call it) and
+  `/var/lib/clamav` is the signature directory. If either is missing, the clamd pod never
+  becomes Ready and every upload answers `503 UPLOAD_SCAN_UNAVAILABLE`. A local run is `amd64`;
+  the `arm64` build shows up only live — the `clamav` Deployment Ready on a Graviton node, an
+  EICAR upload answering `400 UPLOAD_MALWARE_DETECTED`, a clean file passing.
 - `aws elbv2 describe-listeners` on the created ALB shows both a port-80 and a port-443
   listener (`listen-ports` actually took effect, not just rendered).
 - `curl -I http://<domain>` returns a `301`/`302` to the `https://` URL (`ssl-redirect`
