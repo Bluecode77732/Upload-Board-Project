@@ -310,6 +310,20 @@ affinity: {}
 # 범위 설계 근거가 있다.
 networkPolicy:
   enabled: false
+  # Prometheus의 스크레이프 인바운드(ADR 0056 addendum, 2026-09-27). metrics.serviceMonitor.enabled일
+  # 때만 렌더링된다 — 그때만 Prometheus가 이 앱 파드로 들어오기 때문이다. 이 규칙이 없으면
+  # networkPolicy.enabled + ingress.enabled=false 조합에서 다른 네임스페이스의 Prometheus가 막혀
+  # 대상이 down이 된다(2026-09-26 라이브에서 관찰). 기본값은 addons/main.tf가 설치하는
+  # kube-prometheus-stack의 위치와 파드 라벨이다: namespace는 라이브에서 관찰했고
+  # (kubernetes.io/metadata.name=kube-prometheus-stack), podLabels는 차트 48.2.3의 Prometheus
+  # Service selector에서 읽었다(라이브 파드 라벨을 직접 보지는 않았다). 다른 네임스페이스나
+  # 라벨로 설치했다면 이 두 값을 맞춘다. Helm은 맵을 병합하므로 podLabels를 오버라이드하면
+  # 기본 라벨이 그대로 남는다(둘 다 일치해야 하는 AND 조건이라 규칙이 안 맞게 된다) — 대체하려면
+  # 기본 키를 null로 지운다: --set-json 'networkPolicy.prometheus.podLabels={"app.kubernetes.io/name":null,"app":"..."}'.
+  prometheus:
+    namespace: kube-prometheus-stack
+    podLabels:
+      app.kubernetes.io/name: prometheus
   egress:
     # RDS가 있는 VPC CIDR — cluster/main.tf의 var.vpc_cidr 기본값과 같다. 다른
     # CIDR로 apply했다면 이 값도 맞춰 오버라이드한다.
