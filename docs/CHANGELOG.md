@@ -47,6 +47,17 @@ development line (package.json version).
   carries "re-verify before assuming either state" as its status line, and ROADMAP §9 gains a
   dated 2026-09-26 entry for the second live run (applied, checked, torn down; what was found and
   observed). ADR addenda are left as written.
+- **Operational notes from the 2026-09-26 live run, and ROADMAP §6's Stage 4 table reworded
+  (2026-09-27)** — documentation only. The Terraform README now says: `addons/`'s `aws eks
+  get-token` passes no `--region`, so `AWS_DEFAULT_REGION` should be set (whether it fails without
+  was not tried); `deploy.sh` reads its variables from the shell it runs in, and a new terminal has
+  none; `terraform -chdir=` paths are relative to the current directory; and a changed generated
+  value needs an `ExternalSecret` `force-sync` and a Deployment restart
+  ([ADR 0064](ADR/0064-jwt-secret-generation-joi-strength-rule.md)). The Stage 4 cells that said
+  "currently running/deployed/live" (S3, Kubernetes, Secrets delivery, Terraform, AWS) now say
+  "live", pointing at §9's dated runs, and §9's 2026-09-26 entry records what the Route 53 pricing
+  page says about hosted zones deleted within 12 hours and about reusable delegation sets (it does
+  not mention them).
 - **ALB health-check path per Service (2026-09-26, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md)
   Addendum, chart `0.5.1`, `60bfe2a`)** — on the first live ALB the backend and admin target groups
   were `unhealthy` with `Target.ResponseCodeMismatch [404]`, because the default health check is

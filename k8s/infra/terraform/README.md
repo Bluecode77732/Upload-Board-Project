@@ -184,7 +184,11 @@ nothing to migrate.
 4. **AWS credentials** with permission to create EKS/RDS/S3/IAM/Route53/ACM
    resources, and the `aws`/`kubectl`/`helm` CLIs installed locally (the
    `kubernetes`/`helm` providers in `addons/` shell out to `aws eks
-   get-token`).
+   get-token`). That call passes no `--region`, so it uses the CLI's default
+   region: set `AWS_DEFAULT_REGION` to the cluster's region in the shell that
+   runs `deploy.sh`. On 2026-09-26 the machine's default was `us-east-1` and the
+   run had `AWS_DEFAULT_REGION=ap-northeast-2` exported; whether `addons/` fails
+   without it was not tried.
 5. **`region`/`cluster_name` must match across all three `.tfvars`/`-var`
    invocations.** These are plain variables, not shared via
    `terraform_remote_state` — passing a different `cluster_name` to
@@ -227,6 +231,14 @@ bash deploy.sh helm
 
 Every `plan`/`apply` inside `deploy.sh` still stops and asks for an explicit `y` — this
 sequence skips no approval gate, it only orders the commands.
+
+`deploy.sh` reads `TFSTATE_BUCKET_NAME`, `S3_BUCKET_NAME`, `DOMAIN_NAME` and, if you use one,
+`DELEGATION_SET_ID` from the environment of the shell it runs in, and a new terminal has none of
+them: on 2026-09-26 a run in a fresh terminal stopped at the script's first check for
+`TFSTATE_BUCKET_NAME`, before anything was created. Export them again, and run the whole deploy from
+one terminal. Paths given to `terraform -chdir=` are relative to the shell's current directory; the
+quick reference above starts with `cd k8s/infra/terraform`, so `-chdir=cluster` is right there and
+`-chdir=k8s/infra/terraform/cluster` is not (also 2026-09-26).
 
 **Scripted entry point**: `k8s/infra/terraform/deploy.sh` wraps the three-state apply
 order below plus `helm upgrade --install` in one script — plan-then-confirm on every
@@ -414,6 +426,15 @@ does not always clear on its own.
 
    Confirm it synced: `kubectl get externalsecret,secret
    $(terraform output -raw app_secret_k8s_name)`.
+
+   If a generated value changes later — for example after changing a `random_password` and
+   re-applying `app-infra/`
+   ([ADR 0064](../../../docs/ADR/0064-jwt-secret-generation-joi-strength-rule.md)) — two things stand
+   between the new value and the app. External Secrets refreshes on a 1 h interval (`refreshInterval`
+   in the manifest above), so annotate the `ExternalSecret` to copy it at once:
+   `kubectl annotate externalsecret $(terraform output -raw app_secret_k8s_name) force-sync=$(date +%s) --overwrite`.
+   And the pods read the `Secret` only when they start, so restart the Deployment:
+   `kubectl rollout restart deployment/<release>`. Seen on 2026-09-26.
 3. **Install the Helm chart**, wiring in `app-infra/`'s outputs:
 
    ```sh

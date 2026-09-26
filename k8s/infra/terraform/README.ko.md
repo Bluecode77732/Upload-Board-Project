@@ -180,7 +180,11 @@ init`을 할 때 (빈) 로컬 state를 복사하겠냐고 묻는지 — 묻는�
 4. **필요한 권한을 가진 AWS 자격증명**(EKS/RDS/S3/IAM/Route53/ACM 생성
    권한)과 로컬에 설치된 `aws`/`kubectl`/`helm` CLI — `addons/`의
    `kubernetes`/`helm` provider가 내부적으로 `aws eks get-token`을
-   실행합니다.
+   실행합니다. 이 호출은 `--region`을 넘기지 않아서 CLI의 기본 리전을 쓰므로,
+   `deploy.sh`를 실행하는 셸에서 `AWS_DEFAULT_REGION`을 클러스터의 리전으로
+   정하세요. 2026-09-26에 이 머신의 기본 리전은 `us-east-1`이었고 실행 때
+   `AWS_DEFAULT_REGION=ap-northeast-2`를 export해 두었으며, 그것 없이 `addons/`가
+   실패하는지는 시험하지 않았습니다.
 5. **`region`/`cluster_name`은 세 state의 `.tfvars`/`-var` 값이 모두
    일치해야 합니다.** 이 값들은 `terraform_remote_state`로 자동 공유되지
    않는 순수 변수입니다 — `cluster/`에 준 것과 다른 `cluster_name`을
@@ -222,6 +226,14 @@ bash deploy.sh helm
 
 `deploy.sh` 안의 모든 `plan`/`apply`는 여전히 멈춰서 명시적으로 `y`를 물어봅니다 —
 이 순서는 어떤 승인 게이트도 건너뛰지 않습니다, 그저 커맨드 순서만 정리한 것입니다.
+
+`deploy.sh`는 `TFSTATE_BUCKET_NAME`, `S3_BUCKET_NAME`, `DOMAIN_NAME`, 쓰는 경우
+`DELEGATION_SET_ID`를 자신이 실행되는 셸의 환경에서 읽는데, 새 터미널에는 그 값이 하나도
+없습니다. 2026-09-26에 새 터미널에서 실행했더니 아무것도 만들어지기 전에 스크립트가
+`TFSTATE_BUCKET_NAME` 첫 검사에서 멈췄습니다. 다시 export하고 배포 전체를 한 터미널에서
+실행하세요. `terraform -chdir=`에 주는 경로는 셸의 현재 디렉터리 기준입니다. 위 빠른 참조는
+`cd k8s/infra/terraform`으로 시작하므로 그 자리에서는 `-chdir=cluster`가 맞고
+`-chdir=k8s/infra/terraform/cluster`는 맞지 않습니다(같은 날 2026-09-26).
 
 **스크립트 진입점**: `k8s/infra/terraform/deploy.sh`가 아래 3-state apply 순서와
 `helm upgrade --install`을 하나의 스크립트로 감쌉니다 — 모든 apply에 plan-then-confirm
@@ -409,6 +421,14 @@ state 파일 안에만 존재합니다(ADR 0043 D7/D8).
 
    동기화됐는지 확인: `kubectl get externalsecret,secret
    $(terraform output -raw app_secret_k8s_name)`.
+
+   생성된 값이 나중에 바뀌면 — 예를 들어 `random_password`를 바꾸고 `app-infra/`를 다시 apply한
+   경우([ADR 0064](../../../docs/ADR/0064-jwt-secret-generation-joi-strength-rule.ko.md)) — 새 값이 앱에
+   닿기까지 두 가지가 남습니다. External Secrets는 1시간 주기(위 매니페스트의 `refreshInterval`)로
+   새로고침하므로, `ExternalSecret`에 어노테이션을 달아 바로 가져오게 합니다:
+   `kubectl annotate externalsecret $(terraform output -raw app_secret_k8s_name) force-sync=$(date +%s) --overwrite`.
+   그리고 파드는 `Secret`을 시작할 때만 읽으므로 Deployment를 재시작합니다:
+   `kubectl rollout restart deployment/<release>`. 2026-09-26에 확인했습니다.
 3. **Helm 차트 설치**, `app-infra/`의 출력값을 그대로 연결합니다:
 
    ```sh

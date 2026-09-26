@@ -43,6 +43,15 @@
   적는다. ROADMAP 머리말은 더 이상 "어느 쪽 상태든 가정하기 전에 재검증"을 상태 문구로 두지 않고,
   ROADMAP §9에 두 번째 라이브 실행(apply, 확인, 철거, 발견과 관찰)의 2026-09-26 날짜 항목을 더했다.
   ADR의 추가 기록은 작성 시점 그대로 둔다.
+- **2026-09-26 라이브 실행에서 얻은 운영 메모를 추가하고 ROADMAP §6 Stage 4 표의 문구를 고침
+  (2026-09-27)** — 문서만 바꿨다. Terraform README는 이제 다음을 적는다: `addons/`의
+  `aws eks get-token`은 `--region`을 넘기지 않으므로 `AWS_DEFAULT_REGION`을 정해야 하고(없이 실패하는지는
+  시험하지 않았다), `deploy.sh`는 자신이 실행되는 셸의 변수를 읽는데 새 터미널에는 그 값이 없으며,
+  `terraform -chdir=` 경로는 현재 디렉터리 기준이고, 생성된 값이 바뀌면 `ExternalSecret`의 `force-sync`와
+  Deployment 재시작이 필요하다([ADR 0064](ADR/0064-jwt-secret-generation-joi-strength-rule.ko.md)).
+  "현재 가동/배포됨/라이브"라고 적었던 Stage 4 셀(S3, Kubernetes, 시크릿 전달, Terraform, AWS)은 이제
+  "라이브"라고 적고 §9의 날짜별 실행을 가리키며, §9의 2026-09-26 항목에는 Route 53 요금 페이지가 12시간 안에
+  삭제한 호스티드 존과 재사용 위임 세트(언급이 없다)에 대해 하는 말을 적었다.
 - **ALB 헬스체크 경로를 Service별로 지정 (2026-09-26, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)
   추가 기록, 차트 `0.5.1`, `60bfe2a`)** — 첫 라이브 ALB에서 백엔드와 admin 타깃 그룹이
   `Target.ResponseCodeMismatch [404]`로 `unhealthy`였다. 기본 헬스체크가 `/`인데 둘 다 그 경로를
