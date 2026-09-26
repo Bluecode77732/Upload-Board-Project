@@ -1040,26 +1040,26 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   kubelet still sends SIGTERM once it gives up on a stuck `preStop` hook. The sleep duration
   still isn't decided; it needs the real ALB's drain-lag number. Independent of whether the AWS
   stack is currently applied.
-- Pre-deployment readiness — **decided and coded 2026-09-25/26, none of it applied**: the ALB's
-  DNS record via ExternalDNS plus a reusable delegation set that pins the zone's name servers
-  ([ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md)), the VPC CNI Network Policy
-  agent turned on ([ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md) Addendum), and
-  which image a real deployment uses — `dev` images are `amd64`-only and the only nodes that run
-  are `arm64`, so a real deployment uses `main`
-  ([ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md) Addendum).
-  `terraform validate`/`fmt -check` pass in `app-infra/`, `addons/` and `cluster/`; nothing has
-  been planned or applied. Still open before a first real deployment: merge `dev` into `main` and
-  let CI publish all three images; create the tfstate bucket and the reusable delegation set and
-  point Gabia at its name servers; push. Done: the ClamAV `stable-debian` image was run locally
-  (`clamdcheck.sh`, `/var/lib/clamav`, the probe, EICAR) — the developer reported every output
-  matched the expected values (2026-09-26; the session did not see them), and the session then ran
-  it itself the same day: on amd64 and on arm64 under QEMU the probe, `PING`, EICAR and clean
-  results were as expected, Ready took about 30 s on amd64 (131 s emulated), and clamd's memory was
-  about 1.06 GiB steady (1.18 GiB emulated) — figures in `k8s/helm/README.md`'s pending list and
-  ADR 0059's Addendum. Live-only at deploy time: the checks in ADR 0063's Consequences, ADR 0056's
-  Addendum and `k8s/helm/README.md`'s pending list, plus node capacity (two `t4g.medium` nodes;
-  clamd alone is now measured at about a quarter of one node's 4 GiB, but the whole set with
-  ExternalDNS, the frontend and the admin console added has never been measured).
+- Pre-deployment readiness — **decided and coded 2026-09-25/26, then run live once on
+  2026-09-26**: the ALB's DNS record via ExternalDNS plus a reusable delegation set that pins the
+  zone's name servers ([ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md)), the VPC
+  CNI Network Policy agent turned on ([ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md)
+  Addendum), and which image a real deployment uses — `dev` images are `amd64`-only and the only
+  nodes that run are `arm64`, so a real deployment uses `main`
+  ([ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md) Addendum). The live
+  run (the developer applied the stack and enabled the Ingress; the session read AWS and the
+  cluster read-only) found: the ALIAS records came up, but ExternalDNS created no TXT ownership
+  records for the apex host, so it does not remove them and the zone's `force_destroy` does — the
+  developer decided to keep the apex host (ADR 0063 Addendum); the agent enforced the policy, and
+  the app's metrics are not scraped while Ingress is off (ADR 0056 Addendum); the backend and
+  admin target groups needed a health-check path per Service (ADR 0062 Addendum, chart `0.5.1`);
+  clamd ran on Graviton, Ready in 40 s at about 1.02 GiB (ADR 0059 Addendum, and the local
+  amd64/arm64 measurements before it); all pods fit on the two `t4g.medium` nodes (23 of 34 pod
+  slots); and a destroy that skips `addons/` leaves IAM roles and policies, a CloudFormation stack
+  and a stale state (`k8s/infra/terraform/README.md` > Destroy). Still open: an EICAR upload
+  answering `400` and a clean file passing through the app (only the scanner side was observed),
+  a second zone getting the same name servers, and the metrics gap while Ingress is off. The
+  unobserved items from the other ADRs stay in `k8s/helm/README.md`'s pending list.
 - Istio (service mesh over the Kubernetes cluster) — **pulled from the Production DevOps
   stack introduction row and the Stage 4 component-status table** (moved 2026-08-31,
   developer decision after a scale-fit review run this session, independent of the

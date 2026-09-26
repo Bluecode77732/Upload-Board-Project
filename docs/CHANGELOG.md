@@ -13,6 +13,27 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **ALB health-check path per Service (2026-09-26, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md)
+  Addendum, chart `0.5.1`, `60bfe2a`)** — on the first live ALB the backend and admin target groups
+  were `unhealthy` with `Target.ResponseCodeMismatch [404]`, because the default health check is
+  `/` and neither serves it. The site kept answering, since an ALB sends to every target of a group
+  when all of them are unhealthy, which also keeps a dead pod in rotation. The chart gained
+  `service.annotations` and `admin.service.annotations` (empty by default) and `values-prod.yaml`
+  sets `alb.ingress.kubernetes.io/healthcheck-path` to `/health/live` (backend) and `/admin/`
+  (admin). After `helm upgrade` all three groups were `healthy`, so the controller (`v2.7.1`) reads
+  the annotation from the Service.
+- **First live run of the DNS, NetworkPolicy and ClamAV work recorded (2026-09-26,
+  [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md),
+  [0056](ADR/0056-networkpolicy-east-west-restriction.md) and
+  [0059](ADR/0059-upload-malware-scanning-clamav.md) Addenda)** — documentation only. ExternalDNS
+  created the `A` and `AAAA` alias records for the apex host but no TXT ownership records (the
+  `a-`/`aaaa-` names fall outside the zone and the AWS provider drops them at debug level), so it
+  did not remove them either and the zone's `force_destroy` did; the decision is to keep the apex
+  host. The Network Policy agent enforced the policy; the app's metrics scrape is blocked while
+  Ingress is off and works once it is on. clamd ran on Graviton (Ready in 40 s, about 1.02 GiB).
+  `k8s/infra/terraform/README.md` now says to destroy `addons/` first and how to clean up when it
+  was skipped, and the earlier expectation of TXT records is corrected in the ADR, the two READMEs
+  and CLAUDE.md.
 - **VPC CNI Network Policy agent turned on (2026-09-26,
   [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md) Addendum)** — `values-prod.yaml`
   already set `networkPolicy.enabled: true`, but `vpc-cni` ran with its defaults, so the policy

@@ -13,6 +13,26 @@
 ## [Unreleased]
 
 ### 변경
+- **ALB 헬스체크 경로를 Service별로 지정 (2026-09-26, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)
+  추가 기록, 차트 `0.5.1`, `60bfe2a`)** — 첫 라이브 ALB에서 백엔드와 admin 타깃 그룹이
+  `Target.ResponseCodeMismatch [404]`로 `unhealthy`였다. 기본 헬스체크가 `/`인데 둘 다 그 경로를
+  서빙하지 않기 때문이다. 한 그룹의 타깃이 전부 unhealthy이면 ALB가 그 그룹의 모든 타깃으로 요청을
+  보내서 사이트는 계속 응답했는데, 이는 죽은 파드도 로테이션에 남긴다. 차트에
+  `service.annotations`와 `admin.service.annotations`(기본은 빈 값)를 더했고 `values-prod.yaml`이
+  `alb.ingress.kubernetes.io/healthcheck-path`를 `/health/live`(백엔드), `/admin/`(admin)로 정한다.
+  `helm upgrade` 뒤 세 그룹이 모두 `healthy`였고, 컨트롤러(`v2.7.1`)가 Service의 어노테이션을
+  읽는다는 뜻이다.
+- **DNS, NetworkPolicy, ClamAV 작업의 첫 라이브 실행을 기록 (2026-09-26,
+  [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md),
+  [0056](ADR/0056-networkpolicy-east-west-restriction.ko.md),
+  [0059](ADR/0059-upload-malware-scanning-clamav.ko.md) 추가 기록)** — 문서만 바꿨다. ExternalDNS가
+  apex host의 `A`와 `AAAA` alias 레코드를 만들었지만 TXT 소유 레코드는 만들지 않았다(`a-`/`aaaa-`
+  이름이 zone 밖이라 AWS provider가 debug 레벨로 버림). 그래서 그 레코드를 지우지도 못했고 zone의
+  `force_destroy`가 지웠다. 결정은 apex host를 유지하는 것이다. Network Policy 에이전트는 정책을
+  강제했고, Ingress가 꺼져 있는 동안 앱 메트릭 스크레이프는 막히지만 켜지면 동작한다. clamd는
+  Graviton에서 40초에 Ready가 됐고 메모리는 약 1.02 GiB였다. `k8s/infra/terraform/README.ko.md`에
+  `addons/`를 먼저 destroy하라는 것과, 건너뛴 경우의 정리 방법을 추가했고, TXT 레코드가 생긴다는
+  이전 기대는 ADR, 두 README, CLAUDE.md에서 정정했다.
 - **VPC CNI Network Policy 에이전트를 켬 (2026-09-26,
   [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록)** —
   `values-prod.yaml`은 이미 `networkPolicy.enabled: true`였지만 `vpc-cni`가 기본 설정이라 정책이

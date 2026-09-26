@@ -1,6 +1,6 @@
 # ADR 0056: 클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy
 
-- Status: Accepted — implemented, kind+Calico 검증 완료(2026-09-22 addendum의 ALB 인바운드 허용 규칙은 미검증 — 라이브 EKS 클러스터 필요). 2026-09-26 추가 기록에서 AWS 에이전트를 코드로 켰고(`cluster/main.tf`, `terraform validate`/`fmt -check` 통과, 미적용), 라이브 검증은 후속 작업
+- Status: Accepted — implemented, kind+Calico 검증 완료. 2026-09-26 추가 기록에서 AWS 에이전트를 코드로 켰고(`cluster/main.tf`), 같은 날의 두 번째 추가 기록에 EKS 라이브 실행 결과가 있다(에이전트, ALB 인바운드 허용 규칙, 프로브는 확인했고 Ingress가 꺼져 있는 동안 앱 메트릭 스크레이프는 막힘)
 - Date: 2026-09-11
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)
 - English: [0056-networkpolicy-east-west-restriction.md](0056-networkpolicy-east-west-restriction.md)
@@ -259,3 +259,23 @@ Context와 D1이 하나를 열어 뒀다. `values-prod.yaml`이 `networkPolicy.e
       관찰한 적은 없다.
    7. ExternalDNS, External Secrets, ALB Controller가 영향받지 않는지: 정책의 `podSelector`는
       앱 라벨뿐이다.
+
+### Addendum (2026-09-26, 이후) — EKS 라이브 결과
+
+개발자가 스택을 apply했고, 세션이 위의 확인 7개를 직접 실행했다. 읽기 전용 호출과 백엔드 파드
+안에서 돌린 프로브 스크립트 한 번(TCP 연결, clamd `PING`, clamd로 정상 바이트 전송)이 전부이고
+아무것도 쓰지 않았다. 시각은 UTC다.
+
+| # | 확인 | 결과 |
+|---|---|---|
+| 1 | 에이전트와 VPC CNI 버전 | 성공. `aws-node`가 두 노드 모두 `2/2`였고, 애드온은 `v1.22.4-eksbuild.3`, `ACTIVE`, 설정 `{"enableNetworkPolicy":"true"}`였다. |
+| 2 | 프로브가 막히지 않는지 | 성공. 백엔드는 `1/1 Running`에 재시작 0이었고 `/health/ready`가 파드 안에서 `200`이었다. Warning 이벤트는 기동 중 readiness 실패 2건(`connection refused`)뿐인데, 앱이 아직 listen하지 않았다는 뜻이다(프로브가 막혔다면 타임아웃이 난다). |
+| 3 | ALB 타깃 그룹 | 규칙은 동작했고 헬스체크가 문제였다. 백엔드와 admin 그룹이 처음에 `Target.ResponseCodeMismatch [404]`로 `unhealthy`였는데, ALB의 헬스체크가 VPC CIDR 규칙을 통과해 파드에 닿고 응답을 받았다는 뜻이다. 원인은 기본 헬스체크 경로 `/`였고(Service별로 고침, [ADR 0062](0062-admin-same-alb-subpath-routing.ko.md) 추가 기록), 이후 세 그룹이 모두 `healthy`가 됐다. |
+| 4 | Ingress가 꺼진 상태의 강제 | 성공. 백엔드 파드에서 `s3.amazonaws.com:80`과 Prometheus 파드의 `:9090`이 타임아웃됐다. 다른 네임스페이스에서 도는 Prometheus도 백엔드를 스크레이프하지 못했다(`context deadline exceeded`). 다른 네임스페이스에 전용 파드를 띄우지는 않았고, 실패한 스크레이프가 네임스페이스 간 차단의 증거다. |
+| 5 | 허용 경로 | 대부분 성공. 백엔드 파드에서 DNS가 `sharenpo-clamav`를 해석했고, clamd가 `PING`에 `PONG`, 정상 바이트에 `stream: OK`로 답했고, `s3.amazonaws.com:443`에 연결됐다. 5432는 직접 시도하지 않았고, DB를 ping하는 `/health/ready`의 `200`으로 추정한다. clamd 로그에는 16:37에 이전 백엔드 파드 IP에서 온 `Eicar-Test-Signature FOUND`가 남아 있다. HTTP `400 UPLOAD_MALWARE_DETECTED` 응답과 앱을 거친 정상 파일 업로드는 세션이 관찰하지 못했다. |
+| 6 | Prometheus 스크레이프 | 추론대로 Ingress가 꺼진 동안 막혔다(`up{job="sharenpo"}`가 `0`). Ingress를 켜자 VPC CIDR 인바운드 규칙이 생겼고 `up`이 `1`이 됐다(Prometheus의 파드 IP가 `10.0.0.0/16` 안이다). |
+| 7 | 다른 애드온이 영향받지 않는지 | 성공. ExternalDNS, External Secrets, ALB Controller 파드가 `Running`이었고 ExternalDNS가 레코드를 만들었으며 오류는 없었다. |
+
+**이번 작업에서 남은 것:** Ingress가 꺼져 있는 동안에는 백엔드 메트릭이 수집되지 않는다.
+`kube-prometheus-stack` 네임스페이스를 허용하는 규칙을 더하면 해결되지만, 차트 변경이라 여기서는
+하지 않았다.

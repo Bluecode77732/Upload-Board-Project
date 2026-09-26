@@ -991,23 +991,23 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   지저분하게 죽지는 않는다 — kubelet은 막힌 `preStop` hook을 포기하는 순간에도 SIGTERM을
   여전히 보낸다. sleep을 얼마로 둘지는 여전히 정하지 않았다 — 실제 ALB의 드레인 지연 숫자가
   있어야 한다. AWS 스택이 지금 apply돼 있는지와는 무관하다.
-- 배포 전 준비 — **2026-09-25/26 결정 및 코드 작성, 적용된 것은 없음**: ExternalDNS로 만드는 ALB의
-  DNS 레코드와 zone 네임서버를 고정하는 재사용 위임 세트([ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)),
+- 배포 전 준비 — **2026-09-25/26 결정 및 코드 작성, 2026-09-26에 라이브로 한 번 실행**:
+  ExternalDNS로 만드는 ALB의 DNS 레코드와 zone 네임서버를 고정하는 재사용 위임 세트([ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)),
   켜 둔 VPC CNI Network Policy 에이전트([ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md)
   추가 기록), 그리고 실제 배포가 어떤 이미지를 쓰는가 — `dev` 이미지는 `amd64`뿐이고 실제로 도는
   노드는 `arm64`뿐이라 실제 배포는 `main`을 쓴다([ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)
-  추가 기록). `app-infra/`, `addons/`, `cluster/`에서 `terraform validate`/`fmt -check`가
-  통과했고 plan·apply는 한 적이 없다. 첫 실제 배포 전에 남은 것: `dev`를 `main`에 머지하고 CI가
-  세 이미지를 모두 발행하게 하기, tfstate 버킷과 재사용 위임 세트를 만들고 Gabia가 그 네임서버를
-  가리키게 하기, push. 끝난 것: ClamAV `stable-debian` 이미지를 로컬에서 실행해 확인했다
-  (`clamdcheck.sh`, `/var/lib/clamav`, 프로브, EICAR) — 개발자가 출력이 모두 예상값과 같았다고
-  보고했고(2026-09-26, 세션은 출력을 보지 못함), 같은 날 세션이 직접 실행했다: amd64와 QEMU 위
-  arm64 모두 프로브·`PING`·EICAR·정상 파일 결과가 예상대로였고, Ready까지 amd64는 약 30초(에뮬레이션
-  131초), clamd 메모리는 안정 상태 약 1.06 GiB(에뮬레이션 1.18 GiB)였다 — 수치는 `k8s/helm/README.md`
-  미해결 목록과 ADR 0059 추가 기록에 있다. 배포 시점에 라이브로만 확인되는 것: ADR 0063의
-  Consequences, ADR 0056의 추가 기록, `k8s/helm/README.md` 미해결 목록의 점검, 그리고 노드
-  용량(`t4g.medium` 2대 — clamd 하나는 노드 4 GiB의 약 4분의 1로 측정됐지만, ExternalDNS·frontend·
-  admin까지 더한 전체는 측정한 적 없음).
+  추가 기록). 라이브 실행(개발자가 스택을 apply하고 Ingress를 켰으며, 세션은 AWS와 클러스터를 읽기
+  전용으로 조회함)에서 확인한 것: ALIAS 레코드는 만들어졌지만 ExternalDNS가 apex host의 소유 TXT
+  레코드를 만들지 않아 그 레코드를 지우지 못하고 zone의 `force_destroy`가 지운다 — 개발자가 apex
+  host를 유지하기로 결정했다(ADR 0063 추가 기록). 에이전트는 정책을 강제했고 Ingress가 꺼져 있는
+  동안 앱 메트릭은 스크레이프되지 않는다(ADR 0056 추가 기록). 백엔드와 admin 타깃 그룹에는 Service별
+  헬스체크 경로가 필요했다(ADR 0062 추가 기록, 차트 `0.5.1`). clamd는 Graviton에서 40초에 Ready가
+  됐고 메모리는 약 1.02 GiB였다(ADR 0059 추가 기록, 그 앞의 로컬 amd64/arm64 측정 포함). 모든 파드가
+  `t4g.medium` 2대에 들어갔다(파드 슬롯 34개 중 23개). `addons/`를 건너뛴 destroy는 IAM 역할·정책,
+  CloudFormation 스택, 낡은 state를 남긴다(`k8s/infra/terraform/README.md`의 Destroy). 아직 열려 있는
+  것: 앱을 거친 EICAR 업로드가 `400`으로 답하는지와 정상 파일이 통과하는지(스캐너 쪽만 관찰함), 두 번째
+  zone이 같은 네임서버를 받는지, Ingress가 꺼져 있는 동안의 메트릭 공백. 다른 ADR에서 온 미관찰 항목은
+  `k8s/helm/README.md` 미해결 목록에 그대로 있다.
 - Istio(Kubernetes 클러스터 위 서비스 메시) — **프로덕션 DevOps 스택 도입 행과 Stage 4
   구성요소 상태 표에서 제외**(2026-08-31 이동, 이번 세션에서 진행한 규모 적합성 검토 뒤
   개발자가 내린 결정 — ROADMAP 자체의 순서 계획과는 별개). **미착수 이유**: 이 프로젝트의

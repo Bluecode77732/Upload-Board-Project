@@ -1,6 +1,6 @@
 # ADR 0063: ExternalDNS로 ALB DNS 레코드를 만들고, 재사용 위임 세트로 zone 네임서버를 고정한다
 
-- Status: Accepted — 코드 작성 완료(`terraform fmt -check`/`validate`와 `bash -n` 통과). plan·apply는 하지 않음
+- Status: Accepted — 코드 작성 완료(`terraform fmt -check`/`validate`와 `bash -n` 통과). 2026-09-26 첫 라이브 실행: 레코드는 만들어졌고 소유 TXT 레코드는 만들어지지 않음(추가 기록 참고)
 - Date: 2026-09-25
 - Amends: [ADR 0043](0043-terraform-project-adaptation.ko.md) (D5의 네임서버 단계: 등록기관이 Terraform이 마지막으로 만든 zone이 아니라 재사용 위임 세트를 가리킨다)
 - Extends: [ADR 0044](0044-terraform-three-state-split.ko.md) (`addons/`가 `app-infra/`의 출력을 하나 더 읽는다), [ADR 0047](0047-observability-prometheus-grafana.ko.md) (`eks_blueprints_addons` 모듈 플래그 하나 추가)
@@ -179,3 +179,52 @@ README)은 파일 목록을 승인받은 뒤에 진행한다.
 - `init`은 2026-09-25에 `eks-blueprints-addons`를 `1.24.3`으로 해석했고, 이것이 `external_dns`
   블록을 읽은 버전이다. lock 파일은 모듈을 고정하지 않으므로 이후 `init`은 더 새로운 1.x를 고를
   수 있다. 훨씬 새로운 버전으로 해석되면 그 블록을 다시 읽는다.
+
+## Addendum (2026-09-26) — 첫 라이브 실행: 레코드는 만들어졌고 소유 TXT 레코드는 만들어지지 않았다
+
+개발자가 세 state를 apply하고 Ingress를 켰으며, 차트를 한 번 업그레이드한 뒤 스택을 철거했다.
+세션은 AWS, 클러스터, CloudTrail을 읽기 전용으로 조회하고 `curl`로 공개 사이트를 요청했다.
+시각은 2026-09-26 UTC다.
+
+**위의 라이브 확인 5개**
+
+| # | 확인 | 결과 |
+|---|---|---|
+| 1 | Ingress를 켠 뒤의 레코드 | 일부만 성공. ExternalDNS가 `sharenpo.cloud`의 alias `A`**와** alias `AAAA`를 ALB로 만들었다(CloudTrail: 17:13:51의 변경 2건짜리 배치 1개). **`TXT` 소유 레코드는 만들지 않았다.** |
+| 2 | `http://`가 HTTPS로 리다이렉트 | 성공. `http://sharenpo.cloud/`는 `https://`로 `301`, `https://`는 `200`, `/file`은 `401`, `/admin/`은 `200`(상태 코드만 보았고 본문은 읽지 않음). `curl`이 인증서를 검증했고 `nslookup`은 두 리졸버에서 주소 3개를 돌려줬다. |
+| 3 | uninstall 뒤 레코드 제거, `app-infra/` destroy 완료 | destroy는 완료됐지만 **ExternalDNS는 레코드를 지우지 않았다.** ALB가 삭제된 뒤(17:59:05) 8분 동안 1분마다 Route53을 조회하면서도 변경을 내지 않았다. Terraform의 `force_destroy`가 18:06:29에 `A`와 `AAAA`를, 18:07:00에 zone을 삭제했다. |
+| 4 | EKS `1.34`에서 ALB Controller 옆의 차트 `1.22.0` | 성공. `external-dns-1.22.0`(앱 `v0.22.0`)과 `aws-load-balancer-controller-1.7.1`이 모두 `deployed`이고 파드가 `Running`이며 Service webhook 실패가 없었다. |
+| 5 | 두 번째 zone이 같은 네임서버를 받는지 | 관찰하지 못함. zone이 하나뿐이었다. |
+
+**TXT 레코드가 없는 이유.** Ingress host가 zone apex다. `v0.22.0`의 TXT registry는 이름의 첫 라벨
+앞에 레코드 타입을 붙여 소유 레코드 이름을 만든다(`registry/mapper/mapper.go`의 `ToTXTName`).
+그래서 apex의 두 레코드는 `a-sharenpo.cloud`, `aaaa-sharenpo.cloud`가 되고, 이 이름은 zone
+`sharenpo.cloud.` 안이 아니다. AWS provider는 이름이 zone과 같거나 `.sharenpo.cloud.`로 끝나는
+변경만 받아들이고(`provider/aws/aws.go`의 `suitableZones`) 나머지는 debug 레벨로 버린다
+(`changesByZone`, "Skipping record … no hosted zone matching"). 차트가 `--log-level=info`라 이 줄이
+보이지 않는다. 근거는 세 가지다. 실행 중이던 설정이 `--registry=txt --txt-owner-id=sharenpo`라서
+설정 오류가 아니었고, CloudTrail에서 배치가 alias 변경 2건뿐이었으며 오류가 없었고, 위 소스를
+`v0.22.0` 태그에서 읽었다. debug 줄 자체는 보지 못했다. zone 아래의 host(`app.sharenpo.cloud`)는
+zone 안의 `a-app.sharenpo.cloud`가 되는데, 이는 코드에서 읽은 것이고 실행해 보지는 않았다. 이 일은
+`v0.22.0`에서 alias 접두사가 `cname-`에서 `a-`로 바뀐 것과 그 회귀(이미 `cname-` TXT가 있는
+zone이 대상)와 무관하다.
+
+**D3에 미치는 영향.** D3은 ExternalDNS가 자기가 만든 것을 소유한다고 가정했다. apex host에서는
+레코드를 만들 수는 있어도 갱신하거나 삭제하지 못한다. `ApplyChanges`가 Delete와 Update를 owner
+필터(`FilterEndpointsByOwnerID`, 호출부만 확인했고 함수 자체는 읽지 않음)에 통과시키는데, owner
+TXT가 없는 레코드는 통과하지 못하기 때문이다. 따라서:
+
+- apex 레코드에는 `policy: sync`가 아무 일도 하지 않는다.
+- zone의 `force_destroy = true`가 이 레코드를 지우는 유일한 수단이라, 단순한 대비책이 아니라
+  필수다.
+- zone은 두고 `cluster/`만 다시 만들면 apex `A`와 `AAAA`가 삭제된 ALB를 가리킨 채 남고
+  ExternalDNS가 고치지 않는다. 다음 Ingress 전에 손으로 지운다.
+
+TXT 레코드와 ExternalDNS의 제거를 기대한 위의 Consequences는 이 추가 기록으로 대체된다.
+
+**결정(개발자, 2026-09-26): apex host를 유지한다.** 검토한 대안은 서브도메인 host(TXT는 되지만
+사이트 URL, `BASE_URL`, 인증서, Ingress 값이 바뀜)와 `crd` 같은 다른 registry(검증하지 않음)였다.
+둘 다 채택하지 않았다.
+
+개발자의 destroy는 `addons/`를 건너뛰었다. 그 결과로 남는 것은
+[`k8s/infra/terraform/README.ko.md`](../../k8s/infra/terraform/README.ko.md)의 Destroy에 있다.

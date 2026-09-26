@@ -336,16 +336,16 @@ ingress 켜기" 절에서도 같은 문제를 발견해 같은 방식으로 고�
 검증할 수 있는 최대치다. 실제 ALB Controller가 떠 있는 클러스터에 대한 진짜 `helm
 install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 밖이다.
 
-**미해결 — 실전 신뢰 전 필수, 지금은 검증할 살아있는 ALB Controller가 없어서 아직 안 함:**
-YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 동작하는 것은 별개다.
-`addons/`+`app-infra/`를 다시 apply하고, `ingress.enabled`를 실제로 켜고, ExternalDNS가
-도메인을 ALB로 향하게 만든 뒤(ADR 0063)에는, annotation이 먹혔다고 가정하지 말고 다음을
-직접 확인한다:
-- 그 zone에 대한 `aws route53 list-resource-record-sets`에 도메인이 ALB를 가리키는 alias `A`
-  레코드와 ExternalDNS의 `TXT` 소유 레코드가 `Ingress`가 생긴 지 몇 분 안에 보이고, `Ingress`를
-  지운 뒤에는 사라지는지(또는 zone의 `force_destroy`가 지우는지). 명령은
-  `k8s/infra/terraform/README.md`의 "Enabling the ALB ingress"에 있다. 라이브에서 관찰한
-  적 없음(ADR 0063).
+**미해결 — 실전 신뢰 전 필수.** YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로
+동작하는 것은 별개라서, annotation이 먹혔다고 가정하지 말고 다음을 직접 확인한다. 2026-09-26에
+첫 라이브 확인을 했다(개발자가 스택을 apply하고 Ingress를 켰으며, 세션은 AWS와 클러스터를 읽기
+전용으로 조회했다). 각 항목에 그때 관찰한 것을 적었고, "관찰" 표시가 없는 항목은 아직 열려 있다:
+- 그 zone에 대한 `aws route53 list-resource-record-sets`에 도메인이 ALB를 가리키는 alias `A`와
+  `AAAA` 레코드가 `Ingress`가 생긴 지 몇 분 안에 보이는지. 2026-09-26(17:13:51 UTC, apex host)에
+  관찰: 두 레코드가 만들어졌고 `TXT` 소유 레코드는 없었다. ExternalDNS는 apex host의 소유 레코드를
+  만들지 못해서, Ingress와 ALB가 사라진 뒤에도 그 레코드를 지우지 않았고 zone의
+  `force_destroy`가 지웠다(ADR 0063 추가 기록). 명령은 `k8s/infra/terraform/README.md`의
+  "Enabling the ALB ingress"에 있다.
 - 첫 배포 전에 내 컴퓨터에서(클러스터 불필요): `values-prod.yaml`은 ClamAV를 차트가 검증받은
   `stable`이 아니라 `clamav/clamav:stable-debian`으로 실행한다 — `stable`은 Docker Hub에
   `linux/amd64`만 있는데 실제로 도는 노드는 `arm64`뿐이고, `stable-debian`은 amd64, arm64,
@@ -372,31 +372,41 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   두 시간 모두 넉넉히 덮는다. 그리고 `values.yaml` 주석이 제안하는 `clamav.resources.limits.memory`
   "1Gi부터"는 여기서 잰 안정 상태보다 *낮아서* 그대로 두면 파드가 OOM으로 죽는다 — limit을 걸게
   되면 그보다 높게 시작한다(`values.yaml` 자체는 바꾸지 않았다). clamd 하나가 `t4g.medium` 4 GiB의
-  약 4분의 1이다. 여전히 라이브에서만 확인되는 것: 실제 Graviton 노드에서 `clamav` Deployment가
-  Ready가 되는지, 앱을 거친 EICAR 업로드가 `400 UPLOAD_MALWARE_DETECTED`로 답하는지, 정상 파일이
-  통과하는지.
+  약 4분의 1이다. 2026-09-26 라이브 클러스터에서 관찰: 파드가 `t4g.medium`(`arm64`) 노드에서 돌았고
+  시작 후 40초에 Ready가 됐으며 재시작은 없었고 메모리는 약 1.02 GiB였다. clamd 로그에는 백엔드
+  파드에서 온 `Eicar-Test-Signature FOUND`가 남아 있다([ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md)
+  추가 기록). 아직 열려 있는 것: 앱을 거친 EICAR 업로드가 `400 UPLOAD_MALWARE_DETECTED`로 답하는지,
+  정상 파일이 앱을 거쳐 통과하는지.
 - `aws elbv2 describe-listeners`로 만들어진 ALB에 80번과 443번 리스너가 둘 다 있는지
-  (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지).
+  (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지). 실행하지 않았고, 아래의 리다이렉트와
+  인증서가 간접 증거다.
 - `curl -I http://<도메인>`이 `https://` URL로 `301`/`302`를 반환하는지(`ssl-redirect`가
-  실제로 동작하는지).
+  실제로 동작하는지). 2026-09-26 관찰: `https://sharenpo.cloud:443/`로 `301`.
 - 브라우저가 ACM 인증서가 발급된 그 도메인에 대해 경고 없이 인증서를 신뢰하는지
-  (`certificate-arn` annotation이 실제로 올바른 인증서를 붙였는지).
+  (`certificate-arn` annotation이 실제로 올바른 인증서를 붙였는지). 2026-09-26에 `curl`로만
+  관찰: `https://` 요청에서 인증서가 검증됐다. 브라우저는 쓰지 않았다.
 - 토큰 없는 `curl https://<도메인>/file`이 HTML이 아니라 API의 401 JSON을 돌려주고,
   `/files`·`/posts/1`·존재하지 않는 경로는 SPA의 HTML을 돌려주는지 — 프론트엔드 `/` 규칙이
   실제로 API prefix들 아래에 놓이는지(ADR 0060, 컨트롤러의 Exact 다음 긴 Prefix 순서는
   라이브에서 확인된 적이 없다). `/health/live`·`/metrics`·`/doc`도 SPA의 HTML(또는 404)이
-  나와야 하고 백엔드 응답이 나오면 안 된다.
+  나와야 하고 백엔드 응답이 나오면 안 된다. 2026-09-26 관찰: `/`는 `200`, `/file`은 `401` —
+  상태 코드만 보았고 본문과 `/health/live`·`/metrics`·`/doc` 경로는 확인하지 않았다.
 - `curl https://<도메인>/admin/`이 프론트엔드도 404도 아닌 admin 콘솔 자신의 HTML을
   돌려주는지 — `/admin`이 규칙 집합에 실제로 있는지, 그리고 Exact 다음 긴 Prefix 순서에서
   더 짧은 규칙에 먼저 먹히지 않는지 확인한다(ADR 0062, 이것도 라이브에서 확인된 적 없다).
   슬래시 없는 `curl -I https://<도메인>/admin`은 ALB가 아니라 nginx 자신의 `301`로
   `/admin/`에 리다이렉트되는지 확인한다 — 요청이 실제로 admin 파드까지 도달했는지(중간에서
-  재작성되거나 버려지지 않았는지) 확인하는 것이다.
+  재작성되거나 버려지지 않았는지) 확인하는 것이다. 2026-09-26 관찰: `/admin/`은 `200`(상태
+  코드만). 슬래시 없는 `/admin`의 `301`은 확인하지 않았다.
 - 타깃 그룹에 healthy 타깃이 등록되는지. `values-prod.yaml`의 주석 처리된 annotation
-  블록에 이제 `alb.ingress.kubernetes.io/target-type: ip`가 들어 있다(2026-09-22 추가 —
+  블록에 `alb.ingress.kubernetes.io/target-type: ip`가 들어 있다(2026-09-22 추가 —
   컨트롤러 기본값 `instance`는 `NodePort`/`LoadBalancer` Service가 필요한데 이 차트의
-  Service는 둘 다 `ClusterIP`다). 다만 이건 렌더링되는 annotation만 고친 것이고, 실제
-  ALB가 파드를 healthy로 등록하는지는 별개로 확인해야 한다.
+  Service는 둘 다 `ClusterIP`다). 2026-09-26 관찰: `ip`는 동작했지만(타깃이 파드 IP였다) 기본
+  헬스체크(`/`, `200`)에서 백엔드와 admin 그룹이 `unhealthy`(`Target.ResponseCodeMismatch [404]`)였고,
+  그 그룹의 타깃이 전부 unhealthy이면 ALB가 모든 타깃으로 요청을 보내므로 사이트는 계속 응답했다.
+  차트는 이제 Service별로 헬스체크 경로를 지정하고(차트 `0.5.1`, `values-prod.yaml`,
+  [ADR 0062](../../docs/ADR/0062-admin-same-alb-subpath-routing.ko.md) 추가 기록), 그 뒤에 세 그룹이 모두
+  `healthy`였다.
 - `networkPolicy.enabled: true`(`values-prod.yaml`이 설정하는 값)와 Ingress가 함께 켜지면
   `networkpolicy.yaml`이 VPC CIDR을 앱 포트에 허용하는 인바운드 규칙을 하나 더
   렌더링한다(ADR 0056 addendum, 위 `target-type` 수정과 같은 시점에 추가 — ALB의 ENI는
@@ -404,19 +414,19 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   위 항목과 같은 방식으로 ALB 타깃 그룹이 healthy인지 확인하고, ADR 0056 D2가 이미
   남긴 단서대로 이게 실제로 AWS 자신의 VPC CNI Network Policy 에이전트로 강제되는지(단순
   렌더링이 아니라)도 확인한다 — `kind`+Calico로는 실제 VPC CIDR을 흉내 낼 수 없어서, 이
-  규칙은 `helm template` 이상으로 검증할 방법이 없다.
-- VPC CNI Network Policy 에이전트를 켠 뒤에는(2026-09-26에 `cluster/main.tf`에 설정, 코드 완성·
-  미적용 — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)
-  추가 기록) 강제가 실제로 동작하고 정당한 트래픽이 막히지 않는지도 확인한다: `aws-node` 파드가
-  컨테이너 두 개로 떠 있고 VPC CNI 버전이 `v1.14.0-eksbuild.3` 이상인지, 앱 파드가 Ready가 되고
-  `/health/live`·`/health/ready`가 통과하는지(kubelet 프로브가 막히지 않는지,
-  `aws/amazon-vpc-cni-k8s#2571`), Ingress가 꺼져 있을 때 다른 네임스페이스의 파드가 앱 파드에 닿지
-  못하고(Ingress가 켜지면 VPC CIDR 규칙이 허용하므로 타임아웃이 나오지 않는 게 정상) 허용
-  목록에 없는 egress 포트가 타임아웃되는지, DNS·데이터베이스(5432)·clamd(3310)·HTTPS/443(S3)이 동작하고 EICAR
-  업로드는 거부되며 정상 파일은 통과하는지, Prometheus가 백엔드를 계속 스크레이프하는지(인바운드
-  규칙은 같은 네임스페이스 파드와 Ingress가 켜졌을 때의 VPC CIDR만 허용하므로 Ingress가 꺼져
-  있으면 스크레이프가 막힐 수 있다 — 추론이며 관찰한 적 없음), ExternalDNS·External Secrets·ALB
-  Controller가 영향받지 않는지.
+  규칙은 `helm template` 이상으로 검증할 방법이 없다. 2026-09-26 관찰: ALB의 헬스체크가 이
+  규칙을 통해 백엔드 파드에 닿았다(처음에는 `404` 응답, 헬스체크 경로를 고친 뒤 `healthy`).
+- VPC CNI Network Policy 에이전트를 켠 상태에서(`cluster/main.tf`,
+  [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록) 강제가
+  실제로 동작하고 정당한 트래픽이 막히지 않는지 확인한다. 2026-09-26 관찰: `aws-node` `2/2`,
+  VPC CNI `v1.22.4-eksbuild.3`. 백엔드가 Ready이고 `/health/ready`가 통과했다(kubelet 프로브가
+  막히지 않음, `aws/amazon-vpc-cni-k8s#2571`). Ingress가 꺼진 상태에서 80번 포트와 Prometheus 파드의
+  `:9090`으로 나가는 egress가 타임아웃됐고 Prometheus(다른 네임스페이스)가 백엔드를 스크레이프하지
+  못했다. DNS, clamd(`PING`과 정상 바이트), HTTPS/443은 동작했고 5432는 통과한 `/health/ready`로
+  추정한다. ExternalDNS, External Secrets, ALB Controller는 영향받지 않았다. Prometheus는 Ingress가
+  꺼져 있는 동안 막혔고(`up`이 `0`) Ingress가 켜진 뒤 백엔드를 스크레이프했다(`up`이 `1`). 즉
+  Ingress 없이는 앱 메트릭이 수집되지 않는다. 관찰하지 못한 것: EICAR 업로드의 HTTP 응답과 앱을 거친
+  정상 파일 업로드.
 - 실제 HTTPS 연결로 로그인한 뒤 페이지를 새로고침해도 세션이 유지되는지. refresh 쿠키가
   `HttpOnly; Secure; SameSite=Strict; Path=/auth/token`으로 내려오고 `POST /auth/token/refresh`에
   다시 실려 가야 한다 — `Secure` 쿠키는 브라우저 연결이 HTTPS일 때만 동작하므로 다른 곳에서는

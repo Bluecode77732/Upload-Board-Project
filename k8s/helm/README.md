@@ -336,16 +336,17 @@ silently drops every path; `--set-json` is what actually keeps them, per
 the same thing). A real `helm install --wait` against a live ALB Controller is out of scope
 until Terraform is re-applied.
 
-**Pending — required before trusting this in production, not yet done because no live
-ALB Controller exists to test against:** rendering correctly is not the same as the ALB
-actually behaving as configured. Once `addons/`+`app-infra/` are re-applied,
-`ingress.enabled` is actually flipped on, and ExternalDNS has made the domain resolve to the
-ALB (ADR 0063), verify explicitly rather than assuming the annotations worked:
-- `aws route53 list-resource-record-sets` for the zone shows an alias `A` record for the domain
-  pointing at the ALB plus ExternalDNS's `TXT` ownership records within a few minutes of the
-  `Ingress` appearing, and they are gone after it is removed (or the zone's `force_destroy`
-  clears them). The command is in `k8s/infra/terraform/README.md` > "Enabling the ALB
-  ingress". Never observed live (ADR 0063).
+**Pending — required before trusting this in production.** Rendering correctly is not the same
+as the ALB actually behaving as configured, so verify explicitly rather than assuming the
+annotations worked. A first live pass ran on 2026-09-26 (the developer applied the stack and
+enabled the Ingress; the session read AWS and the cluster read-only). Each item says what that
+pass observed; an item with no "observed" note is still open:
+- `aws route53 list-resource-record-sets` for the zone shows alias `A` and `AAAA` records for
+  the domain pointing at the ALB within a few minutes of the `Ingress` appearing. Observed
+  2026-09-26 (17:13:51 UTC, apex host): both records and no `TXT` ownership records. ExternalDNS
+  cannot create ownership records for the apex host, so it also did not remove the records after
+  the Ingress and ALB were gone; the zone's `force_destroy` did (ADR 0063 Addendum). The command
+  is in `k8s/infra/terraform/README.md` > "Enabling the ALB ingress".
 - Before the first deploy, on your machine (no cluster needed): `values-prod.yaml` runs ClamAV
   as `clamav/clamav:stable-debian`, not the `stable` tag the chart was verified with — `stable`
   lists `linux/amd64` alone on Docker Hub and the only nodes that run are `arm64`, while
@@ -372,32 +373,44 @@ ALB (ADR 0063), verify explicitly rather than assuming the annotations worked:
   budget (≈480 s) covers both times with room to spare, and `values.yaml`'s comment suggesting a
   `clamav.resources.limits.memory` "from 1Gi" would sit *below* the steady figure here and get the
   pod OOM-killed — start higher than that if a limit is ever set (`values.yaml` itself was not
-  changed). clamd alone is about a quarter of a `t4g.medium`'s 4 GiB. Still live-only: the `clamav`
-  Deployment Ready on a real Graviton node, an EICAR upload through the app answering
-  `400 UPLOAD_MALWARE_DETECTED`, a clean file passing.
+  changed). clamd alone is about a quarter of a `t4g.medium`'s 4 GiB. Observed on the live
+  cluster 2026-09-26: the pod ran on a `t4g.medium` (`arm64`) node and was Ready 40 s after it
+  started, with no restarts and about 1.02 GiB of memory; clamd's log records an
+  `Eicar-Test-Signature FOUND` from the backend pod ([ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md)
+  Addendum). Still open: an EICAR upload through the app answering `400 UPLOAD_MALWARE_DETECTED`,
+  and a clean file passing through the app.
 - `aws elbv2 describe-listeners` on the created ALB shows both a port-80 and a port-443
-  listener (`listen-ports` actually took effect, not just rendered).
+  listener (`listen-ports` actually took effect, not just rendered). Not run; the redirect and
+  the certificate below are the indirect evidence.
 - `curl -I http://<domain>` returns a `301`/`302` to the `https://` URL (`ssl-redirect`
-  actually fires).
+  actually fires). Observed 2026-09-26: `301` to `https://sharenpo.cloud:443/`.
 - A browser accepts the certificate with no warnings for the same domain the ACM
   certificate was issued for (the `certificate-arn` annotation actually bound the right
-  cert).
+  cert). Observed 2026-09-26 with `curl` only: the certificate validated for `https://`
+  requests; no browser was used.
 - `curl https://<domain>/file` with no token answers the API's 401 JSON, not HTML, while
   `/files`, `/posts/1`, and an unknown path answer the SPA's HTML — the `/` frontend rule
   really sits below the API prefixes (ADR 0060; the controller's Exact-then-longest-Prefix
   ordering has never been observed live). `/health/live`, `/metrics`, and `/doc` must also
-  answer the SPA's HTML (or 404), never a backend response.
+  answer the SPA's HTML (or 404), never a backend response. Observed 2026-09-26: `/` `200`,
+  `/file` `401` — status codes only; the bodies and the `/health/live`, `/metrics`, `/doc` paths
+  were not checked.
 - `curl https://<domain>/admin/` returns the admin console's HTML (not the frontend's, and
   not a 404) — confirms `/admin` sits in the rule set at all and Exact-then-longest-Prefix
   ordering doesn't let a shorter rule swallow it first (ADR 0062, also never observed live).
   A bare `curl -I https://<domain>/admin` (no trailing slash) returns nginx's own `301` to
   `/admin/`, not the ALB's — confirms the request actually reached the admin pod rather than
-  being rewritten or dropped upstream.
+  being rewritten or dropped upstream. Observed 2026-09-26: `/admin/` `200` (status code only);
+  the bare `/admin` `301` was not checked.
 - The target group registers healthy targets. `values-prod.yaml`'s commented annotation
-  block now sets `alb.ingress.kubernetes.io/target-type: ip` (added 2026-09-22 — the
+  block sets `alb.ingress.kubernetes.io/target-type: ip` (added 2026-09-22 — the
   controller's `instance` default needs a `NodePort`/`LoadBalancer` Service, and both
-  Services in this chart are `ClusterIP`); this only fixes the rendered annotation, not
-  whether the real ALB actually registers the pods as healthy.
+  Services in this chart are `ClusterIP`). Observed 2026-09-26: `ip` worked (the targets are
+  pod IPs), but with the default health check (`/`, `200`) the backend and admin groups were
+  `unhealthy` (`Target.ResponseCodeMismatch [404]`) while the site kept answering, because an
+  ALB sends to all targets when every target of a group is unhealthy. The chart now sets a
+  health-check path per Service (chart `0.5.1`, `values-prod.yaml`, [ADR 0062](../../docs/ADR/0062-admin-same-alb-subpath-routing.md)
+  Addendum) and all three groups were `healthy` afterwards.
 - With `networkPolicy.enabled: true` (what `values-prod.yaml` sets) and Ingress on,
   `networkpolicy.yaml` renders a second ingress rule admitting the VPC CIDR on the app's
   port (ADR 0056 addendum, added alongside the `target-type` fix above — the ALB's ENIs
@@ -405,19 +418,20 @@ ALB (ADR 0063), verify explicitly rather than assuming the annotations worked:
   the ALB's target group is healthy (the same check as the bullet above) and, per ADR
   0056 D2's standing caveat, that this is enforced by AWS's own VPC CNI Network Policy
   agent and not just rendered — `kind`+Calico cannot simulate a real VPC CIDR, so this
-  rule has no non-live way to verify beyond `helm template`.
-- Once the VPC CNI Network Policy agent is on (set in `cluster/main.tf` on 2026-09-26, code-complete and never
-  applied — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md)
-  Addendum), also confirm enforcement is real and nothing legitimate is blocked: `aws-node`
-  pods show two containers and the VPC CNI version is `v1.14.0-eksbuild.3` or later; app pods
-  become Ready with `/health/live` and `/health/ready` passing (kubelet probes not blocked,
-  `aws/amazon-vpc-cni-k8s#2571`); with Ingress off a pod in another namespace cannot reach the
-  app pod (with Ingress on the VPC-CIDR rule admits it, so no timeout is expected there) and a
-  non-allow-listed egress port times out; DNS, the database (5432), clamd (3310) and HTTPS/443
-  (S3) work, an EICAR upload is refused and a clean file passes; Prometheus still scrapes the
-  backend (the ingress rule admits same-namespace pods, plus the VPC CIDR only when Ingress is
-  on — so with Ingress off the scrape may be blocked; an inference, not observed);
-  ExternalDNS, External Secrets and the ALB Controller are unaffected.
+  rule has no non-live way to verify beyond `helm template`. Observed 2026-09-26: the ALB's
+  health checks reached the backend pod through this rule (first `404` answers, then `healthy`
+  once the health-check path was fixed).
+- With the VPC CNI Network Policy agent on (`cluster/main.tf`,
+  [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md) Addendum), confirm
+  enforcement is real and nothing legitimate is blocked. Observed 2026-09-26: `aws-node` `2/2`
+  and VPC CNI `v1.22.4-eksbuild.3`; the backend Ready with `/health/ready` passing (kubelet
+  probes not blocked, `aws/amazon-vpc-cni-k8s#2571`); with Ingress off, egress to port 80 and to
+  the Prometheus pod's `:9090` timed out and Prometheus (another namespace) could not scrape the
+  backend; DNS, clamd (`PING` and clean bytes) and HTTPS/443 worked, and 5432 is implied by the
+  passing `/health/ready`; ExternalDNS, External Secrets and the ALB Controller were unaffected.
+  Prometheus is blocked while Ingress is off (`up` was `0`) and scraped the backend once the
+  Ingress was on (`up` was `1`), so the app's metrics are not collected without an Ingress. Not
+  observed: the HTTP response of an EICAR upload and a clean upload through the app.
 - Sign in over the real HTTPS connection, then reload the page: the session survives. The
   refresh cookie must arrive as `HttpOnly; Secure; SameSite=Strict; Path=/auth/token` and go
   back on `POST /auth/token/refresh` — a `Secure` cookie only works when the browser's

@@ -1,6 +1,6 @@
 # ADR 0062: Admin console hosting — a third workload on the same ALB, at `/admin`
 
-- Status: Accepted — implemented (`helm lint`/`helm template`, `pnpm test`, a local image build and curl checks against `/admin/*`, `helm install --wait` on Docker Desktop's Kubernetes, and a CI run on `dev` (smoke test and image push) verified; live ALB unverified)
+- Status: Accepted — implemented (`helm lint`/`helm template`, `pnpm test`, a local image build and curl checks against `/admin/*`, `helm install --wait` on Docker Desktop's Kubernetes, and a CI run on `dev` (smoke test and image push) verified; on a live ALB 2026-09-26 the routing answered as designed and the health checks needed a per-Service path — see the last addendum)
 - Date: 2026-09-23
 - Extends: [ADR 0060](0060-frontend-same-alb-path-routing.md) (D4's "`admin/` is outside this decision" is now resolved — same mechanism, a second app), [ADR 0058](0058-ingress-path-allowlist.md) (one more allow-listed prefix)
 - Relates to: [ADR 0010](0010-frontend-split-and-api-surface-freeze.md) (admin stays a separate app — this adds a deploy path, not a route inside `frontend/`), [ADR 0022](0022-admin-console-import-from-chat-project.md)
@@ -225,3 +225,37 @@ Still not exercised: the `main` path (`:latest` and the `linux/arm64` build), be
 `dev`, which builds `linux/amd64` only; the `sharenpo-admin` entry in `docker-tag-cleanup.yml`, which
 runs on a schedule from `main`'s copy; `deploy.sh`'s admin tag check against the image that now
 exists; and everything that needs a live ALB.
+
+## Addendum (2026-09-26): the live ALB — health checks need a path per Service
+
+The developer enabled the Ingress on a live cluster. The session read AWS and the cluster read-only
+and requested the public site with `curl`. Times are UTC.
+
+**What was seen.** Routing answered as designed: `https://sharenpo.cloud/` `200` (frontend),
+`/file` `401` (backend), `/admin/` `200` (admin) — status codes only, bodies not read. The ALB had
+three target groups, all with the default health check (`/`, success code `200`):
+
+| Target group | Result |
+|---|---|
+| frontend (`:8080`) | `healthy`. `/` is the SPA's `index.html`. |
+| admin (`:8080`) | `unhealthy`, `Target.ResponseCodeMismatch [404]`. The admin nginx serves only under `/admin/`. |
+| backend (`:3000`) | `unhealthy`, `Target.ResponseCodeMismatch [404]`. The backend has no `GET /`. |
+
+The site still answered because an ALB sends requests to every target of a group when all of its
+targets are unhealthy. That also means an unhealthy target never leaves rotation, so a dead pod
+would keep receiving requests.
+
+**Decision.** Set the health-check path per Service through the AWS Load Balancer Controller's
+`alb.ingress.kubernetes.io/healthcheck-path` annotation on the Service: backend `/health/live`,
+admin `/admin/`, frontend unchanged. The chart gained `service.annotations` and
+`admin.service.annotations` (empty by default) and `values-prod.yaml` sets the two paths (chart
+`0.5.1`, commit `60bfe2a`). The ALB's health check goes straight to the pod, not through the
+Ingress rules, so ADR 0058's exclusion of `/health` from the Ingress paths is unaffected.
+
+Rejected: `alb.ingress.kubernetes.io/success-codes: 200-404` on the Ingress, which would make the
+health check accept a missing page as healthy; and leaving it as it was.
+
+**Result.** After the developer ran `helm upgrade` (REVISION 3, 17:41:42), all three target groups
+were `healthy` at 17:43:15 with health-check paths `/`, `/admin/` and `/health/live`. So the
+controller (`aws-load-balancer-controller-1.7.1`, app `v2.7.1`) reads the annotation from the
+Service. The pods were not restarted and the public status codes stayed `200`, `401`, `200`.

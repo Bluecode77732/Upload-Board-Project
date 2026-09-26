@@ -543,8 +543,11 @@ Service → Pod 구간은 ADR 0034의 트러스트 바운더리에 따라 클러
 **DNS 레코드**([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)).
 Terraform은 도메인을 그 ALB로 향하게 하는 레코드를 만들지 않습니다 — `addons/`가 설치하는
 ExternalDNS가 만듭니다. `Ingress`의 host를 지켜보다가 영역 안에 있는 host(ExternalDNS의
-`domainFilters`가 영역 이름입니다)에 대해 ALB를 가리키는 ALIAS 레코드와 소유 표시용 TXT
-레코드를 만들고, `policy: sync`가 `Ingress`가 사라지면 그 레코드를 다시 지웁니다. 그래서
+`domainFilters`가 영역 이름입니다)에 대해 ALB를 가리키는 ALIAS 레코드(`A`와 `AAAA`)를 만듭니다.
+host가 영역의 apex이면(이 프로젝트가 그렇습니다) 소유 표시용 TXT 레코드는 이름이 영역 밖이
+되어 만들어지지 않고, 그러면 ExternalDNS는 그 레코드를 갱신하거나 삭제하지도 못합니다. 영역의
+`force_destroy`가 지웁니다(ADR 0063 추가 기록). 영역 아래의 host라면 TXT 소유 레코드가 만들어지고,
+`Ingress`가 사라질 때 `policy: sync`가 그 레코드를 지웁니다. 그래서
 `Ingress`의 host는 `var.domain_name`이거나 그 아래 이름이어야 하는데, 위 `--set-json`의
 `hosts`가 이미 그렇게 되어 있습니다. 주기적으로 조회하므로(`interval: 1m`) ALB가 생긴 뒤
 몇 분은 기다리세요. 확인하는 방법은 다음과 같습니다(직접 실행하세요. 영역 ID는
@@ -557,9 +560,9 @@ aws route53 list-resource-record-sets --hosted-zone-id <위 Id에서 /hostedzone
   --query 'ResourceRecordSets[].[Name,Type,AliasTarget.DNSName]' --output table
 ```
 
-도메인에 대해 ALB의 DNS 이름을 가리키는 alias `A` 레코드와, `external-dns/owner=<클러스터 이름>`이
-들어간 `TXT` 레코드가 보여야 합니다. 이 중 어느 것도 실제 클러스터에서 관찰한 적은 아직
-없습니다(아직 열려 있는 항목은 ADR 0063 Consequences 참고).
+도메인에 대해 ALB의 DNS 이름을 가리키는 alias `A`와 `AAAA` 레코드가 보여야 합니다(2026-09-26에
+apex host로 관찰했고 `TXT` 레코드는 없었습니다). 영역 아래의 host라면 `TXT` 소유 레코드도 보일
+것으로 예상하지만 관찰한 적은 없습니다(ADR 0063 추가 기록).
 
 ## 각 state가 만드는 것
 
@@ -606,11 +609,30 @@ helm uninstall <릴리스-이름> -n <네임스페이스>
 ```
 
 `app-infra/`의 영역은 `force_destroy = true`([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)
-D3)라서, `destroy`가 Terraform이 모르는 레코드, 즉 ExternalDNS가 만든 ALIAS·TXT 레코드도
-함께 지웁니다. Helm 릴리스를 먼저 제거하면 ExternalDNS의 `policy: sync`가 1분 안팎에 스스로
-지워 주지만, 이제 destroy가 그것에 의존하지는 않습니다. 재사용 위임 세트를 쓴다면 그것은
+D3)라서, `destroy`가 Terraform이 모르는 레코드, 즉 ExternalDNS가 만든 ALIAS 레코드도
+함께 지웁니다. apex host에서는 이것이 실제로 그 레코드를 지우는 수단입니다. ExternalDNS는 소유
+TXT 레코드 없이 만들었고, Ingress와 ALB가 사라진 뒤에도 지우지 않았습니다(2026-09-26 관찰, 8분간
+조회하면서 변경 없음, ADR 0063 추가 기록). 재사용 위임 세트를 쓴다면 그것은
 어떤 state에도 없어서 세 번의 destroy를 모두 거치고도 남습니다. 직접 지울 때까지 유지되며,
 AWS는 그 세트를 쓰는 zone이 하나도 없을 때만 삭제를 허용합니다.
+
+**`addons/`를 건너뛰지 마세요.** 이것 없이 `cluster/`를 지우면 `addons/`가 클러스터 밖에 만든 것이
+남습니다. IAM 역할 3개와 IAM 정책 3개(`alb-controller-…`, `external-dns-…`, `external-secrets-…`),
+모듈의 사용 통계용 CloudFormation 스택(클러스터 이름에 무작위 접미사가 붙은 이름이고
+`WaitConditionHandle`만 들어 있음), 그리고 낡은 `addons/` state입니다. 어느 것도 과금되지는 않지만,
+그 뒤에는 `addons/`를 destroy할 수 없습니다. `cluster/`의 state에 출력이 남아 있지 않아
+`terraform_remote_state`가 plan에서 실패하기 때문입니다. 2026-09-26에 실제로 겪었습니다. 손으로
+정리합니다:
+
+```sh
+for n in <역할 이름 3개>; do
+  for p in $(aws iam list-attached-role-policies --role-name "$n" --query 'AttachedPolicies[].PolicyArn' --output text); do aws iam detach-role-policy --role-name "$n" --policy-arn "$p"; done
+  aws iam delete-role --role-name "$n"
+done
+aws iam delete-policy --policy-arn arn:aws:iam::<계정-ID>:policy/<정책 이름 3개 각각>
+aws cloudformation delete-stack --region <리전> --stack-name <스택 이름>
+cd addons && terraform state rm module.eks_blueprints_addons
+```
 
 `app-infra/`의 `s3_bucket_name`/`domain_name`은 기본값이 없어서(전역적으로
 유일해야 하는 버킷/도메인 이름엔 안전한 기본값을 둘 수 없음) `destroy`도

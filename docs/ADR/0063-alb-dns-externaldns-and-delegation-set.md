@@ -1,6 +1,6 @@
 # ADR 0063: ALB DNS record via ExternalDNS, and a reusable delegation set to pin the zone's name servers
 
-- Status: Accepted — code-complete (`terraform fmt -check`/`validate` and `bash -n` pass); nothing planned or applied
+- Status: Accepted — code-complete (`terraform fmt -check`/`validate` and `bash -n` pass); first live run 2026-09-26: the records were created, the ownership TXT records were not (see the Addendum)
 - Date: 2026-09-25
 - Amends: [ADR 0043](0043-terraform-project-adaptation.md) (D5's name-server step: the registrar now points at a reusable delegation set, not at whichever zone Terraform created last)
 - Extends: [ADR 0044](0044-terraform-three-state-split.md) (`addons/` reads one more `app-infra/` output), [ADR 0047](0047-observability-prometheus-grafana.md) (one more `eks_blueprints_addons` module flag)
@@ -185,3 +185,55 @@ Each entry says what the alternative did better, since that is the trade-off acc
 - `init` resolved `eks-blueprints-addons` to `1.24.3` on 2026-09-25, the version whose
   `external_dns` block was read. The lock file does not pin modules, so a later `init` can pick a
   newer 1.x; re-read that block if it resolves something much newer.
+
+## Addendum (2026-09-26) — First live run: the records came up, the ownership TXT records did not
+
+The developer applied the three states, enabled the Ingress, upgraded the chart once and tore the
+stack down. The session read AWS, the cluster and CloudTrail read-only and requested the public
+site with `curl`. Times are UTC, 2026-09-26.
+
+**The five live checks above**
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Records after the Ingress is enabled | Partly. ExternalDNS created an alias `A` **and** an alias `AAAA` for `sharenpo.cloud` pointing at the ALB (CloudTrail: one batch of two changes at 17:13:51). It created **no `TXT` ownership records**. |
+| 2 | `http://` redirects to HTTPS | Yes. `http://sharenpo.cloud/` answered `301` to `https://`; `https://` answered `200`, `/file` `401`, `/admin/` `200` (status codes only, bodies not read); `curl` validated the certificate; `nslookup` returned three addresses from two resolvers. |
+| 3 | Records removed after uninstall, `app-infra/` destroy completes | The destroy completed, but **ExternalDNS did not remove the records**. It kept polling Route53 every minute for eight minutes after the ALB was deleted (17:59:05) and made no change. Terraform's `force_destroy` deleted the `A` and `AAAA` at 18:06:29 and the zone at 18:07:00. |
+| 4 | Chart `1.22.0` next to the ALB Controller on EKS `1.34` | Yes. `external-dns-1.22.0` (app `v0.22.0`) and `aws-load-balancer-controller-1.7.1` were both `deployed` with `Running` pods and no Service-webhook failure. |
+| 5 | A second zone gets the same name servers | Not observed. Only one zone existed. |
+
+**Why there are no TXT records.** The Ingress host is the zone apex. In `v0.22.0` the TXT registry
+names an ownership record by putting the record type in front of the name's first label
+(`registry/mapper/mapper.go`, `ToTXTName`), so the apex's two records would get `a-sharenpo.cloud`
+and `aaaa-sharenpo.cloud`. Those names are not inside the zone `sharenpo.cloud.`. The AWS provider
+accepts a change only when its name equals the zone or ends in `.sharenpo.cloud.`
+(`provider/aws/aws.go`, `suitableZones`), and drops the rest at debug level (`changesByZone`,
+"Skipping record … no hosted zone matching"), which the chart's `--log-level=info` hides. What
+supports this: the running config was `--registry=txt --txt-owner-id=sharenpo` (so it was not a
+misconfiguration), CloudTrail shows the batch held only the two alias changes and no error, and the
+source above was read at the `v0.22.0` tag. The debug line itself was not seen. A host under the
+zone (`app.sharenpo.cloud`) would produce `a-app.sharenpo.cloud`, which is inside the zone; that is
+read from the code and was not run. This is unrelated to the `v0.22.0` change of the alias prefix
+from `cname-` to `a-` and the regression reported for it, which concerns zones that already carry
+`cname-` TXT records.
+
+**What this changes in D3.** D3 assumed ExternalDNS owns what it creates. For an apex host it
+creates the records but cannot update or delete them: `ApplyChanges` passes Delete and Update
+through an owner filter (`FilterEndpointsByOwnerID`, seen at the call sites; the function itself was
+not read), and a record with no owner TXT does not pass. So:
+
+- `policy: sync` does nothing for the apex records.
+- `force_destroy = true` on the zone is the only thing that removes them, so it is required here,
+  not just a fallback.
+- Recreating only `cluster/` while keeping the zone leaves the apex `A` and `AAAA` pointing at the
+  deleted ALB, and ExternalDNS will not correct them. Delete them by hand before the next Ingress.
+
+The Consequences above, which expect TXT records and a removal by ExternalDNS, are superseded by
+this addendum.
+
+**Decision (developer, 2026-09-26): keep the apex host.** The alternatives were a subdomain host,
+where the TXT records work but the site URL, `BASE_URL`, the certificate and the Ingress values
+change, and a different registry such as `crd`, which was not verified. Neither was adopted.
+
+The developer's destroy skipped `addons/`; what that leaves behind is in
+[`k8s/infra/terraform/README.md`](../../k8s/infra/terraform/README.md) > Destroy.

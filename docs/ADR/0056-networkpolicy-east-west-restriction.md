@@ -1,6 +1,6 @@
 # ADR 0056: NetworkPolicy for cluster east-west traffic restriction
 
-- Status: Accepted — implemented, kind+Calico-verified (the 2026-09-22 addendum's ALB ingress-allow rule is unverified — needs a live EKS cluster); the 2026-09-26 addendum turns the AWS agent on in code (`cluster/main.tf`; `terraform validate`/`fmt -check` pass, never applied) — its live checks are follow-up work
+- Status: Accepted — implemented, kind+Calico-verified; the 2026-09-26 addendum turned the AWS agent on in code (`cluster/main.tf`), and the second 2026-09-26 addendum records the live run on EKS (agent, ALB ingress-allow rule and probes observed; the app's metrics scrape is blocked while Ingress is off)
 - Date: 2026-09-11
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)
 - 한국어: [0056-networkpolicy-east-west-restriction.ko.md](0056-networkpolicy-east-west-restriction.ko.md)
@@ -265,3 +265,23 @@ What turning it on takes, from AWS's EKS documentation (read 2026-09-26; not run
       observed.
    7. ExternalDNS, External Secrets and the ALB Controller are unaffected: the policy's
       `podSelector` is the app's labels only.
+
+### Addendum (2026-09-26, later) — Live results on EKS
+
+The developer applied the stack; the session ran the seven checks above itself: read-only calls
+plus one probe script run inside the backend pod (TCP connects, a clamd `PING`, and clean bytes
+sent to clamd; nothing was written). Times are UTC.
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Agent and VPC CNI version | Yes. `aws-node` was `2/2` on both nodes; the add-on was `v1.22.4-eksbuild.3`, `ACTIVE`, configuration `{"enableNetworkPolicy":"true"}`. |
+| 2 | Probes not blocked | Yes. The backend was `1/1 Running` with 0 restarts and `/health/ready` answered `200` from inside the pod. The only Warning events were two readiness failures with `connection refused` during startup, which is the app not yet listening (a blocked probe would time out). |
+| 3 | ALB target group | The rule works; the health check did not. The backend and admin groups first showed `unhealthy` with `Target.ResponseCodeMismatch [404]`, meaning the ALB's health check reached the pods and got an answer through the VPC-CIDR rule. The cause was the default health-check path `/` (fixed per Service, [ADR 0062](0062-admin-same-alb-subpath-routing.md) Addendum); after that all three groups were `healthy`. |
+| 4 | Enforcement with Ingress off | Yes. From the backend pod, `s3.amazonaws.com:80` and the Prometheus pod's `:9090` timed out. Prometheus, which runs in another namespace, could not scrape the backend (`context deadline exceeded`). A dedicated pod in another namespace was not used; the failed scrape is the cross-namespace evidence. |
+| 5 | Allowed paths | Mostly. From the backend pod, DNS resolved `sharenpo-clamav`, clamd answered `PING` with `PONG` and clean bytes with `stream: OK`, and `s3.amazonaws.com:443` connected. Port 5432 was not tried directly; `/health/ready` `200` (which pings the DB) implies it. clamd's log records `Eicar-Test-Signature FOUND` from the earlier backend pod's IP at 16:37; the HTTP `400 UPLOAD_MALWARE_DETECTED` response and a clean upload through the app were not observed by the session. |
+| 6 | Prometheus scrape | Blocked while Ingress was off, as inferred: `up{job="sharenpo"}` was `0`. After the Ingress was enabled the VPC-CIDR ingress rule appeared and `up` was `1` (Prometheus's pod IP is inside `10.0.0.0/16`). |
+| 7 | Other add-ons unaffected | Yes. ExternalDNS, External Secrets and the ALB Controller pods were `Running` and ExternalDNS created its records; no errors were seen. |
+
+**Left open by this pass:** while Ingress is off the backend's metrics are not collected. A rule
+admitting the `kube-prometheus-stack` namespace would close it; that is a chart change and was not
+made here.
