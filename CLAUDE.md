@@ -1478,7 +1478,10 @@ Architecture Decisions above remain operative.
   — a short or low-entropy value now fails at boot with a named-field Joi error instead
   of silently weakening JWT signing or the bcrypt cost factor (Never Do Group 3).
   `.github/workflows/ci.yml`'s four dummy test-secret spots and `.env.example`'s
-  placeholder were updated to satisfy the new rule. **Live-verified 2026-09-11**: booted
+  placeholder were updated to satisfy the new rule; the Terraform generator in `app-infra/main.tf`
+  was not, and the backend crash-looped at boot on it during the first live run (2026-09-26) —
+  fixed in `f322972`, [ADR 0064](docs/ADR/0064-jwt-secret-generation-joi-strength-rule.md).
+  **Live-verified 2026-09-11**: booted
   the compiled app against five throwaway env combinations (too-short, missing-digit,
   missing-symbol, low-hash-rounds, and a valid baseline) and confirmed each
   failed/passed exactly as designed, without the real `.env` ever being read or its

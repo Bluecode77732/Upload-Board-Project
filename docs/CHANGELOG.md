@@ -298,6 +298,18 @@ development line (package.json version).
   Redis-backed storage for one true per-route ceiling across replicas.
 
 ### Fixed
+- **Terraform-generated JWT secrets now satisfy the app's Joi strength rule (2026-09-26,
+  [ADR 0064](ADR/0064-jwt-secret-generation-joi-strength-rule.md), `f322972`)** — on the first live
+  run the backend pod crash-looped at boot with `Config validation error: "ACCESS_TOKEN_SECRET" ...
+  fails to match the required pattern`. The Joi rule (2026-09-11) needs a lowercase letter, an
+  uppercase letter, a digit and a symbol; `app-infra/main.tf` generated both token secrets as 48
+  alphanumeric characters (`special = false`), and the rule's change had updated only the CI dummy
+  secrets and `.env.example`. Both `random_password` resources now use `special = true`,
+  `override_special = "-_"` and `min_lower`/`min_upper`/`min_numeric`/`min_special = 1`; the database
+  password is unchanged. Re-applied live (plan `3 to add, 0 to change, 3 to destroy`), then the
+  `ExternalSecret` was force-synced and the backend restarted: `1/1 Running`, `/health/live` and
+  `/health/ready` `200`, and `POST /auth/signin` returned a token. Relaxing the Joi rule and
+  replacing the value by hand were weighed and rejected (ADR 0064).
 - **Teardown history corrected: the stack was torn down again on 2026-08-31 (2026-09-26)** —
   CLAUDE.md, the Terraform README and the Helm README said "destroyed 2026-08-28", and
   ROADMAP's header stopped at the 2026-08-29/30 re-apply. The six local `terraform.tfstate` and

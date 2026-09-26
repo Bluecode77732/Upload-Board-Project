@@ -301,6 +301,17 @@
   필요함.
 
 ### 수정
+- **Terraform이 만드는 JWT 시크릿이 이제 앱의 Joi 강도 규칙을 만족 (2026-09-26,
+  [ADR 0064](ADR/0064-jwt-secret-generation-joi-strength-rule.ko.md), `f322972`)** — 첫 라이브 실행에서
+  백엔드 파드가 `Config validation error: "ACCESS_TOKEN_SECRET" ... fails to match the required
+  pattern`로 부팅 중 크래시 루프에 빠졌다. Joi 규칙(2026-09-11)은 소문자, 대문자, 숫자, 기호를 모두
+  요구하는데 `app-infra/main.tf`는 두 토큰 시크릿을 영숫자 48자(`special = false`)로 생성했고, 그 규칙을
+  바꾼 변경은 CI 더미 시크릿과 `.env.example`만 고쳤다. 두 `random_password`는 이제 `special = true`,
+  `override_special = "-_"`, `min_lower`/`min_upper`/`min_numeric`/`min_special = 1`을 쓰고 DB
+  비밀번호는 그대로다. 라이브에서 다시 apply했고(plan `3 to add, 0 to change, 3 to destroy`),
+  이어서 `ExternalSecret`을 강제 동기화하고 백엔드를 재시작해 `1/1 Running`, `/health/live`와
+  `/health/ready` `200`, `POST /auth/signin`의 토큰 발급을 확인했다. Joi 규칙을 낮추는 안과 값을 손으로
+  바꾸는 안은 검토 후 기각했다(ADR 0064).
 - **철거 이력 정정: 스택은 2026-08-31에 한 번 더 철거됐다 (2026-09-26)** — CLAUDE.md,
   terraform README, helm README는 "2026-08-28에 destroy"라고만 적었고 ROADMAP 머리말은
   2026-08-29/30 재적용에서 끝났다. 로컬 `terraform.tfstate`와 `.backup` 6개(state 3개)는
