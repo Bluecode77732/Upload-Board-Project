@@ -187,6 +187,14 @@ AWS의 EKS 문서는 에이전트의 "strict" 모드에서 kubelet 프로브가 
 목적지 제한 없음 — S3/AWS API용, S3 VPC 엔드포인트가 없어 CIDR로 좁힐
 방법이 없다. ADR 참고)만 명시적으로 허용한다.
 
+`metrics.serviceMonitor.enabled`일 때는 Prometheus 스크레이프 규칙이 더해진다(2026-09-27, ADR 0056
+추가 기록). Prometheus는 다른 네임스페이스에서 돌기 때문에 "같은 네임스페이스만"이 유일한 인바운드
+규칙이던 때는 Ingress가 꺼진 동안 스크레이프가 막혔다(2026-09-26: 대상이 `down`). 이 규칙은
+`networkPolicy.prometheus.namespace` 네임스페이스 안에서 `networkPolicy.prometheus.podLabels` 라벨을 단
+파드만 허용한다(기본값: `kube-prometheus-stack` 네임스페이스의 `app.kubernetes.io/name: prometheus`).
+Helm은 맵을 병합하므로 기본 라벨에 덧붙이는 대신 바꾸려면 기본 키를 null로 지운다:
+`--set-json 'networkPolicy.prometheus.podLabels={"app.kubernetes.io/name":null,"app":"..."}'`.
+
 ### throwaway kind + Calico 클러스터로 검증하기
 
 `kind`의 기본 CNI는 `NetworkPolicy`를 강제하지 않는다 — Calico가 필요하다:
@@ -282,6 +290,53 @@ TLS는 ingress/ALB에서만 종료하고 앱 프로세스 안에서는 하지 �
 allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)). 다만 프론트엔드 Service로 가는 `/` 규칙([ADR 0060](../../docs/ADR/0060-frontend-same-alb-path-routing.ko.md))과 admin Service로 가는 `/admin` 규칙([ADR 0062](../../docs/ADR/0062-admin-same-alb-subpath-routing.ko.md)) 두 개는 예외다.
 `ingress.enabled`는 계속 `false`다 — 이건 뭔가 빠져서가 아니라 개발자가 확정한
 의도적 결정이다([ROADMAP.md](../../docs/ROADMAP.md) > Unscheduled): 스택이
+### Prometheus 스크레이프 규칙 검증하기
+
+**아직 실행하지 않았다** — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)의
+2026-09-27 추가 기록에 딸린 후속 작업이다. 앱 이미지가 필요 없다: 차트의 selector 라벨을 단 3000번 포트의
+`busybox` `httpd`가 앱을 대신하고, 그 위에 차트가 렌더링한 `networkpolicy.yaml`을 적용한다(`kind`에는
+`ServiceMonitor` CRD가 없어서 실제 `helm install`은 실패한다). 저장소 루트에서 실행한다:
+
+```bash
+K="kubectl --context kind-netpol-prom"; C=curlimages/curl:8.10.1
+
+# Calico가 붙은 일회용 kind 클러스터(kind의 기본 CNI는 NetworkPolicy를 강제하지 않는다)
+kind create cluster --name netpol-prom --config - <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  podSubnet: "192.168.0.0/16"
+EOF
+$K apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml
+$K -n kube-system rollout status ds/calico-node --timeout=180s
+
+# 앱을 대신할 서버: 차트의 selector 라벨, 3000번 포트, 릴리스 이름과 같은 Service
+$K run app --image=busybox:1.36 --labels="app.kubernetes.io/name=sharenpo,app.kubernetes.io/instance=sharenpo" --port=3000 -- httpd -f -p 3000
+$K wait --for=condition=Ready pod/app --timeout=90s
+$K expose pod app --name=sharenpo --port=3000
+
+# 렌더링한 정책을 적용한다(모니터링 네임스페이스 이름만 테스트용으로 바꾼다)
+$K create namespace monitoring-test; $K create namespace other-ns
+(cd k8s/helm && helm template sharenpo . --set secrets.existingSecret=x --set image.tag=x --set networkPolicy.enabled=true --set metrics.serviceMonitor.enabled=true --set networkPolicy.prometheus.namespace=monitoring-test -s templates/networkpolicy.yaml) | $K apply -f -
+sleep 5
+
+# 허용돼야 함: 모니터링 네임스페이스, Prometheus 라벨 있음
+$K -n monitoring-test run allow --image=$C --restart=Never --rm -i --labels="app.kubernetes.io/name=prometheus" --command -- curl -s -m 8 -o /dev/null -w "allow   http=%{http_code}\n" http://sharenpo.default.svc.cluster.local:3000/
+# 타임아웃돼야 함: 올바른 네임스페이스, 라벨 없음
+$K -n monitoring-test run nolabel --image=$C --restart=Never --rm -i --command -- curl -s -m 8 -o /dev/null -w "nolabel http=%{http_code}\n" http://sharenpo.default.svc.cluster.local:3000/
+# 타임아웃돼야 함: 올바른 라벨, 다른 네임스페이스
+$K -n other-ns run wrongns --image=$C --restart=Never --rm -i --labels="app.kubernetes.io/name=prometheus" --command -- curl -s -m 8 -o /dev/null -w "wrongns http=%{http_code}\n" http://sharenpo.default.svc.cluster.local:3000/
+# 대조: 같은 네임스페이스의 파드는 기존 규칙으로 여전히 통과해야 함
+$K -n default run same --image=$C --restart=Never --rm -i --command -- curl -s -m 8 -o /dev/null -w "same    http=%{http_code}\n" http://sharenpo:3000/
+
+kind delete cluster --name netpol-prom
+```
+
+`allow`와 `same`은 `000`이 아닌 HTTP 상태(`busybox`는 `404`로 답한다)가 나와야 하고, `nolabel`과 `wrongns`는
+`http=000`(타임아웃)이 나와야 한다. 이건 Calico이지 AWS의 에이전트가 아니다. 라이브 확인은 아래
+"HTTPS(Ingress) 활성화"의 Prometheus 항목이다.
+
 실제로 떠 있던 2026-08-27 당시엔 클러스터·도메인(`sharenpo.cloud`)·실제 ACM
 인증서까지 전부 준비돼 있었지만, 외부 테스터가 실제로 필요해질 때까지는 켜지
 않기로 했다. 2026-09-13에 다시 확인했고 그대로다.
@@ -425,7 +480,8 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   못했다. DNS, clamd(`PING`과 정상 바이트), HTTPS/443은 동작했고 5432는 통과한 `/health/ready`로
   추정한다. ExternalDNS, External Secrets, ALB Controller는 영향받지 않았다. Prometheus는 Ingress가
   꺼져 있는 동안 막혔고(`up`이 `0`) Ingress가 켜진 뒤 백엔드를 스크레이프했다(`up`이 `1`). 즉
-  Ingress 없이는 앱 메트릭이 수집되지 않는다. 관찰하지 못한 것: EICAR 업로드의 HTTP 응답과 앱을 거친
+  Ingress 없이는 앱 메트릭이 수집되지 않았고, 2026-09-27부터 차트의 규칙이 이 공백을 닫는다(아래
+  Prometheus 항목). 관찰하지 못한 것: EICAR 업로드의 HTTP 응답과 앱을 거친
   정상 파일 업로드.
 - 실제 HTTPS 연결로 로그인한 뒤 페이지를 새로고침해도 세션이 유지되는지. refresh 쿠키가
   `HttpOnly; Secure; SameSite=Strict; Path=/auth/token`으로 내려오고 `POST /auth/token/refresh`에
@@ -511,6 +567,12 @@ helm template . --set secrets.existingSecret=placeholder --set frontend.enabled=
 이미지도 클러스터 없이 검증할 수 있다 — 빌드해서 SPA fallback과 헤더를 확인한다:
 
 ```bash
+- Ingress가 꺼져 있는 동안 Prometheus가 백엔드를 스크레이프한다(2026-09-27의 규칙, `15229f6`,
+  [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록): 백엔드 대상이
+  2026-09-26에는 `down`(`context deadline exceeded`)이었는데 이제 `up`이어야 하고,
+  `kubectl get pod -n kube-prometheus-stack --show-labels`에서 Prometheus 파드에
+  `app.kubernetes.io/name=prometheus`가 보여야 한다 — 기본 라벨은 파드가 아니라 차트의 Service selector에서
+  읽은 값이다. 아직 관찰하지 못했다. `kind`+Calico 확인은 위의 "Prometheus 스크레이프 규칙 검증하기"다.
 docker build -t sharenpo-frontend:local -f ../../frontend/Dockerfile ../../frontend
 docker run --rm -p 8080:8080 sharenpo-frontend:local
 # /, /posts/1 → 200 index.html;  /assets/missing.js → 404;  모든 응답에 CSP + nosniff 헤더

@@ -1552,7 +1552,8 @@ Architecture Decisions가 계속 유효하다.
   Network Policy 강제 에이전트를 켠다(`enableNetworkPolicy`, 2026-09-26, ADR 0056 추가 기록) —
   코드는 완성됐고(`terraform validate`/`fmt -check` 통과), 이후 **2026-09-26 EKS에서 라이브
   검증**했다(ADR 0056의 두 번째 추가 기록: 에이전트, 프로브, ALB 인바운드 허용 규칙, 강제를
-  확인했고 Ingress가 꺼져 있는 동안 앱 메트릭 스크레이프는 막혔다).
+  확인했고 Ingress가 꺼져 있는 동안 앱 메트릭 스크레이프는 막혔다. 2026-09-27부터 차트가 Prometheus를
+  허용하지만(`15229f6`) 아직 검증하지 않았다).
   **2026-09-11 실제 검증**: Calico를 설치한 throwaway `kind` 클러스터(`kind`의
   기본 CNI는 `NetworkPolicy`를 강제하지 않음)와 RDS를 대신하는 throwaway
   `postgres:16`에 대해 검증했다 — `helm install --wait`가 성공했고(kubelet의

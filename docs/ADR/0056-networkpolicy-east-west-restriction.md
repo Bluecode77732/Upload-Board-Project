@@ -1,6 +1,6 @@
 # ADR 0056: NetworkPolicy for cluster east-west traffic restriction
 
-- Status: Accepted — implemented, kind+Calico-verified; the 2026-09-26 addendum turned the AWS agent on in code (`cluster/main.tf`), and the second 2026-09-26 addendum records the live run on EKS (agent, ALB ingress-allow rule and probes observed; the app's metrics scrape is blocked while Ingress is off)
+- Status: Accepted — implemented, kind+Calico-verified; the 2026-09-26 addendum turned the AWS agent on in code (`cluster/main.tf`), and the second 2026-09-26 addendum records the live run on EKS (agent, ALB ingress-allow rule and probes observed; the app's metrics scrape is blocked while Ingress is off), and the 2026-09-27 addendum puts a chart rule that admits Prometheus in place (code-complete; its checks are follow-up work)
 - Date: 2026-09-11
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)
 - 한국어: [0056-networkpolicy-east-west-restriction.ko.md](0056-networkpolicy-east-west-restriction.ko.md)
@@ -285,3 +285,51 @@ sent to clamd; nothing was written). Times are UTC.
 **Left open by this pass:** while Ingress is off the backend's metrics are not collected. A rule
 admitting the `kube-prometheus-stack` namespace would close it; that is a chart change and was not
 made here.
+
+### Addendum (2026-09-27) — The Prometheus scrape rule is in the chart; its checks are follow-up work
+
+The gap the previous addendum left open — Prometheus, in another namespace, cannot scrape the
+backend's `/metrics` while `ingress.enabled` is false — is closed in the chart (`15229f6`).
+`templates/networkpolicy.yaml` gains one ingress rule, rendered only when
+`metrics.serviceMonitor.enabled` (`values-prod.yaml` sets it). Its single `from` entry carries a
+`namespaceSelector` and a `podSelector` together, so it admits only Prometheus pods **in** that
+namespace (AND), on the app's port. Both come from values: `networkPolicy.prometheus.namespace`
+(default `kube-prometheus-stack`) and `networkPolicy.prometheus.podLabels` (default
+`app.kubernetes.io/name: prometheus`). The namespace was observed on the live cluster. The pod
+label was read from the Prometheus Service selector in the `kube-prometheus-stack` `48.2.3` chart;
+no live pod's labels were listed. Helm merges maps, so overriding `podLabels` keeps the default
+key; deleting it takes `null` (rendered and checked).
+
+Alternatives weighed, in the order they were put to the developer, who chose the first:
+
+- **Admit only Prometheus pods in the monitoring namespace** (chosen) — the narrowest rule that
+  closes the gap.
+- **Admit the whole monitoring namespace** — simpler, but every pod in it could reach the app's
+  port, and `/metrics` is unauthenticated.
+- **Turn the policy off** (`networkPolicy.enabled: false`) — closes the gap by losing D1's
+  east-west restriction altogether.
+- **Turn the ServiceMonitor off** — keeps the restriction, loses the backend's metrics
+  ([ADR 0047](0047-observability-prometheus-grafana.md)).
+- **Move Prometheus into the app's namespace** — needs no rule, but changes ADR 0047's placement
+  and every other workload's scraping.
+
+With Ingress on, the VPC-CIDR rule (D2 addendum) already admits Prometheus's pod IP, so the new
+rule changes nothing then. It matters while Ingress is off, when that rule is not rendered.
+
+**Checked by the session (2026-09-27):** `helm template` under five value sets — `values-prod.yaml`
+(same-namespace rule plus the Prometheus rule), ServiceMonitor off (same-namespace rule only),
+Ingress on (Prometheus rule, then the VPC-CIDR rule), an overridden namespace and labels (applied),
+and the policy off (nothing rendered) — and `helm lint --strict`.
+
+**Not checked — follow-up work:**
+
+1. `kind`+Calico: a pod labelled `app.kubernetes.io/name=prometheus` in the configured namespace
+   reaches the app pod; the same label in another namespace, and the right namespace without the
+   label, both time out; a same-namespace pod still gets through. The commands are in
+   `k8s/helm/README.md` > "Verifying the Prometheus scrape rule".
+2. On the next live deployment, with Ingress off: Prometheus lists the backend target as `up`
+   (before the rule it was `down`, `context deadline exceeded`), and
+   `kubectl get pod -n kube-prometheus-stack --show-labels` shows `app.kubernetes.io/name=prometheus`
+   on the Prometheus pod. Calico and AWS's agent are different enforcement engines (D2), so item 1
+   does not stand in for this one.
+3. Once both pass, this list and the pending bullet in `k8s/helm/README.md` become an observation.

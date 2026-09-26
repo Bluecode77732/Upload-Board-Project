@@ -1521,7 +1521,8 @@ Architecture Decisions above remain operative.
   agent too (`enableNetworkPolicy`, 2026-09-26, ADR 0056 Addendum) — code-complete
   (`terraform validate`/`fmt -check` pass), then **live-verified on EKS 2026-09-26** (ADR 0056's
   second Addendum: agent, probes, ALB ingress-allow rule and enforcement observed; the app's
-  metrics scrape was blocked while Ingress was off). **Live-verified 2026-09-11** against a throwaway `kind`
+  metrics scrape was blocked while Ingress was off; the chart admits Prometheus since 2026-09-27,
+  `15229f6`, not yet verified). **Live-verified 2026-09-11** against a throwaway `kind`
   cluster with Calico installed (`kind`'s own CNI doesn't enforce `NetworkPolicy`) and a
   throwaway `postgres:16` standing in for RDS: `helm install --wait` succeeded (kubelet's
   liveness/readiness probes — which check DB connectivity, ADR 0031 — reached the pod

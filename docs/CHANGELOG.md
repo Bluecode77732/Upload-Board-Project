@@ -13,6 +13,17 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **NetworkPolicy admits Prometheus's scrape (2026-09-27, [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md)
+  Addendum, `15229f6`)** — with `networkPolicy.enabled` and `ingress.enabled: false` (what
+  `values-prod.yaml` runs) the ingress was open to same-namespace pods only, so Prometheus in
+  `kube-prometheus-stack` could not scrape the backend: on 2026-09-26 the target was `down` with
+  `context deadline exceeded` while `/metrics` answered `200` inside the pod.
+  `templates/networkpolicy.yaml` gains one rule, rendered only when `metrics.serviceMonitor.enabled`:
+  a `namespaceSelector` and a `podSelector` in one `from` entry, so only Prometheus pods in that
+  namespace reach the app's port; `networkPolicy.prometheus.namespace` and `.podLabels` set them.
+  `helm template` under five value sets and `helm lint --strict` pass; the `kind`+Calico check and
+  the live check that the target is `up` are follow-up work (`k8s/helm/README.md`, "Verifying the
+  Prometheus scrape rule" and the pending list). The chart version stays `0.5.1`.
 - **ALB health-check path per Service (2026-09-26, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md)
   Addendum, chart `0.5.1`, `60bfe2a`)** — on the first live ALB the backend and admin target groups
   were `unhealthy` with `Target.ResponseCodeMismatch [404]`, because the default health check is

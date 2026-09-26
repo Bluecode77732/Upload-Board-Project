@@ -1,6 +1,6 @@
 # ADR 0056: 클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy
 
-- Status: Accepted — implemented, kind+Calico 검증 완료. 2026-09-26 추가 기록에서 AWS 에이전트를 코드로 켰고(`cluster/main.tf`), 같은 날의 두 번째 추가 기록에 EKS 라이브 실행 결과가 있다(에이전트, ALB 인바운드 허용 규칙, 프로브는 확인했고 Ingress가 꺼져 있는 동안 앱 메트릭 스크레이프는 막힘)
+- Status: Accepted — implemented, kind+Calico 검증 완료. 2026-09-26 추가 기록에서 AWS 에이전트를 코드로 켰고(`cluster/main.tf`), 같은 날의 두 번째 추가 기록에 EKS 라이브 실행 결과가 있다(에이전트, ALB 인바운드 허용 규칙, 프로브는 확인했고 Ingress가 꺼져 있는 동안 앱 메트릭 스크레이프는 막힘), 2026-09-27 추가 기록에서 Prometheus를 허용하는 차트 규칙을 넣었다(코드는 완성, 검증은 후속 작업)
 - Date: 2026-09-11
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)
 - English: [0056-networkpolicy-east-west-restriction.md](0056-networkpolicy-east-west-restriction.md)
@@ -279,3 +279,47 @@ Context와 D1이 하나를 열어 뒀다. `values-prod.yaml`이 `networkPolicy.e
 **이번 작업에서 남은 것:** Ingress가 꺼져 있는 동안에는 백엔드 메트릭이 수집되지 않는다.
 `kube-prometheus-stack` 네임스페이스를 허용하는 규칙을 더하면 해결되지만, 차트 변경이라 여기서는
 하지 않았다.
+
+### 추가 기록 (2026-09-27) — Prometheus 스크레이프 규칙을 차트에 넣었고, 검증은 후속 작업이다
+
+앞선 추가 기록이 남겨 둔 공백, 즉 `ingress.enabled`가 false인 동안 다른 네임스페이스의 Prometheus가
+백엔드의 `/metrics`를 스크레이프하지 못하는 문제를 차트에서 해결했다(`15229f6`).
+`templates/networkpolicy.yaml`에 인바운드 규칙이 하나 늘었고, `metrics.serviceMonitor.enabled`일 때만
+렌더링된다(`values-prod.yaml`이 켠다). 이 규칙의 `from` 항목 하나에 `namespaceSelector`와
+`podSelector`를 함께 적어서, 그 네임스페이스 **안의** Prometheus 파드만(AND) 앱 포트로 들어오게 한다.
+두 값은 모두 values에서 온다: `networkPolicy.prometheus.namespace`(기본 `kube-prometheus-stack`)와
+`networkPolicy.prometheus.podLabels`(기본 `app.kubernetes.io/name: prometheus`). 네임스페이스는 라이브
+클러스터에서 관찰한 값이다. 파드 라벨은 `kube-prometheus-stack` `48.2.3` 차트의 Prometheus Service
+selector에서 읽은 것이고, 라이브 파드의 라벨을 조회하지는 않았다. Helm은 맵을 병합하므로 `podLabels`를
+오버라이드해도 기본 키가 남는다. 그 키를 없애려면 `null`을 준다(렌더로 확인했다).
+
+검토한 대안은 개발자에게 제시한 순서대로이고, 개발자가 첫 번째를 골랐다:
+
+- **모니터링 네임스페이스의 Prometheus 파드만 허용**(채택) — 공백을 닫는 가장 좁은 규칙이다.
+- **모니터링 네임스페이스 전체를 허용** — 더 단순하지만 그 네임스페이스의 모든 파드가 앱 포트에 닿을 수
+  있고 `/metrics`는 인증이 없다.
+- **정책을 끈다**(`networkPolicy.enabled: false`) — D1의 east-west 제한을 통째로 잃는 대가로 공백을
+  닫는다.
+- **ServiceMonitor를 끈다** — 제한은 유지되지만 백엔드 메트릭을 잃는다([ADR 0047](0047-observability-prometheus-grafana.ko.md)).
+- **Prometheus를 앱 네임스페이스로 옮긴다** — 규칙은 필요 없지만 ADR 0047의 배치와 다른 모든 워크로드의
+  스크레이프가 바뀐다.
+
+Ingress가 켜져 있으면 VPC CIDR 규칙(D2 추가 기록)이 이미 Prometheus의 파드 IP를 허용하므로, 그때는 새
+규칙이 아무것도 바꾸지 않는다. 이 규칙은 Ingress가 꺼져 있어 그 규칙이 렌더링되지 않는 동안에 의미가 있다.
+
+**세션이 확인한 것(2026-09-27):** 다섯 가지 값 조합의 `helm template` — `values-prod.yaml`(같은
+네임스페이스 규칙과 Prometheus 규칙), ServiceMonitor 끔(같은 네임스페이스 규칙만), Ingress 켬(Prometheus
+규칙 다음에 VPC CIDR 규칙), 네임스페이스·라벨 오버라이드(반영됨), 정책 끔(아무것도 렌더링되지 않음) —
+그리고 `helm lint --strict`.
+
+**확인하지 않은 것 — 후속 작업:**
+
+1. `kind`+Calico: 설정한 네임스페이스에서 `app.kubernetes.io/name=prometheus` 라벨을 단 파드는 앱 파드에
+   닿고, 같은 라벨이라도 다른 네임스페이스이거나 올바른 네임스페이스에서 라벨이 없으면 둘 다 타임아웃되며,
+   같은 네임스페이스의 파드는 여전히 통과해야 한다. 명령은 `k8s/helm/README.md`의 "Prometheus 스크레이프
+   규칙 검증하기"에 있다.
+2. 다음 라이브 배포에서 Ingress가 꺼진 상태로: Prometheus에 백엔드 대상이 `up`으로 나오고(규칙 전에는
+   `down`, `context deadline exceeded`였다), `kubectl get pod -n kube-prometheus-stack --show-labels`에서
+   Prometheus 파드에 `app.kubernetes.io/name=prometheus`가 보여야 한다. Calico와 AWS의 에이전트는 강제
+   엔진이 서로 달라서(D2) 1번이 이 항목을 대신하지 못한다.
+3. 둘 다 통과하면 이 목록과 `k8s/helm/README.md`의 미해결 항목이 관찰 기록으로 바뀐다.

@@ -188,6 +188,15 @@ override if Terraform was applied with a different CIDR), and HTTPS on 443 to
 any destination (S3/AWS API — there's no S3 VPC endpoint to scope this to a
 CIDR, see the ADR).
 
+A Prometheus scrape rule is added when `metrics.serviceMonitor.enabled` (2026-09-27, ADR 0056
+Addendum). Prometheus runs in another namespace, so with "same-namespace only" as the sole ingress
+rule its scrape was blocked while Ingress was off (2026-09-26: the target was `down`). The rule
+admits only pods labelled `networkPolicy.prometheus.podLabels` in the
+`networkPolicy.prometheus.namespace` namespace (defaults: `app.kubernetes.io/name: prometheus` in
+`kube-prometheus-stack`). Helm merges maps, so to replace the default label instead of adding to
+it, null the default key:
+`--set-json 'networkPolicy.prometheus.podLabels={"app.kubernetes.io/name":null,"app":"..."}'`.
+
 ### Verifying against a throwaway kind + Calico cluster
 
 `kind`'s own CNI doesn't enforce `NetworkPolicy` — you need Calico:
@@ -283,6 +292,54 @@ rule for the frontend Service ([ADR 0060](../../docs/ADR/0060-frontend-same-alb-
 one `/admin` rule for the admin Service ([ADR 0062](../../docs/ADR/0062-admin-same-alb-subpath-routing.md)). `ingress.enabled`
 stays `false` — a deliberate developer choice
 ([ROADMAP.md](../../docs/ROADMAP.md) > Unscheduled), not a missing dependency: while the
+### Verifying the Prometheus scrape rule
+
+**Not run yet** — follow-up to [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md)'s
+2026-09-27 Addendum. It needs no app image: a `busybox` `httpd` on port 3000 carrying the chart's
+selector labels stands in for the app, and the `networkpolicy.yaml` the chart renders is applied
+over it (a real `helm install` would fail on `kind`, which has no `ServiceMonitor` CRD). Run it from
+the repository root:
+
+```bash
+K="kubectl --context kind-netpol-prom"; C=curlimages/curl:8.10.1
+
+# a throwaway kind cluster with Calico (kind's own CNI doesn't enforce NetworkPolicy)
+kind create cluster --name netpol-prom --config - <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  podSubnet: "192.168.0.0/16"
+EOF
+$K apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml
+$K -n kube-system rollout status ds/calico-node --timeout=180s
+
+# a stand-in app: the chart's selector labels, port 3000, and a Service named like the release
+$K run app --image=busybox:1.36 --labels="app.kubernetes.io/name=sharenpo,app.kubernetes.io/instance=sharenpo" --port=3000 -- httpd -f -p 3000
+$K wait --for=condition=Ready pod/app --timeout=90s
+$K expose pod app --name=sharenpo --port=3000
+
+# apply the rendered policy, with the monitoring namespace renamed for the test
+$K create namespace monitoring-test; $K create namespace other-ns
+(cd k8s/helm && helm template sharenpo . --set secrets.existingSecret=x --set image.tag=x --set networkPolicy.enabled=true --set metrics.serviceMonitor.enabled=true --set networkPolicy.prometheus.namespace=monitoring-test -s templates/networkpolicy.yaml) | $K apply -f -
+sleep 5
+
+# must be admitted: the monitoring namespace, with the Prometheus label
+$K -n monitoring-test run allow --image=$C --restart=Never --rm -i --labels="app.kubernetes.io/name=prometheus" --command -- curl -s -m 8 -o /dev/null -w "allow   http=%{http_code}\n" http://sharenpo.default.svc.cluster.local:3000/
+# must time out: the right namespace, no label
+$K -n monitoring-test run nolabel --image=$C --restart=Never --rm -i --command -- curl -s -m 8 -o /dev/null -w "nolabel http=%{http_code}\n" http://sharenpo.default.svc.cluster.local:3000/
+# must time out: the right label, another namespace
+$K -n other-ns run wrongns --image=$C --restart=Never --rm -i --labels="app.kubernetes.io/name=prometheus" --command -- curl -s -m 8 -o /dev/null -w "wrongns http=%{http_code}\n" http://sharenpo.default.svc.cluster.local:3000/
+# control: a same-namespace pod still gets through the original rule
+$K -n default run same --image=$C --restart=Never --rm -i --command -- curl -s -m 8 -o /dev/null -w "same    http=%{http_code}\n" http://sharenpo:3000/
+
+kind delete cluster --name netpol-prom
+```
+
+Expect `allow` and `same` to print an HTTP status other than `000` (`busybox` answers with a
+`404`), and `nolabel` and `wrongns` to print `http=000` (timed out). This is Calico, not AWS's
+agent; the live check is the Prometheus bullet under "Enabling HTTPS (Ingress)" below.
+
 stack was live 2026-08-27 the cluster, the domain (`sharenpo.cloud`), and a real ACM cert
 were all in place, and it was left off until an outside tester actually needs external
 access. Re-confirmed 2026-09-13.
@@ -430,7 +487,8 @@ pass observed; an item with no "observed" note is still open:
   backend; DNS, clamd (`PING` and clean bytes) and HTTPS/443 worked, and 5432 is implied by the
   passing `/health/ready`; ExternalDNS, External Secrets and the ALB Controller were unaffected.
   Prometheus is blocked while Ingress is off (`up` was `0`) and scraped the backend once the
-  Ingress was on (`up` was `1`), so the app's metrics are not collected without an Ingress. Not
+  Ingress was on (`up` was `1`), so the app's metrics were not collected without an Ingress; a rule
+  in the chart since 2026-09-27 closes that gap (see the Prometheus bullet below). Not
   observed: the HTTP response of an EICAR upload and a clean upload through the app.
 - Sign in over the real HTTPS connection, then reload the page: the session survives. The
   refresh cookie must arrive as `HttpOnly; Secure; SameSite=Strict; Path=/auth/token` and go
@@ -518,6 +576,12 @@ The image needs no cluster either — build it and check the SPA fallback and th
 
 ```bash
 docker build -t sharenpo-frontend:local -f ../../frontend/Dockerfile ../../frontend
+- Prometheus scrapes the backend while Ingress is off (the rule from 2026-09-27, `15229f6`,
+  [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md) Addendum): the backend
+  target is `up`, where it was `down` (`context deadline exceeded`) on 2026-09-26, and
+  `kubectl get pod -n kube-prometheus-stack --show-labels` shows `app.kubernetes.io/name=prometheus`
+  on the Prometheus pod — the default label was read from the chart's Service selector, not from a
+  pod. Not observed yet; the `kind`+Calico check is "Verifying the Prometheus scrape rule" above.
 docker run --rm -p 8080:8080 sharenpo-frontend:local
 # /  and  /posts/1 → 200 index.html;  /assets/missing.js → 404;  CSP + nosniff headers on every response
 ```

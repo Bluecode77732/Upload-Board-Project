@@ -13,6 +13,16 @@
 ## [Unreleased]
 
 ### 변경
+- **NetworkPolicy가 Prometheus 스크레이프를 허용 (2026-09-27, [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md)
+  추가 기록, `15229f6`)** — `networkPolicy.enabled`이고 `ingress.enabled: false`인 조합(`values-prod.yaml`이
+  쓰는 값)에서는 인바운드가 같은 네임스페이스 파드에만 열려 있어서, `kube-prometheus-stack`의 Prometheus가
+  백엔드를 스크레이프하지 못했다. 2026-09-26에 대상이 `context deadline exceeded`로 `down`이었고 파드 안의
+  `/metrics`는 `200`이었다. `templates/networkpolicy.yaml`에 `metrics.serviceMonitor.enabled`일 때만
+  렌더링되는 규칙이 하나 늘었다: `from` 항목 하나에 `namespaceSelector`와 `podSelector`를 함께 적어서 그
+  네임스페이스의 Prometheus 파드만 앱 포트에 닿는다. `networkPolicy.prometheus.namespace`와 `.podLabels`가
+  이를 정한다. 다섯 가지 값 조합의 `helm template`과 `helm lint --strict`는 통과했고, `kind`+Calico 확인과 대상이
+  `up`이 되는지의 라이브 확인은 후속 작업이다(`k8s/helm/README.md`의 "Prometheus 스크레이프 규칙 검증하기"와
+  미해결 목록). 차트 버전은 `0.5.1` 그대로다.
 - **ALB 헬스체크 경로를 Service별로 지정 (2026-09-26, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)
   추가 기록, 차트 `0.5.1`, `60bfe2a`)** — 첫 라이브 ALB에서 백엔드와 admin 타깃 그룹이
   `Target.ResponseCodeMismatch [404]`로 `unhealthy`였다. 기본 헬스체크가 `/`인데 둘 다 그 경로를

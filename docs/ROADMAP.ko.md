@@ -1000,13 +1000,15 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   전용으로 조회함)에서 확인한 것: ALIAS 레코드는 만들어졌지만 ExternalDNS가 apex host의 소유 TXT
   레코드를 만들지 않아 그 레코드를 지우지 못하고 zone의 `force_destroy`가 지운다 — 개발자가 apex
   host를 유지하기로 결정했다(ADR 0063 추가 기록). 에이전트는 정책을 강제했고 Ingress가 꺼져 있는
-  동안 앱 메트릭은 스크레이프되지 않는다(ADR 0056 추가 기록). 백엔드와 admin 타깃 그룹에는 Service별
+  동안 앱 메트릭은 스크레이프되지 않았고 이제 차트 규칙이 Prometheus를 허용한다(2026-09-27, ADR 0056
+  추가 기록, 아직 검증하지 않음). 백엔드와 admin 타깃 그룹에는 Service별
   헬스체크 경로가 필요했다(ADR 0062 추가 기록, 차트 `0.5.1`). clamd는 Graviton에서 40초에 Ready가
   됐고 메모리는 약 1.02 GiB였다(ADR 0059 추가 기록, 그 앞의 로컬 amd64/arm64 측정 포함). 모든 파드가
   `t4g.medium` 2대에 들어갔다(파드 슬롯 34개 중 23개). `addons/`를 건너뛴 destroy는 IAM 역할·정책,
   CloudFormation 스택, 낡은 state를 남긴다(`k8s/infra/terraform/README.md`의 Destroy). 아직 열려 있는
   것: 앱을 거친 EICAR 업로드가 `400`으로 답하는지와 정상 파일이 통과하는지(스캐너 쪽만 관찰함), 두 번째
-  zone이 같은 네임서버를 받는지, Ingress가 꺼져 있는 동안의 메트릭 공백. 다른 ADR에서 온 미관찰 항목은
+  zone이 같은 네임서버를 받는지, Ingress가 꺼져 있는 동안의 메트릭 공백을 닫는 Prometheus 규칙의 확인. 다른
+  ADR에서 온 미관찰 항목은
   `k8s/helm/README.md` 미해결 목록에 그대로 있다.
 - Istio(Kubernetes 클러스터 위 서비스 메시) — **프로덕션 DevOps 스택 도입 행과 Stage 4
   구성요소 상태 표에서 제외**(2026-08-31 이동, 이번 세션에서 진행한 규모 적합성 검토 뒤

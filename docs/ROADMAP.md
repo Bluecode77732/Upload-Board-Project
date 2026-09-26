@@ -1051,14 +1051,16 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   cluster read-only) found: the ALIAS records came up, but ExternalDNS created no TXT ownership
   records for the apex host, so it does not remove them and the zone's `force_destroy` does — the
   developer decided to keep the apex host (ADR 0063 Addendum); the agent enforced the policy, and
-  the app's metrics are not scraped while Ingress is off (ADR 0056 Addendum); the backend and
+  the app's metrics were not scraped while Ingress is off, and a chart rule now admits Prometheus
+  (2026-09-27, ADR 0056 Addendum; not yet verified); the backend and
   admin target groups needed a health-check path per Service (ADR 0062 Addendum, chart `0.5.1`);
   clamd ran on Graviton, Ready in 40 s at about 1.02 GiB (ADR 0059 Addendum, and the local
   amd64/arm64 measurements before it); all pods fit on the two `t4g.medium` nodes (23 of 34 pod
   slots); and a destroy that skips `addons/` leaves IAM roles and policies, a CloudFormation stack
   and a stale state (`k8s/infra/terraform/README.md` > Destroy). Still open: an EICAR upload
   answering `400` and a clean file passing through the app (only the scanner side was observed),
-  a second zone getting the same name servers, and the metrics gap while Ingress is off. The
+  a second zone getting the same name servers, and confirming the Prometheus rule that closes the
+  metrics gap while Ingress is off. The
   unobserved items from the other ADRs stay in `k8s/helm/README.md`'s pending list.
 - Istio (service mesh over the Kubernetes cluster) — **pulled from the Production DevOps
   stack introduction row and the Stage 4 component-status table** (moved 2026-08-31,
