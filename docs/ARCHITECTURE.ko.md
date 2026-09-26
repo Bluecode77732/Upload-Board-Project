@@ -328,7 +328,8 @@ Prometheus 스크레이프도 Bearer 토큰을 제시할 방법이 없기 때문
 
 ### 경계 검증
 
-전역 `ValidationPipe`(`backend/main.ts`)는 `transform + whitelist +
+전역 `ValidationPipe`(`backend/app.module.ts`의 `APP_PIPE`로 등록, 옵션은
+`backend/common/validation-pipe-options.ts`)는 `transform + whitelist +
 forbidNonWhitelisted + enableImplicitConversion`을 실행합니다. DTO에 선언되지 않은
 요청 필드는 서비스에 도달하지 못합니다 — 서비스는 검증된 입력을 신뢰하고 그 모양을
 다시 확인하지 않습니다.
@@ -373,6 +374,15 @@ forbidNonWhitelisted + enableImplicitConversion`을 실행합니다. DTO에 선�
 돌려줄 뿐, 경로를 스스로 고르지 않습니다([ADR 0003](ADR/0003-two-phase-upload-contract.ko.md)).
 아무도 청구하지 않은 `temp_` 객체는 TTL을 넘기면 `TempCleanupModule`이
 치웁니다([ADR 0018](ADR/0018-orphan-temp-file-cleanup.ko.md)).
+
+### 종료
+
+`bootstrap()`은 `listen()` 바로 앞에서 `app.enableShutdownHooks([], { useProcessExit: true })`를
+호출하므로, SIGTERM/SIGINT가 오면 Nest의 종료 훅이 실행됩니다: TypeORM이 pg 풀을 닫고, 스케줄러가
+스윕 크론 두 개를 멈춥니다. `node`가 PID 1인 컨테이너에서 특히 중요합니다 — 이 호출이 없으면
+SIGTERM이 무시되어 `docker stop`이 유예 시간을 다 기다린 뒤 SIGKILL로 끝났습니다
+([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md) — `useProcessExit: true`를 쓰는
+이유(PID 1은 Nest가 자기 자신에게 다시 보내는 시그널을 버립니다)도 여기에 기록돼 있습니다).
 
 ## 엔티티 (TypeORM)
 
@@ -452,7 +462,12 @@ DB/JWT/해싱 같은 기본값 말고도, 특정 기능을 위한 그룹이 몇 
   강화 한도를 모듈 수준 `skipIf`로 한 번에 우회하기 위한 용도로만 존재합니다
   ([ADR 0053](ADR/0053-global-rate-limiting.ko.md), [ADR 0054](ADR/0054-per-route-rate-limit-tuning.ko.md)).
 - **선택 사항**: `BASE_URL`(기본 `http://localhost:3000`), `CORS_ORIGIN`(미설정 =
-  CORS 꺼짐; 브라우저 프론트엔드가 필요할 때 콤마로 구분한 허용 목록 — ADR 0008).
+  CORS 꺼짐; 브라우저 프론트엔드가 필요할 때 콤마로 구분한 허용 목록 —
+  [ADR 0008](ADR/0008-opt-in-cors.ko.md). 배포된 `frontend/`와 `admin/`은 이 값을 설정하지
+  않는다 — 둘 다 API와 같은 ALB 뒤에서 same-origin으로 동작한다,
+  [ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md),
+  [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md); `admin/`의 개발 서버나 다른
+  cross-origin 소비자는 여전히 설정한다).
 
 새 환경변수를 추가할 때는 항상 Joi 스키마와 `.env.example`을 같은 변경에서 함께
 갱신해야 합니다.
@@ -494,7 +509,9 @@ Bearer 토큰이 새로고침해도 남습니다)([ADR 0009](ADR/0009-rest-only-
   없습니다.
 - **클라우드 배포**: Helm 차트(`k8s/helm/`)와 별개의 Terraform 루트 모듈 세 개
   (`k8s/infra/terraform/`)로 Prometheus/Grafana까지 붙은 실제 EKS 클러스터를 띄울 수
-  있습니다(ADR 0041–0044, [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md)).
+  있습니다(ADR 0041–0044, [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md). ALB로 가는
+  DNS 레코드는 ExternalDNS가 만들고, zone의 네임서버는 재사용 위임 세트로 고정할 수 있습니다:
+  [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)).
   이미 한 번 끝까지 검증됐고, 그 뒤 AWS 비용을 막으려고 다시 정리됐습니다. 지금 이
   인프라가 실제로 떠 있는지는 이 문단만 보고 판단할 일이 아니라 그때그때의
   사실입니다 — `CLAUDE.md`의 Terraform 항목을 보거나 세 디렉터리에서 각각

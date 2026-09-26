@@ -152,6 +152,24 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app" {
   }
 }
 
+# ADR 0036 addendum(2026-09-22) — private/unlisted 파일의 presigned 리다이렉트를 브라우저가
+# blob으로 읽으려면(비공개 파일 미리보기) 이 CORS 규칙이 있어야 한다. 운영 origin은
+# ADR 0060으로 ALB 호스트 하나로 확정됐다(var.domain_name — values-prod.yaml의 BASE_URL과
+# 같은 값). 이 리소스는 버킷의 CORS 설정을 통째로 관장한다 — 2026-08-16에 손으로 돌렸던
+# localhost 개발 origin용 스크립트를 대체하는 게 아니라 apply 시점에 그 규칙을 통째로
+# 덮어쓴다. GET만 허용하는 이유는 presigned GetObject 응답을 읽는 게 이 프로젝트의 유일한
+# 교차 출처 읽기이기 때문이다(ADR 0036).
+resource "aws_s3_bucket_cors_configuration" "app" {
+  bucket = aws_s3_bucket.app.id
+
+  cors_rule {
+    allowed_methods = ["GET"]
+    allowed_origins = ["https://${var.domain_name}"]
+    allowed_headers = ["*"]
+    max_age_seconds = 300
+  }
+}
+
 data "aws_iam_policy_document" "app_assume_role" {
   statement {
     effect  = "Allow"
@@ -291,6 +309,17 @@ locals {
 resource "aws_route53_zone" "app" {
   name = var.domain_name
   tags = local.tags
+
+  # ADR 0063 D4 — Terraform 밖에서 만든 재사용 위임 세트를 물리면 zone을 다시 만들어도 같은
+  # 네임서버 4개를 받는다. 세트는 일부러 이 state의 리소스가 아니다(aws_route53_delegation_set을
+  # 쓰면 destroy 때 함께 지워져 고정의 의미가 없다). null이면 기존처럼 zone마다 새 네임서버.
+  delegation_set_id = var.delegation_set_id
+
+  # ADR 0063 D3 — ALB로 가는 레코드는 ExternalDNS가 만든다(addons/). 그 레코드는 이 state가
+  # 모르므로, 남아 있으면 zone destroy가 실패한다. true면 zone 안의 모든 레코드를 함께 지운다 —
+  # 이 zone은 이 앱 전용이라 감수한다. ExternalDNS의 policy=sync가 먼저 지워 주겠지만 그것은
+  # 1분 주기와 파드 생존에 달려 있어 destroy의 성공 조건으로 삼지 않는다.
+  force_destroy = true
 }
 
 resource "aws_acm_certificate" "app" {

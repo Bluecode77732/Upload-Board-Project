@@ -13,6 +13,33 @@
 ## [Unreleased]
 
 ### 변경
+- **VPC CNI Network Policy 에이전트를 켬 (2026-09-26,
+  [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록)** —
+  `values-prod.yaml`은 이미 `networkPolicy.enabled: true`였지만 `vpc-cni`가 기본 설정이라 정책이
+  작성만 되고 집행되지 않았다. 이제 `cluster/main.tf`가 애드온에 `enableNetworkPolicy`를
+  넘긴다(standard 모드, 애드온 버전은 EKS 기본값 그대로 — 조회 당시 1.34의 기본은
+  `v1.22.4-eksbuild.3`으로 최소 요건 `v1.14.0-eksbuild.3` 이상). 앞서 적은
+  `ENABLE_NETWORK_POLICY`가 self-managed 애드온의 설정이라는 점도 바로잡았다. 코드는
+  완성(`cluster/`에서 `terraform validate`/`fmt -check` 통과)했고 적용한 적은 없다. 라이브 검증
+  7건은 추가 기록과 `k8s/helm/README.md`에 있으며, "다른 네임스페이스에서 타임아웃"은 Ingress가
+  꺼져 있을 때만 성립한다는 조건도 적었다.
+- **`dev` 이미지는 테스트용, 실제 배포는 `main` (2026-09-26,
+  [ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md) 추가 기록)** —
+  `dev`는 `amd64`만 빌드하고(D2), 실제로 도는 노드는 `arm64`뿐인데 `deploy.sh helm`의 기본값이
+  `dev`라서, 기본값으로 배포하면 태그 확인은 통과하고 파드가 뜰 때 실패한다. Docker Hub 조회
+  결과 `dev`의 이미지 3종은 `amd64`뿐이고, `main`은 백엔드만 둘 다 담았고 frontend·admin
+  이미지는 아직 없다. 문서만 바꿨다 — `deploy.sh`에 장치는 더하지 않았다.
+- **전역 `ValidationPipe` 옵션을 한 곳으로 모으고 `APP_PIPE`로 등록 (2026-09-21)** — 같은
+  옵션 네 개(`transform`, `whitelist`, `forbidNonWhitelisted`,
+  `enableImplicitConversion`)가 `main.ts`, `test/e2e-utils.ts`,
+  `delete-user-query.dto.spec.ts`에 손으로 복사돼 있었고, 스펙의 주석은 "main.ts와 정확히
+  같다"고 적혀 있었지만 그 말이 맞도록 유지하는 것은 사람의 몫이었다. 이제 옵션은
+  `backend/common/validation-pipe-options.ts`의 상수 하나에 있고, 파이프는 `AppModule`에서
+  `APP_FILTER`/`APP_GUARD` 옆의 `APP_PIPE` provider로 한 번만 등록한다. `main.ts`는 더 이상
+  `useGlobalPipes`를 호출하지 않고 `e2e-utils.ts`도 다시 등록하지 않는다 — e2e가 이제
+  운영과 같은 경로인 `AppModule`을 통해 파이프를 받는다. provider를 일부러 빼서 확인했다:
+  e2e 10건이 깨지고(`VALIDATION_FAILED` 단언이 전부 포함된다), 파일은 이후 바이트 단위로
+  동일하게 복원했다. 동작 변화는 없다 — `pnpm test` 279/279, `pnpm test:e2e` 76/76.
 - **API 전체 표면의 Swagger 문서를 확장하고 한글화 (2026-09-16)** — 컨트롤러 11개에
   걸친 엔드포인트 34개 전부에 `@ApiOperation` 요약을 추가했다(이전에는
   `auth.controller.ts`의 `register`에만 있었다). `@ApiTags`/`@ApiOperation`/
@@ -224,6 +251,40 @@
   필요함.
 
 ### 수정
+- **철거 이력 정정: 스택은 2026-08-31에 한 번 더 철거됐다 (2026-09-26)** — CLAUDE.md,
+  terraform README, helm README는 "2026-08-28에 destroy"라고만 적었고 ROADMAP 머리말은
+  2026-08-29/30 재적용에서 끝났다. 로컬 `terraform.tfstate`와 `.backup` 6개(state 3개)는
+  2026-08-31 23:00~23:21에 destroy 순서(addons, app-infra, cluster)대로 마지막으로 쓰였고,
+  철거 명령을 문서화한 커밋이 22:27(`252e830`)에 있어서 두 번째 철거는 그것들로 날짜를 잡았다.
+  §9에는 이 항목이 없고, §6의 "현재 가동" 셀도 여전히 재적용 시점 기준이다. terraform README는 이제
+  그 로컬 state 잔재 파일이 무엇인지도 설명한다.
+- **`ROADMAP.md`·이 파일의 `sharenpo.com`을 `sharenpo.cloud`로 정정 (2026-09-25)** — 08-25
+  기록이 라이브 Route53 zone의 도메인을 `sharenpo.com`이라고 적었는데, 그 이름은 코드에 한 번도
+  나온 적이 없고 미등록이며 첫 라이브 배포가 쓴 것은 `sharenpo.cloud`다. 파괴된 state를 읽을 수
+  없어서 간접 증거로 정정했다.
+- **컨테이너가 SIGKILL을 기다리지 않고 SIGTERM에 종료 (2026-09-21, [ADR
+  0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md))** — `main.ts`가
+  `app.enableShutdownHooks()`를 한 번도 호출하지 않았고, 컨테이너에서 `node`가 PID 1이라
+  SIGTERM이 무시됐다: `docker stop`이 유예 시간 전체인 10.4초를 쓰고 SIGKILL, 종료 코드
+  137로 끝났으며 TypeORM은 pg 풀을 닫지 못했다. 이제 `bootstrap()`이 `listen()` 바로 앞에서
+  `useProcessExit: true`와 함께 이를 호출한다. 로컬 Linux 컨테이너와 로컬 `kind` 클러스터의
+  파드에서 같은 종료가 약 0.4초, 종료 코드 0이고 `pg.Pool.end()`가 실행된다(EKS에서는 검증하지
+  않았다 — 파드가 곧바로 종료하는 지금 롤링 업데이트 중 ALB가 요청을 거절하는지를 포함한 라이브
+  점검은 `k8s/helm/README.md`에 있다). 옵션을 둔 이유는 PID 1이 Nest가 자기 자신에게 다시 보내는 시그널을 버리기 때문이다:
+  옵션이 없으면 핸들 하나가 남는 순간 유예 시간 전체가 되살아난다(Docker에서 10.4초, 파드에서
+  30.6초). trade-off와 측정값은 ADR에 기록했다. 2026-09-16의 Known Gaps 항목을 닫는다(그
+  항목의 "프로세스가 그냥 죽는다"는 문장은 틀렸다). **2026-09-22 addendum**: 아직 열려
+  있던 항목 중 두 가지는 라이브 클러스터 없이도 시험할 수 있는 것으로 드러났다.
+  `S3Storage`의 `S3Client`를 대신한 Docker 전용 시험(같은 기본 `keepAlive` agent —
+  `@smithy/node-http-handler` 소스로 확인)이 소켓을 일부러 열어 둔 채로도 똑같이 빨리
+  종료해, 종료 속도 면에서는 이 우려를 닫았다. 로컬 `kind` 클러스터에서 `preStop`/
+  `terminationGracePeriodSeconds` 조합을 일회용 Deployment에 patch해 본 결과(차트에는
+  커밋 안 함), 유예가 부족하면 롤아웃 시간이 늘어날 뿐 지저분하게 죽지는 않았다 —
+  kubelet은 막힌 `preStop` hook을 포기하는 순간에도 SIGTERM을 여전히 보냈고, 앱은 원래
+  의도한 5초가 아니라 35초 늦게나마 깔끔하게 종료했다. 이는 측정 전에 적어 뒀던 "ALB의
+  등록 해제 지연을 우연히 넘겼다"는 서술이 암시하던 반대쪽(유예가 부족하면 SIGTERM이
+  아예 안 간다)을 정정한다. 실제 ALB의 드레인 지연 숫자는 여전히 미확인이다.
+  항목의 "프로세스가 그냥 죽는다"는 문장은 틀렸다).
 - **`ROADMAP.md`(+ko): §7의 낡은 "미착수" 항목 2건 추가 정정 (2026-09-08)** — 앞서
   고친 ARM/Graviton 건과 같은 유형의 버그. "AWS Secrets Manager+ESO 연동"과
   "Kubernetes Ingress/ALB + TLS 인증서 프로비저닝" 둘 다 여전히 "존재하지 않는
@@ -237,6 +298,62 @@
   코드 변경 없음 — 순수 문서.
 
 ### 추가
+- **ExternalDNS로 ALB DNS 레코드를 만들고, 재사용 위임 세트로 zone 네임서버를 고정
+  (2026-09-25, [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md))** — 도메인을
+  ALB로 잇는 레코드를 만드는 곳이 없었고, Route53 zone은 새로 만들 때마다 네임서버 4개가 바뀌어서
+  apply → destroy를 한 번 돌 때마다 등록기관을 다시 고쳐야 했다. 이제 `addons/`가 ExternalDNS를
+  켜서(차트 `1.22.0`, `policy: sync`, IRSA로 zone 하나에만 권한) `Ingress` host를 보고 ALIAS
+  레코드를 만들고 지운다. `app-infra/`는 선택 변수 `delegation_set_id`(Terraform 밖에서 한 번
+  만든 세트라 destroy해도 네임서버가 유지됨)를 받고, zone에 `force_destroy = true`를 걸고, zone의
+  ARN과 이름을 출력한다. `deploy.sh`는 `DELEGATION_SET_ID`를 모든 `app-infra` plan/apply에 넘긴다.
+  손으로 만드는 Alias 레코드와 Terraform 관리 방식은 검토 후 기각했다(ADR 0063 Alternatives
+  rejected). 검증: `app-infra/`·`addons/`의 `terraform init -backend=false`/`fmt -check`/`validate`,
+  격리된 설정에서의 변수 validation, `bash -n`. plan·apply는 하지 않았고, 라이브에서만 확인되는
+  항목은 ADR의 Consequences에 있다.
+- **프론트엔드를 API와 같은 ALB에서 호스팅 — 별도 nginx 워크로드를 경로로 분기
+  (2026-09-21, [ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md))** — 지금까지
+  `frontend/`를 호스팅하는 곳이 없었다: 이미지도, 차트 리소스도, CI 발행도 없었다. 이제
+  정적 파일 nginx 이미지로 빌드하고(`frontend/Dockerfile`, `nginx.conf`: SPA 딥링크 fallback,
+  없는 `/assets` 파일은 진짜 404, 해시 자산은 1년 캐시, 보안 헤더와 CSP — helmet은 API
+  응답에만 걸린다) 기존 Helm 릴리스 안에 자체 Deployment + Service로 띄운다. values로 켜고
+  끈다(`frontend.enabled`, 기본 `false`, `values-prod.yaml`이 켬). `templates/ingress.yaml`은
+  path마다 선택적 `service: app|frontend`를 받아서, Ingress 하나가 백엔드의 allow-list prefix
+  일곱 개와 프론트엔드용 `/` 규칙을 함께 담는다 — same-origin이라 CORS가 필요 없고 refresh
+  쿠키도 그대로다(ADR 0012가 미뤄 둔 도메인 간 쿠키 문제는 "필요 없음"으로 해소). 새
+  `docker-publish-frontend` CI 잡이 스모크 테스트(딥링크, 자산 404, CSP 헤더)를 통과한 뒤
+  `bluecode1775/sharenpo-frontend`를 백엔드 이미지와 같은 `:<sha>`로 발행하고, `deploy.sh`는
+  두 태그를 확인해 함께 넘긴다. 차트 버전은 0.4.0. 클러스터 없이 검증한 것: 플래그 조합별
+  `helm lint --strict`/`helm template`, amd64·arm64 로컬 이미지 빌드, 실제 브라우저에서 CSP
+  아래로 SPA가 뜨는지, `actionlint`. 검증하지 못한 것: `helm install --wait`(이 머신에는
+  `kind`가 없다), CI 잡 자체, 그리고 라이브 ALB가 필요한 모든 것 — AWS Load Balancer
+  Controller에서 `/` 규칙의 우선순위가 남은 주된 의존이다(라이브에서만 가능한 점검 전체는
+  `k8s/helm/README.md`에 있다). 하다가 발견했지만 고치지 않은
+  것: `frontend/`와 `admin/`의 `package.json`에 `packageManager` 핀이 없고(corepack이 pnpm
+  12.5.1을 받았는데 Node 이미지의 corepack이 그걸 실행하지 못한다 — Dockerfile이 10.14.0을
+  스스로 고정한다), 컨트롤러의 `target-type: instance` 기본값이 이 차트의 `ClusterIP`
+  Service와 맞지 않으며, `docker-tag-cleanup.yml`이 백엔드 저장소만 다룬다.
+- **Admin 콘솔을 같은 ALB의 `/admin`에 호스팅 (2026-09-23,
+  [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md))** — `admin/`에는 배포 경로가
+  없었다: 이미지도, 차트 리소스도, CI 발행도 없었다. 이제 정적 파일 nginx 이미지
+  (`admin/Dockerfile`, `nginx.conf`)로 빌드되어 `alias`로 `/admin/` 아래에서 서빙되고 — ALB
+  Controller는 경로를 재작성하지 않는다 — 같은 Ingress의 `/admin` 규칙(`service: admin`)이
+  가리키는 세 번째 values 게이팅 Deployment + Service(`admin.enabled`, `values-prod.yaml`이
+  켠다)로 동작한다. Vite `base`는 `vite build`일 때만 `/admin/`이고(`pnpm dev`는 그대로),
+  `BrowserRouter`는 `basename={import.meta.env.BASE_URL}`을 받는다. 그 과정에서
+  `session-guard.ts`의 실제 버그 두 개를 고쳤다 — 세션이 거부되면 하드코딩된 `/`(이제 frontend의
+  경로)로 이동했고, `VITE_API_URL`이 없으면 refresh URL이 `undefined/auth/token/refresh`가
+  됐다 — 그리고 spec 두 개가 이를 고정한다. `docker-publish-admin`(CI), `deploy.sh`의 세 번째
+  태그 확인과 `--set admin.image.tag=`, `docker-tag-cleanup.yml`의 `sharenpo-admin` 항목은
+  frontend의 방식을 따르고, 같은 시기에 위 ADR 0060 항목에 적어 둔 세 가지 미해결 사항
+  (`packageManager` 핀, 운영 Ingress 템플릿의 `target-type: ip`, 태그 정리)도 해소했다.
+  차트 버전은 0.5.0. 검증한 것: admin `pnpm test`(24), `lint`, `build`; 로컬 이미지 빌드와 curl 확인, 실제 브라우저
+  확인(로그인 폼 렌더링, CSP 아래 콘솔 오류 없음, 딥링크가 `/admin/`으로 이동); 플래그 조합별
+  `helm lint --strict`/`helm template`; `actionlint`; Docker Desktop Kubernetes에서의
+  `helm install --wait`(개발자가 실행하고 일치한다고 보고함), 그리고 `dev`의 CI 실행(2026-09-25,
+  run `36065808388`, 9개 잡 모두 통과: `docker-publish-admin`의 스모크 테스트와 이미지 push,
+  `admin-e2e` 11 passed, 단위 테스트 24개, `packageManager` 핀에 따른 pnpm 10.14.0). 검증하지 못한
+  것: 라이브 ALB가 필요한 모든 것(`/`에 대한 `/admin` 규칙의 우선순위 포함), `main` 브랜치의 발행
+  경로(`:latest`, arm64), 실제로 발행된 이미지를 대상으로 한 `deploy.sh`.
 - **Admin: 모든 페이지에 라이트/다크 토글 추가 (2026-09-08)** — 개발자의 직접 요청.
   `admin/src/store/theme.store.ts`(신규, zustand)가 `localStorage`(`admin-theme`)에서 초기
   테마를 읽고, 저장된 값이 없으면 `prefers-color-scheme`로 폴백한다. 토글하면 클래스와
@@ -876,7 +993,7 @@
   되돌렸다. 그 README에서 남긴 것은 릴리스명 변경뿐인데, 릴리스명은 AWS 리소스 이름이 아니기
   때문이다. S3 버킷은 애초에 위험하지 않았다 — `s3_bucket_name`은 기본값이 없어 apply 때 주입되는
   값이라 plan에서도 in-place 갱신으로 찍혔다. 도메인 계층은 이미 새 이름이었다(Route53 존과 ACM
-  인증서가 `sharenpo.com`, IAM 사용자가 `sharenpo-user`). 따라서 이 보류에 걸리는 사용자 대면
+  인증서가 `sharenpo.cloud`, IAM 사용자가 `sharenpo-user`). 따라서 이 보류에 걸리는 사용자 대면
   표면은 없다. 후속 항은 [ROADMAP.ko.md](ROADMAP.ko.md) §7에 남겼다.
   **검증**: `pnpm lint` 0 에러, 단위 테스트 220/220, 세 패키지 `pnpm build` 모두 통과,
   `helm lint`/`helm template`, `docker compose config`, 그리고 실제 프로덕션 빌드로 렌더한

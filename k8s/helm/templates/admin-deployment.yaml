@@ -1,0 +1,77 @@
+{{- /*
+admin 콘솔 정적 파일 nginx(ADR 0062 D1) — 앱·frontend Deployment와 별도 Pod로 두고, 같은
+Ingress의 `/admin` 규칙만 이쪽 Service로 보낸다. 셀렉터 라벨을 백엔드(sharenpo.selectorLabels)와
+frontend 둘 다와 다르게 쓰는 이유: 같은 라벨을 달면 다른 Service가 이 Pod를 API 엔드포인트로
+잡거나(clamav-*가 이미 app.kubernetes.io/name: clamav로 그런 문제를 피한다), NetworkPolicy의
+podSelector가 의도치 않게 이 Pod를 포함시킬 수 있어서다. admin.enabled가 false(기본)면 아무것도
+렌더링하지 않는다 — ingress/serviceMonitor/networkPolicy처럼 values-prod.yaml이 켠다.
+*/}}
+{{- if .Values.admin.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sharenpo.fullname" . }}-admin
+  labels:
+    {{- include "sharenpo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin
+spec:
+  replicas: {{ .Values.admin.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: admin
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: admin
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- /* 앱과 달리 전용 ServiceAccount(IRSA)를 붙이지 않는다 — 정적 파일만 서빙해서 AWS 권한이
+      필요 없다. Kubernetes API 토큰도 쓸 일이 없으니 마운트하지 않는다(최소 권한). */}}
+      automountServiceAccountToken: false
+      {{- with .Values.admin.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: admin
+          {{- with .Values.admin.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.admin.image.repository }}:{{ .Values.admin.image.tag }}"
+          imagePullPolicy: {{ .Values.admin.image.pullPolicy }}
+          {{- /* 8080은 admin/nginx.conf의 listen과 짝이다 — 바꾸려면 둘을 같이 바꾼다. */}}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          {{- with .Values.admin.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.admin.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.admin.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

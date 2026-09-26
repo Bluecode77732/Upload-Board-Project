@@ -51,7 +51,18 @@ module "eks" {
   cluster_addons = {
     coredns    = {}
     kube-proxy = {}
-    vpc-cni    = {}
+    # ADR 0056 Addendum(2026-09-26) — VPC CNI의 Network Policy 에이전트를 켠다. values-prod.yaml이
+    # 이미 networkPolicy.enabled: true라서, 이 값이 켜지는 순간 앱 파드의 NetworkPolicy가 실제로
+    # 집행된다. 기본 "standard" 모드라 파드는 정책이 붙기 전까지 전부 허용으로 시작한다(strict는
+    # CoreDNS까지 정책이 필요해서 쓰지 않는다). 에이전트는 노드 포트 8162/8163을 쓴다. 애드온 버전은
+    # 비워 둬서 모듈이 이 클러스터 버전의 기본 버전을 고른다(v1.14.0-eksbuild.3 이상 필요 —
+    # 2026-09-26 기준 기본값은 v1.22.4-eksbuild.3). apply한 적 없다: 프로브가 막히지 않는지 등
+    # 라이브 검증 목록은 ADR 0056 Addendum과 k8s/helm/README.md에 있다.
+    vpc-cni = {
+      configuration_values = jsonencode({
+        enableNetworkPolicy = "true"
+      })
+    }
   }
 
   vpc_id     = module.vpc.vpc_id

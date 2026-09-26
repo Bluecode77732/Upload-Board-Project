@@ -63,10 +63,14 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0053](0053-global-rate-limiting.ko.md) | `@nestjs/throttler`를 통한 전역 요청 횟수 제한 — 최초의 전역 `APP_GUARD`, health/metrics 예외 | 승인됨 — 구현됨, e2e 검증 완료 | 2026-09-10 |
 | [0054](0054-per-route-rate-limit-tuning.ko.md) | 라우트별 요청 횟수 제한 차등화 — auth/upload 강화, skipIf 기반 우회, 0053 amend | 승인됨 — 구현됨, e2e 검증 완료 | 2026-09-10 |
 | [0055](0055-helmet-security-headers.ko.md) | `helmet`을 통한 보안 응답 헤더 — 전역 미들웨어, Swagger UI를 위해 CSP script-src 완화 | 승인됨 — 구현됨, 라이브 검증 완료 | 2026-09-11 |
-| [0056](0056-networkpolicy-east-west-restriction.ko.md) | 클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy — 아웃바운드 중심, 기본 비활성 게이팅, 0041 확장 | 승인됨 — 구현됨, kind+Calico 검증 완료 | 2026-09-11 |
+| [0056](0056-networkpolicy-east-west-restriction.ko.md) | 클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy — 아웃바운드 중심, 기본 비활성 게이팅, 0041 확장 | 승인됨 — 구현됨, kind+Calico 검증 완료. 2026-09-26 추가 기록: AWS 에이전트를 코드로 켬(`validate`/`fmt -check` 통과, 미적용), 라이브 검증은 후속 | 2026-09-11 |
 | [0057](0057-terraform-state-backend-s3-native-lock.ko.md) | Terraform state 백엔드 — S3 네이티브 락, DynamoDB·KMS 없이, 0044 amends | 승인됨 — 코드 완료, 미적용 | 2026-09-12 |
 | [0058](0058-ingress-path-allowlist.ko.md) | Ingress 경로 allow-list — health·metrics·docs 차단, 0041 extends | 승인됨 — 구현 완료, helm template/lint 검증 | 2026-09-13 |
 | [0059](0059-upload-malware-scanning-clamav.ko.md) | 업로드 악성코드 스캔 — temp 쓰기 전 동기 ClamAV 게이트 | 승인됨 — 구현 완료, 라이브+CI+kind/Calico 검증 완료 | 2026-09-14 |
+| [0060](0060-frontend-same-alb-path-routing.ko.md) | 프론트엔드 호스팅 — 같은 Helm 릴리스의 별도 nginx 워크로드를 하나의 ALB에서 경로로 분기, 0058·0010 amend, 0041 확장 | 승인됨 — 구현 완료, helm template/lint·로컬 이미지·Docker Desktop `helm install --wait`·CI 검증 (라이브 ALB 미검증) | 2026-09-21 |
+| [0061](0061-shutdown-hooks-and-pid1-sigterm.ko.md) | 우아한 종료 — `enableShutdownHooks()`와 SIGTERM을 무시하던 PID 1 node, 0030 확장 | 승인됨 — 구현 완료, 컨테이너·`kind` 검증 완료(EKS 미검증) | 2026-09-21 |
+| [0062](0062-admin-same-alb-subpath-routing.ko.md) | admin 콘솔 호스팅 — 같은 ALB의 세 번째 워크로드, `/admin` 서브패스, 0060·0058 확장 | 승인됨 — 구현 완료, helm template/lint·로컬 이미지·Docker Desktop `helm install --wait`·CI 실행 검증 (라이브 ALB 미검증) | 2026-09-23 |
+| [0063](0063-alb-dns-externaldns-and-delegation-set.ko.md) | ExternalDNS로 ALB DNS 레코드 생성, 재사용 위임 세트로 zone 네임서버 고정, 0043 amend, 0044·0047 확장 | 승인됨 — 코드 작성 완료, `terraform fmt -check`/`validate`·`bash -n` 검증, apply 안 함 | 2026-09-25 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

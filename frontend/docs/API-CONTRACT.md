@@ -6,7 +6,7 @@ contract the app depends on. When the backend changes it, update this file
 **and** the mirrored types in `src/api/` in the same change.
 
 Backend decisions referenced here live in the repo-root `ADR/` (0001, 0010,
-0011, 0012, 0020, 0021, 0023, 0024, 0050) — this file restates only what a client must obey.
+0011, 0012, 0020, 0021, 0023, 0024, 0050, 0060) — this file restates only what a client must obey.
 
 ## Base URL & transport
 
@@ -15,8 +15,14 @@ Backend decisions referenced here live in the repo-root `ADR/` (0001, 0010,
   `http://localhost:3000`; `/file` and `/post` are regex-anchored there so the
   proxy's prefix match doesn't also swallow the client routes `/files` and
   `/posts/:id`). `VITE_API_BASE` stays empty.
-- Prod: set `VITE_API_BASE` to the real backend origin; the backend must allow
-  that origin via its `CORS_ORIGIN` env (backend ADR 0008).
+- Prod: same-origin, behind the same ALB as the API — a separate nginx
+  workload serves this app's build at `/`, path-routed alongside the API's
+  controller prefixes on one Ingress (backend ADR 0060). `VITE_API_BASE`
+  stays empty in the production image too (`frontend/Dockerfile` pins it
+  empty at build time; `.dockerignore` keeps a local `.env` out of the build
+  context); the backend's `CORS_ORIGIN` (ADR 0008) is not set for this
+  origin. `admin/` is a separate, cross-origin app outside ADR 0060's
+  scope — it still sets `VITE_API_URL`/needs `CORS_ORIGIN`.
 - **Every** request sends `credentials: 'include'` so the httpOnly refresh
   cookie rides along. This is centralized in `src/api/client.ts`.
 

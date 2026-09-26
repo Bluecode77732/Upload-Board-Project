@@ -17,7 +17,11 @@ Kubernetes용으로 패키징합니다. 이 차트가 별도 `helm/` 폴더가 �
 `postgres:16`, 그리고 `/health/live`/`/health/ready`/`/doc` 모두 Service를
 통해 `200`을 응답했습니다. 이 실행에서 실제 버그 2개를 발견해 고쳤습니다(hook
 순서, 빈 문자열 env var — 커밋 `0326199`).
-**2026-08-17에 실제 배포 시작 → 2026-08-27에 안정화 → 2026-08-28에 철거**: 릴리스
+2026-09-24에는 `frontend`·`admin` 워크로드를 켠 상태로 Docker Desktop Kubernetes에서
+다시 검증했습니다(ADR 0062) — 이 문서 끝의 "Docker Desktop Kubernetes에서 검증하기"를
+참고하세요.
+**2026-08-17에 실제 배포 시작 → 2026-08-27에 안정화 → 2026-08-28에 철거(2026-08-29/30
+재적용, 2026-08-31에 다시 철거)**: 릴리스
 `upload-board`가 `k8s/infra/terraform/cluster/`가 만든 실제 AWS/EKS 클러스터에서
 동작했습니다(revision 5, `STATUS: deployed`) — 전체 경위는
 [ROADMAP.md](../../docs/ROADMAP.md) §9(2026-08-27 항목) 참고, RDS 인스턴스의
@@ -102,12 +106,16 @@ helm upgrade sharenpo . -f values-prod.yaml --set image.tag=<태그>
 | `service.yaml` | Service | `ClusterIP`, 포트 3000 |
 | `configmap.yaml` | ConfigMap | `values.yaml`의 `env:` 블록 아래 모든 키 |
 | `migration-job.yml` | Job (Helm hook) | pre-install/pre-upgrade 시점에 `migration:run` 실행, `docker-compose.yml`의 `migrate` 서비스를 본뜸(ADR 0032) |
-| `ingress.yaml` | Ingress | 기본 비활성(`ingress.enabled: false`) — TLS는 여기서 종료, 앱 내부에서는 안 함(ADR 0034). 경로 규칙은 `/` catch-all이 아니라 실제 컨트롤러 prefix의 명시적 allow-list다 — `/health`, `/metrics`, `/doc`은 의도적으로 제외(ADR 0058) |
+| `ingress.yaml` | Ingress | 기본 비활성(`ingress.enabled: false`) — TLS는 여기서 종료, 앱 내부에서는 안 함(ADR 0034). 경로 규칙은 백엔드 Service에 대해서는 `/` catch-all이 아니라 실제 컨트롤러 prefix의 명시적 allow-list이고, 프론트엔드 Service로 가는 `/` 규칙(`service: frontend`)과 admin Service로 가는 `/admin` 규칙(`service: admin`)이 하나씩 더해진다 — `/health`, `/metrics`, `/doc`은 백엔드 목록에서 의도적으로 빠져 프론트엔드의 `/`로 떨어진다(ADR 0058, ADR 0060, ADR 0062) |
 | `serviceaccount.yaml` | ServiceAccount | 기본 비활성(`serviceAccount.create: false` — Deployment는 네임스페이스의 `default` ServiceAccount로 그대로 뜸). S3 IRSA 권한을 네임스페이스의 모든 pod가 아니라 이 앱에만 좁히려면 켠다 — 아래 "IRSA용 전용 ServiceAccount" 참고 |
 | `networkpolicy.yaml` | NetworkPolicy | 기본 비활성(`networkPolicy.enabled: false`) — 앱 파드의 인바운드/아웃바운드 트래픽을 제한한다. 아래 "NetworkPolicy" 참고(ADR 0056) |
 | `clamav-deployment.yaml` | Deployment | `UploadService`가 업로드를 검사하는 `clamd` 데몬 — 앱 파드마다 하나씩이 아니라 공유되는 단일 replica다(시그니처 DB 중복을 피함, ADR 0059 D6). `ingress`/`networkPolicy`와 달리 항상 렌더링된다 |
 | `clamav-service.yaml` | Service | `ClusterIP`, 포트 3310 — `configmap.yaml`이 `values.yaml`의 `env` 맵이 아니라 이 Service 이름에서 `CLAMD_HOST`를 직접 계산한다 |
 | `clamav-pvc.yaml` | PersistentVolumeClaim | `clamav.persistence.enabled: true`일 때만 렌더링된다(기본 `false` — 그렇지 않으면 재시작마다 `emptyDir`에 시그니처 DB를 다시 내려받는다) |
+| `frontend-deployment.yaml` | Deployment | SPA를 서빙하는 정적 파일 nginx(`frontend/Dockerfile`) — 앱과 별도 파드이며, 백엔드 Service가 절대 고르지 않도록 셀렉터 라벨을 따로 쓴다. 기본 비활성(`frontend.enabled: false`), `values-prod.yaml`이 켠다(ADR 0060) |
+| `frontend-service.yaml` | Service | `ClusterIP`, 포트 80. 포트 이름은 `http`가 아니라 `web`이다: `servicemonitor.yaml`이 `sharenpo.labels`를 단 모든 Service에서 `http`라는 이름의 포트를 스크레이프하는데 nginx에는 `/metrics`가 없기 때문이다. Ingress의 `/` 규칙이 가리키는 대상 |
+| `admin-deployment.yaml` | Deployment | admin 콘솔을 `/admin/`에서 `alias`로 서빙하는 정적 파일 nginx(`admin/Dockerfile`) — 앱·frontend와 별도 파드이며, 자기만의 셀렉터 라벨을 쓴다. 기본 비활성(`admin.enabled: false`), `values-prod.yaml`이 켠다(ADR 0062) |
+| `admin-service.yaml` | Service | `ClusterIP`, 포트 80. `frontend-service.yaml`과 같은 Prometheus 스크레이프 이유로 포트 이름이 `web`이다. Ingress의 `/admin` 규칙이 가리키는 대상 |
 
 `values.yaml`엔 실제로 템플릿이 읽는 키만 남아 있습니다 — 어떤 템플릿도 소비하지
 않던 `autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride` 스캐폴딩
@@ -271,7 +279,7 @@ kubectl run curl-clamav --image=busybox:1.36 --restart=Never --rm -i \
 TLS는 ingress/ALB에서만 종료하고 앱 프로세스 안에서는 하지 않는다([ADR
 0034](../../docs/ADR/0034-https-termination-stance.ko.md)). `values.yaml`의
 `ingress` 블록은 `/` catch-all이 아니라 실제 컨트롤러 prefix의 명시적
-allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)).
+allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)). 다만 프론트엔드 Service로 가는 `/` 규칙([ADR 0060](../../docs/ADR/0060-frontend-same-alb-path-routing.ko.md))과 admin Service로 가는 `/admin` 규칙([ADR 0062](../../docs/ADR/0062-admin-same-alb-subpath-routing.ko.md)) 두 개는 예외다.
 `ingress.enabled`는 계속 `false`다 — 이건 뭔가 빠져서가 아니라 개발자가 확정한
 의도적 결정이다([ROADMAP.md](../../docs/ROADMAP.md) > Unscheduled): 스택이
 실제로 떠 있던 2026-08-27 당시엔 클러스터·도메인(`sharenpo.cloud`)·실제 ACM
@@ -281,7 +289,8 @@ allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)).
 켜기 전 필요한 선행 조건 두 가지, 지금은 둘 다 미충족이다(Terraform 3-state
 전부 destroy 상태):
 - `addons/` apply — AWS Load Balancer Controller가 클러스터 안에 떠 있어야
-  `Ingress` 객체를 처리할 수 있다.
+  `Ingress` 객체를 처리할 수 있다. 같은 state가 ExternalDNS도 설치하며, ExternalDNS가
+  도메인을 ALB로 향하게 하는 DNS 레코드를 만든다([ADR 0063](../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)).
 - `app-infra/` apply — `domain_name`의 ACM 인증서가 `ISSUED` 상태여야 한다
   (`terraform output -raw acm_certificate_arn`).
 
@@ -298,21 +307,28 @@ allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)).
 
 ```bash
 helm lint --strict . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
-  --set ingress.className=alb \
+  --set ingress.className=alb --set frontend.enabled=true --set admin.enabled=true \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
-  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]'
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"},{"path":"/admin","pathType":"Prefix","service":"admin"}]}]'
 helm template . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
-  --set ingress.className=alb \
+  --set ingress.className=alb --set frontend.enabled=true --set admin.enabled=true \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
-  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]' \
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"},{"path":"/admin","pathType":"Prefix","service":"admin"}]}]' \
   -s templates/ingress.yaml
 ```
 
-렌더링된 `Ingress`에 `ingressClassName: alb`, 호스트, allow-list의 일곱 경로,
+같은 플래그가 `networkpolicy.yaml`의 ALB 인바운드 허용 규칙(ADR 0056 addendum)도 함께
+렌더링한다 — `--set networkPolicy.enabled=true -s templates/networkpolicy.yaml`을 더하면
+두 규칙(`podSelector: {}`와 새 `ipBlock`)을 한 번에 볼 수 있다.
+
+렌더링된 `Ingress`에 `ingressClassName: alb`, 호스트, allow-list의 일곱 백엔드 경로와 프론트엔드 `/` 규칙(2026-09-21),
+admin `/admin` 규칙(2026-09-23),
 annotation이 전부 의도대로 나오는지 확인한다(2026-09-13 검증 — 이 레시피의 이전 초안은
 `--set ingress.hosts[0].host=...`를 썼는데, 이건 배열 원소 전체를 교체해버려 경로가 다
 사라진다; `--set-json`이라야 실제로 유지된다 — `k8s/infra/terraform/README.md`의 "ALB
@@ -322,14 +338,137 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
 
 **미해결 — 실전 신뢰 전 필수, 지금은 검증할 살아있는 ALB Controller가 없어서 아직 안 함:**
 YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 동작하는 것은 별개다.
-`addons/`+`app-infra/`를 다시 apply하고 `ingress.enabled`를 실제로 켠 뒤엔, annotation이
-먹혔다고 가정하지 말고 다음을 직접 확인한다:
+`addons/`+`app-infra/`를 다시 apply하고, `ingress.enabled`를 실제로 켜고, ExternalDNS가
+도메인을 ALB로 향하게 만든 뒤(ADR 0063)에는, annotation이 먹혔다고 가정하지 말고 다음을
+직접 확인한다:
+- 그 zone에 대한 `aws route53 list-resource-record-sets`에 도메인이 ALB를 가리키는 alias `A`
+  레코드와 ExternalDNS의 `TXT` 소유 레코드가 `Ingress`가 생긴 지 몇 분 안에 보이고, `Ingress`를
+  지운 뒤에는 사라지는지(또는 zone의 `force_destroy`가 지우는지). 명령은
+  `k8s/infra/terraform/README.md`의 "Enabling the ALB ingress"에 있다. 라이브에서 관찰한
+  적 없음(ADR 0063).
+- 첫 배포 전에 내 컴퓨터에서(클러스터 불필요): `values-prod.yaml`은 ClamAV를 차트가 검증받은
+  `stable`이 아니라 `clamav/clamav:stable-debian`으로 실행한다 — `stable`은 Docker Hub에
+  `linux/amd64`만 있는데 실제로 도는 노드는 `arm64`뿐이고, `stable-debian`은 amd64, arm64,
+  ppc64le를 담고 있다(2026-09-25에 읽음,
+  [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md) 추가 기록). 차트가 전제하는
+  것은 두 가지다: `clamdcheck.sh`가 있는지(두 프로브가 호출한다)와 `/var/lib/clamav`가 서명
+  폴더인지. 둘 중 하나라도 없으면 clamd 파드가 Ready가 되지 않고 모든 업로드가
+  `503 UPLOAD_SCAN_UNAVAILABLE`로 답한다. 개발자가 2026-09-26에 로컬에서 실행해 출력이 모두
+  예상값과 같았다고 보고했다(세션은 그 출력을 보지 못했다). **같은 날 세션이 직접 실행했다**
+  (Docker Desktop, 이미지 `clamav/clamav:stable-debian`, ClamAV 1.5.4, 이미지에 든 서명 DB
+  28130, 첫 기동 때 `freshclam`이 daily 28135 / main 63을 받음). `/var/lib/clamav`는 차트의
+  `emptyDir` 마운트처럼 빈 tmpfs로 두었다:
+
+  | | `linux/amd64`(네이티브) | `linux/arm64`(QEMU 에뮬레이션) |
+  |---|---|---|
+  | `clamdcheck.sh` 존재, 프로브 종료 코드 | 있음, `Clamd is up`, 0 | 동일 |
+  | 빈 서명 폴더에서 Ready까지 | ≈30초(5초 간격 폴링) | 131초 — 에뮬레이션이라 Graviton을 대표하지 않음 |
+  | 메모리, 샘플링 최대 / 안정 상태 | 1075 MiB / ≈1.06 GiB | 1204 MiB / ≈1.18 GiB |
+  | 3310 포트 `PING` | `PONG` | 동일 |
+  | EICAR(로컬 소켓과 TCP 3310 `INSTREAM`) | `Eicar-Signature FOUND` | 동일 |
+  | 정상 바이트 | `OK` | 동일 |
+
+  두 실행 모두 오류나 미러의 429 로그는 없었다. 여기서 나오는 결론 둘: 차트의 liveness 여유(≈480초)는
+  두 시간 모두 넉넉히 덮는다. 그리고 `values.yaml` 주석이 제안하는 `clamav.resources.limits.memory`
+  "1Gi부터"는 여기서 잰 안정 상태보다 *낮아서* 그대로 두면 파드가 OOM으로 죽는다 — limit을 걸게
+  되면 그보다 높게 시작한다(`values.yaml` 자체는 바꾸지 않았다). clamd 하나가 `t4g.medium` 4 GiB의
+  약 4분의 1이다. 여전히 라이브에서만 확인되는 것: 실제 Graviton 노드에서 `clamav` Deployment가
+  Ready가 되는지, 앱을 거친 EICAR 업로드가 `400 UPLOAD_MALWARE_DETECTED`로 답하는지, 정상 파일이
+  통과하는지.
 - `aws elbv2 describe-listeners`로 만들어진 ALB에 80번과 443번 리스너가 둘 다 있는지
   (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지).
 - `curl -I http://<도메인>`이 `https://` URL로 `301`/`302`를 반환하는지(`ssl-redirect`가
   실제로 동작하는지).
 - 브라우저가 ACM 인증서가 발급된 그 도메인에 대해 경고 없이 인증서를 신뢰하는지
   (`certificate-arn` annotation이 실제로 올바른 인증서를 붙였는지).
+- 토큰 없는 `curl https://<도메인>/file`이 HTML이 아니라 API의 401 JSON을 돌려주고,
+  `/files`·`/posts/1`·존재하지 않는 경로는 SPA의 HTML을 돌려주는지 — 프론트엔드 `/` 규칙이
+  실제로 API prefix들 아래에 놓이는지(ADR 0060, 컨트롤러의 Exact 다음 긴 Prefix 순서는
+  라이브에서 확인된 적이 없다). `/health/live`·`/metrics`·`/doc`도 SPA의 HTML(또는 404)이
+  나와야 하고 백엔드 응답이 나오면 안 된다.
+- `curl https://<도메인>/admin/`이 프론트엔드도 404도 아닌 admin 콘솔 자신의 HTML을
+  돌려주는지 — `/admin`이 규칙 집합에 실제로 있는지, 그리고 Exact 다음 긴 Prefix 순서에서
+  더 짧은 규칙에 먼저 먹히지 않는지 확인한다(ADR 0062, 이것도 라이브에서 확인된 적 없다).
+  슬래시 없는 `curl -I https://<도메인>/admin`은 ALB가 아니라 nginx 자신의 `301`로
+  `/admin/`에 리다이렉트되는지 확인한다 — 요청이 실제로 admin 파드까지 도달했는지(중간에서
+  재작성되거나 버려지지 않았는지) 확인하는 것이다.
+- 타깃 그룹에 healthy 타깃이 등록되는지. `values-prod.yaml`의 주석 처리된 annotation
+  블록에 이제 `alb.ingress.kubernetes.io/target-type: ip`가 들어 있다(2026-09-22 추가 —
+  컨트롤러 기본값 `instance`는 `NodePort`/`LoadBalancer` Service가 필요한데 이 차트의
+  Service는 둘 다 `ClusterIP`다). 다만 이건 렌더링되는 annotation만 고친 것이고, 실제
+  ALB가 파드를 healthy로 등록하는지는 별개로 확인해야 한다.
+- `networkPolicy.enabled: true`(`values-prod.yaml`이 설정하는 값)와 Ingress가 함께 켜지면
+  `networkpolicy.yaml`이 VPC CIDR을 앱 포트에 허용하는 인바운드 규칙을 하나 더
+  렌더링한다(ADR 0056 addendum, 위 `target-type` 수정과 같은 시점에 추가 — ALB의 ENI는
+  파드가 아니라서 기존의 같은-네임스페이스 전용 규칙으로는 애초에 통과할 수 없었다).
+  위 항목과 같은 방식으로 ALB 타깃 그룹이 healthy인지 확인하고, ADR 0056 D2가 이미
+  남긴 단서대로 이게 실제로 AWS 자신의 VPC CNI Network Policy 에이전트로 강제되는지(단순
+  렌더링이 아니라)도 확인한다 — `kind`+Calico로는 실제 VPC CIDR을 흉내 낼 수 없어서, 이
+  규칙은 `helm template` 이상으로 검증할 방법이 없다.
+- VPC CNI Network Policy 에이전트를 켠 뒤에는(2026-09-26에 `cluster/main.tf`에 설정, 코드 완성·
+  미적용 — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)
+  추가 기록) 강제가 실제로 동작하고 정당한 트래픽이 막히지 않는지도 확인한다: `aws-node` 파드가
+  컨테이너 두 개로 떠 있고 VPC CNI 버전이 `v1.14.0-eksbuild.3` 이상인지, 앱 파드가 Ready가 되고
+  `/health/live`·`/health/ready`가 통과하는지(kubelet 프로브가 막히지 않는지,
+  `aws/amazon-vpc-cni-k8s#2571`), Ingress가 꺼져 있을 때 다른 네임스페이스의 파드가 앱 파드에 닿지
+  못하고(Ingress가 켜지면 VPC CIDR 규칙이 허용하므로 타임아웃이 나오지 않는 게 정상) 허용
+  목록에 없는 egress 포트가 타임아웃되는지, DNS·데이터베이스(5432)·clamd(3310)·HTTPS/443(S3)이 동작하고 EICAR
+  업로드는 거부되며 정상 파일은 통과하는지, Prometheus가 백엔드를 계속 스크레이프하는지(인바운드
+  규칙은 같은 네임스페이스 파드와 Ingress가 켜졌을 때의 VPC CIDR만 허용하므로 Ingress가 꺼져
+  있으면 스크레이프가 막힐 수 있다 — 추론이며 관찰한 적 없음), ExternalDNS·External Secrets·ALB
+  Controller가 영향받지 않는지.
+- 실제 HTTPS 연결로 로그인한 뒤 페이지를 새로고침해도 세션이 유지되는지. refresh 쿠키가
+  `HttpOnly; Secure; SameSite=Strict; Path=/auth/token`으로 내려오고 `POST /auth/token/refresh`에
+  다시 실려 가야 한다 — `Secure` 쿠키는 브라우저 연결이 HTTPS일 때만 동작하므로 다른 곳에서는
+  볼 수 없다(ADR 0012, ADR 0034).
+- `STORAGE_DRIVER=s3`(`values-prod.yaml`이 설정하는 값)에서 비공개 파일의 미리보기(Blob
+  `fetch()` → API의 302 → presigned S3 URL)와 공개/unlisted 파일의 `<img>`/`<video>`가 모두
+  브라우저 콘솔에 CSP·CORS 에러 없이 로드되는지. 버킷에 운영 origin에 대한 CORS 규칙이
+  있어야 한다. `app-infra/main.tf`에 이제 그 리소스가 있다
+  (`aws_s3_bucket_cors_configuration.app`, 2026-09-22 추가, ADR 0036 addendum) — 코드는
+  완성됐지만 아직 apply하지 않았고, apply하면 지금 버킷에 있는 규칙(2026-08-16에 손으로
+  돌린 스크립트의 localhost 개발 origin 두 개뿐, 운영 origin 없음)을 운영 origin 하나로
+  **교체**한다. apply 이후에도 실제 버킷을 상대로 한 로컬 `STORAGE_DRIVER=s3` 테스트가
+  필요하면 개발 origin을 다시 손으로 넣어야 한다. 별개로 `frontend/nginx.conf`의 CSP가
+  `https://*.amazonaws.com`을 허용해야 한다(ADR 0060 — 브라우저로 확인하기 전까지는 CSP
+  의미론에서 추정한 값이다).
+- 실제 클라이언트 IP가 rate limiter에 도달하는지(`trust proxy` = `10.0.0.0/16`, ADR 0054
+  addendum): 한 클라이언트에서 1분 안에 `POST /auth/signin`을 여섯 번째로 호출하면 429가 나오고,
+  다른 IP의 두 번째 클라이언트는 전혀 제한되지 않아야 한다. 모든 방문자가 하나의 버킷을
+  공유한다면 앱이 보는 peer가 그 CIDR 안에 있지 않다는 뜻이다.
+- 롤아웃과 스크레이프: 세 Deployment 모두 `kubectl rollout status`가 성공하고, 프론트엔드와
+  admin Service 각각에는 ready 엔드포인트가 있으며 백엔드 Service에는 그 파드들이 하나도
+  없고, Prometheus에는 백엔드 타깃만 있고 프론트엔드·admin 타깃은 없어야 한다(`web` 포트
+  이름, ADR 0060, ADR 0062).
+- 파드가 EKS에서 곧바로 종료된다(ADR 0061). `values-prod.yaml`로(따라서 `STORAGE_DRIVER=s3`)
+  `kubectl rollout restart deployment/<release>`를 실행하고 `kubectl get pods -w`를
+  지켜본다: 이전 백엔드 파드는 1~2초 안에 `Terminating`을 벗어나야 한다. 30초를 꽉 채우고
+  나가는 파드(차트가 `terminationGracePeriodSeconds`를 설정하지 않으므로 기본값이
+  적용된다)는 SIGKILL을 맞은 것이다 — `useProcessExit: true`가 있는데도 프로세스가 끝나지
+  못했다는 뜻이니, 종료 훅에 도달하지 못하는 종료 경로를 찾아야 한다. 측정은 로컬 `kind`
+  클러스터에서만 했다: 0.4초, 타이머를 남겨 둔 경우 옵션이 없으면 30.6초였다. `S3Client`
+  자체는 이미 닫힌 질문이다 — 그 기본 `keepAlive` request agent를 대신한 Docker 전용 시험
+  (같은 핸들 모양, ADR 0061 두 번째 Addendum)이 소켓을 일부러 열어 둔 채로도 똑같이 빨리
+  종료했다 — 그러니 이 점검은 그 핸들이 아니라 실제 파드에만 있는 다른 무언가가 있는지를
+  보는 것에 가깝다.
+- 롤링 업데이트 중 ALB 오류가 없다(ADR 0061) — 실패할 가능성이 가장 높은 항목이다. 수정 전에는
+  파드가 SIGTERM을 무시하고 SIGKILL까지 계속 돌았는데, 이것이 (추론일 뿐 측정한 것은 아니지만)
+  우연히 ALB의 등록 해제 지연보다 길었을 것이다. 이제는 1초 안에 종료하므로, SIGTERM 이후 대상이
+  드레인되기 전에 ALB가 그 파드로 보낸 요청이 거절될 수 있다.
+  `kubectl rollout restart deployment/<release>`가 도는 동안 바깥에서 허용 목록에 있는 경로로
+  초당 한 건쯤 요청을 보내고 — `curl -s -o /dev/null -w '%{http_code}\n'
+  https://<domain>/file`은 토큰이 없으면 401이다 — `502`/`503`/`504`를 센다. `401`과 `429`는
+  백엔드가 답한 것이다(429는 자체 rate limit이므로 분당 100건 미만을 유지한다). 통과 기준: 셋 다
+  없음. 나타나면 앱 컨테이너에 `preStop` sleep을 두고 `terminationGracePeriodSeconds`를 적어도
+  그만큼 늘린다. 그 *메커니즘* 자체는 일회용 `kind` Deployment에서 검증했다(차트에는 커밋하지
+  않음, ADR 0061 두 번째 Addendum): 유예가 sleep을 다 덮으면 파드가 예상대로 5.7초 만에
+  사라졌고, 유예를 일부러 sleep보다 짧게 두어도 kubelet은 막힌 hook을 포기하는 순간 여전히
+  SIGTERM을 보냈고 앱은 깔끔하게 종료했다 — 다만 파드가 유예 시간 전체(36.4초)를 다 썼을
+  뿐이다. 그러니 여기서 유예가 부족하면 앱이 그대로 SIGKILL당하는 게 아니라 롤아웃 시간이
+  드는 것이다 — 적어도 이 `kind`/containerd 버전에서는 그렇다; EKS에서는 확인하지 않았다.
+  이 중 무엇도 sleep을 얼마로 둬야 하는지는 말해 주지 않는다 — 그건 아직 측정하지 못한 실제
+  ALB의 드레인 지연 숫자가 있어야 정할 수 있으므로, 차트에는 둘 다 지금 없고 여전히 정하지
+  않았다.
 
 이 중 어느 것도 `helm lint`/`helm template`로는 확인할 수 없다 — 이 둘은 이 저장소가
 렌더링하는 YAML이 올바르다는 것만 증명할 뿐, AWS Load Balancer Controller가 그 설정대로
@@ -349,3 +488,96 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
 helm lint --strict .
 helm template . --set secrets.existingSecret=placeholder
 ```
+
+프론트엔드 워크로드(ADR 0060)는 `--set frontend.enabled=true`를 줘야만 렌더링되고, Ingress의
+`/` 규칙도 그때만 나타난다:
+
+```bash
+helm template . --set secrets.existingSecret=placeholder --set frontend.enabled=true \
+  --set ingress.enabled=true \
+  -s templates/ingress.yaml -s templates/frontend-deployment.yaml -s templates/frontend-service.yaml
+```
+
+이미지도 클러스터 없이 검증할 수 있다 — 빌드해서 SPA fallback과 헤더를 확인한다:
+
+```bash
+docker build -t sharenpo-frontend:local -f ../../frontend/Dockerfile ../../frontend
+docker run --rm -p 8080:8080 sharenpo-frontend:local
+# /, /posts/1 → 200 index.html;  /assets/missing.js → 404;  모든 응답에 CSP + nosniff 헤더
+```
+
+admin 워크로드(ADR 0062)도 `--set admin.enabled=true`를 줘야만 렌더링되고, Ingress의
+`/admin` 규칙도 그때만 나타난다:
+
+```bash
+helm template . --set secrets.existingSecret=placeholder --set admin.enabled=true \
+  --set ingress.enabled=true \
+  -s templates/ingress.yaml -s templates/admin-deployment.yaml -s templates/admin-service.yaml
+```
+
+이미지도 마찬가지다 — `/admin/`에서 서빙되므로(`root`가 아니라 `alias`, ADR 0062 D5)
+확인 대상 경로가 루트가 아니라 그 prefix 아래다:
+
+```bash
+docker build -t sharenpo-admin:local -f ../../admin/Dockerfile ../../admin
+docker run --rm -p 8080:8080 sharenpo-admin:local
+# /admin(슬래시 없음) → /admin/로 301;  /admin/, /admin/dashboard → 200 index.html;
+# /admin/assets/missing.js → 404;  /(admin 밖) → 404;  모든 응답에 CSP + nosniff 헤더
+```
+
+## Docker Desktop Kubernetes에서 검증하기
+
+2026-09-24에 검증했습니다(ADR 0062). `frontend`와 `admin`은 켜고 Ingress와 NetworkPolicy는
+껐습니다 — Docker Desktop에는 ALB Controller가 없고, 기본 CNI는 `NetworkPolicy`를 강제하지
+않습니다. kubeconfig에 실제 EKS 컨텍스트가 함께 있을 수 있어서 모든 명령에
+`--context docker-desktop` / `--kube-context docker-desktop`을 명시합니다. Git Bash 기준이고,
+`cd`가 따로 없으면 저장소 루트에서 실행합니다.
+
+```bash
+# 1. 일회용 네임스페이스, RDS 자리를 대신할 Postgres, Secret(CI가 이미 커밋해 둔 공개 더미 값)
+kubectl --context docker-desktop create namespace c13-verify
+kubectl --context docker-desktop -n c13-verify run postgres --image=postgres:16 --image-pull-policy=IfNotPresent --restart=Never --env=POSTGRES_USER=sharenpo --env=POSTGRES_PASSWORD=sharenpo_pw --env=POSTGRES_DB=sharenpo --port=5432 --labels=app=postgres
+kubectl --context docker-desktop -n c13-verify expose pod postgres --port=5432 --target-port=5432
+kubectl --context docker-desktop -n c13-verify create secret generic c13-secrets --from-literal=DB_USERNAME=sharenpo --from-literal=DB_PASSWORD=sharenpo_pw --from-literal='ACCESS_TOKEN_SECRET=Ci-Access-Secret-2026-For-E2E-Test!' --from-literal='REFRESH_TOKEN_SECRET=Ci-Refresh-Secret-2026-For-E2E-Test!'
+
+# 2. 현재 소스로 이미지 빌드 — Docker Desktop의 Kubernetes는 로컬 Docker 이미지 저장소를 그대로 읽으므로 push나 load 단계가 없다
+docker build -t sharenpo-c13:local -f Dockerfile .
+docker build -t sharenpo-frontend:local -f frontend/Dockerfile frontend
+docker build -t sharenpo-admin:local -f admin/Dockerfile admin
+
+# 3. 설치 (새 ClamAV 파드가 시그니처 DB를 내려받으므로 수 분 걸릴 수 있다)
+cd k8s/helm
+helm --kube-context docker-desktop -n c13-verify install c13 . --set secrets.existingSecret=c13-secrets --set env.DB_HOST=postgres --set env.DB_DATABASE=sharenpo --set env.BASE_URL=http://localhost:3000 --set image.repository=sharenpo-c13 --set image.tag=local --set image.pullPolicy=Never --set frontend.enabled=true --set frontend.image.repository=sharenpo-frontend --set frontend.image.tag=local --set frontend.image.pullPolicy=Never --set admin.enabled=true --set admin.image.repository=sharenpo-admin --set admin.image.tag=local --set admin.image.pullPolicy=Never --wait --timeout=600s
+
+# 4. 파드, Service, 엔드포인트
+kubectl --context docker-desktop -n c13-verify get pods,svc,endpoints
+
+# 5. 클러스터 내부에서 각 Service로 요청 (명령이 끝나면 이 파드는 삭제된다)
+kubectl --context docker-desktop -n c13-verify run curl --image=curlimages/curl:latest --image-pull-policy=IfNotPresent --restart=Never --rm -i --command -- sh -c 'for u in c13-admin/admin c13-admin/admin/ c13-admin/admin/dashboard c13-admin/admin/assets/nope.js c13-admin/ c13-frontend/ c13-frontend/posts/1 c13-frontend/assets/nope.js c13:3000/health/ready; do printf "%s -> " $u; curl -s -o /dev/null -w "%{http_code}\n" http://$u; done'
+
+# 6. 정리
+helm --kube-context docker-desktop -n c13-verify uninstall c13
+kubectl --context docker-desktop delete namespace c13-verify
+```
+
+기대값: `STATUS: deployed`; app·frontend·admin·clamav·postgres 파드가 `Running`; `c13`,
+`c13-frontend`, `c13-admin`이 각각 엔드포인트 주소 하나씩이고 모두 서로 다름; 이어서 `/admin` 301,
+`/admin/` 200, `/admin/dashboard` 200, `/admin/assets/nope.js` 404, `c13-admin/` 404, frontend `/`
+200, `/posts/1` 200, `/assets/nope.js` 404, `c13:3000/health/ready` 200. 2026-09-24 실행은 이틀
+전에 빌드한 `sharenpo-frontend:local`을 그대로 썼고 위 값이 모두 일치했습니다.
+
+**Kubernetes가 "Starting"에서 벗어나지 않을 때**(Docker Desktop 4.48.0, WSL 커널 `6.18.33.2`,
+2026-09-24에 확인): Docker Desktop 로그(`%LOCALAPPDATA%\Docker\log\host\com.docker.backend.exe.log`)에
+`kubelet`이 시작 몇 초 뒤 `cgroup ["kubepods"] has some missing controllers: cpuset`으로 종료되는
+기록이 남습니다. `docker-desktop` WSL 배포판 안에서 `cpuset`은 `cgroup.controllers`에는 있었지만
+`cgroup.subtree_control`에는 없었습니다. 효과가 있었던 방법:
+
+```bash
+wsl -d docker-desktop -e sh -c 'echo +cpuset > /sys/fs/cgroup/cgroup.subtree_control'
+```
+
+그런 다음 Settings > Kubernetes에서 "Enable Kubernetes"는 체크한 채로 **Reset Kubernetes Cluster**를
+누릅니다(체크를 껐다가 Apply & Restart를 누르는 방법은 클러스터가 "Starting"인 동안 비활성화됩니다).
+클러스터는 reset 뒤 약 26초 만에 `Ready`가 됐습니다. 이 설정은 유지되지 않습니다 — Docker Desktop
+VM이 재시작되면(`wsl --shutdown`, Docker Desktop 종료) 사라지므로 다시 해야 합니다. `cpuset`이 기본으로
+위임되지 않는 이유는 확인하지 못했습니다.

@@ -119,6 +119,28 @@ pnpm preview  # serve the production build
 
 dev 서버가 API 호출을 성공시키려면 백엔드가 `:3000`에서 실행 중이어야 한다.
 
+### 운영 이미지 (ADR 0060)
+
+`Dockerfile`이 SPA를 빌드해 nginx(`nginx.conf`)로 `:8080`에서 서빙한다. 운영은 ALB 뒤의
+same-origin이다 — `/`는 이 이미지로, API prefix는 백엔드로 간다 — 그래서 이미지 빌드에서
+`VITE_API_BASE`는 **반드시 비워 둔다**: `Dockerfile`이 빈 값으로 못 박고 `.dockerignore`가
+`.env*`를 빌드 컨텍스트에서 뺀다. 로컬에서 빌드해 확인하려면:
+
+```bash
+docker build -t sharenpo-frontend:local .   # from frontend/
+docker run --rm -p 8080:8080 sharenpo-frontend:local
+```
+
+- SPA의 보안 헤더는 `nginx.conf`가 맡는다(helmet은 API 응답에만 걸린다). CSP는
+  `STORAGE_DRIVER=s3`에서 콘텐츠 읽기가 S3로 리다이렉트되므로 이미지·미디어·`fetch`에
+  `https://*.amazonaws.com`을 허용한다 — 브라우저로는 확인 전이다.
+- 새 최상위 라우트는 API prefix(`/auth`, `/user`, `/post`, `/comment`, `/file`, `/upload`,
+  `/audit-log`)나 `/admin`으로 시작하면 안 된다: ALB가 백엔드나 admin 콘솔(ADR 0062)로 보내
+  버린다. `/posts`와 `/files`는 괜찮다 — 매칭은 경로 세그먼트 단위다.
+- `pnpm`은 `frontend/package.json`(`packageManager`)과 `Dockerfile` 안에서 각각 고정한다 —
+  Node 이미지의 corepack이 최신 pnpm을 실행하지 못한다. 바꾸기 전에 ADR 0060의 구현
+  addendum을 읽을 것.
+
 **Windows에서는 백그라운드로 띄운 `pnpm dev`/`pnpm preview`를 멈춰도 포트가
 풀리지 않는다.** `pnpm`이 vite를 자식 프로세스로 실행하고 Windows에는 POSIX
 프로세스 그룹 시그널링이 없어서, 태스크를 죽여도 고아가 된 `node`가 소켓을

@@ -318,7 +318,8 @@ than the target, or an admin-only listing ([ADR 0007](ADR/0007-ownership-checks-
 
 ### Boundary validation
 
-The global `ValidationPipe` (`backend/main.ts`) runs `transform + whitelist +
+The global `ValidationPipe` (registered as `APP_PIPE` in `backend/app.module.ts`, options in
+`backend/common/validation-pipe-options.ts`) runs `transform + whitelist +
 forbidNonWhitelisted + enableImplicitConversion`. A request field a DTO doesn't declare never
 reaches a service — services trust validated input and don't re-check its shape.
 
@@ -362,6 +363,15 @@ by a DB row". Filenames are always server-generated — the client only ever ech
 never chooses a path itself ([ADR 0003](ADR/0003-two-phase-upload-contract.md)). A `temp_`
 object nobody claims is swept by `TempCleanupModule` once it ages past its TTL
 ([ADR 0018](ADR/0018-orphan-temp-file-cleanup.md)).
+
+### Shutdown
+
+`bootstrap()` calls `app.enableShutdownHooks([], { useProcessExit: true })` right before
+`listen()`, so SIGTERM/SIGINT run Nest's shutdown hooks: TypeORM closes the pg pool and the
+scheduler stops the two sweep crons. It matters in the container, where `node` is PID 1 —
+without the call SIGTERM was ignored and `docker stop` waited out the grace period before
+SIGKILL ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md), which also records why the
+call uses `useProcessExit: true` — PID 1 discards the signal Nest re-sends to itself).
 
 ## Entities (TypeORM)
 
@@ -441,7 +451,12 @@ Beyond the DB/JWT/hashing basics, a few groups exist for specific features:
   limits) for the e2e suite's several-hundred-request run, via a module-level `skipIf`
   ([ADR 0053](ADR/0053-global-rate-limiting.md), [ADR 0054](ADR/0054-per-route-rate-limit-tuning.md)).
 - **Optional**: `BASE_URL` (default `http://localhost:3000`), `CORS_ORIGIN` (unset = CORS
-  off; a comma-separated allowlist when a browser frontend needs it — ADR 0008).
+  off; a comma-separated allowlist when a browser frontend needs it —
+  [ADR 0008](ADR/0008-opt-in-cors.md). The deployed `frontend/` and `admin/` don't set this —
+  both are same-origin behind the same ALB as the API,
+  [ADR 0060](ADR/0060-frontend-same-alb-path-routing.md),
+  [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md); `admin/`'s dev server and any other
+  cross-origin consumer still do).
 
 A new env var always means updating the Joi schema and `.env.example` together, in the same
 change.
@@ -480,7 +495,9 @@ elsewhere, so it doesn't go stale in two places at once.
   CD step — nothing in CI ever runs `helm upgrade`.
 - **Cloud deploy**: a Helm chart (`k8s/helm/`) and three separate Terraform root modules
   (`k8s/infra/terraform/`) can stand up a real EKS cluster with Prometheus/Grafana wired in
-  (ADR 0041–0044, [ADR 0047](ADR/0047-observability-prometheus-grafana.md)). This has already
+  (ADR 0041–0044, [ADR 0047](ADR/0047-observability-prometheus-grafana.md); the ALB's DNS record
+  comes from ExternalDNS and the zone's name servers can be pinned with a reusable delegation
+  set, [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md)). This has already
   been proven end to end once — then torn down to stop the AWS bill. Whether that
   infrastructure currently exists is a point-in-time fact, not something to assume from this
   paragraph; see `CLAUDE.md`'s Terraform entry or run `terraform plan` in each of the three

@@ -4,15 +4,11 @@
 
 import { ArgumentMetadata, ValidationPipe } from '@nestjs/common';
 import { DeleteUserQueryDto } from './delete-user-query.dto';
+import { VALIDATION_PIPE_OPTIONS } from '../../common/validation-pipe-options';
 
-// main.ts가 전역에 설치하는 옵션과 정확히 같다 — 로컬에서 편의상 만든 파이프라인이 아니라
-// 실제 파이프라인을 테스트하는 게 이 테스트의 목적이다.
-const pipe = new ValidationPipe({
-  transform: true,
-  whitelist: true,
-  forbidNonWhitelisted: true,
-  transformOptions: { enableImplicitConversion: true },
-});
+// AppModule의 APP_PIPE가 쓰는 것과 같은 VALIDATION_PIPE_OPTIONS 상수를 쓴다 — 로컬에서 편의상
+// 만든 파이프라인이 아니라 실제 옵션을 테스트하는 게 이 테스트의 목적이다.
+const pipe = new ValidationPipe(VALIDATION_PIPE_OPTIONS);
 
 const metadata: ArgumentMetadata = {
   type: 'query',

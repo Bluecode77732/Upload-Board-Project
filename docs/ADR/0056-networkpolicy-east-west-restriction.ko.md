@@ -1,6 +1,6 @@
 # ADR 0056: 클러스터 내부(east-west) 트래픽 제한용 NetworkPolicy
 
-- Status: Accepted — implemented, kind+Calico 검증 완료
+- Status: Accepted — implemented, kind+Calico 검증 완료(2026-09-22 addendum의 ALB 인바운드 허용 규칙은 미검증 — 라이브 EKS 클러스터 필요). 2026-09-26 추가 기록에서 AWS 에이전트를 코드로 켰고(`cluster/main.tf`, `terraform validate`/`fmt -check` 통과, 미적용), 라이브 검증은 후속 작업
 - Date: 2026-09-11
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)
 - English: [0056-networkpolicy-east-west-restriction.md](0056-networkpolicy-east-west-restriction.md)
@@ -151,3 +151,111 @@ IP를 테스트용으로만 `networkPolicy.egress.vpcCidr=<ip>/32`로 넘김 —
   AWS 자신의 Network Policy 에이전트 아래에서
   `/health/live`/`/health/ready`가 여전히 통과하는지 반드시 따로
   검증한다 — kind 결과를 그대로 가져다 쓰지 않는다.
+
+### 추가 기록 (2026-09-22) — Ingress를 켤 때 ALB 인바운드 허용 규칙 추가
+
+D2의 인바운드 규칙은 "같은 네임스페이스 파드만"이었고 ALB 트래픽을 위한 여지는
+없었다 — 이 ADR을 쓸 당시엔 Ingress가 아직 실제 라우팅 경로가 아니었다
+(`ingress.enabled`는 그때도 지금도 `false`다). 그 뒤 [ADR 0058](0058-ingress-path-allowlist.ko.md)와
+[ADR 0060](0060-frontend-same-alb-path-routing.ko.md)이 Ingress에 실제 형태를
+줬고(명시적 경로 allow-list, 그다음 같은 ALB를 공유하는 프론트엔드 Service),
+ADR 0060을 위해 `alb.ingress.kubernetes.io/target-type: ip`를 추가하면서(이
+차트의 두 Service가 전부 `ClusterIP`인데 컨트롤러 기본값 `instance`는
+`NodePort`/`LoadBalancer`가 필요해서) 이 공백이 그대로 드러났다: Ingress를
+켜는 순간 ALB 자신의 ENI가 `ip` 모드로 파드에 직접 닿으려 하는데, D2의 인바운드
+규칙에는 그걸 허용하는 항목이 없었다.
+
+`templates/networkpolicy.yaml`에 `.Values.ingress.enabled`가 `true`일 때만
+렌더링되는 인바운드 규칙을 하나 더 추가한다:
+
+```yaml
+- from:
+    - ipBlock:
+        cidr: {{ .Values.networkPolicy.egress.vpcCidr }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.service.port }}
+```
+
+같은 CIDR용 values 키를 새로 만드는 대신 `networkPolicy.egress.vpcCidr`(D3)를
+그대로 재사용한다. 두 규칙이 넓어지는 이유는 구조적으로 같다 — RDS(egress의 DB
+규칙)도 ALB ENI(이번 인바운드 규칙)도 파드가 아니라서 `podSelector`로 표현할
+수 없고, `NetworkPolicy`가 파드 아닌 트래픽에 쓸 수 있는 수단은 `ipBlock`뿐이다.
+
+**감수하는 확장 범위를 그대로 적는다**: `ingress.enabled`가 `true`인 동안, 이
+규칙은 ALB의 ENI뿐 아니라 VPC CIDR 안의 *무엇이든* 앱 포트에 닿을 수 있게
+허용한다 — 다른 모든 파드와 모든 노드도 같은 CIDR 안에 있고, 표준
+`NetworkPolicy`에는 "실제로 ALB에서 온 트래픽"만 골라내는 선택자가 없다(그런
+보안 그룹 기반 선택자는 상위 API에 없고, CNI 전용 확장이 있어야 하는데 이
+프로젝트는 그걸 쓰지 않는다). D2의 egress DB 규칙이 같은 이유로 이미 감수한
+트레이드오프와 같은 것이라 — 새로운 종류의 위험이 아니라 그것의 두 번째
+사례로 여기 기록해 둔다. `ingress.enabled`가 `false`인 동안(기본값이자 지금의
+`values-prod.yaml` 값 — ADR 0060의 "구현 단계로 넘기는 것" 목록도 아직 켜지
+않았다)은 이 규칙 자체가 렌더링되지 않으므로 오늘의 `networkPolicy.enabled:
+true` 상태는 그대로다.
+
+**검증하지 못했다.** `kind`+Calico(D4 자신의 레시피)는 이 정책의 나머지
+부분을 검증했던 것과 같은 방식으로 이 규칙을 대신 검증할 수 없다 — `kind`
+클러스터의 파드 CIDR은 실제 VPC CIDR과 아무 관계가 없어서, "`10.0.0.0/16`
+안의 ALB 아닌 주소"를 의미 있게 흉내 낼 방법이 없다. 실제 ALB Controller가
+떠 있는 라이브 EKS 클러스터가 필요하다: ALB의 타깃 그룹에 healthy 타깃이
+잡히는지(이 규칙이 함께 따라가는 `ip` 모드 수정)와, D2 자신이 이미 남긴
+단서대로 이게 Calico가 아니라 AWS 자신의 VPC CNI Network Policy 에이전트로
+동일하게 강제되는지 확인한다. `k8s/helm/README.md`("Enabling HTTPS
+(Ingress)")의 라이브 전용 미해결 점검 목록에 올려 뒀다.
+
+### 추가 기록 (2026-09-26) — VPC CNI 에이전트를 코드로 켬. 적용과 라이브 검증은 후속 작업
+
+Context와 D1이 하나를 열어 뒀다. `values-prod.yaml`이 `networkPolicy.enabled: true`로 켜 뒀지만
+`cluster/main.tf`의 `vpc-cni` 애드온이 기본 설정으로 돌아서, 규칙을 강제하는 Network Policy
+에이전트가 꺼져 있고 정책은 작성만 된 채 아무 효과가 없다. **개발자가 2026-09-26에 결정했다:
+강제를 켠다.** 정책을 효과 없이 두지 않겠다는 것이다. 대안이던 `vpc-cni = {}` 유지는 코드도
+필요 없고 트래픽을 막을 위험도 없지만, `values-prod.yaml`이 켜져 있다고 말하는 방화벽이 아무
+일도 하지 않는 채로 남는다. D1대로 에이전트가 켜지는 순간 차트를 다시 바꾸지 않고도 정책이
+효력을 갖는다.
+
+**변경은 이제 `cluster/main.tf`에 들어 있다**(`vpc-cni`의 `configuration_values`).
+`cluster/`에서 `terraform validate`와 `fmt -check`가 통과했고, plan이나 apply를 한 적은 없다.
+
+켜는 데 필요한 것은 AWS의 EKS 문서(2026-09-26에 읽음, 실행해 보지는 않음)에 따르면 다음과 같다.
+
+- 애드온 설정값 `{"enableNetworkPolicy": "true"}` — 이 저장소에서는 `cluster/main.tf`의
+  `cluster_addons.vpc-cni.configuration_values = jsonencode({ enableNetworkPolicy = "true" })`다.
+  (`k8s/infra/terraform/README.md`가 예전에 적은 `ENABLE_NETWORK_POLICY`는 self-managed
+  애드온의 설정이지, 관리형 애드온의 키가 아니다.)
+- VPC CNI `v1.14.0-eksbuild.3` 이상, 노드 커널 `5.10` 이상(EKS 최적화 Amazon Linux AMI는
+  이미 충족). 애드온 버전은 비워 두어서 모듈이 클러스터 Kubernetes 버전의 기본 버전을
+  고른다(`terraform-aws-modules/eks` `v20.37.2`가 `aws_eks_addon_version`에
+  `most_recent = null`을 넘기고, 그러면 기본 버전이 돌아온다). EKS API는 2026-09-26에
+  `1.34`의 기본 버전이 `v1.22.4-eksbuild.3`(최신은 `v1.23.1`)이라고 답했고, 최소 요건보다
+  훨씬 높다. 기본 버전은 `apply` 전에 바뀔 수 있다.
+- 기본값인 "standard 모드": 새 파드는 정책이 붙기 전까지 전부 허용 상태로 시작한다.
+  `strict` 모드(기본 거부)는 택하지 않는다 — CoreDNS를 포함해 파드가 닿는 모든 대상에
+  정책이 있어야 하기 때문이다.
+- 에이전트가 노드 포트 `8162`(메트릭)와 `8163`(상태 확인 프로브)를 쓴다. 이미 그 포트를 쓰는
+  앱은 실패한다.
+
+**후속 작업**:
+
+1. 코드 — 2026-09-26에 완료: 위 `cluster/main.tf` 변경. `cluster/`에서 `terraform init
+   -backend=false`, `fmt -check`, `validate`가 통과했다. 적용은 나머지 스택과 함께
+   한다(`deploy.sh cluster`).
+2. 에이전트를 켠 뒤의 라이브 검증(개발자가 실행하고 세션은 보고받은 내용을 기록한다).
+   `k8s/helm/README.md`의 Pending 목록에도 있다:
+   1. `aws-node` 파드가 컨테이너 두 개(에이전트가 두 번째)로 떠 있고 VPC CNI 버전이
+      `v1.14.0-eksbuild.3` 이상인지.
+   2. 앱 파드가 Ready가 되고 `/health/live`, `/health/ready`가 계속 통과하는지 — kubelet
+      프로브가 막히지 않는지(`aws/amazon-vpc-cni-k8s#2571`).
+   3. ALB 타깃 그룹이 healthy인지(위의 VPC CIDR 인바운드 규칙).
+   4. `ingress.enabled: false`일 때 다른 네임스페이스의 파드가 앱 파드에 닿지 못하고(타임아웃),
+      허용 목록에 없는 포트로 나가는 egress도 타임아웃되는지 — 렌더링만이 아니라 강제가 실제로
+      동작하는지. Ingress가 켜져 있으면 위의 VPC CIDR 규칙이 다른 네임스페이스의 파드도
+      허용하므로(감수한 확장) 타임아웃이 나오지 않는 것이 정상이다.
+   5. 허용 경로가 동작하는지: DNS, 데이터베이스(5432), clamd(3310), HTTPS/443(S3).
+      EICAR 업로드는 거부되고 정상 파일은 통과하는지(ADR 0059의 AWS 전용 잔여 검증).
+   6. Prometheus가 백엔드를 계속 스크레이프하는지. 인바운드 규칙은 같은 네임스페이스 파드와
+      `ingress.enabled`가 true일 때의 VPC CIDR만 허용하는데 Prometheus는 다른 네임스페이스에서
+      돌기 때문에, Ingress가 꺼져 있으면 스크레이프가 막힐 수 있다. 템플릿에서 추론한 것이며
+      관찰한 적은 없다.
+   7. ExternalDNS, External Secrets, ALB Controller가 영향받지 않는지: 정책의 `podSelector`는
+      앱 라벨뿐이다.

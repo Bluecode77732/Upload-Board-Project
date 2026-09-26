@@ -17,11 +17,15 @@ instead of one root module.
 All three states, plus the app itself (Helm), were applied against real AWS
 2026-08-25–27 and confirmed working end-to-end (ADR 0039's Addendum records a
 TLS-verification fix made against that live RDS instance). Once the deploy
-was proven, everything was destroyed 2026-08-28 to stop the AWS bill — no EKS
+was proven, everything was destroyed 2026-08-28 to stop the AWS bill, re-applied
+2026-08-29/30 to live-verify ADR 0047's observability stack, and destroyed again 2026-08-31
+(dated from the local state files' timestamps) — no EKS
 cluster, RDS instance, S3 bucket, Route53 zone, NAT gateway, or EC2 instance
 from this stack currently exists (verified via `aws eks/rds/ec2/elb` describe
 calls, all empty/not-found). `terraform validate` and `terraform fmt -check`
-still pass in all three state directories.
+still pass in all three state directories. The ExternalDNS record and name-server pinning
+([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)) are
+code-complete in `app-infra/`, `addons/`, and `deploy.sh` and, like the rest, unapplied.
 
 This status is a snapshot, not a promise — a future `apply` can make it true
 again in minutes, and someone re-reading this file later should re-verify
@@ -42,7 +46,7 @@ the fuller history and the deferred identifier rename (ADR 0043 D1).
 k8s/infra/terraform/
 ├── cluster/       module.vpc + module.eks
 ├── app-infra/      RDS + S3/IRSA + Secrets Manager + Route53/ACM
-└── addons/         module.eks_blueprints_addons (ALB Controller + ESO)
+└── addons/         module.eks_blueprints_addons (ALB Controller + ESO + ExternalDNS)
 ```
 
 Each directory is an independent Terraform root module with its own local
@@ -56,9 +60,11 @@ just convention (ADR 0044 D2):
    OIDC provider) for the RDS security group and the S3 IRSA role's trust
    policy.
 3. **`addons/`** last — the only state that reads **both** others: EKS
-   connection details from `cluster/`, and the Secrets Manager ARN from
-   `app-infra/` (`external_secrets_secrets_manager_arns`). This is why it
-   cannot run before `app-infra/` exists.
+   connection details from `cluster/`, and from `app-infra/` the Secrets
+   Manager ARN (`external_secrets_secrets_manager_arns`) and the Route53
+   zone's ARN and name (`external_dns_route53_zone_arns` and ExternalDNS's
+   `domainFilters`, [ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)).
+   This is why it cannot run before `app-infra/` exists.
 
 Each state's own `terraform.tfstate` — and, for `app-infra/`/`addons/`, the
 `terraform_remote_state` reads of the other states' outputs — live in an S3
@@ -100,6 +106,20 @@ persist — it is not something to tear down after verifying it works, the
 way the EKS/RDS stack below was (see ADR 0057 Alternatives rejected for why
 that was considered and rejected for this bucket specifically).
 
+**Leftover local state.** Each state directory may still hold a `terraform.tfstate` and a
+`terraform.tfstate.backup` from the local-state era — gitignored, last written 2026-08-31
+23:00–23:21 in destroy order (addons, app-infra, cluster), which matches that night's full
+teardown. The `terraform.tfstate` files are empty (no resources). Terraform writes the
+`.backup` itself: before it modifies a local state it copies the existing one there
+(`terraform apply -help`, `-backup`), so each holds the whole stack as it stood just before that
+`destroy` — `app-infra/`'s includes the generated `random_password` results, which Terraform
+keeps in plaintext (the reason for
+[ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.md)). Nothing reads
+them once the `backend "s3"` block is in use, and the stack they describe no longer exists;
+delete them when you no longer want the record. Not verified: whether the first `terraform
+init` against the S3 backend offers to copy the (empty) local state — if it asks, there is
+nothing to migrate.
+
 ## Before you `apply` anything
 
 1. **A domain you can point DNS at.** `app-infra/` creates a Route53 hosted
@@ -110,6 +130,31 @@ that was considered and rejected for this bucket specifically).
    either delegate it to the zone this config creates (point your
    registrar's nameservers at the `route53_zone_name_servers` output) or run
    `apply` once first just to get that output, then delegate.
+
+   **Or pin the name servers once** ([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)
+   D4) — worth it if you will destroy and re-`apply` more than once. Create a
+   reusable delegation set outside Terraform, put its four name servers at
+   the registrar once, and give its ID to `app-infra/`; every zone created
+   afterwards gets the same four, so the delegation below never repeats. The
+   domain's own registration stays where it is (Route53 Domains is not
+   involved):
+   ```sh
+   aws route53 create-reusable-delegation-set --caller-reference sharenpo-ns-1
+   ```
+   The output's `DelegationSet.NameServers` are the four values for the
+   registrar. `DelegationSet.Id` looks like `/delegationset/N1PA6795SAMPLE` —
+   keep only the part after the last `/` (the `delegation_set_id` variable
+   rejects the prefix, because the AWS provider stores the ID without it).
+   Pass it as `DELEGATION_SET_ID=<id>` to `deploy.sh`, or as
+   `-var="delegation_set_id=<id>"` by hand. To read the name servers again
+   later: `aws route53 get-reusable-delegation-set --id <id> --query
+   'DelegationSet.NameServers'`. Leave the set alone: it is not part of any
+   state, so `terraform destroy` does not touch it, and AWS lets you delete
+   it only once no zone uses it. When you run `plan` and `apply` separately
+   through `deploy.sh`, give both the same `DELEGATION_SET_ID`. This has not
+   been run against real AWS yet.
+
+   Without a delegation set (the variable unset), this is what applies:
    ⚠️ **This delegation must be redone after every `terraform destroy` +
    re-`apply` of `app-infra/`, not just the first time** — AWS assigns a
    brand-new set of 4 nameservers to every newly created hosted zone, even
@@ -165,10 +210,13 @@ export TFSTATE_BUCKET_NAME=<globally-unique-tfstate-bucket-name>  # bootstrapped
 # 1. cluster
 bash deploy.sh cluster
 
-# 2. app-infra (needs a purchased domain; this apply pauses mid-run for NS
-#    delegation — see "Before you apply anything" below before running it)
+# 2. app-infra (needs a purchased domain. Without DELEGATION_SET_ID this apply
+#    pauses mid-run for NS delegation; with the reusable delegation set from
+#    "Before you apply anything" below — its name servers already at your
+#    registrar — it should not have to wait on the registrar (not yet run).
+#    See that section before running it)
 S3_BUCKET_NAME=<globally-unique-bucket-name> DOMAIN_NAME=<your-domain> \
-  bash deploy.sh app-infra
+  DELEGATION_SET_ID=<set-id-without-prefix> bash deploy.sh app-infra
 
 # 3. addons
 bash deploy.sh addons
@@ -191,8 +239,10 @@ sequence skips no approval gate, it only orders the commands.
 order below plus `helm upgrade --install` in one script — plan-then-confirm on every
 apply, no `-auto-approve` ([ADR 0046](../../../docs/ADR/0046-deploy-sequence-automation.md)).
 Run `bash deploy.sh all` (or `cluster`/`app-infra`/`addons`/`helm` individually; `--help`
-for env vars). It does **not** cover domain purchase/NS delegation, the ESO secret sync,
-or enabling `Ingress` — those stay manual, covered further down this file. The app's S3
+for env vars). It does **not** cover domain purchase, creating the reusable delegation set
+and putting its name servers at the registrar, the ESO secret sync, or enabling `Ingress` —
+those stay manual, covered further down this file. The optional `DELEGATION_SET_ID` is passed
+through to every `app-infra` plan/apply ([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md) D4). The app's S3
 IRSA role is wired automatically as of 2026-09-03 — `deploy.sh`'s `HELM_RELEASE` defaults
 to `sharenpo`, matching both `values-prod.yaml`'s `serviceAccount.create: true` and
 `app-infra/main.tf`'s trust policy, so no separate manual annotation step is needed on
@@ -223,7 +273,33 @@ Either form resolves the branch's current HEAD commit and checks Docker Hub for 
 image tag before proceeding — a missing image (nothing published from that branch yet, or
 CI still running) aborts with a clear error instead of silently deploying something stale.
 `IMAGE_TAG=<tag>` remains as a raw override for anything neither branch's HEAD represents
-(e.g. rolling back to an older sha).
+(e.g. rolling back to an older sha). The frontend image (ADR 0060) and the admin image (ADR 0062)
+use the same tag: the lookup checks `bluecode1775/sharenpo`, `bluecode1775/sharenpo-frontend` and
+`bluecode1775/sharenpo-admin`, and the helm step passes the tag as `image.tag`, `frontend.image.tag`
+and `admin.image.tag`. An explicit `IMAGE_TAG` skips the check for all three, so rolling back to a
+sha from before the frontend or admin image existed leaves that pod without an image — run helm by
+hand for that.
+
+**Test deployment vs real deployment** ([ADR 0048](../../../docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.md)
+Addendum, 2026-09-26): `dev` images are `amd64`-only and the only nodes that run are `arm64`
+(Graviton), so a `dev` deploy to this cluster passes the tag check and then fails at pod start —
+the bare `bash deploy.sh helm` default above is for tests, not for this cluster. Use `dev` for
+tests (local, `kind`, Docker Desktop) and deploy for real from `main`, whose images carry `arm64`
+too: merge `dev` into `main`, wait for CI to publish all three images, then
+`bash deploy.sh helm main`. The script checks that a tag exists, not which platforms it carries,
+and both branches use the same cluster and `values-prod.yaml`, so nothing in it stops the wrong
+choice.
+
+**Two more things `deploy.sh` does not guard.** Its `helm` step passes no `--kube-context`, so it
+uses whichever `kubectl` context is current, and a kubeconfig keeps the contexts of clusters that
+have since been torn down — run `kubectl config current-context` first and pass
+`--context`/`--kube-context` on every command you run by hand. And node capacity is only partly
+measured: `cluster/main.tf` gives two `t4g.medium` nodes (4 GiB each) about 17 pod slots each (its
+own comment), and this is the first deployment where clamd, ExternalDNS, the frontend and the admin
+console run next to the ALB Controller, External Secrets and the monitoring stack. clamd alone was
+measured locally at about 1.06 GiB steady (`k8s/helm/README.md`, pending list) — roughly a quarter
+of one node — but nothing else was, and it is one pod (`replicas: 1`), so it lands on one node.
+If pods stay `Pending` with `FailedScheduling`, raise `node_desired_size_graviton`.
 
 **Plan/apply split** (ADR 0046 addendum, 2026-09-02): for `cluster`/`app-infra`/`addons`,
 `bash deploy.sh plan <state>` computes and saves the plan to a fixed, gitignored path
@@ -261,6 +337,8 @@ terraform init -backend-config="bucket=<globally-unique-tfstate-bucket-name>"
 # These values are NEW every time this zone is (re-)created — after a
 # `terraform destroy` + re-apply, old nameserver values no longer point
 # anywhere and must be replaced at the registrar again.
+# Optional (ADR 0063 D4): add -var="delegation_set_id=<set-id-without-prefix>" to
+# pin the zone's name servers — see "Before you apply anything" above.
 terraform apply \
   -var="s3_bucket_name=<globally-unique-bucket-name>" \
   -var="domain_name=<your-domain>" \
@@ -391,18 +469,23 @@ current Helm chart/`values-prod.yaml` (which no longer annotates `default`,
 and instead creates+annotates a `sharenpo` ServiceAccount), IRSA breaks the
 other way — keep the Terraform and Helm sides deployed from the same commit.
 
-## Known gap: NetworkPolicy is not yet enforced (vpc-cni Network Policy agent off)
+## Known gap: NetworkPolicy enforcement is code-complete but never applied (vpc-cni Network Policy agent)
 
 `k8s/helm/`'s `templates/networkpolicy.yaml` ([ADR
 0056](../../../docs/ADR/0056-networkpolicy-east-west-restriction.md)) restricts the app
 pod's east-west traffic, and `values-prod.yaml` already sets `networkPolicy.enabled: true`.
-`cluster/main.tf`'s `vpc-cni` addon, though, uses its default configuration
-(`cluster_addons = { vpc-cni = {} }`) — the VPC CNI's Network Policy enforcement agent is
-not enabled, so applying this against the real EKS cluster today creates the
-`NetworkPolicy` object but doesn't enforce it.
+Until 2026-09-26, though, `cluster/main.tf`'s `vpc-cni` addon used its default configuration
+(`cluster_addons = { vpc-cni = {} }`), so the VPC CNI's Network Policy enforcement agent was
+off and applying this against the real EKS cluster created the `NetworkPolicy` object without
+enforcing it.
 
-Turning enforcement on is a `cluster_addons.vpc-cni.configuration_values` change (setting
-`ENABLE_NETWORK_POLICY`) — not yet made, and not part of this ADR's scope. Before making
+Turning enforcement on is a `cluster_addons.vpc-cni.configuration_values` change. **Decided
+2026-09-26 to do it** ([ADR 0056's 2026-09-26 Addendum](../../../docs/ADR/0056-networkpolicy-east-west-restriction.md)):
+the managed add-on's setting is `{"enableNetworkPolicy": "true"}` (the
+`ENABLE_NETWORK_POLICY` this section used to name is the self-managed add-on's setting).
+**The change is made** — `cluster/main.tf` sets it; `terraform validate` and `fmt -check`
+pass, and it has never been applied — and the live checks are follow-up work listed in that
+Addendum and in `k8s/helm/README.md`'s Pending list. Before applying
 that change against a real cluster, re-verify `/health/live`/`/health/ready` still pass
 under AWS's own Network Policy agent specifically: the kind+Calico verification ADR 0056
 already ran proves the policy's shape is correct, but Calico and AWS's agent are different
@@ -421,13 +504,16 @@ Controller must be running to reconcile the `Ingress` object) and
 helm upgrade sharenpo . \
   --reuse-values \
   --set ingress.enabled=true \
+  --set frontend.enabled=true \
+  --set admin.enabled=true \
   --set ingress.className=alb \
   --set ingress.annotations."kubernetes\.io/ingress\.class"=alb \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/scheme"=internet-facing \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=$(terraform -chdir=../infra/terraform/app-infra output -raw acm_certificate_arn) \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
-  --set-json 'ingress.hosts=[{"host":"<your-domain>","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]'
+  --set-json 'ingress.hosts=[{"host":"<your-domain>","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"},{"path":"/admin","pathType":"Prefix","service":"admin"}]}]'
 ```
 
 The last two annotations are what actually forces the HTTP→HTTPS redirect (found missing
@@ -439,7 +525,7 @@ also found and fixed in that same 2026-09-13 review: `--set` on an array index r
 whole element rather than merging into it, so a bare `.host` override silently rendered an
 `Ingress` with a real host and **zero paths** (verified by rendering it), exactly the
 "routing rules quietly vanish" failure ADR 0058 exists to prevent. `--set-json` supplies the
-full `hosts[0]` object — host and the complete ADR 0058 path list together — in one write.
+full `hosts[0]` object — host, the complete ADR 0058 path list, the ADR 0060 `/` frontend rule, and the ADR 0062 `/admin` admin rule together — in one write. Leave the frontend rule out and the SPA silently disappears while the API keeps working; leave the admin rule out and `/admin` falls through to the frontend's `/` rule, so the console never loads.
 
 For a checked-in, repeatable version of this instead of retyping `--set` flags on the
 command line, `k8s/helm/values-prod.yaml` carries the equivalent config (host, the full
@@ -456,6 +542,26 @@ deployment of the load balancer; nothing further happens on "AWS's side" as a se
 step. From then on, at runtime, a user's browser connects to that ALB over HTTPS; ALB → Service → pod
 stays plain HTTP inside the cluster's private network, per ADR 0034's trust boundary.
 
+**The DNS record** ([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)).
+Nothing in Terraform creates the record that points the domain at that ALB — ExternalDNS
+does, installed by `addons/`. It watches `Ingress` hosts and, for a host inside the zone
+(its `domainFilters` is the zone's name), creates an ALIAS record to the ALB plus TXT
+ownership records; `policy: sync` removes them again when the `Ingress` goes away. So the
+`Ingress` host must be `var.domain_name` or a name under it, which the `--set-json` `hosts`
+above already does. It polls (`interval: 1m`), so allow a few minutes after the ALB appears.
+To check (you run it; use the zone ID without the `/hostedzone/` prefix):
+
+```sh
+aws route53 list-hosted-zones-by-name --dns-name <your-domain> \
+  --query 'HostedZones[0].Id' --output text
+aws route53 list-resource-record-sets --hosted-zone-id <that Id, without /hostedzone/> \
+  --query 'ResourceRecordSets[].[Name,Type,AliasTarget.DNSName]' --output table
+```
+
+Expect an alias `A` record for the domain pointing at the ALB's DNS name, plus `TXT` records
+carrying `external-dns/owner=<cluster name>`. None of this has been observed against a live
+cluster yet (ADR 0063 Consequences lists what is still open).
+
 ## What each state provisions
 
 | State | Resource | Purpose | ADR 0043 decision |
@@ -465,8 +571,9 @@ stays plain HTTP inside the cluster's private network, per ADR 0034's trust boun
 | `app-infra/` | `aws_db_instance.db` | RDS PostgreSQL, private subnets, reachable only from EKS nodes on 5432 | D2 |
 | `app-infra/` | `aws_s3_bucket.app` + IRSA role | Private bucket for `STORAGE_DRIVER=s3`, app pod's S3 credentials | D8 |
 | `app-infra/` | `aws_secretsmanager_secret.app` | The four values the Helm chart's `secrets.existingSecret` needs | D7 |
-| `app-infra/` | `aws_route53_zone.app` + `aws_acm_certificate.app` | DNS zone and DNS-validated TLS certificate for the ALB ingress | D4, D5 |
+| `app-infra/` | `aws_route53_zone.app` + `aws_acm_certificate.app` | DNS zone and DNS-validated TLS certificate for the ALB ingress; the zone can take a reusable delegation set and has `force_destroy = true` | D4, D5; [ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md) D3, D4 |
 | `addons/` | `module.eks_blueprints_addons` | AWS Load Balancer Controller + External Secrets Operator (both via the module's built-in flags) | D6, D7, D9 |
+| `addons/` | ExternalDNS (`enable_external_dns`, same module) | Creates and removes the ALB's DNS record from `Ingress` hosts, scoped to the `app-infra/` zone | [ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md) D1–D3 |
 
 **Removed from the original scaffold, not kept commented out** (D6): the
 `istio-system` namespace, the `istio-base`/`istiod`/`istio-ingress` Helm
@@ -493,12 +600,20 @@ the ALB's security groups can outlive the command. Uninstall the Helm
 release first, confirm the ALB and its security groups are gone in the AWS
 console, then destroy in the order above. Check the actual release name —
 it need not match the chart name `sharenpo` used in the examples on this
-page (the live deployment's release is currently named `upload-board`):
+page (`deploy.sh` installs under `sharenpo` by default and the app's IRSA trust policy needs
+that name; the 2026-08 deployment, since torn down, was called `upload-board`):
 
 ```sh
 helm list -A
 helm uninstall <release-name> -n <namespace>
 ```
+
+The zone in `app-infra/` has `force_destroy = true` ([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)
+D3), so its `destroy` also removes records Terraform does not know about — the ALIAS and TXT
+records ExternalDNS made. Uninstalling the Helm release first lets ExternalDNS's `policy: sync`
+remove them on its own within a minute or so, but the destroy no longer depends on that. A
+reusable delegation set, if you use one, is in no state and survives all three destroys; it
+stays until you delete it by hand, which AWS allows only when no zone uses it.
 
 `app-infra/`'s `s3_bucket_name`/`domain_name` have no default (a globally
 unique bucket/domain name can't have a safe one), so its `destroy` needs the

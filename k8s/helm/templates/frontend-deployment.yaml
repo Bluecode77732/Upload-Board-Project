@@ -1,0 +1,77 @@
+{{- /*
+프론트엔드(SPA) 정적 파일 nginx(ADR 0060 D1/D3) — 앱 Deployment와 별도 Pod로 두고, 같은
+Ingress의 `/` 규칙만 이쪽 Service로 보낸다. 셀렉터 라벨을 백엔드(sharenpo.selectorLabels)와
+다르게 쓰는 이유: 백엔드 Service가 그 라벨로 Pod를 고르므로, 같은 라벨을 달면 nginx Pod가
+API 엔드포인트로 잡힌다(clamav-*가 이미 app.kubernetes.io/name: clamav로 그렇게 한다).
+frontend.enabled가 false(기본)면 아무것도 렌더링하지 않는다 — ingress/serviceMonitor/
+networkPolicy처럼 values-prod.yaml이 켠다.
+*/}}
+{{- if .Values.frontend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sharenpo.fullname" . }}-frontend
+  labels:
+    {{- include "sharenpo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: frontend
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- /* 앱과 달리 전용 ServiceAccount(IRSA)를 붙이지 않는다 — 정적 파일만 서빙해서 AWS 권한이
+      필요 없다. Kubernetes API 토큰도 쓸 일이 없으니 마운트하지 않는다(최소 권한). */}}
+      automountServiceAccountToken: false
+      {{- with .Values.frontend.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: frontend
+          {{- with .Values.frontend.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          {{- /* 8080은 frontend/nginx.conf의 listen과 짝이다 — 바꾸려면 둘을 같이 바꾼다. */}}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          {{- with .Values.frontend.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.frontend.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.frontend.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

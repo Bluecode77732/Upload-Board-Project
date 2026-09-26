@@ -108,5 +108,35 @@ module "eks_blueprints_addons" {
   # 도입은 기각했으므로 별도 리소스가 필요 없다.
   enable_kube_prometheus_stack = true
 
+  # ADR 0063 D1 — Ingress의 host를 감시해 ALB로 가는 Route53 ALIAS 레코드를 만들고 지운다.
+  # IAM 역할(IRSA)은 이 모듈이 만들며, 범위는 아래 zone ARN 하나다. zone은 cluster/가 아니라
+  # app-infra/의 리소스라서 그쪽 remote_state에서 읽는다.
+  enable_external_dns = true
+  external_dns_route53_zone_arns = [
+    data.terraform_remote_state.app_infra.outputs.route53_zone_arn
+  ]
+
+  # ADR 0063 D2 — chart_version을 고정한 이유: 모듈 기본값 1.14.3(2024-01-26)은 이 클러스터의
+  # Kubernetes 1.34보다 오래된 차트다. values를 넘기면 모듈의 기본값(["provider: aws"])이
+  # 대체되지만, 두 차트 모두 provider.name 기본값이 aws라서 따로 적지 않는다.
+  #   - policy=sync: Ingress가 사라지면 ExternalDNS가 자기가 소유한 레코드를 지운다(D3).
+  #     1.22.0에서 policy는 필수 값이라 어차피 명시해야 한다.
+  #   - txtOwnerId / domainFilters: 소유 표시와 대상 zone을 이 클러스터·이 도메인으로 좁힌다.
+  #   - sources=[ingress]: 이 프로젝트가 쓰는 소스만 본다.
+  #   - service.enabled=false: 이 차트가 만드는 Service는 메트릭용(7979)이라 쓰지 않는다.
+  #     ALB Controller의 Service 관련 admission webhook이 아직 준비되지 않았을 때 다른 차트의
+  #     Service 생성이 실패한 적이 있어(k8s/infra/terraform/README.md "Cleaning up after a
+  #     failed apply") 그 경합의 소지를 아예 없앤다. 이 키는 1.22.0에만 있다(1.14.3은 무조건 생성).
+  external_dns = {
+    chart_version = "1.22.0"
+    values = [yamlencode({
+      policy        = "sync"
+      txtOwnerId    = data.terraform_remote_state.cluster.outputs.cluster_name
+      domainFilters = [data.terraform_remote_state.app_infra.outputs.route53_zone_name]
+      sources       = ["ingress"]
+      service       = { enabled = false }
+    })]
+  }
+
   tags = local.tags
 }

@@ -24,8 +24,8 @@
    - 물리 업로드 변경      → `backend/upload/upload.module.ts`(Multer `memoryStorage`)와 `upload.controller.ts`(100MB 크기 제한)를 `backend/upload/upload.service.ts`(`stageTemp` — `temp_{uuid}_{timestamp}` 네이밍, `FileStorage` 포트 호출, ADR 0029 D4)와 함께 읽는다
    - 스토리지 어댑터 변경  → `backend/storage/file-storage.interface.ts`(`FileStorage` 포트 + `FILE_STORAGE` 토큰), `local-disk.storage.ts` / `s3.storage.ts`(두 구현체), `storage.module.ts`(`STORAGE_DRIVER` 기반 팩토리, ADR 0029)를 읽는다
    - 컨테이너/배포 변경    → `Dockerfile`(non-root `USER`, `HEALTHCHECK`, `CMD`에서 마이그레이션 제거 — ADR 0030/0032)과 `docker-compose.yml`(원샷 `migrate` 서비스)을 `backend/health/`(`GET /health/live`/`GET /health/ready` — ADR 0031)와 함께 읽는다
-   - Helm/K8s 배포 변경    → `k8s/helm/`(`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/명시적 경로 allow-list를 가진 기본 비활성 Ingress(ADR 0058, `/` catch-all 아님)/기본 비활성 NetworkPolicy, ADR 0056)과 그 `README.md`(Secret 생성 절차, `existingSecret` 전용 소비 방식)를 읽는다. `k8s/`엔 이 차트 밖의 매니페스트가 없다 — 예전 `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/`에 있던 독립 raw 매니페스트는 삭제됐다(ADR 0042); 차트 옆에 정적 매니페스트를 다시 추가하지 않는다(ADR 0037/0041/0042)
-   - Terraform/인프라 변경 → `k8s/infra/terraform/`은 하나가 아니라 독립된 3개의 root module이다 — `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM, `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — ALB Controller+ESO, 다른 두 state를 **모두** 읽는 유일한 state). 각 디렉토리는 `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`와 자신만의 state 파일을 가지는데, 그 state는 Terraform 기본값인 로컬 파일이 아니라 네이티브 락 + SSE-S3 암호화를 쓰는 S3에 저장된다(ADR 0057, ADR 0044 D3 amends — 2026-09-12 코드 완료, 버킷 생성과 실제 마이그레이션은 실제 배포 시점으로 유예) — 변경이 실제로 건드리는 디렉토리만 읽는다. `README.md`(`cluster` → `app-infra` → `addons` 3단계 apply 순서와 그 역순 destroy, `SecretStore`/`ExternalSecret`을 한 번만 수동으로 `kubectl apply`하는 단계, 그리고 앱 전용 ServiceAccount IRSA 배선을 다루는 "Known gap" 절 — `app-infra/main.tf`의 trust policy, `k8s/helm/`의 `serviceaccount.yaml`+`values-prod.yaml`, `deploy.sh`의 `HELM_RELEASE` 기본값이 2026-09-03부로 모두 `sharenpo`라는 같은 이름으로 고정돼 있음. 코드는 완성되고 검증됐지만 실제 AWS엔 한 번도 적용된 적 없음 — 이걸로 대체된 예전 `default` ServiceAccount IRSA annotate 방식은 그 trust policy가 적용되는 순간 더 이상 동작하지 않음)를 읽는다. 설계 기록: ADR 0038(업스트림 스캐폴딩, 재작성 유예) → ADR 0043(프로젝트 적응 — 2026-08-18 구현됨) → ADR 0044(3-state 분리 — 2026-08-20 구현됨, 세 디렉토리 모두 `terraform validate`/`fmt -check` 통과) → ADR 0057(state 백엔드 — S3 네이티브 락 + SSE-S3, DynamoDB·KMS 없이, ADR 0044 D3 amends — 2026-09-12 코드 완료, 미적용). **두 ADR의 Addendum은 이 설정을 실제 AWS에 `apply`한 적이 없다고 말하는데, 그건 작성 시점엔 사실이었다가, 한동안 거짓이었다가, 다시 사실이 됐다.** 세 state 전부 2026-08-25~27에 실제 apply됐다(살아 있는 EKS 클러스터, RDS 인스턴스, S3 버킷, Route53 존, ACM 인증서, 그리고 Helm으로 앱 자체까지 배포됨 — 같은 기간 그 실제 RDS를 상대로 발견·수정된 TLS 검증 결함은 ADR 0039의 Addendum에 기록돼 있다). 그 뒤 **2026-08-28에 전체 destroy**해서, 배포가 end-to-end로 검증된 뒤 AWS 과금을 멈췄다 — 지금은 이 스택에서 실재하거나 과금되는 게 아무것도 없다(`aws eks/rds/ec2/elb` describe 호출이 전부 빈 값/not-found를 반환함으로 확인됨). 현재 상태: 미적용. 어느 쪽이든 가정하지 말고, 셋 다에서 `terraform plan`을 돌려 확인할 것 — ADR의 Addendum도 이 줄도 특정 시점의 스냅샷일 뿐 실시간 상태가 아니다. ADR의 Addendum은 작성 시점의 사실을 기록한 것이므로 일부러 그대로 두었고, 정정은 여기와 ROADMAP.md 7절에 있다
+   - Helm/K8s 배포 변경    → `k8s/helm/`(`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/명시적 경로 allow-list를 가진 기본 비활성 Ingress(ADR 0058, 백엔드 Service에는 `/` catch-all 없음 — ADR 0060(2026-09-21 구현)이 같은 Ingress에 별도 프론트엔드 Deployment+Service(`frontend.enabled`, 기본 false, `values-prod.yaml`에서 켬)로 범위를 좁힌 `/` 규칙(`service: frontend`) 하나를 추가하고, ADR 0062(2026-09-23)가 같은 방식으로 별도 admin Deployment+Service(`admin.enabled`, 기본 false, `values-prod.yaml`에서 켬)로 범위를 좁힌 `/admin` 규칙(`service: admin`) 하나를 더하며(nginx `alias`로 `/admin/` 아래에서 서빙), 백엔드 Service는 계속 allow-list)/기본 비활성 NetworkPolicy, ADR 0056)과 그 `README.md`(Secret 생성 절차, `existingSecret` 전용 소비 방식)를 읽는다. `k8s/`엔 이 차트 밖의 매니페스트가 없다 — 예전 `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/`에 있던 독립 raw 매니페스트는 삭제됐다(ADR 0042); 차트 옆에 정적 매니페스트를 다시 추가하지 않는다(ADR 0037/0041/0042)
+   - Terraform/인프라 변경 → `k8s/infra/terraform/`은 하나가 아니라 독립된 3개의 root module이다 — `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM — zone이 Terraform 밖에서 만든 재사용 위임 세트를 선택적으로 받아 네임서버를 고정함, ADR 0063. `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — ALB Controller+ESO+ExternalDNS, 마지막 것은 `Ingress` host로 ALB의 DNS 레코드를 만든다, ADR 0063. 다른 두 state를 **모두** 읽는 유일한 state). 각 디렉토리는 `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`와 자신만의 state 파일을 가지는데, 그 state는 Terraform 기본값인 로컬 파일이 아니라 네이티브 락 + SSE-S3 암호화를 쓰는 S3에 저장된다(ADR 0057, ADR 0044 D3 amends — 2026-09-12 코드 완료, 버킷 생성과 실제 마이그레이션은 실제 배포 시점으로 유예) — 변경이 실제로 건드리는 디렉토리만 읽는다. `README.md`(`cluster` → `app-infra` → `addons` 3단계 apply 순서와 그 역순 destroy, `SecretStore`/`ExternalSecret`을 한 번만 수동으로 `kubectl apply`하는 단계, 그리고 앱 전용 ServiceAccount IRSA 배선을 다루는 "Known gap" 절 — `app-infra/main.tf`의 trust policy, `k8s/helm/`의 `serviceaccount.yaml`+`values-prod.yaml`, `deploy.sh`의 `HELM_RELEASE` 기본값이 2026-09-03부로 모두 `sharenpo`라는 같은 이름으로 고정돼 있음. 코드는 완성되고 검증됐지만 실제 AWS엔 한 번도 적용된 적 없음 — 이걸로 대체된 예전 `default` ServiceAccount IRSA annotate 방식은 그 trust policy가 적용되는 순간 더 이상 동작하지 않음)를 읽는다. 설계 기록: ADR 0038(업스트림 스캐폴딩, 재작성 유예) → ADR 0043(프로젝트 적응 — 2026-08-18 구현됨) → ADR 0044(3-state 분리 — 2026-08-20 구현됨, 세 디렉토리 모두 `terraform validate`/`fmt -check` 통과) → ADR 0057(state 백엔드 — S3 네이티브 락 + SSE-S3, DynamoDB·KMS 없이, ADR 0044 D3 amends — 2026-09-12 코드 완료, 미적용) → ADR 0063(`addons/`의 ExternalDNS로 ALB DNS 레코드를 만들고, 재사용 위임 세트로 zone의 네임서버를 고정 — ADR 0043 D5 amends, 0044·0047 확장 — 2026-09-25 코드 완료, `app-infra/`와 `addons/`에서 `terraform validate`/`fmt -check` 통과, 미적용. 라이브에서만 확인되는 항목은 ADR의 Consequences에 있다). **두 ADR의 Addendum은 이 설정을 실제 AWS에 `apply`한 적이 없다고 말하는데, 그건 작성 시점엔 사실이었다가, 한동안 거짓이었다가, 다시 사실이 됐다.** 세 state 전부 2026-08-25~27에 실제 apply됐다(살아 있는 EKS 클러스터, RDS 인스턴스, S3 버킷, Route53 존, ACM 인증서, 그리고 Helm으로 앱 자체까지 배포됨 — 같은 기간 그 실제 RDS를 상대로 발견·수정된 TLS 검증 결함은 ADR 0039의 Addendum에 기록돼 있다). 그 뒤 **2026-08-28에 전체 destroy**해서, 배포가 end-to-end로 검증된 뒤 AWS 과금을 멈췄고, ADR 0047 관측성 스택 검증을 위해 **2026-08-29/30에 재적용**했다가 **2026-08-31에 다시 destroy**했다(로컬 state 파일의 시각 기준 — ROADMAP.md 머리말 참고, §9에는 이 항목이 없다) — 지금은 이 스택에서 실재하거나 과금되는 게 아무것도 없다(`aws eks/rds/ec2/elb` describe 호출이 전부 빈 값/not-found를 반환함으로 확인됨). 현재 상태: 미적용. 어느 쪽이든 가정하지 말고, 셋 다에서 `terraform plan`을 돌려 확인할 것 — ADR의 Addendum도 이 줄도 특정 시점의 스냅샷일 뿐 실시간 상태가 아니다. ADR의 Addendum은 작성 시점의 사실을 기록한 것이므로 일부러 그대로 두었고, 정정은 여기와 ROADMAP.md 7절에 있다
    - 삭제 경로 변경        → `backend/user/user.service.ts`(`remove` — 확인된 연쇄 삭제), `backend/file/file.service.ts`(`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts`(`deletePost`, `deletePostsOfCreator`), `LocalDiskStorage.unlink`/`S3Storage.unlink`(`FileStorage` 포트를 통한 커밋 후 unlink, ADR 0020/0023/0029)를 읽는다
    - 게시글/게시판 변경    → `backend/post/post.service.ts`(`fileId`에 대한 claim 해석, `canManage`, ADR 0021 읽기 레이어 재사용)를 `FileService.assertAttachableBy` / `toResponse` — PostModule이 FileModule에 묻는 두 가지 질문 — 와 함께 읽는다(ADR 0023)
    - 댓글/스레드 변경      → `backend/comment/comment.service.ts`(고정된 `createdAt ASC` 정렬, `canManage`, `deleteCommentsOfCreator`)와 `PostService.assertPostExists` — CommentModule이 PostModule에 묻는 유일한 질문 — 를 읽는다. 라우트는 **두** 컨트롤러에 나뉘어 있다(`/post/:postId/comment`용 `post-comment.controller.ts`, `/comment/:id`용 `comment.controller.ts`); 게시글 삭제는 서비스가 아니라 FK를 통해 댓글을 제거한다(ADR 0023 D3)
@@ -76,14 +76,15 @@
 
 파급 범위가 큰 파일 — 편집 전 명시적 승인 필요(여기를 건드리면 저장소 전체로
 파급되므로, 파급 범위가 "이 파일만"으로 끝나는 법이 없다: `app.module.ts`는 모든
-모듈 + DB 연결을 연결하고, `main.ts`는 전역 부트스트랩/ValidationPipe/CORS이며,
-`*.entity.ts`는 DB 스키마 자체를 정의한다):
+모듈 + DB 연결 + 전역 `ValidationPipe`(`APP_PIPE`)를 연결하고, `main.ts`는 전역
+부트스트랩/CORS/종료 훅이며, `*.entity.ts`는 DB 스키마 자체를 정의한다):
 `app.module.ts`, `main.ts`, `*.entity.ts`
 
 다음 중 하나를 건드리는 것은 항상 "지시된 작업 범위를 벗어남"으로 취급한다 —
 각각이 *모든* 요청이나 엔드포인트의 동작을 지배하므로, 국소적으로 보이는 편집도
 전역적 파급력을 가진다:
-`main.ts`의 전역 `ValidationPipe` 옵션, `app.module.ts`의 Joi 검증 스키마,
+전역 `ValidationPipe` 옵션(`backend/common/validation-pipe-options.ts`, `app.module.ts`에서
+`APP_PIPE`로 연결), `app.module.ts`의 Joi 검증 스키마,
 공유 가드(`backend/auth/guard/`), `upload.module.ts`의 Multer 스토리지 설정
 
 변경이 지시된 작업을 넘어서는 파일을 건드려야 한다면, 영향받는 파일을 모두 먼저 나열하고 승인을 기다린다.
@@ -917,7 +918,8 @@ Conflict Protocol을 따른다.
 
 ### 경계 검증 & 응답 성형
 
-- Breakdown: 전역 `ValidationPipe`(`main.ts`)는 `transform + whitelist +
+- Breakdown: 전역 `ValidationPipe`(`app.module.ts`의 `APP_PIPE`, 옵션은
+  `backend/common/validation-pipe-options.ts`)는 `transform + whitelist +
   forbidNonWhitelisted + enableImplicitConversion`으로 동작한다 — DTO에
   선언되지 않은 요청 필드는 절대 서비스에 도달하지 않는다. 밖으로 나갈 때는
   `FileService.toResponse()`가 `FileEntity`를 `FileResponseDto`로 매핑하고
@@ -1199,8 +1201,8 @@ Conflict Protocol을 따른다.
   돌기 전까지는
   범위 밖이다
 - **보안 응답 헤더(landed 2026-09-11, [ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md))**:
-  `main.ts`의 `bootstrap()`에서 `helmet()`을 적용한다 — CORS/`cookieParser()`/전역
-  `ValidationPipe`보다 먼저 등록되는 첫 번째 미들웨어라, 모든 라우트가 OWASP 권장
+  `main.ts`의 `bootstrap()`에서 `helmet()`을 적용한다 — CORS/`cookieParser()`보다
+  먼저 등록되는 첫 번째 미들웨어라, 모든 라우트가 OWASP 권장
   헤더 집합(`Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`,
   `Strict-Transport-Security` 등)을 받는다. 이것은 Nest 가드가 아니라 Express 레벨
   미들웨어라 `ThrottlerGuard`/`JwtAuthGuard`/`RolesGuard`보다 먼저 실행되며 어떤
@@ -1546,9 +1548,10 @@ Architecture Decisions가 계속 유효하다.
   (`networkPolicy.egress.vpcCidr:dbPort`, 기본값 `10.0.0.0/16:5432` —
   `cluster/main.tf`의 `var.vpc_cidr`과 동일), HTTPS/443(S3·AWS API — 이를 더 좁힐
   VPC 엔드포인트가 없음)만 명시적으로 허용하고 나머지는 기본 거부한다.
-  `values-prod.yaml`에서 이미 켜뒀지만, 실제(현재는 철거된) EKS 대상에는 아직
-  무효하다 — `cluster/main.tf`의 `vpc-cni` 애드온이 VPC CNI Network Policy 강제
-  에이전트를 아직 켜지 않았다(별도의, 아직 일정이 잡히지 않은 Terraform 작업).
+  `values-prod.yaml`에서 이미 켜뒀고, `cluster/main.tf`의 `vpc-cni` 애드온도 이제 VPC CNI
+  Network Policy 강제 에이전트를 켠다(`enableNetworkPolicy`, 2026-09-26, ADR 0056 추가 기록) —
+  코드는 완성됐고(`terraform validate`/`fmt -check` 통과) 한 번도 적용된 적 없어서 라이브
+  클러스터에서는 미검증이며, 라이브 검증은 후속 작업이다.
   **2026-09-11 실제 검증**: Calico를 설치한 throwaway `kind` 클러스터(`kind`의
   기본 CNI는 `NetworkPolicy`를 강제하지 않음)와 RDS를 대신하는 throwaway
   `postgres:16`에 대해 검증했다 — `helm install --wait`가 성공했고(kubelet의
@@ -1597,8 +1600,8 @@ Architecture Decisions가 계속 유효하다.
   실시간 시연으로 이뤄지지, 면접관이 공개 Swagger URL을 혼자 찾아 눌러보는 경우는
   드물다). ALB 전용 fixed-response 리젝트 규칙 대안도 검토했으나 기각했다 —
   aws-load-balancer-controller의 규칙 우선순위 처리가 불안정하다는 미해결 이슈가
-  있고, 이를 시험해볼 살아있는 ALB도 없다(세 Terraform 상태 모두 2026-08-28
-  destroy). `templates/ingress.yaml`은 변경이 필요 없었다; `helm lint`/
+  있고, 이를 시험해볼 살아있는 ALB도 없다(세 Terraform 상태 모두 destroy — 마지막은
+  2026-08-31, ROADMAP.md 머리말 기준). `templates/ingress.yaml`은 변경이 필요 없었다; `helm lint`/
   `helm template`로 렌더링된 규칙을 확인했다. `ingress.enabled`는 여전히 `false`이고
   `values-prod.yaml`은 무변경이다 — Ingress를 실제로 켜려면 host/TLS/ALB 어노테이션
   작업이 따로 필요하고, 그때 `values-prod.yaml`에도 `paths` 전체를 다시 적어야 한다
@@ -1645,30 +1648,40 @@ Architecture Decisions가 계속 유효하다.
   Policy 강제 에이전트(Calico와 다른 엔진)가 똑같이 동작하는지뿐이고, 이건
   ADR 0056이 이미 안고 있던 것과 같은 공백이지 새로 생긴 게 아니다
   (ROADMAP.md §9)
-- `backend/main.ts`에는 `app.enableShutdownHooks()` 호출이 없다(grep 0건 확인). 그래서
-  TypeORM이 원래 갖고 있는 `onApplicationShutdown` 훅 — DB 커넥션 풀을 깔끔히 닫아주는
-  코드 — 이 한 번도 실행되지 않는다. SIGTERM을 받으면 프로세스가 그냥 죽고, 커넥션
-  풀은 애플리케이션이 아니라 OS가 정리한다.
-
-  **2026-09-16 검토, 결정: 보류(급하지 않음).** 이유는 두 가지다.
-
-  1. 이 앱의 모든 DB 쓰기는 요청 하나짜리 트랜잭션 안에서 끝난다(QueryRunner 또는
-     `dataSource.transaction()` — Project-Specific Principles > Transaction Boundary
-     참고). 연결이 중간에 끊기면 Postgres가 그 트랜잭션을 알아서 롤백해준다. 그래서
-     프로세스가 갑자기 죽어도 데이터가 깨지지 않고, 그 순간 진행 중이던 요청 하나만
-     실패한다(재시도하면 그만인 실패지, 데이터 손실이나 커넥션 누수가 아니다).
-  2. 지금은 이 앱을 실제로 배포한 곳 자체가 없다(위 Terraform/infra 항목대로
-     2026-08-28에 세 상태 모두 destroy, 현재 미적용).
-
-  이 훅을 켜도 "피해를 막아주는" 게 아니라 "종료 방식을 더 깔끔하게 만들어주는" 것뿐
-  이다 — OS가 강제로 끊던 연결을 앱이 스스로 정리하고 닫는 방식으로 바꿔준다. 나중에
-  K8s에 다시 배포할 때는 이 차이가 실질적으로 의미가 커지므로, 그 시점(ROADMAP.md
-  §7/§9의 재배포 작업)에 같이 넣기로 했다. 구현 자체는 `main.ts`의 `app.listen(...)`
-  앞에 한 줄(`app.enableShutdownHooks();`)만 추가하면 끝이라, 저울질할 대안도 딱히
-  없었다 — "언제 넣을지"만 정하면 되는 문제였다.
-
-  ADR은 따로 쓰지 않았다: 위 계정 열거 항목과 마찬가지로 이번 검토로 코드가 바뀐 게
-  없고, 남길 아키텍처적 대안도 없기 때문이다.
+- ~~ADR 0060(2026-09-21) 구현 중 발견, 고치지 않았고 아직 일정 없음~~ — **세 가지 모두
+  2026-09-22/23에 해결**: (1) `frontend/`와 `admin/`의 `package.json`에 `packageManager:
+  pnpm@10.14.0`을 고정했다(`3238f06`) — 그 전에는 corepack이 최신 pnpm(당시 12.5.1)을 받았고
+  `node:24.8.0`에 든 corepack 0.34.0이 이를 실행하지 못했다. `frontend/Dockerfile`과
+  `admin/Dockerfile`은 10.14.0을 여전히 스스로 고정한다. CI 잡도 이 핀을 따르며 Actions에서
+  확인했다(run 36065808388, 2026-09-25: `frontend-lint`와 `admin-lint-and-unit` 모두 corepack이
+  `pnpm-10.14.0.tgz`를 받았다). (2) 운영 Ingress annotation 템플릿에 이제 `target-type: ip`가
+  들어 있다(컨트롤러 기본값 `instance`는 `NodePort`/`LoadBalancer` Service가 필요한데 이 차트의
+  Service는 `ClusterIP`다). ALB용 NetworkPolicy 인바운드 규칙도 함께 들어갔다
+  ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) addendum) — 코드와
+  렌더링까지만 됐고 **라이브 ALB에서는 관찰하지 못했다**. (3) `docker-tag-cleanup.yml`이 이제
+  `sharenpo-frontend`(`3238f06`)와 `sharenpo-admin`(`3ed7e8b`, ADR 0062 D6)도 정리한다. ADR
+  0060이 열어 둔 `admin/` 호스팅은 [ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.ko.md)
+  (2026-09-23)로 반영됐다.
+- ~~`backend/main.ts`에 `app.enableShutdownHooks()` 호출이 없다~~ — **2026-09-21
+  해결**([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md)): 2026-09-16
+  검토에서는 이 한 줄 수정을 급하지 않다며 재배포 때로 미뤘다(요청 하나짜리 트랜잭션이라
+  갑자기 죽어도 데이터가 깨지지 않고 — 끊긴 연결은 Postgres가 롤백한다 — 배포된 곳도
+  없었다). 코드를 쓰기 전에 먼저 측정해 보니 그 항목의 "SIGTERM을 받으면 프로세스가 그냥
+  죽는다"는 문장부터 틀렸다: 컨테이너에서 `node`가 PID 1이라 SIGTERM이 무시됐고,
+  `docker stop`은 유예 시간을 끝까지 기다린 뒤 SIGKILL로 끝냈다 — 유예 10초에서 10.4초,
+  종료 코드 137이었고, TypeORM의 `onApplicationShutdown`(pg 풀 닫기)도 한 번도 실행되지
+  않았다. `app.listen(...)` 앞에 `app.enableShutdownHooks([], { useProcessExit: true });`를
+  넣으면 약 0.4초 만에 종료 코드 0으로 끝나고 `pg.Pool.end()`가 실행된다(로컬 Linux
+  컨테이너와 로컬 `kind` 클러스터의 파드 — 파드 스펙에 기본값 30초 유예가 있다 —
+  **EKS/ALB에서는 검증하지 않았다**). 옵션은 의도적이다: Nest는 정리를 마치고 같은 시그널을
+  자기 자신에게 다시 보내 끝내는데 PID 1은 그 시그널을 버리므로, plain 호출은 이벤트 루프를
+  붙잡는 것이 없을 때에만 끝난다 — ref된 타이머 하나가 남자 plain은 Docker에서 10.4초/137,
+  파드에서 30.6초로 돌아갔고, 옵션을 쓰면 둘 다 0.4초였다. 그 대가(핸들이 누수돼도 더는
+  느린 종료로 드러나지 않는다)는 ADR의 Addendum에 있다. `OnModuleDestroy`는 어디에도
+  추가하지 않았다(누수를 보여주는 것이 없었다. `S3Storage`의 `S3Client`를 대신한 Docker
+  전용 시험 — 같은 기본 `keepAlive` agent 모양 — 도 소켓을 일부러 열어 둔 채로 똑같이 빨리
+  종료해 종료 속도 면에서는 닫혔다. 실제 `S3Client` 인스턴스는 여전히 시험하지 않았다,
+  ADR 0061 두 번째 Addendum)
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은
@@ -1710,8 +1723,10 @@ CLAUDE.md는 저장소 루트의 백엔드를 관장한다**(`backend/`, `docs/A
 방, ban/강제 로그아웃)는 같은 작업에서 삭제되었고 적응된 것이 아니다 —
 참고 자료로 읽을 채팅 관련 내용은 더 이상 남아 있지 않다. 여전히 어떤
 루트 툴체인에도 연결되어 있지 않으며(lint glob, Jest `roots`,
-`tsconfig.build.json`, compose, CI 밖에 있다) 여전히 `frontend/`처럼 자체
-`package.json`과 툴체인을 갖는다. **이제 이것이 유일한 admin 표면이다** —
+`tsconfig.build.json`, compose 밖에 있다) 여전히 `frontend/`처럼 자체
+`package.json`과 툴체인을 갖는다 — CI 잡(`admin-lint-and-unit`, `admin-e2e`,
+`docker-publish-admin`)은 `admin/` 안에서 자체 install로 돌고, 같은 ALB의 `/admin`에 세 번째
+워크로드로 배포된다([ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.ko.md)). **이제 이것이 유일한 admin 표면이다** —
 다른 후보였던 `frontend/src/features/admin/AdminPage.tsx`(백엔드 호출이
 없는 17줄짜리 스텁)는 이 콘솔의 적응이 그 가져오기가 "대부분 삭제
 가능"이 아님을 증명하면서 2026-08-06에 삭제되었고, Stage 5의 마지막
@@ -2057,7 +2072,9 @@ CI: GitHub Actions(`.github/workflows/ci.yml`, ADR 0016)가 lint
 실제 push 전에 스모크 테스트 스텝(ADR 0048 D4)이 빌드된 amd64 이미지를
 일회용 `postgres:16` 서비스와 함께 기동시켜 Dockerfile 자체의
 `HEALTHCHECK`(`GET /health/live`)가 healthy가 될 때까지 확인한다 — 검증되지
-않은 이미지는 push되지 않는다. 워크플로 전역 `concurrency:
+않은 이미지는 push되지 않는다. 짝이 되는 `docker-publish-frontend` 잡(`needs: [frontend-lint, frontend-e2e]`, ADR 0060)이 SPA의 nginx 이미지
+`bluecode1775/sharenpo-frontend`를 같은 `:<sha>` 태그와 같은 브랜치별 분리로 발행하며, 푸시 전
+스모크 테스트가 딥링크 fallback, 없는 `/assets` 파일의 404, CSP 헤더를 확인한다. `docker-publish-admin` 잡(`needs: [admin-lint-and-unit, admin-e2e]`, ADR 0062)이 `bluecode1775/sharenpo-admin`에 대해 같은 일을 하며, 스모크 테스트는 `/admin/` prefix에 맞춰 조정된다(슬래시 없는 `/admin`은 301). 워크플로 전역 `concurrency:
 cancel-in-progress` 블록(ADR 0048 D3)이 CI가 끝나기 전 같은 브랜치에 다시
 push되면 낡은 실행을 취소한다. 로컬 컨테이너화: 멀티 스테이지 `Dockerfile` +
 `docker-compose.yml`(ADR 0015; 2026-08-08 하드닝 — non-root `USER`,
@@ -2203,37 +2220,10 @@ Node이고, `settings.json`에 연결되지 않는다(그건 `.claude/hooks/`의
 
 ### 권한 설정
 
-`.claude/settings.local.json`에는 Paranoid Mode 권한 프로필(`permissions` 아래
-`allow`/`ask`/`deny`)이 들어 있다 — 2026-09-15 추가. 이전까지 로컬 권한 규칙을 담고
-있던 `.claude/claude.local.json`을 대체한 것인데, 그 파일명은 애초에 Claude Code가
-인식하는 이름이 아니었다(로컬 범위 설정 파일로 인식되는 이름은 `settings.local.json`
-하나뿐이다) — 즉 그 규칙들은 그동안 조용히 전혀 적용되지 않고 있었다. `.claude/
-settings.json`과 달리 gitignore 대상이다: 팀 공유 파일이 아니라 개인 로컬 오버라이드다:
-- **`allow`** — 좁고 이 프로젝트에 근거한 항목만 담았다: `npm` 일반형 추측이 아니라
-  루트/`frontend`/`admin` `package.json`에 실제로 있는 스크립트명, 읽기전용
-  `git`/`docker`/`kubectl`/`helm`/`terraform` 조회 명령, 그리고 이 저장소가 쓰는
-  의존성들의 공식 문서 도메인으로 범위를 좁힌 `WebFetch` 허용 목록
-- **`ask`** — 정당하지만 결과가 큰 것들: 의존성 변경, 모든 `migration:*` 스크립트,
-  `promote-superadmin`, `terraform apply`, `kubectl apply`/`helm install`/`upgrade`,
-  PR 생성·병합
-- **`deny`** — 승인 프롬프트를 띄워도 소용없이 막는다, Never Do Group 1–3이 코드에
-  적용하는 것과 같은 논리다: 자격증명 파일(`.env`, `~/.ssh`, `~/.aws`, `~/.docker`,
-  `*.tfvars`, `terraform.tfstate*`), 환경변수 전체 덤프(`env`, `printenv`, PowerShell
-  `Get-ChildItem Env:`), 파괴적인 `git` 조작(`push --force`, `reset --hard`,
-  `filter-branch`, `config --global`, `remote set-url`), 되돌릴 수 없는 클라우드/인프라
-  조작(`terraform destroy`, `aws * delete*`, `helm uninstall`, `kubectl delete`), 클라우드
-  메타데이터 SSRF 대상(`169.254.169.254`)
-- **PowerShell 대응** — `.claude/settings.json`의 기존 deny 규칙은 `Bash(...)` 도구만
-  매칭한다. Windows에서 `PowerShell`은 별도 도구 네임스페이스라 같은 문자열 접두사
-  규칙이 닿지 않으므로, Bash 쪽 파괴적 패턴(강제 push, hard reset, `Invoke-WebRequest`/
-  `iwr`로서의 `curl`/`wget`)을 로컬 파일에서 전부 `PowerShell(...)`로도 미러링했다 —
-  Bash 도구와 PowerShell 도구를 동시에 쓰는 이중 셸 환경에서만 필요한 조치다
-
-요청 없이 임의로 고치지 않고 그대로 남겨둔 알려진 공백(Scope Discipline): PowerShell의
-자유로운 플래그 순서가 단순 접두사 매칭을 무력화한다(`Remove-Item -Recurse -Force`는
-잡히지만 `Remove-Item <경로> -Recurse -Force`는 안 잡힌다 — 완전한 차단에는 sandbox
-기능이라는 다른 메커니즘이 필요하고, 이번에는 시도하지 않았다); `.claude/settings.json`에
-커밋된 `Read(./.env.*)`는 `.env.example`(시크릿이 아닌 무해한 템플릿)까지 부수적으로
-막는데, 이는 팀 공유 파일에 있던 기존 문제라 요청 없이는 건드리지 않았다; `sandbox.*`
-(실행 격리)는 `permissions`(접근 제어)와는 다른 관심사라 이번 작업에서는 설정하지
-않았다.
+`.claude/settings.local.json`에는 개인·개발자 머신별 Claude Code 권한 프로필이 들어
+있다 — `.claude/settings.json`과 달리 gitignore 대상이라 팀과 공유되지 않는다. 그
+근거(`allow`/`ask`/`deny`에 뭐가 왜 있는지)는 여기가 아니라 바로 옆 `.claude/
+settings.local.md`에 적어둔다 — 그 메모도 gitignore 대상이다(2026-09-23 결정). 팀
+공유·커밋 대상 문서는 한 개발자의 개인 도구 설정을 담을 자리가 아니고, 이 절의 예전
+버전이 여기 있었던 것도 애초에 무관한 Swagger 문서화 커밋(`005d9c9`, 2026-09-16)에
+곁다리로, 의도적 배치 없이 묻어 들어간 것이었다.

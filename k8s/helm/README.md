@@ -15,7 +15,11 @@ for its scaffold history.
 fix), a throwaway `postgres:16`, and `/health/live`/`/health/ready`/`/doc` all
 answered `200` through the Service. That run found and fixed two real bugs
 (hook ordering, empty-string env vars — commit `0326199`).
-**Deployed for real 2026-08-17 → stable 2026-08-27, torn down 2026-08-28**: the
+Re-verified 2026-09-24 on Docker Desktop's Kubernetes with the `frontend` and `admin`
+workloads enabled (ADR 0062) — see "Verifying on Docker Desktop's Kubernetes" at the end of
+this file.
+**Deployed for real 2026-08-17 → stable 2026-08-27, torn down 2026-08-28 (re-applied
+2026-08-29/30, torn down again 2026-08-31)**: the
 release `upload-board` ran on the real AWS/EKS cluster from
 `k8s/infra/terraform/cluster/` (revision 5, `STATUS: deployed`) — see
 [ROADMAP.md](../../docs/ROADMAP.md) §9 (2026-08-27) for the full account,
@@ -100,12 +104,16 @@ under a different release name renames every object with it; only the
 | `service.yaml` | Service | `ClusterIP`, port 3000 |
 | `configmap.yaml` | ConfigMap | Every key under `values.yaml`'s `env:` block |
 | `migration-job.yml` | Job (Helm hook) | Runs `migration:run` pre-install/pre-upgrade, mirrors `docker-compose.yml`'s `migrate` service (ADR 0032) |
-| `ingress.yaml` | Ingress | Disabled by default (`ingress.enabled: false`) — TLS terminates here, never in-process (ADR 0034). Path rules are an explicit allow-list of real controller prefixes, not a `/` catch-all — `/health`, `/metrics`, `/doc` are deliberately excluded (ADR 0058) |
+| `ingress.yaml` | Ingress | Disabled by default (`ingress.enabled: false`) — TLS terminates here, never in-process (ADR 0034). Path rules are an explicit allow-list of real controller prefixes for the backend Service, plus one `/` rule (`service: frontend`) for the frontend Service and one `/admin` rule (`service: admin`) for the admin Service — `/health`, `/metrics`, `/doc` are deliberately not on the backend list and fall to the frontend's `/` (ADR 0058, ADR 0060, ADR 0062) |
 | `serviceaccount.yaml` | ServiceAccount | Disabled by default (`serviceAccount.create: false` — Deployment runs as the namespace's `default` ServiceAccount, unchanged). Enable it to scope the S3 IRSA role to this app instead of every pod in the namespace — see "Dedicated ServiceAccount for IRSA" below |
 | `networkpolicy.yaml` | NetworkPolicy | Disabled by default (`networkPolicy.enabled: false`) — restricts the app pod's inbound/outbound traffic. See "NetworkPolicy" below (ADR 0056) |
 | `clamav-deployment.yaml` | Deployment | The `clamd` daemon `UploadService` scans uploads against — a single shared replica, not a per-app-pod sidecar (avoids duplicating the signature DB, ADR 0059 D6). Always renders, unlike `ingress`/`networkPolicy` |
 | `clamav-service.yaml` | Service | `ClusterIP`, port 3310 — `configmap.yaml` computes `CLAMD_HOST` from this Service's name directly, not from `values.yaml`'s `env` map |
 | `clamav-pvc.yaml` | PersistentVolumeClaim | Only renders when `clamav.persistence.enabled: true` (default `false` — signature DB re-downloads into an `emptyDir` on restart otherwise) |
+| `frontend-deployment.yaml` | Deployment | The SPA's static-file nginx (`frontend/Dockerfile`) — a separate Pod from the app, with its own selector labels so the backend Service never selects it. Disabled by default (`frontend.enabled: false`); `values-prod.yaml` turns it on (ADR 0060) |
+| `frontend-service.yaml` | Service | `ClusterIP`, port 80, named `web` rather than `http`: `servicemonitor.yaml` scrapes the port named `http` on every Service carrying `sharenpo.labels`, and nginx has no `/metrics`. The Ingress's `/` rule points here |
+| `admin-deployment.yaml` | Deployment | The admin console's static-file nginx (`admin/Dockerfile`), serving under `/admin/` via `alias` — a separate Pod from the app and frontend, with its own selector labels. Disabled by default (`admin.enabled: false`); `values-prod.yaml` turns it on (ADR 0062) |
+| `admin-service.yaml` | Service | `ClusterIP`, port 80, named `web` for the same Prometheus-scrape reason as `frontend-service.yaml`. The Ingress's `/admin` rule points here |
 
 `values.yaml` carries only keys a template actually reads — the unused
 `autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride` scaffold leftovers
@@ -270,7 +278,9 @@ Tear down when done: `helm uninstall netpol-test && kind delete cluster --name n
 
 TLS terminates at the Ingress/ALB, never in-process ([ADR 0034](../../docs/ADR/0034-https-termination-stance.md));
 `values.yaml`'s `ingress` block ships an explicit controller-prefix allow-list, not a `/`
-catch-all ([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.md)). `ingress.enabled`
+catch-all on the backend Service ([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.md)), plus one `/`
+rule for the frontend Service ([ADR 0060](../../docs/ADR/0060-frontend-same-alb-path-routing.md)) and
+one `/admin` rule for the admin Service ([ADR 0062](../../docs/ADR/0062-admin-same-alb-subpath-routing.md)). `ingress.enabled`
 stays `false` — a deliberate developer choice
 ([ROADMAP.md](../../docs/ROADMAP.md) > Unscheduled), not a missing dependency: while the
 stack was live 2026-08-27 the cluster, the domain (`sharenpo.cloud`), and a real ACM cert
@@ -280,7 +290,8 @@ access. Re-confirmed 2026-09-13.
 Two preconditions before it can do anything, both currently unmet (all three Terraform
 states are destroyed):
 - `addons/` applied — the AWS Load Balancer Controller has to be running in-cluster to
-  reconcile an `Ingress` object at all.
+  reconcile an `Ingress` object at all. The same state installs ExternalDNS, which creates
+  the domain's DNS record for the ALB ([ADR 0063](../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)).
 - `app-infra/` applied — the ACM certificate for `domain_name` has to reach `ISSUED`
   (`terraform output -raw acm_certificate_arn`).
 
@@ -296,22 +307,29 @@ Verifying without a live cluster (none exists right now):
 
 ```bash
 helm lint --strict . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
-  --set ingress.className=alb \
+  --set ingress.className=alb --set frontend.enabled=true --set admin.enabled=true \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
-  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]'
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"},{"path":"/admin","pathType":"Prefix","service":"admin"}]}]'
 helm template . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
-  --set ingress.className=alb \
+  --set ingress.className=alb --set frontend.enabled=true --set admin.enabled=true \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
-  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"}]}]' \
+  --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"},{"path":"/admin","pathType":"Prefix","service":"admin"}]}]' \
   -s templates/ingress.yaml
 ```
 
+The same flags also render `networkpolicy.yaml`'s ALB ingress-allow rule (ADR 0056
+addendum) — add `--set networkPolicy.enabled=true -s templates/networkpolicy.yaml` to
+see both rules (`podSelector: {}` and the new `ipBlock`) at once.
+
 confirms the rendered `Ingress` carries `ingressClassName: alb`, the host, all seven
-allow-listed paths, and the annotations (verified 2026-09-13 — an earlier draft of this
+allow-listed backend paths plus the `/` frontend rule (2026-09-21) and the `/admin` admin
+rule (2026-09-23), and the annotations (verified 2026-09-13 — an earlier draft of this
 recipe used `--set ingress.hosts[0].host=...`, which replaces the whole array element and
 silently drops every path; `--set-json` is what actually keeps them, per
 `k8s/infra/terraform/README.md`'s "Enabling the ALB ingress" section, which hit and fixed
@@ -320,9 +338,43 @@ until Terraform is re-applied.
 
 **Pending — required before trusting this in production, not yet done because no live
 ALB Controller exists to test against:** rendering correctly is not the same as the ALB
-actually behaving as configured. Once `addons/`+`app-infra/` are re-applied and
-`ingress.enabled` is actually flipped on, verify explicitly rather than assuming the
-annotations worked:
+actually behaving as configured. Once `addons/`+`app-infra/` are re-applied,
+`ingress.enabled` is actually flipped on, and ExternalDNS has made the domain resolve to the
+ALB (ADR 0063), verify explicitly rather than assuming the annotations worked:
+- `aws route53 list-resource-record-sets` for the zone shows an alias `A` record for the domain
+  pointing at the ALB plus ExternalDNS's `TXT` ownership records within a few minutes of the
+  `Ingress` appearing, and they are gone after it is removed (or the zone's `force_destroy`
+  clears them). The command is in `k8s/infra/terraform/README.md` > "Enabling the ALB
+  ingress". Never observed live (ADR 0063).
+- Before the first deploy, on your machine (no cluster needed): `values-prod.yaml` runs ClamAV
+  as `clamav/clamav:stable-debian`, not the `stable` tag the chart was verified with — `stable`
+  lists `linux/amd64` alone on Docker Hub and the only nodes that run are `arm64`, while
+  `stable-debian` lists amd64, arm64 and ppc64le (read 2026-09-25;
+  [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md) Addendum). The two things the
+  chart assumes: `clamdcheck.sh` exists (both probes call it) and `/var/lib/clamav` is the
+  signature directory. If either is missing, the clamd pod never becomes Ready and every upload
+  answers `503 UPLOAD_SCAN_UNAVAILABLE`. The developer ran it locally on 2026-09-26 and reported
+  that every output matched the expected values (the session did not see those outputs). **The
+  session then ran it itself the same day** (Docker Desktop; image `clamav/clamav:stable-debian`,
+  ClamAV 1.5.4, baked signature DB 28130, `freshclam` fetched daily 28135 / main 63 on first
+  start), with `/var/lib/clamav` as an empty tmpfs the way the chart's `emptyDir` mounts it:
+
+  | | `linux/amd64` (native) | `linux/arm64` (QEMU-emulated) |
+  |---|---|---|
+  | `clamdcheck.sh` present, probe exit code | yes, `Clamd is up`, 0 | same |
+  | Time to Ready from an empty signature dir | ≈30 s (5-s polling) | 131 s — emulated, not representative of Graviton |
+  | Memory, sampled peak / steady | 1075 MiB / ≈1.06 GiB | 1204 MiB / ≈1.18 GiB |
+  | `PING` on 3310 | `PONG` | same |
+  | EICAR (local socket and `INSTREAM` over TCP 3310) | `Eicar-Signature FOUND` | same |
+  | Clean bytes | `OK` | same |
+
+  Neither run logged an error or a 429 from the mirror. Two consequences: the chart's liveness
+  budget (≈480 s) covers both times with room to spare, and `values.yaml`'s comment suggesting a
+  `clamav.resources.limits.memory` "from 1Gi" would sit *below* the steady figure here and get the
+  pod OOM-killed — start higher than that if a limit is ever set (`values.yaml` itself was not
+  changed). clamd alone is about a quarter of a `t4g.medium`'s 4 GiB. Still live-only: the `clamav`
+  Deployment Ready on a real Graviton node, an EICAR upload through the app answering
+  `400 UPLOAD_MALWARE_DETECTED`, a clean file passing.
 - `aws elbv2 describe-listeners` on the created ALB shows both a port-80 and a port-443
   listener (`listen-ports` actually took effect, not just rendered).
 - `curl -I http://<domain>` returns a `301`/`302` to the `https://` URL (`ssl-redirect`
@@ -330,6 +382,95 @@ annotations worked:
 - A browser accepts the certificate with no warnings for the same domain the ACM
   certificate was issued for (the `certificate-arn` annotation actually bound the right
   cert).
+- `curl https://<domain>/file` with no token answers the API's 401 JSON, not HTML, while
+  `/files`, `/posts/1`, and an unknown path answer the SPA's HTML — the `/` frontend rule
+  really sits below the API prefixes (ADR 0060; the controller's Exact-then-longest-Prefix
+  ordering has never been observed live). `/health/live`, `/metrics`, and `/doc` must also
+  answer the SPA's HTML (or 404), never a backend response.
+- `curl https://<domain>/admin/` returns the admin console's HTML (not the frontend's, and
+  not a 404) — confirms `/admin` sits in the rule set at all and Exact-then-longest-Prefix
+  ordering doesn't let a shorter rule swallow it first (ADR 0062, also never observed live).
+  A bare `curl -I https://<domain>/admin` (no trailing slash) returns nginx's own `301` to
+  `/admin/`, not the ALB's — confirms the request actually reached the admin pod rather than
+  being rewritten or dropped upstream.
+- The target group registers healthy targets. `values-prod.yaml`'s commented annotation
+  block now sets `alb.ingress.kubernetes.io/target-type: ip` (added 2026-09-22 — the
+  controller's `instance` default needs a `NodePort`/`LoadBalancer` Service, and both
+  Services in this chart are `ClusterIP`); this only fixes the rendered annotation, not
+  whether the real ALB actually registers the pods as healthy.
+- With `networkPolicy.enabled: true` (what `values-prod.yaml` sets) and Ingress on,
+  `networkpolicy.yaml` renders a second ingress rule admitting the VPC CIDR on the app's
+  port (ADR 0056 addendum, added alongside the `target-type` fix above — the ALB's ENIs
+  aren't pods, so the existing same-namespace-only rule never let them through). Confirm
+  the ALB's target group is healthy (the same check as the bullet above) and, per ADR
+  0056 D2's standing caveat, that this is enforced by AWS's own VPC CNI Network Policy
+  agent and not just rendered — `kind`+Calico cannot simulate a real VPC CIDR, so this
+  rule has no non-live way to verify beyond `helm template`.
+- Once the VPC CNI Network Policy agent is on (set in `cluster/main.tf` on 2026-09-26, code-complete and never
+  applied — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md)
+  Addendum), also confirm enforcement is real and nothing legitimate is blocked: `aws-node`
+  pods show two containers and the VPC CNI version is `v1.14.0-eksbuild.3` or later; app pods
+  become Ready with `/health/live` and `/health/ready` passing (kubelet probes not blocked,
+  `aws/amazon-vpc-cni-k8s#2571`); with Ingress off a pod in another namespace cannot reach the
+  app pod (with Ingress on the VPC-CIDR rule admits it, so no timeout is expected there) and a
+  non-allow-listed egress port times out; DNS, the database (5432), clamd (3310) and HTTPS/443
+  (S3) work, an EICAR upload is refused and a clean file passes; Prometheus still scrapes the
+  backend (the ingress rule admits same-namespace pods, plus the VPC CIDR only when Ingress is
+  on — so with Ingress off the scrape may be blocked; an inference, not observed);
+  ExternalDNS, External Secrets and the ALB Controller are unaffected.
+- Sign in over the real HTTPS connection, then reload the page: the session survives. The
+  refresh cookie must arrive as `HttpOnly; Secure; SameSite=Strict; Path=/auth/token` and go
+  back on `POST /auth/token/refresh` — a `Secure` cookie only works when the browser's
+  connection is HTTPS, so this can't be seen anywhere else (ADR 0012, ADR 0034).
+- With `STORAGE_DRIVER=s3` (what `values-prod.yaml` sets): a private file's preview (blob
+  `fetch()` → the API's 302 → a presigned S3 URL) and a public/unlisted `<img>`/`<video>` all
+  load with no CSP or CORS error in the browser console. Two things must already be true: the
+  bucket has a CORS rule for the production origin. `app-infra/main.tf` now declares one
+  (`aws_s3_bucket_cors_configuration.app`, added 2026-09-22, ADR 0036 addendum) —
+  code-complete but not yet applied, and applying it **replaces** the rule currently on
+  the bucket (the 2026-08-16 hand-run script's two localhost dev origins only, no
+  production entry) with the production origin only; re-add the dev origins by hand
+  again if local `STORAGE_DRIVER=s3` testing against the real bucket is still wanted
+  after that apply. Separately, `frontend/nginx.conf`'s CSP must allow
+  `https://*.amazonaws.com` (ADR 0060 — a guess from CSP semantics until seen in a
+  browser).
+- The real client IP reaches the rate limiter (`trust proxy` = `10.0.0.0/16`, ADR 0054
+  addendum): from one client the sixth `POST /auth/signin` within a minute answers 429, while
+  a second client on another IP is not throttled at all. If every visitor shares one bucket,
+  the peer the app sees is not inside that CIDR.
+- Rollout and scraping: `kubectl rollout status` succeeds for all three Deployments, the
+  frontend and admin Services each have a ready endpoint and the backend Service has none of
+  their pods, and Prometheus lists a target for the backend but none for frontend or admin
+  (the `web` port name, ADR 0060, ADR 0062).
+- Pods stop promptly on EKS (ADR 0061). With `values-prod.yaml` (so `STORAGE_DRIVER=s3`), run
+  `kubectl rollout restart deployment/<release>` and watch `kubectl get pods -w`: each old
+  backend pod should leave `Terminating` within a second or two. One that sits there for the
+  full 30 s (the chart sets no `terminationGracePeriodSeconds`, so the default applies) was
+  SIGKILLed — something kept the process from exiting even with `useProcessExit: true`, so look
+  for a shutdown path that never reaches the hooks. Measured on a local `kind` cluster only:
+  0.4 s, against 30.6 s without the option when a timer was left running. `S3Client` specifically
+  is a closed question already — a Docker-only test standing in for its default `keepAlive`
+  request agent (same handle shape, ADR 0061's second addendum) exited just as fast with the
+  socket left open on purpose — so this check is really about there being nothing else specific
+  to a live pod, not that handle.
+- No ALB errors during a rolling update (ADR 0061) — the check most likely to fail. Before
+  the fix a pod ignored SIGTERM and kept running until SIGKILL, which (inference, not
+  measured) outlasted the ALB's deregistration lag by accident; now it exits within a second,
+  so a request the ALB routes to it after SIGTERM but before the target drains can be refused.
+  While `kubectl rollout restart deployment/<release>` runs, send about one request a second
+  from outside to an allow-listed route — `curl -s -o /dev/null -w '%{http_code}\n'
+  https://<domain>/file` answers 401 with no token — and count `502`/`503`/`504`. `401` and
+  `429` are the backend answering (429 is its own rate limit, so stay under 100 a minute).
+  Pass: none of the three. If they appear, add a `preStop` sleep on the app container and raise
+  `terminationGracePeriodSeconds` to at least cover it. That *mechanism* is verified on a
+  throwaway `kind` deployment (not committed to the chart, ADR 0061's second addendum): with
+  grace covering the sleep, the pod left in 5.7 s as expected; with grace deliberately shorter
+  than the sleep, kubelet still sent SIGTERM the moment it gave up on the stuck hook, and the
+  app exited cleanly — the pod just took the full grace period (36.4 s) instead. So an
+  under-sized grace period here costs rollout time, not a raw SIGKILL of the app — on this
+  `kind`/containerd version, at least; not verified on EKS. None of this says what the sleep
+  duration should actually be — that needs the real ALB's drain-lag number, still unmeasured, so
+  the chart has neither setting today and it's still not decided.
 
 None of this can be verified by `helm lint`/`helm template` — they only prove the YAML
 this repo renders is correct, never that the AWS Load Balancer Controller acts on it as
@@ -349,3 +490,95 @@ instead, and are not repeated in `values.yaml`.
 helm lint --strict .
 helm template . --set secrets.existingSecret=placeholder
 ```
+
+The frontend workload (ADR 0060) renders only with `--set frontend.enabled=true`, and the `/`
+rule appears in the Ingress only then:
+
+```bash
+helm template . --set secrets.existingSecret=placeholder --set frontend.enabled=true \
+  --set ingress.enabled=true \
+  -s templates/ingress.yaml -s templates/frontend-deployment.yaml -s templates/frontend-service.yaml
+```
+
+The image needs no cluster either — build it and check the SPA fallback and the headers:
+
+```bash
+docker build -t sharenpo-frontend:local -f ../../frontend/Dockerfile ../../frontend
+docker run --rm -p 8080:8080 sharenpo-frontend:local
+# /  and  /posts/1 → 200 index.html;  /assets/missing.js → 404;  CSP + nosniff headers on every response
+```
+
+The admin workload (ADR 0062) renders only with `--set admin.enabled=true`, and the `/admin`
+rule appears in the Ingress only then:
+
+```bash
+helm template . --set secrets.existingSecret=placeholder --set admin.enabled=true \
+  --set ingress.enabled=true \
+  -s templates/ingress.yaml -s templates/admin-deployment.yaml -s templates/admin-service.yaml
+```
+
+Same for its image — served under `/admin/` (`alias`, not `root`, ADR 0062 D5), so the checks
+are against that prefix instead of root:
+
+```bash
+docker build -t sharenpo-admin:local -f ../../admin/Dockerfile ../../admin
+docker run --rm -p 8080:8080 sharenpo-admin:local
+# /admin (no slash) → 301 to /admin/;  /admin/  and  /admin/dashboard → 200 index.html;
+# /admin/assets/missing.js → 404;  /  (outside /admin) → 404;  CSP + nosniff headers on every response
+```
+
+## Verifying on Docker Desktop's Kubernetes
+
+Verified 2026-09-24 (ADR 0062) with `frontend` and `admin` enabled and Ingress and NetworkPolicy
+off — Docker Desktop has no ALB Controller, and its default CNI doesn't enforce `NetworkPolicy`.
+Every command pins `--context docker-desktop` / `--kube-context docker-desktop` because a real EKS
+context can sit in the same kubeconfig. Git Bash, from the repo root unless a `cd` says otherwise.
+
+```bash
+# 1. Throwaway namespace, a Postgres standing in for RDS, and a Secret (the public dummy values CI already commits)
+kubectl --context docker-desktop create namespace c13-verify
+kubectl --context docker-desktop -n c13-verify run postgres --image=postgres:16 --image-pull-policy=IfNotPresent --restart=Never --env=POSTGRES_USER=sharenpo --env=POSTGRES_PASSWORD=sharenpo_pw --env=POSTGRES_DB=sharenpo --port=5432 --labels=app=postgres
+kubectl --context docker-desktop -n c13-verify expose pod postgres --port=5432 --target-port=5432
+kubectl --context docker-desktop -n c13-verify create secret generic c13-secrets --from-literal=DB_USERNAME=sharenpo --from-literal=DB_PASSWORD=sharenpo_pw --from-literal='ACCESS_TOKEN_SECRET=Ci-Access-Secret-2026-For-E2E-Test!' --from-literal='REFRESH_TOKEN_SECRET=Ci-Refresh-Secret-2026-For-E2E-Test!'
+
+# 2. Images from current source — Docker Desktop's Kubernetes reads the local Docker image store, so there is no push or load step
+docker build -t sharenpo-c13:local -f Dockerfile .
+docker build -t sharenpo-frontend:local -f frontend/Dockerfile frontend
+docker build -t sharenpo-admin:local -f admin/Dockerfile admin
+
+# 3. Install (a fresh ClamAV pod downloads its signature DB, so allow several minutes)
+cd k8s/helm
+helm --kube-context docker-desktop -n c13-verify install c13 . --set secrets.existingSecret=c13-secrets --set env.DB_HOST=postgres --set env.DB_DATABASE=sharenpo --set env.BASE_URL=http://localhost:3000 --set image.repository=sharenpo-c13 --set image.tag=local --set image.pullPolicy=Never --set frontend.enabled=true --set frontend.image.repository=sharenpo-frontend --set frontend.image.tag=local --set frontend.image.pullPolicy=Never --set admin.enabled=true --set admin.image.repository=sharenpo-admin --set admin.image.tag=local --set admin.image.pullPolicy=Never --wait --timeout=600s
+
+# 4. Pods, Services and endpoints
+kubectl --context docker-desktop -n c13-verify get pods,svc,endpoints
+
+# 5. In-cluster requests to each Service (the pod is removed when the command ends)
+kubectl --context docker-desktop -n c13-verify run curl --image=curlimages/curl:latest --image-pull-policy=IfNotPresent --restart=Never --rm -i --command -- sh -c 'for u in c13-admin/admin c13-admin/admin/ c13-admin/admin/dashboard c13-admin/admin/assets/nope.js c13-admin/ c13-frontend/ c13-frontend/posts/1 c13-frontend/assets/nope.js c13:3000/health/ready; do printf "%s -> " $u; curl -s -o /dev/null -w "%{http_code}\n" http://$u; done'
+
+# 6. Tear down
+helm --kube-context docker-desktop -n c13-verify uninstall c13
+kubectl --context docker-desktop delete namespace c13-verify
+```
+
+Expected: `STATUS: deployed`; app, frontend, admin, clamav and postgres pods `Running`; `c13`,
+`c13-frontend` and `c13-admin` each with one endpoint address, all different; then `/admin` 301,
+`/admin/` 200, `/admin/dashboard` 200, `/admin/assets/nope.js` 404, `c13-admin/` 404, frontend `/`
+200, `/posts/1` 200, `/assets/nope.js` 404, and `c13:3000/health/ready` 200. The 2026-09-24 run
+reused a two-day-old `sharenpo-frontend:local` and matched all of these.
+
+**If Kubernetes never leaves "Starting"** (seen on Docker Desktop 4.48.0 with WSL kernel
+`6.18.33.2`, 2026-09-24): the Docker Desktop log (`%LOCALAPPDATA%\Docker\log\host\com.docker.backend.exe.log`)
+shows `kubelet` exiting a few seconds after start with `cgroup ["kubepods"] has some missing
+controllers: cpuset`. Inside the `docker-desktop` WSL distro `cpuset` was in `cgroup.controllers`
+but not in `cgroup.subtree_control`. What worked:
+
+```bash
+wsl -d docker-desktop -e sh -c 'echo +cpuset > /sys/fs/cgroup/cgroup.subtree_control'
+```
+
+then Settings > Kubernetes > **Reset Kubernetes Cluster** with "Enable Kubernetes" left checked
+(unchecking it and pressing Apply & Restart is disabled while the cluster shows "Starting"). The
+cluster was `Ready` about 26 seconds after the reset. The setting is not persistent: it is lost when
+the Docker Desktop VM restarts (`wsl --shutdown`, quitting Docker Desktop), and it has to be
+repeated. Why `cpuset` isn't delegated by default was not determined.

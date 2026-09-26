@@ -109,6 +109,31 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 `chown`하세요: `sudo chown -R 1001:1001 file/` (Windows/Mac Docker Desktop은 영향
 없음).
 
+### AWS / Kubernetes 배포
+
+백엔드·`frontend/`·`admin/`은 하나의 ALB 뒤에서 하나의 Helm 릴리스로 배포됩니다
+([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.ko.md),
+[ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.ko.md)). 실행 방법은 세 가지이고,
+정확한 플래그와 선행 조건은
+[k8s/infra/terraform/README.md](k8s/infra/terraform/README.ko.md)와
+[k8s/helm/README.md](k8s/helm/README.ko.md)에 있습니다.
+
+| 방법 | 명령 | 이럴 때 쓴다 |
+|---|---|---|
+| 1. 스크립트 | `bash k8s/infra/terraform/deploy.sh all` (또는 `cluster` / `app-infra` / `addons` / `helm [브랜치]`를 하나씩) | 기본 경로. Terraform 세 state를 순서대로 적용한 뒤, 세 이미지에 같은 `:<git-sha>`를 넣어 `helm upgrade --install`을 실행한다([ADR 0046](docs/ADR/0046-deploy-sequence-automation.ko.md)) |
+| 2. 직접 실행 | `cluster/` → `app-infra/` → `addons/` 각 디렉터리에서 `terraform init -backend-config="bucket=<state-bucket>"`, `plan`, `apply`를 실행한 뒤 `k8s/helm`에서 `helm upgrade --install` | 스크립트를 쓰고 싶지 않을 때 — 스크립트가 감싸고 있는 순서 그대로다 |
+| 3. Helm만 | `k8s/helm`에서 `helm upgrade --install sharenpo . -f values-prod.yaml --set image.tag=<sha> --set frontend.image.tag=<sha> --set admin.image.tag=<sha>` | 인프라가 이미 떠 있고 앱 Secret도 있어서, 재배포하거나 이전 sha로 롤백하기만 하면 될 때 |
+
+`deploy.sh`는 모든 `apply` 전에 명시적으로 `y`를 입력받아야 멈추지 않고 진행합니다 —
+`-auto-approve`는 없습니다. 세 방법 모두 도메인 구매/NS 위임, 1회성 External Secrets
+동기화, `ingress.enabled` 켜기는 다루지 않으며, 이 셋은 계속 수동입니다(Terraform README
+참고).
+
+**CI는 배포하지 않습니다.** GitHub Actions는 세 이미지(`bluecode1775/sharenpo`,
+`-frontend`, `-admin`)를 Docker Hub에 발행할 뿐이고
+([ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)), 이
+저장소에서 `terraform apply`나 `helm upgrade`를 자동으로 실행하는 것은 없습니다.
+
 ### 환경변수
 
 필수 (부팅 시 Joi 검증 — 누락 시 즉시 실패): `ENV`, `DB_TYPE`(`postgres`),
@@ -122,7 +147,10 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 선택 (모두 Joi로 기본값이 검증되거나 각자의 조건으로 게이팅됨 — 예시를 포함한 전체
 목록은 `.env.example` 참고): `BASE_URL`(기본 `http://localhost:3000`; 공개 파일 URL
 조합에 사용), `PORT`(기본 `3000`), `CORS_ORIGIN`(미설정 = CORS 비활성; 콤마 구분
-허용 목록 — [ADR 0008](docs/ADR/0008-opt-in-cors.ko.md)), `SUPERADMIN_EMAIL`(미설정 =
+허용 목록 — [ADR 0008](docs/ADR/0008-opt-in-cors.ko.md); 배포된 `frontend/`는 이 값을
+설정하지 않는다 — API와 같은 ALB 뒤에서 same-origin으로 동작한다,
+[ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.ko.md) — `admin/`의 개발 서버나
+다른 cross-origin 소비자는 여전히 필요하다), `SUPERADMIN_EMAIL`(미설정 =
 비활성; 수동 `pnpm promote-superadmin` 단계의 대상 계정일 뿐 부팅 시 자동으로
 승격되지 않음 —
 [ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md)/[ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.ko.md)), `TEMP_SWEEP_ENABLED` /

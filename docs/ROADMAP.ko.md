@@ -33,7 +33,10 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 > ([ADR 0049](ADR/0049-performance-capacity-criteria.ko.md)) — 표의 마지막 미결 행이었다.
 > **배포 행위 자체가 실제 AWS/EKS에서 라이브로 증명**되었고(2026-08-27, §9), 이어서
 > AWS 요금을 멈추기 위해 **2026-08-28 전면 철거**, ADR 0047 관측성 스택의 라이브 검증을
-> 위해 **2026-08-29/30 재적용**되었다 — §9의 각 항목대로, 인프라 상태는 매번 시점
+> 위해 **2026-08-29/30 재적용**되었다 — §9의 각 항목대로. 이후 **2026-08-31에 다시
+> 철거**되었다(로컬 Terraform state 파일의 시각과 철거 명령을 문서화한 커밋 `252e830`으로
+> 날짜를 잡았고, §9에는 이 철거 항목이 없으며 §6 Stage 4 표의 "현재 가동/배포됨" 셀은
+> 재적용 시점 기준이라 갱신되지 않았다) — 인프라 상태는 매번 시점
 > 스냅샷일 뿐 고정된 사실이 아니므로, 어느 쪽 상태든 가정하기 전에 `terraform plan`으로
 > 재검증할 것. 한 항목은 미완이 아니라 **범위에서 의도적으로 제외**되었다: 2026-08-31에
 > **Istio(서비스 메시)를 DevOps 스택에서 빼고 보류**로 옮겼다(§7) — 이 프로젝트는 단일
@@ -784,7 +787,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   스냅샷 없는 데이터 소멸을 뜻한다. `cluster`는 **34 add / 20 change / 34 destroy**이며
   `aws_eks_cluster.this[0] must be replaced`가 포함된다. 아무것도 apply하지 않았고 기본값은
   되돌렸다. **일정에 넣지 않고 보류한 이유**: AWS 리소스 이름은 브랜딩이 아니다. 사용자에게
-  보이는 표면은 이미 전부 `Sharenpo`이고, 특히 도메인 계층은 이미 `sharenpo.com`(Route53 +
+  보이는 표면은 이미 전부 `Sharenpo`이고, 특히 도메인 계층은 이미 `sharenpo.cloud`(Route53 +
   ACM)에 IAM 사용자도 `sharenpo-user`라, 사용자가 만지는 것 중 이 항목에 걸리는 게 없다.
   미룬다고 비용이 커지지도 않는다 — 언제 하든 클러스터 재구축과 데이터베이스 마이그레이션이
   들고, 다른 이유로 인프라를 새로 세우는 시점(리전 이동, 환경 재구축, remote state 전환)에는
@@ -952,6 +955,59 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   선택**이다 — 2026-08-27에 확정된 대로, 외부 테스터가 실제로 필요해지기 전까지는
   `ingress.enabled`를 `false`로 둔다. 전체 기록은 §6 Stage 4 표의 "HTTPS termination"
   행 참고. 여기 뭔가 아직 안 만들어져서가 아니라, 그 조건이 바뀔 때만 재검토한다.
+- 프론트엔드 호스팅 — **2026-09-21 결정 및 구현**
+  ([ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md)): 같은 Helm 릴리스의 별도
+  nginx 워크로드를 하나의 ALB에서 백엔드와 나란히 경로로 분기한다(same-origin이라 CORS가
+  필요 없고 refresh 쿠키도 그대로). `frontend/Dockerfile`과 nginx 설정, values로 켜고 끄는
+  프론트엔드 Deployment/Service와 `ingress.yaml`의 경로별 backend, `docker-publish-frontend`
+  CI 잡, `deploy.sh`의 프론트엔드 태그 처리까지 반영됐고 클러스터 없이 할 수 있는 검증은
+  끝났고(2026-09-24부터는 Docker Desktop Kubernetes 클러스터 안에서도 — 아래 admin 항목 참고),
+  `docker-publish-frontend` CI 잡도 2026-09-25에 Actions에서 통과했다(run 36065808388).
+  남은 것: 라이브 점검(`k8s/helm/README.md`
+  미해결 목록의 라이브 전용 점검 — `/` 우선순위, HTTPS와 `Secure` 쿠키, CSP/CORS 아래의 S3
+  리다이렉트, rate limit의 실제 클라이언트 IP, 롤아웃과 Prometheus 타깃 — 과 거기 함께 적힌
+  `target-type` 기본값, 운영 origin용 S3 CORS 규칙). AWS 스택이 지금 apply돼 있는지와는
+  무관하다.
+- Admin 콘솔 호스팅 — **2026-09-23 결정 및 구현**
+  ([ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)): 프론트엔드와 같은 방식으로, 하나의
+  ALB에서 `/admin` 규칙이 가리키는 세 번째 values 게이팅 nginx 워크로드다(`alias`로 `/admin/`
+  아래에서 서빙하고, Vite `base`와 라우터 `basename`이 이를 따른다). `admin/Dockerfile`과 nginx
+  설정, Helm Deployment/Service, `docker-publish-admin`, `deploy.sh`, 태그 정리 matrix까지
+  반영됐다. Docker Desktop Kubernetes에서 `helm install --wait`가 통과했고(개발자가 실행,
+  2026-09-24), 이미지를 실제 브라우저로도 확인했고(2026-09-25), `dev`의 CI도 통과했다(2026-09-25,
+  run 36065808388: `docker-publish-admin`의 스모크 테스트와 이미지 push, `admin-e2e`, 단위 테스트).
+  남은 것: `docker-publish-admin`의 `main` 경로(`:latest`, arm64), 그리고 라이브 점검 — `/`와
+  API prefix 대비 `/admin` 규칙의 우선순위, 그 밖에
+  `k8s/helm/README.md` 목록 전체.
+- EKS/ALB에서의 우아한 종료 — **2026-09-21 로컬 구현 및 검증**
+  ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md)): `useProcessExit: true`를 쓴
+  `enableShutdownHooks`를 Docker와 로컬 `kind` 클러스터에서 측정했다(파드가 10초/30초 유예
+  시간을 다 기다리는 대신 약 0.4초에 종료). 아직 열려 있는 것: 라이브 클러스터가 필요한 점검
+  두 가지 — 운영 값에서 파드가 1~2초 안에 `Terminating`을 벗어나는지, 롤링 업데이트 중 ALB가
+  `502`/`503`/`504`를 내지 않는지(실패할 가능성이 높은 쪽: 파드가 우연히 ALB의 등록 해제 지연
+  동안 계속 돌고 있었는데 이제는 그렇지 않다). 둘 다 `k8s/helm/README.md`의 미해결 점검 목록에
+  통과 기준과 함께 있고, 두 번째가 실패하면 `preStop` sleep이 흔한 처방이다. 그 메커니즘
+  자체는 나중에(2026-09-22) `kind`에서 시험했다: 유예가 부족하면 롤아웃 시간이 늘어날 뿐
+  지저분하게 죽지는 않는다 — kubelet은 막힌 `preStop` hook을 포기하는 순간에도 SIGTERM을
+  여전히 보낸다. sleep을 얼마로 둘지는 여전히 정하지 않았다 — 실제 ALB의 드레인 지연 숫자가
+  있어야 한다. AWS 스택이 지금 apply돼 있는지와는 무관하다.
+- 배포 전 준비 — **2026-09-25/26 결정 및 코드 작성, 적용된 것은 없음**: ExternalDNS로 만드는 ALB의
+  DNS 레코드와 zone 네임서버를 고정하는 재사용 위임 세트([ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)),
+  켜 둔 VPC CNI Network Policy 에이전트([ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md)
+  추가 기록), 그리고 실제 배포가 어떤 이미지를 쓰는가 — `dev` 이미지는 `amd64`뿐이고 실제로 도는
+  노드는 `arm64`뿐이라 실제 배포는 `main`을 쓴다([ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)
+  추가 기록). `app-infra/`, `addons/`, `cluster/`에서 `terraform validate`/`fmt -check`가
+  통과했고 plan·apply는 한 적이 없다. 첫 실제 배포 전에 남은 것: `dev`를 `main`에 머지하고 CI가
+  세 이미지를 모두 발행하게 하기, tfstate 버킷과 재사용 위임 세트를 만들고 Gabia가 그 네임서버를
+  가리키게 하기, push. 끝난 것: ClamAV `stable-debian` 이미지를 로컬에서 실행해 확인했다
+  (`clamdcheck.sh`, `/var/lib/clamav`, 프로브, EICAR) — 개발자가 출력이 모두 예상값과 같았다고
+  보고했고(2026-09-26, 세션은 출력을 보지 못함), 같은 날 세션이 직접 실행했다: amd64와 QEMU 위
+  arm64 모두 프로브·`PING`·EICAR·정상 파일 결과가 예상대로였고, Ready까지 amd64는 약 30초(에뮬레이션
+  131초), clamd 메모리는 안정 상태 약 1.06 GiB(에뮬레이션 1.18 GiB)였다 — 수치는 `k8s/helm/README.md`
+  미해결 목록과 ADR 0059 추가 기록에 있다. 배포 시점에 라이브로만 확인되는 것: ADR 0063의
+  Consequences, ADR 0056의 추가 기록, `k8s/helm/README.md` 미해결 목록의 점검, 그리고 노드
+  용량(`t4g.medium` 2대 — clamd 하나는 노드 4 GiB의 약 4분의 1로 측정됐지만, ExternalDNS·frontend·
+  admin까지 더한 전체는 측정한 적 없음).
 - Istio(Kubernetes 클러스터 위 서비스 메시) — **프로덕션 DevOps 스택 도입 행과 Stage 4
   구성요소 상태 표에서 제외**(2026-08-31 이동, 이번 세션에서 진행한 규모 적합성 검토 뒤
   개발자가 내린 결정 — ROADMAP 자체의 순서 계획과는 별개). **미착수 이유**: 이 프로젝트의

@@ -200,3 +200,35 @@ closed in the same pass:
   already uses, before the image is even built. This doesn't change what the smoke test's
   own checks exercise — it closes a separate gap one level earlier, catching a broken
   migration before either check ever runs.
+
+### Addendum (2026-09-26) — a `dev` image is for tests; a real deployment uses `main`
+
+D2 built `dev` for `amd64` only. The cluster it would be deployed to runs `arm64` only:
+`cluster/main.tf`'s `graviton` group (`AL2023_ARM_64_STANDARD`, `t4g.medium`) is the only one
+with nodes, the `x64` group is desired-0 (ADR 0043 D3), and the chart sets no `nodeSelector`.
+D2 (2026-08-30) weighed only what a missing `dev` arm64 build costs CI, and it predates
+`deploy.sh`'s branch-resolving default of `dev` (2026-09-04) — together the two give a mismatch
+neither decision saw. Read from Docker Hub's public API on 2026-09-25: `origin/dev`'s `:<sha>`
+tags for `sharenpo`, `sharenpo-frontend` and `sharenpo-admin` are `linux/amd64` only; `main`'s
+backend tag carries `linux/amd64` and `linux/arm64`, and `main` has no frontend or admin tag at
+all (those publish jobs have never run there).
+
+**Decided by the developer, 2026-09-26:** `dev` images are for testing (local, `kind`, Docker
+Desktop, CI) and stay `amd64`-only for build speed, as D2 says. A real deployment uses `main`,
+whose images carry `arm64` too.
+
+What `deploy.sh` already does (read from its code, not run): `bash deploy.sh helm main` (or
+`DEPLOY_BRANCH=main`) resolves `origin/main`'s HEAD and checks Docker Hub for the backend,
+frontend and admin tags; the bare `bash deploy.sh helm` does the same for `dev`. That separates
+the *image source* only — the cluster, namespace and `values-prod.yaml` are the same either way.
+It checks that a tag exists, **not which platforms it carries**, so a `dev` tag deployed to the
+`arm64` nodes passes the check and fails later, at pod start. No guard exists for that; adding
+one (for example a warning when the branch is not `main`) is not decided and not done.
+
+Before the first real deployment: `dev` has to be merged into `main`, and CI on `main` has to
+publish all three images. The frontend and admin `arm64` builds have only ever been checked as
+"the build completed" (D2); the backend is the one image with `arm64` runtime evidence — it ran
+on the Graviton nodes in the 2026-08-25–27 deployment. The frontend and admin runtime base,
+`nginxinc/nginx-unprivileged:1.28-alpine`, lists `linux/arm64` on Docker Hub (read 2026-09-26)
+and their build stage is pinned to `$BUILDPLATFORM`, so what is unproven is their runtime on
+Graviton, not their base.

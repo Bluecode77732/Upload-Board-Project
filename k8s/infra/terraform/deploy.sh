@@ -39,6 +39,18 @@ REGION="${REGION:-ap-northeast-2}"
 CLUSTER_NAME="${CLUSTER_NAME:-sharenpo}"
 S3_BUCKET_NAME="${S3_BUCKET_NAME:-}"
 DOMAIN_NAME="${DOMAIN_NAME:-}"
+# ADR 0063 D4 -- Terraform 밖에서 미리 만든 재사용 위임 세트의 ID(`/delegationset/` 접두사를
+# 뗀 값). 선택 값이다: 비어 있으면 zone을 만들 때마다 새 네임서버를 받는 기존 동작 그대로다.
+DELEGATION_SET_ID="${DELEGATION_SET_ID:-}"
+# app-infra의 plan/apply에 그대로 이어 붙일 -var 문자열. DELEGATION_SET_ID가 있을 때만 채운다.
+# 아래 호출들에서 이 변수를 일부러 따옴표 없이 쓴다 -- 비어 있을 때는 인자가 통째로
+# 사라져야 하기 때문이다(따옴표를 붙이면 빈 문자열 인자가 하나 넘어간다). ID에는 공백이 없다.
+# 이 변수를 빼먹은 호출이 있으면 그 apply에서는 고정이 조용히 빠진다 -- app-infra를 부르는
+# 곳(deploy_app_infra/plan_app_infra/apply_app_infra)의 plan/apply마다 붙어 있어야 한다.
+DELEGATION_SET_VAR=""
+if [ -n "$DELEGATION_SET_ID" ]; then
+  DELEGATION_SET_VAR="-var=delegation_set_id=$DELEGATION_SET_ID"
+fi
 # ADR 0057 -- 세 state 모두 backend "s3" 블록을 쓰므로(bucket은 커밋하지 않고
 # terraform init -backend-config로 넘김), 세 상태 전부에 필요하다.
 TFSTATE_BUCKET_NAME="${TFSTATE_BUCKET_NAME:-}"
@@ -75,7 +87,7 @@ print_usage() {
   echo "생략하지 않는다."
   echo ""
   echo "이 스크립트가 다루지 않는 것 (README.md 참고, 계속 손으로 처리):"
-  echo "  - 도메인 구매 / DNS 위임"
+  echo "  - 도메인 구매, 재사용 위임 세트 생성, 등록기관의 네임서버 변경 (ADR 0063 D4)"
   echo "  - ESO 시크릿 1회성 동기화"
   echo "  - Ingress 활성화"
   echo ""
@@ -84,6 +96,11 @@ print_usage() {
   echo "  CLUSTER_NAME      기본값: sharenpo"
   echo "  S3_BUCKET_NAME    app-infra/all 실행 시 필수 (전역적으로 유일한 버킷 이름)"
   echo "  DOMAIN_NAME       app-infra/all 실행 시 필수 (도메인은 미리 구매돼 있어야 함)"
+  echo "  DELEGATION_SET_ID 선택. Terraform 밖에서 미리 만든 재사용 위임 세트 ID (CLI가 출력한"
+  echo "                    Id에서 /delegationset/ 접두사를 뗀 값, ADR 0063 D4). 있으면"
+  echo "                    app-infra의 zone이 그 세트의 네임서버를 받아, zone을 다시 만들어도"
+  echo "                    등록기관 네임서버를 바꿀 필요가 없다. 비어 있으면 zone마다 새 값."
+  echo "                    plan/apply를 나눠 실행할 때는 두 번 모두 같은 값을 줘야 한다"
   echo "  TFSTATE_BUCKET_NAME  cluster/app-infra/addons/all 실행 시 모두 필수"
   echo "                    (Terraform state 저장용 S3 버킷 이름, ADR 0057 -- 버킷을"
   echo "                    아직 만들지 않았다면 README.md 부트스트랩 절차부터 실행)"
@@ -94,7 +111,10 @@ print_usage() {
   echo "                    쓰는 기본값). 매번 인자로 넘기기 번거로우면 이걸로 고정 가능"
   echo "  IMAGE_TAG         기본값: 비어 있음 (DEPLOY_BRANCH 조회 결과를 씀)."
   echo "                    명시하면 DEPLOY_BRANCH 조회 자체를 건너뛰고 그 태그를 강제로"
-  echo "                    씀 (예: 예전 sha로 롤백)"
+  echo "                    씀 (예: 예전 sha로 롤백). 백엔드·프론트엔드·admin 이미지에 같은"
+  echo "                    태그를 쓴다(ADR 0060/0062) -- 그 이미지가 없던 시점의 sha로"
+  echo "                    롤백하면 해당 파드가 이미지를 못 받으니, 그런 롤백은 이 스크립트"
+  echo "                    대신 helm을 직접 실행한다"
 }
 
 # 목적: terraform plan을 사람이 직접 읽고 확인한 뒤에만, 바로 그 plan을 적용한다.
@@ -242,6 +262,13 @@ apply_cluster() {
   apply_saved_plan cluster .deploy-plan.tfplan
 }
 
+# 목적: app-infra/를 2단계(ACM 인증서 -> 전체)로 apply한다.
+# 이유: 검증 레코드가 인증서 값을 for_each로 돌아서 인증서를 먼저 만들어야 한다. 또 이 apply가
+#   Route53 zone을 만들고 ACM 검증을 기다리는 동안 등록기관 네임서버가 그 zone을 가리켜야
+#   해서, 위임 방식(ADR 0063 D4)에 따라 사람에게 해야 할 일이 달라진다.
+# 방법: DELEGATION_SET_ID가 있으면 두 apply 모두에 -var로 넘겨(DELEGATION_SET_VAR) zone이
+#   그 세트의 네임서버를 받게 하고, 안내 문구도 "미리 설정해 둔 네임서버" 기준으로 바꾼다.
+#   없으면 예전처럼 새 zone의 네임서버를 조회해 등록기관에 반영하라고 안내한다.
 deploy_app_infra() {
   if [ -z "$S3_BUCKET_NAME" ]; then
     echo "에러: S3_BUCKET_NAME 환경변수가 필요합니다 (전역적으로 유일한 버킷 이름)." >&2
@@ -267,6 +294,7 @@ deploy_app_infra() {
     -var="s3_bucket_name=$S3_BUCKET_NAME" \
     -var="domain_name=$DOMAIN_NAME" \
     -var="tfstate_bucket_name=$TFSTATE_BUCKET_NAME" \
+    $DELEGATION_SET_VAR \
     -target=aws_acm_certificate.app
 
   # 이 2단계에서 aws_route53_zone.app이 새로 만들어지고, 같은 apply 안에서
@@ -275,26 +303,39 @@ deploy_app_infra() {
   # terraform output은 apply가 끝나야(또는 최소한 그 리소스 apply가 끝나야)
   # 값을 준다. 그래서 위임을 여기서 자동으로 안내할 수 없고, 대신 이 apply가
   # 오래 걸리기 전에 사람이 다른 터미널에서 조치하도록 미리 경고한다.
-  echo ""
-  echo "⚠️  주의: 이 단계는 Route53 zone을 새로 만든 뒤 ACM 인증서가 DNS로"
-  echo "   검증될 때까지 이 터미널에서 계속 대기합니다. 새 zone의 네임서버로"
-  echo "   도메인 등록기관(registrar)의 네임서버를 갱신하기 전까지는 검증이"
-  echo "   끝나지 않습니다(destroy 후 재apply라면 예전 네임서버 값은 이제"
-  echo "   안 쓰이니 반드시 새 값으로 다시 위임하세요)."
-  echo "   이 창이 대기하는 동안, 다른 터미널을 열어 아래로 새 네임서버 값을"
-  echo "   먼저 확인하고 등록기관에 즉시 반영하세요:"
-  echo "     aws route53 list-hosted-zones-by-name --dns-name $DOMAIN_NAME \\"
-  echo "       --query 'HostedZones[0].Id' --output text"
-  echo "     aws route53 get-hosted-zone --id <위 명령 결과 ID> \\"
-  echo "       --query 'DelegationSet.NameServers' --output json"
-  echo ""
+  # 위임 세트(ADR 0063 D4)를 쓰면 zone의 네임서버가 미리 정해져 있어서, 안내가 "새 값을
+  # 조회하라"에서 "세트의 값이 이미 등록기관에 들어가 있는지 확인하라"로 바뀐다.
+  if [ -n "$DELEGATION_SET_ID" ]; then
+    echo ""
+    echo "안내: 위임 세트($DELEGATION_SET_ID)를 쓰므로 이 zone은 그 세트의 네임서버를 받습니다."
+    echo "   등록기관의 네임서버가 이미 그 값으로 설정돼 있다면 ACM 검증이 바로 진행돼야 합니다."
+    echo "   아직이라면 이 창이 대기하는 동안 다른 터미널에서 값을 확인해 등록기관에 반영하세요:"
+    echo "     aws route53 get-reusable-delegation-set --id $DELEGATION_SET_ID \\"
+    echo "       --query 'DelegationSet.NameServers' --output json"
+    echo ""
+  else
+    echo ""
+    echo "⚠️  주의: 이 단계는 Route53 zone을 새로 만든 뒤 ACM 인증서가 DNS로"
+    echo "   검증될 때까지 이 터미널에서 계속 대기합니다. 새 zone의 네임서버로"
+    echo "   도메인 등록기관(registrar)의 네임서버를 갱신하기 전까지는 검증이"
+    echo "   끝나지 않습니다(destroy 후 재apply라면 예전 네임서버 값은 이제"
+    echo "   안 쓰이니 반드시 새 값으로 다시 위임하세요)."
+    echo "   이 창이 대기하는 동안, 다른 터미널을 열어 아래로 새 네임서버 값을"
+    echo "   먼저 확인하고 등록기관에 즉시 반영하세요:"
+    echo "     aws route53 list-hosted-zones-by-name --dns-name $DOMAIN_NAME \\"
+    echo "       --query 'HostedZones[0].Id' --output text"
+    echo "     aws route53 get-hosted-zone --id <위 명령 결과 ID> \\"
+    echo "       --query 'DelegationSet.NameServers' --output json"
+    echo ""
+  fi
   echo "==> 2단계: app-infra 전체 apply"
   run_terraform_step app-infra \
     -var="region=$REGION" \
     -var="cluster_name=$CLUSTER_NAME" \
     -var="s3_bucket_name=$S3_BUCKET_NAME" \
     -var="domain_name=$DOMAIN_NAME" \
-    -var="tfstate_bucket_name=$TFSTATE_BUCKET_NAME"
+    -var="tfstate_bucket_name=$TFSTATE_BUCKET_NAME" \
+    $DELEGATION_SET_VAR
 }
 
 # 목적: app-infra 1단계(ACM 인증서)의 plan만 계산해서 저장한다.
@@ -305,6 +346,7 @@ deploy_app_infra() {
 #   그 자리에서 바로 계산+승인+적용까지 이어서 한다(deploy_app_infra()의 2단계와
 #   동일한 동작).
 # 방법: plan_and_save()로 1단계만 -target=aws_acm_certificate.app로 저장한다.
+#   DELEGATION_SET_ID가 있으면 -var로 함께 넘긴다(DELEGATION_SET_VAR, ADR 0063 D4).
 plan_app_infra() {
   if [ -z "$S3_BUCKET_NAME" ]; then
     echo "에러: S3_BUCKET_NAME 환경변수가 필요합니다 (전역적으로 유일한 버킷 이름)." >&2
@@ -328,6 +370,7 @@ plan_app_infra() {
     -var="s3_bucket_name=$S3_BUCKET_NAME" \
     -var="domain_name=$DOMAIN_NAME" \
     -var="tfstate_bucket_name=$TFSTATE_BUCKET_NAME" \
+    $DELEGATION_SET_VAR \
     -target=aws_acm_certificate.app
 }
 
@@ -335,27 +378,41 @@ plan_app_infra() {
 #   (전체)를 계산+승인+적용까지 이어서 진행한다.
 # 이유/방법: plan_app_infra()의 주석 참고 -- 2단계는 구조적으로 미리 저장해 둘
 #   수 없는 값이라, deploy_app_infra()의 2단계와 동일하게 그 자리에서 처리한다.
+#   1단계는 저장된 plan에 -var 값이 이미 들어 있지만 2단계는 여기서 새로 계산하므로,
+#   plan 때 준 DELEGATION_SET_ID를 apply 때도 똑같이 줘야 한다 -- 빼먹으면 2단계 plan에
+#   zone의 delegation_set_id가 null로 바뀌는 변경이 나타난다(y를 누르기 전에 보인다).
 apply_app_infra() {
   apply_saved_plan app-infra .deploy-plan-acm.tfplan
 
-  echo ""
-  echo "⚠️  주의: 이 다음 2단계는 Route53 zone을 새로 만든 뒤 ACM 인증서가 DNS로"
-  echo "   검증될 때까지 이 터미널에서 계속 대기합니다. 새 zone의 네임서버로"
-  echo "   도메인 등록기관(registrar)의 네임서버를 갱신하기 전까지는 검증이"
-  echo "   끝나지 않습니다. 이 창이 대기하는 동안, 다른 터미널을 열어 아래로"
-  echo "   새 네임서버 값을 먼저 확인하고 등록기관에 즉시 반영하세요:"
-  echo "     aws route53 list-hosted-zones-by-name --dns-name $DOMAIN_NAME \\"
-  echo "       --query 'HostedZones[0].Id' --output text"
-  echo "     aws route53 get-hosted-zone --id <위 명령 결과 ID> \\"
-  echo "       --query 'DelegationSet.NameServers' --output json"
-  echo ""
+  if [ -n "$DELEGATION_SET_ID" ]; then
+    echo ""
+    echo "안내: 위임 세트($DELEGATION_SET_ID)를 쓰므로 이 zone은 그 세트의 네임서버를 받습니다."
+    echo "   등록기관의 네임서버가 이미 그 값으로 설정돼 있다면 ACM 검증이 바로 진행돼야 합니다."
+    echo "   아직이라면 이 창이 대기하는 동안 다른 터미널에서 값을 확인해 등록기관에 반영하세요:"
+    echo "     aws route53 get-reusable-delegation-set --id $DELEGATION_SET_ID \\"
+    echo "       --query 'DelegationSet.NameServers' --output json"
+    echo ""
+  else
+    echo ""
+    echo "⚠️  주의: 이 다음 2단계는 Route53 zone을 새로 만든 뒤 ACM 인증서가 DNS로"
+    echo "   검증될 때까지 이 터미널에서 계속 대기합니다. 새 zone의 네임서버로"
+    echo "   도메인 등록기관(registrar)의 네임서버를 갱신하기 전까지는 검증이"
+    echo "   끝나지 않습니다. 이 창이 대기하는 동안, 다른 터미널을 열어 아래로"
+    echo "   새 네임서버 값을 먼저 확인하고 등록기관에 즉시 반영하세요:"
+    echo "     aws route53 list-hosted-zones-by-name --dns-name $DOMAIN_NAME \\"
+    echo "       --query 'HostedZones[0].Id' --output text"
+    echo "     aws route53 get-hosted-zone --id <위 명령 결과 ID> \\"
+    echo "       --query 'DelegationSet.NameServers' --output json"
+    echo ""
+  fi
   echo "==> app-infra 2단계(전체) apply"
   run_terraform_step app-infra \
     -var="region=$REGION" \
     -var="cluster_name=$CLUSTER_NAME" \
     -var="s3_bucket_name=$S3_BUCKET_NAME" \
     -var="domain_name=$DOMAIN_NAME" \
-    -var="tfstate_bucket_name=$TFSTATE_BUCKET_NAME"
+    -var="tfstate_bucket_name=$TFSTATE_BUCKET_NAME" \
+    $DELEGATION_SET_VAR
 }
 
 # 목적: addons/를 apply한다.
@@ -416,6 +473,12 @@ apply_addons() {
 #   성공적으로 발행된 이미지가 아직 하나도 없는 경우, 이 에러가 바로 그걸
 #   알려준다). IMAGE_TAG를 명시하면 이 조회 전체를 건너뛰고 그 값을 그대로
 #   쓴다(예: 예전 sha로 롤백).
+#   프론트엔드 이미지(bluecode1775/sharenpo-frontend, ADR 0060)와 admin 이미지
+#   (bluecode1775/sharenpo-admin, ADR 0062)도 같은 sha 태그가 있는지 똑같이 확인하고,
+#   같은 태그를 --set frontend.image.tag / --set admin.image.tag로 함께 넘긴다 --
+#   세 이미지가 항상 같은 커밋에서 나온 쌍이라서 IMAGE_TAG 하나로 배포와 롤백을 다룰
+#   수 있다. IMAGE_TAG를 명시하면 확인 없이 세 이미지에 그대로 쓰므로, 프론트엔드나
+#   admin 이미지가 없던 시점의 sha로 롤백하면 그 파드가 이미지를 못 받는다.
 deploy_helm() {
   local helm_dir="$SCRIPT_DIR/../../helm"
   local branch="${1:-$DEPLOY_BRANCH}"
@@ -439,18 +502,44 @@ deploy_helm() {
       exit 1
     fi
 
-    echo "==> 확인됨: $branch 최신 커밋 $resolved_tag 이미지가 Docker Hub에 존재합니다."
+    # 프론트엔드 이미지도 같은 sha 태그가 있어야 한다(ADR 0060). 백엔드와 같은 방식으로
+    # 확인하고, 없으면 백엔드만 조용히 새 버전으로 올라가는 대신 바로 중단한다. 저장소
+    # 자체가 아직 없어도 Hub API가 404를 돌려주므로 같은 메시지로 잡힌다.
+    local frontend_status_code
+    frontend_status_code="$(curl -s -o /dev/null -w "%{http_code}" \
+      "https://hub.docker.com/v2/repositories/bluecode1775/sharenpo-frontend/tags/${resolved_tag}/")"
+
+    if [ "$frontend_status_code" != "200" ]; then
+      echo "에러: $branch의 최신 커밋($resolved_tag)에 대한 프론트엔드 이미지가 Docker Hub에" >&2
+      echo "아직 없습니다 (HTTP $frontend_status_code). docker-publish-frontend 워크플로가" >&2
+      echo "아직 안 끝났거나 실패했을 수 있습니다. GitHub Actions 진행 상황을 확인하세요." >&2
+      exit 1
+    fi
+
+    # admin 이미지도 같은 sha 태그가 있어야 한다(ADR 0062). 프론트엔드와 같은 방식으로 확인한다.
+    local admin_status_code
+    admin_status_code="$(curl -s -o /dev/null -w "%{http_code}" \
+      "https://hub.docker.com/v2/repositories/bluecode1775/sharenpo-admin/tags/${resolved_tag}/")"
+
+    if [ "$admin_status_code" != "200" ]; then
+      echo "에러: $branch의 최신 커밋($resolved_tag)에 대한 admin 이미지가 Docker Hub에" >&2
+      echo "아직 없습니다 (HTTP $admin_status_code). docker-publish-admin 워크플로가" >&2
+      echo "아직 안 끝났거나 실패했을 수 있습니다. GitHub Actions 진행 상황을 확인하세요." >&2
+      exit 1
+    fi
+
+    echo "==> 확인됨: $branch 최신 커밋 $resolved_tag 의 백엔드·프론트엔드·admin 이미지가 Docker Hub에 존재합니다."
   else
     echo "==> IMAGE_TAG=$resolved_tag 가 명시적으로 지정되어, 자동 조회를 건너뜁니다."
   fi
 
-  echo "==> Helm 배포: 릴리스 이름 $HELM_RELEASE ($helm_dir, values-prod.yaml + image.tag=$resolved_tag)"
+  echo "==> Helm 배포: 릴리스 이름 $HELM_RELEASE ($helm_dir, values-prod.yaml + image.tag=$resolved_tag + frontend.image.tag=$resolved_tag + admin.image.tag=$resolved_tag)"
   echo "    (secrets.existingSecret으로 참조하는 Secret이 이미 만들어져 있어야 합니다 -- README.md 참고)"
   # run_terraform_step과 같은 이유로 read 실패를 흡수한다.
   read -r -p "helm upgrade --install 을 실행할까요? [y/N] " answer || answer=""
 
   if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
-    (cd "$helm_dir" && helm upgrade --install "$HELM_RELEASE" . -f values-prod.yaml --set image.tag="$resolved_tag")
+    (cd "$helm_dir" && helm upgrade --install "$HELM_RELEASE" . -f values-prod.yaml --set image.tag="$resolved_tag" --set frontend.image.tag="$resolved_tag" --set admin.image.tag="$resolved_tag")
     (cd "$helm_dir" && helm status "$HELM_RELEASE")
   else
     echo "helm 단계에서 중단했습니다." >&2

@@ -1,22 +1,26 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 
-// 목적: Nest 앱을 부트스트랩하고 프록시 신뢰 범위/보안 헤더/CORS/쿠키/검증/Swagger를 구성한 뒤
-//       리슨을 시작한다.
+// 목적: Nest 앱을 부트스트랩하고 프록시 신뢰 범위/보안 헤더/CORS/쿠키/Swagger를 구성한 뒤
+//       종료 시그널 훅을 켜고 리슨을 시작한다.
 // 이유: PORT를 process.env에서 직접 읽으면 Joi 검증을 우회해 Config 정책(ConfigService만 사용)을
 //       깨뜨린다. ALB 뒤에서는 req.ip가 항상 ALB 자신의 주소로 찍혀, 라우트별 rate limit
-//       (ADR 0054)이 방문자별이 아닌 전체 공유 버킷이 된다.
+//       (ADR 0054)이 방문자별이 아닌 전체 공유 버킷이 된다. 컨테이너에서 PID 1인 node는 SIGTERM으로
+//       죽지 않고 유예 시간을 다 쓴 뒤 SIGKILL(137)로 끝나, TypeORM의 DB 풀 정리
+//       (onApplicationShutdown)도 실행된 적이 없다(ADR 0061).
 // 방법: ConfigService 인스턴스를 한 번만 얻어 CORS_ORIGIN과 PORT 조회에 재사용한다. trust proxy는
 //       VPC 대역(10.0.0.0/16, ADR 0056과 동일 상수)에서 온 연결일 때만 X-Forwarded-For를
 //       신뢰하도록 가장 먼저 설정한다(ADR 0054 addendum). helmet은 다른 미들웨어보다 먼저
 //       적용해 모든 응답에 보안 헤더가 빠짐없이 붙게 하되, CSP의 script-src는 /doc(Swagger UI)의
-//       인라인 부트스트랩 스크립트가 실행되도록 완화한다(ADR 0055).
+//       인라인 부트스트랩 스크립트가 실행되도록 완화한다(ADR 0055). 전역 ValidationPipe는 여기서
+//       등록하지 않는다 — AppModule의 APP_PIPE가 맡아 e2e도 같은 경로를 탄다. enableShutdownHooks()는
+//       listen 직전에 useProcessExit와 함께 호출해, SIGTERM/SIGINT에서 Nest 종료 훅이 돌고 정리가
+//       끝나면 곧바로 process.exit(0)으로 끝나게 한다.
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
@@ -53,17 +57,6 @@ async function bootstrap() {
   // POST /auth/token/refresh를 위해 httpOnly refresh 쿠키를 파싱한다 (ADR 0012).
   app.use(cookieParser());
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
-    }),
-  );
-
   const config = new DocumentBuilder()
     .setTitle('Sharenpo')
     .setDescription(
@@ -81,6 +74,13 @@ async function bootstrap() {
       persistAuthorization: true,
     },
   });
+
+  // SIGTERM/SIGINT에서 OnModuleDestroy/OnApplicationShutdown 훅(TypeORM DB 풀 정리, 스케줄러
+  // 크론 정지)이 실제로 돌게 한다 — 호출하지 않으면 시그널 리스너가 없어 그 훅들이 실행되지 않는다.
+  // useProcessExit: 정리 뒤 Nest가 같은 시그널을 자기 자신에게 다시 보내 끝내는 대신 process.exit(0)을
+  // 부른다 — 컨테이너의 PID 1(node)은 그 자기 전송 시그널을 버려서, 이벤트 루프를 붙잡는 핸들이
+  // 하나라도 남으면 유예 시간이 끝나 SIGKILL이 올 때까지 안 꺼지기 때문이다(ADR 0061 D3).
+  app.enableShutdownHooks([], { useProcessExit: true });
 
   await app.listen(configService.get<number>('PORT', 3000));
 }

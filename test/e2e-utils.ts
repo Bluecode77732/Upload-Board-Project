@@ -2,11 +2,11 @@
 // 요청→응답 전체 경로를 격리된 환경에서 검증할 수 있게 한다.
 // 사용처: *.e2e-spec.ts가 임포트한다 — beforeAll에서 setupE2E(), afterAll에서 teardownE2E(),
 // beforeEach에서 truncateAll(); 그리고 Basic-auth/쿠키 헬퍼들.
-// 근거: main.ts의 (전역 ValidationPipe + cookie-parser)는 Test.createTestingModule에는 적용되지
-// 않고, dev DB를 오염시켜서도 안 된다 — 이 파일이 둘 다와 격리 전략(전용 DB + 테스트별 truncate)을
+// 근거: main.ts의 cookie-parser는 Test.createTestingModule에는 적용되지 않고, dev DB를
+// 오염시켜서도 안 된다 — 이 파일이 둘 다와 격리 전략(전용 DB + 테스트별 truncate)을
 // 한 곳에 모은다.
 
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import cookieParser from 'cookie-parser';
@@ -90,8 +90,11 @@ async function runMigrations(): Promise<void> {
   }
 }
 
-// main.ts의 부트스트랩(cookie-parser + 전역 ValidationPipe)을 재현한다 — 둘 다
-// Test.createTestingModule에는 적용되지 않지만, e2e 경로에는 둘 다 필수적이다.
+// 목적: main.ts의 부트스트랩 중 e2e 경로에 필요한 것(cookie-parser)을 재현한 테스트 앱을 띄운다.
+// 이유: cookie-parser는 main.ts의 app.use()라 Test.createTestingModule에는 적용되지 않는다.
+//       전역 ValidationPipe는 AppModule의 APP_PIPE라 여기서 따로 등록하지 않는다 — 예전엔 옵션을
+//       손으로 복사해 뒀고, 사본이 어긋나도 e2e가 알아채지 못했다.
+// 방법: AppModule을 임포트한 테스트 모듈로 앱을 만들고 cookieParser()만 붙여 init한다.
 async function bootstrapTestApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
@@ -99,14 +102,6 @@ async function bootstrapTestApp(): Promise<INestApplication> {
 
   const app = moduleRef.createNestApplication();
   app.use(cookieParser());
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transformOptions: { enableImplicitConversion: true },
-    }),
-  );
   await app.init();
   return app;
 }

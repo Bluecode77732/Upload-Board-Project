@@ -13,6 +13,33 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **VPC CNI Network Policy agent turned on (2026-09-26,
+  [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md) Addendum)** — `values-prod.yaml`
+  already set `networkPolicy.enabled: true`, but `vpc-cni` ran with its defaults, so the policy
+  was written and not enforced. `cluster/main.tf` now passes `enableNetworkPolicy` to the add-on
+  (standard mode; the add-on version stays the EKS default, `v1.22.4-eksbuild.3` for `1.34` when
+  read, above the `v1.14.0-eksbuild.3` minimum). Also corrected an earlier wording:
+  `ENABLE_NETWORK_POLICY` is the self-managed add-on's setting. Code-complete (`terraform
+  validate`/`fmt -check` pass in `cluster/`), never applied; seven live checks are listed in the
+  Addendum and `k8s/helm/README.md`, including that "another namespace times out" holds only
+  with Ingress off.
+- **A `dev` image is for tests; a real deployment uses `main` (2026-09-26,
+  [ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md) Addendum)** — `dev`
+  builds `amd64` only (D2), the only nodes that run are `arm64`, and `deploy.sh helm` defaults to
+  `dev`, so a default deploy passes its tag check and fails at pod start. Read from Docker Hub:
+  `dev`'s three images are `amd64`-only; `main`'s backend carries both and `main` has no frontend
+  or admin image yet. Documentation only — `deploy.sh` got no guard.
+- **Global `ValidationPipe` options single-sourced and registered as `APP_PIPE`
+  (2026-09-21)** — the same four options (`transform`, `whitelist`, `forbidNonWhitelisted`,
+  `enableImplicitConversion`) were hand-copied into `main.ts`, `test/e2e-utils.ts` and
+  `delete-user-query.dto.spec.ts`, whose comment said "exactly the same as main.ts" and was
+  kept true by hand. They now live in one constant, `backend/common/validation-pipe-options.ts`,
+  and the pipe is registered once, as an `APP_PIPE` provider in `AppModule` next to
+  `APP_FILTER`/`APP_GUARD`. `main.ts` no longer calls `useGlobalPipes` and `e2e-utils.ts` no
+  longer re-registers it — e2e now gets the pipe through `AppModule`, the same route as
+  production. Checked by removing the provider on purpose: 10 e2e cases fail (every
+  `VALIDATION_FAILED` assertion among them); the file was restored byte-identical afterwards.
+  No behavior change — `pnpm test` 279/279, `pnpm test:e2e` 76/76.
 - **Swagger documentation expanded and Koreanized across the entire API surface
   (2026-09-16)** — every one of the 34 endpoints across all 11 controllers gained an
   `@ApiOperation` summary (previously only `auth.controller.ts`'s `register` had one),
@@ -216,6 +243,41 @@ development line (package.json version).
   Redis-backed storage for one true per-route ceiling across replicas.
 
 ### Fixed
+- **Teardown history corrected: the stack was torn down again on 2026-08-31 (2026-09-26)** —
+  CLAUDE.md, the Terraform README and the Helm README said "destroyed 2026-08-28", and
+  ROADMAP's header stopped at the 2026-08-29/30 re-apply. The six local `terraform.tfstate` and
+  `.backup` files (three states) were last written 2026-08-31 23:00–23:21 in destroy order —
+  addons, app-infra, cluster — and the teardown commands were committed at 22:27
+  (`252e830`), so the second teardown is dated from those; §9 has no entry for it, and §6's
+  "currently live" cells still describe the re-apply. The Terraform README now also says what
+  those leftover local state files are.
+- **`sharenpo.com` → `sharenpo.cloud` in `ROADMAP.md` and this file (2026-09-25)** — an
+  08-25 entry named the live Route53 zone's domain `sharenpo.com`; that name never appears in
+  code and is unregistered, while `sharenpo.cloud` is what the first live deployment used.
+  Corrected from indirect evidence — the destroyed state could not be read.
+- **Container now stops on SIGTERM instead of waiting for SIGKILL (2026-09-21, [ADR
+  0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md))** — `main.ts` never called
+  `app.enableShutdownHooks()`, and because `node` is PID 1 in the container its SIGTERM was
+  ignored: `docker stop` took 10.4 s (the whole grace period) and ended in SIGKILL, exit 137,
+  and TypeORM never closed the pg pool. `bootstrap()` now calls it right before `listen()`,
+  with `useProcessExit: true`; in a local Linux container and in a pod on a local `kind`
+  cluster the same stop takes about 0.4 s, exit 0, with `pg.Pool.end()` running (not verified
+  on EKS — the live checks, including whether the ALB refuses requests during a rolling update
+  now that pods exit at once, are in `k8s/helm/README.md`). The option is there because PID 1 discards the signal Nest re-sends to itself:
+  without it a lingering handle brings back the full grace period (10.4 s in Docker, 30.6 s in
+  a pod). The ADR records the trade-off and the measurements. Closes the 2026-09-16 Known
+  Gaps entry, whose "the process just dies" line was wrong. **2026-09-22 addendum**: two of
+  the still-open items turned out testable without a live cluster. A Docker-only analog for
+  `S3Storage`'s `S3Client` (same default `keepAlive` agent, confirmed by reading
+  `@smithy/node-http-handler`'s source) exited just as fast with a socket left open on
+  purpose, closing that concern for shutdown speed. On a local `kind` cluster, patching a
+  `preStop`/`terminationGracePeriodSeconds` combination onto a throwaway deployment (not
+  committed to the chart) showed that an under-provisioned grace period costs rollout time,
+  not an unclean kill — kubelet still delivered SIGTERM the moment it gave up on a stuck
+  `preStop` hook, and the app exited cleanly ~35 s late instead of the intended ~5 s. This
+  corrects the "outlasted the ALB's deregistration lag by accident" framing's implied
+  opposite (that insufficient grace means no SIGTERM at all) written before this was
+  measured; the real ALB drain-lag number is still unmeasured.
 - **`ROADMAP.md`(+ko): two more stale "not started" §7 entries corrected (2026-09-08)**
   — same class of bug as the earlier ARM/Graviton fix. "AWS Secrets Manager + ESO wiring"
   and "Kubernetes Ingress/ALB + TLS certificate provisioning" both still said they were
@@ -229,6 +291,66 @@ development line (package.json version).
   the §7 entries just never caught up with §6. No code change — pure documentation.
 
 ### Added
+- **ALB DNS record via ExternalDNS, and a reusable delegation set that pins the zone's name
+  servers (2026-09-25, [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md))** —
+  nothing created the record that points the domain at the ALB, and a new Route53 zone gets four
+  new name servers every time, so each apply → destroy cycle meant editing the registrar again.
+  `addons/` now enables ExternalDNS (chart `1.22.0`, `policy: sync`, scoped by IRSA to the one
+  zone), which creates and removes the ALIAS record from `Ingress` hosts; `app-infra/` takes an
+  optional `delegation_set_id` (a set created once outside Terraform, so its name servers survive
+  a destroy), sets the zone's `force_destroy = true`, and outputs the zone's ARN and name;
+  `deploy.sh` passes `DELEGATION_SET_ID` to every `app-infra` plan/apply. A hand-made Alias record
+  and a Terraform-managed one were weighed and rejected (ADR 0063, Alternatives rejected).
+  Verified: `terraform init -backend=false`/`fmt -check`/`validate` in `app-infra/` and
+  `addons/`, the new variable's validation in an isolated config, `bash -n`. Not planned or
+  applied; the live-only checks are in the ADR's Consequences.
+- **Frontend hosted on the same ALB as the API — a separate nginx workload, path-routed
+  (2026-09-21, [ADR 0060](ADR/0060-frontend-same-alb-path-routing.md))** — nothing hosted
+  `frontend/` before: no image, no chart resources, no CI publish. It is now built into a
+  static-file nginx image (`frontend/Dockerfile`, `nginx.conf`: SPA deep-link fallback, a real
+  404 for a missing `/assets` file, a one-year cache on hashed assets, security headers and a
+  CSP — helmet only covers API responses) and runs as its own Deployment + Service in the
+  existing Helm release, values-gated (`frontend.enabled`, default `false`; `values-prod.yaml`
+  turns it on). `templates/ingress.yaml` takes an optional `service: app|frontend` per path,
+  so one Ingress carries the backend's seven allow-listed prefixes plus a `/` rule for the
+  frontend — same origin, so no CORS, and the refresh cookie is unchanged (ADR 0012's deferred
+  cross-domain question resolves as "not needed"). A new `docker-publish-frontend` CI job
+  publishes `bluecode1775/sharenpo-frontend` under the same `:<sha>` as the backend image after
+  a smoke test (deep link, asset 404, CSP header), and `deploy.sh` checks and passes both tags.
+  Chart version 0.4.0. Verified without a cluster: `helm lint --strict`/`helm template` across
+  the flag combinations, a local image build for amd64 and arm64, the SPA loading under the CSP
+  in a real browser, `actionlint`. Not verified: `helm install --wait` (no `kind` on the
+  machine), the CI job itself, and anything that needs a live ALB — the `/` rule's priority
+  under the AWS Load Balancer Controller is the main open dependency (the full live-only
+  checklist is in `k8s/helm/README.md`). Found along the way, not
+  fixed: the `frontend/` and `admin/` `package.json` files have no `packageManager` pin
+  (corepack resolved pnpm 12.5.1, which the Node image's corepack cannot run — the Dockerfile
+  pins 10.14.0 itself), the controller's default `target-type: instance` doesn't fit this
+  chart's `ClusterIP` Services, and `docker-tag-cleanup.yml` covers only the backend
+  repository.
+- **Admin console hosted on the same ALB, at `/admin` (2026-09-23,
+  [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md))** — `admin/` had no deploy path: no
+  image, no chart resources, no CI publish. It now builds into a static-file nginx image
+  (`admin/Dockerfile`, `nginx.conf`) that serves under `/admin/` with `alias` — the ALB
+  Controller does not rewrite paths — and runs as a third values-gated Deployment + Service
+  (`admin.enabled`; `values-prod.yaml` turns it on) reached by a `/admin` rule (`service: admin`)
+  on the same Ingress. The Vite `base` is `/admin/` for `vite build` only (`pnpm dev` is
+  unchanged) and `BrowserRouter` takes `basename={import.meta.env.BASE_URL}`. Two real bugs in
+  `session-guard.ts` were fixed on the way — a rejected session navigated to a hardcoded `/`
+  (which is now the frontend's), and the refresh URL became `undefined/auth/token/refresh` when
+  `VITE_API_URL` is unset — and two specs pin them. `docker-publish-admin` (CI), `deploy.sh`'s
+  third tag check and `--set admin.image.tag=`, and a `sharenpo-admin` entry in
+  `docker-tag-cleanup.yml` follow the frontend's pattern; the same window closed the three
+  leftovers noted under ADR 0060 above (`packageManager` pins, `target-type: ip` in the prod
+  Ingress template, tag cleanup). Chart version 0.5.0. Verified: admin `pnpm test` (24), `lint`, `build`; a local
+  image build with curl checks and a real-browser pass (login form renders, no console errors
+  under the CSP, a deep link ends on `/admin/`); `helm lint --strict`/`helm template` across the
+  flag combinations; `actionlint`; and `helm install --wait` on Docker Desktop's Kubernetes (run
+  by the developer, reported as matching), plus a CI run on `dev` (2026-09-25, run
+  `36065808388`, nine jobs green: `docker-publish-admin`'s smoke test and image push, `admin-e2e`
+  11 passed, 24 unit tests, pnpm 10.14.0 through the `packageManager` pin). Not verified: anything
+  that needs a live ALB (including the `/admin` rule's priority against `/`), the `main`-branch
+  publish path (`:latest`, arm64), and `deploy.sh` against a real published image.
 - **Admin: light/dark toggle on every page (2026-09-08)** — on direct developer request.
   `admin/src/store/theme.store.ts` (new, zustand) resolves the initial theme from
   `localStorage` (`admin-theme`) and falls back to `prefers-color-scheme` when nothing is
@@ -870,7 +992,7 @@ development line (package.json version).
   applied and the variable defaults were reverted; only the Helm release name in that README
   was kept, since it is not an AWS resource name. The S3 bucket was never at risk:
   `s3_bucket_name` has no default and is supplied per apply, and the plan showed it updated
-  in place. The domain layer was already on the new name (`sharenpo.com` Route53 zone and ACM
+  in place. The domain layer was already on the new name (`sharenpo.cloud` Route53 zone and ACM
   certificate, IAM user `sharenpo-user`), so no user-visible surface depends on the deferral.
   Follow-up recorded in [ROADMAP.md](ROADMAP.md) §7.
   **Verified**: `pnpm lint` at 0 errors, 220/220 unit tests, `pnpm build` green in all three

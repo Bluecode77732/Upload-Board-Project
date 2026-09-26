@@ -150,6 +150,29 @@ metrics:
 networkPolicy:
   enabled: true
 
+# clamd 이미지(ADR 0059). values.yaml 기본값 clamav/clamav:stable은 Docker Hub에 linux/amd64만
+# 있어서(2026-09-25 조회), 상시 노드가 graviton(arm64)인 이 오버레이에서는 그대로 두면 이미지를
+# 못 받는다. -debian 접미 태그는 amd64/arm64/ppc64le 멀티아치다. 로컬 kind·Docker Desktop과 CI는
+# amd64라 values.yaml 기본값을 계속 쓴다. clamdcheck.sh 프로브·/var/lib/clamav 경로가 이 태그에도
+# 있는지는 배포 전 로컬 amd64 실행으로 확인한다.
+clamav:
+  image:
+    tag: stable-debian
+
+# 프론트엔드(SPA) nginx 워크로드(ADR 0060) — 실제 배포에서는 켠다. same-origin이라 CORS_ORIGIN을
+# 따로 두지 않는다(위 env에도 없다). 이미지 태그는 deploy.sh가 백엔드 image.tag와 같은 sha로
+# `--set frontend.image.tag=`를 덮어쓴다 — 여기 값(기본 "latest")은 deploy.sh를 거치지 않을 때의
+# 대비일 뿐이다.
+frontend:
+  enabled: true
+
+# admin 콘솔 nginx 워크로드(ADR 0062) — 실제 배포에서는 켠다. same-origin이라 CORS_ORIGIN을
+# 따로 두지 않는다(위 env에도 없다). 이미지 태그는 deploy.sh가 백엔드·frontend image.tag와 같은
+# sha로 `--set admin.image.tag=`를 덮어쓴다 — 여기 값(기본 "latest")은 deploy.sh를 거치지
+# 않을 때의 대비일 뿐이다.
+admin:
+  enabled: true
+
 # HTTPS 종단(ADR 0034)은 ingress/ALB에서만 하고 앱 프로세스 안에서는 하지 않는다. 아래는
 # 실제로 켤 때 쓸 값의 참고 템플릿이다 — 전부 주석 처리돼 있고 ingress.enabled은 여전히
 # values.yaml 기본값(false)을 따른다. 외부 테스터가 실제로 필요해질 때까지 켜지 않기로 한
@@ -173,6 +196,13 @@ networkPolicy:
 #     kubernetes.io/ingress.class: alb
 #     alb.ingress.kubernetes.io/scheme: internet-facing
 #     alb.ingress.kubernetes.io/certificate-arn: <app-infra `terraform output -raw acm_certificate_arn`>
+#     # 이 차트의 세 Service(app, frontend, admin)는 전부 ClusterIP다 — 컨트롤러 기본값인
+#     # target-type: instance는 NodePort/LoadBalancer Service가 필요해서 이 조합에
+#     # 맞지 않는다(2026-09-21, ADR 0060 구현 중 발견). ip 모드는 Service 타입과
+#     # 무관하게 동작하므로 이 값이 없으면 타깃 그룹에 healthy 타깃이 하나도 안
+#     # 잡힐 것으로 예상된다(라이브 미검증) — networkpolicy.yaml의 ALB 인바운드
+#     # 허용 규칙(ADR 0056 addendum)도 이 모드를 전제로 한다.
+#     alb.ingress.kubernetes.io/target-type: ip
 #     # HTTP(80)->HTTPS(443) 강제 리다이렉트 — 두 리스너를 명시하지 않으면 ALB
 #     # Controller가 80 리스너 자체를 만들지 않아 리다이렉트할 대상이 없다.
 #     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
@@ -194,3 +224,13 @@ networkPolicy:
 #           pathType: Prefix
 #         - path: /audit-log
 #           pathType: Prefix
+#         # 프론트엔드(SPA, ADR 0060) — `service: frontend`라 프론트엔드 Service로 간다. 이걸
+#         # 빠뜨리면 API는 열리는데 화면(SPA)만 사라진다(배열을 통째로 덮어쓰기 때문).
+#         - path: /
+#           pathType: Prefix
+#           service: frontend
+#         # admin 콘솔(ADR 0062) — `service: admin`이라 admin Service로 간다. 이걸 빠뜨리면
+#         # 운영자 콘솔에 닿을 방법이 없어진다(배열을 통째로 덮어쓰기 때문).
+#         - path: /admin
+#           pathType: Prefix
+#           service: admin

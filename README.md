@@ -109,6 +109,30 @@ service, not inside `api`'s boot ([ADR 0032](docs/ADR/0032-migration-as-separate
 the bind-mounted `./file` directory fails to write, `chown` it once:
 `sudo chown -R 1001:1001 file/` (Windows/Mac Docker Desktop is unaffected).
 
+### Deploying to AWS / Kubernetes
+
+The backend, `frontend/`, and `admin/` ship as one Helm release behind one ALB
+([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md),
+[ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.md)). There are three ways to
+run it; exact flags and prerequisites live in
+[k8s/infra/terraform/README.md](k8s/infra/terraform/README.md) and
+[k8s/helm/README.md](k8s/helm/README.md).
+
+| Way | Command | Use it when |
+|---|---|---|
+| 1. Scripted | `bash k8s/infra/terraform/deploy.sh all` (or `cluster` / `app-infra` / `addons` / `helm [branch]` one at a time) | The normal path. Runs the three Terraform states in order, then `helm upgrade --install` with the same `:<git-sha>` for all three images ([ADR 0046](docs/ADR/0046-deploy-sequence-automation.md)) |
+| 2. By hand | `terraform init -backend-config="bucket=<state-bucket>"`, `plan`, `apply` inside `cluster/`, then `app-infra/`, then `addons/`; then `helm upgrade --install` from `k8s/helm` | You don't want the script — this is exactly the sequence it wraps |
+| 3. Helm only | `helm upgrade --install sharenpo . -f values-prod.yaml --set image.tag=<sha> --set frontend.image.tag=<sha> --set admin.image.tag=<sha>` from `k8s/helm` | The infra is already up and the app Secret exists; you only need to redeploy or roll back to an older sha |
+
+`deploy.sh` stops for an explicit `y` before every `apply` — there is no `-auto-approve`.
+None of the three covers domain purchase / NS delegation, the one-time External Secrets
+sync, or turning `ingress.enabled` on; those stay manual (see the Terraform README).
+
+**CI does not deploy.** GitHub Actions only publishes the three images
+(`bluecode1775/sharenpo`, `-frontend`, `-admin`) to Docker Hub
+([ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.md)); nothing in
+this repository runs `terraform apply` or `helm upgrade` automatically.
+
 ### Environment variables
 
 Required (Joi-validated at boot — missing vars fail fast): `ENV`, `DB_TYPE`
@@ -124,7 +148,10 @@ Optional (all Joi-validated with a default, or gated by their own condition — 
 `.env.example` for the full list with examples): `BASE_URL` (default
 `http://localhost:3000`; composes public file URLs), `PORT` (default `3000`),
 `CORS_ORIGIN` (unset = CORS disabled; comma-separated allowlist —
-[ADR 0008](docs/ADR/0008-opt-in-cors.md)), `SUPERADMIN_EMAIL` (unset = disabled;
+[ADR 0008](docs/ADR/0008-opt-in-cors.md); the deployed `frontend/` doesn't set this — it's
+same-origin behind the same ALB as the API,
+[ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md) — `admin/`'s dev server and any
+other cross-origin consumer still need it), `SUPERADMIN_EMAIL` (unset = disabled;
 the target account for the manual `pnpm promote-superadmin` step, not an
 automatic boot-time promotion —
 [ADR 0013](docs/ADR/0013-rbac-and-audit-log.md)/[ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.md)), `TEMP_SWEEP_ENABLED` /

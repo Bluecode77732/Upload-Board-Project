@@ -24,8 +24,8 @@ Before making any change:
    - Physical upload change→ read `backend/upload/upload.module.ts` (Multer `memoryStorage`) and `upload.controller.ts` (100MB size limit) together with `backend/upload/upload.service.ts` (`stageTemp` — `temp_{uuid}_{timestamp}` naming, calls the `FileStorage` port, ADR 0029 D4)
    - Storage adapter change→ read `backend/storage/file-storage.interface.ts` (the `FileStorage` port + `FILE_STORAGE` token), `local-disk.storage.ts` / `s3.storage.ts` (the two implementations), and `storage.module.ts` (the `STORAGE_DRIVER`-keyed factory, ADR 0029)
    - Container/deploy change→ read `Dockerfile` (non-root `USER`, `HEALTHCHECK`, migration removed from `CMD` — ADR 0030/0032) and `docker-compose.yml` (the one-shot `migrate` service) together with `backend/health/` (`GET /health/live`/`GET /health/ready` — ADR 0031)
-   - Helm/K8s deploy change→ read `k8s/helm/` (`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/disabled-by-default Ingress with an explicit path allow-list (ADR 0058, not a `/` catch-all)/disabled-by-default NetworkPolicy, ADR 0056) and its `README.md` (Secret creation runbook, `existingSecret`-only consumption). `k8s/` holds no manifests outside this chart — the standalone raw manifests once at `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/` were deleted (ADR 0042); do not re-add static manifests alongside the chart (ADR 0037/0041/0042)
-   - Terraform/infra change  → `k8s/infra/terraform/` is three independent root modules, not one — `cluster/` (`module.vpc`+`module.eks`), `app-infra/` (RDS/S3+IRSA/Secrets Manager/Route53+ACM, reads `cluster/` via `terraform_remote_state`), `addons/` (`module.eks_blueprints_addons` — ALB Controller+ESO, the only state reading **both** other states). Each is `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` with its own state file, stored in S3 with native locking and SSE-S3 encryption rather than Terraform's local-file default (ADR 0057, amends ADR 0044 D3 — code-complete 2026-09-12, bucket creation and the actual migration deferred to real deployment time); read the one(s) the change actually touches. Read `README.md` (the three-step `cluster` → `app-infra` → `addons` apply order and its destroy-order reversal, the `SecretStore`/`ExternalSecret` one-time manual `kubectl apply` step, and the "Known gap" section covering the app's dedicated-ServiceAccount IRSA wiring — `app-infra/main.tf`'s trust policy, `k8s/helm/`'s `serviceaccount.yaml`+`values-prod.yaml`, and `deploy.sh`'s `HELM_RELEASE` default all pinned to the name `sharenpo` as of 2026-09-03, code-complete and validated but never applied against real AWS; the old `default`-ServiceAccount IRSA annotation this superseded is now dead once that trust policy is ever applied). Design record: ADR 0038 (upstream scaffold, deferred rewrite) → ADR 0043 (project adaptation — implemented 2026-08-18) → ADR 0044 (three-state split — implemented 2026-08-20, `terraform validate`/`fmt -check` pass in all three directories) → ADR 0057 (state backend — S3 native lock + SSE-S3, no DynamoDB/KMS, amends 0044 D3 — code-complete 2026-09-12, not applied). **Both ADRs' addenda say this config had never been `apply`d against real AWS — that was true when written, then briefly false, then true again.** All three states were applied 2026-08-25–27 (a live EKS cluster, RDS instance, S3 bucket, Route53 zone, ACM certificate, plus the app itself deployed via Helm — ADR 0039's Addendum records a same-window TLS-verification defect found and fixed against that live RDS), then **fully destroyed 2026-08-28** to stop the ongoing AWS bill once the deploy was proven end-to-end — nothing from this stack currently exists or costs money (verified via `aws eks/rds/ec2/elb` describe calls returning empty/not-found across the board). Currently: not applied. Before assuming either state, run `terraform plan` in each of the three directories — the ADR addenda and this line are both point-in-time snapshots, not live state. The ADR addenda are deliberately left as written — they record what was true when written; the correction lives here and in ROADMAP.md §7
+   - Helm/K8s deploy change→ read `k8s/helm/` (`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/disabled-by-default Ingress with an explicit path allow-list (ADR 0058, no `/` catch-all on the backend Service — ADR 0060, landed 2026-09-21, adds one `/` rule (`service: frontend`) scoped to a values-gated frontend Deployment+Service (`frontend.enabled`, default false, on in `values-prod.yaml`) on the same Ingress, and ADR 0062 (2026-09-23) adds a third the same way — one `/admin` rule (`service: admin`) to a values-gated admin Deployment+Service (`admin.enabled`, default false, on in `values-prod.yaml`), served under `/admin/` by nginx `alias`; the backend Service stays allow-listed)/disabled-by-default NetworkPolicy, ADR 0056) and its `README.md` (Secret creation runbook, `existingSecret`-only consumption). `k8s/` holds no manifests outside this chart — the standalone raw manifests once at `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/` were deleted (ADR 0042); do not re-add static manifests alongside the chart (ADR 0037/0041/0042)
+   - Terraform/infra change  → `k8s/infra/terraform/` is three independent root modules, not one — `cluster/` (`module.vpc`+`module.eks`), `app-infra/` (RDS/S3+IRSA/Secrets Manager/Route53+ACM — the zone takes an optional reusable delegation set created outside Terraform that pins its name servers, ADR 0063; reads `cluster/` via `terraform_remote_state`), `addons/` (`module.eks_blueprints_addons` — ALB Controller+ESO+ExternalDNS, the last one creating the ALB's DNS record from `Ingress` hosts, ADR 0063; the only state reading **both** other states). Each is `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf` with its own state file, stored in S3 with native locking and SSE-S3 encryption rather than Terraform's local-file default (ADR 0057, amends ADR 0044 D3 — code-complete 2026-09-12, bucket creation and the actual migration deferred to real deployment time); read the one(s) the change actually touches. Read `README.md` (the three-step `cluster` → `app-infra` → `addons` apply order and its destroy-order reversal, the `SecretStore`/`ExternalSecret` one-time manual `kubectl apply` step, and the "Known gap" section covering the app's dedicated-ServiceAccount IRSA wiring — `app-infra/main.tf`'s trust policy, `k8s/helm/`'s `serviceaccount.yaml`+`values-prod.yaml`, and `deploy.sh`'s `HELM_RELEASE` default all pinned to the name `sharenpo` as of 2026-09-03, code-complete and validated but never applied against real AWS; the old `default`-ServiceAccount IRSA annotation this superseded is now dead once that trust policy is ever applied). Design record: ADR 0038 (upstream scaffold, deferred rewrite) → ADR 0043 (project adaptation — implemented 2026-08-18) → ADR 0044 (three-state split — implemented 2026-08-20, `terraform validate`/`fmt -check` pass in all three directories) → ADR 0057 (state backend — S3 native lock + SSE-S3, no DynamoDB/KMS, amends 0044 D3 — code-complete 2026-09-12, not applied) → ADR 0063 (ALB DNS record via ExternalDNS in `addons/` + a reusable delegation set pinning the zone's name servers — amends 0043 D5, extends 0044/0047 — code-complete 2026-09-25, `terraform validate`/`fmt -check` pass in `app-infra/` and `addons/`, not applied; live-only checks are listed in the ADR's Consequences). **Both ADRs' addenda say this config had never been `apply`d against real AWS — that was true when written, then briefly false, then true again.** All three states were applied 2026-08-25–27 (a live EKS cluster, RDS instance, S3 bucket, Route53 zone, ACM certificate, plus the app itself deployed via Helm — ADR 0039's Addendum records a same-window TLS-verification defect found and fixed against that live RDS), then **fully destroyed 2026-08-28** to stop the ongoing AWS bill once the deploy was proven end-to-end, **re-applied 2026-08-29/30** to live-verify ADR 0047's observability stack, and **destroyed again 2026-08-31** (dated from the local state files' timestamps — see ROADMAP.md's header; §9 has no entry for it) — nothing from this stack currently exists or costs money (verified via `aws eks/rds/ec2/elb` describe calls returning empty/not-found across the board). Currently: not applied. Before assuming either state, run `terraform plan` in each of the three directories — the ADR addenda and this line are both point-in-time snapshots, not live state. The ADR addenda are deliberately left as written — they record what was true when written; the correction lives here and in ROADMAP.md §7
    - Deletion path change  → read `backend/user/user.service.ts` (`remove` — confirmed cascade), `backend/file/file.service.ts` (`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts` (`deletePost`, `deletePostsOfCreator`) and `LocalDiskStorage.unlink`/`S3Storage.unlink` (post-commit unlink through the `FileStorage` port, ADR 0020/0023/0029)
    - Post/board change     → read `backend/post/post.service.ts` (claim resolution on `fileId`, `canManage`, ADR 0021 read-layer reuse) together with `FileService.assertAttachableBy` / `toResponse` — the two things PostModule asks FileModule for (ADR 0023)
    - Comment/thread change → read `backend/comment/comment.service.ts` (fixed `createdAt ASC` order, `canManage`, `deleteCommentsOfCreator`) and `PostService.assertPostExists` — the one thing CommentModule asks PostModule for. Routes live in **two** controllers (`post-comment.controller.ts` for `/post/:postId/comment`, `comment.controller.ts` for `/comment/:id`); post deletion removes comments via the FK, not the service (ADR 0023 D3)
@@ -79,13 +79,14 @@ Do not make any of the following unless explicitly requested:
 
 High-blast-radius files — require explicit approval before any edit (a change here
 radiates repo-wide, so the blast radius is never "just this file": `app.module.ts` wires
-every module + the DB connection, `main.ts` is the global bootstrap/ValidationPipe/CORS,
-`*.entity.ts` defines the DB schema itself):
+every module + the DB connection + the global `ValidationPipe` (`APP_PIPE`), `main.ts` is
+the global bootstrap/CORS/shutdown hooks, `*.entity.ts` defines the DB schema itself):
 `app.module.ts`, `main.ts`, `*.entity.ts`
 
 Touching any of the following always counts as "beyond the stated task" — each governs
 behavior for *every* request or endpoint, so a local-looking edit has global reach:
-the global `ValidationPipe` options in `main.ts`, the Joi validation schema in `app.module.ts`,
+the global `ValidationPipe` options (`backend/common/validation-pipe-options.ts`, wired as
+`APP_PIPE` in `app.module.ts`), the Joi validation schema in `app.module.ts`,
 shared guards (`backend/auth/guard/`), the Multer storage config in `upload.module.ts`
 
 If a change requires touching files beyond the stated task, list all affected files first and wait for approval.
@@ -913,7 +914,8 @@ effect), choose the pattern explicitly from this table — state the choice and 
 
 ### Boundary Validation & Response Shaping
 
-- Breakdown: the global `ValidationPipe` (`main.ts`) runs `transform + whitelist +
+- Breakdown: the global `ValidationPipe` (`APP_PIPE` in `app.module.ts`, options in
+  `backend/common/validation-pipe-options.ts`) runs `transform + whitelist +
   forbidNonWhitelisted + enableImplicitConversion` — a request field not declared on a
   DTO never reaches a service. Outward, `FileService.toResponse()` maps `FileEntity` to
   `FileResponseDto` (composing the public URL from `BASE_URL` via ConfigService), and
@@ -1175,7 +1177,7 @@ Do not suggest alternatives to these decisions without explicit request.
   until this app actually runs more than one replica
 - **Security response headers (landed 2026-09-11, [ADR 0055](docs/ADR/0055-helmet-security-headers.md))**:
   `helmet()` is applied in `main.ts`'s `bootstrap()` — the first middleware registered,
-  before CORS/`cookieParser()`/the global `ValidationPipe` — so every route carries the
+  before CORS/`cookieParser()` — so every route carries the
   OWASP-recommended header set (`Content-Security-Policy`, `X-Content-Type-Options`,
   `X-Frame-Options`, `Strict-Transport-Security`, etc.). This is Express-level middleware,
   not a Nest guard, so it runs ahead of `ThrottlerGuard`/`JwtAuthGuard`/`RolesGuard` and
@@ -1514,10 +1516,11 @@ Architecture Decisions above remain operative.
   pod's ingress to same-namespace pods only and default-denies egress except DNS
   (CoreDNS), DB (`networkPolicy.egress.vpcCidr:dbPort`, default `10.0.0.0/16:5432`
   matching `cluster/main.tf`'s `var.vpc_cidr`), and HTTPS/443 (S3/AWS API — no VPC
-  endpoint exists to scope this further). `values-prod.yaml` turns it on, but it's
-  currently inert against the real (torn-down) EKS target: `cluster/main.tf`'s `vpc-cni`
-  addon doesn't enable the VPC CNI Network Policy enforcement agent yet — a separate,
-  unscheduled Terraform task. **Live-verified 2026-09-11** against a throwaway `kind`
+  endpoint exists to scope this further). `values-prod.yaml` turns it on, and
+  `cluster/main.tf`'s `vpc-cni` addon now enables the VPC CNI Network Policy enforcement
+  agent too (`enableNetworkPolicy`, 2026-09-26, ADR 0056 Addendum) — code-complete
+  (`terraform validate`/`fmt -check` pass) and never applied, so it is unverified on a live
+  cluster; the live checks are follow-up work. **Live-verified 2026-09-11** against a throwaway `kind`
   cluster with Calico installed (`kind`'s own CNI doesn't enforce `NetworkPolicy`) and a
   throwaway `postgres:16` standing in for RDS: `helm install --wait` succeeded (kubelet's
   liveness/readiness probes — which check DB connectivity, ADR 0031 — reached the pod
@@ -1568,7 +1571,7 @@ Architecture Decisions above remain operative.
   An ALB-specific fixed-response reject-rule alternative was considered and rejected —
   it would depend on aws-load-balancer-controller's rule-priority ordering, which has
   open reports of being unreliable, and there is no live ALB to verify it against
-  (all three Terraform states destroyed 2026-08-28). `templates/ingress.yaml` needed no
+  (all three Terraform states destroyed — the last time 2026-08-31, per ROADMAP.md's header). `templates/ingress.yaml` needed no
   changes; `helm lint`/`helm template` confirm the rendered rules. `ingress.enabled`
   stays `false` and `values-prod.yaml` is untouched — turning Ingress on for real still
   needs its own host/TLS/ALB-annotation work, at which point `values-prod.yaml` must
@@ -1615,31 +1618,40 @@ Architecture Decisions above remain operative.
   Network Policy enforcement agent (a different engine than Calico) stays genuinely
   AWS-only-verifiable — the same residual ADR 0056 already carries, not a new one
   (ROADMAP.md §9)
-- `app.enableShutdownHooks()` is never called in `backend/main.ts` (grep-confirmed zero
-  hits), so TypeORM's own `onApplicationShutdown` hook — the code that closes the DB
-  connection pool cleanly — never runs. On SIGTERM the process just dies, and the OS
-  cleans up the connection pool instead of the application doing it.
-
-  **Reviewed 2026-09-16, decided: defer, not urgent.** Two reasons:
-
-  1. Every DB write in this app finishes inside a single-request transaction (the
-     QueryRunner or `dataSource.transaction()` patterns in Project-Specific Principles >
-     Transaction Boundary). If the connection drops mid-transaction, Postgres rolls it
-     back automatically — so an abrupt kill can't corrupt data, it only fails the one
-     request that was in flight (a retriable failure, not data loss or a connection leak).
-  2. There is currently no live deployment for this to matter against (all three
-     Terraform states destroyed 2026-08-28; currently not applied, per the Terraform/
-     infra entry above).
-
-  Turning the hook on wouldn't prevent damage — it would just make shutdown cleaner:
-  instead of the OS forcing the connection closed, the app would close it itself. That
-  matters more once this is redeployed to K8s, so it's slated for then (ROADMAP.md
-  §7/§9's redeploy work) rather than as a standalone task now. The change itself is one
-  line (`app.enableShutdownHooks();` before `app.listen(...)` in `main.ts`), so there was
-  no real alternative to weigh — only a timing call.
-
-  No ADR: like the account-enumeration entry above, nothing in the codebase changed and
-  there's no architectural alternative to record.
+- ~~Found while implementing ADR 0060 (2026-09-21), not fixed, not yet scheduled~~ — **all three
+  resolved 2026-09-22/23**: (1) `packageManager: pnpm@10.14.0` is now pinned in `frontend/`'s and
+  `admin/`'s `package.json` (`3238f06`) — before that, corepack resolved the latest pnpm (12.5.1 at
+  the time), which corepack 0.34.0 in `node:24.8.0` cannot run. `frontend/Dockerfile` and
+  `admin/Dockerfile` still pin 10.14.0 themselves. The CI jobs pick up the pin, confirmed on Actions
+  (run 36065808388, 2026-09-25: `frontend-lint` and `admin-lint-and-unit` had corepack download
+  `pnpm-10.14.0.tgz`). (2) The prod Ingress annotation template now sets `target-type: ip` (the
+  controller's `instance` default needs a `NodePort`/`LoadBalancer` Service, and this chart's are
+  `ClusterIP`), together with the NetworkPolicy ingress rule for the ALB
+  ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.md) addendum) — coded and rendered,
+  **not observed against a live ALB**. (3) `docker-tag-cleanup.yml` now prunes `sharenpo-frontend`
+  (`3238f06`) and `sharenpo-admin` (`3ed7e8b`, ADR 0062 D6) as well. The `admin/` hosting ADR 0060
+  left open landed as [ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.md) (2026-09-23).
+- ~~`app.enableShutdownHooks()` is never called in `backend/main.ts`~~ — **resolved
+  2026-09-21** ([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.md)): the
+  2026-09-16 review had deferred the one-line fix to the redeploy as not urgent
+  (single-request transactions mean an abrupt kill can't corrupt data — Postgres rolls back
+  a dropped connection — and nothing was deployed). Measuring before writing it showed that
+  entry's own "on SIGTERM the process just dies" was wrong: `node` is PID 1 in the
+  container, so SIGTERM was ignored and `docker stop` waited out the whole grace period
+  before SIGKILL ended it — 10.4 s and exit 137 with a 10 s grace, and TypeORM's
+  `onApplicationShutdown` (the pg pool close) never ran. With
+  `app.enableShutdownHooks([], { useProcessExit: true });` before `app.listen(...)` it stops
+  in about 0.4 s, exit 0, and `pg.Pool.end()` runs (a local Linux container and a pod on a
+  local `kind` cluster, whose spec carries the default 30 s grace — **not verified on
+  EKS/the ALB**). The option is deliberate: Nest ends its cleanup by re-sending the signal
+  to itself, which PID 1 discards, so the plain call exits only while nothing holds the
+  event loop open — one lingering ref'd timer put plain back to 10.4 s/137 in Docker and
+  30.6 s in a pod, and with the option both stayed at 0.4 s. What that costs (a leaked
+  handle no longer shows up as a slow shutdown) is in the ADR's addendum. No
+  `OnModuleDestroy` was added anywhere (nothing showed a leak; a Docker-only analog for
+  `S3Storage`'s `S3Client` — the same default `keepAlive` agent shape — exited just as fast
+  with a socket left open on purpose, closing this for shutdown speed; a real `S3Client`
+  instance is still untested, ADR 0061's second addendum)
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for
@@ -1679,8 +1691,10 @@ slice now does describe this repo's contracts**; verify current behavior against
 remnant (Apollo/`/graphql`, rooms, ban/force-logout) was deleted in the same pass,
 not adapted — nothing chat-related remains to be read as reference material. It is
 still wired into no root tooling (outside the lint glob, Jest `roots`,
-`tsconfig.build.json`, compose, and CI) and still carries its own `package.json` and
-tooling, like `frontend/`. **This is now the sole admin surface** — the other
+`tsconfig.build.json`, and compose) and still carries its own `package.json` and
+tooling, like `frontend/` — its CI jobs (`admin-lint-and-unit`, `admin-e2e`,
+`docker-publish-admin`) run inside `admin/` with their own install, and it deploys as a third
+workload on the same ALB at `/admin` ([ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.md)). **This is now the sole admin surface** — the other
 candidate, `frontend/src/features/admin/AdminPage.tsx` (a 17-line stub with no
 backend calls), was deleted 2026-08-06 once this console's adaptation proved the
 import was not "mostly deletable," settling Stage 5's last open row (ROADMAP.md
@@ -1995,7 +2009,10 @@ image with a branch-aware tag/platform split (ADR 0048 D2): `main` gets
 `:<sha>` only on a `linux/amd64`-only build. Before every push, a smoke-test step
 (ADR 0048 D4) boots the built amd64 image against a throwaway `postgres:16`
 service and polls the Dockerfile's own `HEALTHCHECK` (`GET /health/live`) until
-healthy — the image is never pushed unproven. A workflow-wide `concurrency:
+healthy — the image is never pushed unproven. A sibling `docker-publish-frontend` job (`needs: [frontend-lint, frontend-e2e]`, ADR 0060) publishes the SPA's nginx image
+`bluecode1775/sharenpo-frontend` under the same `:<sha>` tag and the same branch-aware split; its
+smoke test checks the deep-link fallback, a 404 for a missing `/assets` file, and the CSP header
+before the push. A `docker-publish-admin` job (`needs: [admin-lint-and-unit, admin-e2e]`, ADR 0062) does the same for `bluecode1775/sharenpo-admin`, its smoke test adjusted to the `/admin/` prefix (a 301 from bare `/admin`). A workflow-wide `concurrency:
 cancel-in-progress` block (ADR 0048 D3) cancels a superseded run when a branch
 gets pushed to again before its CI finishes. Local containerization: a
 multi-stage `Dockerfile` + `docker-compose.yml` (ADR 0015; hardened 2026-08-08 —
@@ -2141,37 +2158,11 @@ needed before a newly added or edited skill is invocable.
 
 ### Permissions
 
-`.claude/settings.local.json` holds a Paranoid Mode permission profile (`allow`/`ask`/`deny`
-under `permissions`) — added 2026-09-15. It replaces `.claude/claude.local.json`, which had
-carried the project's local permission rules under a filename Claude Code never actually
-loads (the only recognized local-scope file is `settings.local.json`) — those rules had
-silently never applied. Gitignored, unlike `.claude/settings.json`: a personal local
-override, not a team-shared file:
-- **`allow`** — narrow and project-grounded: the real script names from root/`frontend`/
-  `admin` `package.json` (not generic `npm` guesses), read-only `git`/`docker`/`kubectl`/
-  `helm`/`terraform` inspection, and a `WebFetch` domain allowlist scoped to this repo's own
-  dependencies' official docs
-- **`ask`** — legitimate but consequential: dependency changes, every `migration:*` script,
-  `promote-superadmin`, `terraform apply`, `kubectl apply`/`helm install`/`upgrade`, PR
-  creation/merge
-- **`deny`** — blocks even past a prompt, the same reasoning Never Do Groups 1–3 apply to
-  code: credential files (`.env`, `~/.ssh`, `~/.aws`, `~/.docker`, `*.tfvars`,
-  `terraform.tfstate*`), whole-environment dumps (`env`, `printenv`, PowerShell
-  `Get-ChildItem Env:`), destructive `git` (`push --force`, `reset --hard`, `filter-branch`,
-  `config --global`, `remote set-url`), irreversible cloud/infra ops (`terraform destroy`,
-  `aws * delete*`, `helm uninstall`, `kubectl delete`), and the cloud-metadata SSRF target
-  (`169.254.169.254`)
-- **PowerShell parity** — `.claude/settings.json`'s deny rules only match the `Bash(...)`
-  tool; on Windows, `PowerShell` is a separate tool namespace the same string-prefix rules
-  do not reach, so every Bash-side destructive pattern (force-push, hard-reset, `curl`/
-  `wget` as `Invoke-WebRequest`/`iwr`) is mirrored under `PowerShell(...)` in the local
-  file — specific to a dual-shell (Bash tool + PowerShell tool) environment
-
-Known gaps, left as-is rather than fixed without request (Scope Discipline): PowerShell's
-free flag ordering defeats simple prefix matching (`Remove-Item -Recurse -Force` is covered,
-`Remove-Item <path> -Recurse -Force` is not — full coverage needs the sandbox feature, a
-different mechanism, not attempted here); `.claude/settings.json`'s committed
-`Read(./.env.*)` also blocks `.env.example` (a harmless template, not a secret) as a side
-effect — pre-existing, in the team-shared file, left untouched without an explicit request;
-`sandbox.*` (execution isolation) is a distinct concern from `permissions` (access control)
-and was not configured in this pass.
+`.claude/settings.local.json` holds a personal, machine-local Claude Code permission
+profile — gitignored, unlike `.claude/settings.json`, so it is never a team-shared file.
+Its rationale (what's in `allow`/`ask`/`deny` and why) lives in `.claude/settings.local.md`
+next to it, not here — that note is gitignored too (2026-09-23 decision): a team-shared,
+committed doc is the wrong home for one developer's local tool config, and the earlier
+version of this section only existed here because it was folded, undisclosed, into an
+unrelated Swagger-documentation commit (`005d9c9`, 2026-09-16) rather than being placed
+deliberately.

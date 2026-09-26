@@ -64,10 +64,14 @@ each ADR records the *why* behind those rules.
 | [0053](0053-global-rate-limiting.md) | Global rate limiting via `@nestjs/throttler` — first global `APP_GUARD`, health/metrics exempted | Accepted — implemented, e2e-verified | 2026-09-10 |
 | [0054](0054-per-route-rate-limit-tuning.md) | Per-route rate limit tuning — tighter auth/upload limits, `skipIf`-based bypass, amends 0053 | Accepted — implemented, e2e-verified | 2026-09-10 |
 | [0055](0055-helmet-security-headers.md) | Security response headers via `helmet` — global middleware, CSP `script-src` widened for Swagger UI | Accepted — implemented, live-verified | 2026-09-11 |
-| [0056](0056-networkpolicy-east-west-restriction.md) | NetworkPolicy for cluster east-west traffic restriction — egress-primary, gated off by default, extends 0041 | Accepted — implemented, kind+Calico-verified | 2026-09-11 |
+| [0056](0056-networkpolicy-east-west-restriction.md) | NetworkPolicy for cluster east-west traffic restriction — egress-primary, gated off by default, extends 0041 | Accepted — implemented, kind+Calico-verified; 2026-09-26 addendum: AWS agent turned on in code (`validate`/`fmt -check` pass, not applied), live checks are follow-up | 2026-09-11 |
 | [0057](0057-terraform-state-backend-s3-native-lock.md) | Terraform state backend — S3 with native locking, no DynamoDB, no KMS, amends 0044 | Accepted — code-complete, not applied | 2026-09-12 |
 | [0058](0058-ingress-path-allowlist.md) | Ingress path allow-list — closing off health, metrics, and docs, extends 0041 | Accepted — implemented, helm-template/lint-verified | 2026-09-13 |
 | [0059](0059-upload-malware-scanning-clamav.md) | Malware scanning for uploads — synchronous ClamAV gate before temp write | Accepted — implemented, live+CI+kind/Calico-verified | 2026-09-14 |
+| [0060](0060-frontend-same-alb-path-routing.md) | Frontend hosting — a separate nginx workload in the same Helm release, path-routed on the one ALB, amends 0058/0010, extends 0041 | Accepted — implemented, helm-template/lint + local image + Docker Desktop `helm install --wait` + CI verified (live ALB unverified) | 2026-09-21 |
+| [0061](0061-shutdown-hooks-and-pid1-sigterm.md) | Graceful shutdown — `enableShutdownHooks()` and node as PID 1 ignoring SIGTERM, extends 0030 | Accepted — implemented, container- and `kind`-verified (not on EKS) | 2026-09-21 |
+| [0062](0062-admin-same-alb-subpath-routing.md) | Admin console hosting — a third workload on the same ALB, at `/admin`, extends 0060/0058 | Accepted — implemented, helm-template/lint + local image + Docker Desktop `helm install --wait` + CI run verified (live ALB unverified) | 2026-09-23 |
+| [0063](0063-alb-dns-externaldns-and-delegation-set.md) | ALB DNS record via ExternalDNS, and a reusable delegation set to pin the zone's name servers, amends 0043, extends 0044/0047 | Accepted — code-complete, `terraform fmt -check`/`validate` and `bash -n` verified, not applied | 2026-09-25 |
 
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status

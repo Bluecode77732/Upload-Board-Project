@@ -6,7 +6,7 @@
 **같은 변경**에서 함께 갱신한다.
 
 여기서 참조하는 백엔드 결정 사항은 저장소 루트의 `ADR/`(0001, 0010,
-0011, 0012, 0020, 0021, 0023, 0024, 0050)에 있다 — 이 문서는 클라이언트가 지켜야 할 부분만 다시 정리한다.
+0011, 0012, 0020, 0021, 0023, 0024, 0050, 0060)에 있다 — 이 문서는 클라이언트가 지켜야 할 부분만 다시 정리한다.
 
 ## Base URL과 전송
 
@@ -16,8 +16,14 @@
   앵커링돼 있는데, 프록시의 prefix 매칭이 클라이언트 라우트인 `/files`,
   `/posts/:id`까지 함께 삼켜버리지 않도록 하기 위해서다). `VITE_API_BASE`는
   비워 둔다.
-- 프로덕션: `VITE_API_BASE`를 실제 백엔드 origin으로 설정한다. 백엔드는
-  `CORS_ORIGIN` env로 그 origin을 허용해야 한다(백엔드 ADR 0008).
+- 프로덕션: API와 같은 ALB 뒤에서 same-origin으로 동작한다 — 별도의 nginx
+  워크로드가 이 앱의 빌드 산출물을 `/`에서 서빙하고, 하나의 Ingress에서 API의
+  컨트롤러 prefix들과 나란히 경로로 분기된다(백엔드 ADR 0060). 운영 이미지에서도
+  `VITE_API_BASE`는 비워 둔다(`frontend/Dockerfile`이 빌드 시점에 빈 값으로
+  고정하고, `.dockerignore`가 로컬 `.env`를 빌드 컨텍스트에서 뺀다) — 이
+  origin에는 백엔드의 `CORS_ORIGIN`(ADR 0008)을 설정하지 않는다. `admin/`은
+  ADR 0060의 범위 밖에 있는 별도의 cross-origin 앱이라 여전히
+  `VITE_API_URL`을 설정하고 `CORS_ORIGIN`이 필요하다.
 - **모든** 요청은 `credentials: 'include'`를 보내 httpOnly 리프레시
   쿠키가 함께 실린다. 이는 `src/api/client.ts`에 중앙화되어 있다.
 

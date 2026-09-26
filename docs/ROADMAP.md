@@ -35,7 +35,10 @@ item below lands as its own dedicated, designed change
 > table's last undecided row. **The deploy act itself was proven live** on real AWS/EKS
 > (2026-08-27, §9), then **fully torn down 2026-08-28** to stop the AWS bill, then
 > **re-applied 2026-08-29/30** to live-verify ADR 0047's observability stack, per §9's
-> entries — infrastructure state is a point-in-time snapshot each time, not a standing fact;
+> entries, then **torn down again 2026-08-31** (dated from the local Terraform state files'
+> timestamps and commit `252e830`, which documents the teardown commands; §9 has no entry
+> for it, and the "currently live/deployed/running" cells in §6's Stage 4 table describe the
+> re-apply and were not updated) — infrastructure state is a point-in-time snapshot each time, not a standing fact;
 > re-verify with `terraform plan` before assuming either state. One item was scoped out
 > rather than left undone: **Istio (service mesh) was pulled from the DevOps stack and
 > deferred** on 2026-08-31 (§7) — this project runs a single backend workload with no
@@ -823,7 +826,7 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   34 destroy** including `aws_eks_cluster.this[0] must be replaced`. Nothing was applied and
   the defaults were reverted. **Why deferred rather than scheduled**: AWS resource names are
   not product branding — every user-visible surface is already `Sharenpo`, and the domain
-  layer specifically was already `sharenpo.com` (Route53 + ACM) with an IAM user
+  layer specifically was already `sharenpo.cloud` (Route53 + ACM) with an IAM user
   `sharenpo-user`, so nothing a user touches depends on this. The cost also does not grow by
   waiting: renaming costs a cluster rebuild plus a database migration whenever it is done, and
   it becomes **free** if the infrastructure is ever rebuilt for another reason (a region move,
@@ -1000,6 +1003,63 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   outside tester actually needs external access — see §6's Stage 4 table, "HTTPS
   termination" row, for the full record. Revisit only when that condition changes, not
   because anything here is still unbuilt.
+- Frontend hosting — **decided and built 2026-09-21**
+  ([ADR 0060](ADR/0060-frontend-same-alb-path-routing.md)): a separate nginx workload in
+  the same Helm release, path-routed on the one ALB beside the backend (same origin, so
+  no CORS and an unchanged refresh cookie). `frontend/Dockerfile` + nginx config, the
+  values-gated frontend Deployment/Service and a per-path backend in `ingress.yaml`, the
+  `docker-publish-frontend` CI job, and frontend tag handling in `deploy.sh` are in place and
+  verified without a cluster (and, from 2026-09-24, in-cluster on Docker Desktop's Kubernetes —
+  see the admin bullet below), and its `docker-publish-frontend` CI job passed on Actions
+  (2026-09-25, run 36065808388). Still open: a live pass (the live-only checks in `k8s/helm/README.md`'s pending list — `/`
+  priority, HTTPS and the `Secure` cookie, S3 redirect under CSP/CORS, real client IP for rate
+  limiting, rollout and Prometheus targets — plus the `target-type` default and the S3 CORS
+  rule for the production origin, both listed there). Independent of whether the AWS stack is
+  currently applied.
+- Admin console hosting — **decided and built 2026-09-23**
+  ([ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md)): the frontend's mechanism again, a
+  third values-gated nginx workload with a `/admin` rule on the one ALB (served under `/admin/`
+  with `alias`; the Vite `base` and the router `basename` follow). `admin/Dockerfile` + nginx
+  config, the Helm Deployment/Service, `docker-publish-admin`, `deploy.sh` and the tag-cleanup
+  matrix are in place. `helm install --wait` passed on Docker Desktop's Kubernetes (run by the
+  developer, 2026-09-24), the image was exercised in a real browser (2026-09-25), and CI passed on
+  `dev` (2026-09-25, run 36065808388: `docker-publish-admin`'s smoke test and image push,
+  `admin-e2e`, unit tests). Still open: the `main` path of `docker-publish-admin` (`:latest`,
+  arm64), and the live pass — the `/admin` rule's priority
+  against `/` and the API prefixes, plus the rest of the list in `k8s/helm/README.md`.
+- Graceful shutdown on EKS/ALB — **built and verified locally 2026-09-21**
+  ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md)): `enableShutdownHooks` with
+  `useProcessExit: true`, measured in Docker and on a local `kind` cluster (pods stop in about
+  0.4 s instead of waiting out the 10 s/30 s grace period). Still open: the two checks that
+  need a live cluster — pods leaving `Terminating` within a second or two under the production
+  values, and no `502`/`503`/`504` from the ALB during a rolling update (the likelier failure:
+  pods used to keep running through the ALB's deregistration lag by accident, and no longer
+  do). Both are in `k8s/helm/README.md`'s pending list with pass criteria; a `preStop` sleep is
+  the usual remedy if the second fails. The mechanism itself was tested on `kind` afterward
+  (2026-09-22): an under-provisioned grace period costs rollout time, not an unclean kill —
+  kubelet still sends SIGTERM once it gives up on a stuck `preStop` hook. The sleep duration
+  still isn't decided; it needs the real ALB's drain-lag number. Independent of whether the AWS
+  stack is currently applied.
+- Pre-deployment readiness — **decided and coded 2026-09-25/26, none of it applied**: the ALB's
+  DNS record via ExternalDNS plus a reusable delegation set that pins the zone's name servers
+  ([ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md)), the VPC CNI Network Policy
+  agent turned on ([ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md) Addendum), and
+  which image a real deployment uses — `dev` images are `amd64`-only and the only nodes that run
+  are `arm64`, so a real deployment uses `main`
+  ([ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md) Addendum).
+  `terraform validate`/`fmt -check` pass in `app-infra/`, `addons/` and `cluster/`; nothing has
+  been planned or applied. Still open before a first real deployment: merge `dev` into `main` and
+  let CI publish all three images; create the tfstate bucket and the reusable delegation set and
+  point Gabia at its name servers; push. Done: the ClamAV `stable-debian` image was run locally
+  (`clamdcheck.sh`, `/var/lib/clamav`, the probe, EICAR) — the developer reported every output
+  matched the expected values (2026-09-26; the session did not see them), and the session then ran
+  it itself the same day: on amd64 and on arm64 under QEMU the probe, `PING`, EICAR and clean
+  results were as expected, Ready took about 30 s on amd64 (131 s emulated), and clamd's memory was
+  about 1.06 GiB steady (1.18 GiB emulated) — figures in `k8s/helm/README.md`'s pending list and
+  ADR 0059's Addendum. Live-only at deploy time: the checks in ADR 0063's Consequences, ADR 0056's
+  Addendum and `k8s/helm/README.md`'s pending list, plus node capacity (two `t4g.medium` nodes;
+  clamd alone is now measured at about a quarter of one node's 4 GiB, but the whole set with
+  ExternalDNS, the frontend and the admin console added has never been measured).
 - Istio (service mesh over the Kubernetes cluster) — **pulled from the Production DevOps
   stack introduction row and the Stage 4 component-status table** (moved 2026-08-31,
   developer decision after a scale-fit review run this session, independent of the

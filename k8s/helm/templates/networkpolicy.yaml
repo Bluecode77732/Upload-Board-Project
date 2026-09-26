@@ -9,8 +9,13 @@ servicemonitor.yaml과 같은 게이팅 방식.
 노드발 kubelet 트래픽이 자동 예외 처리된다고 명시한다 — 다만 그 예외가 항상 보장되진
 않는다는 실제 사례도 있다(aws/amazon-vpc-cni-k8s#2571). 이 차트를 실제로 켜기 전에는
 반드시 대상 클러스터에서 프로브가 여전히 통과하는지 먼저 검증한다(README 참고).
-Ingress 컨트롤러/ALB(현재 ingress.enabled=false)가 실제로 켜지면 그쪽 트래픽을 허용하는
-규칙이 별도로 필요하다 — 지금은 다루지 않는다.
+Ingress/ALB용 규칙은 ingress.enabled가 true일 때만 함께 렌더링된다(2026-09-22, ADR 0056
+addendum) — ALB의 ENI는 파드가 아니라 podSelector로 구분할 수 없어, 아래처럼 egress의
+DB 규칙과 같은 이유로 VPC CIDR 전체를 ipBlock으로 허용한다. 즉 이 규칙이 렌더링되는
+동안은 "같은 네임스페이스 파드만"보다 넓어진다 — 같은 CIDR 안의 다른 파드·노드도 이
+포트에 닿을 수 있다. NetworkPolicy에는 ALB ENI만 골라내는 선택자가 없어 감수한
+트레이드오프이며, ingress.enabled가 false인 동안(기본값, 지금의 values-prod.yaml도
+동일)은 이 규칙 자체가 렌더링되지 않아 오늘의 게이팅 상태는 그대로다.
 
 아웃바운드는 이 앱이 실제로 나가는 곳만 허용한다: DNS(CoreDNS), DB(RDS — 파드가 아니라
 VPC 안 주소라 VPC CIDR로 좁힌다), clamd(ADR 0059 — 같은 네임스페이스의 clamav Pod로
@@ -44,6 +49,15 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.service.port }}
+    {{- /* ALB(ip 모드)의 인바운드 — ingress.enabled일 때만 렌더링(ADR 0056 addendum, ADR 0060). */}}
+    {{- if .Values.ingress.enabled }}
+    - from:
+        - ipBlock:
+            cidr: {{ .Values.networkPolicy.egress.vpcCidr }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+    {{- end }}
   egress:
     - to:
         - namespaceSelector: {}

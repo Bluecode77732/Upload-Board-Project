@@ -1,6 +1,8 @@
 # 목적: docker-publish(ADR 0048)가 이제 드문 main 머지가 아니라 모든 dev
-# push마다 도는 만큼, Docker Hub의 bluecode1775/sharenpo 저장소에 commit-sha
-# 태그가 무한정 쌓이는 걸 막는다.
+# push마다 도는 만큼, Docker Hub의 bluecode1775/sharenpo,
+# bluecode1775/sharenpo-frontend(ADR 0060, docker-publish-frontend),
+# bluecode1775/sharenpo-admin(ADR 0062, docker-publish-admin) 세
+# 저장소 모두에 commit-sha 태그가 무한정 쌓이는 걸 막는다.
 # 사용법: cron으로 매일 돌고, workflow_dispatch로 필요할 때도 실행 가능
 # (기본값은 dry run — `dry_run` 입력 참고).
 # 브랜치 관련 주의: `on.schedule`엔 `branches:` 필터가 없다 — GitHub Actions는
@@ -38,9 +40,19 @@ permissions:
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    # 저장소 세 개(백엔드, ADR 0060의 프론트엔드, ADR 0062의 admin)에 같은 정리 로직을 각각
+    # 돌린다 — REPO 하나만 바뀌므로 스크립트 자체는 그대로 재사용한다. fail-fast: false는
+    # 한 저장소 정리가 실패해도(예: 아직 어느 브랜치에서도 첫 이미지가 발행되지
+    # 않아 저장소가 생기기 전) 다른 저장소까지 취소되지 않게 한다 — 다만 존재하지 않는
+    # 저장소는 실패하지 않고 "태그 0개"로 정상 종료된다(태그 목록 API가 404를
+    # 반환해도 이 스크립트의 페이지네이션 루프가 빈 결과로 처리한다).
+    strategy:
+      fail-fast: false
+      matrix:
+        repo: [sharenpo, sharenpo-frontend, sharenpo-admin]
     env:
       NAMESPACE: bluecode1775
-      REPO: sharenpo
+      REPO: ${{ matrix.repo }}
       KEEP: 30
       # schedule로 트리거된 실행에는 workflow_dispatch 입력 자체가 없으므로,
       # cron 발동은 항상 "false"(실제 삭제)로 결정된다; 수동 실행은 실행하는
