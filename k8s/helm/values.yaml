@@ -49,6 +49,9 @@ securityContext:
 service:
   type: ClusterIP
   port: 3000
+  # Ingress 컨트롤러가 Service 단위로 읽는 값(예: ALB 타깃 그룹 헬스체크 경로)을 싣는 자리.
+  # 기본은 비어 있다 — 특정 컨트롤러의 키를 차트 기본값에 박지 않고 overlay(values-prod.yaml)가 정한다.
+  annotations: {}
 
 # 비밀이 아닌 env var — 여기 있는 키 하나하나가 ConfigMap(templates/configmap.yaml)의
 # 항목 하나가 되고, envFrom을 통해 컨테이너에 연결된다. 이름과 필수 여부는
@@ -187,6 +190,8 @@ admin:
     tag: "latest"
   service:
     port: 80
+    # 백엔드 service.annotations와 같은 용도(위 주석 참고).
+    annotations: {}
   # nginx-unprivileged 이미지의 non-root uid/gid(101) — frontend와 같다(ADR 0030과 같은 방침).
   podSecurityContext:
     runAsNonRoot: true
