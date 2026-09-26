@@ -243,6 +243,14 @@ development line (package.json version).
   Redis-backed storage for one true per-route ceiling across replicas.
 
 ### Fixed
+- **Teardown history corrected: the stack was torn down again on 2026-08-31 (2026-09-26)** —
+  CLAUDE.md, the Terraform README and the Helm README said "destroyed 2026-08-28", and
+  ROADMAP's header stopped at the 2026-08-29/30 re-apply. The six local `terraform.tfstate` and
+  `.backup` files (three states) were last written 2026-08-31 23:00–23:21 in destroy order —
+  addons, app-infra, cluster — and the teardown commands were committed at 22:27
+  (`252e830`), so the second teardown is dated from those; §9 has no entry for it, and §6's
+  "currently live" cells still describe the re-apply. The Terraform README now also says what
+  those leftover local state files are.
 - **`sharenpo.com` → `sharenpo.cloud` in `ROADMAP.md` and this file (2026-09-25)** — an
   08-25 entry named the live Route53 zone's domain `sharenpo.com`; that name never appears in
   code and is unregistered, while `sharenpo.cloud` is what the first live deployment used.

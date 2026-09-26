@@ -251,6 +251,13 @@
   필요함.
 
 ### 수정
+- **철거 이력 정정: 스택은 2026-08-31에 한 번 더 철거됐다 (2026-09-26)** — CLAUDE.md,
+  terraform README, helm README는 "2026-08-28에 destroy"라고만 적었고 ROADMAP 머리말은
+  2026-08-29/30 재적용에서 끝났다. 로컬 `terraform.tfstate`와 `.backup` 6개(state 3개)는
+  2026-08-31 23:00~23:21에 destroy 순서(addons, app-infra, cluster)대로 마지막으로 쓰였고,
+  철거 명령을 문서화한 커밋이 22:27(`252e830`)에 있어서 두 번째 철거는 그것들로 날짜를 잡았다.
+  §9에는 이 항목이 없고, §6의 "현재 가동" 셀도 여전히 재적용 시점 기준이다. terraform README는 이제
+  그 로컬 state 잔재 파일이 무엇인지도 설명한다.
 - **`ROADMAP.md`·이 파일의 `sharenpo.com`을 `sharenpo.cloud`로 정정 (2026-09-25)** — 08-25
   기록이 라이브 Route53 zone의 도메인을 `sharenpo.com`이라고 적었는데, 그 이름은 코드에 한 번도
   나온 적이 없고 미등록이며 첫 라이브 배포가 쓴 것은 `sharenpo.cloud`다. 파괴된 state를 읽을 수

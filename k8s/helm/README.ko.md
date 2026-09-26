@@ -20,7 +20,8 @@ Kubernetes용으로 패키징합니다. 이 차트가 별도 `helm/` 폴더가 �
 2026-09-24에는 `frontend`·`admin` 워크로드를 켠 상태로 Docker Desktop Kubernetes에서
 다시 검증했습니다(ADR 0062) — 이 문서 끝의 "Docker Desktop Kubernetes에서 검증하기"를
 참고하세요.
-**2026-08-17에 실제 배포 시작 → 2026-08-27에 안정화 → 2026-08-28에 철거**: 릴리스
+**2026-08-17에 실제 배포 시작 → 2026-08-27에 안정화 → 2026-08-28에 철거(2026-08-29/30
+재적용, 2026-08-31에 다시 철거)**: 릴리스
 `upload-board`가 `k8s/infra/terraform/cluster/`가 만든 실제 AWS/EKS 클러스터에서
 동작했습니다(revision 5, `STATUS: deployed`) — 전체 경위는
 [ROADMAP.md](../../docs/ROADMAP.md) §9(2026-08-27 항목) 참고, RDS 인스턴스의

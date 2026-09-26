@@ -17,7 +17,9 @@ instead of one root module.
 All three states, plus the app itself (Helm), were applied against real AWS
 2026-08-25–27 and confirmed working end-to-end (ADR 0039's Addendum records a
 TLS-verification fix made against that live RDS instance). Once the deploy
-was proven, everything was destroyed 2026-08-28 to stop the AWS bill — no EKS
+was proven, everything was destroyed 2026-08-28 to stop the AWS bill, re-applied
+2026-08-29/30 to live-verify ADR 0047's observability stack, and destroyed again 2026-08-31
+(dated from the local state files' timestamps) — no EKS
 cluster, RDS instance, S3 bucket, Route53 zone, NAT gateway, or EC2 instance
 from this stack currently exists (verified via `aws eks/rds/ec2/elb` describe
 calls, all empty/not-found). `terraform validate` and `terraform fmt -check`
@@ -103,6 +105,20 @@ Then, in each of the three directories, `terraform init -backend-config="bucket=
 persist — it is not something to tear down after verifying it works, the
 way the EKS/RDS stack below was (see ADR 0057 Alternatives rejected for why
 that was considered and rejected for this bucket specifically).
+
+**Leftover local state.** Each state directory may still hold a `terraform.tfstate` and a
+`terraform.tfstate.backup` from the local-state era — gitignored, last written 2026-08-31
+23:00–23:21 in destroy order (addons, app-infra, cluster), which matches that night's full
+teardown. The `terraform.tfstate` files are empty (no resources). Terraform writes the
+`.backup` itself: before it modifies a local state it copies the existing one there
+(`terraform apply -help`, `-backup`), so each holds the whole stack as it stood just before that
+`destroy` — `app-infra/`'s includes the generated `random_password` results, which Terraform
+keeps in plaintext (the reason for
+[ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.md)). Nothing reads
+them once the `backend "s3"` block is in use, and the stack they describe no longer exists;
+delete them when you no longer want the record. Not verified: whether the first `terraform
+init` against the S3 backend offers to copy the (empty) local state — if it asks, there is
+nothing to migrate.
 
 ## Before you `apply` anything
 

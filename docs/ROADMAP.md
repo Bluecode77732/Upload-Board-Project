@@ -35,7 +35,10 @@ item below lands as its own dedicated, designed change
 > table's last undecided row. **The deploy act itself was proven live** on real AWS/EKS
 > (2026-08-27, §9), then **fully torn down 2026-08-28** to stop the AWS bill, then
 > **re-applied 2026-08-29/30** to live-verify ADR 0047's observability stack, per §9's
-> entries — infrastructure state is a point-in-time snapshot each time, not a standing fact;
+> entries, then **torn down again 2026-08-31** (dated from the local Terraform state files'
+> timestamps and commit `252e830`, which documents the teardown commands; §9 has no entry
+> for it, and the "currently live/deployed/running" cells in §6's Stage 4 table describe the
+> re-apply and were not updated) — infrastructure state is a point-in-time snapshot each time, not a standing fact;
 > re-verify with `terraform plan` before assuming either state. One item was scoped out
 > rather than left undone: **Istio (service mesh) was pulled from the DevOps stack and
 > deferred** on 2026-08-31 (§7) — this project runs a single backend workload with no

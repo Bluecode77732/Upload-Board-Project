@@ -18,7 +18,9 @@ state로 나뉘어 있는지는
 것입니다.** 세 state 전부와 앱 자체(Helm)까지 2026-08-25~27에 실제 AWS에
 apply돼서 end-to-end로 정상 동작까지 확인됐습니다(그 실제 RDS를 상대로 발견·
 수정된 TLS 검증 결함은 ADR 0039의 Addendum에 기록돼 있음). 배포가 검증된 뒤
-2026-08-28에 AWS 과금을 멈추려고 전부 destroy했습니다 — 이 스택에서 나온 EKS
+2026-08-28에 AWS 과금을 멈추려고 전부 destroy했고, ADR 0047 관측성 스택 검증을 위해
+2026-08-29/30에 재적용했다가 2026-08-31에 다시 destroy했습니다(로컬 state 파일의 시각 기준) —
+이 스택에서 나온 EKS
 클러스터, RDS 인스턴스, S3 버킷, Route53 존, NAT 게이트웨이, EC2 인스턴스
 어느 것도 지금 존재하지 않습니다(`aws eks/rds/ec2/elb` describe 호출이 전부
 빈 값/not-found로 확인됨). 세 state 디렉터리 모두 `terraform validate`,
@@ -104,6 +106,18 @@ aws s3api put-public-access-block --bucket <그-버킷-이름> \
 설정 — 아래 모든 `deploy.sh` 명령이 이미 이 값을 기대합니다). 이 버킷은
 계속 유지되어야 합니다 — 아래 EKS/RDS 스택처럼 검증 후 지우는 대상이
 아닙니다(왜 그렇게 하지 않기로 했는지는 ADR 0057 기각된 대안 참고).
+
+**남아 있는 로컬 state.** 각 state 디렉터리에는 로컬 state 시절의 `terraform.tfstate`와
+`terraform.tfstate.backup`이 아직 있을 수 있습니다 — gitignore돼 있고, 2026-08-31
+23:00~23:21에 destroy 순서(addons, app-infra, cluster)대로 마지막으로 쓰였으며 그날 밤의
+전체 철거와 일치합니다. `terraform.tfstate`는 비어 있습니다(리소스 없음). `.backup`은
+Terraform이 직접 만듭니다: 로컬 state를 수정하기 전에 기존 것을 그곳으로 복사하므로
+(`terraform apply -help`의 `-backup`), 각 파일에는 그 `destroy` 직전의 스택 전체가 들어
+있습니다 — `app-infra/`의 것에는 생성된 `random_password` 결과가 평문으로 남아 있고, 이것이
+[ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.ko.md)의 배경입니다.
+`backend "s3"` 블록을 쓰는 이상 아무것도 이 파일들을 읽지 않고 이 파일이 설명하는 스택도 더는
+없으니, 기록이 필요 없으면 직접 삭제하세요. 확인하지 못한 것: S3 backend로 처음 `terraform
+init`을 할 때 (빈) 로컬 state를 복사하겠냐고 묻는지 — 묻는다면 옮길 내용이 없습니다.
 
 ## 아무거나 `apply`하기 전에 준비할 것
 

@@ -18,7 +18,8 @@ answered `200` through the Service. That run found and fixed two real bugs
 Re-verified 2026-09-24 on Docker Desktop's Kubernetes with the `frontend` and `admin`
 workloads enabled (ADR 0062) — see "Verifying on Docker Desktop's Kubernetes" at the end of
 this file.
-**Deployed for real 2026-08-17 → stable 2026-08-27, torn down 2026-08-28**: the
+**Deployed for real 2026-08-17 → stable 2026-08-27, torn down 2026-08-28 (re-applied
+2026-08-29/30, torn down again 2026-08-31)**: the
 release `upload-board` ran on the real AWS/EKS cluster from
 `k8s/infra/terraform/cluster/` (revision 5, `STATUS: deployed`) — see
 [ROADMAP.md](../../docs/ROADMAP.md) §9 (2026-08-27) for the full account,
