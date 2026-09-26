@@ -227,14 +227,29 @@ resource "aws_iam_role_policy" "app_s3" {
 # 절대 리터럴로 남지 않는다.
 ################################################################################
 
+# 두 JWT 시크릿은 backend/app.module.ts의 Joi 규칙(32자 이상, 대문자·소문자·숫자·기호 각 1개
+# 이상)을 통과해야 앱이 부팅한다. special=false로 만들면 기호가 없어 부팅 중에 종료된다(2026-09-26
+# 첫 라이브 배포에서 발견 — Joi 규칙은 09-11에 강화됐지만 이 생성 쪽은 그대로였다). 기호는 URL·셸
+# 어디서 다뤄져도 이스케이프가 필요 없는 "-_"만 쓴다(위 DB 비밀번호가 special=false인 이유와 같다).
+# min_*는 무작위 결과가 우연히 한 종류를 빠뜨리는 경우까지 막아, 규칙이 항상 충족되게 한다.
 resource "random_password" "access_token_secret" {
-  length  = 48
-  special = false
+  length           = 48
+  special          = true
+  override_special = "-_"
+  min_lower        = 1
+  min_upper        = 1
+  min_numeric      = 1
+  min_special      = 1
 }
 
 resource "random_password" "refresh_token_secret" {
-  length  = 48
-  special = false
+  length           = 48
+  special          = true
+  override_special = "-_"
+  min_lower        = 1
+  min_upper        = 1
+  min_numeric      = 1
+  min_special      = 1
 }
 
 resource "aws_secretsmanager_secret" "app" {
