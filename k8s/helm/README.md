@@ -350,8 +350,10 @@ ALB (ADR 0063), verify explicitly rather than assuming the annotations worked:
   as `clamav/clamav:stable-debian`, not the `stable` tag the chart was verified with — `stable`
   lists `linux/amd64` alone on Docker Hub and the only nodes that run are `arm64`, while
   `stable-debian` lists amd64, arm64 and ppc64le (read 2026-09-25;
-  [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md) Addendum). Run it locally
-  and confirm the two things the chart assumes: `clamdcheck.sh` exists (both probes call it) and
+  [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md) Addendum). The developer ran it
+  locally on 2026-09-26 and reported that every output matched the expected values (the session
+  did not see them; which platforms were run, the time to Ready and clamd's memory were not
+  reported). It covers the two things the chart assumes: `clamdcheck.sh` exists (both probes call it) and
   `/var/lib/clamav` is the signature directory. If either is missing, the clamd pod never
   becomes Ready and every upload answers `503 UPLOAD_SCAN_UNAVAILABLE`. Run it once with
   `--platform linux/arm64` too: Docker Desktop's platform list includes `linux/arm64` (emulated,

@@ -998,9 +998,10 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   노드는 `arm64`뿐이라 실제 배포는 `main`을 쓴다([ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)
   추가 기록). `app-infra/`, `addons/`, `cluster/`에서 `terraform validate`/`fmt -check`가
   통과했고 plan·apply는 한 적이 없다. 첫 실제 배포 전에 남은 것: `dev`를 `main`에 머지하고 CI가
-  세 이미지를 모두 발행하게 하기, ClamAV `stable-debian` 이미지를 로컬에서 띄워 `clamdcheck.sh`와
-  `/var/lib/clamav` 확인하기, tfstate 버킷과 재사용 위임 세트를 만들고 Gabia가 그 네임서버를
-  가리키게 하기, push. 배포 시점에 라이브로만 확인되는 것: ADR 0063의 Consequences, ADR 0056의
+  세 이미지를 모두 발행하게 하기, tfstate 버킷과 재사용 위임 세트를 만들고 Gabia가 그 네임서버를
+  가리키게 하기, push. 끝난 것: ClamAV `stable-debian` 이미지를 로컬에서 실행해 확인했다
+  (`clamdcheck.sh`, `/var/lib/clamav`, 프로브, EICAR) — 개발자가 출력이 모두 예상값과 같았다고
+  보고했다(2026-09-26, 세션은 출력을 보지 못함). 배포 시점에 라이브로만 확인되는 것: ADR 0063의 Consequences, ADR 0056의
   추가 기록, `k8s/helm/README.md` 미해결 목록의 점검, 그리고 노드 용량(`t4g.medium` 2대, clamd·
   ExternalDNS·frontend·admin이 더해진 상태로는 측정한 적 없음).
 - Istio(Kubernetes 클러스터 위 서비스 메시) — **프로덕션 DevOps 스택 도입 행과 Stage 4

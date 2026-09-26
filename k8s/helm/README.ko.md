@@ -350,8 +350,10 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   `stable`이 아니라 `clamav/clamav:stable-debian`으로 실행한다 — `stable`은 Docker Hub에
   `linux/amd64`만 있는데 실제로 도는 노드는 `arm64`뿐이고, `stable-debian`은 amd64, arm64,
   ppc64le를 담고 있다(2026-09-25에 읽음,
-  [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md) 추가 기록). 로컬에서
-  실행해 차트가 전제한 두 가지를 확인한다: `clamdcheck.sh`가 있는지(두 프로브가 호출한다)와
+  [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md) 추가 기록). 개발자가
+  2026-09-26에 로컬에서 실행해 출력이 모두 예상값과 같았다고 보고했다(세션은 출력을 보지 못했고,
+  어느 플랫폼으로 했는지·Ready까지 걸린 시간·clamd 메모리는 보고되지 않았다). 확인 대상은 차트가
+  전제한 두 가지다: `clamdcheck.sh`가 있는지(두 프로브가 호출한다)와
   `/var/lib/clamav`가 서명 폴더인지. 둘 중 하나라도 없으면 clamd 파드가 Ready가 되지 않고 모든
   업로드가 `503 UPLOAD_SCAN_UNAVAILABLE`로 답한다. `--platform linux/arm64`로도 한 번
   실행해 본다: Docker Desktop의 플랫폼 목록에 `linux/arm64`가 있다(에뮬레이션이라 느리고

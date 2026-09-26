@@ -1049,9 +1049,10 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   ([ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md) Addendum).
   `terraform validate`/`fmt -check` pass in `app-infra/`, `addons/` and `cluster/`; nothing has
   been planned or applied. Still open before a first real deployment: merge `dev` into `main` and
-  let CI publish all three images; run the ClamAV `stable-debian` image locally and check
-  `clamdcheck.sh` and `/var/lib/clamav`; create the tfstate bucket and the reusable delegation
-  set and point Gabia at its name servers; push. Live-only at deploy time: the checks in ADR
+  let CI publish all three images; create the tfstate bucket and the reusable delegation set and
+  point Gabia at its name servers; push. Done: the ClamAV `stable-debian` image was run locally
+  (`clamdcheck.sh`, `/var/lib/clamav`, the probe, EICAR) and the developer reported every output
+  matched the expected values (2026-09-26; the session did not see them). Live-only at deploy time: the checks in ADR
   0063's Consequences, ADR 0056's Addendum and `k8s/helm/README.md`'s pending list, plus node
   capacity (two `t4g.medium` nodes, never measured with clamd, ExternalDNS, the frontend and the
   admin console added).
