@@ -445,14 +445,19 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   실제로 API prefix들 아래에 놓이는지(ADR 0060, 컨트롤러의 Exact 다음 긴 Prefix 순서는
   라이브에서 확인된 적이 없다). `/health/live`·`/metrics`·`/doc`도 SPA의 HTML(또는 404)이
   나와야 하고 백엔드 응답이 나오면 안 된다. 2026-09-26 관찰: `/`는 `200`, `/file`은 `401` —
-  상태 코드만 보았고 본문과 `/health/live`·`/metrics`·`/doc` 경로는 확인하지 않았다.
+  상태 코드만 보았다. `401`은 백엔드만 낼 수 있으므로(SPA 폴백은 `200`을 돌려준다) API prefix
+  규칙이 `/`보다 먼저 적용된 것은 확인됐다. 확인하지 않은 것: 본문, `/files`, `/posts/1`,
+  존재하지 않는 경로, `/health/live`·`/metrics`·`/doc`.
 - `curl https://<도메인>/admin/`이 프론트엔드도 404도 아닌 admin 콘솔 자신의 HTML을
   돌려주는지 — `/admin`이 규칙 집합에 실제로 있는지, 그리고 Exact 다음 긴 Prefix 순서에서
   더 짧은 규칙에 먼저 먹히지 않는지 확인한다(ADR 0062, 이것도 라이브에서 확인된 적 없다).
   슬래시 없는 `curl -I https://<도메인>/admin`은 ALB가 아니라 nginx 자신의 `301`로
   `/admin/`에 리다이렉트되는지 확인한다 — 요청이 실제로 admin 파드까지 도달했는지(중간에서
   재작성되거나 버려지지 않았는지) 확인하는 것이다. 2026-09-26 관찰: `/admin/`은 `200`(상태
-  코드만). 슬래시 없는 `/admin`의 `301`은 확인하지 않았다.
+  코드만)인데, 이것으로는 아무것도 증명되지 않는다 — 프론트엔드 nginx도 SPA 폴백으로 `/admin/`에
+  `200`을 돌려주므로, ALB가 요청을 프론트엔드로 보냈어도 똑같이 보인다. 둘은 본문(SPA가 아니라
+  admin 콘솔의 페이지)이나, admin nginx만 내는 슬래시 없는 `/admin`의 `301`로 구분한다. 둘 다
+  확인하지 않았으므로 이 항목은 여전히 열려 있다.
 - 타깃 그룹에 healthy 타깃이 등록되는지. `values-prod.yaml`의 주석 처리된 annotation
   블록에 `alb.ingress.kubernetes.io/target-type: ip`가 들어 있다(2026-09-22 추가 —
   컨트롤러 기본값 `instance`는 `NodePort`/`LoadBalancer` Service가 필요한데 이 차트의

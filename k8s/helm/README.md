@@ -450,15 +450,19 @@ pass observed; an item with no "observed" note is still open:
   really sits below the API prefixes (ADR 0060; the controller's Exact-then-longest-Prefix
   ordering has never been observed live). `/health/live`, `/metrics`, and `/doc` must also
   answer the SPA's HTML (or 404), never a backend response. Observed 2026-09-26: `/` `200`,
-  `/file` `401` — status codes only; the bodies and the `/health/live`, `/metrics`, `/doc` paths
-  were not checked.
+  `/file` `401` — status codes only. The `401` can only come from the backend (the SPA fallback
+  answers `200`), so the API prefix rule did win over `/`. Not checked: the bodies, `/files`,
+  `/posts/1`, an unknown path, and `/health/live`, `/metrics`, `/doc`.
 - `curl https://<domain>/admin/` returns the admin console's HTML (not the frontend's, and
   not a 404) — confirms `/admin` sits in the rule set at all and Exact-then-longest-Prefix
   ordering doesn't let a shorter rule swallow it first (ADR 0062, also never observed live).
   A bare `curl -I https://<domain>/admin` (no trailing slash) returns nginx's own `301` to
   `/admin/`, not the ALB's — confirms the request actually reached the admin pod rather than
-  being rewritten or dropped upstream. Observed 2026-09-26: `/admin/` `200` (status code only);
-  the bare `/admin` `301` was not checked.
+  being rewritten or dropped upstream. Observed 2026-09-26: `/admin/` `200` (status code only),
+  which proves nothing here — the frontend's nginx also answers `200` for `/admin/` through its
+  SPA fallback, so a request the ALB sent to the frontend would look identical. Tell them apart
+  by the body (the admin console's page, not the SPA's) or by the bare `/admin` `301`, which only
+  the admin nginx produces; neither was checked, so this item is still open.
 - The target group registers healthy targets. `values-prod.yaml`'s commented annotation
   block sets `alb.ingress.kubernetes.io/target-type: ip` (added 2026-09-22 — the
   controller's `instance` default needs a `NodePort`/`LoadBalancer` Service, and both

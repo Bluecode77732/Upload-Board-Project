@@ -13,6 +13,20 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Live-run docs corrected and completed (2026-09-27, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md),
+  [0060](ADR/0060-frontend-same-alb-path-routing.md) and [0057](ADR/0057-terraform-state-backend-s3-native-lock.md)
+  Addenda)** — documentation only. The 2026-09-26 records said the `/admin/` `200` showed the admin
+  rule routing correctly. It does not: the frontend's nginx also answers `200` for `/admin/` through
+  its SPA fallback, so that check is open again (ADR 0062 Addendum, `k8s/helm/README.md`,
+  `admin/README.md`, the ADR README). The same run's `/file` `401` did show the API prefix rules
+  winning over `/`, and the frontend target group was healthy on the default check; both are in a
+  new ADR 0060 Addendum, with what stayed unobserved. ADR 0057 gained an Addendum for the state
+  backend's first use: the bucket was created 2026-09-26 with versioning, SSE-S3 and the
+  public-access block as designed, each run created and removed its `.tflock` object, and the
+  earlier state versions (which hold generated passwords in plaintext) stay in place with no
+  lifecycle rule; the Terraform README's Destroy section says so. CLAUDE.md's `target-type: ip` and
+  ADR 0057 clauses and the ROADMAP HTTPS termination row no longer read "not observed",
+  "not applied" or "deliberately not enabled".
 - **NetworkPolicy admits Prometheus's scrape (2026-09-27, [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md)
   Addendum, `15229f6`)** — with `networkPolicy.enabled` and `ingress.enabled: false` (what
   `values-prod.yaml` runs) the ingress was open to same-namespace pods only, so Prometheus in

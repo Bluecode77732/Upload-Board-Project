@@ -3,8 +3,8 @@
 - Status: Accepted — 구현 완료(`helm lint`/`helm template`, `pnpm test`, 로컬 이미지 빌드와
   `/admin/*` curl 확인, Docker Desktop Kubernetes에서의 `helm install --wait`, `dev`에서 돈
   CI(스모크 테스트와 이미지 push)까지 검증.
-  2026-09-26 라이브 ALB에서 라우팅은 설계대로 응답했고 헬스체크에는 Service별 경로가 필요했다 —
-  마지막 추가 기록 참고)
+  2026-09-26 라이브 ALB에서 헬스체크에는 Service별 경로가 필요했고, `/admin` 자체의 라우팅은
+  상태 코드만으로는 프론트엔드의 폴백과 구분되지 않았다 — 마지막 추가 기록 참고)
 - Date: 2026-09-23
 - Extends: [ADR 0060](0060-frontend-same-alb-path-routing.ko.md) (D4의 "`admin/`은 이 결정
   밖"이 이제 해소됨 — 같은 메커니즘, 두 번째 앱), [ADR 0058](0058-ingress-path-allowlist.ko.md)
@@ -238,9 +238,13 @@ admin 파드가 Ready라는 것은 probe(`GET /admin/`)가 `alias` 설정을 거
 개발자가 라이브 클러스터에서 Ingress를 켰다. 세션은 AWS와 클러스터를 읽기 전용으로 조회하고
 `curl`로 공개 사이트를 요청했다. 시각은 UTC다.
 
-**본 것.** 라우팅은 설계대로 응답했다. `https://sharenpo.cloud/`는 `200`(frontend), `/file`은 `401`
-(백엔드), `/admin/`은 `200`(admin)이었다(상태 코드만 보았고 본문은 읽지 않음). ALB에는 타깃 그룹이
-세 개 있었고 모두 기본 헬스체크(`/`, 성공 코드 `200`)였다:
+**본 것.** 상태 코드는 `https://sharenpo.cloud/`가 `200`, `/file`이 `401`, `/admin/`이 `200`이었고
+본문과 헤더는 읽지 않았다. `/file`의 `401`은 백엔드만 낼 수 있으므로 API prefix 규칙이 `/` 규칙보다
+먼저 적용된 것은 확인됐다. `/admin/`의 `200`은 `/admin` 규칙이 적용됐다는 증거가 못 된다. 프론트엔드
+nginx(`location / { try_files $uri /index.html; }`)도 그 경로에 `200`을 돌려주므로, 요청이 프론트엔드로
+갔어도 똑같이 보였을 것이다. 아래에서 admin 그룹이 `healthy`인 것도 ALB가 admin 파드에 직접 물었을 때
+`/admin/`을 서빙한다는 것만 보여 준다. ALB가 `/admin/*`를 admin Service로 보내는지는 아직 확인하지
+못했다. ALB에는 타깃 그룹이 세 개 있었고 모두 기본 헬스체크(`/`, 성공 코드 `200`)였다:
 
 | 타깃 그룹 | 결과 |
 |---|---|

@@ -634,6 +634,12 @@ aws cloudformation delete-stack --region <리전> --stack-name <스택 이름>
 cd addons && terraform state rm module.eks_blueprints_addons
 ```
 
+state 버킷은 어느 state에도 속하지 않아서 어떤 destroy도 지우지 않고, 모든 state의 이전 버전이
+그대로 남는다(버저닝이 켜져 있고 만료시키는 규칙이 없다). 그 버전들에는 생성된 비밀번호가 평문으로
+들어 있다([ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.ko.md) Context와
+Addendum). 위 정리 뒤에 `addons/` state 객체에는 삭제 마커가 찍혔고(2026-09-26), 이전 버전들은
+남아 있다.
+
 `app-infra/`의 `s3_bucket_name`/`domain_name`은 기본값이 없어서(전역적으로
 유일해야 하는 버킷/도메인 이름엔 안전한 기본값을 둘 수 없음) `destroy`도
 `apply` 때와 같은 `-var` 값이 필요합니다. 저장해두는 커맨드에 하드코딩하지

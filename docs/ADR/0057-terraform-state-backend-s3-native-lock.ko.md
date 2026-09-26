@@ -1,7 +1,7 @@
 # ADR 0057: Terraform State 백엔드 — S3 네이티브 락, DynamoDB·KMS 없이
 
-- Status: Accepted — 코드 완료, 미적용 (버킷 생성과 state 마이그레이션은 실제
-  배포 시점으로 유예)
+- Status: Accepted — 코드 완료. 2026-09-26에 처음 사용(버킷을 만들고 세 state를 이
+  백엔드로 apply·destroy함 — Addendum 참고)
 - Date: 2026-09-12
 - Amends: [ADR 0044](0044-terraform-three-state-split.md) D3 ("local backend, 두 번째
   개발자나 CI 파이프라인이 필요해지면 재검토"라는 입장을 그 트리거보다 먼저 재검토함 —
@@ -162,3 +162,22 @@ state 모두 현재 비어 있어 지금 옮길 것이 없고, 이 AWS 계정에
   리소스는 없다; 그게 언제 바뀌는지는 D5가 정한다.
 - 스키마·엔티티·API 표면 변경 없음 — 이 ADR은 전적으로 `k8s/infra/terraform/`과 그
   문서에 국한된다.
+
+## Addendum (2026-09-26) — 첫 실사용
+
+개발자가 2026-09-26에 버킷을 만들고 세 state를 이 백엔드로 apply하고 destroy했다. 버킷 설정은
+README의 1회성 부트스트랩과 일치한다. 세션은 그 뒤에 버킷 메타데이터를 읽기 전용(`aws s3api`)으로
+조회했고 state 내용은 읽지 않았다. 시각은 UTC다.
+
+| 결정 | 버킷에서 본 것 |
+|---|---|
+| D1 — 버킷 하나, state당 키 하나, 버저닝 | 11:39에 생성. 버저닝 `Enabled`, 퍼블릭 액세스 차단 네 항목 모두 켜짐. `cluster/`·`app-infra/`·`addons/terraform.tfstate`는 각각 16·12·6개 버전이 있고 전부 그날 것이다. |
+| D2 — S3 네이티브 락 | 실행마다 `terraform.tfstate.tflock` 객체가 생겼다가 지워졌다. 락 키에 몇 초~몇 분 간격의 버전·삭제 마커 쌍이 남아 있다(`addons/`: 15:06:30 생성, 15:06:57 삭제 마커). 다른 사람이 쥔 락에 실행이 막히는 경우는 보지 못했다. 작업자가 한 명이었기 때문이다. |
+| D3 — SSE-S3 | 기본 암호화 `AES256`. |
+| D4 — `terraform_remote_state`가 S3에서 읽음 | `addons/` apply가 성공한 것으로 짐작할 뿐, 직접 보지는 않았다. |
+
+`addons/terraform.tfstate` 객체에는 18:32:49에 찍힌 삭제 마커가 있다. 건너뛰었던 `addons/`를 정리한
+뒤(`k8s/infra/terraform/README.md` > Destroy)의 일이고, 누가 지웠는지는 조회하지 않았다. 버저닝
+덕분에 그 앞의 여섯 버전이 남아 있고, 나머지 두 키의 이전 버전도 그대로다. 만료시키는 lifecycle 규칙이 없고 그
+버전들에는 생성된 비밀번호가 평문으로 들어 있다(위 Context 참고). 이 부분은 여기서 손대지 않았다.
+버킷 자체는 어느 state에도 속하지 않아서 `terraform destroy`가 지우지 않는다.

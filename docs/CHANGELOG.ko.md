@@ -13,6 +13,18 @@
 ## [Unreleased]
 
 ### 변경
+- **라이브 실행 문서를 바로잡고 보충 (2026-09-27, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md),
+  [0060](ADR/0060-frontend-same-alb-path-routing.ko.md), [0057](ADR/0057-terraform-state-backend-s3-native-lock.ko.md)
+  추가 기록)** — 문서만 바꿨다. 2026-09-26 기록은 `/admin/`의 `200`이 admin 규칙이 제대로 라우팅됐다는
+  뜻이라고 적었다. 그렇지 않다. 프론트엔드 nginx도 SPA 폴백으로 `/admin/`에 `200`을 돌려주므로 그 확인은
+  다시 열린 항목이다(ADR 0062 추가 기록, `k8s/helm/README.md`, `admin/README.md`, ADR README). 같은
+  실행의 `/file` `401`은 API prefix 규칙이 `/`보다 먼저 적용됐음을 실제로 보여 줬고 frontend 타깃 그룹도
+  기본 헬스체크에서 healthy였다. 이 둘은 보지 못한 것과 함께 새 ADR 0060 추가 기록에 적었다. ADR 0057에는
+  state 백엔드의 첫 사용에 대한 추가 기록이 생겼다: 버킷은 2026-09-26에 만들어졌고 버저닝·SSE-S3·퍼블릭
+  액세스 차단이 설계대로였으며, 실행마다 `.tflock` 객체가 생겼다가 지워졌고, 생성된 비밀번호가 평문으로 든
+  이전 state 버전들은 lifecycle 규칙 없이 그대로 남아 있다. Terraform README의 Destroy 절도 이를 적는다.
+  CLAUDE.md의 `target-type: ip`·ADR 0057 문구와 ROADMAP의 HTTPS 종단 행은 더 이상 "관찰하지 못했다"·"미적용"·
+  "의도적으로 비활성"으로 읽히지 않는다.
 - **NetworkPolicy가 Prometheus 스크레이프를 허용 (2026-09-27, [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md)
   추가 기록, `15229f6`)** — `networkPolicy.enabled`이고 `ingress.enabled: false`인 조합(`values-prod.yaml`이
   쓰는 값)에서는 인바운드가 같은 네임스페이스 파드에만 열려 있어서, `kube-prometheus-stack`의 Prometheus가

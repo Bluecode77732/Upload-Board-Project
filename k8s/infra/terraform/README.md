@@ -637,6 +637,12 @@ aws cloudformation delete-stack --region <region> --stack-name <the stack's name
 cd addons && terraform state rm module.eks_blueprints_addons
 ```
 
+The state bucket is in no state, so none of the destroys removes it, and it keeps the earlier
+versions of every state (versioning is on, nothing expires them). Those versions hold the
+generated passwords in plaintext ([ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.md)
+Context and Addendum). After the cleanup above the `addons/` state object carried a delete marker
+(2026-09-26); its earlier versions remain.
+
 `app-infra/`'s `s3_bucket_name`/`domain_name` have no default (a globally
 unique bucket/domain name can't have a safe one), so its `destroy` needs the
 same `-var` flags its `apply` did. Don't hardcode them into a command you

@@ -1,6 +1,6 @@
 # ADR 0062: Admin console hosting — a third workload on the same ALB, at `/admin`
 
-- Status: Accepted — implemented (`helm lint`/`helm template`, `pnpm test`, a local image build and curl checks against `/admin/*`, `helm install --wait` on Docker Desktop's Kubernetes, and a CI run on `dev` (smoke test and image push) verified; on a live ALB 2026-09-26 the routing answered as designed and the health checks needed a per-Service path — see the last addendum)
+- Status: Accepted — implemented (`helm lint`/`helm template`, `pnpm test`, a local image build and curl checks against `/admin/*`, `helm install --wait` on Docker Desktop's Kubernetes, and a CI run on `dev` (smoke test and image push) verified; on a live ALB 2026-09-26 the health checks needed a per-Service path, and `/admin`'s own routing could not be told apart from the frontend's fallback by status code — see the last addendum)
 - Date: 2026-09-23
 - Extends: [ADR 0060](0060-frontend-same-alb-path-routing.md) (D4's "`admin/` is outside this decision" is now resolved — same mechanism, a second app), [ADR 0058](0058-ingress-path-allowlist.md) (one more allow-listed prefix)
 - Relates to: [ADR 0010](0010-frontend-split-and-api-surface-freeze.md) (admin stays a separate app — this adds a deploy path, not a route inside `frontend/`), [ADR 0022](0022-admin-console-import-from-chat-project.md)
@@ -231,8 +231,13 @@ exists; and everything that needs a live ALB.
 The developer enabled the Ingress on a live cluster. The session read AWS and the cluster read-only
 and requested the public site with `curl`. Times are UTC.
 
-**What was seen.** Routing answered as designed: `https://sharenpo.cloud/` `200` (frontend),
-`/file` `401` (backend), `/admin/` `200` (admin) — status codes only, bodies not read. The ALB had
+**What was seen.** Status codes: `https://sharenpo.cloud/` `200`, `/file` `401`, `/admin/` `200`;
+bodies and headers were not read. `/file` `401` can only have come from the backend, so the API
+prefix rules did win over the `/` rule. `/admin/` `200` does not show that the `/admin` rule was
+hit: the frontend's nginx (`location / { try_files $uri /index.html; }`) answers `200` for that
+path too, so a request that went to the frontend instead would have looked the same. The admin
+group being `healthy` (below) only shows the admin pod serves `/admin/` when the ALB asks it
+directly. Whether the ALB sends `/admin/*` to the admin Service is still unobserved. The ALB had
 three target groups, all with the default health check (`/`, success code `200`):
 
 | Target group | Result |

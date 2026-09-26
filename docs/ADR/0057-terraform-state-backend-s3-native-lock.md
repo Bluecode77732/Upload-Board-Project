@@ -1,7 +1,7 @@
 # ADR 0057: Terraform State Backend — S3 with Native Locking, No DynamoDB, No KMS
 
-- Status: Accepted — code-complete, not applied (bucket creation and state migration
-  deferred to actual deployment time)
+- Status: Accepted — code-complete; first used 2026-09-26 (bucket created, the three states
+  applied and destroyed against it — see the Addendum)
 - Date: 2026-09-12
 - Amends: [ADR 0044](0044-terraform-three-state-split.md) D3 (revisits its "local backend,
   revisit once a second developer or CI pipeline needs to apply" stance earlier than that
@@ -171,3 +171,23 @@ trigger the developer asked to have recorded, stated precisely rather than as a 
   ADR; D5 governs when that changes.
 - No schema, entity, or API surface change — this ADR is scoped entirely to
   `k8s/infra/terraform/` and its documentation.
+
+## Addendum (2026-09-26) — first real use
+
+The developer created the bucket and applied and destroyed the three states against it on
+2026-09-26; the bucket's settings match the README's one-time bootstrap. The session read the
+bucket's metadata afterward, read-only (`aws s3api`); no state contents were read. Times are UTC.
+
+| Decision | What the bucket showed |
+|---|---|
+| D1 — one bucket, one key per state, versioning | Created 11:39. Versioning `Enabled` and all four public-access-block settings on. `cluster/`, `app-infra/` and `addons/terraform.tfstate` hold 16, 12 and 6 versions, all from that day. |
+| D2 — S3 native locking | Every run left a `terraform.tfstate.tflock` object that was created and then removed: the lock keys carry version and delete-marker pairs seconds to minutes apart (`addons/`: created 15:06:30, delete marker 15:06:57). A run blocked by a lock somebody else held was not seen, since there was one operator. |
+| D3 — SSE-S3 | Default encryption `AES256`. |
+| D4 — `terraform_remote_state` reads from S3 | Implied by the `addons/` apply succeeding; not looked at directly. |
+
+The `addons/terraform.tfstate` object has a delete marker at 18:32:49, after the cleanup of the
+skipped `addons/` (`k8s/infra/terraform/README.md` > Destroy); who deleted it was not looked up.
+Versioning keeps its six earlier versions, and the earlier versions of the other two keys are still there too:
+no lifecycle rule expires them, and they hold the generated passwords in plaintext (see Context).
+Nothing was done about that here. The bucket itself is outside every state, so a `terraform destroy`
+never removes it.
