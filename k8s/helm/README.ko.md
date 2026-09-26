@@ -21,15 +21,18 @@ Kubernetes용으로 패키징합니다. 이 차트가 별도 `helm/` 폴더가 �
 다시 검증했습니다(ADR 0062) — 이 문서 끝의 "Docker Desktop Kubernetes에서 검증하기"를
 참고하세요.
 **2026-08-17에 실제 배포 시작 → 2026-08-27에 안정화 → 2026-08-28에 철거(2026-08-29/30
-재적용, 2026-08-31에 다시 철거)**: 릴리스
+재적용, 2026-08-31에 다시 철거, 2026-09-26에 `frontend`·`admin`·ClamAV 워크로드와 함께
+한 번 더 apply하고 철거)**: 릴리스
 `upload-board`가 `k8s/infra/terraform/cluster/`가 만든 실제 AWS/EKS 클러스터에서
 동작했습니다(revision 5, `STATUS: deployed`) — 전체 경위는
 [ROADMAP.md](../../docs/ROADMAP.md) §9(2026-08-27 항목) 참고, RDS 인스턴스의
 `rds.force_ssl`이 요구해서 필요했던 `DB_SSL`/`DB_SSL_CA` 수정도 포함됩니다(ADR
 0039). 클러스터 내부에서만 접근 가능한 채로 유지됐습니다(`ingress.enabled:
 false` — 끝까지 켠 적 없음). 배포가 end-to-end로 검증된 뒤, 과금을 멈추려고
-밑단 AWS 인프라를 전부 destroy했습니다(ROADMAP.md §9, 2026-08-28 항목) —
-**지금은 아무것도 안 돌고 있습니다**. 이 차트 자체 내용은 영향 없고,
+밑단 AWS 인프라를 전부 destroy했습니다(ROADMAP.md §9, 2026-08-28 항목). 지금 무언가
+돌고 있는지는 여기에 적지 않습니다. 클러스터를 직접 확인하고(`kubectl config get-contexts`,
+이어서 `helm list -A --kube-context <컨텍스트>`) `k8s/infra/terraform/README.md`의 Status를
+보세요. 어느 쪽이든 이 차트 자체 내용은 영향이 없고,
 `bash k8s/infra/terraform/deploy.sh all`(ADR 0046)로 처음부터 다시 같은 배포를
 재현할 수 있습니다.
 

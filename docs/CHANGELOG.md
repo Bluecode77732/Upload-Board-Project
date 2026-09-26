@@ -38,6 +38,15 @@ development line (package.json version).
   `helm template` under five value sets and `helm lint --strict` pass; the `kind`+Calico check and
   the live check that the target is `up` are follow-up work (`k8s/helm/README.md`, "Verifying the
   Prometheus scrape rule" and the pending list). The chart version stays `0.5.1`.
+- **AWS applied/torn-down status is recorded as dated history, not as a standing status
+  (2026-09-27)** — documentation only. The Terraform README's and the Helm README's Status
+  paragraphs said whether the stack was applied ("not applied", "nothing currently runs") and were
+  wrong within a day of every `apply` or `destroy` (see the 2026-09-26 "teardown history
+  corrected" entry below). They now say the file does not track that, and how to read the real
+  state (`aws eks list-clusters`, `terraform plan`, `helm list`). The ROADMAP header no longer
+  carries "re-verify before assuming either state" as its status line, and ROADMAP §9 gains a
+  dated 2026-09-26 entry for the second live run (applied, checked, torn down; what was found and
+  observed). ADR addenda are left as written.
 - **ALB health-check path per Service (2026-09-26, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md)
   Addendum, chart `0.5.1`, `60bfe2a`)** — on the first live ALB the backend and admin target groups
   were `unhealthy` with `Target.ResponseCodeMismatch [404]`, because the default health check is

@@ -13,30 +13,23 @@ directory's scaffold history;
 configuration below is split into three independently-appliable states
 instead of one root module.
 
-**Status**: **not applied — a full teardown, not the original scaffold gap.**
-All three states, plus the app itself (Helm), were applied against real AWS
-2026-08-25–27 and confirmed working end-to-end (ADR 0039's Addendum records a
-TLS-verification fix made against that live RDS instance). Once the deploy
-was proven, everything was destroyed 2026-08-28 to stop the AWS bill, re-applied
-2026-08-29/30 to live-verify ADR 0047's observability stack, and destroyed again 2026-08-31
-(dated from the local state files' timestamps) — no EKS
-cluster, RDS instance, S3 bucket, Route53 zone, NAT gateway, or EC2 instance
-from this stack currently exists (verified via `aws eks/rds/ec2/elb` describe
-calls, all empty/not-found). `terraform validate` and `terraform fmt -check`
-still pass in all three state directories. The ExternalDNS record and name-server pinning
-([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)) are
-code-complete in `app-infra/`, `addons/`, and `deploy.sh` and, like the rest, unapplied.
+**Status**: this file does not say whether the stack is applied right now. That changes each
+time someone runs `apply` or `destroy`, and a sentence about it goes stale the same day (it
+did, more than once). Read the real state instead: `aws eks list-clusters --region
+ap-northeast-2` and the other billed resources — RDS (`aws rds describe-db-instances`), NAT
+gateways, load balancers, Elastic IPs — or run `terraform plan` in each state directory. What
+happened, with dates — the applies, the checks, the teardowns — is the log in
+[ROADMAP.md §9](../../../docs/ROADMAP.md#9-completed) and [CHANGELOG.md](../../../docs/CHANGELOG.md),
+not this paragraph. The ExternalDNS record and name-server pinning
+([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)) are in
+`app-infra/`, `addons/` and `deploy.sh`; the ADR's Addendum records what a live run showed.
 
-This status is a snapshot, not a promise — a future `apply` can make it true
-again in minutes, and someone re-reading this file later should re-verify
-with `terraform plan` rather than trust this paragraph. When applying, run
-`terraform plan` and read it before any `apply`, and never `destroy`
-casually — the RDS instance carries `skip_final_snapshot = true` and
-`deletion_protection = false`, so anything that replaces or destroys it takes
-the data with it and leaves no final snapshot (this is exactly why the prior
-teardown was a deliberate, confirmed decision, not a casual one). ADR 0043's
-and ADR 0044's addenda still say this config had never been applied; they are
-left as written because an ADR records what was true when written — see
+Two things hold whatever the state is: run `terraform plan` and read it before any `apply`,
+and never `destroy` casually — the RDS instance carries `skip_final_snapshot = true` and
+`deletion_protection = false`, so anything that replaces or destroys it takes the data with it
+and leaves no final snapshot (this is why every teardown so far was a deliberate, confirmed
+decision). ADR 0043's and ADR 0044's addenda still say this config had never been applied;
+they are left as written because an ADR records what was true when written — see
 [ROADMAP.md §7](../../../docs/ROADMAP.md#7-unscheduled--open-decisions) for
 the fuller history and the deferred identifier rename (ADR 0043 D1).
 

@@ -35,6 +35,14 @@
   이를 정한다. 다섯 가지 값 조합의 `helm template`과 `helm lint --strict`는 통과했고, `kind`+Calico 확인과 대상이
   `up`이 되는지의 라이브 확인은 후속 작업이다(`k8s/helm/README.md`의 "Prometheus 스크레이프 규칙 검증하기"와
   미해결 목록). 차트 버전은 `0.5.1` 그대로다.
+- **AWS 적용/철거 상태를 고정된 상태가 아니라 날짜가 붙은 이력으로 기록
+  (2026-09-27)** — 문서만 바꿨다. Terraform README와 Helm README의 Status 문단은 스택이 apply돼
+  있는지("미적용", "지금은 아무것도 안 돌고 있습니다")를 적었고, `apply`나 `destroy`를 실행할 때마다
+  하루 안에 틀린 말이 됐다(아래 2026-09-26의 "철거 이력 정정" 항목 참고). 이제 두 문단은 이 파일이 그 상태를
+  추적하지 않는다는 것과 실제 상태를 읽는 방법(`aws eks list-clusters`, `terraform plan`, `helm list`)을
+  적는다. ROADMAP 머리말은 더 이상 "어느 쪽 상태든 가정하기 전에 재검증"을 상태 문구로 두지 않고,
+  ROADMAP §9에 두 번째 라이브 실행(apply, 확인, 철거, 발견과 관찰)의 2026-09-26 날짜 항목을 더했다.
+  ADR의 추가 기록은 작성 시점 그대로 둔다.
 - **ALB 헬스체크 경로를 Service별로 지정 (2026-09-26, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)
   추가 기록, 차트 `0.5.1`, `60bfe2a`)** — 첫 라이브 ALB에서 백엔드와 admin 타깃 그룹이
   `Target.ResponseCodeMismatch [404]`로 `unhealthy`였다. 기본 헬스체크가 `/`인데 둘 다 그 경로를

@@ -19,7 +19,8 @@ Re-verified 2026-09-24 on Docker Desktop's Kubernetes with the `frontend` and `a
 workloads enabled (ADR 0062) — see "Verifying on Docker Desktop's Kubernetes" at the end of
 this file.
 **Deployed for real 2026-08-17 → stable 2026-08-27, torn down 2026-08-28 (re-applied
-2026-08-29/30, torn down again 2026-08-31)**: the
+2026-08-29/30, torn down again 2026-08-31, applied and torn down once more 2026-09-26 with the
+`frontend`, `admin` and ClamAV workloads)**: the
 release `upload-board` ran on the real AWS/EKS cluster from
 `k8s/infra/terraform/cluster/` (revision 5, `STATUS: deployed`) — see
 [ROADMAP.md](../../docs/ROADMAP.md) §9 (2026-08-27) for the full account,
@@ -27,9 +28,10 @@ including the `DB_SSL`/`DB_SSL_CA` fixes the RDS instance's `rds.force_ssl`
 required (ADR 0039). It was reachable only inside the cluster the whole time
 (`ingress.enabled: false` — never enabled). Once the deploy was proven
 end-to-end, the underlying AWS infrastructure was fully destroyed to stop the
-bill (ROADMAP.md §9, 2026-08-28) — **nothing currently runs**; this chart's
-own contents are unaffected and `bash k8s/infra/terraform/deploy.sh all`
-(ADR 0046) reproduces the same deployment from scratch.
+bill (ROADMAP.md §9, 2026-08-28). Whether anything runs now is not written here: check the
+cluster (`kubectl config get-contexts`, then `helm list -A --kube-context <context>`) and see
+`k8s/infra/terraform/README.md` > Status. None of that changes this chart's contents, and
+`bash k8s/infra/terraform/deploy.sh all` (ADR 0046) reproduces the same deployment from scratch.
 
 ## Before installing: create the Secret
 

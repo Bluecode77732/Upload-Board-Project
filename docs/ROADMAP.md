@@ -38,8 +38,10 @@ item below lands as its own dedicated, designed change
 > entries, then **torn down again 2026-08-31** (dated from the local Terraform state files'
 > timestamps and commit `252e830`, which documents the teardown commands; §9 has no entry
 > for it, and the "currently live/deployed/running" cells in §6's Stage 4 table describe the
-> re-apply and were not updated) — infrastructure state is a point-in-time snapshot each time, not a standing fact;
-> re-verify with `terraform plan` before assuming either state. One item was scoped out
+> re-apply and were not updated), then **applied and torn down once more on 2026-09-26** (§9) — the docs
+> no longer say whether the stack is applied now, because that goes stale the day someone runs `apply` or
+> `destroy`; §9 is the dated log, and the real state is read from AWS (`k8s/infra/terraform/README.md` >
+> Status). One item was scoped out
 > rather than left undone: **Istio (service mesh) was pulled from the DevOps stack and
 > deferred** on 2026-08-31 (§7) — this project runs a single backend workload with no
 > east-west traffic for a mesh to manage, so introducing one now would solve a problem this
@@ -1555,6 +1557,12 @@ candidate under the CI task).
 ## 9. Completed
 
 ### 2026-08-29
+
+### 2026-09-26
+
+| Item | Notes |
+|---|---|
+| Second live run: applied, checked, torn down | **The developer ran every `apply` and `destroy`; the session read AWS and the cluster read-only** and gave the commands. Window: the first `cluster` apply started 14:33Z, the last resource (the cluster) was gone at 18:26Z, and the session's sweep at 18:36Z found none of the stack's billed resources (the state bucket and the reusable delegation set are kept on purpose). Order: state bucket → delegation set and its name servers at the registrar → `cluster` (70 to add) → `app-infra` → `addons` → the ESO sync → `helm` from `main` (`dev` images are `amd64`-only and the nodes are `arm64`, so `main`'s multi-arch images; [ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md) Addendum). **Found:** (1) the backend crash-looped at boot because Terraform generated the JWT secrets without a symbol while the app's Joi rule requires one — fixed in `app-infra/main.tf` (`f322972`), re-applied, then Ready; (2) with Ingress off Prometheus could not scrape the backend (NetworkPolicy) — a chart rule was added afterwards (`15229f6`, [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md) Addendum), **not yet verified**; (3) a destroy that skipped `addons/` left three IAM roles and three policies, a CloudFormation stack (only a `WaitConditionHandle`) and a stale state — none billed; the cleanup steps are in `k8s/infra/terraform/README.md` > Destroy. **Observed:** all four Deployments Ready on Graviton, the migration Job, the IRSA/S3 upload path (upload, promote, presigned `302` → `200`, delete), the EICAR upload refused with `400 UPLOAD_MALWARE_DETECTED`, probes passing under the AWS Network Policy agent, cross-namespace and non-allow-listed egress blocked, a pod stopping in 3.76 s on EKS, and `plan` answering `No changes` in all three states afterwards. **Not observed by this session:** the Ingress/ALB/DNS part of the run (recorded in the ADR 0056/0062/0063 Addenda), the browser side (CORS, cookies) and cost (an unverified estimate was given in chat only, not recorded). Whether the stack is applied *now* is not recorded here or anywhere in the docs: check AWS (`k8s/infra/terraform/README.md` > Status). |
 
 | Item | Notes |
 |---|---|
