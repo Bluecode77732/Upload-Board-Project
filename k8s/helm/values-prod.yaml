@@ -9,10 +9,9 @@
 #
 # 2026-09-07 Terraform 리네이밍(docs/ROADMAP.md §7) 이후로는 이 파일이 더 이상 순수
 # 스냅샷이 아니다 — cluster_name에서 결정적으로 유도되는 값(DB_DATABASE/S3_BUCKET/
-# existingSecret/role-arn)은 새 이름으로 미리 갱신해 뒀지만, AWS가 생성 시점에
-# 랜덤하게 부여하는 DB_HOST만은 다음 실제 apply 전까지 알 수 없어 플레이스홀더로
-# 남겨뒀다. 다음 실제 `deploy.sh all` 이후 `terraform output -raw db_host`(app-infra/)로
-# 다시 채워 넣을 것.
+# existingSecret/role-arn)은 새 이름으로 미리 갱신해 뒀고, DB_HOST는 2026-09-26 apply의
+# `terraform output -raw db_host`(app-infra/) 값으로 채웠다. apply를 다시 하면 이 값이
+# 그대로인지 대조한다.
 
 image:
   tag: 2cd73b9
@@ -20,12 +19,10 @@ image:
 env:
   AWS_REGION: ap-northeast-2
   BASE_URL: https://sharenpo.cloud
-  # 2026-09-07 Terraform 리네이밍(docs/ROADMAP.md §7) 이후, RDS identifier 접두사는
-  # "sharenpo-db"가 되지만 뒤의 랜덤 서브도메인(구 값의 "chygueeqyek9")은 AWS가 생성
-  # 시점에 새로 부여하는 값이라 apply 전엔 알 수 없다 — 다음 실제 apply 후
-  # `terraform output -raw db_host`(app-infra/)로 다시 채워 넣어야 한다. 아래는
-  # 더 이상 존재하지 않는 구 인스턴스의 호스트네임이므로 그대로 쓰면 안 된다.
-  DB_HOST: REPLACE_AFTER_NEXT_APPLY__terraform_output_db_host
+  # RDS 호스트 중간의 랜덤 서브도메인("chygueeqyek9")은 2026-09-26 apply에서 구 인스턴스와
+  # 같았다 — 계정·리전 단위로 고정되는 값으로 보이나 AWS 문서로 확인하지는 않았다. 2026-09-07
+  # 리네이밍으로 바뀐 건 identifier 접두사("sharenpo-db")뿐이다.
+  DB_HOST: sharenpo-db.chygueeqyek9.ap-northeast-2.rds.amazonaws.com
   DB_DATABASE: sharenpo
   # app-infra의 RDS는 rds.force_ssl 파라미터로 TLS를 강제한다 — 이 값이 없으면
   # 마이그레이션 Job이 "no pg_hba.conf entry ... no encryption"로 실패한다.
