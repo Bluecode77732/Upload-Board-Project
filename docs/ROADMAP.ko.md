@@ -1001,9 +1001,13 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   세 이미지를 모두 발행하게 하기, tfstate 버킷과 재사용 위임 세트를 만들고 Gabia가 그 네임서버를
   가리키게 하기, push. 끝난 것: ClamAV `stable-debian` 이미지를 로컬에서 실행해 확인했다
   (`clamdcheck.sh`, `/var/lib/clamav`, 프로브, EICAR) — 개발자가 출력이 모두 예상값과 같았다고
-  보고했다(2026-09-26, 세션은 출력을 보지 못함). 배포 시점에 라이브로만 확인되는 것: ADR 0063의 Consequences, ADR 0056의
-  추가 기록, `k8s/helm/README.md` 미해결 목록의 점검, 그리고 노드 용량(`t4g.medium` 2대, clamd·
-  ExternalDNS·frontend·admin이 더해진 상태로는 측정한 적 없음).
+  보고했고(2026-09-26, 세션은 출력을 보지 못함), 같은 날 세션이 직접 실행했다: amd64와 QEMU 위
+  arm64 모두 프로브·`PING`·EICAR·정상 파일 결과가 예상대로였고, Ready까지 amd64는 약 30초(에뮬레이션
+  131초), clamd 메모리는 안정 상태 약 1.06 GiB(에뮬레이션 1.18 GiB)였다 — 수치는 `k8s/helm/README.md`
+  미해결 목록과 ADR 0059 추가 기록에 있다. 배포 시점에 라이브로만 확인되는 것: ADR 0063의
+  Consequences, ADR 0056의 추가 기록, `k8s/helm/README.md` 미해결 목록의 점검, 그리고 노드
+  용량(`t4g.medium` 2대 — clamd 하나는 노드 4 GiB의 약 4분의 1로 측정됐지만, ExternalDNS·frontend·
+  admin까지 더한 전체는 측정한 적 없음).
 - Istio(Kubernetes 클러스터 위 서비스 메시) — **프로덕션 DevOps 스택 도입 행과 Stage 4
   구성요소 상태 표에서 제외**(2026-08-31 이동, 이번 세션에서 진행한 규모 적합성 검토 뒤
   개발자가 내린 결정 — ROADMAP 자체의 순서 계획과는 별개). **미착수 이유**: 이 프로젝트의

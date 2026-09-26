@@ -293,11 +293,13 @@ choice.
 **Two more things `deploy.sh` does not guard.** Its `helm` step passes no `--kube-context`, so it
 uses whichever `kubectl` context is current, and a kubeconfig keeps the contexts of clusters that
 have since been torn down — run `kubectl config current-context` first and pass
-`--context`/`--kube-context` on every command you run by hand. And node capacity is unmeasured:
-`cluster/main.tf` gives two `t4g.medium` nodes about 17 pod slots each (its own comment), and this
-is the first deployment where clamd, ExternalDNS, the frontend and the admin console run next to
-the ALB Controller, External Secrets and the monitoring stack — if pods stay `Pending` with
-`FailedScheduling`, raise `node_desired_size_graviton`.
+`--context`/`--kube-context` on every command you run by hand. And node capacity is only partly
+measured: `cluster/main.tf` gives two `t4g.medium` nodes (4 GiB each) about 17 pod slots each (its
+own comment), and this is the first deployment where clamd, ExternalDNS, the frontend and the admin
+console run next to the ALB Controller, External Secrets and the monitoring stack. clamd alone was
+measured locally at about 1.06 GiB steady (`k8s/helm/README.md`, pending list) — roughly a quarter
+of one node — but nothing else was, and it is one pod (`replicas: 1`), so it lands on one node.
+If pods stay `Pending` with `FailedScheduling`, raise `node_desired_size_graviton`.
 
 **Plan/apply split** (ADR 0046 addendum, 2026-09-02): for `cluster`/`app-infra`/`addons`,
 `bash deploy.sh plan <state>` computes and saves the plan to a fixed, gitignored path

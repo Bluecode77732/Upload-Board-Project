@@ -350,16 +350,31 @@ ALB (ADR 0063), verify explicitly rather than assuming the annotations worked:
   as `clamav/clamav:stable-debian`, not the `stable` tag the chart was verified with — `stable`
   lists `linux/amd64` alone on Docker Hub and the only nodes that run are `arm64`, while
   `stable-debian` lists amd64, arm64 and ppc64le (read 2026-09-25;
-  [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md) Addendum). The developer ran it
-  locally on 2026-09-26 and reported that every output matched the expected values (the session
-  did not see them; which platforms were run, the time to Ready and clamd's memory were not
-  reported). It covers the two things the chart assumes: `clamdcheck.sh` exists (both probes call it) and
-  `/var/lib/clamav` is the signature directory. If either is missing, the clamd pod never
-  becomes Ready and every upload answers `503 UPLOAD_SCAN_UNAVAILABLE`. Run it once with
-  `--platform linux/arm64` too: Docker Desktop's platform list includes `linux/arm64` (emulated,
-  so slow, and not Graviton hardware; not run here). What only shows up live: the `clamav`
-  Deployment Ready on a Graviton node, an EICAR upload answering `400 UPLOAD_MALWARE_DETECTED`,
-  a clean file passing.
+  [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md) Addendum). The two things the
+  chart assumes: `clamdcheck.sh` exists (both probes call it) and `/var/lib/clamav` is the
+  signature directory. If either is missing, the clamd pod never becomes Ready and every upload
+  answers `503 UPLOAD_SCAN_UNAVAILABLE`. The developer ran it locally on 2026-09-26 and reported
+  that every output matched the expected values (the session did not see those outputs). **The
+  session then ran it itself the same day** (Docker Desktop; image `clamav/clamav:stable-debian`,
+  ClamAV 1.5.4, baked signature DB 28130, `freshclam` fetched daily 28135 / main 63 on first
+  start), with `/var/lib/clamav` as an empty tmpfs the way the chart's `emptyDir` mounts it:
+
+  | | `linux/amd64` (native) | `linux/arm64` (QEMU-emulated) |
+  |---|---|---|
+  | `clamdcheck.sh` present, probe exit code | yes, `Clamd is up`, 0 | same |
+  | Time to Ready from an empty signature dir | ≈30 s (5-s polling) | 131 s — emulated, not representative of Graviton |
+  | Memory, sampled peak / steady | 1075 MiB / ≈1.06 GiB | 1204 MiB / ≈1.18 GiB |
+  | `PING` on 3310 | `PONG` | same |
+  | EICAR (local socket and `INSTREAM` over TCP 3310) | `Eicar-Signature FOUND` | same |
+  | Clean bytes | `OK` | same |
+
+  Neither run logged an error or a 429 from the mirror. Two consequences: the chart's liveness
+  budget (≈480 s) covers both times with room to spare, and `values.yaml`'s comment suggesting a
+  `clamav.resources.limits.memory` "from 1Gi" would sit *below* the steady figure here and get the
+  pod OOM-killed — start higher than that if a limit is ever set (`values.yaml` itself was not
+  changed). clamd alone is about a quarter of a `t4g.medium`'s 4 GiB. Still live-only: the `clamav`
+  Deployment Ready on a real Graviton node, an EICAR upload through the app answering
+  `400 UPLOAD_MALWARE_DETECTED`, a clean file passing.
 - `aws elbv2 describe-listeners` on the created ALB shows both a port-80 and a port-443
   listener (`listen-ports` actually took effect, not just rendered).
 - `curl -I http://<domain>` returns a `301`/`302` to the `https://` URL (`ssl-redirect`

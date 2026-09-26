@@ -350,16 +350,31 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   `stable`이 아니라 `clamav/clamav:stable-debian`으로 실행한다 — `stable`은 Docker Hub에
   `linux/amd64`만 있는데 실제로 도는 노드는 `arm64`뿐이고, `stable-debian`은 amd64, arm64,
   ppc64le를 담고 있다(2026-09-25에 읽음,
-  [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md) 추가 기록). 개발자가
-  2026-09-26에 로컬에서 실행해 출력이 모두 예상값과 같았다고 보고했다(세션은 출력을 보지 못했고,
-  어느 플랫폼으로 했는지·Ready까지 걸린 시간·clamd 메모리는 보고되지 않았다). 확인 대상은 차트가
-  전제한 두 가지다: `clamdcheck.sh`가 있는지(두 프로브가 호출한다)와
-  `/var/lib/clamav`가 서명 폴더인지. 둘 중 하나라도 없으면 clamd 파드가 Ready가 되지 않고 모든
-  업로드가 `503 UPLOAD_SCAN_UNAVAILABLE`로 답한다. `--platform linux/arm64`로도 한 번
-  실행해 본다: Docker Desktop의 플랫폼 목록에 `linux/arm64`가 있다(에뮬레이션이라 느리고
-  Graviton 하드웨어도 아니며, 여기서 실행해 보지는 않았다). 라이브에서만 드러나는 것: Graviton
-  노드에서 `clamav` Deployment가 Ready가 되는지, EICAR 업로드가 `400 UPLOAD_MALWARE_DETECTED`로
-  답하는지, 정상 파일이 통과하는지.
+  [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md) 추가 기록). 차트가 전제하는
+  것은 두 가지다: `clamdcheck.sh`가 있는지(두 프로브가 호출한다)와 `/var/lib/clamav`가 서명
+  폴더인지. 둘 중 하나라도 없으면 clamd 파드가 Ready가 되지 않고 모든 업로드가
+  `503 UPLOAD_SCAN_UNAVAILABLE`로 답한다. 개발자가 2026-09-26에 로컬에서 실행해 출력이 모두
+  예상값과 같았다고 보고했다(세션은 그 출력을 보지 못했다). **같은 날 세션이 직접 실행했다**
+  (Docker Desktop, 이미지 `clamav/clamav:stable-debian`, ClamAV 1.5.4, 이미지에 든 서명 DB
+  28130, 첫 기동 때 `freshclam`이 daily 28135 / main 63을 받음). `/var/lib/clamav`는 차트의
+  `emptyDir` 마운트처럼 빈 tmpfs로 두었다:
+
+  | | `linux/amd64`(네이티브) | `linux/arm64`(QEMU 에뮬레이션) |
+  |---|---|---|
+  | `clamdcheck.sh` 존재, 프로브 종료 코드 | 있음, `Clamd is up`, 0 | 동일 |
+  | 빈 서명 폴더에서 Ready까지 | ≈30초(5초 간격 폴링) | 131초 — 에뮬레이션이라 Graviton을 대표하지 않음 |
+  | 메모리, 샘플링 최대 / 안정 상태 | 1075 MiB / ≈1.06 GiB | 1204 MiB / ≈1.18 GiB |
+  | 3310 포트 `PING` | `PONG` | 동일 |
+  | EICAR(로컬 소켓과 TCP 3310 `INSTREAM`) | `Eicar-Signature FOUND` | 동일 |
+  | 정상 바이트 | `OK` | 동일 |
+
+  두 실행 모두 오류나 미러의 429 로그는 없었다. 여기서 나오는 결론 둘: 차트의 liveness 여유(≈480초)는
+  두 시간 모두 넉넉히 덮는다. 그리고 `values.yaml` 주석이 제안하는 `clamav.resources.limits.memory`
+  "1Gi부터"는 여기서 잰 안정 상태보다 *낮아서* 그대로 두면 파드가 OOM으로 죽는다 — limit을 걸게
+  되면 그보다 높게 시작한다(`values.yaml` 자체는 바꾸지 않았다). clamd 하나가 `t4g.medium` 4 GiB의
+  약 4분의 1이다. 여전히 라이브에서만 확인되는 것: 실제 Graviton 노드에서 `clamav` Deployment가
+  Ready가 되는지, 앱을 거친 EICAR 업로드가 `400 UPLOAD_MALWARE_DETECTED`로 답하는지, 정상 파일이
+  통과하는지.
 - `aws elbv2 describe-listeners`로 만들어진 ALB에 80번과 443번 리스너가 둘 다 있는지
   (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지).
 - `curl -I http://<도메인>`이 `https://` URL로 `301`/`302`를 반환하는지(`ssl-redirect`가

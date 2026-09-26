@@ -1051,11 +1051,15 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   been planned or applied. Still open before a first real deployment: merge `dev` into `main` and
   let CI publish all three images; create the tfstate bucket and the reusable delegation set and
   point Gabia at its name servers; push. Done: the ClamAV `stable-debian` image was run locally
-  (`clamdcheck.sh`, `/var/lib/clamav`, the probe, EICAR) and the developer reported every output
-  matched the expected values (2026-09-26; the session did not see them). Live-only at deploy time: the checks in ADR
-  0063's Consequences, ADR 0056's Addendum and `k8s/helm/README.md`'s pending list, plus node
-  capacity (two `t4g.medium` nodes, never measured with clamd, ExternalDNS, the frontend and the
-  admin console added).
+  (`clamdcheck.sh`, `/var/lib/clamav`, the probe, EICAR) — the developer reported every output
+  matched the expected values (2026-09-26; the session did not see them), and the session then ran
+  it itself the same day: on amd64 and on arm64 under QEMU the probe, `PING`, EICAR and clean
+  results were as expected, Ready took about 30 s on amd64 (131 s emulated), and clamd's memory was
+  about 1.06 GiB steady (1.18 GiB emulated) — figures in `k8s/helm/README.md`'s pending list and
+  ADR 0059's Addendum. Live-only at deploy time: the checks in ADR 0063's Consequences, ADR 0056's
+  Addendum and `k8s/helm/README.md`'s pending list, plus node capacity (two `t4g.medium` nodes;
+  clamd alone is now measured at about a quarter of one node's 4 GiB, but the whole set with
+  ExternalDNS, the frontend and the admin console added has never been measured).
 - Istio (service mesh over the Kubernetes cluster) — **pulled from the Production DevOps
   stack introduction row and the Stage 4 component-status table** (moved 2026-08-31,
   developer decision after a scale-fit review run this session, independent of the

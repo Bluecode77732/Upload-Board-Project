@@ -289,11 +289,13 @@ Addendum, 2026-09-26): `dev` 이미지는 `amd64`뿐이고 실제로 도는 노�
 **`deploy.sh`가 막아 주지 않는 것이 두 가지 더 있습니다.** `helm` 단계는 `--kube-context`를
 넘기지 않아서 `kubectl`의 현재 컨텍스트를 그대로 쓰는데, kubeconfig에는 이미 철거된
 클러스터의 컨텍스트가 남아 있습니다 — 먼저 `kubectl config current-context`를 확인하고 손으로
-실행하는 명령마다 `--context`/`--kube-context`를 붙이세요. 그리고 노드 용량은 측정한 적이
-없습니다. `cluster/main.tf`는 `t4g.medium` 노드 2대에 노드당 파드 슬롯 약 17개(그 파일의 주석)를
-주는데, 이번이 clamd·ExternalDNS·frontend·admin 콘솔이 ALB Controller, External Secrets, 모니터링
-스택과 함께 도는 첫 배포입니다 — 파드가 `FailedScheduling`으로 `Pending`에 머물면
-`node_desired_size_graviton`을 올리세요.
+실행하는 명령마다 `--context`/`--kube-context`를 붙이세요. 그리고 노드 용량은 일부만
+측정했습니다. `cluster/main.tf`는 `t4g.medium` 노드(각 4 GiB) 2대에 노드당 파드 슬롯 약
+17개(그 파일의 주석)를 주는데, 이번이 clamd·ExternalDNS·frontend·admin 콘솔이 ALB Controller,
+External Secrets, 모니터링 스택과 함께 도는 첫 배포입니다. clamd 하나는 로컬에서 안정 상태
+약 1.06 GiB로 측정했지만(`k8s/helm/README.ko.md` 미해결 목록) — 노드 하나의 약 4분의 1 — 나머지는
+측정하지 않았고, clamd는 파드 하나(`replicas: 1`)라서 한 노드에 올라갑니다. 파드가
+`FailedScheduling`으로 `Pending`에 머물면 `node_desired_size_graviton`을 올리세요.
 
 아래 수동 순서는 스크립트가 자동화하는
 대상이자, 각 단계가 실제로 무엇을 하는지 보는 참고 자료로 남겨둡니다. 이 순서는
