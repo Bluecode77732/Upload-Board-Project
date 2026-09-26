@@ -285,15 +285,6 @@ Tear down when done: `helm uninstall netpol-test && kind delete cluster --name n
   `PG_IP=$(kubectl get pod postgres -o jsonpath='{.status.podIP}'); echo
   "PG_IP=$PG_IP"` — confirm it's a real IP before using it.
 
-## Enabling HTTPS (Ingress)
-
-TLS terminates at the Ingress/ALB, never in-process ([ADR 0034](../../docs/ADR/0034-https-termination-stance.md));
-`values.yaml`'s `ingress` block ships an explicit controller-prefix allow-list, not a `/`
-catch-all on the backend Service ([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.md)), plus one `/`
-rule for the frontend Service ([ADR 0060](../../docs/ADR/0060-frontend-same-alb-path-routing.md)) and
-one `/admin` rule for the admin Service ([ADR 0062](../../docs/ADR/0062-admin-same-alb-subpath-routing.md)). `ingress.enabled`
-stays `false` — a deliberate developer choice
-([ROADMAP.md](../../docs/ROADMAP.md) > Unscheduled), not a missing dependency: while the
 ### Verifying the Prometheus scrape rule
 
 **Not run yet** — follow-up to [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md)'s
@@ -342,6 +333,15 @@ Expect `allow` and `same` to print an HTTP status other than `000` (`busybox` an
 `404`), and `nolabel` and `wrongns` to print `http=000` (timed out). This is Calico, not AWS's
 agent; the live check is the Prometheus bullet under "Enabling HTTPS (Ingress)" below.
 
+## Enabling HTTPS (Ingress)
+
+TLS terminates at the Ingress/ALB, never in-process ([ADR 0034](../../docs/ADR/0034-https-termination-stance.md));
+`values.yaml`'s `ingress` block ships an explicit controller-prefix allow-list, not a `/`
+catch-all on the backend Service ([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.md)), plus one `/`
+rule for the frontend Service ([ADR 0060](../../docs/ADR/0060-frontend-same-alb-path-routing.md)) and
+one `/admin` rule for the admin Service ([ADR 0062](../../docs/ADR/0062-admin-same-alb-subpath-routing.md)). `ingress.enabled`
+stays `false` — a deliberate developer choice
+([ROADMAP.md](../../docs/ROADMAP.md) > Unscheduled), not a missing dependency: while the
 stack was live 2026-08-27 the cluster, the domain (`sharenpo.cloud`), and a real ACM cert
 were all in place, and it was left off until an outside tester actually needs external
 access. Re-confirmed 2026-09-13.
@@ -520,6 +520,12 @@ pass observed; an item with no "observed" note is still open:
   frontend and admin Services each have a ready endpoint and the backend Service has none of
   their pods, and Prometheus lists a target for the backend but none for frontend or admin
   (the `web` port name, ADR 0060, ADR 0062).
+- Prometheus scrapes the backend while Ingress is off (the rule from 2026-09-27, `15229f6`,
+  [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md) Addendum): the backend
+  target is `up`, where it was `down` (`context deadline exceeded`) on 2026-09-26, and
+  `kubectl get pod -n kube-prometheus-stack --show-labels` shows `app.kubernetes.io/name=prometheus`
+  on the Prometheus pod — the default label was read from the chart's Service selector, not from a
+  pod. Not observed yet; the `kind`+Calico check is "Verifying the Prometheus scrape rule" above.
 - Pods stop promptly on EKS (ADR 0061). With `values-prod.yaml` (so `STORAGE_DRIVER=s3`), run
   `kubectl rollout restart deployment/<release>` and watch `kubectl get pods -w`: each old
   backend pod should leave `Terminating` within a second or two. One that sits there for the
@@ -582,12 +588,6 @@ The image needs no cluster either — build it and check the SPA fallback and th
 
 ```bash
 docker build -t sharenpo-frontend:local -f ../../frontend/Dockerfile ../../frontend
-- Prometheus scrapes the backend while Ingress is off (the rule from 2026-09-27, `15229f6`,
-  [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md) Addendum): the backend
-  target is `up`, where it was `down` (`context deadline exceeded`) on 2026-09-26, and
-  `kubectl get pod -n kube-prometheus-stack --show-labels` shows `app.kubernetes.io/name=prometheus`
-  on the Prometheus pod — the default label was read from the chart's Service selector, not from a
-  pod. Not observed yet; the `kind`+Calico check is "Verifying the Prometheus scrape rule" above.
 docker run --rm -p 8080:8080 sharenpo-frontend:local
 # /  and  /posts/1 → 200 index.html;  /assets/missing.js → 404;  CSP + nosniff headers on every response
 ```

@@ -285,14 +285,6 @@ kubectl run curl-clamav --image=busybox:1.36 --restart=Never --rm -i \
   `PG_IP=$(kubectl get pod postgres -o jsonpath='{.status.podIP}'); echo
   "PG_IP=$PG_IP"` — 진짜 IP인지 눈으로 확인한 뒤에 사용.
 
-## HTTPS(Ingress) 활성화
-
-TLS는 ingress/ALB에서만 종료하고 앱 프로세스 안에서는 하지 않는다([ADR
-0034](../../docs/ADR/0034-https-termination-stance.ko.md)). `values.yaml`의
-`ingress` 블록은 `/` catch-all이 아니라 실제 컨트롤러 prefix의 명시적
-allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)). 다만 프론트엔드 Service로 가는 `/` 규칙([ADR 0060](../../docs/ADR/0060-frontend-same-alb-path-routing.ko.md))과 admin Service로 가는 `/admin` 규칙([ADR 0062](../../docs/ADR/0062-admin-same-alb-subpath-routing.ko.md)) 두 개는 예외다.
-`ingress.enabled`는 계속 `false`다 — 이건 뭔가 빠져서가 아니라 개발자가 확정한
-의도적 결정이다([ROADMAP.md](../../docs/ROADMAP.md) > Unscheduled): 스택이
 ### Prometheus 스크레이프 규칙 검증하기
 
 **아직 실행하지 않았다** — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)의
@@ -340,6 +332,14 @@ kind delete cluster --name netpol-prom
 `http=000`(타임아웃)이 나와야 한다. 이건 Calico이지 AWS의 에이전트가 아니다. 라이브 확인은 아래
 "HTTPS(Ingress) 활성화"의 Prometheus 항목이다.
 
+## HTTPS(Ingress) 활성화
+
+TLS는 ingress/ALB에서만 종료하고 앱 프로세스 안에서는 하지 않는다([ADR
+0034](../../docs/ADR/0034-https-termination-stance.ko.md)). `values.yaml`의
+`ingress` 블록은 `/` catch-all이 아니라 실제 컨트롤러 prefix의 명시적
+allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)). 다만 프론트엔드 Service로 가는 `/` 규칙([ADR 0060](../../docs/ADR/0060-frontend-same-alb-path-routing.ko.md))과 admin Service로 가는 `/admin` 규칙([ADR 0062](../../docs/ADR/0062-admin-same-alb-subpath-routing.ko.md)) 두 개는 예외다.
+`ingress.enabled`는 계속 `false`다 — 이건 뭔가 빠져서가 아니라 개발자가 확정한
+의도적 결정이다([ROADMAP.md](../../docs/ROADMAP.md) > Unscheduled): 스택이
 실제로 떠 있던 2026-08-27 당시엔 클러스터·도메인(`sharenpo.cloud`)·실제 ACM
 인증서까지 전부 준비돼 있었지만, 외부 테스터가 실제로 필요해질 때까지는 켜지
 않기로 했다. 2026-09-13에 다시 확인했고 그대로다.
@@ -514,6 +514,12 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   admin Service 각각에는 ready 엔드포인트가 있으며 백엔드 Service에는 그 파드들이 하나도
   없고, Prometheus에는 백엔드 타깃만 있고 프론트엔드·admin 타깃은 없어야 한다(`web` 포트
   이름, ADR 0060, ADR 0062).
+- Ingress가 꺼져 있는 동안 Prometheus가 백엔드를 스크레이프한다(2026-09-27의 규칙, `15229f6`,
+  [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록): 백엔드 대상이
+  2026-09-26에는 `down`(`context deadline exceeded`)이었는데 이제 `up`이어야 하고,
+  `kubectl get pod -n kube-prometheus-stack --show-labels`에서 Prometheus 파드에
+  `app.kubernetes.io/name=prometheus`가 보여야 한다 — 기본 라벨은 파드가 아니라 차트의 Service selector에서
+  읽은 값이다. 아직 관찰하지 못했다. `kind`+Calico 확인은 위의 "Prometheus 스크레이프 규칙 검증하기"다.
 - 파드가 EKS에서 곧바로 종료된다(ADR 0061). `values-prod.yaml`로(따라서 `STORAGE_DRIVER=s3`)
   `kubectl rollout restart deployment/<release>`를 실행하고 `kubectl get pods -w`를
   지켜본다: 이전 백엔드 파드는 1~2초 안에 `Terminating`을 벗어나야 한다. 30초를 꽉 채우고
@@ -575,12 +581,6 @@ helm template . --set secrets.existingSecret=placeholder --set frontend.enabled=
 이미지도 클러스터 없이 검증할 수 있다 — 빌드해서 SPA fallback과 헤더를 확인한다:
 
 ```bash
-- Ingress가 꺼져 있는 동안 Prometheus가 백엔드를 스크레이프한다(2026-09-27의 규칙, `15229f6`,
-  [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록): 백엔드 대상이
-  2026-09-26에는 `down`(`context deadline exceeded`)이었는데 이제 `up`이어야 하고,
-  `kubectl get pod -n kube-prometheus-stack --show-labels`에서 Prometheus 파드에
-  `app.kubernetes.io/name=prometheus`가 보여야 한다 — 기본 라벨은 파드가 아니라 차트의 Service selector에서
-  읽은 값이다. 아직 관찰하지 못했다. `kind`+Calico 확인은 위의 "Prometheus 스크레이프 규칙 검증하기"다.
 docker build -t sharenpo-frontend:local -f ../../frontend/Dockerfile ../../frontend
 docker run --rm -p 8080:8080 sharenpo-frontend:local
 # /, /posts/1 → 200 index.html;  /assets/missing.js → 404;  모든 응답에 CSP + nosniff 헤더
