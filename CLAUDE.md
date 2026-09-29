@@ -1754,6 +1754,33 @@ powershell -NoProfile -Command "Stop-Process -Id <pid> -Force"
 Confirm what the PID is before killing it (`Get-CimInstance Win32_Process -Filter
 'ProcessId=<pid>'` prints the command line) — never kill a PID you have not identified.
 
+### Handing off a manual command: state the execution location first
+
+When a command is handed to the developer to run themselves (Scope Discipline's
+costly/irreversible-command pattern — `terraform apply`/`destroy`, `helm install`/
+`upgrade`, `kubectl apply`/`delete`, `aws` write calls, `git push`), the very first
+line must say where to run it, before the command itself — this repo mixes two
+genuinely different kinds and conflating them costs the developer a round trip:
+
+- **Directory-sensitive**: every Terraform command needs `-chdir=k8s/infra/terraform/
+  <module>/` (`cluster`/`app-infra`/`addons` are three independent root modules, each
+  with its own state).
+- **Directory-agnostic**: `kubectl`/`helm` read only the current kube context
+  (`kubectl config current-context`), never the working directory — they run from
+  anywhere, including the repo root.
+
+Say which kind a command is explicitly; don't just paste the command and assume the
+developer will infer it — especially right after a run of directory-sensitive
+Terraform commands, where a plain `kubectl` command reads as needing a directory too
+unless told otherwise. Also don't conflate *where the developer types the command*
+with *where it actually executes* in the same sentence (a `kubectl exec ... node
+dist/scripts/x.js` is typed in the developer's local terminal but runs inside a
+remote pod) — state the typing location plainly first, then explain the execution
+detail separately if it matters. (Found 2026-09-30: it took three rounds of
+back-and-forth to answer "where do I run this" for a `kubectl exec` handoff, because
+the first handoff never said, and the follow-up answer mixed the two locations into
+one sentence.)
+
 ### Live-testing a sweep/reclaim service: never against the real project directory
 
 Incident, 2026-09-05: manually verifying `GrantedCleanupService.sweep()` end to end (real
