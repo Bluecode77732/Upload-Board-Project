@@ -295,3 +295,32 @@ apex는 `CNAME`을 아예 가질 수 없다(RFC 1035가 apex의 필수 레코드
 A 외에는 아무 옵션도 여기서 채택하지 않는다. B가 이번 추가 기록이 새로 보탠 사실 하나이고,
 개발자에게 제시만 할 뿐 결정하지 않는다 — 채택하려면 그 전에 이 zone에서 라이브로 따로
 검증해야 한다.
+
+## 추가 기록 (2026-09-29, 나중) — 예측했던 실패가 세션 도중 실제로 일어남
+
+ADR 0056의 2026-09-29 추가 기록에 있는 NetworkPolicy Prometheus 스크레이프 규칙을 시험하려고
+`helm upgrade --set ingress.enabled=false`(뒤에 `true`)를 쓰는 동안, `Ingress`가 사라지자 ALB
+Controller가 기존 ALB를 실제로 지웠고, `Ingress`가 돌아오자 **새** ALB를 새 DNS 이름으로
+만들었다(`...afa98c275a-1403878523...`, 기존 `...afa98c275a-1380304786...`를 대체). 이건 바로
+위 2026-09-26 추가 기록이 추상적으로 경고했던 바로 그 시나리오다("`cluster/`만 다시 만들고
+zone은 두면 apex `A`와 `AAAA`가 삭제된 ALB를 가리킨 채 남고 ExternalDNS가 고치지 않는다") —
+`cluster/` 재구축이 아니라 `helm upgrade`로 `ingress.enabled`를 토글하는 것도 다른 문으로
+같은 실패에 이른다는 걸 보여준 셈이다. 고칠 때까지 사이트는 접속 불가였다(`curl: (6) Could
+not resolve host`).
+
+**해결, 개발자가 직접 실행(AWS 쓰기 호출이라 세션이 직접 하지 않음):** 죽은 ALB를 가리키던
+`A`/`AAAA`에 대한 `route53 change-resource-record-sets` `DELETE`(기존 레코드 값과 정확히
+일치해야 `DELETE`가 성공한다), 그 뒤 ExternalDNS의 1분 주기를 기다림. UPDATE가 아니라
+DELETE를 고른 건 의도적인 선택이다 — `DELETE`는 소유 TXT가 필요 없고(기존 레코드 값과
+일치하기만 하면 되는데, 그 값은 `aws route53 list-resource-record-sets`로 구했다), 반면
+ExternalDNS를 통한 UPDATE/UPSERT는 이 ADR이 이미 막혀 있다고 확인한 바로 그 owner-필터링된
+`ApplyChanges`에 걸린다. 실제로 동작 확인: 삭제 후 약 1분 안에 ExternalDNS가 두 레코드를 새
+ALB를 가리키도록 다시 만들었고, `curl -I https://sharenpo.cloud/`가 다시 `200`을 답했다 —
+전달받은 보고가 아니라 세션이 직접 재확인함.
+
+**이게 바꾸는 것.** 위의 Decision이나 옵션 비교표는 하나도 안 바뀐다 — D3는 이미
+`force_destroy`가 stale apex 레코드를 지우는 유일한 수단이라고 못 박아 뒀고, 이번 일은 그
+같은 틈이 완전한 `destroy` 바깥에서 드러난 것뿐이다. 새로 보탠 건: 이 실패가 추론이 아니라
+실제였다는 확인, 그리고 다음에 `Ingress` 토글이나 ALB 교체로 apex가 죽은 로드밸런서를 가리키게
+됐을 때 쓸 수 있는 검증된 수동 복구법(삭제하고 ExternalDNS가 다시 만들게 둔다) — 위의 옵션 B를
+채택하든 안 하든 상관없이 쓸 수 있다.

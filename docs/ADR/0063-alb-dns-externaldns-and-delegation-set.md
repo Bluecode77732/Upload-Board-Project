@@ -305,3 +305,32 @@ its setting.
 
 No option beyond A is adopted here. B is the one new fact this addendum adds to the record; it is
 presented to the developer, not decided, and needs its own live test before anyone adopts it.
+
+## Addendum (2026-09-29, later) — the predicted failure happened for real, mid-session
+
+While using `helm upgrade --set ingress.enabled=false` (then `true`) to test the NetworkPolicy
+Prometheus-scrape rule (ADR 0056's own 2026-09-29 addendum), the AWS Load Balancer Controller
+deleted the ALB when the `Ingress` was removed and created a **new** one, with a new DNS name
+(`...afa98c275a-1403878523...`, replacing `...afa98c275a-1380304786...`), when the `Ingress` came
+back. This is exactly the scenario the first 2026-09-26 addendum above warned about in the abstract
+("Recreating only `cluster/` while keeping the zone leaves the apex `A` and `AAAA` pointing at the
+deleted ALB, and ExternalDNS will not correct them") — it turns out `helm upgrade` toggling
+`ingress.enabled` reaches the same failure through a different door, not just a `cluster/` rebuild.
+The site was unreachable (`curl: (6) Could not resolve host`) until fixed by hand.
+
+**Fix, developer-run (an AWS write call, not run by the session):** a `route53
+change-resource-record-sets` `DELETE` for the stale `A` and `AAAA` (matching the old ALB's alias
+target exactly, required for a `DELETE` to succeed), then waiting for ExternalDNS's `1m` interval.
+Deleting rather than updating was the deliberate choice — a `DELETE` needs no owner TXT (it only
+has to match the existing record's values, which `aws route53 list-resource-record-sets` supplied),
+while an `UPDATE`/`UPSERT` through ExternalDNS would hit the same owner-filtered `ApplyChanges` this
+ADR already found blocked. Confirmed working: within about a minute of the delete, ExternalDNS
+re-created both records pointing at the new ALB, and `curl -I https://sharenpo.cloud/` answered
+`200` again — verified independently by the session, not just reported.
+
+**What this changes.** Nothing in the Decision or the option comparison above — D3 already named
+`force_destroy` as the only thing that clears a stale apex record, and this is the same gap
+surfacing outside a full `destroy`. What it adds: confirmation that the failure is real and not
+just an inferred risk, and a proven manual recovery (delete, let ExternalDNS recreate) for the next
+time an `Ingress` toggle or ALB replacement leaves the apex pointed at a dead load balancer —
+whether or not option B above is ever adopted.
