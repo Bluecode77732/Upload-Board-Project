@@ -184,63 +184,63 @@ service:
     alb.ingress.kubernetes.io/healthcheck-path: /health/live
 
 # HTTPS 종단(ADR 0034)은 ingress/ALB에서만 하고 앱 프로세스 안에서는 하지 않는다. 아래는
-# 실제로 켤 때 쓸 값의 참고 템플릿이다 — 전부 주석 처리돼 있고 ingress.enabled은 여전히
-# values.yaml 기본값(false)을 따른다. 외부 테스터가 실제로 필요해질 때까지 켜지 않기로 한
-# 결정은 그대로다(ROADMAP.md > Unscheduled, 개발자 확정 2026-08-27, 재확인 2026-09-13) —
-# 이 블록은 그 결정을 바꾸지 않고, 켜는 날의 실수 여지만 줄여둔 것.
+# 2026-09-29 라이브 재검증(작업 1/7)에서 활성화됐다 — 외부 테스터가 실제로 필요해질
+# 때까지 켜지 않기로 한 결정(ROADMAP.md > Unscheduled, 개발자 확정 2026-08-27,
+# 재확인 2026-09-13)이 이 재검증으로 종료됐다. 지금까지 두 번의 실제 적용
+# (2026-08-27, 2026-09-26)은 이 파일을 고치지 않고 `helm upgrade --set ...`
+# ad-hoc 플래그로만 켰다(k8s/infra/terraform/README.md "Enabling the ALB
+# ingress") — 파일에 커밋하는 건 이번이 처음이다(개발자 확정 2026-09-29).
 #
-# 켜기 전 필요한 두 가지 선행 조건(현재 Terraform 3-state 전부 destroy 상태라 둘 다
-# 미충족): addons/ apply(ALB Controller가 떠 있어야 Ingress 객체를 실제로 처리한다),
-# app-infra/ apply(ACM 인증서가 ISSUED 상태여야 한다 — `terraform output -raw
-# acm_certificate_arn`, app-infra/). 두 상태가 갖춰진 뒤 아래 주석을 해제하고 ARN 값을
-# 채운 다음 enabled만 true로 바꾼다 — k8s/helm/README.md "Enabling HTTPS (Ingress)" 참고.
+# 필요한 두 가지 선행 조건 — addons/ apply(ALB Controller), app-infra/ apply(ACM
+# 인증서 ISSUED) — 는 2026-09-29 재적용으로 충족됐다. certificate-arn은 그 apply의
+# `terraform output -raw acm_certificate_arn` 값을 그대로 채운 것.
 #
 # paths는 values.yaml과 동일하게 전체를 다시 선언해야 한다 — Helm은 배열을 병합하지
 # 않는다(ADR 0058). tls: 블록은 없다 — ALB Ingress Controller는 spec.tls를 쓰지 않고
 # certificate-arn annotation으로 인증서를 붙인다(k8s/infra/terraform/README.md
 # "Enabling the ALB ingress" 참고).
-# ingress:
-#   enabled: true
-#   className: alb
-#   annotations:
-#     kubernetes.io/ingress.class: alb
-#     alb.ingress.kubernetes.io/scheme: internet-facing
-#     alb.ingress.kubernetes.io/certificate-arn: <app-infra `terraform output -raw acm_certificate_arn`>
-#     # 이 차트의 세 Service(app, frontend, admin)는 전부 ClusterIP다 — 컨트롤러 기본값인
-#     # target-type: instance는 NodePort/LoadBalancer Service가 필요해서 이 조합에
-#     # 맞지 않는다(2026-09-21, ADR 0060 구현 중 발견). ip 모드는 Service 타입과
-#     # 무관하게 동작하므로 이 값이 없으면 타깃 그룹에 healthy 타깃이 하나도 안
-#     # 잡힐 것으로 예상된다(라이브 미검증) — networkpolicy.yaml의 ALB 인바운드
-#     # 허용 규칙(ADR 0056 addendum)도 이 모드를 전제로 한다.
-#     alb.ingress.kubernetes.io/target-type: ip
-#     # HTTP(80)->HTTPS(443) 강제 리다이렉트 — 두 리스너를 명시하지 않으면 ALB
-#     # Controller가 80 리스너 자체를 만들지 않아 리다이렉트할 대상이 없다.
-#     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-#     alb.ingress.kubernetes.io/ssl-redirect: '443'
-#   hosts:
-#     - host: sharenpo.cloud
-#       paths:
-#         - path: /auth
-#           pathType: Prefix
-#         - path: /user
-#           pathType: Prefix
-#         - path: /post
-#           pathType: Prefix
-#         - path: /comment
-#           pathType: Prefix
-#         - path: /file
-#           pathType: Prefix
-#         - path: /upload
-#           pathType: Prefix
-#         - path: /audit-log
-#           pathType: Prefix
-#         # 프론트엔드(SPA, ADR 0060) — `service: frontend`라 프론트엔드 Service로 간다. 이걸
-#         # 빠뜨리면 API는 열리는데 화면(SPA)만 사라진다(배열을 통째로 덮어쓰기 때문).
-#         - path: /
-#           pathType: Prefix
-#           service: frontend
-#         # admin 콘솔(ADR 0062) — `service: admin`이라 admin Service로 간다. 이걸 빠뜨리면
-#         # 운영자 콘솔에 닿을 방법이 없어진다(배열을 통째로 덮어쓰기 때문).
-#         - path: /admin
-#           pathType: Prefix
-#           service: admin
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:074416822640:certificate/10f64cce-2dfe-4674-ac9e-75abab5fc79f
+    # 이 차트의 세 Service(app, frontend, admin)는 전부 ClusterIP다 — 컨트롤러 기본값인
+    # target-type: instance는 NodePort/LoadBalancer Service가 필요해서 이 조합에
+    # 맞지 않는다(2026-09-21, ADR 0060 구현 중 발견). ip 모드는 Service 타입과
+    # 무관하게 동작하므로 이 값이 없으면 타깃 그룹에 healthy 타깃이 하나도 안
+    # 잡힐 것으로 예상된다(라이브 미검증) — networkpolicy.yaml의 ALB 인바운드
+    # 허용 규칙(ADR 0056 addendum)도 이 모드를 전제로 한다.
+    alb.ingress.kubernetes.io/target-type: ip
+    # HTTP(80)->HTTPS(443) 강제 리다이렉트 — 두 리스너를 명시하지 않으면 ALB
+    # Controller가 80 리스너 자체를 만들지 않아 리다이렉트할 대상이 없다.
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+  hosts:
+    - host: sharenpo.cloud
+      paths:
+        - path: /auth
+          pathType: Prefix
+        - path: /user
+          pathType: Prefix
+        - path: /post
+          pathType: Prefix
+        - path: /comment
+          pathType: Prefix
+        - path: /file
+          pathType: Prefix
+        - path: /upload
+          pathType: Prefix
+        - path: /audit-log
+          pathType: Prefix
+        # 프론트엔드(SPA, ADR 0060) — `service: frontend`라 프론트엔드 Service로 간다. 이걸
+        # 빠뜨리면 API는 열리는데 화면(SPA)만 사라진다(배열을 통째로 덮어쓰기 때문).
+        - path: /
+          pathType: Prefix
+          service: frontend
+        # admin 콘솔(ADR 0062) — `service: admin`이라 admin Service로 간다. 이걸 빠뜨리면
+        # 운영자 콘솔에 닿을 방법이 없어진다(배열을 통째로 덮어쓰기 때문).
+        - path: /admin
+          pathType: Prefix
+          service: admin
