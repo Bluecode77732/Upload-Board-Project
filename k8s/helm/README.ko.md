@@ -558,10 +558,16 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   2026-09-26에는 `down`(`context deadline exceeded`)이었는데 이제 `up`이어야 하고,
   `kubectl get pod -n kube-prometheus-stack --show-labels`에서 Prometheus 파드에
   `app.kubernetes.io/name=prometheus`가 보여야 한다 — 기본 라벨은 파드가 아니라 차트의 Service selector에서
-  읽은 값이다. 아직 관찰하지 못했다. `kind`+Calico 확인은 위의 "Prometheus 스크레이프 규칙 검증하기"다.
-  `ingress.enabled`를 토글하는 건 라이브 release에 대한 `helm upgrade`이고 그동안 공개
-  사이트가 도메인에서 잠깐 안 되니, 이 확인은 세션이 아니라 개발자가 토글을 직접 돌려야 한다
-  (ADR 0056의 2026-09-29 추가 기록).
+  읽은 값이다. `kind`+Calico 확인은 위의 "Prometheus 스크레이프 규칙 검증하기"이고 여전히
+  관찰 못 했다. 라이브 EKS 쪽은 관찰됨: 2026-09-29, 개발자가 `ingress.enabled`를 `false`로
+  토글했고(`helm upgrade`라 세션이 직접 돌리지 않음 — 그동안 공개 사이트가 도메인에서 잠깐
+  안 됨) `kubectl get ingress -A`가 비어 있는 걸 확인한 뒤 세션이 Prometheus를 다시 조회했다
+  — 백엔드 타깃은 `up`, `lastError`는 비어 있었고 파드 라벨도 일치했다. 규칙은 동작한다
+  (ADR 0056의 2026-09-29 추가 기록). 이후 `Ingress`를 다시 켜면서는 이것과 무관한 부작용이
+  따로 있었다 — ALB가 새 DNS 이름으로 재생성되며 apex DNS 레코드가 고아가 됐는데, 그 사고와
+  해결은 여기가 아니라
+  [ADR 0063](../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)의
+  2026-09-29(나중) 추가 기록에 있다.
 - 파드가 EKS에서 곧바로 종료된다(ADR 0061). `values-prod.yaml`로(따라서 `STORAGE_DRIVER=s3`)
   `kubectl rollout restart deployment/<release>`를 실행하고 `kubectl get pods -w`를
   지켜본다: 이전 백엔드 파드는 1~2초 안에 `Terminating`을 벗어나야 한다. 30초를 꽉 채우고

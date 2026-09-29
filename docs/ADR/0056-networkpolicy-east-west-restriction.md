@@ -334,7 +334,7 @@ and the policy off (nothing rendered) — and `helm lint --strict`.
    does not stand in for this one.
 3. Once both pass, this list and the pending bullet in `k8s/helm/README.md` become an observation.
 
-### Addendum (2026-09-29) — baseline confirmed with Ingress on; the Ingress-off half is still open
+### Addendum (2026-09-29) — both halves confirmed: baseline with Ingress on, then Ingress off
 
 The session queried the live Prometheus (`kubectl -n kube-prometheus-stack port-forward
 svc/kube-prometheus-stack-prometheus 9090:9090`, then `GET /api/v1/targets`) with `Ingress`
@@ -344,7 +344,19 @@ svc/kube-prometheus-stack-prometheus 9090:9090`, then `GET /api/v1/targets`) wit
 neither has a `ServiceMonitor` (only the backend exposes `/metrics`, ADR 0047). This matches
 `k8s/helm/README.md`'s "Rollout and scraping" bullet.
 
-**Still open: item 2 above (scrape while `Ingress` is off).** Toggling `ingress.enabled` is a
-`helm upgrade` against the live release and briefly takes the public site off the domain, so this
-session did not run it — that's the developer's call, not the session's. It was not attempted
-here.
+**Item 2 above (scrape while `Ingress` is off) — also confirmed.** Toggling `ingress.enabled` is a
+`helm upgrade` against the live release and briefly takes the public site off the domain, so the
+session did not run the toggle itself — the developer did (`ingress.enabled=false`, same image
+tags, to isolate the toggle from an image change). With `kubectl get ingress -A` showing no
+resources, the session re-queried Prometheus: `job=sharenpo` (by then `sharenpo-7b4d7c94df-gr2lr`,
+the rollout-tested pod from ADR 0061's addendum) was `up`, `lastError` empty, `lastScrape` seconds
+old — where it was `down`/`context deadline exceeded` before the 2026-09-27 rule.
+`kubectl -n kube-prometheus-stack get pod ... --show-labels` confirmed
+`app.kubernetes.io/name=prometheus` on the actual Prometheus pod, not just assumed from the
+chart's Service selector. The rule works as designed.
+
+Turning `Ingress` back on had an unrelated side effect worth recording here only in passing — the
+AWS Load Balancer Controller deleted and recreated the ALB, which orphaned the apex DNS record.
+That is a DNS/ExternalDNS matter, not a NetworkPolicy one, so the incident and its fix are recorded
+in [ADR 0063](0063-alb-dns-externaldns-and-delegation-set.md)'s own 2026-09-29 (later) addendum,
+not here.

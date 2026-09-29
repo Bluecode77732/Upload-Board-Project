@@ -568,10 +568,15 @@ pass observed; an item with no "observed" note is still open:
   target is `up`, where it was `down` (`context deadline exceeded`) on 2026-09-26, and
   `kubectl get pod -n kube-prometheus-stack --show-labels` shows `app.kubernetes.io/name=prometheus`
   on the Prometheus pod — the default label was read from the chart's Service selector, not from a
-  pod. Not observed yet; the `kind`+Calico check is "Verifying the Prometheus scrape rule" above.
-  Toggling `ingress.enabled` is a `helm upgrade` against the live release and briefly takes the
-  public site off the domain, so checking this needs the developer to run the toggle, not the
-  session (ADR 0056's 2026-09-29 Addendum).
+  pod. The `kind`+Calico check is "Verifying the Prometheus scrape rule" above and is still
+  unobserved. The live-EKS half is observed: 2026-09-29, the developer toggled `ingress.enabled`
+  to `false` (a `helm upgrade`, so the session didn't run it — briefly taking the public site off
+  the domain) and the session re-queried Prometheus with `kubectl get ingress -A` confirmed empty
+  — the backend target was `up`, `lastError` empty, matching the pod label too. The rule works
+  (ADR 0056's 2026-09-29 Addendum). Re-enabling `Ingress` afterward had a separate, unrelated
+  consequence — the ALB got recreated with a new DNS name and orphaned the apex DNS record; that
+  incident and its fix are in [ADR 0063](../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)'s
+  2026-09-29 (later) addendum, not here.
 - Pods stop promptly on EKS (ADR 0061). With `values-prod.yaml` (so `STORAGE_DRIVER=s3`), run
   `kubectl rollout restart deployment/<release>` and watch `kubectl get pods -w`: each old
   backend pod should leave `Terminating` within a second or two. One that sits there for the
