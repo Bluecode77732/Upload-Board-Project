@@ -209,3 +209,22 @@ Fixed by adding `THROTTLE_ENABLED: 'false'` to each job's own `env:` block in
 `test/e2e-env.ts` already used, applied at the CI-job level since neither job imports
 that file. No change to D1's limits, D2's mechanism, or `THROTTLE_ENABLED`'s dev/prod
 default (`true`) — CI-only.
+
+### Addendum (2026-09-29) — same-client throttling verified live on the real ALB; cross-IP still open
+
+The 2026-09-14 addendum above named exactly what it could not verify without
+the AWS stack applied and billing again: "that a live ALB's actual connecting
+peer address lands inside that CIDR in practice." Checked today against the
+live deployment (`https://sharenpo.cloud`, the same stack `trust proxy` =
+`10.0.0.0/16` targets): repeated `POST /auth/signin` against a nonexistent
+account tripped `429 Too Many Requests` with `Retry-After: 33`, consistent
+with the 5/minute limit. While throttled, from the same client:
+`POST /auth/register` (a different handler, same IP) still answered `400` and
+unauthenticated `GET /file` still answered `401` — neither was affected by
+the signin bucket, matching D1's per-handler `generateKey` claim.
+
+What this does not verify — and the 2026-09-14 addendum's own remaining open
+item — is a second client on a genuinely different IP being unaffected by the
+first client's `429`. That needs a second network (e.g. a phone hotspot) this
+session had no access to; tracked as a live-only pending check in
+`k8s/helm/README.md`.

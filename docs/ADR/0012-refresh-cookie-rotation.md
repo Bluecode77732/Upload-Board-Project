@@ -78,3 +78,17 @@ before the first frontend line is written.
 - Stage F is complete — the API surface, error contract, and auth transport a
   frontend depends on are all settled; the frontend repository can start
   (RBAC proceeds in parallel, changing no API surface).
+
+### Addendum (2026-09-29) — the cookie attributes verified live, over a real HTTPS connection
+
+ADR 0034 left "a `Secure` cookie over a connection the browser sees as HTTP is
+simply dropped" as an accepted gap until something is actually deployed with
+`ENV=prod`. Checked today against the live ALB-fronted deployment
+(`https://sharenpo.cloud`) with a throwaway registered account (Playwright,
+`page.context().cookies()` — not `document.cookie`, which an `HttpOnly` cookie
+never appears in regardless): the `refreshToken` cookie arrived as
+`{ httpOnly: true, secure: true, sameSite: 'Strict', path: '/auth/token',
+domain: 'sharenpo.cloud' }`, matching this ADR's spec exactly. A full page
+reload kept the signed-in view (the app's own silent-refresh-on-load call
+succeeded), confirming the cookie round-trips correctly, not just that it was
+set. The test account and its one uploaded file were deleted afterward.

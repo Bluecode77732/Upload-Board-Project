@@ -505,7 +505,10 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
 - 실제 HTTPS 연결로 로그인한 뒤 페이지를 새로고침해도 세션이 유지되는지. refresh 쿠키가
   `HttpOnly; Secure; SameSite=Strict; Path=/auth/token`으로 내려오고 `POST /auth/token/refresh`에
   다시 실려 가야 한다 — `Secure` 쿠키는 브라우저 연결이 HTTPS일 때만 동작하므로 다른 곳에서는
-  볼 수 없다(ADR 0012, ADR 0034).
+  볼 수 없다(ADR 0012, ADR 0034). Observed 2026-09-29(Playwright, 일회용 가입 계정):
+  `context.cookies()`에서 `refreshToken`이 정확히 `httpOnly: true, secure: true,
+  sameSite: 'Strict', path: '/auth/token', domain: 'sharenpo.cloud'`로 나왔고, 전체 페이지
+  새로고침 후에도 로그인 상태 화면이 유지됐다. 계정과 그 계정이 올린 파일 1개는 확인 후 삭제했다.
 - `STORAGE_DRIVER=s3`(`values-prod.yaml`이 설정하는 값)에서 비공개 파일의 미리보기(Blob
   `fetch()` → API의 302 → presigned S3 URL)와 공개/unlisted 파일의 `<img>`/`<video>`가 모두
   브라우저 콘솔에 CSP·CORS 에러 없이 로드되는지. 버킷에 운영 origin에 대한 CORS 규칙이
@@ -516,11 +519,24 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   **교체**한다. apply 이후에도 실제 버킷을 상대로 한 로컬 `STORAGE_DRIVER=s3` 테스트가
   필요하면 개발 origin을 다시 손으로 넣어야 한다. 별개로 `frontend/nginx.conf`의 CSP가
   `https://*.amazonaws.com`을 허용해야 한다(ADR 0060 — 브라우저로 확인하기 전까지는 CSP
-  의미론에서 추정한 값이다).
+  의미론에서 추정한 값이다). Observed 2026-09-29: `sharenpo-074416822640`에 `aws s3api
+  get-bucket-cors`를 돌려보니 운영 origin 전용 규칙이 적용돼 있었다(개발 origin은 예측대로
+  병합이 아니라 통째로 사라짐). 실제 브라우저에서: `private`은 blob fetch로 로드됐고(`302` →
+  presigned `https://sharenpo-074416822640.s3.ap-northeast-2.amazonaws.com/granted/...` →
+  `200`); `public`과 `unlisted`는 둘 다 `<img src="https://sharenpo.cloud/file/:id/content">`가
+  그대로 그 리다이렉트를 따라가는 방식으로 로드됐다. 세 경우 모두 실제 테스트 이미지가
+  렌더링됐고(`naturalWidth: 4`, 깨진 이미지 아님) 콘솔 에러는 없었다 — CSP 와일드카드가
+  버킷의 실제 virtual-hosted-style 호스트를 정말로 매치한다(ADR 0036 addendum).
 - 실제 클라이언트 IP가 rate limiter에 도달하는지(`trust proxy` = `10.0.0.0/16`, ADR 0054
   addendum): 한 클라이언트에서 1분 안에 `POST /auth/signin`을 여섯 번째로 호출하면 429가 나오고,
   다른 IP의 두 번째 클라이언트는 전혀 제한되지 않아야 한다. 모든 방문자가 하나의 버킷을
-  공유한다면 앱이 보는 peer가 그 CIDR 안에 있지 않다는 뜻이다.
+  공유한다면 앱이 보는 peer가 그 CIDR 안에 있지 않다는 뜻이다. Observed 2026-09-29(단일
+  클라이언트만 — 이 세션에 두 번째 네트워크가 없었다): 존재하지 않는 계정으로
+  `POST /auth/signin`을 반복하니 `429`와 `Retry-After: 33`이 떴다; 스로틀된 상태에서 같은
+  IP의 `POST /auth/register`(다른 핸들러)는 여전히 `400`을, 인증되지 않은 `GET /file`은
+  여전히 `401`을 답해 버킷이 라우트별이지 앱 전체 공유가 아님을 확인했다(ADR 0054
+  addendum). 아직 열려 있는 것: 정말로 다른 IP의 두 번째 클라이언트가 첫 번째의 `429`에
+  영향받지 않는지 — 실제 두 번째 네트워크(예: 휴대폰 핫스팟)가 필요하다.
 - 롤아웃과 스크레이프: 세 Deployment 모두 `kubectl rollout status`가 성공하고, 프론트엔드와
   admin Service 각각에는 ready 엔드포인트가 있으며 백엔드 Service에는 그 파드들이 하나도
   없고, Prometheus에는 백엔드 타깃만 있고 프론트엔드·admin 타깃은 없어야 한다(`web` 포트

@@ -315,6 +315,33 @@ script again by hand (or writing the Terraform resource, not decided here).
 This is listed as a live-only pending check in `k8s/helm/README.md`
 ("Enabling HTTPS (Ingress)"), not resolved here.
 
+### Addendum (2026-09-29) — the production CORS rule is applied, and all three visibility tiers load in a real browser
+
+The 2026-09-22 addendum left `aws_s3_bucket_cors_configuration.app`
+code-complete but not applied. `aws s3api get-bucket-cors` on the live bucket
+(`sharenpo-074416822640`) now shows exactly that rule —
+`AllowedOrigins: ["https://sharenpo.cloud"]`, `AllowedMethods: ["GET"]` — and
+nothing else; the 2026-08-16 hand-run script's two `localhost` dev origins are
+gone, replaced outright as that addendum predicted, not merged.
+
+Live-verified in a real Chromium session (Playwright) against
+`https://sharenpo.cloud`, with a throwaway registered account and a small
+uploaded PNG: `private` loads through the frontend's blob-fetch path
+(`fetch()` → `GET /file/:id/content` → `302` → the presigned
+`https://sharenpo-074416822640.s3.ap-northeast-2.amazonaws.com/granted/...`
+URL → `200`, turned into an objectURL); switching the same file to `public`
+and reloading, the `<img>` pointed directly at
+`https://sharenpo.cloud/file/:id/content` and the browser followed the `302`
+natively with no JS fetch involved; `unlisted` was identical with
+`?share=<token>` appended. All three reported `naturalWidth: 4` — the real
+4×4 test image, not a broken-image placeholder — with zero console errors or
+warnings in any case. This confirms both the CORS rule above and
+`frontend/nginx.conf`'s `img-src`/`media-src https://*.amazonaws.com`
+allowance actually cover the bucket's real host: `S3Storage`'s client sets no
+`forcePathStyle`, so the presigned URL is virtual-hosted-style
+(`{bucket}.s3.{region}.amazonaws.com`), which the CSP wildcard matches. The
+test file and its throwaway account were deleted after the check.
+
 ### Addendum (2026-09-22) — the production origin is now coded, not yet applied
 
 `app-infra/main.tf` gains `aws_s3_bucket_cors_configuration.app`: `AllowedMethods = ["GET"]`,

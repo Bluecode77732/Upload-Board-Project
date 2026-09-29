@@ -511,7 +511,11 @@ pass observed; an item with no "observed" note is still open:
 - Sign in over the real HTTPS connection, then reload the page: the session survives. The
   refresh cookie must arrive as `HttpOnly; Secure; SameSite=Strict; Path=/auth/token` and go
   back on `POST /auth/token/refresh` — a `Secure` cookie only works when the browser's
-  connection is HTTPS, so this can't be seen anywhere else (ADR 0012, ADR 0034).
+  connection is HTTPS, so this can't be seen anywhere else (ADR 0012, ADR 0034). Observed
+  2026-09-29 (Playwright, a throwaway registered account): `context.cookies()` showed
+  `refreshToken` with exactly `httpOnly: true, secure: true, sameSite: 'Strict',
+  path: '/auth/token', domain: 'sharenpo.cloud'`; a full page reload kept the signed-in view.
+  The account and its one uploaded file were deleted afterward.
 - With `STORAGE_DRIVER=s3` (what `values-prod.yaml` sets): a private file's preview (blob
   `fetch()` → the API's 302 → a presigned S3 URL) and a public/unlisted `<img>`/`<video>` all
   load with no CSP or CORS error in the browser console. Two things must already be true: the
@@ -523,11 +527,24 @@ pass observed; an item with no "observed" note is still open:
   again if local `STORAGE_DRIVER=s3` testing against the real bucket is still wanted
   after that apply. Separately, `frontend/nginx.conf`'s CSP must allow
   `https://*.amazonaws.com` (ADR 0060 — a guess from CSP semantics until seen in a
-  browser).
+  browser). Observed 2026-09-29: `aws s3api get-bucket-cors` on `sharenpo-074416822640` shows
+  the production-only rule applied (the dev origins are gone, replaced not merged, as
+  predicted). In a real browser: `private` loaded via blob fetch (`302` → presigned
+  `https://sharenpo-074416822640.s3.ap-northeast-2.amazonaws.com/granted/...` → `200`);
+  `public` and `unlisted` both loaded via a plain `<img src="https://sharenpo.cloud/file/:id/content">`
+  that the browser followed through the same redirect natively. All three rendered the real
+  test image (`naturalWidth: 4`, not a broken-image placeholder) with zero console errors —
+  the CSP wildcard does match the bucket's actual virtual-hosted-style host (ADR 0036 addendum).
 - The real client IP reaches the rate limiter (`trust proxy` = `10.0.0.0/16`, ADR 0054
   addendum): from one client the sixth `POST /auth/signin` within a minute answers 429, while
   a second client on another IP is not throttled at all. If every visitor shares one bucket,
-  the peer the app sees is not inside that CIDR.
+  the peer the app sees is not inside that CIDR. Observed 2026-09-29 (single client only — no
+  second network available to this session): repeated `POST /auth/signin` against a
+  nonexistent account answered `429` with `Retry-After: 33`; while throttled, `POST
+  /auth/register` (same IP, different handler) still answered `400` and unauthenticated
+  `GET /file` still answered `401`, confirming the bucket is per-route, not shared app-wide
+  (ADR 0054 addendum). Still open: a second client on a genuinely different IP not being
+  throttled by the first's `429` — needs a real second network (e.g. a phone hotspot).
 - Rollout and scraping: `kubectl rollout status` succeeds for all three Deployments, the
   frontend and admin Services each have a ready endpoint and the backend Service has none of
   their pods, and Prometheus lists a target for the backend but none for frontend or admin
