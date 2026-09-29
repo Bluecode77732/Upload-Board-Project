@@ -543,8 +543,15 @@ pass observed; an item with no "observed" note is still open:
   nonexistent account answered `429` with `Retry-After: 33`; while throttled, `POST
   /auth/register` (same IP, different handler) still answered `400` and unauthenticated
   `GET /file` still answered `401`, confirming the bucket is per-route, not shared app-wide
-  (ADR 0054 addendum). Still open: a second client on a genuinely different IP not being
-  throttled by the first's `429` — needs a real second network (e.g. a phone hotspot).
+  (ADR 0054 addendum). ~~Still open: a second client on a genuinely different IP not being
+  throttled by the first's `429` — needs a real second network (e.g. a phone hotspot).~~
+  Observed 2026-09-29 (developer, laptop switched from normal Wi-Fi to a phone hotspot — a
+  genuinely different public IP, not another device on the same network): the normal network
+  hit `429` on the 6th `POST /auth/signin` (5×`400` then `429`, matching the 5/minute limit
+  exactly); the same request from the hotspot IP answered `400`, not `429` — the two IPs
+  tracked separate buckets. A third attempt back on the original network also answered `400`
+  rather than the still-expected `429`, most likely because the 60-second window had already
+  elapsed during the network switch, not a defect (ADR 0054 addendum).
 - Rollout and scraping: `kubectl rollout status` succeeds for all three Deployments, the
   frontend and admin Services each have a ready endpoint and the backend Service has none of
   their pods, and Prometheus lists a target for the backend but none for frontend or admin

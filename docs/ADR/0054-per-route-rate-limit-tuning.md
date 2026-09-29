@@ -210,7 +210,7 @@ Fixed by adding `THROTTLE_ENABLED: 'false'` to each job's own `env:` block in
 that file. No change to D1's limits, D2's mechanism, or `THROTTLE_ENABLED`'s dev/prod
 default (`true`) — CI-only.
 
-### Addendum (2026-09-29) — same-client throttling verified live on the real ALB; cross-IP still open
+### Addendum (2026-09-29) — same-client throttling verified live on the real ALB; cross-IP resolved below
 
 The 2026-09-14 addendum above named exactly what it could not verify without
 the AWS stack applied and billing again: "that a live ALB's actual connecting
@@ -226,5 +226,21 @@ the signin bucket, matching D1's per-handler `generateKey` claim.
 What this does not verify — and the 2026-09-14 addendum's own remaining open
 item — is a second client on a genuinely different IP being unaffected by the
 first client's `429`. That needs a second network (e.g. a phone hotspot) this
-session had no access to; tracked as a live-only pending check in
-`k8s/helm/README.md`.
+session had no access to ~~; tracked as a live-only pending check in
+`k8s/helm/README.md`~~ — resolved by the developer the same day, see below.
+
+### Addendum (2026-09-29, cont'd) — cross-IP isolation confirmed on a real second network
+
+The developer ran the check the addendum above could not. From their normal
+network: `POST /auth/signin` against a nonexistent account answered `400`
+five times, then `429` on the sixth — exactly D1's 5/minute limit. Switching
+the same machine to a phone hotspot (a different public IP, not another
+device on the same Wi-Fi) and repeating the same request once: `400`, not
+`429` — the two IPs tracked separate buckets, so `trust proxy`'s CIDR
+resolves the real client through the live ALB rather than collapsing every
+visitor onto the ALB's own address. Switching back to the original network,
+one more attempt answered `400` again instead of the `429` still expected
+from the first burst — almost certainly the 60-second window (D1's
+`ttl: 60000`) had already elapsed during the network switch, not a defect;
+the comparison that actually matters here (same IP throttled, different IP
+not) came out exactly as designed.
