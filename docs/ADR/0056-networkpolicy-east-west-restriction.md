@@ -333,3 +333,18 @@ and the policy off (nothing rendered) — and `helm lint --strict`.
    on the Prometheus pod. Calico and AWS's agent are different enforcement engines (D2), so item 1
    does not stand in for this one.
 3. Once both pass, this list and the pending bullet in `k8s/helm/README.md` become an observation.
+
+### Addendum (2026-09-29) — baseline confirmed with Ingress on; the Ingress-off half is still open
+
+The session queried the live Prometheus (`kubectl -n kube-prometheus-stack port-forward
+svc/kube-prometheus-stack-prometheus 9090:9090`, then `GET /api/v1/targets`) with `Ingress`
+**on** (its normal state during this session). The `job=sharenpo` target
+(`sharenpo-79556dbc48-6cnmm`, endpoint `http`, `http://10.0.10.34:3000/metrics`) was `up`; no
+`sharenpo-frontend` or `sharenpo-admin` job appeared at all — not `down`, simply absent, because
+neither has a `ServiceMonitor` (only the backend exposes `/metrics`, ADR 0047). This matches
+`k8s/helm/README.md`'s "Rollout and scraping" bullet.
+
+**Still open: item 2 above (scrape while `Ingress` is off).** Toggling `ingress.enabled` is a
+`helm upgrade` against the live release and briefly takes the public site off the domain, so this
+session did not run it — that's the developer's call, not the session's. It was not attempted
+here.

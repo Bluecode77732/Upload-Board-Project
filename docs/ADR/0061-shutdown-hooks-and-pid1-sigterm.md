@@ -1,6 +1,6 @@
 # ADR 0061: Graceful Shutdown — `enableShutdownHooks()`, and Node as PID 1
 
-- Status: Accepted — implemented, verified in a local Linux container and on a local `kind` cluster (not on EKS); D3 reversed by the addendum
+- Status: Accepted — implemented, verified in a local Linux container, on a local `kind` cluster, and (2026-09-29) on live EKS; D3 reversed by the addendum
 - Date: 2026-09-21
 - Extends: [ADR 0030](0030-container-non-root-and-arch-stance.md) — the container shape this was measured against (non-root, `CMD ["node", "dist/main"]`); none of it changes
 - 한국어: [0061-shutdown-hooks-and-pid1-sigterm.ko.md](0061-shutdown-hooks-and-pid1-sigterm.ko.md)
@@ -204,3 +204,51 @@ containerd behaves the same, and — the actual open question — whether the AL
 a pod before its grace period (however long) runs out, are both still unverified. `docker
 stop`'s own grace/SIGKILL semantics (used throughout this ADR's other measurements) has no
 `preStop` equivalent, so this pair of scenarios could only be run on `kind`.
+
+### Addendum (2026-09-29) — live EKS: pod termination speed confirmed fast; the ALB race reproduced twice, a `preStop` sleep proposed, not adopted
+
+Two `kubectl rollout restart deployment/sharenpo` cycles against the live cluster (chart `0.5.1`,
+one replica, `maxSurge: 25%`/`maxUnavailable: 25%` → surge-first: a new pod comes up before the
+old one is killed). Each was instrumented with three independent readouts running throughout: a
+1 req/s `curl -s -o /dev/null -w '%{http_code}' https://sharenpo.cloud/file` (no token, `401`
+expected), UTC-timestamped; an `aws elbv2 describe-target-health` poll of the backend target
+group (`k8s-default-sharenpo-60fc9d48fc`) roughly every 3 s; and `kubectl get events
+--sort-by=.lastTimestamp` read afterward.
+
+**Pod termination speed — the "1–2 seconds" pending item, previously `kind`-only.** Both rounds:
+the old pod's `Killing` and `SuccessfulDelete` events landed in the *same second*
+(`2026-09-29T16:15:00Z` and `...T16:17:38Z`), and a `kubectl get pod <old-name>` run a few
+seconds later already returned `NotFound`. Kubernetes events only carry whole-second timestamps,
+so this doesn't reproduce `kind`'s sub-second `0.4 s` figure exactly, but it rules out the failure
+mode the pending item named — a pod stuck in `Terminating` anywhere near the default 30 s grace.
+EKS matches `kind` here: fast.
+
+**The ALB race — reproduced, not a one-off.** Both rounds produced exactly one non-`401`
+response: a curl `000` (no HTTP response at all — refused or reset — not a `502`/`503`/`504` an
+ALB or the app would have returned):
+
+| Round | `Killing` event (UTC) | curl `000` (UTC) | Target-health transition first observed |
+|---|---|---|---|
+| 1 | `16:15:00` | `16:15:00.448` | `16:15:00.948`: old target `draining`/`DeregistrationInProgress`, new target `initial`/`RegistrationInProgress` |
+| 2 | `16:17:38` | `16:17:39.281` | `16:17:41.321`: old target `draining`/`DeregistrationInProgress` (≈3.1 s poll gap, so the real transition may be earlier) |
+
+Every other sample answered `401` cleanly (19 of 21 in round 1, 9 of 10 in round 2). Each round's
+one failure lands within about a second of `Killing` and at or before the target-health API first
+reports `draining` — consistent with the mechanism the 2026-09-22 addendum above left as the
+actual open question: the pod stops accepting connections (SIGTERM → the app's own fast shutdown,
+D1/D3) before the ALB's deregistration has propagated, so a request landed in that window is
+refused rather than routed elsewhere. This is on the surge-first path — the new pod was already
+`Running` (with one expected boot-time `Unhealthy` readiness-probe event per round) before the old
+one was killed, so the gap sits on the deregistration side, not "no target existed yet."
+
+**Proposed to the developer, not implemented.** A `preStop` sleep on the backend container long
+enough to keep the pod serving past ALB deregistration propagation, plus
+`terminationGracePeriodSeconds` raised to comfortably exceed it — the same mechanism the
+2026-09-22 addendum already validated in isolation (`preStop: sleep 5` + 35 s grace: 5.7 s to
+pod-gone, SIGTERM held until the sleep finished). This session's measurement narrows what that
+mechanism needs to cover on EKS specifically: both live failures resolved to `draining` within
+roughly 1–3 s of `Killing`, so the same `sleep 5` already proven on `kind` looks like it would
+close this gap here too — but two samples don't bound a tail, and the chart still has neither
+setting today. Adopting one is the developer's call, and needs its own `values-prod.yaml`/
+`values.yaml` change plus a live re-run of this same instrumented rollout (zero `000`/`502`/
+`503`/`504` across several rounds) before this item is closed rather than narrowed.

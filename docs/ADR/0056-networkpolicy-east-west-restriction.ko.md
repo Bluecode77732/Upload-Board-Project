@@ -323,3 +323,18 @@ Ingress가 켜져 있으면 VPC CIDR 규칙(D2 추가 기록)이 이미 Promethe
    Prometheus 파드에 `app.kubernetes.io/name=prometheus`가 보여야 한다. Calico와 AWS의 에이전트는 강제
    엔진이 서로 달라서(D2) 1번이 이 항목을 대신하지 못한다.
 3. 둘 다 통과하면 이 목록과 `k8s/helm/README.md`의 미해결 항목이 관찰 기록으로 바뀐다.
+
+### Addendum (2026-09-29) — Ingress 켠 상태의 기준선은 확인, Ingress 끈 상태 쪽은 아직 열려 있음
+
+세션이 라이브 Prometheus를 조회했다(`kubectl -n kube-prometheus-stack port-forward
+svc/kube-prometheus-stack-prometheus 9090:9090` 뒤 `GET /api/v1/targets`). 이때 `Ingress`는
+**켜져 있었다**(이번 세션 동안의 평상시 상태). `job=sharenpo` 타깃
+(`sharenpo-79556dbc48-6cnmm`, endpoint `http`, `http://10.0.10.34:3000/metrics`)은 `up`이었고,
+`sharenpo-frontend`나 `sharenpo-admin` job은 아예 나타나지 않았다 — `down`이 아니라 애초에
+없는 것인데, 둘 다 `ServiceMonitor`가 없기 때문이다(오직 백엔드만 `/metrics`를 노출함, ADR
+0047). `k8s/helm/README.md`의 "Rollout and scraping" 항목과 일치한다.
+
+**여전히 열려 있음: 위 2번 항목(`Ingress`를 끈 상태의 스크레이프).** `ingress.enabled`를
+토글하는 건 라이브 release에 대한 `helm upgrade`이고 그동안 공개 사이트가 도메인에서 잠깐
+안 되니, 이건 세션이 직접 돌리지 않았다 — 세션이 아니라 개발자가 판단할 일이다. 이번엔
+시도하지 않았다.

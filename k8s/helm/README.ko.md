@@ -549,13 +549,19 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
 - 롤아웃과 스크레이프: 세 Deployment 모두 `kubectl rollout status`가 성공하고, 프론트엔드와
   admin Service 각각에는 ready 엔드포인트가 있으며 백엔드 Service에는 그 파드들이 하나도
   없고, Prometheus에는 백엔드 타깃만 있고 프론트엔드·admin 타깃은 없어야 한다(`web` 포트
-  이름, ADR 0060, ADR 0062).
+  이름, ADR 0060, ADR 0062). Observed 2026-09-29(`Ingress` 켠 상태 — 이번 세션의 평상시
+  상태): `job=sharenpo`(endpoint `http`)는 `up`이었고, `sharenpo-frontend`/`sharenpo-admin`
+  job은 아예 나타나지 않았다 — `down`이 아니라 처음부터 없는 것인데, 둘 다 `ServiceMonitor`가
+  없기 때문이다([ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록).
 - Ingress가 꺼져 있는 동안 Prometheus가 백엔드를 스크레이프한다(2026-09-27의 규칙, `15229f6`,
   [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록): 백엔드 대상이
   2026-09-26에는 `down`(`context deadline exceeded`)이었는데 이제 `up`이어야 하고,
   `kubectl get pod -n kube-prometheus-stack --show-labels`에서 Prometheus 파드에
   `app.kubernetes.io/name=prometheus`가 보여야 한다 — 기본 라벨은 파드가 아니라 차트의 Service selector에서
   읽은 값이다. 아직 관찰하지 못했다. `kind`+Calico 확인은 위의 "Prometheus 스크레이프 규칙 검증하기"다.
+  `ingress.enabled`를 토글하는 건 라이브 release에 대한 `helm upgrade`이고 그동안 공개
+  사이트가 도메인에서 잠깐 안 되니, 이 확인은 세션이 아니라 개발자가 토글을 직접 돌려야 한다
+  (ADR 0056의 2026-09-29 추가 기록).
 - 파드가 EKS에서 곧바로 종료된다(ADR 0061). `values-prod.yaml`로(따라서 `STORAGE_DRIVER=s3`)
   `kubectl rollout restart deployment/<release>`를 실행하고 `kubectl get pods -w`를
   지켜본다: 이전 백엔드 파드는 1~2초 안에 `Terminating`을 벗어나야 한다. 30초를 꽉 채우고
@@ -566,7 +572,10 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   자체는 이미 닫힌 질문이다 — 그 기본 `keepAlive` request agent를 대신한 Docker 전용 시험
   (같은 핸들 모양, ADR 0061 두 번째 Addendum)이 소켓을 일부러 열어 둔 채로도 똑같이 빨리
   종료했다 — 그러니 이 점검은 그 핸들이 아니라 실제 파드에만 있는 다른 무언가가 있는지를
-  보는 것에 가깝다.
+  보는 것에 가깝다. Observed 2026-09-29, 라이브 EKS, 롤아웃 두 회차: 옛 파드의 `Killing`과
+  `SuccessfulDelete` 이벤트가 두 회차 모두 같은 초에 찍혔고, 몇 초 뒤엔 이미 `NotFound`였다 —
+  Kubernetes 이벤트는 초 단위까지만 찍혀서 `kind`의 정확한 `0.4초`를 그대로 재현하진 못했지만,
+  30초 유예 근처까지 가는 것과는 확실히 거리가 멀었다(ADR 0061의 2026-09-29 추가 기록).
 - 롤링 업데이트 중 ALB 오류가 없다(ADR 0061) — 실패할 가능성이 가장 높은 항목이다. 수정 전에는
   파드가 SIGTERM을 무시하고 SIGKILL까지 계속 돌았는데, 이것이 (추론일 뿐 측정한 것은 아니지만)
   우연히 ALB의 등록 해제 지연보다 길었을 것이다. 이제는 1초 안에 종료하므로, SIGTERM 이후 대상이
@@ -584,7 +593,15 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   드는 것이다 — 적어도 이 `kind`/containerd 버전에서는 그렇다; EKS에서는 확인하지 않았다.
   이 중 무엇도 sleep을 얼마로 둬야 하는지는 말해 주지 않는다 — 그건 아직 측정하지 못한 실제
   ALB의 드레인 지연 숫자가 있어야 정할 수 있으므로, 차트에는 둘 다 지금 없고 여전히 정하지
-  않았다.
+  않았다. Observed 2026-09-29, 라이브 EKS, 롤아웃 두 회차, `/file`에 초당 1회 curl을 걸면서
+  백엔드 타깃 그룹을 `aws elbv2 describe-target-health`로 함께 조회: **회차마다 정확히 한 번씩
+  실패했다**, 다만 `502`/`503`/`504`가 아니라 curl `000`(HTTP 응답 자체가 없음 — 거부/리셋)
+  이었고, 옛 파드의 `Killing` 이벤트로부터 약 1초 안, 그리고 타깃 헬스 API가 `draining`을
+  처음 보고하는 시점과 같거나 그 직전에 몰려 있었다. 한 번이 아니라 두 번 재현됐다. 여기서
+  `draining`이 `Killing` 직후 얼마나 빨리 따라왔는지를 보면, `kind`에서 이미 검증된 것과 같은
+  `preStop sleep 5` + 맞춘 `terminationGracePeriodSeconds`가 이 틈을 막을 가능성이 커 보여
+  개발자에게 제안만 했다 — 구현하지는 않았고, 차트에는 아직 둘 다 없다(ADR 0061의 2026-09-29
+  추가 기록).
 
 이 중 어느 것도 `helm lint`/`helm template`로는 확인할 수 없다 — 이 둘은 이 저장소가
 렌더링하는 YAML이 올바르다는 것만 증명할 뿐, AWS Load Balancer Controller가 그 설정대로

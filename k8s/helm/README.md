@@ -559,13 +559,19 @@ pass observed; an item with no "observed" note is still open:
 - Rollout and scraping: `kubectl rollout status` succeeds for all three Deployments, the
   frontend and admin Services each have a ready endpoint and the backend Service has none of
   their pods, and Prometheus lists a target for the backend but none for frontend or admin
-  (the `web` port name, ADR 0060, ADR 0062).
+  (the `web` port name, ADR 0060, ADR 0062). Observed 2026-09-29 (`Ingress` on, its normal state
+  this session): `job=sharenpo` (endpoint `http`) was `up`; no `sharenpo-frontend`/
+  `sharenpo-admin` job appeared at all — absent, not `down`, since neither has a `ServiceMonitor`
+  ([ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md) Addendum).
 - Prometheus scrapes the backend while Ingress is off (the rule from 2026-09-27, `15229f6`,
   [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md) Addendum): the backend
   target is `up`, where it was `down` (`context deadline exceeded`) on 2026-09-26, and
   `kubectl get pod -n kube-prometheus-stack --show-labels` shows `app.kubernetes.io/name=prometheus`
   on the Prometheus pod — the default label was read from the chart's Service selector, not from a
   pod. Not observed yet; the `kind`+Calico check is "Verifying the Prometheus scrape rule" above.
+  Toggling `ingress.enabled` is a `helm upgrade` against the live release and briefly takes the
+  public site off the domain, so checking this needs the developer to run the toggle, not the
+  session (ADR 0056's 2026-09-29 Addendum).
 - Pods stop promptly on EKS (ADR 0061). With `values-prod.yaml` (so `STORAGE_DRIVER=s3`), run
   `kubectl rollout restart deployment/<release>` and watch `kubectl get pods -w`: each old
   backend pod should leave `Terminating` within a second or two. One that sits there for the
@@ -576,7 +582,11 @@ pass observed; an item with no "observed" note is still open:
   is a closed question already — a Docker-only test standing in for its default `keepAlive`
   request agent (same handle shape, ADR 0061's second addendum) exited just as fast with the
   socket left open on purpose — so this check is really about there being nothing else specific
-  to a live pod, not that handle.
+  to a live pod, not that handle. Observed 2026-09-29, live EKS, two rollout cycles: the old
+  pod's `Killing` and `SuccessfulDelete` events landed in the same second both times, and it was
+  already `NotFound` a few seconds later — Kubernetes events only carry whole-second timestamps,
+  so this doesn't pin down `kind`'s exact `0.4 s`, but it rules out anything near the 30 s grace
+  (ADR 0061's 2026-09-29 Addendum).
 - No ALB errors during a rolling update (ADR 0061) — the check most likely to fail. Before
   the fix a pod ignored SIGTERM and kept running until SIGKILL, which (inference, not
   measured) outlasted the ALB's deregistration lag by accident; now it exits within a second,
@@ -594,7 +604,16 @@ pass observed; an item with no "observed" note is still open:
   under-sized grace period here costs rollout time, not a raw SIGKILL of the app — on this
   `kind`/containerd version, at least; not verified on EKS. None of this says what the sleep
   duration should actually be — that needs the real ALB's drain-lag number, still unmeasured, so
-  the chart has neither setting today and it's still not decided.
+  the chart has neither setting today and it's still not decided. Observed 2026-09-29, live EKS,
+  two rollout cycles, instrumented with a 1 req/s curl loop against `/file` plus an
+  `aws elbv2 describe-target-health` poll of the backend target group: **the check failed once
+  per round**, not with a `502`/`503`/`504` but a curl `000` (no HTTP response — refused/reset),
+  landing within about a second of the old pod's `Killing` event and at or just before the
+  target-health API first reported `draining`. Reproduced twice, not a one-off. A `preStop`
+  sleep (`sleep 5`, the duration already validated on `kind`) plus a matching
+  `terminationGracePeriodSeconds` is proposed to the developer as the likely fix, given how
+  quickly `draining` followed `Killing` here — but not implemented; the chart still has neither
+  setting (ADR 0061's 2026-09-29 Addendum).
 
 None of this can be verified by `helm lint`/`helm template` — they only prove the YAML
 this repo renders is correct, never that the AWS Load Balancer Controller acts on it as
