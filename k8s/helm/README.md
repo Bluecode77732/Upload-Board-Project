@@ -436,8 +436,10 @@ pass observed; an item with no "observed" note is still open:
   cluster 2026-09-26: the pod ran on a `t4g.medium` (`arm64`) node and was Ready 40 s after it
   started, with no restarts and about 1.02 GiB of memory; clamd's log records an
   `Eicar-Test-Signature FOUND` from the backend pod ([ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md)
-  Addendum). Still open: an EICAR upload through the app answering `400 UPLOAD_MALWARE_DETECTED`,
-  and a clean file passing through the app.
+  Addendum). Observed 2026-09-30: an EICAR upload through the app answered
+  `400 UPLOAD_MALWARE_DETECTED`, and a clean file passed through, was promoted, and appeared in
+  the file board — see [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md)'s
+  2026-09-30 addendum for the full record.
 - `aws elbv2 describe-listeners` on the created ALB shows both a port-80 and a port-443
   listener (`listen-ports` actually took effect, not just rendered). Observed 2026-09-29
   (a second live pass, after the 2026-09-26 one below was torn down and `app-infra`
@@ -506,8 +508,10 @@ pass observed; an item with no "observed" note is still open:
   passing `/health/ready`; ExternalDNS, External Secrets and the ALB Controller were unaffected.
   Prometheus is blocked while Ingress is off (`up` was `0`) and scraped the backend once the
   Ingress was on (`up` was `1`), so the app's metrics were not collected without an Ingress; a rule
-  in the chart since 2026-09-27 closes that gap (see the Prometheus bullet below). Not
-  observed: the HTTP response of an EICAR upload and a clean upload through the app.
+  in the chart since 2026-09-27 closes that gap (see the Prometheus bullet below). Observed
+  2026-09-30 ([ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md)'s 2026-09-30
+  addendum): an EICAR upload through the app answered `400 UPLOAD_MALWARE_DETECTED`, and a
+  clean upload succeeded and appeared in the file board.
 - Sign in over the real HTTPS connection, then reload the page: the session survives. The
   refresh cookie must arrive as `HttpOnly; Secure; SameSite=Strict; Path=/auth/token` and go
   back on `POST /auth/token/refresh` — a `Secure` cookie only works when the browser's

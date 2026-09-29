@@ -1007,8 +1007,11 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   됐고 메모리는 약 1.02 GiB였다(ADR 0059 추가 기록, 그 앞의 로컬 amd64/arm64 측정 포함). 모든 파드가
   `t4g.medium` 2대에 들어갔다(파드 슬롯 34개 중 23개). `addons/`를 건너뛴 destroy는 IAM 역할·정책,
   CloudFormation 스택, 낡은 state를 남긴다(`k8s/infra/terraform/README.md`의 Destroy). 아직 열려 있는
-  것: 앱을 거친 EICAR 업로드가 `400`으로 답하는지와 정상 파일이 통과하는지(스캐너 쪽만 관찰함), 두 번째
-  zone이 같은 네임서버를 받는지, Ingress가 꺼져 있는 동안의 메트릭 공백을 닫는 Prometheus 규칙의 확인. 다른
+  것: 두 번째 zone이 같은 네임서버를 받는지, Ingress가 꺼져 있는 동안의 메트릭 공백을 닫는 Prometheus
+  규칙의 확인. 그 사이 닫힌 항목: 앱을 거친 EICAR 업로드는 이제 `400 UPLOAD_MALWARE_DETECTED`로 답하고,
+  정상 파일은 통과해 승격까지 마치고 파일 목록에 나타난다
+  ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md)의 2026-09-30 추가 기록 — 이전에는 스캐너
+  쪽만 관찰했었다). 다른
   ADR에서 온 미관찰 항목은
   `k8s/helm/README.md` 미해결 목록에 그대로 있다.
 - Istio(Kubernetes 클러스터 위 서비스 메시) — **프로덕션 DevOps 스택 도입 행과 Stage 4
@@ -1482,7 +1485,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 
 | 항목 | 비고 |
 |---|---|
-| 두 번째 라이브 실행: apply, 확인, 철거 | **모든 `apply`와 `destroy`는 개발자가 실행했고, 세션은 AWS와 클러스터를 읽기 전용으로 조회하며 명령을 안내했다.** 기간: 첫 `cluster` apply가 14:33Z에 시작됐고, 마지막 리소스(클러스터)가 18:26Z에 사라졌으며, 18:36Z의 세션 점검에서 이 스택의 과금 리소스가 하나도 남아 있지 않았다(state 버킷과 재사용 위임 세트는 의도적으로 남겼다). 순서: state 버킷 → 위임 세트와 등록처의 네임서버 → `cluster`(70개 추가) → `app-infra` → `addons` → ESO 동기화 → `main`의 `helm`(`dev` 이미지는 `amd64`뿐이고 노드는 `arm64`뿐이라 `main`의 멀티아치 이미지를 썼다. [ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md) 추가 기록). **발견:** (1) Terraform이 JWT 시크릿을 기호 없이 생성해서 기호를 요구하는 앱의 Joi 규칙에 걸려 백엔드가 부팅 중 크래시 루프에 빠졌다 — `app-infra/main.tf`를 고치고(`f322972`) 다시 apply해서 Ready가 됐다. (2) Ingress가 꺼져 있는 동안 Prometheus가 백엔드를 스크레이프하지 못했다(NetworkPolicy) — 이후 차트 규칙을 추가했다(`15229f6`, [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록), **아직 검증하지 않았다.** (3) `addons/`를 건너뛴 destroy가 IAM 역할 3개와 정책 3개, CloudFormation 스택(`WaitConditionHandle` 하나뿐), 낡은 state를 남겼다 — 과금은 없고 정리 절차는 `k8s/infra/terraform/README.md`의 Destroy에 있다. **관찰:** Graviton에서 Deployment 4개가 모두 Ready, 마이그레이션 Job, IRSA/S3 업로드 경로(업로드, promote, presigned `302` → `200`, 삭제), EICAR 업로드가 `400 UPLOAD_MALWARE_DETECTED`로 거부됨, AWS Network Policy 에이전트 아래에서 프로브 통과, 다른 네임스페이스와 허용 목록 밖 egress 차단, EKS에서 파드가 3.76초에 종료, 그리고 이후 세 state의 `plan`이 모두 `No changes`. **이 세션이 관찰하지 못한 것:** 이 실행의 Ingress/ALB/DNS 부분(ADR 0056/0062/0063 추가 기록에 있다), 브라우저 쪽(CORS, 쿠키), 비용(검증하지 않은 추정을 대화에서만 말했고 기록하지 않았다. Route 53 요금 페이지는 2026-09-27에 읽었고, 재사용 위임 세트를 언급하지 않으며 생성 후 12시간 안에 삭제한 호스티드 존에는 요금이 붙지 않는다고 적고 있다. 이번 실행의 zone이 그 경우였다). 스택이 *지금* apply돼 있는지는 여기에도 다른 어느 문서에도 적지 않는다: AWS에서 직접 확인한다(`k8s/infra/terraform/README.md`의 Status). |
+| 두 번째 라이브 실행: apply, 확인, 철거 | **모든 `apply`와 `destroy`는 개발자가 실행했고, 세션은 AWS와 클러스터를 읽기 전용으로 조회하며 명령을 안내했다.** 기간: 첫 `cluster` apply가 14:33Z에 시작됐고, 마지막 리소스(클러스터)가 18:26Z에 사라졌으며, 18:36Z의 세션 점검에서 이 스택의 과금 리소스가 하나도 남아 있지 않았다(state 버킷과 재사용 위임 세트는 의도적으로 남겼다). 순서: state 버킷 → 위임 세트와 등록처의 네임서버 → `cluster`(70개 추가) → `app-infra` → `addons` → ESO 동기화 → `main`의 `helm`(`dev` 이미지는 `amd64`뿐이고 노드는 `arm64`뿐이라 `main`의 멀티아치 이미지를 썼다. [ADR 0048](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md) 추가 기록). **발견:** (1) Terraform이 JWT 시크릿을 기호 없이 생성해서 기호를 요구하는 앱의 Joi 규칙에 걸려 백엔드가 부팅 중 크래시 루프에 빠졌다 — `app-infra/main.tf`를 고치고(`f322972`) 다시 apply해서 Ready가 됐다. (2) Ingress가 꺼져 있는 동안 Prometheus가 백엔드를 스크레이프하지 못했다(NetworkPolicy) — 이후 차트 규칙을 추가했다(`15229f6`, [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록), **아직 검증하지 않았다.** (3) `addons/`를 건너뛴 destroy가 IAM 역할 3개와 정책 3개, CloudFormation 스택(`WaitConditionHandle` 하나뿐), 낡은 state를 남겼다 — 과금은 없고 정리 절차는 `k8s/infra/terraform/README.md`의 Destroy에 있다. **관찰:** Graviton에서 Deployment 4개가 모두 Ready, 마이그레이션 Job, IRSA/S3 업로드 경로(업로드, promote, presigned `302` → `200`, 삭제), clamd가 백엔드 파드 IP발 EICAR 프로브를 탐지함(앱 자신의 `/upload/attach` HTTP 응답은 아니었다 — 그 왕복은 그때까지 열려 있었고 [ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md)의 2026-09-30 추가 기록에서 따로 닫혔다), AWS Network Policy 에이전트 아래에서 다른 프로브들 통과, 다른 네임스페이스와 허용 목록 밖 egress 차단, EKS에서 파드가 3.76초에 종료, 그리고 이후 세 state의 `plan`이 모두 `No changes`. **이 세션이 관찰하지 못한 것:** 이 실행의 Ingress/ALB/DNS 부분(ADR 0056/0062/0063 추가 기록에 있다), 브라우저 쪽(CORS, 쿠키), 비용(검증하지 않은 추정을 대화에서만 말했고 기록하지 않았다. Route 53 요금 페이지는 2026-09-27에 읽었고, 재사용 위임 세트를 언급하지 않으며 생성 후 12시간 안에 삭제한 호스티드 존에는 요금이 붙지 않는다고 적고 있다. 이번 실행의 zone이 그 경우였다). 스택이 *지금* apply돼 있는지는 여기에도 다른 어느 문서에도 적지 않는다: AWS에서 직접 확인한다(`k8s/infra/terraform/README.md`의 Status). |
 
 ### 2026-08-29
 

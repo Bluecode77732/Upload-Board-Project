@@ -433,8 +433,9 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   약 4분의 1이다. 2026-09-26 라이브 클러스터에서 관찰: 파드가 `t4g.medium`(`arm64`) 노드에서 돌았고
   시작 후 40초에 Ready가 됐으며 재시작은 없었고 메모리는 약 1.02 GiB였다. clamd 로그에는 백엔드
   파드에서 온 `Eicar-Test-Signature FOUND`가 남아 있다([ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md)
-  추가 기록). 아직 열려 있는 것: 앱을 거친 EICAR 업로드가 `400 UPLOAD_MALWARE_DETECTED`로 답하는지,
-  정상 파일이 앱을 거쳐 통과하는지.
+  추가 기록). 2026-09-30 관찰: 앱을 거친 EICAR 업로드는 `400 UPLOAD_MALWARE_DETECTED`로 답했고,
+  정상 파일은 통과해 승격까지 마치고 파일 목록에 나타났다 — 전체 기록은
+  [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md)의 2026-09-30 추가 기록 참고.
 - `aws elbv2 describe-listeners`로 만들어진 ALB에 80번과 443번 리스너가 둘 다 있는지
   (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지). 2026-09-29 관찰(아래 2026-09-26
   실행분을 철거하고 `app-infra`를 재적용한 두 번째 라이브 실행): 인증서 없는 80번 `HTTP`
@@ -500,8 +501,9 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   추정한다. ExternalDNS, External Secrets, ALB Controller는 영향받지 않았다. Prometheus는 Ingress가
   꺼져 있는 동안 막혔고(`up`이 `0`) Ingress가 켜진 뒤 백엔드를 스크레이프했다(`up`이 `1`). 즉
   Ingress 없이는 앱 메트릭이 수집되지 않았고, 2026-09-27부터 차트의 규칙이 이 공백을 닫는다(아래
-  Prometheus 항목). 관찰하지 못한 것: EICAR 업로드의 HTTP 응답과 앱을 거친
-  정상 파일 업로드.
+  Prometheus 항목). 2026-09-30 관찰([ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md)의
+  2026-09-30 추가 기록): 앱을 거친 EICAR 업로드는 `400 UPLOAD_MALWARE_DETECTED`로 답했고, 정상
+  업로드는 성공해 파일 목록에 나타났다.
 - 실제 HTTPS 연결로 로그인한 뒤 페이지를 새로고침해도 세션이 유지되는지. refresh 쿠키가
   `HttpOnly; Secure; SameSite=Strict; Path=/auth/token`으로 내려오고 `POST /auth/token/refresh`에
   다시 실려 가야 한다 — `Secure` 쿠키는 브라우저 연결이 HTTPS일 때만 동작하므로 다른 곳에서는
