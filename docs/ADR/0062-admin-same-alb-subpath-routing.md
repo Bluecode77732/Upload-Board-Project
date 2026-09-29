@@ -264,3 +264,22 @@ health check accept a missing page as healthy; and leaving it as it was.
 were `healthy` at 17:43:15 with health-check paths `/`, `/admin/` and `/health/live`. So the
 controller (`aws-load-balancer-controller-1.7.1`, app `v2.7.1`) reads the annotation from the
 Service. The pods were not restarted and the public status codes stayed `200`, `401`, `200`.
+
+## Addendum (2026-09-29): second live ALB — the `/admin/` body settles the 2026-09-26 open item
+
+The 2026-09-26 stack was torn down and `app-infra`/`addons`/the chart were re-applied for a second
+live pass. The 2026-09-26 addendum above left one thing explicitly open: `/admin/`'s `200` proved
+nothing on its own, because the frontend's SPA fallback answers `200` for `/admin/` too. This pass
+read the bodies.
+
+- `curl -s https://sharenpo.cloud/admin/` returned `<title>Sharenpo Admin</title>`, with
+  `/admin/assets/index--Ii8g1iN.js`/`/admin/assets/index-5ZLQDVBl.css` and
+  `/admin/favicon.svg` — distinct from `/`'s `<title>Sharenpo</title>` and bare `/assets/...`.
+  The `/admin` Ingress rule is reaching the admin pod, not falling through to the frontend's SPA
+  fallback.
+- `curl -I https://sharenpo.cloud/admin` (no trailing slash) returned `301` with `server: nginx`
+  and `location: /admin/`, and none of the ALB Controller's own response headers — the admin
+  container's own redirect (`admin/nginx.conf`), not an ALB-level rewrite.
+
+Both close the last two open rows in [k8s/helm/README.md](../../k8s/helm/README.md)'s Pending
+list for this ADR. Nothing decided here changes.

@@ -439,8 +439,10 @@ pass observed; an item with no "observed" note is still open:
   Addendum). Still open: an EICAR upload through the app answering `400 UPLOAD_MALWARE_DETECTED`,
   and a clean file passing through the app.
 - `aws elbv2 describe-listeners` on the created ALB shows both a port-80 and a port-443
-  listener (`listen-ports` actually took effect, not just rendered). Not run; the redirect and
-  the certificate below are the indirect evidence.
+  listener (`listen-ports` actually took effect, not just rendered). Observed 2026-09-29
+  (a second live pass, after the 2026-09-26 one below was torn down and `app-infra`
+  re-applied): a port-80 `HTTP` listener with no certificate, and a port-443 `HTTPS`
+  listener carrying the ACM cert issued by that re-apply.
 - `curl -I http://<domain>` returns a `301`/`302` to the `https://` URL (`ssl-redirect`
   actually fires). Observed 2026-09-26: `301` to `https://sharenpo.cloud:443/`.
 - A browser accepts the certificate with no warnings for the same domain the ACM
@@ -453,8 +455,14 @@ pass observed; an item with no "observed" note is still open:
   ordering has never been observed live). `/health/live`, `/metrics`, and `/doc` must also
   answer the SPA's HTML (or 404), never a backend response. Observed 2026-09-26: `/` `200`,
   `/file` `401` — status codes only. The `401` can only come from the backend (the SPA fallback
-  answers `200`), so the API prefix rule did win over `/`. Not checked: the bodies, `/files`,
-  `/posts/1`, an unknown path, and `/health/live`, `/metrics`, `/doc`.
+  answers `200`), so the API prefix rule did win over `/`. Observed 2026-09-29 (bodies, on the
+  re-applied stack): `/file` returns the API's `{"code":"AUTH_UNAUTHORIZED",...}` JSON, while
+  `/`, `/files`, `/posts/1`, and an unknown path all return the frontend SPA's HTML
+  (`<title>Sharenpo</title>`, `/assets/...`) — confirming the API-prefix rules really do sit
+  above the `/` catch-all rather than the earlier status-code-only check being a coincidence.
+  `/health/live`, `/metrics`, and `/doc` also fell through to the SPA's HTML (`200`), never a
+  backend response — ADR 0058's allow-list omission is enforced by which Ingress rule the
+  request matches, not merely by the backend never being asked.
 - `curl https://<domain>/admin/` returns the admin console's HTML (not the frontend's, and
   not a 404) — confirms `/admin` sits in the rule set at all and Exact-then-longest-Prefix
   ordering doesn't let a shorter rule swallow it first (ADR 0062, also never observed live).
@@ -462,9 +470,13 @@ pass observed; an item with no "observed" note is still open:
   `/admin/`, not the ALB's — confirms the request actually reached the admin pod rather than
   being rewritten or dropped upstream. Observed 2026-09-26: `/admin/` `200` (status code only),
   which proves nothing here — the frontend's nginx also answers `200` for `/admin/` through its
-  SPA fallback, so a request the ALB sent to the frontend would look identical. Tell them apart
-  by the body (the admin console's page, not the SPA's) or by the bare `/admin` `301`, which only
-  the admin nginx produces; neither was checked, so this item is still open.
+  SPA fallback, so a request the ALB sent to the frontend would look identical. Observed
+  2026-09-29 (bodies, on the re-applied stack): `/admin/` returns `<title>Sharenpo Admin</title>`
+  with `/admin/assets/...` and `/admin/favicon.svg` — distinct from `/`'s `<title>Sharenpo</title>`
+  and `/assets/...` — so the request reached the admin pod, not the frontend's SPA fallback. The
+  bare `curl -I https://sharenpo.cloud/admin` answers `301` with `server: nginx` and
+  `location: /admin/` and none of the ALB Controller's own response headers — the admin
+  container's own redirect, not an ALB-level rewrite.
 - The target group registers healthy targets. `values-prod.yaml`'s commented annotation
   block sets `alb.ingress.kubernetes.io/target-type: ip` (added 2026-09-22 — the
   controller's `instance` default needs a `NodePort`/`LoadBalancer` Service, and both

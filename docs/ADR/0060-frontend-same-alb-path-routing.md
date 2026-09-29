@@ -353,3 +353,23 @@ was `aws-load-balancer-controller-1.7.1` (app `v2.7.1`).
 
 Nothing decided here changes. The other two Services needed a health-check path of their own; that
 is recorded in ADR 0062's Addendum.
+
+### Addendum (2026-09-29) — second live ALB: bodies, not just status codes
+
+The 2026-09-26 stack was torn down and `app-infra`/`addons`/the chart were re-applied for a second
+live pass. The session read AWS and the cluster read-only and requested the public site with
+`curl`; no browser was used.
+
+- **`aws elbv2 describe-listeners`** on the new ALB: a port-80 `HTTP` listener with no certificate,
+  and a port-443 `HTTPS` listener carrying the ACM cert from the re-applied `app-infra` — closing
+  the "Not run" item [k8s/helm/README.md](../../k8s/helm/README.md)'s Pending list carried.
+- **Bodies, not just status codes.** `/file` with no token returned the API's
+  `{"code":"AUTH_UNAUTHORIZED",...}` JSON. `/`, `/files`, `/posts/1`, and an unknown path all
+  returned the frontend SPA's HTML (`<title>Sharenpo</title>`, `/assets/...`). `/health/live`,
+  `/metrics`, and `/doc` also returned the SPA's HTML at `200` — never a backend response. This
+  closes the "still not observed" list above: the API-prefix-over-`/` ordering inferred from status
+  codes alone on 2026-09-26 held up once the actual bodies were read.
+- **Still not observed**: the CSP/S3 presigned-redirect check and a browser visit — this pass, like
+  the last, was `curl`-only.
+
+`/admin`'s ordering and body are recorded in ADR 0062's own 2026-09-29 addendum, not here.

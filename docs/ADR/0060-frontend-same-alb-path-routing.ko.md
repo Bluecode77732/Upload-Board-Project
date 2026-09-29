@@ -335,3 +335,24 @@ API prefix와도 SPA 라우트와도 겹치지 않고, "Residual, unverified"의
 
 여기서 정한 것은 바뀌지 않는다. 나머지 두 Service는 각자의 헬스체크 경로가 필요했고, 그것은 ADR 0062의
 Addendum에 기록했다.
+
+### 추가 기록 (2026-09-29) — 두 번째 라이브 ALB: 상태 코드가 아니라 본문으로 확인
+
+2026-09-26 스택을 철거하고 `app-infra`/`addons`/차트를 다시 적용해 두 번째 라이브 실행을 했다.
+세션은 AWS와 클러스터를 읽기 전용으로 조회하고 `curl`로 공개 사이트를 요청했다. 브라우저는 쓰지
+않았다.
+
+- **`aws elbv2 describe-listeners`**: 새 ALB에 인증서 없는 80번 `HTTP` 리스너와, 재적용된
+  `app-infra`에서 나온 ACM 인증서를 물고 있는 443번 `HTTPS` 리스너가 있었다 —
+  [k8s/helm/README.md](../../k8s/helm/README.ko.md)의 Pending 목록에 "실행하지 않음"으로 남아
+  있던 항목을 닫는다.
+- **상태 코드가 아니라 본문으로 확인.** 토큰 없는 `/file`은 API의
+  `{"code":"AUTH_UNAUTHORIZED",...}` JSON을 돌려줬다. `/`·`/files`·`/posts/1`·존재하지 않는
+  경로는 모두 프론트엔드 SPA의 HTML(`<title>Sharenpo</title>`, `/assets/...`)을 돌려줬다.
+  `/health/live`·`/metrics`·`/doc`도 `200`으로 SPA의 HTML을 돌려줬을 뿐 백엔드 응답은 한 번도
+  나오지 않았다. 위의 "아직 보지 못한 것" 목록을 닫는 결과다 — 2026-09-26에 상태 코드만으로
+  추론했던 "API prefix가 `/`보다 먼저 적용된다"는 판단이 실제 본문 확인에서도 그대로 맞았다.
+- **여전히 보지 못한 것**: CSP/S3 presigned 리다이렉트 확인과 브라우저 방문 — 이번 실행도
+  지난번처럼 `curl`만 썼다.
+
+`/admin`의 순서와 본문은 여기가 아니라 ADR 0062의 2026-09-29 추가 기록에 적었다.

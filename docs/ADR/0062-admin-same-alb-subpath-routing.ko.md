@@ -270,3 +270,22 @@ healthy로 받아들이게 됨)과 기존 상태를 그대로 두는 것.
 `healthy`였고 헬스체크 경로는 `/`, `/admin/`, `/health/live`였다. 컨트롤러
 (`aws-load-balancer-controller-1.7.1`, 앱 `v2.7.1`)가 Service의 어노테이션을 읽는다는 뜻이다.
 파드는 재시작되지 않았고 공개 상태 코드는 `200`, `401`, `200` 그대로였다.
+
+## 추가 기록 (2026-09-29): 두 번째 라이브 ALB — `/admin/`의 본문으로 2026-09-26의 미결 항목을 닫음
+
+2026-09-26 스택을 철거하고 `app-infra`/`addons`/차트를 다시 적용해 두 번째 라이브 실행을 했다.
+위 2026-09-26 추가 기록은 한 가지를 명시적으로 열어 뒀다 — `/admin/`의 `200`만으로는 아무것도
+증명되지 않는다는 것, 프론트엔드 SPA 폴백도 `/admin/`에 `200`을 돌려주기 때문이다. 이번 실행은
+본문을 읽었다.
+
+- `curl -s https://sharenpo.cloud/admin/`은 `<title>Sharenpo Admin</title>`과
+  `/admin/assets/index--Ii8g1iN.js`/`/admin/assets/index-5ZLQDVBl.css`,
+  `/admin/favicon.svg`를 돌려줬다 — `/`의 `<title>Sharenpo</title>`와 경로 없는
+  `/assets/...`와는 뚜렷이 다르다. `/admin` Ingress 규칙이 실제로 admin 파드까지 도달했고,
+  프론트엔드의 SPA 폴백으로 떨어진 게 아니라는 뜻이다.
+- 슬래시 없는 `curl -I https://sharenpo.cloud/admin`은 `server: nginx`와
+  `location: /admin/`을 돌려줬고 ALB Controller 자신의 응답 헤더는 없었다 — ALB 단의
+  재작성이 아니라 admin 컨테이너 자신의 리다이렉트(`admin/nginx.conf`)다.
+
+둘 다 이 ADR에 대한 [k8s/helm/README.md](../../k8s/helm/README.ko.md) Pending 목록의 마지막
+두 항목을 닫는다. 여기서 정한 것은 바뀌지 않는다.

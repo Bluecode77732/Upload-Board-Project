@@ -436,8 +436,9 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   추가 기록). 아직 열려 있는 것: 앱을 거친 EICAR 업로드가 `400 UPLOAD_MALWARE_DETECTED`로 답하는지,
   정상 파일이 앱을 거쳐 통과하는지.
 - `aws elbv2 describe-listeners`로 만들어진 ALB에 80번과 443번 리스너가 둘 다 있는지
-  (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지). 실행하지 않았고, 아래의 리다이렉트와
-  인증서가 간접 증거다.
+  (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지). 2026-09-29 관찰(아래 2026-09-26
+  실행분을 철거하고 `app-infra`를 재적용한 두 번째 라이브 실행): 인증서 없는 80번 `HTTP`
+  리스너와, 그 재적용에서 발급된 ACM 인증서를 물고 있는 443번 `HTTPS` 리스너가 둘 다 있었다.
 - `curl -I http://<도메인>`이 `https://` URL로 `301`/`302`를 반환하는지(`ssl-redirect`가
   실제로 동작하는지). 2026-09-26 관찰: `https://sharenpo.cloud:443/`로 `301`.
 - 브라우저가 ACM 인증서가 발급된 그 도메인에 대해 경고 없이 인증서를 신뢰하는지
@@ -449,8 +450,14 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   라이브에서 확인된 적이 없다). `/health/live`·`/metrics`·`/doc`도 SPA의 HTML(또는 404)이
   나와야 하고 백엔드 응답이 나오면 안 된다. 2026-09-26 관찰: `/`는 `200`, `/file`은 `401` —
   상태 코드만 보았다. `401`은 백엔드만 낼 수 있으므로(SPA 폴백은 `200`을 돌려준다) API prefix
-  규칙이 `/`보다 먼저 적용된 것은 확인됐다. 확인하지 않은 것: 본문, `/files`, `/posts/1`,
-  존재하지 않는 경로, `/health/live`·`/metrics`·`/doc`.
+  규칙이 `/`보다 먼저 적용된 것은 확인됐다. 2026-09-29 관찰(본문, 재적용된 스택 기준):
+  `/file`은 API의 `{"code":"AUTH_UNAUTHORIZED",...}` JSON을 돌려줬고, `/`·`/files`·`/posts/1`·
+  존재하지 않는 경로는 모두 프론트엔드 SPA의 HTML(`<title>Sharenpo</title>`, `/assets/...`)을
+  돌려줬다 — API prefix 규칙이 `/` catch-all보다 실제로 위에 있음을 확인했고, 앞서의 상태 코드만
+  본 판단이 우연이 아니었음도 함께 확인했다. `/health/live`·`/metrics`·`/doc`도 SPA의 HTML(`200`)
+  로 떨어졌고 백엔드 응답은 나오지 않았다 — ADR 0058의 allow-list 누락 항목들은 백엔드가 아예
+  호출되지 않아서가 아니라, 요청이 매칭되는 Ingress 규칙 자체가 다르기 때문에 걸러진다는 것이
+  확인됐다.
 - `curl https://<도메인>/admin/`이 프론트엔드도 404도 아닌 admin 콘솔 자신의 HTML을
   돌려주는지 — `/admin`이 규칙 집합에 실제로 있는지, 그리고 Exact 다음 긴 Prefix 순서에서
   더 짧은 규칙에 먼저 먹히지 않는지 확인한다(ADR 0062, 이것도 라이브에서 확인된 적 없다).
@@ -458,9 +465,13 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   `/admin/`에 리다이렉트되는지 확인한다 — 요청이 실제로 admin 파드까지 도달했는지(중간에서
   재작성되거나 버려지지 않았는지) 확인하는 것이다. 2026-09-26 관찰: `/admin/`은 `200`(상태
   코드만)인데, 이것으로는 아무것도 증명되지 않는다 — 프론트엔드 nginx도 SPA 폴백으로 `/admin/`에
-  `200`을 돌려주므로, ALB가 요청을 프론트엔드로 보냈어도 똑같이 보인다. 둘은 본문(SPA가 아니라
-  admin 콘솔의 페이지)이나, admin nginx만 내는 슬래시 없는 `/admin`의 `301`로 구분한다. 둘 다
-  확인하지 않았으므로 이 항목은 여전히 열려 있다.
+  `200`을 돌려주므로, ALB가 요청을 프론트엔드로 보냈어도 똑같이 보인다. 2026-09-29 관찰(본문,
+  재적용된 스택 기준): `/admin/`은 `<title>Sharenpo Admin</title>`과 `/admin/assets/...`,
+  `/admin/favicon.svg`를 돌려줬다 — `/`의 `<title>Sharenpo</title>`/`/assets/...`와 뚜렷이
+  다르므로, 요청이 프론트엔드의 SPA 폴백이 아니라 실제로 admin 파드까지 도달했음이 확인됐다.
+  슬래시 없는 `curl -I https://sharenpo.cloud/admin`은 `server: nginx`와
+  `location: /admin/`을 돌려줬고 ALB Controller 자신의 응답 헤더는 없었다 — ALB 단의 재작성이
+  아니라 admin 컨테이너 자신의 리다이렉트임이 확인됐다.
 - 타깃 그룹에 healthy 타깃이 등록되는지. `values-prod.yaml`의 주석 처리된 annotation
   블록에 `alb.ingress.kubernetes.io/target-type: ip`가 들어 있다(2026-09-22 추가 —
   컨트롤러 기본값 `instance`는 `NodePort`/`LoadBalancer` Service가 필요한데 이 차트의
