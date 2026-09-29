@@ -237,3 +237,71 @@ change, and a different registry such as `crd`, which was not verified. Neither 
 
 The developer's destroy skipped `addons/`; what that leaves behind is in
 [`k8s/infra/terraform/README.md`](../../k8s/infra/terraform/README.md) > Destroy.
+
+## Addendum (2026-09-29) — second live run: reproduced; independently corroborated in upstream docs/issues; no code change
+
+The 2026-09-26 addendum above already located the mechanism in external-dns `v0.22.0`'s own
+source (`registry/mapper/mapper.go`'s `ToTXTName`, `provider/aws/aws.go`'s
+`suitableZones`/`changesByZone`). This addendum does two things: reproduces the symptom on a
+second, independent live run (`app-infra`/`addons`/the chart re-applied after the 2026-09-26
+teardown), and checks the mechanism against external-dns's own published documentation and issue
+tracker rather than source alone — the session read `docs/registry/txt.md` and two GitHub issues,
+not memory, per this ADR's own evidentiary standard.
+
+**Reproduction, 2026-09-29.** `aws route53 list-resource-record-sets` on the new zone
+(`Z07357852B0DR48XVC7PW`, created `07:33:17` UTC) shows five record sets: the alias `A` and `AAAA`
+for `sharenpo.cloud.`, `NS`, `SOA`, and the ACM validation `CNAME` — zero `TXT`. `kubectl -n
+external-dns logs` from the pod's first reconcile (`07:47:18` UTC, one second after it built its
+AWS client) onward reads `"All records are already up to date"` every interval, with no error or
+warning line — the chart's `--log-level=info` still hides the skip, exactly as the 2026-09-26
+addendum inferred without seeing the debug line itself.
+
+**Independent confirmation, from upstream docs and issues, not source alone.**
+[`docs/registry/txt.md`](https://github.com/kubernetes-sigs/external-dns/blob/master/docs/registry/txt.md)
+(`kubernetes-sigs/external-dns`, `master`) states: "AWS ALIAS records are stored in Route 53 as
+A/AAAA records, so their ownership TXT uses the matching `a-`/`aaaa-` prefix" — applied
+automatically, not only when `--txt-prefix` is set — and gives a worked apex failure matching this
+project's symptom structurally: "If configured `--txt-suffix="-.%{record_type}"` for apex domain
+`ex.com`, the expected result would be `ex-.a.com`, which fails to create a TXT record because it
+does not exist within the managed zone." Two issues on `kubernetes-sigs/external-dns` report the
+identical failure independently of this project:
+[#5010](https://github.com/kubernetes-sigs/external-dns/issues/5010) ("no hosted zone matching
+record DNS Name was detected" for an apex TXT record) and
+[#4234](https://github.com/kubernetes-sigs/external-dns/issues/4234) ("New format txt registry
+records fail for Apex record"), the latter closed by a maintainer as *not planned*. This is a
+known, currently unfixed upstream limitation of the TXT registry at a zone apex, not a bug in this
+project's `domainFilters`/`txtOwnerId`/`policy` values — the running config
+(`--registry=txt --txt-owner-id=sharenpo`, `TXTPrefix`/`TXTSuffix` both empty, confirmed again from
+this run's own `kubectl logs` config dump) was already found unremarkable on 2026-09-26 and is
+unchanged.
+
+**D3 still correct — reconfirmed, not changed.** The developer's 2026-09-26 decision to keep the
+apex host, after weighing a subdomain move and the untested `crd` registry, already stands on this
+same constraint; today's reproduction and the upstream citations above only harden it — issue
+#4234 being closed *not planned* means there is no upstream fix to wait for. `force_destroy = true`
+remains the only thing that removes the apex `A`/`AAAA` records (ExternalDNS's owner-filtered
+`ApplyChanges` cannot touch what has no TXT ownership record, per the 2026-09-26 addendum); nothing
+here changes that or any code.
+
+**One option this project has not yet evaluated, surfaced but not adopted.** The same doc page
+gives the apex-safe pattern: a `--txt-prefix`/`--txt-suffix` containing `%{record_type}` **and
+ending in a period**, e.g. `--txt-prefix="%{record_type}-abc-."` for apex `ex.com`, which places the
+ownership record at `cname-abc-.ex.com.` — a genuine subdomain of the zone, so it should not hit
+the same `suitableZones` rejection. This was not part of the 2026-09-26 comparison (which weighed
+subdomain-hosting vs. `crd` registry only) and has not been tried against this project's zone. The
+task's other suggested option, switching to `CNAME`, is not viable independent of ExternalDNS: a
+zone apex cannot carry a `CNAME` at all (RFC 1035 forbids it coexisting with the apex's mandatory
+`NS`/`SOA`), which is exactly why Route53's ALIAS mechanism (already in use here, `useAlias`) exists
+— `AWSPreferCNAME` (confirmed `false` in the running config) has no effect at an apex regardless of
+its setting.
+
+| Option | Apex host kept? | TXT ownership tracking | Cost | Verified how |
+|---|---|---|---|---|
+| **A — leave as-is** (current, D3) | Yes | None; `force_destroy` is the only cleanup path | Zero | Reproduced live twice (2026-09-26, 2026-09-29) |
+| **B — apex-safe `--txt-prefix`/`--txt-suffix`** | Yes | Would start working, per the doc's own worked example | One Helm value + a live re-verify | Not tried against this zone |
+| **C — move the public host off the apex** (`app.sharenpo.cloud`) | No | Works normally (already true for any non-apex host) | Large — `BASE_URL`, cert SANs, CORS, `values-prod.yaml`, already-shared links | Rejected 2026-09-26 |
+| **D — `crd` registry** | Yes | Different mechanism entirely | Unverified | Rejected 2026-09-26 (untested) |
+| ~~CNAME at the apex~~ | — | — | — | Not viable — forbidden by DNS itself, unrelated to ExternalDNS |
+
+No option beyond A is adopted here. B is the one new fact this addendum adds to the record; it is
+presented to the developer, not decided, and needs its own live test before anyone adopts it.
