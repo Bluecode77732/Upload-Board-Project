@@ -1,6 +1,6 @@
 # ADR 0062: Admin console hosting — a third workload on the same ALB, at `/admin`
 
-- Status: Accepted — implemented (`helm lint`/`helm template`, `pnpm test`, a local image build and curl checks against `/admin/*`, `helm install --wait` on Docker Desktop's Kubernetes, and a CI run on `dev` (smoke test and image push) verified; on a live ALB 2026-09-26 the health checks needed a per-Service path, and `/admin`'s own routing could not be told apart from the frontend's fallback by status code — see the last addendum)
+- Status: Accepted — implemented (`helm lint`/`helm template`, `pnpm test`, a local image build and curl checks against `/admin/*`, `helm install --wait` on Docker Desktop's Kubernetes, and a CI run on `dev` (smoke test and image push) verified; on a live ALB 2026-09-26 the health checks needed a per-Service path, and `/admin`'s own routing could not be told apart from the frontend's fallback by status code until the 2026-09-29 addendum read the bodies). The 2026-09-30 addendum adds the first real-user-flow pass (register/login/upload/post/comment/visibility on the frontend, role-change+audit-log+D4's sign-out redirect on admin) and, along the way, found and fixed an unrelated bug in `PostService` (unlisted attachments 403ing for their own owner)
 - Date: 2026-09-23
 - Extends: [ADR 0060](0060-frontend-same-alb-path-routing.md) (D4's "`admin/` is outside this decision" is now resolved — same mechanism, a second app), [ADR 0058](0058-ingress-path-allowlist.md) (one more allow-listed prefix)
 - Relates to: [ADR 0010](0010-frontend-split-and-api-surface-freeze.md) (admin stays a separate app — this adds a deploy path, not a route inside `frontend/`), [ADR 0022](0022-admin-console-import-from-chat-project.md)
@@ -283,3 +283,75 @@ read the bodies.
 
 Both close the last two open rows in [k8s/helm/README.md](../../k8s/helm/README.md)'s Pending
 list for this ADR. Nothing decided here changes.
+
+## Addendum (2026-09-30): real-user-flow live verification, frontend through admin
+
+Every prior check against the live stack asked "does the request reach the right pod" —
+status codes, response headers, target-group health. None of it asked "does a real user get
+the result they expect." This pass did, end to end, against `https://sharenpo.cloud`
+(Playwright, throwaway registered accounts, deleted after each run), following after Task 2
+(admin/frontend split) and Task 4 (login/CSP) in the same verification series.
+
+**Frontend** (`https://sharenpo.cloud`):
+- Register → sign in → sign out; re-registering the same email surfaces "That email is
+  already registered — try signing in." (`AUTH_EMAIL_TAKEN`) in the UI, not just as a raw API
+  response.
+- Uploaded one image, one audio (a hand-built 50-frame silent MP3 — no `.mp3` fixture existed
+  in either e2e suite, so one was constructed as an in-browser `File`/`DataTransfer` object
+  rather than added to the repo), and one video (the existing `frontend/e2e/fixtures/
+  sample.mp4`) through `UploadForm`, then opened each on its `/view/:id` page. All three
+  actually decoded and played in a real browser (`<audio>`/`<video>`: `readyState 4`,
+  `currentTime` advancing after `.play()`, `error: null`) — not just "the tag rendered." This
+  closes the "an actual upload/read round-trip... remains unverified" line on ROADMAP.md's
+  **S3** row (Range-request/seek behavior stays open — not exercised here).
+- Created a post with an attached file, listed it, opened its detail page, added a comment,
+  edited it, deleted it.
+- Toggled one file's visibility through all three states and confirmed the *actual*
+  reachable range with anonymous (`credentials: 'omit'`) fetches against
+  `GET /file/:id/content`: `private` → `403`, `public` → `200`, `unlisted` without the share
+  token → `403`, with it → `200` — matching ADR 0025/0026 exactly.
+- Dark-mode toggle and a 390×844 mobile viewport both rendered correctly with no console
+  errors (excluding the baseline non-2xx `fetch` log entries every unauthenticated page load
+  or expected-4xx already produces — those are the browser logging an HTTP response, not a JS
+  exception).
+
+**Real bug found and fixed while checking the mobile/dark-mode step**: a post with an
+`unlisted` attached file rendered a broken preview (`403`) for every requester, including the
+file's own owner, when opened through `PostDetailPage`. Root cause: `PostService.toResponse`
+called `fileService.toResponse(post.file)` with no `requester` — the one call site that
+didn't, out of every other one in `FileService` — so `FileResponseDto.shareUrl` could never be
+computed, and separately `PostService.baseQuery()` never joined `file.creator`, so even after
+passing `requester` through, `FileService`'s `isManager` check (`file.creator &&
+canManage(...)`) stayed `false` regardless. `PostDetailPage.tsx`'s `shareUrl ?? fileUrl`
+fallback then handed an unauthenticated `<img>`/`<audio>`/`<video src>` a token-less URL,
+which `unlisted`'s access rule always refuses. `public` (no auth needed) and `private` (its
+own authenticated blob-fetch path) were unaffected — only `unlisted` was structurally broken.
+Fixed by threading `requester` through `toResponse`/`getPosts`/`getPostById`/`create`/
+`resolveAttachment` and adding the missing `leftJoinAndSelect('file.creator', 'fileCreator')`
+(`backend/post/post.service.ts`, `post.controller.ts`, commit `1c845a3`) — `pnpm test`
+280/280, verified against a local `db`+`clamav` compose stack + dev servers (the API response
+gained `shareUrl`; a same-origin image load, via the Vite proxy, succeeded pixel-for-pixel).
+Not yet on the live stack — this fix needs its own deploy.
+
+**Admin** (`https://sharenpo.cloud/admin/`):
+- Signed in as a freshly-promoted superadmin (registered live, then promoted by the developer
+  running `kubectl exec <backend-pod> -- env SUPERADMIN_EMAIL=<email> node
+  dist/scripts/promote-superadmin.js` — the RDS instance is `publicly_accessible = false`, so
+  the script has to run from inside a pod already in the VPC, not from a laptop against
+  `.env`).
+- `/admin/dashboard`, `/admin/users`, `/admin/logs` all resolved under the `/admin` router
+  `basename` (D3).
+- Changed a user's role `user → admin` from `/admin/users`; the table updated immediately and
+  `/admin/logs` recorded it as `ROLE_CHANGE`, actor and target user IDs, `user→admin` — both
+  the write and the audit trail work end to end on the live stack, not just in the local
+  suite.
+- A full page reload on `/admin/users` kept the session (no bounce to the login form).
+- Signing out landed on `https://sharenpo.cloud/admin/` — **the live confirmation of D4's
+  fix** (`session-guard.ts`'s `rejectSession()` hard-navigating to site root instead of the
+  admin basename), which every earlier addendum here had only checked locally or against a
+  backend-less container.
+
+Console errors across every step: `0`, aside from the same baseline non-2xx `fetch` log noise
+noted above. Test accounts and their files/posts were deleted after each check; the two role
+changes made for this check (promote, then `user → admin` on a second account) are recorded
+in `/admin/logs` permanently, by design (ADR 0013's audit log is append-only).
