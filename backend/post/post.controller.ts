@@ -30,7 +30,6 @@ import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { GetPostsDto } from './dto/get-posts.dto';
 import { JwtAuthGuard } from 'backend/auth/guard/jwt-auth.guard';
-import { UserId } from 'backend/user/decorator/userId.decorator';
 import { AuthUser } from 'backend/auth/decorator/auth-user.decorator';
 
 @Controller('post')
@@ -65,8 +64,8 @@ export class PostController {
   // 목적: 검증된 목록 조회 조건을 DTO 한 덩어리로 서비스에 넘긴다.
   // 이유: 조건이 페이지네이션·검색·정렬·필터로 여러 개라, 위치 인자로 풀면 호출부가 인자 순서 실수에 노출된다.
   // 방법: @Query()로 바인딩된 GetPostsDto를 그대로 전달한다 — 컨트롤러는 조회 조건을 해석하지 않는다.
-  getPosts(@Query() getPostsDto: GetPostsDto) {
-    return this.postService.getPosts(getPostsDto);
+  getPosts(@Query() getPostsDto: GetPostsDto, @AuthUser() actor: AuthUser) {
+    return this.postService.getPosts(getPostsDto, actor);
   }
 
   @Get(':id')
@@ -85,8 +84,11 @@ export class PostController {
   // 목적: 단건 조회 요청을 서비스로 넘긴다.
   // 이유: 상세 화면은 목록에 담기지 않는 본문 전체를 필요로 한다.
   // 방법: 경로 파라미터를 ParseIntPipe로 좁혀 그대로 전달한다.
-  getPostById(@Param('id', ParseIntPipe) id: number) {
-    return this.postService.getPostById(id);
+  getPostById(
+    @Param('id', ParseIntPipe) id: number,
+    @AuthUser() actor: AuthUser,
+  ) {
+    return this.postService.getPostById(id, actor);
   }
 
   @Post()
@@ -128,12 +130,12 @@ export class PostController {
   // 방법: 서비스가 돌려준 replayed 플래그로만 상태코드를 바꾸고(@Res passthrough), 본문은 동일하게 반환한다.
   async create(
     @Body() createPostDto: CreatePostDto,
-    @UserId() userId: number,
+    @AuthUser() actor: AuthUser,
     @Res({ passthrough: true }) response: Response,
   ) {
     const { replayed, post } = await this.postService.create(
       createPostDto,
-      userId,
+      actor,
     );
 
     if (replayed) {

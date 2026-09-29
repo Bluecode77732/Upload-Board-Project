@@ -76,8 +76,11 @@ export class PostService {
 
   // 목적: PostEntity를 외부 응답 형태로 변환한다.
   // 이유: 엔티티는 순수 DB 모델이어야 하고, 첨부 파일의 공개 URL 합성 규칙은 FileModule 소유다.
-  // 방법: 관계가 로드된 경우에만 creator/file 필드를 붙이고, 파일 쪽 변환은 fileService.toResponse에 위임한다.
-  private toResponse(post: PostEntity): PostResponseDto {
+  //       requester 없이 fileService.toResponse를 호출하면 unlisted 첨부 파일의 shareUrl이
+  //       소유자 본인에게도 절대 채워지지 않아, 게시글 상세의 미리보기가 항상 403으로 깨진다
+  //       (라이브 사용자 흐름 검증에서 발견 — task 7/7).
+  // 방법: 관계가 로드된 경우에만 creator/file 필드를 붙이고, requester를 그대로 fileService.toResponse에 넘긴다.
+  private toResponse(post: PostEntity, requester?: Requester): PostResponseDto {
     return {
       id: post.id,
       title: post.title,
@@ -87,24 +90,34 @@ export class PostService {
       ...(post.creator && {
         creator: { id: post.creator.id, email: post.creator.email },
       }),
-      ...(post.file && { file: this.fileService.toResponse(post.file) }),
+      ...(post.file && {
+        file: this.fileService.toResponse(post.file, requester),
+      }),
     };
   }
 
-  // 목적: creator와 file을 한 번에 붙인 조회 쿼리 빌더를 만든다.
-  // 이유: 목록과 단건이 각자 관계를 로드하면 한쪽이 빠졌을 때 N+1이 조용히 생긴다.
-  // 방법: 두 관계 모두 leftJoinAndSelect로 미리 붙인 빌더를 반환해 호출부가 조건만 얹게 한다.
+  // 목적: creator와 file(및 file의 creator)을 한 번에 붙인 조회 쿼리 빌더를 만든다.
+  // 이유: 목록과 단건이 각자 관계를 로드하면 한쪽이 빠졌을 때 N+1이 조용히 생긴다. file.creator가
+  //       없으면 FileService.toResponse의 isManager 판정(file.creator && canManage(...))이 항상
+  //       false가 되어, requester를 넘겨도 unlisted 첨부 파일의 shareUrl이 소유자 본인에게조차
+  //       채워지지 않는다 — 라이브 사용자 흐름 검증에서 발견된 결함의 나머지 절반(task 7/7).
+  // 방법: 세 관계 모두 leftJoinAndSelect로 미리 붙인 빌더를 반환해 호출부가 조건만 얹게 한다.
+  //       file의 creator는 post의 creator와 alias가 겹치지 않게 fileCreator로 둔다.
   private baseQuery(): SelectQueryBuilder<PostEntity> {
     return this.postRepository
       .createQueryBuilder('post')
       .leftJoinAndSelect('post.creator', 'creator')
-      .leftJoinAndSelect('post.file', 'file');
+      .leftJoinAndSelect('post.file', 'file')
+      .leftJoinAndSelect('file.creator', 'fileCreator');
   }
 
   // 목적: 게시글 목록을 검색·작성자 필터·화이트리스트 정렬·페이지네이션과 함께 조회한다.
   // 이유: 목록 엔드포인트는 전량 스캔이 금지돼 있고(Never Do G2), ORDER BY가 없으면 페이지 간 행 중복·누락이 생긴다.
   // 방법: ADR 0021의 읽기 계층을 그대로 재사용 — 이스케이프한 ILIKE, SORT_COLUMN 매핑, id tiebreaker.
-  async getPosts(query: GetPostsDto): Promise<[PostResponseDto[], number]> {
+  async getPosts(
+    query: GetPostsDto,
+    requester?: Requester,
+  ): Promise<[PostResponseDto[], number]> {
     const { take, skip, search, sortBy, order, creatorId } = query;
 
     const queryBuilder = this.baseQuery();
@@ -132,13 +145,16 @@ export class PostService {
       .take(take)
       .skip(skip)
       .getManyAndCount();
-    return [posts.map((post) => this.toResponse(post)), count];
+    return [posts.map((post) => this.toResponse(post, requester)), count];
   }
 
   // 목적: 단일 게시글을 작성자·첨부 파일과 함께 조회한다.
   // 이유: 상세 화면은 본문뿐 아니라 작성자와 영상 URL을 함께 요구한다.
   // 방법: 관계를 미리 조인한 공통 빌더에 id 조건만 얹고, 없으면 404 POST_NOT_FOUND를 던진다.
-  async getPostById(id: number): Promise<PostResponseDto> {
+  async getPostById(
+    id: number,
+    requester?: Requester,
+  ): Promise<PostResponseDto> {
     const post = await this.baseQuery().where('post.id = :id', { id }).getOne();
 
     if (!post) {
@@ -148,7 +164,7 @@ export class PostService {
       });
     }
 
-    return this.toResponse(post);
+    return this.toResponse(post, requester);
   }
 
   // 목적: 주어진 id의 게시글이 실재하는지 판정한다.
@@ -180,12 +196,12 @@ export class PostService {
   private resolveAttachment(
     existing: PostEntity,
     dto: CreatePostDto,
-    userId: number,
+    requester: Requester,
   ): PostClaimResult {
     // 평소에는 same-creator 첨부 규칙이 이를 함축하지만, 파일 소유권은 재할당될 수 있어서
     // (PATCH /file/:id userId) 새 소유자가 자기 것이 아닌 게시글에 정당하게 닿을 수 있다.
     // replay는 오직 원 작성자에게만 해당한다.
-    const sameAuthor = existing.creator.id === userId;
+    const sameAuthor = existing.creator.id === requester.id;
     // 페이로드가 완전히 같을 때만 replay — ADR 0019의 무조건적 replay와 다르다. 파일
     // promotion에는 작성자가 쓴 텍스트가 없지만 게시글에는 있으므로, title/body가 다른데도
     // replay로 처리하면 실제로는 새로운 제출을 예전 게시글로 응답하는 셈이 된다.
@@ -223,17 +239,20 @@ export class PostService {
   //       500으로 새어 나가서는 안 된다(Idempotence, ADR 0023 D1).
   // 방법: 첨부 허용 여부를 FileService에 먼저 묻고(404/403), 선점 행이 있으면 replay/409로 끝낸다. 그렇지 않을
   //       때만 단일 insert(트랜잭션 표 Row 1)를 실행하고, 경합으로 진 23505는 같은 판정 경로로 되돌린다.
-  async create(dto: CreatePostDto, userId: number): Promise<PostClaimResult> {
+  async create(
+    dto: CreatePostDto,
+    requester: Requester,
+  ): Promise<PostClaimResult> {
     const { fileId } = dto;
 
     if (fileId !== undefined) {
       // 소유권 판단은 파일 상태를 소유한 계층의 몫이다; 이 서비스는 file.creator를
       // 스스로 읽지 않는다 (Law of Demeter / Tell Don't Ask).
-      await this.fileService.assertAttachableBy(fileId, userId);
+      await this.fileService.assertAttachableBy(fileId, requester.id);
 
       const existing = await this.findByFileId(fileId);
       if (existing) {
-        return this.resolveAttachment(existing, dto, userId);
+        return this.resolveAttachment(existing, dto, requester);
       }
     }
 
@@ -246,7 +265,7 @@ export class PostService {
         .values({
           title: dto.title,
           body: dto.body,
-          creator: { id: userId },
+          creator: { id: requester.id },
           // 값이 없을 때 null로 설정하지 않고 아예 생략한다 — 컬럼 기본값이 이미 null이고,
           // 이렇게 하면 values 객체에 nullable-relation 캐스팅이 끼어들지 않는다.
           ...(fileId !== undefined && { file: { id: fileId } }),
@@ -268,7 +287,7 @@ export class PostService {
       if (fileId !== undefined && this.isUniqueViolation(error)) {
         const winner = await this.findByFileId(fileId);
         if (winner) {
-          return this.resolveAttachment(winner, dto, userId);
+          return this.resolveAttachment(winner, dto, requester);
         }
       }
       throw error;
@@ -276,7 +295,10 @@ export class PostService {
 
     // 공유 경로로 다시 읽는다: insert 결과에는 관계가 없어서, 그걸로 바로 응답을
     // 조립하면 작성자 이메일과 파일 URL이 빠진다.
-    return { replayed: false, post: await this.getPostById(insertedId) };
+    return {
+      replayed: false,
+      post: await this.getPostById(insertedId, requester),
+    };
   }
 
   // 목적: 게시글 본문을 수정한다.
@@ -315,7 +337,7 @@ export class PostService {
       await this.postRepository.update({ id }, updateFields);
     }
 
-    return this.getPostById(id);
+    return this.getPostById(id, requester);
   }
 
   // 목적: 게시글 한 건을 삭제하고 그 사실을 감사 로그에 남긴다.
