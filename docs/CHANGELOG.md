@@ -13,6 +13,72 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Live-run docs corrected and completed (2026-09-27, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md),
+  [0060](ADR/0060-frontend-same-alb-path-routing.md) and [0057](ADR/0057-terraform-state-backend-s3-native-lock.md)
+  Addenda)** — documentation only. The 2026-09-26 records said the `/admin/` `200` showed the admin
+  rule routing correctly. It does not: the frontend's nginx also answers `200` for `/admin/` through
+  its SPA fallback, so that check is open again (ADR 0062 Addendum, `k8s/helm/README.md`,
+  `admin/README.md`, the ADR README). The same run's `/file` `401` did show the API prefix rules
+  winning over `/`, and the frontend target group was healthy on the default check; both are in a
+  new ADR 0060 Addendum, with what stayed unobserved. ADR 0057 gained an Addendum for the state
+  backend's first use: the bucket was created 2026-09-26 with versioning, SSE-S3 and the
+  public-access block as designed, each run created and removed its `.tflock` object, and the
+  earlier state versions (which hold generated passwords in plaintext) stay in place with no
+  lifecycle rule; the Terraform README's Destroy section says so. CLAUDE.md's `target-type: ip` and
+  ADR 0057 clauses and the ROADMAP HTTPS termination row no longer read "not observed",
+  "not applied" or "deliberately not enabled".
+- **NetworkPolicy admits Prometheus's scrape (2026-09-27, [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md)
+  Addendum, `15229f6`)** — with `networkPolicy.enabled` and `ingress.enabled: false` (what
+  `values-prod.yaml` runs) the ingress was open to same-namespace pods only, so Prometheus in
+  `kube-prometheus-stack` could not scrape the backend: on 2026-09-26 the target was `down` with
+  `context deadline exceeded` while `/metrics` answered `200` inside the pod.
+  `templates/networkpolicy.yaml` gains one rule, rendered only when `metrics.serviceMonitor.enabled`:
+  a `namespaceSelector` and a `podSelector` in one `from` entry, so only Prometheus pods in that
+  namespace reach the app's port; `networkPolicy.prometheus.namespace` and `.podLabels` set them.
+  `helm template` under five value sets and `helm lint --strict` pass; the `kind`+Calico check and
+  the live check that the target is `up` are follow-up work (`k8s/helm/README.md`, "Verifying the
+  Prometheus scrape rule" and the pending list). The chart version stays `0.5.1`.
+- **AWS applied/torn-down status is recorded as dated history, not as a standing status
+  (2026-09-27)** — documentation only. The Terraform README's and the Helm README's Status
+  paragraphs said whether the stack was applied ("not applied", "nothing currently runs") and were
+  wrong within a day of every `apply` or `destroy` (see the 2026-09-26 "teardown history
+  corrected" entry below). They now say the file does not track that, and how to read the real
+  state (`aws eks list-clusters`, `terraform plan`, `helm list`). The ROADMAP header no longer
+  carries "re-verify before assuming either state" as its status line, and ROADMAP §9 gains a
+  dated 2026-09-26 entry for the second live run (applied, checked, torn down; what was found and
+  observed). ADR addenda are left as written.
+- **Operational notes from the 2026-09-26 live run, and ROADMAP §6's Stage 4 table reworded
+  (2026-09-27)** — documentation only. The Terraform README now says: `addons/`'s `aws eks
+  get-token` passes no `--region`, so `AWS_DEFAULT_REGION` should be set (whether it fails without
+  was not tried); `deploy.sh` reads its variables from the shell it runs in, and a new terminal has
+  none; `terraform -chdir=` paths are relative to the current directory; and a changed generated
+  value needs an `ExternalSecret` `force-sync` and a Deployment restart
+  ([ADR 0064](ADR/0064-jwt-secret-generation-joi-strength-rule.md)). The Stage 4 cells that said
+  "currently running/deployed/live" (S3, Kubernetes, Secrets delivery, Terraform, AWS) now say
+  "live", pointing at §9's dated runs, and §9's 2026-09-26 entry records what the Route 53 pricing
+  page says about hosted zones deleted within 12 hours and about reusable delegation sets (it does
+  not mention them).
+- **ALB health-check path per Service (2026-09-26, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md)
+  Addendum, chart `0.5.1`, `60bfe2a`)** — on the first live ALB the backend and admin target groups
+  were `unhealthy` with `Target.ResponseCodeMismatch [404]`, because the default health check is
+  `/` and neither serves it. The site kept answering, since an ALB sends to every target of a group
+  when all of them are unhealthy, which also keeps a dead pod in rotation. The chart gained
+  `service.annotations` and `admin.service.annotations` (empty by default) and `values-prod.yaml`
+  sets `alb.ingress.kubernetes.io/healthcheck-path` to `/health/live` (backend) and `/admin/`
+  (admin). After `helm upgrade` all three groups were `healthy`, so the controller (`v2.7.1`) reads
+  the annotation from the Service.
+- **First live run of the DNS, NetworkPolicy and ClamAV work recorded (2026-09-26,
+  [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md),
+  [0056](ADR/0056-networkpolicy-east-west-restriction.md) and
+  [0059](ADR/0059-upload-malware-scanning-clamav.md) Addenda)** — documentation only. ExternalDNS
+  created the `A` and `AAAA` alias records for the apex host but no TXT ownership records (the
+  `a-`/`aaaa-` names fall outside the zone and the AWS provider drops them at debug level), so it
+  did not remove them either and the zone's `force_destroy` did; the decision is to keep the apex
+  host. The Network Policy agent enforced the policy; the app's metrics scrape is blocked while
+  Ingress is off and works once it is on. clamd ran on Graviton (Ready in 40 s, about 1.02 GiB).
+  `k8s/infra/terraform/README.md` now says to destroy `addons/` first and how to clean up when it
+  was skipped, and the earlier expectation of TXT records is corrected in the ADR, the two READMEs
+  and CLAUDE.md.
 - **VPC CNI Network Policy agent turned on (2026-09-26,
   [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md) Addendum)** — `values-prod.yaml`
   already set `networkPolicy.enabled: true`, but `vpc-cni` ran with its defaults, so the policy
@@ -243,6 +309,18 @@ development line (package.json version).
   Redis-backed storage for one true per-route ceiling across replicas.
 
 ### Fixed
+- **Terraform-generated JWT secrets now satisfy the app's Joi strength rule (2026-09-26,
+  [ADR 0064](ADR/0064-jwt-secret-generation-joi-strength-rule.md), `f322972`)** — on the first live
+  run the backend pod crash-looped at boot with `Config validation error: "ACCESS_TOKEN_SECRET" ...
+  fails to match the required pattern`. The Joi rule (2026-09-11) needs a lowercase letter, an
+  uppercase letter, a digit and a symbol; `app-infra/main.tf` generated both token secrets as 48
+  alphanumeric characters (`special = false`), and the rule's change had updated only the CI dummy
+  secrets and `.env.example`. Both `random_password` resources now use `special = true`,
+  `override_special = "-_"` and `min_lower`/`min_upper`/`min_numeric`/`min_special = 1`; the database
+  password is unchanged. Re-applied live (plan `3 to add, 0 to change, 3 to destroy`), then the
+  `ExternalSecret` was force-synced and the backend restarted: `1/1 Running`, `/health/live` and
+  `/health/ready` `200`, and `POST /auth/signin` returned a token. Relaxing the Joi rule and
+  replacing the value by hand were weighed and rejected (ADR 0064).
 - **Teardown history corrected: the stack was torn down again on 2026-08-31 (2026-09-26)** —
   CLAUDE.md, the Terraform README and the Helm README said "destroyed 2026-08-28", and
   ROADMAP's header stopped at the 2026-08-29/30 re-apply. The six local `terraform.tfstate` and

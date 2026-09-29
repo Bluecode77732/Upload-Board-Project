@@ -1,4 +1,5 @@
-{{- /* admin 콘솔 nginx용 ClusterIP 서비스(ADR 0062 D1) — Ingress의 `/admin` 규칙이 가리키는 대상. admin.enabled가 false면 렌더링하지 않는다. */}}
+{{- /* admin 콘솔 nginx용 ClusterIP 서비스(ADR 0062 D1) — Ingress의 `/admin` 규칙이 가리키는 대상. admin.enabled가 false면 렌더링하지 않는다.
+admin.service.annotations는 service.yaml의 service.annotations와 같은 용도다(ALB 타깃 그룹 헬스체크 경로 등). */}}
 {{- if .Values.admin.enabled }}
 apiVersion: v1
 kind: Service
@@ -7,6 +8,10 @@ metadata:
   labels:
     {{- include "sharenpo.labels" . | nindent 4 }}
     app.kubernetes.io/component: admin
+  {{- with .Values.admin.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   type: ClusterIP
   ports:

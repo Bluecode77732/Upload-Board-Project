@@ -13,6 +13,65 @@
 ## [Unreleased]
 
 ### 변경
+- **라이브 실행 문서를 바로잡고 보충 (2026-09-27, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md),
+  [0060](ADR/0060-frontend-same-alb-path-routing.ko.md), [0057](ADR/0057-terraform-state-backend-s3-native-lock.ko.md)
+  추가 기록)** — 문서만 바꿨다. 2026-09-26 기록은 `/admin/`의 `200`이 admin 규칙이 제대로 라우팅됐다는
+  뜻이라고 적었다. 그렇지 않다. 프론트엔드 nginx도 SPA 폴백으로 `/admin/`에 `200`을 돌려주므로 그 확인은
+  다시 열린 항목이다(ADR 0062 추가 기록, `k8s/helm/README.md`, `admin/README.md`, ADR README). 같은
+  실행의 `/file` `401`은 API prefix 규칙이 `/`보다 먼저 적용됐음을 실제로 보여 줬고 frontend 타깃 그룹도
+  기본 헬스체크에서 healthy였다. 이 둘은 보지 못한 것과 함께 새 ADR 0060 추가 기록에 적었다. ADR 0057에는
+  state 백엔드의 첫 사용에 대한 추가 기록이 생겼다: 버킷은 2026-09-26에 만들어졌고 버저닝·SSE-S3·퍼블릭
+  액세스 차단이 설계대로였으며, 실행마다 `.tflock` 객체가 생겼다가 지워졌고, 생성된 비밀번호가 평문으로 든
+  이전 state 버전들은 lifecycle 규칙 없이 그대로 남아 있다. Terraform README의 Destroy 절도 이를 적는다.
+  CLAUDE.md의 `target-type: ip`·ADR 0057 문구와 ROADMAP의 HTTPS 종단 행은 더 이상 "관찰하지 못했다"·"미적용"·
+  "의도적으로 비활성"으로 읽히지 않는다.
+- **NetworkPolicy가 Prometheus 스크레이프를 허용 (2026-09-27, [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md)
+  추가 기록, `15229f6`)** — `networkPolicy.enabled`이고 `ingress.enabled: false`인 조합(`values-prod.yaml`이
+  쓰는 값)에서는 인바운드가 같은 네임스페이스 파드에만 열려 있어서, `kube-prometheus-stack`의 Prometheus가
+  백엔드를 스크레이프하지 못했다. 2026-09-26에 대상이 `context deadline exceeded`로 `down`이었고 파드 안의
+  `/metrics`는 `200`이었다. `templates/networkpolicy.yaml`에 `metrics.serviceMonitor.enabled`일 때만
+  렌더링되는 규칙이 하나 늘었다: `from` 항목 하나에 `namespaceSelector`와 `podSelector`를 함께 적어서 그
+  네임스페이스의 Prometheus 파드만 앱 포트에 닿는다. `networkPolicy.prometheus.namespace`와 `.podLabels`가
+  이를 정한다. 다섯 가지 값 조합의 `helm template`과 `helm lint --strict`는 통과했고, `kind`+Calico 확인과 대상이
+  `up`이 되는지의 라이브 확인은 후속 작업이다(`k8s/helm/README.md`의 "Prometheus 스크레이프 규칙 검증하기"와
+  미해결 목록). 차트 버전은 `0.5.1` 그대로다.
+- **AWS 적용/철거 상태를 고정된 상태가 아니라 날짜가 붙은 이력으로 기록
+  (2026-09-27)** — 문서만 바꿨다. Terraform README와 Helm README의 Status 문단은 스택이 apply돼
+  있는지("미적용", "지금은 아무것도 안 돌고 있습니다")를 적었고, `apply`나 `destroy`를 실행할 때마다
+  하루 안에 틀린 말이 됐다(아래 2026-09-26의 "철거 이력 정정" 항목 참고). 이제 두 문단은 이 파일이 그 상태를
+  추적하지 않는다는 것과 실제 상태를 읽는 방법(`aws eks list-clusters`, `terraform plan`, `helm list`)을
+  적는다. ROADMAP 머리말은 더 이상 "어느 쪽 상태든 가정하기 전에 재검증"을 상태 문구로 두지 않고,
+  ROADMAP §9에 두 번째 라이브 실행(apply, 확인, 철거, 발견과 관찰)의 2026-09-26 날짜 항목을 더했다.
+  ADR의 추가 기록은 작성 시점 그대로 둔다.
+- **2026-09-26 라이브 실행에서 얻은 운영 메모를 추가하고 ROADMAP §6 Stage 4 표의 문구를 고침
+  (2026-09-27)** — 문서만 바꿨다. Terraform README는 이제 다음을 적는다: `addons/`의
+  `aws eks get-token`은 `--region`을 넘기지 않으므로 `AWS_DEFAULT_REGION`을 정해야 하고(없이 실패하는지는
+  시험하지 않았다), `deploy.sh`는 자신이 실행되는 셸의 변수를 읽는데 새 터미널에는 그 값이 없으며,
+  `terraform -chdir=` 경로는 현재 디렉터리 기준이고, 생성된 값이 바뀌면 `ExternalSecret`의 `force-sync`와
+  Deployment 재시작이 필요하다([ADR 0064](ADR/0064-jwt-secret-generation-joi-strength-rule.ko.md)).
+  "현재 가동/배포됨/라이브"라고 적었던 Stage 4 셀(S3, Kubernetes, 시크릿 전달, Terraform, AWS)은 이제
+  "라이브"라고 적고 §9의 날짜별 실행을 가리키며, §9의 2026-09-26 항목에는 Route 53 요금 페이지가 12시간 안에
+  삭제한 호스티드 존과 재사용 위임 세트(언급이 없다)에 대해 하는 말을 적었다.
+- **ALB 헬스체크 경로를 Service별로 지정 (2026-09-26, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)
+  추가 기록, 차트 `0.5.1`, `60bfe2a`)** — 첫 라이브 ALB에서 백엔드와 admin 타깃 그룹이
+  `Target.ResponseCodeMismatch [404]`로 `unhealthy`였다. 기본 헬스체크가 `/`인데 둘 다 그 경로를
+  서빙하지 않기 때문이다. 한 그룹의 타깃이 전부 unhealthy이면 ALB가 그 그룹의 모든 타깃으로 요청을
+  보내서 사이트는 계속 응답했는데, 이는 죽은 파드도 로테이션에 남긴다. 차트에
+  `service.annotations`와 `admin.service.annotations`(기본은 빈 값)를 더했고 `values-prod.yaml`이
+  `alb.ingress.kubernetes.io/healthcheck-path`를 `/health/live`(백엔드), `/admin/`(admin)로 정한다.
+  `helm upgrade` 뒤 세 그룹이 모두 `healthy`였고, 컨트롤러(`v2.7.1`)가 Service의 어노테이션을
+  읽는다는 뜻이다.
+- **DNS, NetworkPolicy, ClamAV 작업의 첫 라이브 실행을 기록 (2026-09-26,
+  [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md),
+  [0056](ADR/0056-networkpolicy-east-west-restriction.ko.md),
+  [0059](ADR/0059-upload-malware-scanning-clamav.ko.md) 추가 기록)** — 문서만 바꿨다. ExternalDNS가
+  apex host의 `A`와 `AAAA` alias 레코드를 만들었지만 TXT 소유 레코드는 만들지 않았다(`a-`/`aaaa-`
+  이름이 zone 밖이라 AWS provider가 debug 레벨로 버림). 그래서 그 레코드를 지우지도 못했고 zone의
+  `force_destroy`가 지웠다. 결정은 apex host를 유지하는 것이다. Network Policy 에이전트는 정책을
+  강제했고, Ingress가 꺼져 있는 동안 앱 메트릭 스크레이프는 막히지만 켜지면 동작한다. clamd는
+  Graviton에서 40초에 Ready가 됐고 메모리는 약 1.02 GiB였다. `k8s/infra/terraform/README.ko.md`에
+  `addons/`를 먼저 destroy하라는 것과, 건너뛴 경우의 정리 방법을 추가했고, TXT 레코드가 생긴다는
+  이전 기대는 ADR, 두 README, CLAUDE.md에서 정정했다.
 - **VPC CNI Network Policy 에이전트를 켬 (2026-09-26,
   [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록)** —
   `values-prod.yaml`은 이미 `networkPolicy.enabled: true`였지만 `vpc-cni`가 기본 설정이라 정책이
@@ -251,6 +310,17 @@
   필요함.
 
 ### 수정
+- **Terraform이 만드는 JWT 시크릿이 이제 앱의 Joi 강도 규칙을 만족 (2026-09-26,
+  [ADR 0064](ADR/0064-jwt-secret-generation-joi-strength-rule.ko.md), `f322972`)** — 첫 라이브 실행에서
+  백엔드 파드가 `Config validation error: "ACCESS_TOKEN_SECRET" ... fails to match the required
+  pattern`로 부팅 중 크래시 루프에 빠졌다. Joi 규칙(2026-09-11)은 소문자, 대문자, 숫자, 기호를 모두
+  요구하는데 `app-infra/main.tf`는 두 토큰 시크릿을 영숫자 48자(`special = false`)로 생성했고, 그 규칙을
+  바꾼 변경은 CI 더미 시크릿과 `.env.example`만 고쳤다. 두 `random_password`는 이제 `special = true`,
+  `override_special = "-_"`, `min_lower`/`min_upper`/`min_numeric`/`min_special = 1`을 쓰고 DB
+  비밀번호는 그대로다. 라이브에서 다시 apply했고(plan `3 to add, 0 to change, 3 to destroy`),
+  이어서 `ExternalSecret`을 강제 동기화하고 백엔드를 재시작해 `1/1 Running`, `/health/live`와
+  `/health/ready` `200`, `POST /auth/signin`의 토큰 발급을 확인했다. Joi 규칙을 낮추는 안과 값을 손으로
+  바꾸는 안은 검토 후 기각했다(ADR 0064).
 - **철거 이력 정정: 스택은 2026-08-31에 한 번 더 철거됐다 (2026-09-26)** — CLAUDE.md,
   terraform README, helm README는 "2026-08-28에 destroy"라고만 적었고 ROADMAP 머리말은
   2026-08-29/30 재적용에서 끝났다. 로컬 `terraform.tfstate`와 `.backup` 6개(state 3개)는

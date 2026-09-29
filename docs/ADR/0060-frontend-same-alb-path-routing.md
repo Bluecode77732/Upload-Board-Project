@@ -1,6 +1,6 @@
 # ADR 0060: Frontend hosting — a separate nginx workload in the same Helm release, path-routed on the one ALB
 
-- Status: Accepted — implemented (`helm lint`/`helm template`, a local image build, a browser CSP check, `helm install --wait` on Docker Desktop's Kubernetes ([ADR 0062](0062-admin-same-alb-subpath-routing.md) addendum, 2026-09-24), and the `docker-publish-frontend` CI job (2026-09-25) verified; live ALB unverified)
+- Status: Accepted — implemented (`helm lint`/`helm template`, a local image build, a browser CSP check, `helm install --wait` on Docker Desktop's Kubernetes ([ADR 0062](0062-admin-same-alb-subpath-routing.md) addendum, 2026-09-24), and the `docker-publish-frontend` CI job (2026-09-25) verified; on the first live ALB, 2026-09-26, the API prefixes won over `/` and the frontend target group was healthy — the rest of the live checks stayed unobserved, see the last addendum)
 - Date: 2026-09-21
 - Amends: [ADR 0058](0058-ingress-path-allowlist.md) (D1's "no catch-all" now applies to the backend Service only; D2's reasons 3–4 no longer hold for the combined Ingress), [ADR 0010](0010-frontend-split-and-api-surface-freeze.md) (its "prod: `CORS_ORIGIN`" clause only)
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.md)
@@ -332,3 +332,24 @@ workload reached by a `/admin` rule on the same Ingress. D4's exclusion no longe
 Nothing decided here changes — `/admin` collides with neither the seven API prefixes nor the
 SPA's routes, and the ordering assumption under "Residual, unverified" (never observed live)
 now covers `/admin` too.
+
+### Addendum (2026-09-26) — first live ALB: what was and was not observed
+
+The developer enabled the Ingress on a live cluster. The session requested the public site with
+`curl` and read the ALB's target groups; only status codes were checked, no bodies. The controller
+was `aws-load-balancer-controller-1.7.1` (app `v2.7.1`).
+
+- **Observed.** `https://sharenpo.cloud/` answered `200`, and `/file` with no token answered `401`.
+  A `401` can only come from the backend (the SPA fallback answers `200`), so the API prefix rules
+  did win over the `/` rule — the part of "Residual, unverified" that rested on the controller's
+  documented Exact-then-longest-Prefix ordering. The frontend target group was `healthy` on the
+  default health check (`/`, success code `200`), because `/` is the SPA's `index.html`.
+- **Still not observed.** `/files`, `/posts/1` and an unknown path answering the SPA's HTML;
+  `/health/live`, `/metrics` and `/doc` answering the SPA's HTML or a 404 (the rest of follow-up
+  6's live list); the CSP letting a browser follow the S3 presigned redirect (the
+  `https://*.amazonaws.com` guess above); and `/admin`'s ordering, which a `200` cannot show
+  because this Service's fallback also answers `200` there ([ADR 0062](0062-admin-same-alb-subpath-routing.md)
+  Addendum).
+
+Nothing decided here changes. The other two Services needed a health-check path of their own; that
+is recorded in ADR 0062's Addendum.

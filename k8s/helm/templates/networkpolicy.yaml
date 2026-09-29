@@ -17,6 +17,12 @@ DB 규칙과 같은 이유로 VPC CIDR 전체를 ipBlock으로 허용한다. 즉
 트레이드오프이며, ingress.enabled가 false인 동안(기본값, 지금의 values-prod.yaml도
 동일)은 이 규칙 자체가 렌더링되지 않아 오늘의 게이팅 상태는 그대로다.
 
+Prometheus의 스크레이프용 규칙은 metrics.serviceMonitor.enabled일 때만 함께 렌더링된다(2026-09-27,
+ADR 0056 addendum) — Prometheus는 다른 네임스페이스(kube-prometheus-stack)에서 파드 IP로 직접
+/metrics를 가져오므로 "같은 네임스페이스만" 규칙에 막히고, 2026-09-26 라이브에서 대상이 down이
+됐다. 한 from 항목에 namespaceSelector와 podSelector를 함께 적어 "그 네임스페이스의 Prometheus
+파드"만(AND) 열고, /metrics가 인증 없는 엔드포인트라 네임스페이스 전체는 열지 않는다.
+
 아웃바운드는 이 앱이 실제로 나가는 곳만 허용한다: DNS(CoreDNS), DB(RDS — 파드가 아니라
 VPC 안 주소라 VPC CIDR로 좁힌다), clamd(ADR 0059 — 같은 네임스페이스의 clamav Pod로
 좁힌다), 그 외 HTTPS(S3/AWS API 등 — S3 VPC 엔드포인트가 없어 app-infra/main.tf, CIDR로
@@ -49,6 +55,19 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.service.port }}
+    {{- /* Prometheus의 스크레이프 — metrics.serviceMonitor.enabled일 때만 렌더링(ADR 0056 addendum, 2026-09-27). */}}
+    {{- if .Values.metrics.serviceMonitor.enabled }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.prometheus.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.prometheus.podLabels | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+    {{- end }}
     {{- /* ALB(ip 모드)의 인바운드 — ingress.enabled일 때만 렌더링(ADR 0056 addendum, ADR 0060). */}}
     {{- if .Values.ingress.enabled }}
     - from:

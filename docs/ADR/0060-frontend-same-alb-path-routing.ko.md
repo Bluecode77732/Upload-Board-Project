@@ -1,6 +1,6 @@
 # ADR 0060: 프론트엔드 호스팅 — 같은 Helm 릴리스의 별도 nginx 워크로드를 하나의 ALB에서 경로로 분기
 
-- Status: Accepted — 구현 완료 (`helm lint`/`helm template`, 로컬 이미지 빌드, 브라우저 CSP 확인, Docker Desktop Kubernetes에서의 `helm install --wait`([ADR 0062](0062-admin-same-alb-subpath-routing.ko.md) addendum, 2026-09-24), `docker-publish-frontend` CI 잡(2026-09-25)까지 검증. 라이브 ALB는 미검증)
+- Status: Accepted — 구현 완료 (`helm lint`/`helm template`, 로컬 이미지 빌드, 브라우저 CSP 확인, Docker Desktop Kubernetes에서의 `helm install --wait`([ADR 0062](0062-admin-same-alb-subpath-routing.ko.md) addendum, 2026-09-24), `docker-publish-frontend` CI 잡(2026-09-25)까지 검증. 첫 라이브 ALB(2026-09-26)에서 API prefix가 `/`보다 먼저 적용됐고 frontend 타깃 그룹이 healthy였다 — 나머지 라이브 확인은 보지 못했다, 마지막 추가 기록 참고)
 - Date: 2026-09-21
 - Amends: [ADR 0058](0058-ingress-path-allowlist.ko.md) (D1의 "catch-all 없음"은 이제 백엔드 Service에만 적용되고, D2의 3·4번 근거는 합쳐진 Ingress에서는 더 이상 성립하지 않는다), [ADR 0010](0010-frontend-split-and-api-surface-freeze.ko.md) ("prod: `CORS_ORIGIN`" 절만)
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.ko.md)
@@ -314,3 +314,24 @@ Ingress는 8개뿐이다.
 워크로드다. D4의 제외는 더는 유효하지 않다. 여기서 정한 것은 바뀌지 않는다 — `/admin`은 일곱
 API prefix와도 SPA 라우트와도 겹치지 않고, "Residual, unverified"의 순서 가정(라이브에서
 확인된 적 없음)은 이제 `/admin`에도 그대로 적용된다.
+
+### 추가 기록 (2026-09-26) — 첫 라이브 ALB: 본 것과 보지 못한 것
+
+개발자가 라이브 클러스터에서 Ingress를 켰다. 세션은 `curl`로 공개 사이트를 요청하고 ALB의 타깃
+그룹을 읽었다. 확인한 것은 상태 코드뿐이고 본문은 보지 않았다. 컨트롤러는
+`aws-load-balancer-controller-1.7.1`(앱 `v2.7.1`)이었다.
+
+- **본 것.** `https://sharenpo.cloud/`가 `200`이었고, 토큰 없는 `/file`이 `401`이었다. `401`은
+  백엔드만 낼 수 있으므로(SPA 폴백은 `200`을 돌려준다) API prefix 규칙이 `/` 규칙보다 먼저
+  적용된 것이다. "Residual, unverified" 가운데 컨트롤러 문서의 Exact 다음 긴 Prefix 순서에 기대던
+  부분이 이것이다. frontend 타깃 그룹은 기본 헬스체크(`/`, 성공 코드 `200`)에서 `healthy`였다.
+  `/`가 SPA의 `index.html`이기 때문이다.
+- **아직 보지 못한 것.** `/files`·`/posts/1`·존재하지 않는 경로가 SPA의 HTML을 돌려주는지,
+  `/health/live`·`/metrics`·`/doc`이 SPA의 HTML 또는 404를 돌려주는지(후속 작업 6의 라이브 목록
+  나머지), 브라우저가 S3 presigned 리다이렉트를 따라가도록 CSP가 허용하는지(위의
+  `https://*.amazonaws.com` 추정), 그리고 `/admin`의 순서다. `/admin`은 `200`으로는 확인할 수
+  없다. 이 Service의 폴백도 그 경로에 `200`을 돌려주기 때문이다([ADR
+  0062](0062-admin-same-alb-subpath-routing.ko.md) Addendum).
+
+여기서 정한 것은 바뀌지 않는다. 나머지 두 Service는 각자의 헬스체크 경로가 필요했고, 그것은 ADR 0062의
+Addendum에 기록했다.

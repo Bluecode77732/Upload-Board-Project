@@ -3,7 +3,8 @@
 - Status: Accepted — 구현 완료(`helm lint`/`helm template`, `pnpm test`, 로컬 이미지 빌드와
   `/admin/*` curl 확인, Docker Desktop Kubernetes에서의 `helm install --wait`, `dev`에서 돈
   CI(스모크 테스트와 이미지 push)까지 검증.
-  라이브 ALB는 미검증)
+  2026-09-26 라이브 ALB에서 헬스체크에는 Service별 경로가 필요했고, `/admin` 자체의 라우팅은
+  상태 코드만으로는 프론트엔드의 폴백과 구분되지 않았다 — 마지막 추가 기록 참고)
 - Date: 2026-09-23
 - Extends: [ADR 0060](0060-frontend-same-alb-path-routing.ko.md) (D4의 "`admin/`은 이 결정
   밖"이 이제 해소됨 — 같은 메커니즘, 두 번째 앱), [ADR 0058](0058-ingress-path-allowlist.ko.md)
@@ -231,3 +232,41 @@ admin 파드가 Ready라는 것은 probe(`GET /admin/`)가 `alias` 설정을 거
 빌드하는 `dev`였다; `main`의 사본이 스케줄로 돌리는 `docker-tag-cleanup.yml`의 `sharenpo-admin`
 항목; 이제 존재하는 이미지를 대상으로 한 `deploy.sh`의 admin 태그 확인; 그리고 라이브 ALB가 필요한
 모든 것.
+
+## Addendum (2026-09-26): 라이브 ALB — 헬스체크에는 Service별 경로가 필요하다
+
+개발자가 라이브 클러스터에서 Ingress를 켰다. 세션은 AWS와 클러스터를 읽기 전용으로 조회하고
+`curl`로 공개 사이트를 요청했다. 시각은 UTC다.
+
+**본 것.** 상태 코드는 `https://sharenpo.cloud/`가 `200`, `/file`이 `401`, `/admin/`이 `200`이었고
+본문과 헤더는 읽지 않았다. `/file`의 `401`은 백엔드만 낼 수 있으므로 API prefix 규칙이 `/` 규칙보다
+먼저 적용된 것은 확인됐다. `/admin/`의 `200`은 `/admin` 규칙이 적용됐다는 증거가 못 된다. 프론트엔드
+nginx(`location / { try_files $uri /index.html; }`)도 그 경로에 `200`을 돌려주므로, 요청이 프론트엔드로
+갔어도 똑같이 보였을 것이다. 아래에서 admin 그룹이 `healthy`인 것도 ALB가 admin 파드에 직접 물었을 때
+`/admin/`을 서빙한다는 것만 보여 준다. ALB가 `/admin/*`를 admin Service로 보내는지는 아직 확인하지
+못했다. ALB에는 타깃 그룹이 세 개 있었고 모두 기본 헬스체크(`/`, 성공 코드 `200`)였다:
+
+| 타깃 그룹 | 결과 |
+|---|---|
+| frontend(`:8080`) | `healthy`. `/`가 SPA의 `index.html`이다. |
+| admin(`:8080`) | `unhealthy`, `Target.ResponseCodeMismatch [404]`. admin nginx는 `/admin/` 아래에서만 서빙한다. |
+| 백엔드(`:3000`) | `unhealthy`, `Target.ResponseCodeMismatch [404]`. 백엔드에는 `GET /`가 없다. |
+
+사이트가 응답한 것은 ALB가 한 그룹의 타깃이 전부 unhealthy이면 그 그룹의 모든 타깃으로 요청을
+보내기 때문이다. 이는 unhealthy 타깃이 로테이션에서 빠지지 않는다는 뜻이기도 해서, 죽은 파드도
+계속 요청을 받는다.
+
+**결정.** AWS Load Balancer Controller의 `alb.ingress.kubernetes.io/healthcheck-path` 어노테이션을
+Service에 달아 헬스체크 경로를 Service별로 지정한다. 백엔드는 `/health/live`, admin은 `/admin/`이고
+frontend는 그대로 둔다. 차트에 `service.annotations`와 `admin.service.annotations`(기본은 빈 값)를
+더했고 `values-prod.yaml`이 두 경로를 정한다(차트 `0.5.1`, 커밋 `60bfe2a`). ALB의 헬스체크는 Ingress
+규칙을 거치지 않고 파드에 바로 가므로, ADR 0058이 `/health`를 Ingress 경로에서 뺀 것은 영향을
+받지 않는다.
+
+기각한 안: Ingress에 `alb.ingress.kubernetes.io/success-codes: 200-404`를 두는 것(없는 페이지도
+healthy로 받아들이게 됨)과 기존 상태를 그대로 두는 것.
+
+**결과.** 개발자가 `helm upgrade`(REVISION 3, 17:41:42)를 실행한 뒤 17:43:15에 세 타깃 그룹이 모두
+`healthy`였고 헬스체크 경로는 `/`, `/admin/`, `/health/live`였다. 컨트롤러
+(`aws-load-balancer-controller-1.7.1`, 앱 `v2.7.1`)가 Service의 어노테이션을 읽는다는 뜻이다.
+파드는 재시작되지 않았고 공개 상태 코드는 `200`, `401`, `200` 그대로였다.

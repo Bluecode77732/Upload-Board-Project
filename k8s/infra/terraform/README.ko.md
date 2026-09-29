@@ -14,28 +14,22 @@ state로 나뉘어 있는지는
 [ADR 0044](../../../docs/ADR/0044-terraform-three-state-split.ko.md)를
 참고하세요.
 
-**상태**: **미적용 — 원래 스캐폴드가 안 만들어진 게 아니라, 완전히 destroy된
-것입니다.** 세 state 전부와 앱 자체(Helm)까지 2026-08-25~27에 실제 AWS에
-apply돼서 end-to-end로 정상 동작까지 확인됐습니다(그 실제 RDS를 상대로 발견·
-수정된 TLS 검증 결함은 ADR 0039의 Addendum에 기록돼 있음). 배포가 검증된 뒤
-2026-08-28에 AWS 과금을 멈추려고 전부 destroy했고, ADR 0047 관측성 스택 검증을 위해
-2026-08-29/30에 재적용했다가 2026-08-31에 다시 destroy했습니다(로컬 state 파일의 시각 기준) —
-이 스택에서 나온 EKS
-클러스터, RDS 인스턴스, S3 버킷, Route53 존, NAT 게이트웨이, EC2 인스턴스
-어느 것도 지금 존재하지 않습니다(`aws eks/rds/ec2/elb` describe 호출이 전부
-빈 값/not-found로 확인됨). 세 state 디렉터리 모두 `terraform validate`,
-`terraform fmt -check`는 여전히 통과합니다. ExternalDNS 레코드와 네임서버 고정
+**상태**: 이 파일은 스택이 지금 apply돼 있는지를 적지 않습니다. 그 내용은 누군가
+`apply`나 `destroy`를 실행할 때마다 바뀌고, 그것을 적은 문장은 그날로 낡습니다(실제로
+여러 번 낡았습니다). 실제 상태는 직접 읽으세요: `aws eks list-clusters --region
+ap-northeast-2`와 과금되는 나머지 리소스 — RDS(`aws rds describe-db-instances`), NAT
+게이트웨이, 로드 밸런서, Elastic IP — 를 조회하거나 각 state 디렉터리에서 `terraform plan`을
+실행합니다. 무슨 일이 있었는지는 날짜와 함께 이 문단이 아니라
+[ROADMAP.ko.md 9절](../../../docs/ROADMAP.ko.md#9-완료)과
+[CHANGELOG.ko.md](../../../docs/CHANGELOG.ko.md)의 기록에 있습니다(apply, 확인, 철거). ExternalDNS
+레코드와 네임서버 고정
 ([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md))은
-`app-infra/`, `addons/`, `deploy.sh`에 코드 작성까지 끝났고, 나머지와 마찬가지로 apply는
-안 된 상태입니다.
+`app-infra/`, `addons/`, `deploy.sh`에 있고, 라이브 실행에서 확인된 내용은 그 ADR의 추가 기록에 있습니다.
 
-이 상태 설명도 스냅샷일 뿐 확정된 사실이 아닙니다 — 나중에 다시 apply하면
-몇 분 안에 이 문단이 틀린 말이 됩니다. 이 문단을 나중에 다시 읽는 사람은
-그대로 믿지 말고 `terraform plan`으로 재확인하세요. apply할 땐 `apply` 전에
-반드시 `terraform plan`을 돌려 읽고, `destroy`는 함부로 하지 마세요 — RDS
-인스턴스가 `skip_final_snapshot = true`, `deletion_protection = false`
-상태라 이를 교체하거나 파괴하는 작업은 데이터를 함께 지우고 최종 스냅샷도
-남기지 않습니다(그래서 이번 destroy도 즉흥적으로가 아니라 확인을 거쳐
+상태가 어떻든 변하지 않는 것이 둘 있습니다. `apply` 전에 반드시 `terraform plan`을 돌려
+읽을 것, 그리고 `destroy`는 함부로 하지 말 것입니다 — RDS 인스턴스가
+`skip_final_snapshot = true`, `deletion_protection = false` 상태라 이를 교체하거나 파괴하는
+작업은 데이터를 함께 지우고 최종 스냅샷도 남기지 않습니다(그래서 지금까지의 철거는 모두 확인을 거쳐
 결정한 것입니다). ADR 0043과 0044의 Addendum은 여전히 apply한 적 없다고 적고
 있는데, ADR은 작성 시점의 사실을 기록하므로 그대로 두었습니다 — 더 자세한
 경위와 보류된 식별자 개명 건은
@@ -186,7 +180,11 @@ init`을 할 때 (빈) 로컬 state를 복사하겠냐고 묻는지 — 묻는�
 4. **필요한 권한을 가진 AWS 자격증명**(EKS/RDS/S3/IAM/Route53/ACM 생성
    권한)과 로컬에 설치된 `aws`/`kubectl`/`helm` CLI — `addons/`의
    `kubernetes`/`helm` provider가 내부적으로 `aws eks get-token`을
-   실행합니다.
+   실행합니다. 이 호출은 `--region`을 넘기지 않아서 CLI의 기본 리전을 쓰므로,
+   `deploy.sh`를 실행하는 셸에서 `AWS_DEFAULT_REGION`을 클러스터의 리전으로
+   정하세요. 2026-09-26에 이 머신의 기본 리전은 `us-east-1`이었고 실행 때
+   `AWS_DEFAULT_REGION=ap-northeast-2`를 export해 두었으며, 그것 없이 `addons/`가
+   실패하는지는 시험하지 않았습니다.
 5. **`region`/`cluster_name`은 세 state의 `.tfvars`/`-var` 값이 모두
    일치해야 합니다.** 이 값들은 `terraform_remote_state`로 자동 공유되지
    않는 순수 변수입니다 — `cluster/`에 준 것과 다른 `cluster_name`을
@@ -228,6 +226,14 @@ bash deploy.sh helm
 
 `deploy.sh` 안의 모든 `plan`/`apply`는 여전히 멈춰서 명시적으로 `y`를 물어봅니다 —
 이 순서는 어떤 승인 게이트도 건너뛰지 않습니다, 그저 커맨드 순서만 정리한 것입니다.
+
+`deploy.sh`는 `TFSTATE_BUCKET_NAME`, `S3_BUCKET_NAME`, `DOMAIN_NAME`, 쓰는 경우
+`DELEGATION_SET_ID`를 자신이 실행되는 셸의 환경에서 읽는데, 새 터미널에는 그 값이 하나도
+없습니다. 2026-09-26에 새 터미널에서 실행했더니 아무것도 만들어지기 전에 스크립트가
+`TFSTATE_BUCKET_NAME` 첫 검사에서 멈췄습니다. 다시 export하고 배포 전체를 한 터미널에서
+실행하세요. `terraform -chdir=`에 주는 경로는 셸의 현재 디렉터리 기준입니다. 위 빠른 참조는
+`cd k8s/infra/terraform`으로 시작하므로 그 자리에서는 `-chdir=cluster`가 맞고
+`-chdir=k8s/infra/terraform/cluster`는 맞지 않습니다(같은 날 2026-09-26).
 
 **스크립트 진입점**: `k8s/infra/terraform/deploy.sh`가 아래 3-state apply 순서와
 `helm upgrade --install`을 하나의 스크립트로 감쌉니다 — 모든 apply에 plan-then-confirm
@@ -415,6 +421,14 @@ state 파일 안에만 존재합니다(ADR 0043 D7/D8).
 
    동기화됐는지 확인: `kubectl get externalsecret,secret
    $(terraform output -raw app_secret_k8s_name)`.
+
+   생성된 값이 나중에 바뀌면 — 예를 들어 `random_password`를 바꾸고 `app-infra/`를 다시 apply한
+   경우([ADR 0064](../../../docs/ADR/0064-jwt-secret-generation-joi-strength-rule.ko.md)) — 새 값이 앱에
+   닿기까지 두 가지가 남습니다. External Secrets는 1시간 주기(위 매니페스트의 `refreshInterval`)로
+   새로고침하므로, `ExternalSecret`에 어노테이션을 달아 바로 가져오게 합니다:
+   `kubectl annotate externalsecret $(terraform output -raw app_secret_k8s_name) force-sync=$(date +%s) --overwrite`.
+   그리고 파드는 `Secret`을 시작할 때만 읽으므로 Deployment를 재시작합니다:
+   `kubectl rollout restart deployment/<release>`. 2026-09-26에 확인했습니다.
 3. **Helm 차트 설치**, `app-infra/`의 출력값을 그대로 연결합니다:
 
    ```sh
@@ -543,8 +557,11 @@ Service → Pod 구간은 ADR 0034의 트러스트 바운더리에 따라 클러
 **DNS 레코드**([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)).
 Terraform은 도메인을 그 ALB로 향하게 하는 레코드를 만들지 않습니다 — `addons/`가 설치하는
 ExternalDNS가 만듭니다. `Ingress`의 host를 지켜보다가 영역 안에 있는 host(ExternalDNS의
-`domainFilters`가 영역 이름입니다)에 대해 ALB를 가리키는 ALIAS 레코드와 소유 표시용 TXT
-레코드를 만들고, `policy: sync`가 `Ingress`가 사라지면 그 레코드를 다시 지웁니다. 그래서
+`domainFilters`가 영역 이름입니다)에 대해 ALB를 가리키는 ALIAS 레코드(`A`와 `AAAA`)를 만듭니다.
+host가 영역의 apex이면(이 프로젝트가 그렇습니다) 소유 표시용 TXT 레코드는 이름이 영역 밖이
+되어 만들어지지 않고, 그러면 ExternalDNS는 그 레코드를 갱신하거나 삭제하지도 못합니다. 영역의
+`force_destroy`가 지웁니다(ADR 0063 추가 기록). 영역 아래의 host라면 TXT 소유 레코드가 만들어지고,
+`Ingress`가 사라질 때 `policy: sync`가 그 레코드를 지웁니다. 그래서
 `Ingress`의 host는 `var.domain_name`이거나 그 아래 이름이어야 하는데, 위 `--set-json`의
 `hosts`가 이미 그렇게 되어 있습니다. 주기적으로 조회하므로(`interval: 1m`) ALB가 생긴 뒤
 몇 분은 기다리세요. 확인하는 방법은 다음과 같습니다(직접 실행하세요. 영역 ID는
@@ -557,9 +574,9 @@ aws route53 list-resource-record-sets --hosted-zone-id <위 Id에서 /hostedzone
   --query 'ResourceRecordSets[].[Name,Type,AliasTarget.DNSName]' --output table
 ```
 
-도메인에 대해 ALB의 DNS 이름을 가리키는 alias `A` 레코드와, `external-dns/owner=<클러스터 이름>`이
-들어간 `TXT` 레코드가 보여야 합니다. 이 중 어느 것도 실제 클러스터에서 관찰한 적은 아직
-없습니다(아직 열려 있는 항목은 ADR 0063 Consequences 참고).
+도메인에 대해 ALB의 DNS 이름을 가리키는 alias `A`와 `AAAA` 레코드가 보여야 합니다(2026-09-26에
+apex host로 관찰했고 `TXT` 레코드는 없었습니다). 영역 아래의 host라면 `TXT` 소유 레코드도 보일
+것으로 예상하지만 관찰한 적은 없습니다(ADR 0063 추가 기록).
 
 ## 각 state가 만드는 것
 
@@ -606,11 +623,36 @@ helm uninstall <릴리스-이름> -n <네임스페이스>
 ```
 
 `app-infra/`의 영역은 `force_destroy = true`([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)
-D3)라서, `destroy`가 Terraform이 모르는 레코드, 즉 ExternalDNS가 만든 ALIAS·TXT 레코드도
-함께 지웁니다. Helm 릴리스를 먼저 제거하면 ExternalDNS의 `policy: sync`가 1분 안팎에 스스로
-지워 주지만, 이제 destroy가 그것에 의존하지는 않습니다. 재사용 위임 세트를 쓴다면 그것은
+D3)라서, `destroy`가 Terraform이 모르는 레코드, 즉 ExternalDNS가 만든 ALIAS 레코드도
+함께 지웁니다. apex host에서는 이것이 실제로 그 레코드를 지우는 수단입니다. ExternalDNS는 소유
+TXT 레코드 없이 만들었고, Ingress와 ALB가 사라진 뒤에도 지우지 않았습니다(2026-09-26 관찰, 8분간
+조회하면서 변경 없음, ADR 0063 추가 기록). 재사용 위임 세트를 쓴다면 그것은
 어떤 state에도 없어서 세 번의 destroy를 모두 거치고도 남습니다. 직접 지울 때까지 유지되며,
 AWS는 그 세트를 쓰는 zone이 하나도 없을 때만 삭제를 허용합니다.
+
+**`addons/`를 건너뛰지 마세요.** 이것 없이 `cluster/`를 지우면 `addons/`가 클러스터 밖에 만든 것이
+남습니다. IAM 역할 3개와 IAM 정책 3개(`alb-controller-…`, `external-dns-…`, `external-secrets-…`),
+모듈의 사용 통계용 CloudFormation 스택(클러스터 이름에 무작위 접미사가 붙은 이름이고
+`WaitConditionHandle`만 들어 있음), 그리고 낡은 `addons/` state입니다. 어느 것도 과금되지는 않지만,
+그 뒤에는 `addons/`를 destroy할 수 없습니다. `cluster/`의 state에 출력이 남아 있지 않아
+`terraform_remote_state`가 plan에서 실패하기 때문입니다. 2026-09-26에 실제로 겪었습니다. 손으로
+정리합니다:
+
+```sh
+for n in <역할 이름 3개>; do
+  for p in $(aws iam list-attached-role-policies --role-name "$n" --query 'AttachedPolicies[].PolicyArn' --output text); do aws iam detach-role-policy --role-name "$n" --policy-arn "$p"; done
+  aws iam delete-role --role-name "$n"
+done
+aws iam delete-policy --policy-arn arn:aws:iam::<계정-ID>:policy/<정책 이름 3개 각각>
+aws cloudformation delete-stack --region <리전> --stack-name <스택 이름>
+cd addons && terraform state rm module.eks_blueprints_addons
+```
+
+state 버킷은 어느 state에도 속하지 않아서 어떤 destroy도 지우지 않고, 모든 state의 이전 버전이
+그대로 남는다(버저닝이 켜져 있고 만료시키는 규칙이 없다). 그 버전들에는 생성된 비밀번호가 평문으로
+들어 있다([ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.ko.md) Context와
+Addendum). 위 정리 뒤에 `addons/` state 객체에는 삭제 마커가 찍혔고(2026-09-26), 이전 버전들은
+남아 있다.
 
 `app-infra/`의 `s3_bucket_name`/`domain_name`은 기본값이 없어서(전역적으로
 유일해야 하는 버킷/도메인 이름엔 안전한 기본값을 둘 수 없음) `destroy`도

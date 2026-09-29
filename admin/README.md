@@ -49,7 +49,7 @@ rather than a rewrite from scratch.
 | | |
 |---|---|
 | Provenance | Chat Project admin console, imported 2026-07-30; role-management slice adapted 2026-08-06 |
-| Adapted to this API? | **Yes** — login/dashboard/users/logs (see "What was adapted"). Deploy target: same-ALB `/admin` subpath via Docker+nginx ([ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.md), see "Provenance cleanup" below) — the Helm chart, Docker image, CI publish and `deploy.sh` wiring are in place; nothing has run against a live ALB yet |
+| Adapted to this API? | **Yes** — login/dashboard/users/logs (see "What was adapted"). Deploy target: same-ALB `/admin` subpath via Docker+nginx ([ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.md), see "Provenance cleanup" below) — the Helm chart, Docker image, CI publish and `deploy.sh` wiring are in place. It has run behind a live ALB once (2026-09-26): its target group needed the health-check path `/admin/` (now set in the chart), but that a request for `/admin/` reached this pod was not observed — a `200` looks the same when the frontend's fallback answers (ADR 0062 Addendum) |
 | Wired into root tooling? | **No** — outside the lint glob, Jest `roots`, `tsconfig.build.json`, `docker-compose.yml`, and CI. This is deliberate (ADR 0022), not a gap |
 | Dependencies | Own `package.json` / `node_modules`; **not** a pnpm workspace (same precedent as `frontend/`). `@apollo/client`, `graphql`, and `rxjs` were dropped with the chat-domain deletion |
 | Runs today? | Yes, against a real backend on `:3000` — see "Local commands" for the one-time `CORS_ORIGIN` setup this needs (admin runs on its own origin, `:5174`, unlike `frontend/`'s same-origin Vite proxy) |

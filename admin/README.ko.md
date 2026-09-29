@@ -47,7 +47,7 @@ REST 계약에 맞게 적응됐다** — 아래 "무엇을 적응시켰는가" �
 | | |
 |---|---|
 | 출처 | Chat Project admin 콘솔, 2026-07-30 이식; 역할 관리 부분 2026-08-06 적응 |
-| 이 API에 적응됐는가? | **그렇다** — 로그인/대시보드/사용자/로그("무엇을 적응시켰는가" 참고). 배포 대상: 같은 ALB의 `/admin` 서브패스, Docker+nginx([ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.ko.md), 아래 "출처 정리" 참고) — Helm 차트, Docker 이미지, CI 발행, `deploy.sh` 연동까지 준비됐고 실제 ALB에서 돌려 본 적은 없다 |
+| 이 API에 적응됐는가? | **그렇다** — 로그인/대시보드/사용자/로그("무엇을 적응시켰는가" 참고). 배포 대상: 같은 ALB의 `/admin` 서브패스, Docker+nginx([ADR 0062](../docs/ADR/0062-admin-same-alb-subpath-routing.ko.md), 아래 "출처 정리" 참고) — Helm 차트, Docker 이미지, CI 발행, `deploy.sh` 연동까지 준비됐다. 실제 ALB 뒤에서 한 번 돌았고(2026-09-26) 타깃 그룹에 헬스체크 경로 `/admin/`이 필요했지만(이제 차트에 지정됨), `/admin/` 요청이 이 파드에 닿았는지는 보지 못했다 — 프론트엔드의 폴백이 답해도 `200`은 똑같이 보인다(ADR 0062 Addendum) |
 | 루트 도구 체계에 연결됐는가? | **아니다** — 린트 glob, Jest `roots`, `tsconfig.build.json`, `docker-compose.yml`, CI 모두의 바깥이다. 이것은 의도된 것이지(ADR 0022) 빈틈이 아니다 |
 | 의존성 | 자체 `package.json` / `node_modules`. pnpm 워크스페이스가 **아니다**(`frontend/`와 같은 선례). 채팅 도메인 삭제와 함께 `@apollo/client`, `graphql`, `rxjs`를 제거했다 |
 | 지금 실행되는가? | 그렇다, 실제 백엔드(`:3000`)를 대상으로 동작한다 — 필요한 일회성 `CORS_ORIGIN` 설정은 "로컬 명령" 참고(`admin`은 `frontend/`의 동일 출처 Vite 프록시와 달리 자체 출처 `:5174`에서 동작한다) |

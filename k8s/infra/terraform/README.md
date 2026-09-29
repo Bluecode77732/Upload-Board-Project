@@ -13,30 +13,23 @@ directory's scaffold history;
 configuration below is split into three independently-appliable states
 instead of one root module.
 
-**Status**: **not applied — a full teardown, not the original scaffold gap.**
-All three states, plus the app itself (Helm), were applied against real AWS
-2026-08-25–27 and confirmed working end-to-end (ADR 0039's Addendum records a
-TLS-verification fix made against that live RDS instance). Once the deploy
-was proven, everything was destroyed 2026-08-28 to stop the AWS bill, re-applied
-2026-08-29/30 to live-verify ADR 0047's observability stack, and destroyed again 2026-08-31
-(dated from the local state files' timestamps) — no EKS
-cluster, RDS instance, S3 bucket, Route53 zone, NAT gateway, or EC2 instance
-from this stack currently exists (verified via `aws eks/rds/ec2/elb` describe
-calls, all empty/not-found). `terraform validate` and `terraform fmt -check`
-still pass in all three state directories. The ExternalDNS record and name-server pinning
-([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)) are
-code-complete in `app-infra/`, `addons/`, and `deploy.sh` and, like the rest, unapplied.
+**Status**: this file does not say whether the stack is applied right now. That changes each
+time someone runs `apply` or `destroy`, and a sentence about it goes stale the same day (it
+did, more than once). Read the real state instead: `aws eks list-clusters --region
+ap-northeast-2` and the other billed resources — RDS (`aws rds describe-db-instances`), NAT
+gateways, load balancers, Elastic IPs — or run `terraform plan` in each state directory. What
+happened, with dates — the applies, the checks, the teardowns — is the log in
+[ROADMAP.md §9](../../../docs/ROADMAP.md#9-completed) and [CHANGELOG.md](../../../docs/CHANGELOG.md),
+not this paragraph. The ExternalDNS record and name-server pinning
+([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)) are in
+`app-infra/`, `addons/` and `deploy.sh`; the ADR's Addendum records what a live run showed.
 
-This status is a snapshot, not a promise — a future `apply` can make it true
-again in minutes, and someone re-reading this file later should re-verify
-with `terraform plan` rather than trust this paragraph. When applying, run
-`terraform plan` and read it before any `apply`, and never `destroy`
-casually — the RDS instance carries `skip_final_snapshot = true` and
-`deletion_protection = false`, so anything that replaces or destroys it takes
-the data with it and leaves no final snapshot (this is exactly why the prior
-teardown was a deliberate, confirmed decision, not a casual one). ADR 0043's
-and ADR 0044's addenda still say this config had never been applied; they are
-left as written because an ADR records what was true when written — see
+Two things hold whatever the state is: run `terraform plan` and read it before any `apply`,
+and never `destroy` casually — the RDS instance carries `skip_final_snapshot = true` and
+`deletion_protection = false`, so anything that replaces or destroys it takes the data with it
+and leaves no final snapshot (this is why every teardown so far was a deliberate, confirmed
+decision). ADR 0043's and ADR 0044's addenda still say this config had never been applied;
+they are left as written because an ADR records what was true when written — see
 [ROADMAP.md §7](../../../docs/ROADMAP.md#7-unscheduled--open-decisions) for
 the fuller history and the deferred identifier rename (ADR 0043 D1).
 
@@ -191,7 +184,11 @@ nothing to migrate.
 4. **AWS credentials** with permission to create EKS/RDS/S3/IAM/Route53/ACM
    resources, and the `aws`/`kubectl`/`helm` CLIs installed locally (the
    `kubernetes`/`helm` providers in `addons/` shell out to `aws eks
-   get-token`).
+   get-token`). That call passes no `--region`, so it uses the CLI's default
+   region: set `AWS_DEFAULT_REGION` to the cluster's region in the shell that
+   runs `deploy.sh`. On 2026-09-26 the machine's default was `us-east-1` and the
+   run had `AWS_DEFAULT_REGION=ap-northeast-2` exported; whether `addons/` fails
+   without it was not tried.
 5. **`region`/`cluster_name` must match across all three `.tfvars`/`-var`
    invocations.** These are plain variables, not shared via
    `terraform_remote_state` — passing a different `cluster_name` to
@@ -234,6 +231,14 @@ bash deploy.sh helm
 
 Every `plan`/`apply` inside `deploy.sh` still stops and asks for an explicit `y` — this
 sequence skips no approval gate, it only orders the commands.
+
+`deploy.sh` reads `TFSTATE_BUCKET_NAME`, `S3_BUCKET_NAME`, `DOMAIN_NAME` and, if you use one,
+`DELEGATION_SET_ID` from the environment of the shell it runs in, and a new terminal has none of
+them: on 2026-09-26 a run in a fresh terminal stopped at the script's first check for
+`TFSTATE_BUCKET_NAME`, before anything was created. Export them again, and run the whole deploy from
+one terminal. Paths given to `terraform -chdir=` are relative to the shell's current directory; the
+quick reference above starts with `cd k8s/infra/terraform`, so `-chdir=cluster` is right there and
+`-chdir=k8s/infra/terraform/cluster` is not (also 2026-09-26).
 
 **Scripted entry point**: `k8s/infra/terraform/deploy.sh` wraps the three-state apply
 order below plus `helm upgrade --install` in one script — plan-then-confirm on every
@@ -421,6 +426,15 @@ does not always clear on its own.
 
    Confirm it synced: `kubectl get externalsecret,secret
    $(terraform output -raw app_secret_k8s_name)`.
+
+   If a generated value changes later — for example after changing a `random_password` and
+   re-applying `app-infra/`
+   ([ADR 0064](../../../docs/ADR/0064-jwt-secret-generation-joi-strength-rule.md)) — two things stand
+   between the new value and the app. External Secrets refreshes on a 1 h interval (`refreshInterval`
+   in the manifest above), so annotate the `ExternalSecret` to copy it at once:
+   `kubectl annotate externalsecret $(terraform output -raw app_secret_k8s_name) force-sync=$(date +%s) --overwrite`.
+   And the pods read the `Secret` only when they start, so restart the Deployment:
+   `kubectl rollout restart deployment/<release>`. Seen on 2026-09-26.
 3. **Install the Helm chart**, wiring in `app-infra/`'s outputs:
 
    ```sh
@@ -545,8 +559,12 @@ stays plain HTTP inside the cluster's private network, per ADR 0034's trust boun
 **The DNS record** ([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)).
 Nothing in Terraform creates the record that points the domain at that ALB — ExternalDNS
 does, installed by `addons/`. It watches `Ingress` hosts and, for a host inside the zone
-(its `domainFilters` is the zone's name), creates an ALIAS record to the ALB plus TXT
-ownership records; `policy: sync` removes them again when the `Ingress` goes away. So the
+(its `domainFilters` is the zone's name), creates ALIAS records (`A` and `AAAA`) to the ALB.
+When the host is the zone apex, which this project uses, the TXT ownership records would fall
+outside the zone, so they are not created, and ExternalDNS then never updates or deletes those
+records either; the zone's `force_destroy` removes them (ADR 0063 Addendum). A host under the
+zone gets TXT ownership records, and `policy: sync` removes its records when the `Ingress` goes
+away. So the
 `Ingress` host must be `var.domain_name` or a name under it, which the `--set-json` `hosts`
 above already does. It polls (`interval: 1m`), so allow a few minutes after the ALB appears.
 To check (you run it; use the zone ID without the `/hostedzone/` prefix):
@@ -558,9 +576,9 @@ aws route53 list-resource-record-sets --hosted-zone-id <that Id, without /hosted
   --query 'ResourceRecordSets[].[Name,Type,AliasTarget.DNSName]' --output table
 ```
 
-Expect an alias `A` record for the domain pointing at the ALB's DNS name, plus `TXT` records
-carrying `external-dns/owner=<cluster name>`. None of this has been observed against a live
-cluster yet (ADR 0063 Consequences lists what is still open).
+Expect an alias `A` and an alias `AAAA` record for the domain pointing at the ALB's DNS name
+(observed 2026-09-26 with the apex host, with no `TXT` records). For a host under the zone the
+`TXT` ownership records are expected too, but that has not been observed (ADR 0063 Addendum).
 
 ## What each state provisions
 
@@ -609,11 +627,35 @@ helm uninstall <release-name> -n <namespace>
 ```
 
 The zone in `app-infra/` has `force_destroy = true` ([ADR 0063](../../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)
-D3), so its `destroy` also removes records Terraform does not know about — the ALIAS and TXT
-records ExternalDNS made. Uninstalling the Helm release first lets ExternalDNS's `policy: sync`
-remove them on its own within a minute or so, but the destroy no longer depends on that. A
+D3), so its `destroy` also removes records Terraform does not know about — the ALIAS records
+ExternalDNS made. For the apex host that is what actually removes them: ExternalDNS created
+them without ownership TXT records and did not delete them after the Ingress and ALB were gone
+(observed 2026-09-26, eight minutes of polling with no change; ADR 0063 Addendum). A
 reusable delegation set, if you use one, is in no state and survives all three destroys; it
 stays until you delete it by hand, which AWS allows only when no zone uses it.
+
+**Do not skip `addons/`.** Destroying `cluster/` without it leaves what `addons/` created
+outside the cluster: three IAM roles and three IAM policies (`alb-controller-…`, `external-dns-…`,
+`external-secrets-…`), a CloudFormation stack from the module's usage telemetry (named after the
+cluster plus a random suffix, holding only a `WaitConditionHandle`) and a stale `addons/` state.
+None of it is billed, but `addons/` can no longer be destroyed afterwards: `cluster/`'s state has
+no outputs left, so `terraform_remote_state` fails at plan. Seen on 2026-09-26. Clean up by hand:
+
+```sh
+for n in <the three role names>; do
+  for p in $(aws iam list-attached-role-policies --role-name "$n" --query 'AttachedPolicies[].PolicyArn' --output text); do aws iam detach-role-policy --role-name "$n" --policy-arn "$p"; done
+  aws iam delete-role --role-name "$n"
+done
+aws iam delete-policy --policy-arn arn:aws:iam::<account-id>:policy/<each of the three policy names>
+aws cloudformation delete-stack --region <region> --stack-name <the stack's name>
+cd addons && terraform state rm module.eks_blueprints_addons
+```
+
+The state bucket is in no state, so none of the destroys removes it, and it keeps the earlier
+versions of every state (versioning is on, nothing expires them). Those versions hold the
+generated passwords in plaintext ([ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.md)
+Context and Addendum). After the cleanup above the `addons/` state object carried a delete marker
+(2026-09-26); its earlier versions remain.
 
 `app-infra/`'s `s3_bucket_name`/`domain_name` have no default (a globally
 unique bucket/domain name can't have a safe one), so its `destroy` needs the

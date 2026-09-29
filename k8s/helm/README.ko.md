@@ -21,15 +21,18 @@ Kubernetes용으로 패키징합니다. 이 차트가 별도 `helm/` 폴더가 �
 다시 검증했습니다(ADR 0062) — 이 문서 끝의 "Docker Desktop Kubernetes에서 검증하기"를
 참고하세요.
 **2026-08-17에 실제 배포 시작 → 2026-08-27에 안정화 → 2026-08-28에 철거(2026-08-29/30
-재적용, 2026-08-31에 다시 철거)**: 릴리스
+재적용, 2026-08-31에 다시 철거, 2026-09-26에 `frontend`·`admin`·ClamAV 워크로드와 함께
+한 번 더 apply하고 철거)**: 릴리스
 `upload-board`가 `k8s/infra/terraform/cluster/`가 만든 실제 AWS/EKS 클러스터에서
 동작했습니다(revision 5, `STATUS: deployed`) — 전체 경위는
 [ROADMAP.md](../../docs/ROADMAP.md) §9(2026-08-27 항목) 참고, RDS 인스턴스의
 `rds.force_ssl`이 요구해서 필요했던 `DB_SSL`/`DB_SSL_CA` 수정도 포함됩니다(ADR
 0039). 클러스터 내부에서만 접근 가능한 채로 유지됐습니다(`ingress.enabled:
 false` — 끝까지 켠 적 없음). 배포가 end-to-end로 검증된 뒤, 과금을 멈추려고
-밑단 AWS 인프라를 전부 destroy했습니다(ROADMAP.md §9, 2026-08-28 항목) —
-**지금은 아무것도 안 돌고 있습니다**. 이 차트 자체 내용은 영향 없고,
+밑단 AWS 인프라를 전부 destroy했습니다(ROADMAP.md §9, 2026-08-28 항목). 지금 무언가
+돌고 있는지는 여기에 적지 않습니다. 클러스터를 직접 확인하고(`kubectl config get-contexts`,
+이어서 `helm list -A --kube-context <컨텍스트>`) `k8s/infra/terraform/README.md`의 Status를
+보세요. 어느 쪽이든 이 차트 자체 내용은 영향이 없고,
 `bash k8s/infra/terraform/deploy.sh all`(ADR 0046)로 처음부터 다시 같은 배포를
 재현할 수 있습니다.
 
@@ -187,6 +190,14 @@ AWS의 EKS 문서는 에이전트의 "strict" 모드에서 kubelet 프로브가 
 목적지 제한 없음 — S3/AWS API용, S3 VPC 엔드포인트가 없어 CIDR로 좁힐
 방법이 없다. ADR 참고)만 명시적으로 허용한다.
 
+`metrics.serviceMonitor.enabled`일 때는 Prometheus 스크레이프 규칙이 더해진다(2026-09-27, ADR 0056
+추가 기록). Prometheus는 다른 네임스페이스에서 돌기 때문에 "같은 네임스페이스만"이 유일한 인바운드
+규칙이던 때는 Ingress가 꺼진 동안 스크레이프가 막혔다(2026-09-26: 대상이 `down`). 이 규칙은
+`networkPolicy.prometheus.namespace` 네임스페이스 안에서 `networkPolicy.prometheus.podLabels` 라벨을 단
+파드만 허용한다(기본값: `kube-prometheus-stack` 네임스페이스의 `app.kubernetes.io/name: prometheus`).
+Helm은 맵을 병합하므로 기본 라벨에 덧붙이는 대신 바꾸려면 기본 키를 null로 지운다:
+`--set-json 'networkPolicy.prometheus.podLabels={"app.kubernetes.io/name":null,"app":"..."}'`.
+
 ### throwaway kind + Calico 클러스터로 검증하기
 
 `kind`의 기본 CNI는 `NetworkPolicy`를 강제하지 않는다 — Calico가 필요하다:
@@ -274,6 +285,53 @@ kubectl run curl-clamav --image=busybox:1.36 --restart=Never --rm -i \
   `PG_IP=$(kubectl get pod postgres -o jsonpath='{.status.podIP}'); echo
   "PG_IP=$PG_IP"` — 진짜 IP인지 눈으로 확인한 뒤에 사용.
 
+### Prometheus 스크레이프 규칙 검증하기
+
+**아직 실행하지 않았다** — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)의
+2026-09-27 추가 기록에 딸린 후속 작업이다. 앱 이미지가 필요 없다: 차트의 selector 라벨을 단 3000번 포트의
+`busybox` `httpd`가 앱을 대신하고, 그 위에 차트가 렌더링한 `networkpolicy.yaml`을 적용한다(`kind`에는
+`ServiceMonitor` CRD가 없어서 실제 `helm install`은 실패한다). 저장소 루트에서 실행한다:
+
+```bash
+K="kubectl --context kind-netpol-prom"; C=curlimages/curl:8.10.1
+
+# Calico가 붙은 일회용 kind 클러스터(kind의 기본 CNI는 NetworkPolicy를 강제하지 않는다)
+kind create cluster --name netpol-prom --config - <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  podSubnet: "192.168.0.0/16"
+EOF
+$K apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml
+$K -n kube-system rollout status ds/calico-node --timeout=180s
+
+# 앱을 대신할 서버: 차트의 selector 라벨, 3000번 포트, 릴리스 이름과 같은 Service
+$K run app --image=busybox:1.36 --labels="app.kubernetes.io/name=sharenpo,app.kubernetes.io/instance=sharenpo" --port=3000 -- httpd -f -p 3000
+$K wait --for=condition=Ready pod/app --timeout=90s
+$K expose pod app --name=sharenpo --port=3000
+
+# 렌더링한 정책을 적용한다(모니터링 네임스페이스 이름만 테스트용으로 바꾼다)
+$K create namespace monitoring-test; $K create namespace other-ns
+(cd k8s/helm && helm template sharenpo . --set secrets.existingSecret=x --set image.tag=x --set networkPolicy.enabled=true --set metrics.serviceMonitor.enabled=true --set networkPolicy.prometheus.namespace=monitoring-test -s templates/networkpolicy.yaml) | $K apply -f -
+sleep 5
+
+# 허용돼야 함: 모니터링 네임스페이스, Prometheus 라벨 있음
+$K -n monitoring-test run allow --image=$C --restart=Never --rm -i --labels="app.kubernetes.io/name=prometheus" --command -- curl -s -m 8 -o /dev/null -w "allow   http=%{http_code}\n" http://sharenpo.default.svc.cluster.local:3000/
+# 타임아웃돼야 함: 올바른 네임스페이스, 라벨 없음
+$K -n monitoring-test run nolabel --image=$C --restart=Never --rm -i --command -- curl -s -m 8 -o /dev/null -w "nolabel http=%{http_code}\n" http://sharenpo.default.svc.cluster.local:3000/
+# 타임아웃돼야 함: 올바른 라벨, 다른 네임스페이스
+$K -n other-ns run wrongns --image=$C --restart=Never --rm -i --labels="app.kubernetes.io/name=prometheus" --command -- curl -s -m 8 -o /dev/null -w "wrongns http=%{http_code}\n" http://sharenpo.default.svc.cluster.local:3000/
+# 대조: 같은 네임스페이스의 파드는 기존 규칙으로 여전히 통과해야 함
+$K -n default run same --image=$C --restart=Never --rm -i --command -- curl -s -m 8 -o /dev/null -w "same    http=%{http_code}\n" http://sharenpo:3000/
+
+kind delete cluster --name netpol-prom
+```
+
+`allow`와 `same`은 `000`이 아닌 HTTP 상태(`busybox`는 `404`로 답한다)가 나와야 하고, `nolabel`과 `wrongns`는
+`http=000`(타임아웃)이 나와야 한다. 이건 Calico이지 AWS의 에이전트가 아니다. 라이브 확인은 아래
+"HTTPS(Ingress) 활성화"의 Prometheus 항목이다.
+
 ## HTTPS(Ingress) 활성화
 
 TLS는 ingress/ALB에서만 종료하고 앱 프로세스 안에서는 하지 않는다([ADR
@@ -336,16 +394,16 @@ ingress 켜기" 절에서도 같은 문제를 발견해 같은 방식으로 고�
 검증할 수 있는 최대치다. 실제 ALB Controller가 떠 있는 클러스터에 대한 진짜 `helm
 install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 밖이다.
 
-**미해결 — 실전 신뢰 전 필수, 지금은 검증할 살아있는 ALB Controller가 없어서 아직 안 함:**
-YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 동작하는 것은 별개다.
-`addons/`+`app-infra/`를 다시 apply하고, `ingress.enabled`를 실제로 켜고, ExternalDNS가
-도메인을 ALB로 향하게 만든 뒤(ADR 0063)에는, annotation이 먹혔다고 가정하지 말고 다음을
-직접 확인한다:
-- 그 zone에 대한 `aws route53 list-resource-record-sets`에 도메인이 ALB를 가리키는 alias `A`
-  레코드와 ExternalDNS의 `TXT` 소유 레코드가 `Ingress`가 생긴 지 몇 분 안에 보이고, `Ingress`를
-  지운 뒤에는 사라지는지(또는 zone의 `force_destroy`가 지우는지). 명령은
-  `k8s/infra/terraform/README.md`의 "Enabling the ALB ingress"에 있다. 라이브에서 관찰한
-  적 없음(ADR 0063).
+**미해결 — 실전 신뢰 전 필수.** YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로
+동작하는 것은 별개라서, annotation이 먹혔다고 가정하지 말고 다음을 직접 확인한다. 2026-09-26에
+첫 라이브 확인을 했다(개발자가 스택을 apply하고 Ingress를 켰으며, 세션은 AWS와 클러스터를 읽기
+전용으로 조회했다). 각 항목에 그때 관찰한 것을 적었고, "관찰" 표시가 없는 항목은 아직 열려 있다:
+- 그 zone에 대한 `aws route53 list-resource-record-sets`에 도메인이 ALB를 가리키는 alias `A`와
+  `AAAA` 레코드가 `Ingress`가 생긴 지 몇 분 안에 보이는지. 2026-09-26(17:13:51 UTC, apex host)에
+  관찰: 두 레코드가 만들어졌고 `TXT` 소유 레코드는 없었다. ExternalDNS는 apex host의 소유 레코드를
+  만들지 못해서, Ingress와 ALB가 사라진 뒤에도 그 레코드를 지우지 않았고 zone의
+  `force_destroy`가 지웠다(ADR 0063 추가 기록). 명령은 `k8s/infra/terraform/README.md`의
+  "Enabling the ALB ingress"에 있다.
 - 첫 배포 전에 내 컴퓨터에서(클러스터 불필요): `values-prod.yaml`은 ClamAV를 차트가 검증받은
   `stable`이 아니라 `clamav/clamav:stable-debian`으로 실행한다 — `stable`은 Docker Hub에
   `linux/amd64`만 있는데 실제로 도는 노드는 `arm64`뿐이고, `stable-debian`은 amd64, arm64,
@@ -372,31 +430,46 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   두 시간 모두 넉넉히 덮는다. 그리고 `values.yaml` 주석이 제안하는 `clamav.resources.limits.memory`
   "1Gi부터"는 여기서 잰 안정 상태보다 *낮아서* 그대로 두면 파드가 OOM으로 죽는다 — limit을 걸게
   되면 그보다 높게 시작한다(`values.yaml` 자체는 바꾸지 않았다). clamd 하나가 `t4g.medium` 4 GiB의
-  약 4분의 1이다. 여전히 라이브에서만 확인되는 것: 실제 Graviton 노드에서 `clamav` Deployment가
-  Ready가 되는지, 앱을 거친 EICAR 업로드가 `400 UPLOAD_MALWARE_DETECTED`로 답하는지, 정상 파일이
-  통과하는지.
+  약 4분의 1이다. 2026-09-26 라이브 클러스터에서 관찰: 파드가 `t4g.medium`(`arm64`) 노드에서 돌았고
+  시작 후 40초에 Ready가 됐으며 재시작은 없었고 메모리는 약 1.02 GiB였다. clamd 로그에는 백엔드
+  파드에서 온 `Eicar-Test-Signature FOUND`가 남아 있다([ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md)
+  추가 기록). 아직 열려 있는 것: 앱을 거친 EICAR 업로드가 `400 UPLOAD_MALWARE_DETECTED`로 답하는지,
+  정상 파일이 앱을 거쳐 통과하는지.
 - `aws elbv2 describe-listeners`로 만들어진 ALB에 80번과 443번 리스너가 둘 다 있는지
-  (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지).
+  (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지). 실행하지 않았고, 아래의 리다이렉트와
+  인증서가 간접 증거다.
 - `curl -I http://<도메인>`이 `https://` URL로 `301`/`302`를 반환하는지(`ssl-redirect`가
-  실제로 동작하는지).
+  실제로 동작하는지). 2026-09-26 관찰: `https://sharenpo.cloud:443/`로 `301`.
 - 브라우저가 ACM 인증서가 발급된 그 도메인에 대해 경고 없이 인증서를 신뢰하는지
-  (`certificate-arn` annotation이 실제로 올바른 인증서를 붙였는지).
+  (`certificate-arn` annotation이 실제로 올바른 인증서를 붙였는지). 2026-09-26에 `curl`로만
+  관찰: `https://` 요청에서 인증서가 검증됐다. 브라우저는 쓰지 않았다.
 - 토큰 없는 `curl https://<도메인>/file`이 HTML이 아니라 API의 401 JSON을 돌려주고,
   `/files`·`/posts/1`·존재하지 않는 경로는 SPA의 HTML을 돌려주는지 — 프론트엔드 `/` 규칙이
   실제로 API prefix들 아래에 놓이는지(ADR 0060, 컨트롤러의 Exact 다음 긴 Prefix 순서는
   라이브에서 확인된 적이 없다). `/health/live`·`/metrics`·`/doc`도 SPA의 HTML(또는 404)이
-  나와야 하고 백엔드 응답이 나오면 안 된다.
+  나와야 하고 백엔드 응답이 나오면 안 된다. 2026-09-26 관찰: `/`는 `200`, `/file`은 `401` —
+  상태 코드만 보았다. `401`은 백엔드만 낼 수 있으므로(SPA 폴백은 `200`을 돌려준다) API prefix
+  규칙이 `/`보다 먼저 적용된 것은 확인됐다. 확인하지 않은 것: 본문, `/files`, `/posts/1`,
+  존재하지 않는 경로, `/health/live`·`/metrics`·`/doc`.
 - `curl https://<도메인>/admin/`이 프론트엔드도 404도 아닌 admin 콘솔 자신의 HTML을
   돌려주는지 — `/admin`이 규칙 집합에 실제로 있는지, 그리고 Exact 다음 긴 Prefix 순서에서
   더 짧은 규칙에 먼저 먹히지 않는지 확인한다(ADR 0062, 이것도 라이브에서 확인된 적 없다).
   슬래시 없는 `curl -I https://<도메인>/admin`은 ALB가 아니라 nginx 자신의 `301`로
   `/admin/`에 리다이렉트되는지 확인한다 — 요청이 실제로 admin 파드까지 도달했는지(중간에서
-  재작성되거나 버려지지 않았는지) 확인하는 것이다.
+  재작성되거나 버려지지 않았는지) 확인하는 것이다. 2026-09-26 관찰: `/admin/`은 `200`(상태
+  코드만)인데, 이것으로는 아무것도 증명되지 않는다 — 프론트엔드 nginx도 SPA 폴백으로 `/admin/`에
+  `200`을 돌려주므로, ALB가 요청을 프론트엔드로 보냈어도 똑같이 보인다. 둘은 본문(SPA가 아니라
+  admin 콘솔의 페이지)이나, admin nginx만 내는 슬래시 없는 `/admin`의 `301`로 구분한다. 둘 다
+  확인하지 않았으므로 이 항목은 여전히 열려 있다.
 - 타깃 그룹에 healthy 타깃이 등록되는지. `values-prod.yaml`의 주석 처리된 annotation
-  블록에 이제 `alb.ingress.kubernetes.io/target-type: ip`가 들어 있다(2026-09-22 추가 —
+  블록에 `alb.ingress.kubernetes.io/target-type: ip`가 들어 있다(2026-09-22 추가 —
   컨트롤러 기본값 `instance`는 `NodePort`/`LoadBalancer` Service가 필요한데 이 차트의
-  Service는 둘 다 `ClusterIP`다). 다만 이건 렌더링되는 annotation만 고친 것이고, 실제
-  ALB가 파드를 healthy로 등록하는지는 별개로 확인해야 한다.
+  Service는 둘 다 `ClusterIP`다). 2026-09-26 관찰: `ip`는 동작했지만(타깃이 파드 IP였다) 기본
+  헬스체크(`/`, `200`)에서 백엔드와 admin 그룹이 `unhealthy`(`Target.ResponseCodeMismatch [404]`)였고,
+  그 그룹의 타깃이 전부 unhealthy이면 ALB가 모든 타깃으로 요청을 보내므로 사이트는 계속 응답했다.
+  차트는 이제 Service별로 헬스체크 경로를 지정하고(차트 `0.5.1`, `values-prod.yaml`,
+  [ADR 0062](../../docs/ADR/0062-admin-same-alb-subpath-routing.ko.md) 추가 기록), 그 뒤에 세 그룹이 모두
+  `healthy`였다.
 - `networkPolicy.enabled: true`(`values-prod.yaml`이 설정하는 값)와 Ingress가 함께 켜지면
   `networkpolicy.yaml`이 VPC CIDR을 앱 포트에 허용하는 인바운드 규칙을 하나 더
   렌더링한다(ADR 0056 addendum, 위 `target-type` 수정과 같은 시점에 추가 — ALB의 ENI는
@@ -404,19 +477,20 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   위 항목과 같은 방식으로 ALB 타깃 그룹이 healthy인지 확인하고, ADR 0056 D2가 이미
   남긴 단서대로 이게 실제로 AWS 자신의 VPC CNI Network Policy 에이전트로 강제되는지(단순
   렌더링이 아니라)도 확인한다 — `kind`+Calico로는 실제 VPC CIDR을 흉내 낼 수 없어서, 이
-  규칙은 `helm template` 이상으로 검증할 방법이 없다.
-- VPC CNI Network Policy 에이전트를 켠 뒤에는(2026-09-26에 `cluster/main.tf`에 설정, 코드 완성·
-  미적용 — [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)
-  추가 기록) 강제가 실제로 동작하고 정당한 트래픽이 막히지 않는지도 확인한다: `aws-node` 파드가
-  컨테이너 두 개로 떠 있고 VPC CNI 버전이 `v1.14.0-eksbuild.3` 이상인지, 앱 파드가 Ready가 되고
-  `/health/live`·`/health/ready`가 통과하는지(kubelet 프로브가 막히지 않는지,
-  `aws/amazon-vpc-cni-k8s#2571`), Ingress가 꺼져 있을 때 다른 네임스페이스의 파드가 앱 파드에 닿지
-  못하고(Ingress가 켜지면 VPC CIDR 규칙이 허용하므로 타임아웃이 나오지 않는 게 정상) 허용
-  목록에 없는 egress 포트가 타임아웃되는지, DNS·데이터베이스(5432)·clamd(3310)·HTTPS/443(S3)이 동작하고 EICAR
-  업로드는 거부되며 정상 파일은 통과하는지, Prometheus가 백엔드를 계속 스크레이프하는지(인바운드
-  규칙은 같은 네임스페이스 파드와 Ingress가 켜졌을 때의 VPC CIDR만 허용하므로 Ingress가 꺼져
-  있으면 스크레이프가 막힐 수 있다 — 추론이며 관찰한 적 없음), ExternalDNS·External Secrets·ALB
-  Controller가 영향받지 않는지.
+  규칙은 `helm template` 이상으로 검증할 방법이 없다. 2026-09-26 관찰: ALB의 헬스체크가 이
+  규칙을 통해 백엔드 파드에 닿았다(처음에는 `404` 응답, 헬스체크 경로를 고친 뒤 `healthy`).
+- VPC CNI Network Policy 에이전트를 켠 상태에서(`cluster/main.tf`,
+  [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록) 강제가
+  실제로 동작하고 정당한 트래픽이 막히지 않는지 확인한다. 2026-09-26 관찰: `aws-node` `2/2`,
+  VPC CNI `v1.22.4-eksbuild.3`. 백엔드가 Ready이고 `/health/ready`가 통과했다(kubelet 프로브가
+  막히지 않음, `aws/amazon-vpc-cni-k8s#2571`). Ingress가 꺼진 상태에서 80번 포트와 Prometheus 파드의
+  `:9090`으로 나가는 egress가 타임아웃됐고 Prometheus(다른 네임스페이스)가 백엔드를 스크레이프하지
+  못했다. DNS, clamd(`PING`과 정상 바이트), HTTPS/443은 동작했고 5432는 통과한 `/health/ready`로
+  추정한다. ExternalDNS, External Secrets, ALB Controller는 영향받지 않았다. Prometheus는 Ingress가
+  꺼져 있는 동안 막혔고(`up`이 `0`) Ingress가 켜진 뒤 백엔드를 스크레이프했다(`up`이 `1`). 즉
+  Ingress 없이는 앱 메트릭이 수집되지 않았고, 2026-09-27부터 차트의 규칙이 이 공백을 닫는다(아래
+  Prometheus 항목). 관찰하지 못한 것: EICAR 업로드의 HTTP 응답과 앱을 거친
+  정상 파일 업로드.
 - 실제 HTTPS 연결로 로그인한 뒤 페이지를 새로고침해도 세션이 유지되는지. refresh 쿠키가
   `HttpOnly; Secure; SameSite=Strict; Path=/auth/token`으로 내려오고 `POST /auth/token/refresh`에
   다시 실려 가야 한다 — `Secure` 쿠키는 브라우저 연결이 HTTPS일 때만 동작하므로 다른 곳에서는
@@ -440,6 +514,12 @@ YAML이 올바르게 렌더링되는 것과 ALB가 실제로 그 설정대로 �
   admin Service 각각에는 ready 엔드포인트가 있으며 백엔드 Service에는 그 파드들이 하나도
   없고, Prometheus에는 백엔드 타깃만 있고 프론트엔드·admin 타깃은 없어야 한다(`web` 포트
   이름, ADR 0060, ADR 0062).
+- Ingress가 꺼져 있는 동안 Prometheus가 백엔드를 스크레이프한다(2026-09-27의 규칙, `15229f6`,
+  [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록): 백엔드 대상이
+  2026-09-26에는 `down`(`context deadline exceeded`)이었는데 이제 `up`이어야 하고,
+  `kubectl get pod -n kube-prometheus-stack --show-labels`에서 Prometheus 파드에
+  `app.kubernetes.io/name=prometheus`가 보여야 한다 — 기본 라벨은 파드가 아니라 차트의 Service selector에서
+  읽은 값이다. 아직 관찰하지 못했다. `kind`+Calico 확인은 위의 "Prometheus 스크레이프 규칙 검증하기"다.
 - 파드가 EKS에서 곧바로 종료된다(ADR 0061). `values-prod.yaml`로(따라서 `STORAGE_DRIVER=s3`)
   `kubectl rollout restart deployment/<release>`를 실행하고 `kubectl get pods -w`를
   지켜본다: 이전 백엔드 파드는 1~2초 안에 `Terminating`을 벗어나야 한다. 30초를 꽉 채우고
