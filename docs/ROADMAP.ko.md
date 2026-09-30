@@ -1007,7 +1007,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   됐고 메모리는 약 1.02 GiB였다(ADR 0059 추가 기록, 그 앞의 로컬 amd64/arm64 측정 포함). 모든 파드가
   `t4g.medium` 2대에 들어갔다(파드 슬롯 34개 중 23개). `addons/`를 건너뛴 destroy는 IAM 역할·정책,
   CloudFormation 스택, 낡은 state를 남긴다(`k8s/infra/terraform/README.md`의 Destroy). 아직 열려 있는
-  것: 두 번째 zone이 같은 네임서버를 받는지, Ingress가 꺼져 있는 동안의 메트릭 공백을 닫는 Prometheus
+  것: Ingress가 꺼져 있는 동안의 메트릭 공백을 닫는 Prometheus
   규칙의 확인. 그 사이 닫힌 항목: 앱을 거친 EICAR 업로드는 이제 `400 UPLOAD_MALWARE_DETECTED`로 답하고,
   정상 파일은 통과해 승격까지 마치고 파일 목록에 나타난다
   ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md)의 2026-09-30 추가 기록 — 이전에는 스캐너

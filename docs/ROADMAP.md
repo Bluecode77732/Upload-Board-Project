@@ -1059,8 +1059,7 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   clamd ran on Graviton, Ready in 40 s at about 1.02 GiB (ADR 0059 Addendum, and the local
   amd64/arm64 measurements before it); all pods fit on the two `t4g.medium` nodes (23 of 34 pod
   slots); and a destroy that skips `addons/` leaves IAM roles and policies, a CloudFormation stack
-  and a stale state (`k8s/infra/terraform/README.md` > Destroy). Still open: a second zone
-  getting the same name servers, and confirming the Prometheus rule that closes the metrics gap
+  and a stale state (`k8s/infra/terraform/README.md` > Destroy). Still open: confirming the Prometheus rule that closes the metrics gap
   while Ingress is off. Resolved since: an EICAR upload through the app now answers
   `400 UPLOAD_MALWARE_DETECTED` and a clean file passes through, is promoted, and appears in the
   file board ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.md)'s 2026-09-30 addendum, only

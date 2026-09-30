@@ -324,3 +324,21 @@ ALB를 가리키도록 다시 만들었고, `curl -I https://sharenpo.cloud/`가
 실제였다는 확인, 그리고 다음에 `Ingress` 토글이나 ALB 교체로 apex가 죽은 로드밸런서를 가리키게
 됐을 때 쓸 수 있는 검증된 수동 복구법(삭제하고 ExternalDNS가 다시 만들게 둔다) — 위의 옵션 B를
 채택하든 안 하든 상관없이 쓸 수 있다.
+
+## Addendum (2026-09-30) — 확인 5 완료: 두 번째 zone이 위임 세트의 네임서버를 받는다
+
+확인 5는 2026-09-26에 zone이 하나뿐이라 열려 있었다. **개발자가 실행했다**(AWS 쓰기 호출이라 세션이
+직접 하지 않음): 임시 도메인으로 `aws route53 create-hosted-zone --delegation-set-id
+N07398092TK6C08I19TJ9`를 실행하고 곧바로 그 zone을 삭제했다. 처음에는 `delegation-test.example.com`을
+썼다가 `InvalidDomainName`("reserved by AWS")로 거부됐다 — 예약 도메인 규칙이고 위임 세트와는 무관하며,
+무작위 `.com` 이름으로는 만들어졌다.
+
+**개발자가 보고한 것:** 새 zone의 네임서버 4개가 위임 세트의 것과 일치했고, zone 삭제도 문제없이
+끝났다. **세션이 읽기 전용으로 확인한 것:** 위임 세트 `N07398092TK6C08I19TJ9`
+(`ns-1635.awsdns-12.co.uk`, `ns-477.awsdns-59.com`, `ns-907.awsdns-49.net`, `ns-1314.awsdns-36.org`),
+기존 `sharenpo.cloud.` zone(`Z0322605UVIXXFXT0EOO`)이 같은 4개를 쓴다는 것, 삭제 뒤 `list-hosted-zones`가
+`sharenpo.cloud.`만 돌려줬다는 것. create 명령의 출력 자체는 세션이 보지 못했다.
+
+다루지 못한 것: 확인 5의 뒷부분(이후 apply의 `plan`에 zone 교체가 안 보이는지)은 이번에 하지 않았다.
+2026-09-26 실행 마지막에 세 state 모두 `plan`이 `No changes`였던 것이 가장 가까운 근거지만 같은 확인은
+아니다. Decision은 바뀌지 않는다.

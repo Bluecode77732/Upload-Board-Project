@@ -334,3 +334,22 @@ surfacing outside a full `destroy`. What it adds: confirmation that the failure 
 just an inferred risk, and a proven manual recovery (delete, let ExternalDNS recreate) for the next
 time an `Ingress` toggle or ALB replacement leaves the apex pointed at a dead load balancer —
 whether or not option B above is ever adopted.
+
+## Addendum (2026-09-30) — check 5 done: a second zone gets the delegation set's name servers
+
+Check 5 was open because only one zone existed on 2026-09-26. **The developer ran** (AWS write
+calls, not run by the session) `aws route53 create-hosted-zone --delegation-set-id
+N07398092TK6C08I19TJ9` for a throwaway domain and deleted the zone right after. The first try used
+`delegation-test.example.com` and was refused with `InvalidDomainName` ("reserved by AWS") — that
+is a reserved-domain rule, unrelated to the delegation set; a random `.com` name worked.
+
+**The developer reported** that the new zone's four name servers matched the delegation set's, and
+that the zone was deleted without a problem. **The session read, read-only:** the delegation set
+`N07398092TK6C08I19TJ9` (`ns-1635.awsdns-12.co.uk`, `ns-477.awsdns-59.com`, `ns-907.awsdns-49.net`,
+`ns-1314.awsdns-36.org`); the existing `sharenpo.cloud.` zone (`Z0322605UVIXXFXT0EOO`) carries the
+same four; and after the delete `list-hosted-zones` returned only `sharenpo.cloud.`. The session did
+not see the create command's output itself.
+
+Not covered: the second half of check 5 (a later apply's `plan` showing no zone replacement) was
+not run here. The 2026-09-26 run's end-of-run `plan` answering `No changes` in all three states is
+the closest evidence, and it is not the same check. Nothing in the Decision changes.
