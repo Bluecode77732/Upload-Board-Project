@@ -355,3 +355,26 @@ Console errors across every step: `0`, aside from the same baseline non-2xx `fet
 noted above. Test accounts and their files/posts were deleted after each check; the two role
 changes made for this check (promote, then `user → admin` on a second account) are recorded
 in `/admin/logs` permanently, by design (ADR 0013's audit log is append-only).
+
+## Addendum (2026-09-30, later) — redeploy from `main`: the unlisted-attachment fix is live
+
+The stack was redeployed the same day (the developer ran `deploy.sh helm main`; `cluster/`,
+`app-infra/` and the four add-ons were already up). The session read the cluster and AWS
+read-only and drove the frontend with Playwright.
+
+- **Deploy.** All four workloads (`sharenpo`, `-frontend`, `-admin`, `-clamav`) were `Running` with
+  `0` restarts, so the backend did not crash-loop this time (the JWT secret rule is
+  [ADR 0064](0064-jwt-secret-generation-joi-strength-rule.md)'s fix). The Ingress got an address,
+  the apex `A` and `AAAA` records pointed at it, and `https://sharenpo.cloud/` answered `200`,
+  `/file` `401`, `/admin/` `200`. Chart `0.5.1`; `values-prod.yaml`'s certificate ARN had to be
+  refilled with the new ACM certificate first, as the runbook says.
+- **The unlisted-attachment bug (`1c845a3`), on the live stack.** A throwaway account uploaded a
+  video, switched it to `unlisted`, and attached it to a post. As the owner, `GET /post/1` answered
+  `200`, the post page rendered a `<video>`, and its content request carried the share token —
+  `GET /file/1/content?share=…` → `302` to a presigned S3 URL — instead of the `403` the earlier
+  addendum recorded. This closes that addendum's "not yet on the live stack".
+- The malware-scan message and the Range/seek check ran in the same session; see
+  [ADR 0059](0059-upload-malware-scanning-clamav.md)'s second 2026-09-30 addendum.
+
+The throwaway account was not deleted by the session (the permission classifier refused the
+Settings deletion as an unrequested action); the stack teardown removes it with the database.

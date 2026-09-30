@@ -362,3 +362,23 @@ healthy로 받아들이게 됨)과 기존 상태를 그대로 두는 것.
 계정과 그 파일·게시글은 확인 후 매번 삭제했다. 이번 확인을 위해 만든 두 건의 role
 변경(승격, 그리고 두 번째 계정의 `user → admin`)은 설계대로 `/admin/logs`에 영구히
 남아 있다(ADR 0013의 감사 로그는 append-only다).
+
+## Addendum (2026-09-30, 이어서) — `main`에서 재배포: unlisted 첨부 수정이 라이브에 반영됨
+
+같은 날 스택을 다시 배포했다(개발자가 `deploy.sh helm main`을 실행했고, `cluster/`, `app-infra/`, 애드온
+4개는 이미 떠 있었다). 세션은 클러스터와 AWS를 읽기 전용으로 조회하고 Playwright로 frontend를 조작했다.
+
+- **배포.** 워크로드 4개(`sharenpo`, `-frontend`, `-admin`, `-clamav`)가 모두 재시작 `0`으로 `Running`이었다.
+  이번에는 백엔드 crash-loop이 없었다(JWT 시크릿 규칙은 [ADR 0064](0064-jwt-secret-generation-joi-strength-rule.ko.md)의
+  수정 덕분이다). Ingress에 주소가 붙었고 apex `A`/`AAAA`가 그것을 가리켰으며 `https://sharenpo.cloud/`는
+  `200`, `/file`은 `401`, `/admin/`은 `200`이었다. 차트 `0.5.1`이고, 런북대로 `values-prod.yaml`의 인증서
+  ARN을 새 ACM 인증서로 먼저 갱신했다.
+- **라이브에서 확인한 unlisted 첨부 버그(`1c845a3`).** 임시 계정으로 비디오를 올려 `unlisted`로 바꾸고 게시글에
+  첨부했다. 소유자로 `GET /post/1`을 열자 `200`이었고 게시글 페이지에 `<video>`가 그려졌으며, 콘텐츠
+  요청은 share 토큰을 달고 갔다 — `GET /file/1/content?share=…` → presigned S3 URL로 `302`. 앞선 추가 기록에
+  적힌 `403`이 아니다. 그 기록의 "아직 라이브에는 없다"를 이것으로 닫는다.
+- 악성코드 스캔 문구와 Range/seek 확인은 같은 세션에서 했다. [ADR 0059](0059-upload-malware-scanning-clamav.ko.md)의
+  2026-09-30 두 번째 추가 기록을 본다.
+
+임시 계정은 세션이 삭제하지 못했다(Settings의 삭제를 권한 분류기가 요청받지 않은 동작으로 거부했다). 스택
+teardown이 데이터베이스와 함께 지운다.
