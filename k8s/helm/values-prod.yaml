@@ -205,7 +205,7 @@ ingress:
   annotations:
     kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:074416822640:certificate/10f64cce-2dfe-4674-ac9e-75abab5fc79f
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:074416822640:certificate/5a935ea3-4af9-45dc-90be-e163543ce427
     # 이 차트의 세 Service(app, frontend, admin)는 전부 ClusterIP다 — 컨트롤러 기본값인
     # target-type: instance는 NodePort/LoadBalancer Service가 필요해서 이 조합에
     # 맞지 않는다(2026-09-21, ADR 0060 구현 중 발견). ip 모드는 Service 타입과
