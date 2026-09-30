@@ -113,6 +113,10 @@ export class PostService {
 
   // 목적: 게시글 목록을 검색·작성자 필터·화이트리스트 정렬·페이지네이션과 함께 조회한다.
   // 이유: 목록 엔드포인트는 전량 스캔이 금지돼 있고(Never Do G2), ORDER BY가 없으면 페이지 간 행 중복·누락이 생긴다.
+  //       requester도 받아 toResponse에 넘긴다 — 지금 FileBoard/PostBoard는 목록에서 첨부파일을
+  //       📎 아이콘으로만 보여줘 이 응답의 shareUrl을 안 쓰지만, toResponse는 getPostById와 공유하는
+  //       함수라 한쪽만 고치면 같은 함수의 다른 호출부(이 목록)에 똑같은 버그가 잠복한 채로 남는다 —
+  //       나중에 목록에 미리보기가 붙는 순간 재발하는 걸 지금 막는다(task 7/7 라이브 검증에서 발견).
   // 방법: ADR 0021의 읽기 계층을 그대로 재사용 — 이스케이프한 ILIKE, SORT_COLUMN 매핑, id tiebreaker.
   async getPosts(
     query: GetPostsDto,
@@ -149,7 +153,9 @@ export class PostService {
   }
 
   // 목적: 단일 게시글을 작성자·첨부 파일과 함께 조회한다.
-  // 이유: 상세 화면은 본문뿐 아니라 작성자와 영상 URL을 함께 요구한다.
+  // 이유: 상세 화면은 본문뿐 아니라 작성자와 영상 URL을 함께 요구한다. requester를 받아 toResponse에
+  //       넘기지 않으면 첨부 파일이 unlisted일 때 shareUrl이 소유자 본인에게도 안 채워져,
+  //       PostDetailPage의 미리보기가 항상 403으로 깨진다(task 7/7 라이브 검증에서 발견).
   // 방법: 관계를 미리 조인한 공통 빌더에 id 조건만 얹고, 없으면 404 POST_NOT_FOUND를 던진다.
   async getPostById(
     id: number,
@@ -192,6 +198,8 @@ export class PostService {
 
   // 목적: 같은 파일로 들어온 재제출을 멱등 replay 또는 409로 판정한다.
   // 이유: 네트워크 재시도는 최초 성공과 같은 결과를 받아야 하지만, 본문이 다르면 그것은 재시도가 아니라 새 글이다.
+  //       숫자 userId 대신 Requester를 받는 이유: replay 응답도 toResponse를 거치므로, requester가
+  //       없으면 replay된 게시글의 unlisted 첨부 파일도 shareUrl 없이 나간다(task 7/7).
   // 방법: 작성자 일치와 title/body 완전 일치를 모두 확인해 replay로 인정하고, 하나라도 어긋나면 POST_FILE_TAKEN.
   private resolveAttachment(
     existing: PostEntity,
@@ -236,7 +244,9 @@ export class PostService {
 
   // 목적: 게시글을 만들되, 같은 파일을 건 재제출은 멱등하게 판정한다.
   // 이유: 첨부 파일의 유니크 제약이 이 엔드포인트의 유일한 자연 멱등 키이고, 예견 가능한 클라이언트 중복이
-  //       500으로 새어 나가서는 안 된다(Idempotence, ADR 0023 D1).
+  //       500으로 새어 나가서는 안 된다(Idempotence, ADR 0023 D1). userId만이 아니라 role까지 담은
+  //       Requester를 받는 이유: resolveAttachment와 마지막의 getPostById 재조회가 모두 requester를
+  //       toResponse까지 그대로 넘겨야 unlisted 첨부 파일의 shareUrl이 정상 계산된다(task 7/7).
   // 방법: 첨부 허용 여부를 FileService에 먼저 묻고(404/403), 선점 행이 있으면 replay/409로 끝낸다. 그렇지 않을
   //       때만 단일 insert(트랜잭션 표 Row 1)를 실행하고, 경합으로 진 23505는 같은 판정 경로로 되돌린다.
   async create(

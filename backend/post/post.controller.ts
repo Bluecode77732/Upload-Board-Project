@@ -64,6 +64,8 @@ export class PostController {
   // 목적: 검증된 목록 조회 조건을 DTO 한 덩어리로 서비스에 넘긴다.
   // 이유: 조건이 페이지네이션·검색·정렬·필터로 여러 개라, 위치 인자로 풀면 호출부가 인자 순서 실수에 노출된다.
   // 방법: @Query()로 바인딩된 GetPostsDto를 그대로 전달한다 — 컨트롤러는 조회 조건을 해석하지 않는다.
+  //       @AuthUser()로 받은 요청자도 함께 넘긴다 — 없으면 응답의 unlisted 첨부 파일 shareUrl이
+  //       계산되지 않는다(task 7/7).
   getPosts(@Query() getPostsDto: GetPostsDto, @AuthUser() actor: AuthUser) {
     return this.postService.getPosts(getPostsDto, actor);
   }
@@ -83,7 +85,9 @@ export class PostController {
   })
   // 목적: 단건 조회 요청을 서비스로 넘긴다.
   // 이유: 상세 화면은 목록에 담기지 않는 본문 전체를 필요로 한다.
-  // 방법: 경로 파라미터를 ParseIntPipe로 좁혀 그대로 전달한다.
+  // 방법: 경로 파라미터를 ParseIntPipe로 좁혀 그대로 전달한다. @AuthUser()로 받은 요청자도
+  //       함께 넘긴다 — 없으면 unlisted 첨부 파일의 shareUrl이 소유자 본인에게도 안 채워져
+  //       PostDetailPage 미리보기가 항상 403으로 깨진다(task 7/7).
   getPostById(
     @Param('id', ParseIntPipe) id: number,
     @AuthUser() actor: AuthUser,
@@ -127,7 +131,9 @@ export class PostController {
   })
   // 목적: 게시글 생성 요청을 서비스로 넘기고, 멱등 재시도는 200으로 응답한다.
   // 이유: 재시도가 새 리소스를 만든 것처럼 201을 돌려주면 클라이언트가 생성/재생을 구분할 수 없다.
-  // 방법: 서비스가 돌려준 replayed 플래그로만 상태코드를 바꾸고(@Res passthrough), 본문은 동일하게 반환한다.
+  // 방법: 서비스가 돌려준 replayed 플래그로만 상태코드를 바꾸고(@Res passthrough), 본문은 동일하게
+  //       반환한다. @UserId() 대신 @AuthUser()를 쓴다 — role까지 담아야 서비스가 requester를
+  //       toResponse까지 그대로 넘겨 unlisted shareUrl을 계산할 수 있다(task 7/7).
   async create(
     @Body() createPostDto: CreatePostDto,
     @AuthUser() actor: AuthUser,
