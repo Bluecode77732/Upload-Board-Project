@@ -74,3 +74,17 @@ API의 트레이드오프로 수용했다. 프론트엔드 분리
 - Stage F 완결 — 프론트엔드가 의존할 API 표면·에러 계약·인증 전송이 모두
   확정되었다; frontend repository를 시작할 수 있다(RBAC은 API 표면을 바꾸지
   않으므로 병행).
+
+### Addendum (2026-09-29) — 쿠키 속성을 실제 HTTPS 연결에서 라이브로 검증함
+
+ADR 0034는 "브라우저가 HTTP로 보는 연결 위의 `Secure` 쿠키는 그냥 버려진다"를
+실제로 `ENV=prod`로 뭔가 배포되기 전까지는 받아들이는 공백으로 남겨뒀다. 오늘
+라이브 ALB 배포(`https://sharenpo.cloud`)를 상대로 일회용 가입 계정으로
+확인했다(Playwright, `page.context().cookies()` 사용 — `document.cookie`가
+아니다, `HttpOnly` 쿠키는 애초에 거기 안 잡힌다): `refreshToken` 쿠키가
+`{ httpOnly: true, secure: true, sameSite: 'Strict', path: '/auth/token',
+domain: 'sharenpo.cloud' }`로 도착했고, 이 ADR의 명세와 정확히 일치했다. 전체
+페이지 새로고침 후에도 로그인 상태 화면이 유지됐다(앱 자체의 로드 시 조용한
+refresh 호출이 성공한 것) — 쿠키가 설정됐다는 것뿐 아니라 실제로 왕복까지
+된다는 것을 확인한다. 테스트 계정과 그 계정이 올린 파일 1개는 확인 후
+삭제했다.

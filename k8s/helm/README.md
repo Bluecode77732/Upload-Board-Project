@@ -436,11 +436,15 @@ pass observed; an item with no "observed" note is still open:
   cluster 2026-09-26: the pod ran on a `t4g.medium` (`arm64`) node and was Ready 40 s after it
   started, with no restarts and about 1.02 GiB of memory; clamd's log records an
   `Eicar-Test-Signature FOUND` from the backend pod ([ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md)
-  Addendum). Still open: an EICAR upload through the app answering `400 UPLOAD_MALWARE_DETECTED`,
-  and a clean file passing through the app.
+  Addendum). Observed 2026-09-30: an EICAR upload through the app answered
+  `400 UPLOAD_MALWARE_DETECTED`, and a clean file passed through, was promoted, and appeared in
+  the file board — see [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md)'s
+  2026-09-30 addendum for the full record.
 - `aws elbv2 describe-listeners` on the created ALB shows both a port-80 and a port-443
-  listener (`listen-ports` actually took effect, not just rendered). Not run; the redirect and
-  the certificate below are the indirect evidence.
+  listener (`listen-ports` actually took effect, not just rendered). Observed 2026-09-29
+  (a second live pass, after the 2026-09-26 one below was torn down and `app-infra`
+  re-applied): a port-80 `HTTP` listener with no certificate, and a port-443 `HTTPS`
+  listener carrying the ACM cert issued by that re-apply.
 - `curl -I http://<domain>` returns a `301`/`302` to the `https://` URL (`ssl-redirect`
   actually fires). Observed 2026-09-26: `301` to `https://sharenpo.cloud:443/`.
 - A browser accepts the certificate with no warnings for the same domain the ACM
@@ -453,8 +457,14 @@ pass observed; an item with no "observed" note is still open:
   ordering has never been observed live). `/health/live`, `/metrics`, and `/doc` must also
   answer the SPA's HTML (or 404), never a backend response. Observed 2026-09-26: `/` `200`,
   `/file` `401` — status codes only. The `401` can only come from the backend (the SPA fallback
-  answers `200`), so the API prefix rule did win over `/`. Not checked: the bodies, `/files`,
-  `/posts/1`, an unknown path, and `/health/live`, `/metrics`, `/doc`.
+  answers `200`), so the API prefix rule did win over `/`. Observed 2026-09-29 (bodies, on the
+  re-applied stack): `/file` returns the API's `{"code":"AUTH_UNAUTHORIZED",...}` JSON, while
+  `/`, `/files`, `/posts/1`, and an unknown path all return the frontend SPA's HTML
+  (`<title>Sharenpo</title>`, `/assets/...`) — confirming the API-prefix rules really do sit
+  above the `/` catch-all rather than the earlier status-code-only check being a coincidence.
+  `/health/live`, `/metrics`, and `/doc` also fell through to the SPA's HTML (`200`), never a
+  backend response — ADR 0058's allow-list omission is enforced by which Ingress rule the
+  request matches, not merely by the backend never being asked.
 - `curl https://<domain>/admin/` returns the admin console's HTML (not the frontend's, and
   not a 404) — confirms `/admin` sits in the rule set at all and Exact-then-longest-Prefix
   ordering doesn't let a shorter rule swallow it first (ADR 0062, also never observed live).
@@ -462,9 +472,13 @@ pass observed; an item with no "observed" note is still open:
   `/admin/`, not the ALB's — confirms the request actually reached the admin pod rather than
   being rewritten or dropped upstream. Observed 2026-09-26: `/admin/` `200` (status code only),
   which proves nothing here — the frontend's nginx also answers `200` for `/admin/` through its
-  SPA fallback, so a request the ALB sent to the frontend would look identical. Tell them apart
-  by the body (the admin console's page, not the SPA's) or by the bare `/admin` `301`, which only
-  the admin nginx produces; neither was checked, so this item is still open.
+  SPA fallback, so a request the ALB sent to the frontend would look identical. Observed
+  2026-09-29 (bodies, on the re-applied stack): `/admin/` returns `<title>Sharenpo Admin</title>`
+  with `/admin/assets/...` and `/admin/favicon.svg` — distinct from `/`'s `<title>Sharenpo</title>`
+  and `/assets/...` — so the request reached the admin pod, not the frontend's SPA fallback. The
+  bare `curl -I https://sharenpo.cloud/admin` answers `301` with `server: nginx` and
+  `location: /admin/` and none of the ALB Controller's own response headers — the admin
+  container's own redirect, not an ALB-level rewrite.
 - The target group registers healthy targets. `values-prod.yaml`'s commented annotation
   block sets `alb.ingress.kubernetes.io/target-type: ip` (added 2026-09-22 — the
   controller's `instance` default needs a `NodePort`/`LoadBalancer` Service, and both
@@ -494,12 +508,18 @@ pass observed; an item with no "observed" note is still open:
   passing `/health/ready`; ExternalDNS, External Secrets and the ALB Controller were unaffected.
   Prometheus is blocked while Ingress is off (`up` was `0`) and scraped the backend once the
   Ingress was on (`up` was `1`), so the app's metrics were not collected without an Ingress; a rule
-  in the chart since 2026-09-27 closes that gap (see the Prometheus bullet below). Not
-  observed: the HTTP response of an EICAR upload and a clean upload through the app.
+  in the chart since 2026-09-27 closes that gap (see the Prometheus bullet below). Observed
+  2026-09-30 ([ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md)'s 2026-09-30
+  addendum): an EICAR upload through the app answered `400 UPLOAD_MALWARE_DETECTED`, and a
+  clean upload succeeded and appeared in the file board.
 - Sign in over the real HTTPS connection, then reload the page: the session survives. The
   refresh cookie must arrive as `HttpOnly; Secure; SameSite=Strict; Path=/auth/token` and go
   back on `POST /auth/token/refresh` — a `Secure` cookie only works when the browser's
-  connection is HTTPS, so this can't be seen anywhere else (ADR 0012, ADR 0034).
+  connection is HTTPS, so this can't be seen anywhere else (ADR 0012, ADR 0034). Observed
+  2026-09-29 (Playwright, a throwaway registered account): `context.cookies()` showed
+  `refreshToken` with exactly `httpOnly: true, secure: true, sameSite: 'Strict',
+  path: '/auth/token', domain: 'sharenpo.cloud'`; a full page reload kept the signed-in view.
+  The account and its one uploaded file were deleted afterward.
 - With `STORAGE_DRIVER=s3` (what `values-prod.yaml` sets): a private file's preview (blob
   `fetch()` → the API's 302 → a presigned S3 URL) and a public/unlisted `<img>`/`<video>` all
   load with no CSP or CORS error in the browser console. Two things must already be true: the
@@ -511,21 +531,52 @@ pass observed; an item with no "observed" note is still open:
   again if local `STORAGE_DRIVER=s3` testing against the real bucket is still wanted
   after that apply. Separately, `frontend/nginx.conf`'s CSP must allow
   `https://*.amazonaws.com` (ADR 0060 — a guess from CSP semantics until seen in a
-  browser).
+  browser). Observed 2026-09-29: `aws s3api get-bucket-cors` on `sharenpo-074416822640` shows
+  the production-only rule applied (the dev origins are gone, replaced not merged, as
+  predicted). In a real browser: `private` loaded via blob fetch (`302` → presigned
+  `https://sharenpo-074416822640.s3.ap-northeast-2.amazonaws.com/granted/...` → `200`);
+  `public` and `unlisted` both loaded via a plain `<img src="https://sharenpo.cloud/file/:id/content">`
+  that the browser followed through the same redirect natively. All three rendered the real
+  test image (`naturalWidth: 4`, not a broken-image placeholder) with zero console errors —
+  the CSP wildcard does match the bucket's actual virtual-hosted-style host (ADR 0036 addendum).
 - The real client IP reaches the rate limiter (`trust proxy` = `10.0.0.0/16`, ADR 0054
   addendum): from one client the sixth `POST /auth/signin` within a minute answers 429, while
   a second client on another IP is not throttled at all. If every visitor shares one bucket,
-  the peer the app sees is not inside that CIDR.
+  the peer the app sees is not inside that CIDR. Observed 2026-09-29 (single client only — no
+  second network available to this session): repeated `POST /auth/signin` against a
+  nonexistent account answered `429` with `Retry-After: 33`; while throttled, `POST
+  /auth/register` (same IP, different handler) still answered `400` and unauthenticated
+  `GET /file` still answered `401`, confirming the bucket is per-route, not shared app-wide
+  (ADR 0054 addendum). ~~Still open: a second client on a genuinely different IP not being
+  throttled by the first's `429` — needs a real second network (e.g. a phone hotspot).~~
+  Observed 2026-09-29 (developer, laptop switched from normal Wi-Fi to a phone hotspot — a
+  genuinely different public IP, not another device on the same network): the normal network
+  hit `429` on the 6th `POST /auth/signin` (5×`400` then `429`, matching the 5/minute limit
+  exactly); the same request from the hotspot IP answered `400`, not `429` — the two IPs
+  tracked separate buckets. A third attempt back on the original network also answered `400`
+  rather than the still-expected `429`, most likely because the 60-second window had already
+  elapsed during the network switch, not a defect (ADR 0054 addendum).
 - Rollout and scraping: `kubectl rollout status` succeeds for all three Deployments, the
   frontend and admin Services each have a ready endpoint and the backend Service has none of
   their pods, and Prometheus lists a target for the backend but none for frontend or admin
-  (the `web` port name, ADR 0060, ADR 0062).
+  (the `web` port name, ADR 0060, ADR 0062). Observed 2026-09-29 (`Ingress` on, its normal state
+  this session): `job=sharenpo` (endpoint `http`) was `up`; no `sharenpo-frontend`/
+  `sharenpo-admin` job appeared at all — absent, not `down`, since neither has a `ServiceMonitor`
+  ([ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md) Addendum).
 - Prometheus scrapes the backend while Ingress is off (the rule from 2026-09-27, `15229f6`,
   [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.md) Addendum): the backend
   target is `up`, where it was `down` (`context deadline exceeded`) on 2026-09-26, and
   `kubectl get pod -n kube-prometheus-stack --show-labels` shows `app.kubernetes.io/name=prometheus`
   on the Prometheus pod — the default label was read from the chart's Service selector, not from a
-  pod. Not observed yet; the `kind`+Calico check is "Verifying the Prometheus scrape rule" above.
+  pod. The `kind`+Calico check is "Verifying the Prometheus scrape rule" above and is still
+  unobserved. The live-EKS half is observed: 2026-09-29, the developer toggled `ingress.enabled`
+  to `false` (a `helm upgrade`, so the session didn't run it — briefly taking the public site off
+  the domain) and the session re-queried Prometheus with `kubectl get ingress -A` confirmed empty
+  — the backend target was `up`, `lastError` empty, matching the pod label too. The rule works
+  (ADR 0056's 2026-09-29 Addendum). Re-enabling `Ingress` afterward had a separate, unrelated
+  consequence — the ALB got recreated with a new DNS name and orphaned the apex DNS record; that
+  incident and its fix are in [ADR 0063](../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.md)'s
+  2026-09-29 (later) addendum, not here.
 - Pods stop promptly on EKS (ADR 0061). With `values-prod.yaml` (so `STORAGE_DRIVER=s3`), run
   `kubectl rollout restart deployment/<release>` and watch `kubectl get pods -w`: each old
   backend pod should leave `Terminating` within a second or two. One that sits there for the
@@ -536,7 +587,11 @@ pass observed; an item with no "observed" note is still open:
   is a closed question already — a Docker-only test standing in for its default `keepAlive`
   request agent (same handle shape, ADR 0061's second addendum) exited just as fast with the
   socket left open on purpose — so this check is really about there being nothing else specific
-  to a live pod, not that handle.
+  to a live pod, not that handle. Observed 2026-09-29, live EKS, two rollout cycles: the old
+  pod's `Killing` and `SuccessfulDelete` events landed in the same second both times, and it was
+  already `NotFound` a few seconds later — Kubernetes events only carry whole-second timestamps,
+  so this doesn't pin down `kind`'s exact `0.4 s`, but it rules out anything near the 30 s grace
+  (ADR 0061's 2026-09-29 Addendum).
 - No ALB errors during a rolling update (ADR 0061) — the check most likely to fail. Before
   the fix a pod ignored SIGTERM and kept running until SIGKILL, which (inference, not
   measured) outlasted the ALB's deregistration lag by accident; now it exits within a second,
@@ -554,7 +609,16 @@ pass observed; an item with no "observed" note is still open:
   under-sized grace period here costs rollout time, not a raw SIGKILL of the app — on this
   `kind`/containerd version, at least; not verified on EKS. None of this says what the sleep
   duration should actually be — that needs the real ALB's drain-lag number, still unmeasured, so
-  the chart has neither setting today and it's still not decided.
+  the chart has neither setting today and it's still not decided. Observed 2026-09-29, live EKS,
+  two rollout cycles, instrumented with a 1 req/s curl loop against `/file` plus an
+  `aws elbv2 describe-target-health` poll of the backend target group: **the check failed once
+  per round**, not with a `502`/`503`/`504` but a curl `000` (no HTTP response — refused/reset),
+  landing within about a second of the old pod's `Killing` event and at or just before the
+  target-health API first reported `draining`. Reproduced twice, not a one-off. A `preStop`
+  sleep (`sleep 5`, the duration already validated on `kind`) plus a matching
+  `terminationGracePeriodSeconds` is proposed to the developer as the likely fix, given how
+  quickly `draining` followed `Killing` here — but not implemented; the chart still has neither
+  setting (ADR 0061's 2026-09-29 Addendum).
 
 None of this can be verified by `helm lint`/`helm template` — they only prove the YAML
 this repo renders is correct, never that the AWS Load Balancer Controller acts on it as

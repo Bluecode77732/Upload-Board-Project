@@ -75,3 +75,17 @@ nothing has been deployed with `ENV=prod` yet.
   the app over plain HTTP without breaking refresh rotation — an accepted gap
   because nothing is deployed with `ENV=prod` yet (ROADMAP.md > Stage 4,
   deployment is still the unscheduled terminal act of the plan).
+
+### Addendum (2026-09-29) — the deferred gap is closed: `ENV=prod` is live and `Secure` works
+
+The Consequences bullet above accepted the gap "because nothing is deployed
+with `ENV=prod` yet." That premise no longer holds — the app has now run with
+`ENV=prod` behind a real ALB more than once (ROADMAP.md §9). Checked live
+today in a real browser (Playwright) against `https://sharenpo.cloud`: the
+refresh-token cookie arrived with `Secure` set and the browser kept it — no
+dropped cookie, no broken rotation. Exact attributes observed are recorded in
+ADR 0012's addendum. This does not change anything about when `ENV=prod` is
+actually running (the stack is applied and torn down on its own schedule,
+ROADMAP.md §9) — it records that the specific risk this ADR named (a `Secure`
+cookie silently dropped over what the browser sees as plain HTTP) did not
+happen once TLS was terminated at the ALB the way this ADR designed.

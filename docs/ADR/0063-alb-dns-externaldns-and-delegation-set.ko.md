@@ -228,3 +228,99 @@ TXT 레코드와 ExternalDNS의 제거를 기대한 위의 Consequences는 이 �
 
 개발자의 destroy는 `addons/`를 건너뛰었다. 그 결과로 남는 것은
 [`k8s/infra/terraform/README.ko.md`](../../k8s/infra/terraform/README.ko.md)의 Destroy에 있다.
+
+## 추가 기록 (2026-09-29) — 두 번째 라이브 실행: 재현됨; upstream 문서·이슈로 독립 확인; 코드 변경 없음
+
+위 2026-09-26 추가 기록은 이미 external-dns `v0.22.0` 자체 소스에서 메커니즘을 짚었다
+(`registry/mapper/mapper.go`의 `ToTXTName`, `provider/aws/aws.go`의
+`suitableZones`/`changesByZone`). 이번 추가 기록은 두 가지를 한다 — 2026-09-26 철거 뒤
+`app-infra`/`addons`/차트를 다시 적용한 두 번째 독립 라이브 실행에서 증상을 재현하고, 소스
+코드만이 아니라 external-dns 자신이 공개한 문서와 이슈 트래커로 그 메커니즘을 다시 확인한다 —
+세션은 `docs/registry/txt.md`와 GitHub 이슈 두 건을 직접 읽었고, 기억에 의존하지 않았다. 이는 이
+ADR 스스로가 요구하는 증거 기준을 그대로 따른 것이다.
+
+**재현, 2026-09-29.** `aws route53 list-resource-record-sets`로 새 zone(`Z07357852B0DR48XVC7PW`,
+UTC `07:33:17` 생성)을 조회하면 레코드가 다섯 개다: `sharenpo.cloud.`의 alias `A`와 `AAAA`, `NS`,
+`SOA`, ACM 검증용 `CNAME` — `TXT`는 0개. `kubectl -n external-dns logs`는 파드의 첫 reconcile(UTC
+`07:47:18`, AWS 클라이언트를 만든 지 1초 뒤)부터 매 주기 `"All records are already up to date"`만
+찍었고 오류나 경고 줄은 없었다 — 차트의 `--log-level=info`가 여전히 그 skip을 가린다는 뜻이고,
+debug 줄 자체를 보지 못한 채로 추론했던 2026-09-26 추가 기록의 판단과 정확히 일치한다.
+
+**upstream 문서·이슈로 독립 확인, 소스 코드만이 아니라.**
+[`docs/registry/txt.md`](https://github.com/kubernetes-sigs/external-dns/blob/master/docs/registry/txt.md)
+(`kubernetes-sigs/external-dns`, `master`)는 이렇게 적혀 있다: "AWS ALIAS records are stored in
+Route 53 as A/AAAA records, so their ownership TXT uses the matching `a-`/`aaaa-` prefix" —
+`--txt-prefix`를 따로 지정하지 않아도 자동으로 붙는다 — 그리고 이 프로젝트의 증상과 구조적으로
+같은 apex 실패 예시를 든다: "If configured `--txt-suffix="-.%{record_type}"` for apex domain
+`ex.com`, the expected result would be `ex-.a.com`, which fails to create a TXT record because it
+does not exist within the managed zone." `kubernetes-sigs/external-dns`의 이슈 두 건이 이
+프로젝트와 무관하게 똑같은 실패를 보고한다:
+[#5010](https://github.com/kubernetes-sigs/external-dns/issues/5010)(apex TXT 레코드에 대해 "no
+hosted zone matching record DNS Name was detected")와
+[#4234](https://github.com/kubernetes-sigs/external-dns/issues/4234)("New format txt registry
+records fail for Apex record"), 후자는 메인테이너가 *not planned*으로 닫았다. 이는 zone apex에서
+TXT registry가 겪는, 알려져 있고 지금도 고쳐지지 않은 upstream 제약이지 이 프로젝트의
+`domainFilters`/`txtOwnerId`/`policy` 값 문제가 아니다 — 실행 중이던 설정(`--registry=txt
+--txt-owner-id=sharenpo`, `TXTPrefix`/`TXTSuffix` 둘 다 빈 값, 이번 실행의 `kubectl logs` config
+덤프에서도 다시 확인됨)은 2026-09-26에 이미 문제없다고 확인됐고 그대로다.
+
+**D3은 여전히 맞다 — 재확인일 뿐, 바꾸지 않는다.** 개발자가 2026-09-26에 서브도메인 이전과
+검증 안 된 `crd` registry를 저울질한 뒤 apex host를 유지하기로 한 결정은 이미 이 같은 제약 위에
+서 있었다 — 오늘의 재현과 위 upstream 인용은 그 근거를 더 단단하게 할 뿐이다. 이슈 #4234가 *not
+planned*으로 닫혔다는 것은 기다릴 upstream 수정이 없다는 뜻이다. `force_destroy = true`는 여전히
+apex `A`/`AAAA` 레코드를 지우는 유일한 수단이고(ExternalDNS의 owner-필터링된 `ApplyChanges`는
+소유 TXT가 없는 레코드에 손대지 못한다, 2026-09-26 추가 기록 참고), 여기서 그것도 다른 코드도
+바꾸지 않는다.
+
+**이 프로젝트가 아직 검토하지 않은 옵션 하나 — 제시만 하고 채택하지 않음.** 같은 문서 페이지는
+apex에서도 안전한 패턴을 알려준다: `%{record_type}`를 포함하고 **마침표로 끝나는**
+`--txt-prefix`/`--txt-suffix` — 예를 들어 apex `ex.com`에 `--txt-prefix="%{record_type}-abc-."`를
+쓰면 소유 레코드가 `cname-abc-.ex.com.`에 생기는데, 이는 zone의 진짜 서브도메인이라 같은
+`suitableZones` 거부에 걸리지 않을 것이다. 이건 2026-09-26 비교(서브도메인 이전 vs `crd`
+registry만 저울질함)에는 없던 항목이고, 이 프로젝트의 zone에 시도해 본 적도 없다. 작업 지시에서
+예로 든 또 다른 옵션인 "CNAME 전환"은 ExternalDNS와 무관하게 애초에 성립하지 않는다 — zone
+apex는 `CNAME`을 아예 가질 수 없다(RFC 1035가 apex의 필수 레코드인 `NS`/`SOA`와의 공존을
+금지한다), 그리고 그것이 바로 Route53의 ALIAS 메커니즘(지금 여기서 쓰는 `useAlias`)이 존재하는
+이유다 — `AWSPreferCNAME`(실행 중인 설정에서 `false`로 확인됨)는 값을 뭘로 두든 apex에는 영향이
+없다.
+
+| 옵션 | apex host 유지? | TXT 소유권 추적 | 비용 | 확인 방법 |
+|---|---|---|---|---|
+| **A — 지금 그대로** (현재, D3) | 유지 | 없음; `force_destroy`가 유일한 정리 수단 | 0 | 라이브에서 두 번 재현(2026-09-26, 2026-09-29) |
+| **B — apex-safe `--txt-prefix`/`--txt-suffix`** | 유지 | 문서의 예시대로라면 동작 시작 | Helm 값 하나 + 라이브 재검증 | 이 zone에 시도한 적 없음 |
+| **C — 공개 host를 apex 밖으로 이전** (`app.sharenpo.cloud`) | 이전 | 정상 동작(apex가 아닌 host는 원래도 그렇다) | 큼 — `BASE_URL`, 인증서 SAN, CORS, `values-prod.yaml`, 이미 공유된 링크들 | 2026-09-26에 기각 |
+| **D — `crd` registry** | 유지 | 완전히 다른 메커니즘 | 미검증 | 2026-09-26에 기각(검증 안 함) |
+| ~~apex의 CNAME~~ | — | — | — | 성립 불가 — DNS 자체가 금지, ExternalDNS와 무관 |
+
+A 외에는 아무 옵션도 여기서 채택하지 않는다. B가 이번 추가 기록이 새로 보탠 사실 하나이고,
+개발자에게 제시만 할 뿐 결정하지 않는다 — 채택하려면 그 전에 이 zone에서 라이브로 따로
+검증해야 한다.
+
+## 추가 기록 (2026-09-29, 나중) — 예측했던 실패가 세션 도중 실제로 일어남
+
+ADR 0056의 2026-09-29 추가 기록에 있는 NetworkPolicy Prometheus 스크레이프 규칙을 시험하려고
+`helm upgrade --set ingress.enabled=false`(뒤에 `true`)를 쓰는 동안, `Ingress`가 사라지자 ALB
+Controller가 기존 ALB를 실제로 지웠고, `Ingress`가 돌아오자 **새** ALB를 새 DNS 이름으로
+만들었다(`...afa98c275a-1403878523...`, 기존 `...afa98c275a-1380304786...`를 대체). 이건 바로
+위 2026-09-26 추가 기록이 추상적으로 경고했던 바로 그 시나리오다("`cluster/`만 다시 만들고
+zone은 두면 apex `A`와 `AAAA`가 삭제된 ALB를 가리킨 채 남고 ExternalDNS가 고치지 않는다") —
+`cluster/` 재구축이 아니라 `helm upgrade`로 `ingress.enabled`를 토글하는 것도 다른 문으로
+같은 실패에 이른다는 걸 보여준 셈이다. 고칠 때까지 사이트는 접속 불가였다(`curl: (6) Could
+not resolve host`).
+
+**해결, 개발자가 직접 실행(AWS 쓰기 호출이라 세션이 직접 하지 않음):** 죽은 ALB를 가리키던
+`A`/`AAAA`에 대한 `route53 change-resource-record-sets` `DELETE`(기존 레코드 값과 정확히
+일치해야 `DELETE`가 성공한다), 그 뒤 ExternalDNS의 1분 주기를 기다림. UPDATE가 아니라
+DELETE를 고른 건 의도적인 선택이다 — `DELETE`는 소유 TXT가 필요 없고(기존 레코드 값과
+일치하기만 하면 되는데, 그 값은 `aws route53 list-resource-record-sets`로 구했다), 반면
+ExternalDNS를 통한 UPDATE/UPSERT는 이 ADR이 이미 막혀 있다고 확인한 바로 그 owner-필터링된
+`ApplyChanges`에 걸린다. 실제로 동작 확인: 삭제 후 약 1분 안에 ExternalDNS가 두 레코드를 새
+ALB를 가리키도록 다시 만들었고, `curl -I https://sharenpo.cloud/`가 다시 `200`을 답했다 —
+전달받은 보고가 아니라 세션이 직접 재확인함.
+
+**이게 바꾸는 것.** 위의 Decision이나 옵션 비교표는 하나도 안 바뀐다 — D3는 이미
+`force_destroy`가 stale apex 레코드를 지우는 유일한 수단이라고 못 박아 뒀고, 이번 일은 그
+같은 틈이 완전한 `destroy` 바깥에서 드러난 것뿐이다. 새로 보탠 건: 이 실패가 추론이 아니라
+실제였다는 확인, 그리고 다음에 `Ingress` 토글이나 ALB 교체로 apex가 죽은 로드밸런서를 가리키게
+됐을 때 쓸 수 있는 검증된 수동 복구법(삭제하고 ExternalDNS가 다시 만들게 둔다) — 위의 옵션 B를
+채택하든 안 하든 상관없이 쓸 수 있다.

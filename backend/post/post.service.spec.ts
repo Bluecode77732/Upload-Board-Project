@@ -181,12 +181,26 @@ describe('PostService', () => {
         fileUrl: 'http://localhost:3000/file/upload/granted_clip.mp4',
       });
 
-      const result = await postService.getPostById(5);
+      const result = await postService.getPostById(5, author);
 
-      // BASE_URL 조립은 정확히 한 곳에서만 이뤄진다 (ADR 0023).
-      expect(mockFileService.toResponse).toHaveBeenCalledWith(mockFile);
       expect(result.file?.fileUrl).toContain('granted_clip.mp4');
       expect(result.creator?.email).toBe('author@test.com');
+    });
+
+    // requester를 넘기지 않으면 fileService.toResponse가 isManager를 판정할 수 없어,
+    // unlisted 첨부 파일의 shareUrl이 소유자 본인에게도 절대 채워지지 않는다 — 라이브
+    // 사용자 흐름 검증에서 발견된 실제 결함(게시글 상세의 미리보기가 항상 403)의 회귀 테스트다.
+    it('passes the requester through to FileService so shareUrl can be computed', async () => {
+      const withFile: PostEntity = { ...mockPost, file: mockFile };
+      const builder = selectQueryBuilder({
+        getOne: jest.fn().mockResolvedValue(withFile),
+      });
+      jest.spyOn(postRepository, 'createQueryBuilder').mockReturnValue(builder);
+      mockFileService.toResponse.mockReturnValue({ id: 7, title: 'clip' });
+
+      await postService.getPostById(5, author);
+
+      expect(mockFileService.toResponse).toHaveBeenCalledWith(mockFile, author);
     });
 
     it('throws POST_NOT_FOUND for a missing post', async () => {
@@ -240,7 +254,7 @@ describe('PostService', () => {
         .mockReturnValueOnce(insert)
         .mockReturnValueOnce(reread);
 
-      const result = await postService.create(dto, 1);
+      const result = await postService.create(dto, author);
 
       expect(mockFileService.assertAttachableBy).toHaveBeenCalledWith(7, 1);
       expect(result.replayed).toBe(false);
@@ -259,7 +273,10 @@ describe('PostService', () => {
         .mockReturnValueOnce(insert)
         .mockReturnValueOnce(reread);
 
-      await postService.create({ title: 'Text only', body: 'No video.' }, 1);
+      await postService.create(
+        { title: 'Text only', body: 'No video.' },
+        author,
+      );
 
       expect(mockFileService.assertAttachableBy).not.toHaveBeenCalled();
     });
@@ -270,7 +287,7 @@ describe('PostService', () => {
       });
       jest.spyOn(postRepository, 'createQueryBuilder').mockReturnValue(lookup);
 
-      const result = await postService.create(dto, 1);
+      const result = await postService.create(dto, author);
 
       expect(result.replayed).toBe(true);
       expect(result.post.id).toBe(5);
@@ -287,7 +304,7 @@ describe('PostService', () => {
       // ADR 0019의 무조건적 replay와는 다르다: 작성자가 쓴 텍스트가 다르면 실제로
       // 새로운 제출이므로, 예전 게시글로 응답해서는 안 된다.
       await expect(
-        postService.create({ ...dto, body: 'Rewritten.' }, 1),
+        postService.create({ ...dto, body: 'Rewritten.' }, author),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -298,7 +315,7 @@ describe('PostService', () => {
       jest.spyOn(postRepository, 'createQueryBuilder').mockReturnValue(lookup);
 
       // 파일 소유권을 재할당할 수 있기 때문에(PATCH /file/:id userId) 도달 가능한 경로다.
-      await expect(postService.create(dto, 2)).rejects.toThrow(
+      await expect(postService.create(dto, stranger)).rejects.toThrow(
         ConflictException,
       );
     });
@@ -319,7 +336,7 @@ describe('PostService', () => {
         .mockReturnValueOnce(insert)
         .mockReturnValueOnce(lookupAfter);
 
-      const result = await postService.create(dto, 1);
+      const result = await postService.create(dto, author);
 
       // 경합에서 진 쪽은 결국 같은 요청이 두 번 온 것이다 — replay일 뿐, 500이 아니다.
       expect(result.replayed).toBe(true);
@@ -331,7 +348,7 @@ describe('PostService', () => {
         new ForbiddenException(),
       );
 
-      await expect(postService.create(dto, 2)).rejects.toThrow(
+      await expect(postService.create(dto, stranger)).rejects.toThrow(
         ForbiddenException,
       );
       // 소유권 검사는 무엇이 쓰이거나 조회되기도 전에 먼저 실행된다.

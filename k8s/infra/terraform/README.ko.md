@@ -560,7 +560,9 @@ ExternalDNS가 만듭니다. `Ingress`의 host를 지켜보다가 영역 안에 
 `domainFilters`가 영역 이름입니다)에 대해 ALB를 가리키는 ALIAS 레코드(`A`와 `AAAA`)를 만듭니다.
 host가 영역의 apex이면(이 프로젝트가 그렇습니다) 소유 표시용 TXT 레코드는 이름이 영역 밖이
 되어 만들어지지 않고, 그러면 ExternalDNS는 그 레코드를 갱신하거나 삭제하지도 못합니다. 영역의
-`force_destroy`가 지웁니다(ADR 0063 추가 기록). 영역 아래의 host라면 TXT 소유 레코드가 만들어지고,
+`force_destroy`가 지웁니다(ADR 0063 추가 기록). 이건 이 프로젝트 설정이 잘못된 게 아니라,
+zone apex(도메인 이름 자체)를 쓸 때 ExternalDNS가 원래부터 갖고 있는 한계입니다 — 만든 쪽에서도
+고칠 계획이 없다고 이미 못 박아뒀습니다(근거는 ADR 0063의 2026-09-29 추가 기록에). 영역 아래의 host라면 TXT 소유 레코드가 만들어지고,
 `Ingress`가 사라질 때 `policy: sync`가 그 레코드를 지웁니다. 그래서
 `Ingress`의 host는 `var.domain_name`이거나 그 아래 이름이어야 하는데, 위 `--set-json`의
 `hosts`가 이미 그렇게 되어 있습니다. 주기적으로 조회하므로(`interval: 1m`) ALB가 생긴 뒤

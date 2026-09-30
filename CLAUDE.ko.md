@@ -1786,6 +1786,32 @@ powershell -NoProfile -Command "Stop-Process -Id <pid> -Force"
 종료 전에 그 PID가 무엇인지 반드시 확인한다(`Get-CimInstance Win32_Process -Filter
 'ProcessId=<pid>'`가 커맨드라인을 출력한다) — 정체를 확인하지 않은 PID는 죽이지 않는다.
 
+### 개발자에게 명령을 넘길 땐 실행 위치부터 말한다
+
+개발자가 직접 실행하도록 명령을 넘길 때(Scope Discipline의 과금·비가역 명령
+패턴 — `terraform apply`/`destroy`, `helm install`/`upgrade`, `kubectl apply`/
+`delete`, `aws` 쓰기 호출, `git push`), 명령 자체보다 먼저 첫 줄에서 어디서
+실행하는지부터 말한다 — 이 저장소는 성격이 전혀 다른 두 종류를 섞어 쓰고 있어서,
+구분하지 않으면 개발자가 한 번 더 물어봐야 한다:
+
+- **디렉터리에 민감한 것**: 모든 Terraform 명령은 `-chdir=k8s/infra/terraform/
+  <모듈>/`이 필요하다(`cluster`/`app-infra`/`addons`는 각자 독립된 state를 가진
+  세 개의 별도 루트 모듈이다).
+- **디렉터리와 무관한 것**: `kubectl`/`helm`은 현재 kube 컨텍스트만 읽는다
+  (`kubectl config current-context`), 작업 디렉터리는 전혀 안 본다 — 리포 루트를
+  포함해 어디서든 실행된다.
+
+명령이 둘 중 어느 쪽인지 명시적으로 말한다 — 명령만 붙여놓고 개발자가 알아서
+추론하게 두지 않는다. 특히 디렉터리에 민감한 Terraform 명령을 연달아 실행한
+직후라면, 평범한 `kubectl` 명령도 따로 말해주지 않으면 마찬가지로 디렉터리가
+필요한 것처럼 읽힌다. 또한 *개발자가 명령을 입력하는 곳*과 *실제로 실행되는
+곳*을 한 문장에 섞지 않는다(`kubectl exec ... node dist/scripts/x.js`는
+개발자의 로컬 터미널에 입력하지만 실행 자체는 원격 파드 안에서 일어난다) —
+입력 위치를 먼저 평이하게 말하고, 실행 세부사항이 중요하면 그건 따로 설명한다.
+(2026-09-30 발견: `kubectl exec` 명령을 넘기면서 "어디서 실행하냐"는 질문에
+답하는 데 세 번의 왕복이 걸렸다 — 처음 넘길 때 위치를 아예 말 안 했고, 그다음
+답변에서는 두 위치를 한 문장에 섞어버렸기 때문이다.)
+
 ### 스윕/회수 서비스를 라이브로 테스트할 땐 절대 실제 프로젝트 디렉터리에 대고 하지 않는다
 
 사고, 2026-09-05: `GrantedCleanupService.sweep()`을 실제 DB·실제 디스크로,

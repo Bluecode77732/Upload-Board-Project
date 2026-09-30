@@ -20,6 +20,8 @@ export const ErrorCode = {
   UPLOAD_INVALID_TYPE: 'UPLOAD_INVALID_TYPE',
   // 하나의 /upload/attach 요청에 image/audio/video 중 둘 이상을 첨부한 경우(ADR 0025 D5).
   UPLOAD_MULTIPLE_FIELDS: 'UPLOAD_MULTIPLE_FIELDS',
+  // ClamAV 스캔이 첨부된 파일에서 악성 콘텐츠를 확정적으로 탐지한 경우(ADR 0059 D3).
+  UPLOAD_MALWARE_DETECTED: 'UPLOAD_MALWARE_DETECTED',
   // 마지막 남은 superadmin의 강등은 거절된다(ADR 0013).
   AUTH_LAST_SUPERADMIN: 'AUTH_LAST_SUPERADMIN',
   // 파일 이전을 그 파일의 현재 소유자 본인 앞으로 제안한 경우(ADR 0050).
@@ -70,6 +72,11 @@ export const ErrorCode = {
 
   // 500
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+
+  // 503
+  // clamd에 연결할 수 없었거나 재시도가 모두 타임아웃됐다 — 파일 자체에 대해서는 아무것도
+  // 확인되지 않았다는 뜻이다, 감염이 아니라(ADR 0059 D3/D4).
+  UPLOAD_SCAN_UNAVAILABLE: 'UPLOAD_SCAN_UNAVAILABLE',
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]

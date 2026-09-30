@@ -433,11 +433,13 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   약 4분의 1이다. 2026-09-26 라이브 클러스터에서 관찰: 파드가 `t4g.medium`(`arm64`) 노드에서 돌았고
   시작 후 40초에 Ready가 됐으며 재시작은 없었고 메모리는 약 1.02 GiB였다. clamd 로그에는 백엔드
   파드에서 온 `Eicar-Test-Signature FOUND`가 남아 있다([ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md)
-  추가 기록). 아직 열려 있는 것: 앱을 거친 EICAR 업로드가 `400 UPLOAD_MALWARE_DETECTED`로 답하는지,
-  정상 파일이 앱을 거쳐 통과하는지.
+  추가 기록). 2026-09-30 관찰: 앱을 거친 EICAR 업로드는 `400 UPLOAD_MALWARE_DETECTED`로 답했고,
+  정상 파일은 통과해 승격까지 마치고 파일 목록에 나타났다 — 전체 기록은
+  [ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md)의 2026-09-30 추가 기록 참고.
 - `aws elbv2 describe-listeners`로 만들어진 ALB에 80번과 443번 리스너가 둘 다 있는지
-  (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지). 실행하지 않았고, 아래의 리다이렉트와
-  인증서가 간접 증거다.
+  (`listen-ports`가 렌더링만 된 게 아니라 실제로 적용됐는지). 2026-09-29 관찰(아래 2026-09-26
+  실행분을 철거하고 `app-infra`를 재적용한 두 번째 라이브 실행): 인증서 없는 80번 `HTTP`
+  리스너와, 그 재적용에서 발급된 ACM 인증서를 물고 있는 443번 `HTTPS` 리스너가 둘 다 있었다.
 - `curl -I http://<도메인>`이 `https://` URL로 `301`/`302`를 반환하는지(`ssl-redirect`가
   실제로 동작하는지). 2026-09-26 관찰: `https://sharenpo.cloud:443/`로 `301`.
 - 브라우저가 ACM 인증서가 발급된 그 도메인에 대해 경고 없이 인증서를 신뢰하는지
@@ -449,8 +451,14 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   라이브에서 확인된 적이 없다). `/health/live`·`/metrics`·`/doc`도 SPA의 HTML(또는 404)이
   나와야 하고 백엔드 응답이 나오면 안 된다. 2026-09-26 관찰: `/`는 `200`, `/file`은 `401` —
   상태 코드만 보았다. `401`은 백엔드만 낼 수 있으므로(SPA 폴백은 `200`을 돌려준다) API prefix
-  규칙이 `/`보다 먼저 적용된 것은 확인됐다. 확인하지 않은 것: 본문, `/files`, `/posts/1`,
-  존재하지 않는 경로, `/health/live`·`/metrics`·`/doc`.
+  규칙이 `/`보다 먼저 적용된 것은 확인됐다. 2026-09-29 관찰(본문, 재적용된 스택 기준):
+  `/file`은 API의 `{"code":"AUTH_UNAUTHORIZED",...}` JSON을 돌려줬고, `/`·`/files`·`/posts/1`·
+  존재하지 않는 경로는 모두 프론트엔드 SPA의 HTML(`<title>Sharenpo</title>`, `/assets/...`)을
+  돌려줬다 — API prefix 규칙이 `/` catch-all보다 실제로 위에 있음을 확인했고, 앞서의 상태 코드만
+  본 판단이 우연이 아니었음도 함께 확인했다. `/health/live`·`/metrics`·`/doc`도 SPA의 HTML(`200`)
+  로 떨어졌고 백엔드 응답은 나오지 않았다 — ADR 0058의 allow-list 누락 항목들은 백엔드가 아예
+  호출되지 않아서가 아니라, 요청이 매칭되는 Ingress 규칙 자체가 다르기 때문에 걸러진다는 것이
+  확인됐다.
 - `curl https://<도메인>/admin/`이 프론트엔드도 404도 아닌 admin 콘솔 자신의 HTML을
   돌려주는지 — `/admin`이 규칙 집합에 실제로 있는지, 그리고 Exact 다음 긴 Prefix 순서에서
   더 짧은 규칙에 먼저 먹히지 않는지 확인한다(ADR 0062, 이것도 라이브에서 확인된 적 없다).
@@ -458,9 +466,13 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   `/admin/`에 리다이렉트되는지 확인한다 — 요청이 실제로 admin 파드까지 도달했는지(중간에서
   재작성되거나 버려지지 않았는지) 확인하는 것이다. 2026-09-26 관찰: `/admin/`은 `200`(상태
   코드만)인데, 이것으로는 아무것도 증명되지 않는다 — 프론트엔드 nginx도 SPA 폴백으로 `/admin/`에
-  `200`을 돌려주므로, ALB가 요청을 프론트엔드로 보냈어도 똑같이 보인다. 둘은 본문(SPA가 아니라
-  admin 콘솔의 페이지)이나, admin nginx만 내는 슬래시 없는 `/admin`의 `301`로 구분한다. 둘 다
-  확인하지 않았으므로 이 항목은 여전히 열려 있다.
+  `200`을 돌려주므로, ALB가 요청을 프론트엔드로 보냈어도 똑같이 보인다. 2026-09-29 관찰(본문,
+  재적용된 스택 기준): `/admin/`은 `<title>Sharenpo Admin</title>`과 `/admin/assets/...`,
+  `/admin/favicon.svg`를 돌려줬다 — `/`의 `<title>Sharenpo</title>`/`/assets/...`와 뚜렷이
+  다르므로, 요청이 프론트엔드의 SPA 폴백이 아니라 실제로 admin 파드까지 도달했음이 확인됐다.
+  슬래시 없는 `curl -I https://sharenpo.cloud/admin`은 `server: nginx`와
+  `location: /admin/`을 돌려줬고 ALB Controller 자신의 응답 헤더는 없었다 — ALB 단의 재작성이
+  아니라 admin 컨테이너 자신의 리다이렉트임이 확인됐다.
 - 타깃 그룹에 healthy 타깃이 등록되는지. `values-prod.yaml`의 주석 처리된 annotation
   블록에 `alb.ingress.kubernetes.io/target-type: ip`가 들어 있다(2026-09-22 추가 —
   컨트롤러 기본값 `instance`는 `NodePort`/`LoadBalancer` Service가 필요한데 이 차트의
@@ -489,12 +501,16 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   추정한다. ExternalDNS, External Secrets, ALB Controller는 영향받지 않았다. Prometheus는 Ingress가
   꺼져 있는 동안 막혔고(`up`이 `0`) Ingress가 켜진 뒤 백엔드를 스크레이프했다(`up`이 `1`). 즉
   Ingress 없이는 앱 메트릭이 수집되지 않았고, 2026-09-27부터 차트의 규칙이 이 공백을 닫는다(아래
-  Prometheus 항목). 관찰하지 못한 것: EICAR 업로드의 HTTP 응답과 앱을 거친
-  정상 파일 업로드.
+  Prometheus 항목). 2026-09-30 관찰([ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md)의
+  2026-09-30 추가 기록): 앱을 거친 EICAR 업로드는 `400 UPLOAD_MALWARE_DETECTED`로 답했고, 정상
+  업로드는 성공해 파일 목록에 나타났다.
 - 실제 HTTPS 연결로 로그인한 뒤 페이지를 새로고침해도 세션이 유지되는지. refresh 쿠키가
   `HttpOnly; Secure; SameSite=Strict; Path=/auth/token`으로 내려오고 `POST /auth/token/refresh`에
   다시 실려 가야 한다 — `Secure` 쿠키는 브라우저 연결이 HTTPS일 때만 동작하므로 다른 곳에서는
-  볼 수 없다(ADR 0012, ADR 0034).
+  볼 수 없다(ADR 0012, ADR 0034). Observed 2026-09-29(Playwright, 일회용 가입 계정):
+  `context.cookies()`에서 `refreshToken`이 정확히 `httpOnly: true, secure: true,
+  sameSite: 'Strict', path: '/auth/token', domain: 'sharenpo.cloud'`로 나왔고, 전체 페이지
+  새로고침 후에도 로그인 상태 화면이 유지됐다. 계정과 그 계정이 올린 파일 1개는 확인 후 삭제했다.
 - `STORAGE_DRIVER=s3`(`values-prod.yaml`이 설정하는 값)에서 비공개 파일의 미리보기(Blob
   `fetch()` → API의 302 → presigned S3 URL)와 공개/unlisted 파일의 `<img>`/`<video>`가 모두
   브라우저 콘솔에 CSP·CORS 에러 없이 로드되는지. 버킷에 운영 origin에 대한 CORS 규칙이
@@ -505,21 +521,53 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   **교체**한다. apply 이후에도 실제 버킷을 상대로 한 로컬 `STORAGE_DRIVER=s3` 테스트가
   필요하면 개발 origin을 다시 손으로 넣어야 한다. 별개로 `frontend/nginx.conf`의 CSP가
   `https://*.amazonaws.com`을 허용해야 한다(ADR 0060 — 브라우저로 확인하기 전까지는 CSP
-  의미론에서 추정한 값이다).
+  의미론에서 추정한 값이다). Observed 2026-09-29: `sharenpo-074416822640`에 `aws s3api
+  get-bucket-cors`를 돌려보니 운영 origin 전용 규칙이 적용돼 있었다(개발 origin은 예측대로
+  병합이 아니라 통째로 사라짐). 실제 브라우저에서: `private`은 blob fetch로 로드됐고(`302` →
+  presigned `https://sharenpo-074416822640.s3.ap-northeast-2.amazonaws.com/granted/...` →
+  `200`); `public`과 `unlisted`는 둘 다 `<img src="https://sharenpo.cloud/file/:id/content">`가
+  그대로 그 리다이렉트를 따라가는 방식으로 로드됐다. 세 경우 모두 실제 테스트 이미지가
+  렌더링됐고(`naturalWidth: 4`, 깨진 이미지 아님) 콘솔 에러는 없었다 — CSP 와일드카드가
+  버킷의 실제 virtual-hosted-style 호스트를 정말로 매치한다(ADR 0036 addendum).
 - 실제 클라이언트 IP가 rate limiter에 도달하는지(`trust proxy` = `10.0.0.0/16`, ADR 0054
   addendum): 한 클라이언트에서 1분 안에 `POST /auth/signin`을 여섯 번째로 호출하면 429가 나오고,
   다른 IP의 두 번째 클라이언트는 전혀 제한되지 않아야 한다. 모든 방문자가 하나의 버킷을
-  공유한다면 앱이 보는 peer가 그 CIDR 안에 있지 않다는 뜻이다.
+  공유한다면 앱이 보는 peer가 그 CIDR 안에 있지 않다는 뜻이다. Observed 2026-09-29(단일
+  클라이언트만 — 이 세션에 두 번째 네트워크가 없었다): 존재하지 않는 계정으로
+  `POST /auth/signin`을 반복하니 `429`와 `Retry-After: 33`이 떴다; 스로틀된 상태에서 같은
+  IP의 `POST /auth/register`(다른 핸들러)는 여전히 `400`을, 인증되지 않은 `GET /file`은
+  여전히 `401`을 답해 버킷이 라우트별이지 앱 전체 공유가 아님을 확인했다(ADR 0054
+  addendum). ~~아직 열려 있는 것: 정말로 다른 IP의 두 번째 클라이언트가 첫 번째의 `429`에
+  영향받지 않는지 — 실제 두 번째 네트워크(예: 휴대폰 핫스팟)가 필요하다.~~ Observed
+  2026-09-29(개발자, 노트북을 평소 와이파이에서 휴대폰 핫스팟으로 전환 — 같은 네트워크의
+  다른 기기가 아니라 실제로 다른 공인 IP): 평소 네트워크에서는 여섯 번째
+  `POST /auth/signin`에서 `429`가 떴다(`400` 다섯 번 뒤 `429`, 분당 5회 한도와 정확히
+  일치); 핫스팟 IP에서 같은 요청은 `429`가 아니라 `400` — 두 IP가 서로 다른 버킷으로
+  잡혔다. 원래 네트워크로 돌아가 한 번 더 시도했을 때도 여전히 기대했던 `429`가 아니라
+  `400`이 나왔는데, 네트워크 전환 도중 60초 윈도가 이미 지났을 가능성이 거의 확실하고
+  결함은 아니다(ADR 0054 addendum).
 - 롤아웃과 스크레이프: 세 Deployment 모두 `kubectl rollout status`가 성공하고, 프론트엔드와
   admin Service 각각에는 ready 엔드포인트가 있으며 백엔드 Service에는 그 파드들이 하나도
   없고, Prometheus에는 백엔드 타깃만 있고 프론트엔드·admin 타깃은 없어야 한다(`web` 포트
-  이름, ADR 0060, ADR 0062).
+  이름, ADR 0060, ADR 0062). Observed 2026-09-29(`Ingress` 켠 상태 — 이번 세션의 평상시
+  상태): `job=sharenpo`(endpoint `http`)는 `up`이었고, `sharenpo-frontend`/`sharenpo-admin`
+  job은 아예 나타나지 않았다 — `down`이 아니라 처음부터 없는 것인데, 둘 다 `ServiceMonitor`가
+  없기 때문이다([ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록).
 - Ingress가 꺼져 있는 동안 Prometheus가 백엔드를 스크레이프한다(2026-09-27의 규칙, `15229f6`,
   [ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록): 백엔드 대상이
   2026-09-26에는 `down`(`context deadline exceeded`)이었는데 이제 `up`이어야 하고,
   `kubectl get pod -n kube-prometheus-stack --show-labels`에서 Prometheus 파드에
   `app.kubernetes.io/name=prometheus`가 보여야 한다 — 기본 라벨은 파드가 아니라 차트의 Service selector에서
-  읽은 값이다. 아직 관찰하지 못했다. `kind`+Calico 확인은 위의 "Prometheus 스크레이프 규칙 검증하기"다.
+  읽은 값이다. `kind`+Calico 확인은 위의 "Prometheus 스크레이프 규칙 검증하기"이고 여전히
+  관찰 못 했다. 라이브 EKS 쪽은 관찰됨: 2026-09-29, 개발자가 `ingress.enabled`를 `false`로
+  토글했고(`helm upgrade`라 세션이 직접 돌리지 않음 — 그동안 공개 사이트가 도메인에서 잠깐
+  안 됨) `kubectl get ingress -A`가 비어 있는 걸 확인한 뒤 세션이 Prometheus를 다시 조회했다
+  — 백엔드 타깃은 `up`, `lastError`는 비어 있었고 파드 라벨도 일치했다. 규칙은 동작한다
+  (ADR 0056의 2026-09-29 추가 기록). 이후 `Ingress`를 다시 켜면서는 이것과 무관한 부작용이
+  따로 있었다 — ALB가 새 DNS 이름으로 재생성되며 apex DNS 레코드가 고아가 됐는데, 그 사고와
+  해결은 여기가 아니라
+  [ADR 0063](../../docs/ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md)의
+  2026-09-29(나중) 추가 기록에 있다.
 - 파드가 EKS에서 곧바로 종료된다(ADR 0061). `values-prod.yaml`로(따라서 `STORAGE_DRIVER=s3`)
   `kubectl rollout restart deployment/<release>`를 실행하고 `kubectl get pods -w`를
   지켜본다: 이전 백엔드 파드는 1~2초 안에 `Terminating`을 벗어나야 한다. 30초를 꽉 채우고
@@ -530,7 +578,10 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   자체는 이미 닫힌 질문이다 — 그 기본 `keepAlive` request agent를 대신한 Docker 전용 시험
   (같은 핸들 모양, ADR 0061 두 번째 Addendum)이 소켓을 일부러 열어 둔 채로도 똑같이 빨리
   종료했다 — 그러니 이 점검은 그 핸들이 아니라 실제 파드에만 있는 다른 무언가가 있는지를
-  보는 것에 가깝다.
+  보는 것에 가깝다. Observed 2026-09-29, 라이브 EKS, 롤아웃 두 회차: 옛 파드의 `Killing`과
+  `SuccessfulDelete` 이벤트가 두 회차 모두 같은 초에 찍혔고, 몇 초 뒤엔 이미 `NotFound`였다 —
+  Kubernetes 이벤트는 초 단위까지만 찍혀서 `kind`의 정확한 `0.4초`를 그대로 재현하진 못했지만,
+  30초 유예 근처까지 가는 것과는 확실히 거리가 멀었다(ADR 0061의 2026-09-29 추가 기록).
 - 롤링 업데이트 중 ALB 오류가 없다(ADR 0061) — 실패할 가능성이 가장 높은 항목이다. 수정 전에는
   파드가 SIGTERM을 무시하고 SIGKILL까지 계속 돌았는데, 이것이 (추론일 뿐 측정한 것은 아니지만)
   우연히 ALB의 등록 해제 지연보다 길었을 것이다. 이제는 1초 안에 종료하므로, SIGTERM 이후 대상이
@@ -548,7 +599,15 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   드는 것이다 — 적어도 이 `kind`/containerd 버전에서는 그렇다; EKS에서는 확인하지 않았다.
   이 중 무엇도 sleep을 얼마로 둬야 하는지는 말해 주지 않는다 — 그건 아직 측정하지 못한 실제
   ALB의 드레인 지연 숫자가 있어야 정할 수 있으므로, 차트에는 둘 다 지금 없고 여전히 정하지
-  않았다.
+  않았다. Observed 2026-09-29, 라이브 EKS, 롤아웃 두 회차, `/file`에 초당 1회 curl을 걸면서
+  백엔드 타깃 그룹을 `aws elbv2 describe-target-health`로 함께 조회: **회차마다 정확히 한 번씩
+  실패했다**, 다만 `502`/`503`/`504`가 아니라 curl `000`(HTTP 응답 자체가 없음 — 거부/리셋)
+  이었고, 옛 파드의 `Killing` 이벤트로부터 약 1초 안, 그리고 타깃 헬스 API가 `draining`을
+  처음 보고하는 시점과 같거나 그 직전에 몰려 있었다. 한 번이 아니라 두 번 재현됐다. 여기서
+  `draining`이 `Killing` 직후 얼마나 빨리 따라왔는지를 보면, `kind`에서 이미 검증된 것과 같은
+  `preStop sleep 5` + 맞춘 `terminationGracePeriodSeconds`가 이 틈을 막을 가능성이 커 보여
+  개발자에게 제안만 했다 — 구현하지는 않았고, 차트에는 아직 둘 다 없다(ADR 0061의 2026-09-29
+  추가 기록).
 
 이 중 어느 것도 `helm lint`/`helm template`로는 확인할 수 없다 — 이 둘은 이 저장소가
 렌더링하는 YAML이 올바르다는 것만 증명할 뿐, AWS Load Balancer Controller가 그 설정대로

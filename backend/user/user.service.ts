@@ -302,7 +302,7 @@ export class UserService {
         if (paths.length > 0 && !deleteFiles) {
           throw new ConflictException({
             code: ErrorCode.USER_HAS_FILES,
-            message: `This account owns ${paths.length} file(s). Repeat with deleteFiles=true to delete them together.`,
+            message: `This account owns ${paths.length} file(s). Confirm again to delete them together.`,
           });
         }
 

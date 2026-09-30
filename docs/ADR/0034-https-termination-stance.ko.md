@@ -70,3 +70,17 @@ Node 프로세스는 평문 HTTP로만 리슨하고(`app.listen`, `main.ts`), �
   `ENV=prod`를 실제로 돌리면 refresh rotation이 깨진다 — 이는 받아들여지는
   공백이다. 아직 `ENV=prod`로 배포된 곳이 전혀 없기 때문이다(ROADMAP.md > Stage
   4, 배포 자체는 여전히 이 계획의 미착수 terminal act다).
+
+### Addendum (2026-09-29) — 미뤄뒀던 공백이 닫힘: `ENV=prod`가 라이브이고 `Secure`도 동작함
+
+위 Consequences 항목은 "아직 `ENV=prod`로 배포된 게 없기 때문"이라는 전제로 그
+공백을 받아들였다. 그 전제가 더 이상 성립하지 않는다 — 앱은 이제 실제 ALB
+뒤에서 `ENV=prod`로 한 번 이상 돌았다(ROADMAP.md §9). 오늘 실제 브라우저
+(Playwright)로 `https://sharenpo.cloud`를 상대로 라이브 확인했다: refresh
+토큰 쿠키가 `Secure`가 설정된 채로 도착했고 브라우저가 그걸 그대로 유지했다 —
+쿠키가 버려지지도, rotation이 깨지지도 않았다. 관찰된 정확한 속성은 ADR
+0012의 addendum에 기록돼 있다. 이게 `ENV=prod`가 지금 실제로 돌고 있는지
+여부를 바꾸는 건 아니다(스택은 제 나름의 일정으로 apply되고 철거된다,
+ROADMAP.md §9) — 이 ADR이 지목한 그 구체적 위험(브라우저가 평문 HTTP로 보는
+연결 위에서 `Secure` 쿠키가 조용히 버려지는 것)이, TLS가 이 ADR이 설계한
+대로 ALB에서 실제로 종단되고 나니 발생하지 않았다는 사실을 기록할 뿐이다.

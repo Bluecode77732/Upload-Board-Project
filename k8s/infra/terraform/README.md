@@ -562,7 +562,10 @@ does, installed by `addons/`. It watches `Ingress` hosts and, for a host inside 
 (its `domainFilters` is the zone's name), creates ALIAS records (`A` and `AAAA`) to the ALB.
 When the host is the zone apex, which this project uses, the TXT ownership records would fall
 outside the zone, so they are not created, and ExternalDNS then never updates or deletes those
-records either; the zone's `force_destroy` removes them (ADR 0063 Addendum). A host under the
+records either; the zone's `force_destroy` removes them (ADR 0063 Addendum). This is a known
+upstream limitation of ExternalDNS's TXT registry at a zone apex, not a bug in this project's
+config — closed by the maintainers as *not planned* (ADR 0063's 2026-09-29 Addendum cites the
+issue). A host under the
 zone gets TXT ownership records, and `policy: sync` removes its records when the `Ingress` goes
 away. So the
 `Ingress` host must be `var.domain_name` or a name under it, which the `--set-json` `hosts`

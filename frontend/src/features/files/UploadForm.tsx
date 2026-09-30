@@ -40,6 +40,14 @@ function messageForError(error: unknown, fieldType: UploadFieldType): string {
       case ErrorCode.FILE_ALREADY_CLAIMED:
         // 이 temp 업로드는 이미 다른 사람이 승격시켰다(ADR 0019, 409).
         return 'That upload was already claimed — please attach the file again.'
+      case ErrorCode.UPLOAD_MALWARE_DETECTED:
+        // ClamAV가 콘텐츠에서 악성코드를 확정 탐지했다(ADR 0059 D3) — 확장자/mimetype
+        // 허용목록은 이미 통과했으므로 사용자에게는 스캔 결과로 명확히 알린다.
+        return 'This file was rejected by our malware scanner. If you believe this is a mistake, please try a different file.'
+      case ErrorCode.UPLOAD_SCAN_UNAVAILABLE:
+        // 스캐너에 연결할 수 없거나 재시도가 모두 타임아웃됐다(ADR 0059 D4, fail-closed) —
+        // 파일 자체가 아니라 스캔 자체가 되지 않았다는 뜻이라 재시도를 안내한다.
+        return 'The malware scanner is temporarily unavailable — please try again shortly.'
       case ErrorCode.VALIDATION_FAILED:
         return 'Please enter a title and choose a file.'
       default:

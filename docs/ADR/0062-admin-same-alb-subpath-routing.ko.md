@@ -4,7 +4,11 @@
   `/admin/*` curl 확인, Docker Desktop Kubernetes에서의 `helm install --wait`, `dev`에서 돈
   CI(스모크 테스트와 이미지 push)까지 검증.
   2026-09-26 라이브 ALB에서 헬스체크에는 Service별 경로가 필요했고, `/admin` 자체의 라우팅은
-  상태 코드만으로는 프론트엔드의 폴백과 구분되지 않았다 — 마지막 추가 기록 참고)
+  상태 코드만으로는 프론트엔드의 폴백과 구분되지 않았는데, 이건 2026-09-29 추가 기록에서
+  본문까지 읽어보고서야 풀렸다). 2026-09-30 추가 기록은 첫 실사용자 흐름 검증을 더한다
+  (프론트엔드는 가입/로그인/업로드/게시글/댓글/visibility, admin은 역할 변경+감사 로그+D4가
+  고친 로그아웃 리다이렉트) — 그 과정에서 이 ADR과 무관한 `PostService` 버그(소유자 본인도
+  unlisted 첨부파일에서 403 나던 문제)도 하나 찾아 고쳤다
 - Date: 2026-09-23
 - Extends: [ADR 0060](0060-frontend-same-alb-path-routing.ko.md) (D4의 "`admin/`은 이 결정
   밖"이 이제 해소됨 — 같은 메커니즘, 두 번째 앱), [ADR 0058](0058-ingress-path-allowlist.ko.md)
@@ -270,3 +274,91 @@ healthy로 받아들이게 됨)과 기존 상태를 그대로 두는 것.
 `healthy`였고 헬스체크 경로는 `/`, `/admin/`, `/health/live`였다. 컨트롤러
 (`aws-load-balancer-controller-1.7.1`, 앱 `v2.7.1`)가 Service의 어노테이션을 읽는다는 뜻이다.
 파드는 재시작되지 않았고 공개 상태 코드는 `200`, `401`, `200` 그대로였다.
+
+## 추가 기록 (2026-09-29): 두 번째 라이브 ALB — `/admin/`의 본문으로 2026-09-26의 미결 항목을 닫음
+
+2026-09-26 스택을 철거하고 `app-infra`/`addons`/차트를 다시 적용해 두 번째 라이브 실행을 했다.
+위 2026-09-26 추가 기록은 한 가지를 명시적으로 열어 뒀다 — `/admin/`의 `200`만으로는 아무것도
+증명되지 않는다는 것, 프론트엔드 SPA 폴백도 `/admin/`에 `200`을 돌려주기 때문이다. 이번 실행은
+본문을 읽었다.
+
+- `curl -s https://sharenpo.cloud/admin/`은 `<title>Sharenpo Admin</title>`과
+  `/admin/assets/index--Ii8g1iN.js`/`/admin/assets/index-5ZLQDVBl.css`,
+  `/admin/favicon.svg`를 돌려줬다 — `/`의 `<title>Sharenpo</title>`와 경로 없는
+  `/assets/...`와는 뚜렷이 다르다. `/admin` Ingress 규칙이 실제로 admin 파드까지 도달했고,
+  프론트엔드의 SPA 폴백으로 떨어진 게 아니라는 뜻이다.
+- 슬래시 없는 `curl -I https://sharenpo.cloud/admin`은 `server: nginx`와
+  `location: /admin/`을 돌려줬고 ALB Controller 자신의 응답 헤더는 없었다 — ALB 단의
+  재작성이 아니라 admin 컨테이너 자신의 리다이렉트(`admin/nginx.conf`)다.
+
+둘 다 이 ADR에 대한 [k8s/helm/README.md](../../k8s/helm/README.ko.md) Pending 목록의 마지막
+두 항목을 닫는다. 여기서 정한 것은 바뀌지 않는다.
+
+## 추가 기록 (2026-09-30): 실사용자 흐름 라이브 검증, 프론트엔드부터 admin까지
+
+지금까지 라이브 스택을 상대로 한 모든 확인은 "요청이 맞는 파드에 도달하는가"만 물었다 —
+상태 코드, 응답 헤더, 타깃 그룹 healthy 여부. "실제 사용자가 기대한 결과를 얻는가"는 한
+번도 묻지 않았다. 이번 실행은 그걸 처음부터 끝까지, `https://sharenpo.cloud`를 상대로
+직접 물었다(Playwright, 일회용 가입 계정, 확인 후 매번 삭제) — 같은 검증 연속선상에서
+작업 2(admin/frontend 분리)와 작업 4(로그인/CSP) 다음으로 진행했다.
+
+**프론트엔드** (`https://sharenpo.cloud`):
+- 회원가입 → 로그인 → 로그아웃. 같은 이메일로 재가입하면 API 원본 응답이 아니라
+  화면에서 "That email is already registered — try signing in."(`AUTH_EMAIL_TAKEN`)로
+  실제로 표시됨을 확인했다.
+- `UploadForm`으로 이미지 1개·오디오 1개·비디오 1개를 올리고 각각 `/view/:id`에서 열었다.
+  오디오는 두 e2e 스위트 어디에도 `.mp3` fixture가 없어서, 저장소에 파일을 추가하는 대신
+  브라우저 안에서 직접 `File`/`DataTransfer` 객체로(50프레임짜리 무음 MP3) 구성했다.
+  비디오는 기존 `frontend/e2e/fixtures/sample.mp4`를 그대로 썼다. 셋 다 실제 브라우저에서
+  디코딩되고 재생됐다(`<audio>`/`<video>`: `readyState 4`, `.play()` 후 `currentTime` 진행,
+  `error: null`) — "태그가 렌더링됐다" 수준이 아니라. 이걸로 ROADMAP.md **S3** 행의
+  "실제 업로드/읽기 왕복... 미검증" 문구가 닫힌다(Range 요청/탐색 동작은 이번에 다루지
+  않아 계속 열려 있다).
+- 파일을 첨부해 게시글을 작성하고, 목록·상세를 조회하고, 댓글을 작성·수정·삭제했다.
+- 파일 하나의 visibility를 세 상태로 다 바꿔가며, `GET /file/:id/content`에 인증 없는
+  (`credentials: 'omit'`) fetch로 실제 접근 가능 범위를 확인했다: `private` → `403`,
+  `public` → `200`, 토큰 없는 `unlisted` → `403`, 토큰 있는 `unlisted` → `200` —
+  ADR 0025/0026 그대로였다.
+- 다크모드 토글과 390×844 모바일 뷰포트 둘 다 콘솔 에러 없이 정상 렌더링됐다(로그인 전
+  페이지마다 뜨는 기준선 401/기대된 4xx는 제외 — 이건 JS 예외가 아니라 브라우저가
+  HTTP 응답 자체를 로그로 남기는 것뿐이다).
+
+**모바일/다크모드 단계를 확인하다가 실제 버그를 하나 찾아 고쳤다**: unlisted 파일이
+첨부된 게시글을 열면, 그 파일의 소유자 본인을 포함해 누가 봐도 미리보기가 `403`으로
+깨졌다. 원인: `PostService.toResponse`가 `fileService.toResponse(post.file)`을
+`requester` 없이 호출했다 — `FileService`의 다른 모든 호출부 중 유일하게 이것만 빠져
+있었다 — 그래서 `FileResponseDto.shareUrl`이 절대 계산될 수 없었고, 별도로
+`PostService.baseQuery()`가 `file.creator`를 조인하지 않아서 `requester`를 넘겨도
+`FileService`의 `isManager` 판정(`file.creator && canManage(...)`)이 항상 `false`였다.
+`PostDetailPage.tsx`의 `shareUrl ?? fileUrl` 폴백이 결국 토큰 없는 URL을 인증 안 된
+`<img>`/`<audio>`/`<video src>`에 넘겼고, unlisted의 접근 규칙은 그걸 항상 거절한다.
+`public`(인증 불필요)과 `private`(자체 인증된 blob-fetch 경로가 있음)은 문제없었다 —
+구조적으로 깨진 건 unlisted뿐이었다. `toResponse`/`getPosts`/`getPostById`/`create`/
+`resolveAttachment`에 `requester`를 관통시키고 빠져 있던
+`leftJoinAndSelect('file.creator', 'fileCreator')`를 추가해 고쳤다
+(`backend/post/post.service.ts`, `post.controller.ts`, 커밋 `1c845a3`) —
+`pnpm test` 280/280, 로컬 `db`+`clamav` compose 스택 + dev 서버로 검증(API 응답에
+`shareUrl`이 실렸고, vite 프록시를 거친 same-origin 이미지 로드가 픽셀 단위까지
+정확히 성공). 아직 라이브 스택엔 안 올라갔다 — 이 수정은 별도 배포가 필요하다.
+
+**admin** (`https://sharenpo.cloud/admin/`):
+- 방금 승격된 superadmin으로 로그인했다(라이브에 등록한 뒤, 개발자가
+  `kubectl exec <백엔드 파드> -- env SUPERADMIN_EMAIL=<이메일>
+  node dist/scripts/promote-superadmin.js`를 실행해 승격 — RDS 인스턴스가
+  `publicly_accessible = false`라서, 이 스크립트는 노트북에서 `.env`로 직접 돌릴 수 없고
+  이미 VPC 안에 있는 파드 안에서 실행해야 한다).
+- `/admin/dashboard`, `/admin/users`, `/admin/logs`가 전부 `/admin` 라우터 `basename`
+  아래에서 정상 해석됐다(D3).
+- `/admin/users`에서 유저 role을 `user → admin`으로 바꿨다. 테이블이 즉시 갱신됐고
+  `/admin/logs`에 `ROLE_CHANGE`, 행위자·대상 유저 ID, `user→admin`으로 정확히 남았다 —
+  쓰기와 감사 기록 둘 다 로컬 스위트뿐 아니라 라이브 스택에서 처음부터 끝까지 동작한다.
+- `/admin/users`에서 전체 새로고침을 해도 세션이 유지됐다(로그인 화면으로 안 튕김).
+- 로그아웃하면 `https://sharenpo.cloud/admin/`으로 이동했다 — **D4가 고친 버그
+  (`session-guard.ts`의 `rejectSession()`이 admin basename이 아니라 사이트 루트로
+  하드 네비게이션하던 것)의 라이브 확인**이다. 지금까지 이 문서의 추가 기록들은 전부
+  로컬이나 백엔드 없는 컨테이너로만 확인했었다.
+
+전 단계에 걸친 콘솔 에러: `0`건 (위에서 말한 기준선 non-2xx `fetch` 로그 제외). 테스트
+계정과 그 파일·게시글은 확인 후 매번 삭제했다. 이번 확인을 위해 만든 두 건의 role
+변경(승격, 그리고 두 번째 계정의 `user → admin`)은 설계대로 `/admin/logs`에 영구히
+남아 있다(ADR 0013의 감사 로그는 append-only다).

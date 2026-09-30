@@ -1,6 +1,6 @@
 # ADR 0061: 우아한 종료 — `enableShutdownHooks()`와 PID 1로 뜬 Node
 
-- Status: Accepted — implemented, 로컬 Linux 컨테이너와 로컬 `kind` 클러스터에서 검증(EKS에서는 검증하지 않음); D3는 Addendum으로 뒤집힘
+- Status: Accepted — implemented, 로컬 Linux 컨테이너와 로컬 `kind` 클러스터, 그리고(2026-09-29) 라이브 EKS에서 검증; D3는 Addendum으로 뒤집힘
 - Date: 2026-09-21
 - Extends: [ADR 0030](0030-container-non-root-and-arch-stance.ko.md) — 이번 측정의 대상이 된 컨테이너 구성(non-root, `CMD ["node", "dist/main"]`). 그쪽은 바뀌는 것이 없다
 - English: [0061-shutdown-hooks-and-pid1-sigterm.md](0061-shutdown-hooks-and-pid1-sigterm.md)
@@ -200,3 +200,49 @@ ref된 타이머 결과를 `S3Client`가 실제로 쓰는 구체적인 핸들 �
 먼저 멈추는지는 둘 다 아직 확인하지 못했다. 이 ADR의 다른 측정에 쓴 `docker stop`의 유예/
 SIGKILL 방식에는 `preStop`에 대응하는 게 없어서, 이 두 시나리오는 `kind`에서만 돌려볼 수
 있었다.
+
+### Addendum (2026-09-29) — 라이브 EKS: 파드 종료 속도는 빠름을 확인, ALB 레이스는 두 번 재현 — `preStop` sleep을 제안만 하고 채택은 안 함
+
+라이브 클러스터에서 `kubectl rollout restart deployment/sharenpo`를 두 번 돌렸다(차트 `0.5.1`,
+레플리카 1개, `maxSurge: 25%`/`maxUnavailable: 25%` → surge 우선: 새 파드가 먼저 뜬 뒤에야 옛
+파드가 죽는다). 각 회차마다 세 가지 독립된 측정을 동시에 돌렸다 — 초당 1회
+`curl -s -o /dev/null -w '%{http_code}' https://sharenpo.cloud/file`(토큰 없음, `401` 예상,
+UTC 타임스탬프 기록), 백엔드 타깃 그룹(`k8s-default-sharenpo-60fc9d48fc`)을 약 3초마다 조회하는
+`aws elbv2 describe-target-health`, 그리고 끝난 뒤 읽은
+`kubectl get events --sort-by=.lastTimestamp`.
+
+**파드 종료 속도 — "1~2초" 미해결 항목, 이전엔 `kind`에서만 확인.** 두 회차 모두 옛 파드의
+`Killing`과 `SuccessfulDelete` 이벤트가 *같은 초*에 찍혔고(`2026-09-29T16:15:00Z`,
+`...T16:17:38Z`), 몇 초 뒤 돌린 `kubectl get pod <옛-이름>`은 이미 `NotFound`였다. Kubernetes
+이벤트는 초 단위까지만 찍히므로 `kind`의 `0.4초`라는 소수점 수치를 그대로 재현하진 못했지만,
+이 미해결 항목이 우려하던 실패 형태 — 기본 유예 30초 근처까지 `Terminating`에 머무는 파드 —
+는 확실히 아니었다. EKS도 `kind`와 마찬가지로 빠르다.
+
+**ALB 레이스 — 한 번이 아니라 재현됨.** 두 회차 모두 `401`이 아닌 응답이 정확히 하나씩
+나왔는데, 둘 다 curl `000`이었다(HTTP 응답 자체가 없음 — 거부되거나 리셋됨 — ALB나 앱이
+냈을 `502`/`503`/`504`가 아니다):
+
+| 회차 | `Killing` 이벤트(UTC) | curl `000`(UTC) | 타깃 헬스 전환 첫 관측 |
+|---|---|---|---|
+| 1 | `16:15:00` | `16:15:00.448` | `16:15:00.948`: 옛 타깃 `draining`/`DeregistrationInProgress`, 새 타깃 `initial`/`RegistrationInProgress` |
+| 2 | `16:17:38` | `16:17:39.281` | `16:17:41.321`: 옛 타깃 `draining`/`DeregistrationInProgress`(조회 간격 약 3.1초라 실제 전환은 더 일렀을 수 있음) |
+
+나머지 샘플은 전부 `401`로 깨끗했다(1회차 21개 중 19개, 2회차 10개 중 9개). 각 회차의 유일한
+실패는 `Killing`에서 약 1초 안, 그리고 타깃 헬스 API가 `draining`을 처음 보고하는 시점과
+같거나 그 직전에 몰려 있다 — 위 2026-09-22 추가 기록이 진짜 열려 있는 질문으로 남겨 둔
+메커니즘과 맞아떨어진다: 파드가 연결을 안 받기 시작하는 시점(SIGTERM → 앱 자신의 빠른 종료,
+D1/D3)이 ALB의 등록 해제 전파보다 먼저라서, 그 틈에 도착한 요청이 다른 곳으로 돌려지지 못하고
+거부된다는 것. 이건 surge 우선 경로에서 나온 결과다 — 새 파드는 옛 파드가 죽기 전에 이미
+`Running`이었으므로(회차마다 부팅 중 예상된 `Unhealthy` readiness probe 이벤트 1건 포함),
+틈은 "아직 타깃이 없어서"가 아니라 등록 해제 쪽에 있다.
+
+**개발자에게 제안만 함, 구현하지 않음.** 백엔드 컨테이너에 ALB 등록 해제 전파가 끝날 때까지
+파드가 계속 서비스하도록 붙잡아 두는 `preStop` sleep과, 그걸 넉넉히 덮도록 올린
+`terminationGracePeriodSeconds` — 2026-09-22 추가 기록이 이미 따로 떼어 검증해 둔 바로 그
+메커니즘이다(`preStop: sleep 5` + 유예 35초: pod-gone까지 5.7초, sleep이 끝날 때까지 SIGTERM
+보류). 이번 세션의 측정은 EKS에서 그 메커니즘이 덮어야 할 구간을 좁혀 준다 — 두 번의 실제
+실패 모두 `Killing`으로부터 대략 1~3초 안에 `draining`으로 전환됐으니, `kind`에서 이미
+검증된 것과 같은 `sleep 5`면 여기서도 이 틈을 막을 것으로 보인다 — 다만 샘플 두 개로는 꼬리
+분포까지 보장 못 하고, 차트에는 아직 두 설정 다 없다. 채택 여부는 개발자의 몫이고, 채택하려면
+`values-prod.yaml`/`values.yaml` 변경과 함께 같은 방식의 계측 롤아웃을 여러 번 다시 돌려
+`000`/`502`/`503`/`504`가 전부 0인 걸 확인해야 — 좁혀진 게 아니라 닫힌 항목이 된다.

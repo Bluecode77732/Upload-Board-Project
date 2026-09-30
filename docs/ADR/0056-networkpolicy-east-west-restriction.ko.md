@@ -323,3 +323,30 @@ Ingress가 켜져 있으면 VPC CIDR 규칙(D2 추가 기록)이 이미 Promethe
    Prometheus 파드에 `app.kubernetes.io/name=prometheus`가 보여야 한다. Calico와 AWS의 에이전트는 강제
    엔진이 서로 달라서(D2) 1번이 이 항목을 대신하지 못한다.
 3. 둘 다 통과하면 이 목록과 `k8s/helm/README.md`의 미해결 항목이 관찰 기록으로 바뀐다.
+
+### Addendum (2026-09-29) — 둘 다 확인: Ingress 켠 상태의 기준선, 그리고 Ingress 끈 상태
+
+세션이 라이브 Prometheus를 조회했다(`kubectl -n kube-prometheus-stack port-forward
+svc/kube-prometheus-stack-prometheus 9090:9090` 뒤 `GET /api/v1/targets`). 이때 `Ingress`는
+**켜져 있었다**(이번 세션 동안의 평상시 상태). `job=sharenpo` 타깃
+(`sharenpo-79556dbc48-6cnmm`, endpoint `http`, `http://10.0.10.34:3000/metrics`)은 `up`이었고,
+`sharenpo-frontend`나 `sharenpo-admin` job은 아예 나타나지 않았다 — `down`이 아니라 애초에
+없는 것인데, 둘 다 `ServiceMonitor`가 없기 때문이다(오직 백엔드만 `/metrics`를 노출함, ADR
+0047). `k8s/helm/README.md`의 "Rollout and scraping" 항목과 일치한다.
+
+**위 2번 항목(`Ingress`를 끈 상태의 스크레이프) — 이것도 확인됨.** `ingress.enabled`를
+토글하는 건 라이브 release에 대한 `helm upgrade`이고 그동안 공개 사이트가 도메인에서 잠깐
+안 되니, 토글 자체는 세션이 아니라 개발자가 돌렸다(`ingress.enabled=false`, 토글만 따로
+보려고 이미지 태그는 그대로 유지). `kubectl get ingress -A`가 아무것도 안 보이는 걸 확인한
+뒤 세션이 Prometheus를 다시 조회했다: `job=sharenpo`(그때는 `sharenpo-7b4d7c94df-gr2lr`,
+ADR 0061 추가 기록의 롤아웃 시험에 쓴 그 파드)는 `up`이었고 `lastError`는 비어 있었으며
+`lastScrape`도 몇 초 전이었다 — 2026-09-27 규칙 전에는 `down`/`context deadline exceeded`
+였던 것과 대비된다. `kubectl -n kube-prometheus-stack get pod ... --show-labels`로 실제
+Prometheus 파드에 `app.kubernetes.io/name=prometheus`가 있는 것도 확인했다 — 차트의 Service
+selector에서 추정만 한 게 아니라. 규칙이 설계대로 동작한다.
+
+`Ingress`를 다시 켜면서 이것과는 무관한 부작용이 하나 있었는데, 여기서는 지나가듯만
+적는다 — AWS Load Balancer Controller가 ALB를 지웠다가 다시 만들면서 apex DNS 레코드가
+고아가 됐다. 이건 NetworkPolicy가 아니라 DNS/ExternalDNS 쪽 문제라, 그 사고와 해결은 여기가
+아니라 [ADR 0063](0063-alb-dns-externaldns-and-delegation-set.ko.md)의 2026-09-29(나중)
+추가 기록에 적었다.
