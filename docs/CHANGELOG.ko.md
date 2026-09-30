@@ -13,6 +13,15 @@
 ## [Unreleased]
 
 ### 변경
+- **2026-09-30 라이브 확인 결과 기록 (2026-09-30, [ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md),
+  [0059](ADR/0059-upload-malware-scanning-clamav.ko.md), [0062](ADR/0062-admin-same-alb-subpath-routing.ko.md),
+  [0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md) 추가 기록)** — 문서 변경이며,
+  `values-prod.yaml`의 Ingress 인증서 ARN도 바꿨다. 재사용 위임 세트로 만든 두 번째 zone이 같은
+  네임서버를 받았다(ADR 0063 확인 5, 생성과 삭제는 개발자가 실행하고 세션은 zone 목록을 읽었다).
+  재배포한 스택에서 unlisted 첨부 수정(`1c845a3`)이 소유자에게 동작하고, 프론트가
+  `UPLOAD_MALWARE_DETECTED`에 전용 문구를 보여 주며(`5d268b2`), `frontend/` 플레이어의 seek이 S3에서
+  `206`으로 처리된다 — ADR 0036 D6의 미해결 항목이다. `admin/`에는 미디어 플레이어가 없어 그쪽은 확인할
+  대상이 없다. `k8s/helm/README.md`와 ROADMAP의 S3 행에도 같은 결과를 적었다.
 - **라이브 실행 문서를 바로잡고 보충 (2026-09-27, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md),
   [0060](ADR/0060-frontend-same-alb-path-routing.ko.md), [0057](ADR/0057-terraform-state-backend-s3-native-lock.ko.md)
   추가 기록)** — 문서만 바꿨다. 2026-09-26 기록은 `/admin/`의 `200`이 admin 규칙이 제대로 라우팅됐다는

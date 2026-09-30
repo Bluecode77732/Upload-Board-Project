@@ -355,3 +355,13 @@ merges with it — local `STORAGE_DRIVER=s3` testing against the real bucket nee
 origins re-added by hand after that apply, same script as before, if it's still wanted. This
 is recorded as a pending live check in `k8s/helm/README.md` ("Enabling HTTPS (Ingress)"), not
 verified here.
+
+### Addendum (2026-09-30) — D6's Range/seek item, checked in the `frontend/` player
+
+D6 left "Range-request behavior across the redirect" unverified. On the redeployed stack
+(`STORAGE_DRIVER=s3`) a seek in the `frontend/` post page's `<video>` sent `Range: bytes=1212416-`
+directly to the presigned S3 URL and got `206` with `Content-Range: bytes 1212416-3133225/3133226`;
+playback continued with no error, and the seek did not come back through the app. Only Chromium
+was used; a seek after the URL's TTL and audio were not tried. `admin/` has no media player, so
+there is no consumer there to verify. Details: [ADR 0059](0059-upload-malware-scanning-clamav.md)'s
+second 2026-09-30 addendum. D6's text above is left as written.

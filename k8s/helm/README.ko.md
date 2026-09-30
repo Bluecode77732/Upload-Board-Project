@@ -529,6 +529,12 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   그대로 그 리다이렉트를 따라가는 방식으로 로드됐다. 세 경우 모두 실제 테스트 이미지가
   렌더링됐고(`naturalWidth: 4`, 깨진 이미지 아님) 콘솔 에러는 없었다 — CSP 와일드카드가
   버킷의 실제 virtual-hosted-style 호스트를 정말로 매치한다(ADR 0036 addendum).
+  2026-09-30 관찰(재배포한 스택, 개발자가 배포하고 Playwright로 확인): 게시글에 첨부한 `unlisted`
+  비디오가 소유자에게 렌더링됐고, 콘텐츠 요청은 share 토큰을 달고 갔다(`302` → presigned S3 URL).
+  `frontend/` 플레이어에서 seek하면 `Range: bytes=1212416-`가 S3로 가서 `Content-Range`가 일치하는
+  `206`이 돌아왔다([ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.ko.md)의 2026-09-30
+  두 번째 추가 기록). `admin/`에는 미디어 플레이어가 없어 확인하지 않았다. 확인하지 못한 것: URL의
+  TTL 이후 seek, 다른 브라우저, 오디오.
 - 실제 클라이언트 IP가 rate limiter에 도달하는지(`trust proxy` = `10.0.0.0/16`, ADR 0054
   addendum): 한 클라이언트에서 1분 안에 `POST /auth/signin`을 여섯 번째로 호출하면 429가 나오고,
   다른 IP의 두 번째 클라이언트는 전혀 제한되지 않아야 한다. 모든 방문자가 하나의 버킷을

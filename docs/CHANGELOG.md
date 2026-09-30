@@ -13,6 +13,16 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Live checks of 2026-09-30 recorded (2026-09-30, [ADR 0036](ADR/0036-s3-presigned-content-redirect.md),
+  [0059](ADR/0059-upload-malware-scanning-clamav.md), [0062](ADR/0062-admin-same-alb-subpath-routing.md)
+  and [0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md) Addenda)** — documentation only, plus
+  the Ingress certificate ARN in `values-prod.yaml`. A second zone created with the reusable
+  delegation set got its name servers (ADR 0063 check 5; the developer ran the create and delete,
+  the session read the zone list). On the redeployed stack the unlisted-attachment fix (`1c845a3`)
+  works for the owner, the frontend shows its own message for `UPLOAD_MALWARE_DETECTED` (`5d268b2`),
+  and a seek in the `frontend/` player is served by S3 as `206` — ADR 0036 D6's open item. `admin/`
+  has no media player, so that half has nothing to check. `k8s/helm/README.md` and the ROADMAP S3 row
+  carry the same result.
 - **Live-run docs corrected and completed (2026-09-27, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md),
   [0060](ADR/0060-frontend-same-alb-path-routing.md) and [0057](ADR/0057-terraform-state-backend-s3-native-lock.md)
   Addenda)** — documentation only. The 2026-09-26 records said the `/admin/` `200` showed the admin
