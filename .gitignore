@@ -50,6 +50,18 @@ lerna-debug.log*
 # 업로드된 미디어 — file/temp, file/upload 아래의 런타임 산출물, 절대 커밋하지 않음
 /file/
 
+# 촬영·수동 검증용 샘플 미디어 — assets/files 아래에 개발자가 직접 둔 사진/음원/영상.
+# 용량이 크고 저작권이 불분명한 것이 섞일 수 있어 커밋하지 않는다. 이미 추적 중인
+# assets/files/sample.mp4는 ignore 규칙이 영향을 주지 않으므로 그대로 추적된다
+/assets/files/*.jpg
+/assets/files/*.jpeg
+/assets/files/*.png
+/assets/files/*.webp
+/assets/files/*.mp3
+/assets/files/*.mp4
+/assets/files/*.mov
+/assets/files/*.webm
+
 # 세션 로그 — .claude/hooks/log-session-start.js와 log-session-title.js가 매
 # SessionStart/UserPromptSubmit마다 로컬에서 자동으로 이어 붙인다; 개발자 머신마다
 # 늘어나고 계속 바뀌므로 로컬 전용이고, git으로 공유하지 않는다
