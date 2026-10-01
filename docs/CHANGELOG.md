@@ -20,8 +20,8 @@ development line (package.json version).
   so `react-router-dom` moved to the highest 7.x (it pins `react-router` to the same version).
   `pnpm audit --prod` now reports no known vulnerabilities for `frontend/`; lint, `tsc`, build and
   the stub-based e2e specs pass; no code changed. `admin/` was not touched — a read-only `pnpm
-  audit --prod` there lists several `axios` advisories (high and moderate) that this entry does
-  not address.
+  audit --prod` there lists 12 `axios` advisories (7 high, 5 moderate) that this entry does not
+  address; [ROADMAP.md](ROADMAP.md) §7 tracks them.
 - **Frontend: Noto Sans KR body and Hahmlet headings, for Hangul and Latin (2026-10-01,
   `f31cd1a`, [ADR 0060](ADR/0060-frontend-same-alb-path-routing.md) 2026-10-01 Addendum)** — the
   UI loaded no font files. Hangul fell to the OS (measured through CDP: on Windows headings drew in
@@ -43,7 +43,8 @@ development line (package.json version).
   `e2e/fonts.spec.ts` reads the platform font through CDP and fails on the old `index.css`. Not
   verified: the nginx image and a live ALB (the CSP check used a Node server that copies the
   header). `frontend/docs/STYLE-PLAN.md` item 3 records that 2026-09-07's "zero new dependency"
-  reason no longer holds for typography.
+  reason no longer holds for typography. Open: whether the build should carry the OFL-1.1 license
+  text (`frontend/docs/STYLE-PLAN.md` open question 7).
 - **Frontend: one `main` box and one 720px column on every authenticated screen (2026-10-01,
   `3eac5d2`)** — the header, `main` and forms differed in width per screen. Measured at 1280px,
   `main` was 768px on Post, 1124px on File, 768px on Setting, 395px on the Post detail and 524px on
@@ -56,7 +57,8 @@ development line (package.json version).
   `<section>`. The inline "Back to …" link becomes a block so it lines up with the column.
   `LoginPage`, a centered card, is left out on purpose. The 720px width for the card and filter
   panel, with the preview grid wide, was chosen from a comparison table in `ead3b90`. The
-  left-aligned `h1` on Post and File is a side effect. Verified: the same boxes at 1280/900/375px on all five screens,
+  left-aligned `h1` on Post and File is a side effect. Open: whether the File header should match
+  the grid's width (`frontend/docs/STYLE-PLAN.md` open question 6). Verified: the same boxes at 1280/900/375px on all five screens,
   and the new `e2e/layout.spec.ts` (desktop and phone, stubbed API, no account created) fails when
   File detail's CSS is put back. `frontend/CLAUDE.md` records the rule.
 - **Frontend: English/Korean toggle, singular nouns, "Date" label (2026-10-01, `ead3b90`)** — a

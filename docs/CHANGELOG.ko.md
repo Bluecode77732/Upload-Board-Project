@@ -19,8 +19,8 @@
   둘만 바꿨다. 이 앱은 RSC 모드를 쓰지 않지만 패치 버전이 있어, `react-router-dom`을 범위 안 최신 7.x로
   올렸다(`react-router`도 같은 버전으로 고정된다). 이제 `frontend/`의 `pnpm audit --prod`는 알려진
   취약점이 없다고 나오고, lint·`tsc`·build·스텁 기반 e2e가 통과하며 코드 변경은 없다. `admin/`은 건드리지
-  않았다 — 읽기 전용으로 돌린 `pnpm audit --prod`에서 `axios` 취약점(high·moderate)이 여러 건 보였고, 이
-  항목은 그것을 다루지 않는다.
+  않았다 — 읽기 전용으로 돌린 `pnpm audit --prod`에서 `axios` 취약점 12건(high 7, moderate 5)이 보였고,
+  이 항목은 그것을 다루지 않는다. [ROADMAP.ko.md](ROADMAP.ko.md) §7이 추적한다.
 - **프론트엔드: 본문 Noto Sans KR + 제목 Hahmlet, 한글과 영문 모두 (2026-10-01, `f31cd1a`,
   [ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md) 2026-10-01 추가 기록)** — UI는 직접 불러오는
   글꼴 파일이 없었다. 한글은 OS에 맡겨졌고(CDP로 측정: Windows에서 제목은 바탕체, 본문은 맑은 고딕),
@@ -39,7 +39,8 @@
   에러가 없다(Vite 변경 전에는 2건). 새 `e2e/fonts.spec.ts`는 CDP로 플랫폼 글꼴을 읽으며 예전
   `index.css`에서는 실패한다. 확인하지 못한 것: nginx 이미지와 라이브 ALB(CSP 확인은 헤더를 복사한 Node
   서버로 했다). `frontend/docs/STYLE-PLAN.md` 3번 항목에, 2026-09-07의 "신규 의존성 0건"이라는 이유가
-  타이포그래피에서는 더 이상 성립하지 않는다고 기록했다.
+  타이포그래피에서는 더 이상 성립하지 않는다고 기록했다. 미결정: 빌드에 OFL-1.1 라이선스 문구를 담을지
+  (`frontend/docs/STYLE-PLAN.md` 확인 필요 사항 7번).
 - **프론트엔드: 인증된 모든 화면이 하나의 `main` 박스와 720px 칼럼을 쓴다 (2026-10-01, `3eac5d2`)** —
   헤더·`main`·폼의 폭이 화면마다 달랐다. 1280px에서 측정하면 `main`은 Post 768px, File 1124px, Setting
   768px, Post 상세 395px, File 상세 524px였고, 내비 헤더는 720/1076/720/347/476px, `h1`은 두 화면에서
@@ -49,7 +50,8 @@
   자식은 하나의 720px 칼럼에 놓이고, File의 미리보기 그리드(`wide`)만 그보다 넓다 — 그래서 `FileBoard`는
   `<section>` 대신 프래그먼트를 돌려준다. 인라인인 "Back to …" 링크는 블록으로 바꿔 칼럼과 줄을 맞춘다.
   가운데 카드인 `LoginPage`는 일부러 뺐다. 카드와 필터 패널을 720px로, 미리보기 그리드는 넓게 두는 안은
-  `ead3b90`에서 비교표로 골랐다. Post·File의 `h1`이 왼쪽 정렬이 된 것은 부수 효과다. 검증: 다섯 화면 모두
+  `ead3b90`에서 비교표로 골랐다. Post·File의 `h1`이 왼쪽 정렬이 된 것은 부수 효과다. 미결정: File 헤더를
+  그리드 폭에 맞출지(`frontend/docs/STYLE-PLAN.md` 확인 필요 사항 6번). 검증: 다섯 화면 모두
   1280/900/375px에서 같은 박스이고, 새 `e2e/layout.spec.ts`(데스크톱·모바일, API 스텁, 계정 생성 없음)는
   File 상세의 CSS를 되돌리면 실패한다. 규칙은 `frontend/CLAUDE.md`에 적었다.
 - **프론트엔드: 한/영 전환, 단수 명사, "Date" 라벨 (2026-10-01, `ead3b90`)** — `NavBar`의 테마 토글

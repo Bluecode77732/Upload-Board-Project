@@ -1472,6 +1472,17 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   `-slim` 베이스 멀티스테이지 빌드로 dev 의존성을 정리한 상태다 — distroless는 이미
   검토 후 사유를 남기고 보류했다(ADR 0030). 코드 변경 없음. 실제 배포 트래픽이 생기거나
   실측된 문제(청크 크기 경고, 비대해진 배포 이미지)가 실제로 나타날 때만 재검토한다.
+  **2026-10-02 갱신:** 위 수치는 2026-09-16 기준이다. `frontend/`는 이제 production 패키지가
+  5개(글꼴 패키지 2개, [CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-01)이고 `dist`는 약 6.3MB이며,
+  거의 전부 브라우저가 페이지에 필요한 만큼만 요청하는 woff2 조각이다. 결론은 그대로다.
+- **`admin/` 의존성 취약점 — `axios`** — **2026-10-02 발견, 미해결.** `admin/`에서 읽기 전용으로 돌린
+  `pnpm audit --prod`가 전부 `axios`에 대한 12건(high 7, moderate 5)을 보고한다. 취약 범위는 모두 1.20.0
+  미만에서 끝나고 패치는 `>=1.20.0`이다. `axios`는 직접 production 의존성(`^1.15.2`, 설치 1.19.0)이라
+  `pnpm update axios`로 1.20.0에 닿는다. `frontend/`의 `react-router-dom`을 패치하다가
+  발견했고([CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-02) `admin/`은 건드리지 않았다. 확인하지 않은
+  것: 12건 중 브라우저 번들에 해당하는 것이 몇 건인지 — 제목 중 일부는 Node 전용 구성 요소(HTTP/2와 Node
+  HTTP 어댑터, 프록시 우회)를 가리킨다. `frontend/`의 패치가 선례다: 업데이트, `pnpm audit --prod`, 그다음
+  `admin/`의 lint·unit·e2e 잡. 다음 `admin/` 변경 때, 또는 개발자가 패치하기로 정할 때 다시 본다.
 
 ## 8. Advisory 노트
 

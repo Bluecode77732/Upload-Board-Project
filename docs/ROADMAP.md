@@ -1546,6 +1546,19 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   dependencies pruned — distroless was already weighed and deferred with a stated reason (ADR
   0030). No code changed. Revisit only once real deployment traffic, or a concrete measured
   problem (a chunk-size warning, a bloated pushed image), actually shows up.
+  **Update 2026-10-02:** the figures above are as of 2026-09-16. `frontend/` now has 5
+  production packages (two font packages, [CHANGELOG.md](CHANGELOG.md) 2026-10-01) and its
+  `dist` is about 6.3MB, almost all of it woff2 slices that a browser requests only as a page
+  needs them. The conclusion stands.
+- **`admin/` dependency advisories — `axios`** — **found 2026-10-02, open.** A read-only
+  `pnpm audit --prod` in `admin/` reports 12 advisories, all on `axios` (7 high, 5 moderate;
+  every vulnerable range ends below 1.20.0, patched `>=1.20.0`). `axios` is a direct production
+  dependency (`^1.15.2`, installed 1.19.0), so `pnpm update axios` would reach 1.20.0. Found
+  while patching `frontend/`'s `react-router-dom` ([CHANGELOG.md](CHANGELOG.md) 2026-10-02);
+  `admin/` was not touched. Not assessed: how many of the 12 apply to a browser bundle — several
+  titles name Node-only parts (the HTTP/2 and Node HTTP adapters, proxy bypass). The `frontend/`
+  patch is the pattern: update, `pnpm audit --prod`, then the `admin/` lint, unit and e2e jobs.
+  Revisit with the next `admin/` change, or whenever the developer decides to patch.
 
 ## 8. Advisory notes
 

@@ -221,6 +221,25 @@ because whoever touches these files for restyling will see them:
    `prefers-color-scheme` block for browsers that honor it in a favicon, a
    flat fallback for those that don't) since the browser tab can't see page
    CSS custom properties. `icons.svg` is deleted.
+6. **File screen: header width** (recorded 2026-10-02, open) — since `3eac5d2`
+   every authenticated screen puts the nav header and the heading in the same
+   720px column, and on File the preview grid below is 1076px wide, so the
+   header is narrower than the grid. Options: (a) leave it — one header on
+   every screen, which is the current state; (b) widen the header on File
+   only — the header then differs between screens; (c) widen the header on
+   every screen to the grid's 1076px, keeping the content in the 720px
+   column. `e2e/layout.spec.ts` asserts that the header box is identical on
+   every screen, so (b) and (c) mean changing that spec. Not decided.
+7. **Font license notice (OFL-1.1)** (recorded 2026-10-02, open) — `dist/`
+   holds `assets/` (woff2 and CSS), `favicon.svg` and `index.html`, with no
+   license text in it. OFL-1.1 asks that copies of the font software carry
+   the copyright notice and the license, as a text file, a header, or
+   metadata inside the font file. Both packages carry a `LICENSE` under
+   `node_modules/@fontsource-variable/*`; whether the subsetted woff2 files
+   keep it in their metadata was not checked. Options: (a) leave it; (b)
+   check the woff2 metadata first, then decide; (c) add a notice file served
+   from `public/` (not under an API prefix, see `frontend/CLAUDE.md`). Not
+   decided; this is a project decision, not legal advice.
 
 ## Ready-to-paste prompts
 
