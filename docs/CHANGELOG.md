@@ -71,8 +71,9 @@ development line (package.json version).
   `<section>`. The inline "Back to …" link becomes a block so it lines up with the column.
   `LoginPage`, a centered card, is left out on purpose. The 720px width for the card and filter
   panel, with the preview grid wide, was chosen from a comparison table in `ead3b90`. The
-  left-aligned `h1` on Post and File is a side effect. Open: whether the File header should match
-  the grid's width (`frontend/docs/STYLE-PLAN.md` open question 6). Verified: the same boxes at 1280/900/375px on all five screens,
+  left-aligned `h1` on Post and File is a side effect. Decided 2026-10-02: the File header stays in
+  the 720px column (`frontend/docs/STYLE-PLAN.md` open question 6) — widening it would make the
+  nav links jump 178px between Post and File, or put them left of the content on every screen. Verified: the same boxes at 1280/900/375px on all five screens,
   and the new `e2e/layout.spec.ts` (desktop and phone, stubbed API, no account created) fails when
   File detail's CSS is put back. `frontend/CLAUDE.md` records the rule.
 - **Frontend: English/Korean toggle, singular nouns, "Date" label (2026-10-01, `ead3b90`)** — a

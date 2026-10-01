@@ -221,15 +221,20 @@ because whoever touches these files for restyling will see them:
    `prefers-color-scheme` block for browsers that honor it in a favicon, a
    flat fallback for those that don't) since the browser tab can't see page
    CSS custom properties. `icons.svg` is deleted.
-6. **File screen: header width** (recorded 2026-10-02, open) — since `3eac5d2`
-   every authenticated screen puts the nav header and the heading in the same
-   720px column, and on File the preview grid below is 1076px wide, so the
-   header is narrower than the grid. Options: (a) leave it — one header on
-   every screen, which is the current state; (b) widen the header on File
-   only — the header then differs between screens; (c) widen the header on
-   every screen to the grid's 1076px, keeping the content in the 720px
-   column. `e2e/layout.spec.ts` asserts that the header box is identical on
-   every screen, so (b) and (c) mean changing that spec. Not decided.
+6. ~~**File screen: header width**~~ (recorded 2026-10-02) — **decided
+   2026-10-02: option (a), keep the current layout.** Since `3eac5d2` every
+   authenticated screen puts the nav header and the heading in the same 720px
+   column, and on File the preview grid below is 1076px wide, so the header is
+   narrower than the grid. The three options were rendered against the real
+   app side by side (boxes measured at 1280px): (a) leave it — the nav links
+   sit at x=280 on every screen, in line with the title and cards; (b) widen
+   the header on File only — the nav links jump from x=280 to x=102 (178px)
+   when moving between Post and File; (c) widen the header on every screen —
+   no jump, but the nav links sit at x=102, left of the title and cards, on
+   every screen, and the header is wider than the content on four of the five
+   screens. (b) and (c) would also have meant changing `e2e/layout.spec.ts`,
+   which asserts one header box on every screen. (a) keeps both. Revisit if
+   the File grid's width ever changes.
 7. ~~**Font license notice (OFL-1.1)**~~ (recorded 2026-10-02) — **checked and
    decided 2026-10-02: no notice file.** `dist/` holds `assets/` (woff2 and
    CSS), `favicon.svg` and `index.html`, with no license text in it, so the
