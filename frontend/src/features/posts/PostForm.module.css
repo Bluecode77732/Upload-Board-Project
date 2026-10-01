@@ -1,8 +1,13 @@
+/* UploadForm/SettingsPage의 카드와 같은 규격이다(box-sizing·max-width·margin auto) — 세 화면의
+   폼이 같은 폭과 같은 가로 위치에 놓이게 한다. */
 .form {
   display: grid;
   gap: 14px;
-  margin: 16px 0;
+  box-sizing: border-box;
+  max-width: 720px;
+  margin: 16px auto;
   padding: 20px;
+  text-align: left;
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -73,4 +78,10 @@
 .submit:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+@media (max-width: 640px) {
+  .form {
+    padding: 16px;
+  }
 }

@@ -10,6 +10,10 @@ import { ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import styles from './LoginPage.module.css'
 
+// 목적: 로그인/가입 실패 응답을 화면에 보여줄 한 줄 문구로 바꾼다.
+// 이유: 비밀번호가 약해 가입이 거절돼도 AUTH_WEAK_PASSWORD가 default로 떨어져 "Something went wrong"만
+//       보였고, 분당 5회 제한(RATE_LIMITED)에 걸려도 똑같았다 — 사용자는 무엇을 고쳐야 하는지 알 수 없었다.
+// 방법: ApiError의 고정 code로 switch(message는 파싱하지 않는다). 두 코드에 서버 규칙·상황과 맞는 문구를 달았다.
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
     // 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
@@ -18,6 +22,10 @@ function messageForError(error: unknown): string {
         return 'Incorrect email or password.'
       case ErrorCode.AUTH_EMAIL_TAKEN:
         return 'That email is already registered — try signing in.'
+      case ErrorCode.AUTH_WEAK_PASSWORD:
+        return 'Password must be at least 10 characters and include lowercase, uppercase, a digit, and a symbol.'
+      case ErrorCode.RATE_LIMITED:
+        return 'Too many attempts. Please wait a minute and try again.'
       case ErrorCode.VALIDATION_FAILED:
         return 'Please enter a valid email and password.'
       default:

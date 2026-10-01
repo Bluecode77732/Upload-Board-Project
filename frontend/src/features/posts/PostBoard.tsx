@@ -16,6 +16,9 @@ import styles from './PostBoard.module.css'
 
 const TAKE = 20
 
+// 서버에 보내는 sortBy 값은 그대로 두고 화면 라벨만 바꾼다 — createdAt은 사용자에게 "Date"로 보인다.
+const SORT_FIELD_LABELS: Partial<Record<PostSortField, string>> = { createdAt: 'Date' }
+
 // 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -113,7 +116,7 @@ export function PostBoard() {
             <select className={styles.select} value={sortBy} onChange={(e) => setSortBy(e.target.value as PostSortField)}>
               {POST_SORT_FIELDS.map((field) => (
                 <option key={field} value={field}>
-                  {field}
+                  {SORT_FIELD_LABELS[field] ?? field}
                 </option>
               ))}
             </select>

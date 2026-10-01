@@ -69,10 +69,18 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
   // replay된 청구(200)와 신규 승격(201, ADR 0019)을 구분한다 — 다음 제출 시 초기화해
   // 오래된 안내 문구가 그 업로드가 끝난 뒤까지 남아있지 않게 한다.
   const [notice, setNotice] = useState<string | null>(null)
+  // 파일 입력은 uncontrolled라 setFile(null)만으로는 브라우저가 들고 있는 선택이 비워지지 않는다 —
+  // 이 값을 올려 입력 요소를 새로 마운트시키면 화면에 보이는 파일명과 state가 함께 초기화된다.
+  const [fileInputKey, setFileInputKey] = useState(0)
 
+  // 목적: 업로드 타입(image/audio/video)을 바꾸고, 앞서 고른 파일을 입력창과 state 양쪽에서 비운다.
+  // 이유: 입력창이 이전 파일명을 계속 보여주는데 state는 null이라, 같은 파일을 다시 고르면 change
+  //       이벤트가 오지 않고 "Please choose a … file"이 떠서 Choose File이 먹통처럼 보였다.
+  // 방법: setFile(null)에 더해 fileInputKey를 올려 입력 요소를 remount한다.
   function onFieldTypeChange(next: UploadFieldType) {
     setFieldType(next)
     setFile(null) // 한 타입에서 고른 파일은 다른 타입의 허용목록에서는 유효하지 않다
+    setFileInputKey((k) => k + 1)
   }
 
   // 목적: 두 단계 업로드(attach→promote)를 수행하고, promote 응답이 신규(201)인지 이미 청구된
@@ -81,7 +89,8 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
   //       status를 읽는다. 409 FILE_ALREADY_CLAIMED(다른 사람이 이미 청구)는 이 얘기와 다르며
   //       messageForError가 이미 처리한다.
   // 방법: attach는 그대로 두고, promote만 api.postWithStatus로 바꿔 status===200이면 replay 문구,
-  //       201이면 기존 성공 흐름(별도 안내 없음).
+  //       201이면 기존 성공 흐름(별도 안내 없음). 성공하면 fileInputKey를 올려 입력창도 비운다 —
+  //       실패했을 때는 파일을 그대로 둬서 같은 파일로 바로 재시도할 수 있다.
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
@@ -112,6 +121,7 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
 
       setTitle('')
       setFile(null)
+      setFileInputKey((k) => k + 1)
       onUploaded()
     } catch (err) {
       setError(messageForError(err, fieldType))
@@ -146,6 +156,7 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
       <label className={styles.field}>
         {FIELD_CONFIG[fieldType].label} file ({FIELD_CONFIG[fieldType].hint} · max 100 MB)
         <input
+          key={fileInputKey}
           type="file"
           className={styles.fileInput}
           accept={FIELD_CONFIG[fieldType].accept}

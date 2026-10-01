@@ -1,7 +1,13 @@
+/* #root가 flex column이라 `margin: auto`만 쓰면 페이지가 내용물 폭에 맞춰 줄어든다 — Posts/Files/
+   Settings의 폼 폭과 위치가 제각각이던 원인이다. width: 100%로 폭을 고정한다. 768px는 폼 카드
+   720px에 좌우 padding 24px씩을 더한 값이다. 아래 padding은 목록 끝이 화면 하단에 붙지 않게
+   스크롤 여유를 둔 것이다. */
 .page {
-  max-width: 720px;
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 768px;
   margin: 5vh auto;
-  padding: 24px;
+  padding: 24px 24px 80px;
 }
 
 .board {
@@ -178,7 +184,7 @@
 @media (max-width: 640px) {
   .page {
     margin: 2vh auto;
-    padding: 16px;
+    padding: 16px 16px 80px;
   }
 
   .filters {

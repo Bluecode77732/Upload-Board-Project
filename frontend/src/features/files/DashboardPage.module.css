@@ -1,7 +1,11 @@
 /* FileBoard의 3열 미리보기가 쓸 만한 프레임 크기를 확보하도록 720px에서 넓혔다 —
    720px에서는 16:9 프레임 하나가 겨우 ~227px였다. 1126px는 #root 자체 너비(index.css)와
    맞춘 값이라, 새 바깥 너비를 도입하는 대신 이미 차지하고 있는 컬럼 전체를 쓰게 된다. */
+/* width: 100%가 없으면 flex column인 #root 안에서 `margin: auto`가 페이지 폭을 내용물에 맞춰
+   줄인다 — 화면마다 폼 위치/폭이 달라지던 원인(PostBoard.module.css의 같은 주석 참고). */
 .page {
+  width: 100%;
+  box-sizing: border-box;
   max-width: 1126px;
   margin: 5vh auto;
   padding: 24px;
