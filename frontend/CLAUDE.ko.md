@@ -134,6 +134,21 @@
   "Post", "File"이라는 한 단어라서 "New post", "Upload a file", 그리고 그 단어가 들어간 모든
   게시글·파일 제목에도 부분 일치한다.
 
+### UI만 검증하는 spec은 API를 스텁한다 (`frontend/e2e/`)
+
+`layout`, `language`, `fonts`는 백엔드가 하는 일이 아니라 UI가 어떻게 보이고 동작하는지를 검증한다.
+이 spec들은 `registerAndSignIn` 대신 `stubAuthenticatedApi(page)`(`e2e/helpers.ts`)를 호출한다: silent
+refresh에는 서명 없는 토큰을 돌려주고(클라이언트는 `sub`만 읽는다) 목록·상세·댓글·콘텐츠 요청에는 고정
+데이터를 돌려준다. 공유 dev DB에 계정이 생기지 않고, 분당 5회 인증 제한(backend ADR 0054)도 쓰지
+않으며, 백엔드가 떠 있지 않아도 된다(dev 서버는 여전히 필요하다).
+
+- **스텁 경로는 모두 경로 끝까지 고정한 정규식으로 쓴다**(헬퍼처럼 `/\/post(\?.*)?$/`). 클라이언트
+  라우트 `/posts/:id`, `/files`는 API의 `/post`, `/file`과 접두사를 공유하므로 `/\/post/` 같은 느슨한
+  패턴은 페이지 이동 요청까지 잡아 JSON으로 응답해 버린다.
+- **스텁은 백엔드 계약에 대해 아무것도 말해 주지 않는다.** 실제 응답에 기대는 spec(`auth`, `upload`,
+  `board`, `detail`, `posts`, `navigation`)은 계속 실제 계정을 쓴다. `auth.spec.ts`의 429 테스트는 필요한
+  응답 하나만 스텁하고, 약한 비밀번호 테스트는 실제 백엔드를 호출한다.
+
 ## 명령어
 
 ```bash
@@ -143,7 +158,8 @@ pnpm lint     # oxlint
 pnpm preview  # serve the production build
 ```
 
-dev 서버가 API 호출을 성공시키려면 백엔드가 `:3000`에서 실행 중이어야 한다.
+dev 서버가 API 호출을 성공시키려면 백엔드가 `:3000`에서 실행 중이어야 한다(「UI만 검증하는 spec은 API를
+스텁한다」의 스텁 기반 spec은 예외다).
 
 ### 운영 이미지 (ADR 0060)
 

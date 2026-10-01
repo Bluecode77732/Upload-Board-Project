@@ -26,7 +26,8 @@ REST API를 HTTP로 소비한다. 이 앱에는 `/admin` 라우트가 **없다**
   확인한다; `language` 스펙은 NavBar의 한/영 토글, 새로고침 후 유지, 그리고 테마
   토글 옆에서의 크기와 위치를 검증하고, `layout` 스펙은 인증된 모든 화면이 하나의 `main`
   박스와 720px 칼럼을 쓰는지 검증하며, `fonts` 스펙은 제목과 본문이 조용한 시스템 글꼴
-  폴백이 아니라 Hahmlet·Noto Sans KR 웹 폰트로 실제 그려지는지 검증한다)
+  폴백이 아니라 Hahmlet·Noto Sans KR 웹 폰트로 실제 그려지는지 검증한다; 이 세 스펙은 API를 스텁해서
+  계정을 만들지 않고 백엔드도 필요 없다 — `frontend/CLAUDE.md` 참고)
 - 순수 `fetch` 래퍼(`src/api/client.ts`) — 데이터 페칭/상태 관리 라이브러리는 아직 없음
   (같은 파일에 업로드 진행률 보고용 `XMLHttpRequest` 경로도 함께 있다 —
   `fetch`는 업로드 진행률 이벤트를 제공하지 않기 때문)

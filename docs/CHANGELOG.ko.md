@@ -13,6 +13,18 @@
 ## [Unreleased]
 
 ### 변경
+- **문서: 2026-10-01/02 프론트엔드 세션의 기록 (2026-10-02)** — 문서만 바꿨고, `frontend/nginx.conf`에
+  주석 한 블록을 더했다(`94c8373`, CSP 값은 그대로다). 아래 항목들이 이미 가리키는 것 외에:
+  `frontend/docs/STYLE-PLAN.md`가 "한글/영어 UI 텍스트 혼용" 항목과 확인 필요 사항 2번, 6번(File 헤더는
+  720px 칼럼에 둔다), 7번(라이선스 고지 파일은 두지 않는다)을 닫았다. [ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md)에는
+  CSP 아래의 글꼴에 대한 2026-10-01 추가 기록이 생겼고, 한국어판에서 번역되지 않았던 첫 Addendum 제목을
+  고쳤다. ROADMAP §7에는 `admin/` axios 항목(패치함)과 `.ko.md` 한국어 점검 항목이 생겼고, 2026-09-07
+  서체 행에는 "변경" 문장을 덧붙였으며(여전히 "시스템 세리프, 신규 의존성 0건"이라고 적혀 있었다),
+  2026-09-16 크기 행에는 새 수치(`frontend/` production 패키지 5개, `dist` 약 6.3MB)를 적었다. CLAUDE.md >
+  Known Gaps에는 파일 전체를 다시 읽지 않고 수정한 `.ko.md` 네 개를 올렸고, `frontend/CLAUDE.md`에는 UI
+  문구, 페이지 셸, 글꼴, 스텁 기반 e2e 규칙이 들어갔으며, nginx 주석은 글꼴을 자체 호스팅해야 하는 이유와
+  Vite가 `.woff2`를 인라인하면 안 되는 이유를 적는다. 하지 않은 것: `CHANGELOG.ko.md`, `ROADMAP.ko.md`,
+  `frontend/CLAUDE.ko.md`, `frontend/README.ko.md`의 한국어 점검([ROADMAP.ko.md](ROADMAP.ko.md) §7).
 - **`admin/`: axios 1.19.0 → 1.20.0 (2026-10-02, `40d6227`)** — 아래 `frontend/` 항목에서 말한, 읽기
   전용으로 돌린 `pnpm audit --prod`가 1.20.0 미만 `axios`에 대한 12건(high 7, moderate 5)을 보고했다.
   취약점 요약을 `admin/` 코드(`axios.create` 인스턴스 하나, 브라우저의 XHR 어댑터, `FormData`·`proxy`·

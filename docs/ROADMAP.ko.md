@@ -817,6 +817,9 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   **2026-09-08 별도 작업으로 해결** —
   [frontend/docs/STYLE-PLAN.ko.md](../frontend/docs/STYLE-PLAN.ko.md) > 4번 항목 참고.
   전체 결정 경위: [frontend/docs/STYLE-PLAN.ko.md](../frontend/docs/STYLE-PLAN.ko.md) > 3번 항목.
+  **2026-10-01 변경:** 글꼴이 한글·영문 모두 Noto Sans KR(`--sans`)과 Hahmlet(`--heading`)으로
+  바뀌었다 — 자체 호스팅 의존성 2개라 위의 "신규 의존성 0건"이라는 이유는 더 이상 성립하지 않는다
+  ([CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-01, STYLE-PLAN 3번 항목 아래의 보완 기록).
 - ~~`admin/`의 작은 화면 전용 레이아웃~~ (2026-08-24 기록) — **2026-09-08 결정: 가로 스크롤
   유지, 카드 전환은 하지 않음.** 이 콘솔은 배포 대상이 없고 데스크톱에서 운영되므로 노출이
   사실상 없다. 비교표(컬럼 숨기기 vs. 카드 전환 vs. 현행 유지)로 트레이드오프를 그대로

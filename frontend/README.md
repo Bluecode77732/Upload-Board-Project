@@ -27,7 +27,8 @@ instead (backend ROADMAP.md > Stage 5).
   its persistence across a reload, and its size and position next to the theme toggle;
   `layout` checks that every authenticated screen shares one `main` box and one 720px column;
   `fonts` checks that headings and body text are really drawn with the Hahmlet and Noto Sans
-  KR web fonts rather than a silent system fallback)
+  KR web fonts rather than a silent system fallback; those three stub the API, so they create no
+  account and need no backend — see `frontend/CLAUDE.md`)
 - Plain `fetch` wrapper (`src/api/client.ts`) — no data-fetching or state library yet
   (plus an `XMLHttpRequest` path in the same file for upload-progress reporting,
   since `fetch` exposes no upload-progress event)

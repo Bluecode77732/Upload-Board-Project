@@ -133,6 +133,23 @@ that will resurface in any new spec unless avoided up front:
   links and headings are now the single words "Post" and "File", which also substring-match
   "New post", "Upload a file" and any post or file title containing them.
 
+### UI-only specs stub the API (`frontend/e2e/`)
+
+`layout`, `language` and `fonts` check how the UI looks and behaves, not what the backend does.
+They call `stubAuthenticatedApi(page)` (`e2e/helpers.ts`) instead of `registerAndSignIn`: it answers
+the silent refresh with an unsigned token (the client only reads `sub`) and returns fixed data for
+the list, detail, comment and content requests. No account is created in the shared dev DB, none of
+the 5/minute auth limit (backend ADR 0054) is spent, and the backend does not have to be running
+(the dev server still does).
+
+- **Anchor every stub route as a regex that ends at the path** (`/\/post(\?.*)?$/`, as the helper
+  does). The client routes `/posts/:id` and `/files` share a prefix with the API's `/post` and
+  `/file`, so a loose pattern such as `/\/post/` also matches the page navigations and would answer
+  them with JSON.
+- **A stub says nothing about the backend contract.** Specs that depend on real responses (`auth`,
+  `upload`, `board`, `detail`, `posts`, `navigation`) keep using real accounts. `auth.spec.ts`'s 429
+  test stubs only the one response it needs, and its weak-password test hits the real backend.
+
 ## Commands
 
 ```bash
@@ -142,7 +159,8 @@ pnpm lint     # oxlint
 pnpm preview  # serve the production build
 ```
 
-The dev server needs the backend running on `:3000` for API calls to succeed.
+The dev server needs the backend running on `:3000` for API calls to succeed (the stub-based specs
+under "UI-only specs stub the API" are the exception).
 
 ### Production image (ADR 0060)
 

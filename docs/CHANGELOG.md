@@ -13,6 +13,20 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Docs: records for the 2026-10-01/02 frontend session (2026-10-02)** — documentation only, plus one
+  comment block in `frontend/nginx.conf` (`94c8373`; the CSP value is unchanged). Beyond what the
+  entries below already cite: `frontend/docs/STYLE-PLAN.md` closes its "Korean/English UI-text split"
+  item and open questions 2, 6 (the File header stays in the 720px column) and 7 (no license notice
+  file); [ADR 0060](ADR/0060-frontend-same-alb-path-routing.md) gained a 2026-10-01 Addendum on fonts
+  under the CSP, and its Korean sibling's untranslated first Addendum heading was fixed; ROADMAP §7
+  gained the `admin/` axios row (patched) and the `.ko.md` fluency row, its 2026-09-07 typeface row got
+  an "Amended" note (it still read "system serif, zero new dependency"), and its 2026-09-16 size row got
+  the new figures (`frontend/` now has 5 production packages and a `dist` of about 6.3MB); CLAUDE.md >
+  Known Gaps lists the four `.ko.md` files edited without a whole-file re-read; `frontend/CLAUDE.md`
+  gained the UI-text, page-shell, font and stub-based e2e rules; and the nginx comment says why fonts
+  must be self-hosted and why Vite must not inline `.woff2`. Not done: the Korean fluency pass over
+  `CHANGELOG.ko.md`, `ROADMAP.ko.md`, `frontend/CLAUDE.ko.md` and `frontend/README.ko.md`
+  ([ROADMAP.md](ROADMAP.md) §7).
 - **`admin/`: axios 1.19.0 → 1.20.0 (2026-10-02, `40d6227`)** — the read-only `pnpm audit --prod`
   noted in the `frontend/` entry below reported 12 advisories on `axios` below 1.20.0 (7 high, 5
   moderate). Reading the advisory summaries against `admin/`'s code (one `axios.create` instance,

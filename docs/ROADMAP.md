@@ -859,6 +859,9 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   at the time. **Resolved 2026-09-08** as its own pass — see
   [frontend/docs/STYLE-PLAN.md](../frontend/docs/STYLE-PLAN.md) > item 4.
   Full decision trail: [frontend/docs/STYLE-PLAN.md](../frontend/docs/STYLE-PLAN.md) > item 3.
+  **Amended 2026-10-01:** the fonts became Noto Sans KR (`--sans`) and Hahmlet (`--heading`), for
+  Hangul and Latin alike — two self-hosted dependencies, so the "zero new dependency" reason above
+  no longer holds ([CHANGELOG.md](CHANGELOG.md) 2026-10-01, and the amendment under STYLE-PLAN item 3).
 - ~~A small-screen layout for `admin/`~~ (recorded 2026-08-24) — **decided 2026-09-08: keep
   horizontal scroll, don't build cards.** The console has no deploy target and is operated on
   a desktop, so exposure is nil; a comparison table (column-hiding vs. card conversion vs.
