@@ -136,8 +136,10 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
   const filtersActive =
     search !== '' || sortBy !== 'createdAt' || order !== 'DESC' || creatorIdInput !== ''
 
+  // 래퍼 없이 프래그먼트로 돌려준다 — 필터·안내 문구·푸터는 main의 720px 칼럼에, 그리드만 칼럼보다 넓게
+  // 놓이려면 이 요소들이 main(src/shared/page.module.css)의 직계 자식이어야 하기 때문이다.
   return (
-    <section className={styles.board}>
+    <>
       <div className={styles.filters}>
         <label className={`${styles.field} ${styles.searchField}`}>
           {t('common.search')}
@@ -241,6 +243,6 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
           )}
         </div>
       )}
-    </section>
+    </>
   )
 }

@@ -22,7 +22,8 @@ REST API를 HTTP로 소비한다. 이 앱에는 `/admin` 라우트가 **없다**
   그리고 그 결과로 보드 행/상세 링크가 반영되는지를 검증하며, `PostDetailPage`가
   더 이상 자리표시자가 아니게 되면서 게시글 자신의 title/body에 도착하는지까지
   확인한다; `language` 스펙은 NavBar의 한/영 토글, 새로고침 후 유지, 그리고 테마
-  토글 옆에서의 크기와 위치를 검증한다)
+  토글 옆에서의 크기와 위치를 검증하고, `layout` 스펙은 인증된 모든 화면이 하나의 `main`
+  박스와 720px 칼럼을 쓰는지 검증한다)
 - 순수 `fetch` 래퍼(`src/api/client.ts`) — 데이터 페칭/상태 관리 라이브러리는 아직 없음
   (같은 파일에 업로드 진행률 보고용 `XMLHttpRequest` 경로도 함께 있다 —
   `fetch`는 업로드 진행률 이벤트를 제공하지 않기 때문)
@@ -56,7 +57,8 @@ src/
 │                 (영어 사전 + 같은 키를 쓰는 Record인 `ko` — 번역이 빠지면 `tsc`가
 │                 실패한다). 서버가 보낸 메시지 문구는 받은 그대로 표시한다
 ├── shared/       NavBar — 인증된 모든 화면에 표시되는 Post/File/Setting 링크,
-│                 언어·테마 토글, 로그아웃 헤더
+│                 언어·테마 토글, 로그아웃 헤더; page.module.css — 인증된 모든 화면이
+│                 composes하는 하나의 `<main>` 박스(와 720px 칼럼)
 └── features/
     ├── auth/     LoginPage (Basic 로그인/회원가입)
     ├── posts/    PostBoard (보호됨, "/" — 앱의 홈: PostForm + 게시글 목록 —

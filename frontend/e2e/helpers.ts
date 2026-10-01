@@ -31,6 +31,40 @@ export function uniqueTitle(prefix: string): string {
 
 export const TEST_PASSWORD = 'TestPass!234'
 
+// 목적: 계정 없이 인증된 화면(Post/File/Setting 목록과 두 상세)을 렌더할 수 있게 API를 스텁한다.
+// 이유: 레이아웃·언어 토글처럼 UI만 검증하는 spec이 공유 dev DB에 e2e 계정을 늘리거나 분당 5회 제한
+//       (backend ADR 0054)을 소진하지 않게 하려는 것이다.
+// 방법: silent refresh가 서명 없는 토큰(클라이언트는 sub 클레임만 읽는다, authStore.ts)을 받게 하고,
+//       목록·상세·댓글·콘텐츠 요청에 고정 데이터를 돌려준다. 파일은 public이라 콘텐츠 blob fetch를 타지 않는다.
+export async function stubAuthenticatedApi(page: Page): Promise<void> {
+  const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url')
+  const accessToken = `${encode({ alg: 'none' })}.${encode({ sub: 1, type: 'access', role: 'user' })}.sig`
+  const now = new Date().toISOString()
+  const creator = { id: 1, email: 'stub@example.com' }
+  const file = {
+    id: 1,
+    title: 'Stub file',
+    fileUrl: '/file/1/content',
+    visibility: 'public',
+    mediaType: 'image',
+    creator,
+    createdAt: now,
+    updatedAt: now,
+  }
+  const post = { id: 1, title: 'Stub post', body: 'Stub body.', creator, file, createdAt: now, updatedAt: now }
+  const comment = { id: 1, body: 'Stub comment.', creator, postId: 1, createdAt: now, updatedAt: now }
+
+  await page.route(/\/auth\/token\/refresh$/, (route) => route.fulfill({ json: { accessToken } }))
+  await page.route(/\/post(\?.*)?$/, (route) => route.fulfill({ json: [[post], 1] }))
+  await page.route(/\/post\/1$/, (route) => route.fulfill({ json: post }))
+  await page.route(/\/post\/1\/comment(\?.*)?$/, (route) => route.fulfill({ json: [[comment], 1] }))
+  await page.route(/\/file(\?.*)?$/, (route) => route.fulfill({ json: [[file], 1] }))
+  await page.route(/\/file\/1$/, (route) => route.fulfill({ json: file }))
+  await page.route(/\/file\/\d+\/content/, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('x') }),
+  )
+}
+
 // LoginPage의 register-후-signIn 흐름(제출 한 번이 둘 다 처리한다)을 구동하고 인증된
 // 홈(PostBoard, "/")으로의 리다이렉트를 기다린다. 페이지별 heading이 아니라 NavBar의
 // Sign out 버튼으로 단언한다 — PostBoard 자체 콘텐츠는 여전히 플레이스홀더고(App.tsx),

@@ -1,12 +1,6 @@
-/* width: 100%가 없으면 flex column인 #root 안에서 `margin: auto`가 페이지 폭을 내용물에 맞춰
-   줄인다 — 화면마다 폼 위치/폭이 달라지던 원인(PostBoard.module.css의 같은 주석 참고). */
+/* 모든 인증 화면이 같은 main 규격을 쓴다(src/shared/page.module.css). */
 .page {
-  width: 100%;
-  box-sizing: border-box;
-  max-width: 768px;
-  margin: 5vh auto;
-  padding: 24px;
-  text-align: left;
+  composes: page from '../../shared/page.module.css';
 }
 
 /* Posts의 New post, Files의 Upload 폼과 같은 카드 규격(폭·margin·padding·배경·그림자·간격)이다.
@@ -80,11 +74,6 @@
 }
 
 @media (max-width: 640px) {
-  .page {
-    margin: 2vh auto;
-    padding: 16px;
-  }
-
   .danger {
     padding: 16px;
   }

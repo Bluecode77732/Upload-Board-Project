@@ -83,6 +83,13 @@
   렌더 시점에 `t()`를 부른다 — 그래서 에러가 이미 떠 있는 상태에서 언어를 바꿔도 새 언어로 다시
   그려진다. URL 경로 `/posts/:id`와 `/files`는 일부러 복수형으로 둔다(`/post`, `/file`은 API
   prefix다 — Production image 참고).
+- **페이지 셸**: 인증된 모든 화면의 `<main>`은 박스를 `src/shared/page.module.css`에서 받는다
+  (`.page { composes: page from '../../shared/page.module.css' }`) — 자기만의 폭, margin, padding을
+  두지 않는다. `main`의 직계 자식(내비 헤더, 제목, 카드, 목록)은 모두 같은 720px 칼럼에 놓이고, 같은
+  파일의 `wide`를 composes한 요소(File의 미리보기 그리드)만 그보다 넓다. 그 요소는 `main`의 직계
+  자식이어야 한다(그래서 `FileBoard`가 프래그먼트를 돌려준다). flex column인 `#root` 안에서 화면이
+  자기 `margin: auto`를 쓰면 폭이 내용물에 맞춰 줄어드는데, 이것이 헤더·main·폼이 화면마다 달랐던
+  원인이다. `LoginPage`는 의도적인 유일한 예외다(가운데 카드). `e2e/layout.spec.ts`가 이를 지킨다.
 - **파일 헤더 주석**(새 파일에만): imports 위에 세 줄 — 목적(Purpose) /
   사용처(Usage) / 근거(Rationale) — 기존 파일과 동일한 형식으로.
   (2026-09-09에 영어 라벨에서 한글로 전환 — 루트 CLAUDE.md의 File Creation

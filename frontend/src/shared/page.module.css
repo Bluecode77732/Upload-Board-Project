@@ -1,0 +1,43 @@
+/* 인증된 모든 화면(Post, File, Setting, 두 상세)의 <main>이 함께 쓰는 공통 규격이다.
+
+   화면마다 .page를 따로 두던 때는 #root(flex column) 안의 `margin: auto`가 main 폭을 내용물에 맞춰
+   줄이는 바람에, main·헤더·제목·폼의 폭과 위치가 화면마다 달랐다(실측: 상세 화면 main이 395px/524px,
+   Post 768px, File 1124px). 이제 main은 모든 화면에서 같은 박스이고, 직계 자식(헤더, 제목, 카드,
+   목록)은 모두 같은 720px 칼럼에 놓인다. 칼럼보다 넓어야 하는 구역(File의 미리보기 그리드)만
+   .wide로 푼다. 칼럼 폭은 아래 세 곳의 720px뿐이다. */
+.page {
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 1126px;
+  margin: 5vh auto;
+  /* 아래 padding은 목록 끝이 화면 하단에 붙지 않게 스크롤 여유를 둔 것이다. */
+  padding: 24px 24px 80px;
+  text-align: left;
+}
+
+/* `main.page`로 쓴 이유: 자식 쪽 규칙(.header { margin: 16px 0 } 등)과 우선순위가 같으면 선언
+   순서에 따라 결과가 갈린다 — 한 단계 높여 어느 화면에서나 칼럼 규칙이 이기게 한다. */
+main.page > * {
+  box-sizing: border-box;
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+/* 인라인인 링크("Back to …")는 max-width·auto margin이 먹지 않아 main의 왼쪽 끝에 붙는다. 블록으로
+   만들어 칼럼의 왼쪽 끝에 맞춘다. */
+main.page > a {
+  display: block;
+  width: fit-content;
+  margin-inline: max(0px, calc((100% - 720px) / 2)) auto;
+}
+
+main.page > .wide {
+  max-width: none;
+}
+
+@media (max-width: 640px) {
+  .page {
+    margin: 2vh auto;
+    padding: 16px 16px 80px;
+  }
+}

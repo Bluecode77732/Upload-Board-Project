@@ -22,7 +22,8 @@ instead (backend ROADMAP.md > Stage 5).
   creating a post through PostForm — with and without an attached file — and the
   resulting board row/detail link, landing on the post's own title/body once
   `PostDetailPage` stopped being a placeholder; `language` covers the NavBar en/ko toggle,
-  its persistence across a reload, and its size and position next to the theme toggle)
+  its persistence across a reload, and its size and position next to the theme toggle;
+  `layout` checks that every authenticated screen shares one `main` box and one 720px column)
 - Plain `fetch` wrapper (`src/api/client.ts`) — no data-fetching or state library yet
   (plus an `XMLHttpRequest` path in the same file for upload-progress reporting,
   since `fetch` exposes no upload-progress event)
@@ -55,7 +56,8 @@ src/
 │                 (the en dictionary plus `ko`, a Record over the same keys — a missing
 │                 translation fails `tsc`). Server-sent message text is shown as received
 ├── shared/       NavBar — the Post/File/Setting links, language and theme toggles, and
-│                 Sign out, shown on every authenticated screen
+│                 Sign out, shown on every authenticated screen; page.module.css — the one
+│                 `<main>` box (and 720px column) every authenticated screen composes
 └── features/
     ├── auth/     LoginPage (Basic signin/register)
     ├── posts/    PostBoard (protected, "/" — the app's home: PostForm + the post list —

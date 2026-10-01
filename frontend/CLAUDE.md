@@ -84,6 +84,14 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   text shown as received) and the component stores that in state and calls `t()` at render, so a
   language switch re-renders an error that is already on screen. The URL paths `/posts/:id` and
   `/files` stay plural on purpose (`/post`, `/file` are API prefixes — see Production image).
+- **Page shell**: every authenticated screen's `<main>` takes its box from `src/shared/page.module.css`
+  (`.page { composes: page from '../../shared/page.module.css' }`) — never its own width, margin or
+  padding. The direct children of `main` (nav header, title, card, list) sit in one 720px column;
+  only an element that composes `wide` from the same file (the File preview grid) is wider, and it
+  must be a direct child of `main` (which is why `FileBoard` returns a fragment). A page that sets
+  its own `margin: auto` inside the flex-column `#root` shrinks to its content, which is what once
+  made the header, main and forms differ per screen. `LoginPage` is the one deliberate exception (a
+  centered card). `e2e/layout.spec.ts` guards this.
 - **File header comment** (new files only): three lines — 목적 (Purpose) / 사용처
   (Usage) / 근거 (Rationale) — above the imports, matching the existing files.
   (Switched from English labels to Korean 2026-09-09, matching the root

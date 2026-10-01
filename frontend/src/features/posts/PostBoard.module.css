@@ -1,13 +1,6 @@
-/* #root가 flex column이라 `margin: auto`만 쓰면 페이지가 내용물 폭에 맞춰 줄어든다 — Posts/Files/
-   Settings의 폼 폭과 위치가 제각각이던 원인이다. width: 100%로 폭을 고정한다. 768px는 폼 카드
-   720px에 좌우 padding 24px씩을 더한 값이다. 아래 padding은 목록 끝이 화면 하단에 붙지 않게
-   스크롤 여유를 둔 것이다. */
+/* 모든 인증 화면이 같은 main 규격을 쓴다(src/shared/page.module.css). */
 .page {
-  width: 100%;
-  box-sizing: border-box;
-  max-width: 768px;
-  margin: 5vh auto;
-  padding: 24px 24px 80px;
+  composes: page from '../../shared/page.module.css';
 }
 
 .board {
@@ -189,11 +182,6 @@
    행의 제목을 작성자 위에 쌓아서 위에서 다룬 말줄임이 기본 읽기 방식이 아니라
    폴백이 되도록 한다. */
 @media (max-width: 640px) {
-  .page {
-    margin: 2vh auto;
-    padding: 16px 16px 80px;
-  }
-
   .filters {
     gap: 12px;
     padding: 12px;
