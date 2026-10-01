@@ -1,12 +1,11 @@
-.board {
-  margin-top: 24px;
-}
-
+/* 필터 패널은 main의 720px 칼럼에 놓인다(src/shared/page.module.css의 직계 자식 규칙) — Post 화면의
+   필터 패널과 같은 폭과 위치다. 미리보기 그리드만 칼럼보다 넓게 푼다(아래 .grid). */
 .filters {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
   align-items: flex-end;
+  margin-top: 24px;
   margin-bottom: 16px;
   padding: 16px;
   background: var(--surface-raised);
@@ -73,6 +72,7 @@
    3열을 아래로 이어 3xN이 된다. minmax(0, 1fr)는 긴 제목이 자기 몫 이상으로 컬럼을
    넓히는 걸 막는다. */
 .grid {
+  composes: wide from '../../shared/page.module.css';
   list-style: none;
   padding: 0;
   margin: 0;

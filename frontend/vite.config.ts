@@ -19,6 +19,14 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // 목적: 글꼴(.woff2)은 크기와 상관없이 항상 별도 파일로 내보낸다.
+    // 이유: Vite는 4KB 미만 자산을 data: URI로 CSS에 인라인하는데, nginx CSP가 `font-src 'self'`(nginx.conf)라
+    //       data: 글꼴은 차단돼 운영 페이지마다 콘솔에 CSP 에러가 났다(@fontsource-variable/hahmlet의 작은
+    //       조각 2개). CSP에 data:를 허용하는 대신 인라인을 막아 CSP를 엄격하게 유지한다.
+    // 방법: woff2면 false(인라인 안 함)를 돌려주고, 그 밖의 자산은 undefined로 Vite 기본 규칙에 맡긴다.
+    assetsInlineLimit: (filePath) => (filePath.endsWith('.woff2') ? false : undefined),
+  },
   server: {
     port: 5173,
     proxy: {

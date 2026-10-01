@@ -435,7 +435,7 @@ the status of each is scannable rather than buried in prose (as of 2026-08-18). 
 |---|---|---|---|---|
 | **Docker** | Containerization | ✅ + hardened, multi-arch landed | Multi-stage image (Stage 1); now runs as a dedicated **non-root** user with a `HEALTHCHECK`. **Multi-arch (ARM/Graviton) is landed and live**, not deferred: `bcrypt`'s "x64-only" premise was retracted 2026-08-12 ([0035](ADR/0035-arm64-bcrypt-source-rebuild.md)), CI publishes real `linux/amd64,linux/arm64` images from `main`, and the graviton node group ran the app in production as of 2026-08-27. A **distroless** base was considered and stays **deferred** (accepted residual — no verified Node 24 distroless tag, and it removes the only debug path (`docker exec`) with no K8s-native replacement yet). | [0015](ADR/0015-docker-and-compose.md), [0030](ADR/0030-container-non-root-and-arch-stance.md), [0035](ADR/0035-arm64-bcrypt-source-rebuild.md) |
 | **GitHub Actions** | CI (/CD) | 🔶 CI + image publish | `lint`+unit+e2e workflow on push/PR, now including `frontend-e2e`/`admin-e2e` and lint/unit jobs for `frontend/`/`admin/` (both previously unverified in CI). A **deploy pipeline (CD) to AWS is still not built** — added when AWS is the target. **Exception, recorded 2026-08-13**: a `docker-publish` job was added on explicit request that buildx-builds `linux/amd64,linux/arm64` and pushes `bluecode1775/sharenpo` to Docker Hub on every push to `main` — this is image-publish CD, not app deployment, and its own commit (`1b72ec9`) flags that it runs ahead of this row's stated plan (CD only once AWS is the target) rather than superseding that plan. | [0016](ADR/0016-github-actions-ci.md) |
-| **S3** | Object storage | 🔶 adapter ✅ / redirect ✅ / bucket code ✅ / cutover ✅ observed live (dated runs in §9) / upload-read round-trip ✅ 2026-09-30, Range-behavior still unverified | The `FileStorage` port + `S3Storage` implementation landed (unit-tested only). The proxy-streaming path was bandwidth-heavy on the app tier, so `GET /file/:id/content` now redirects (`302`) to a short-lived presigned S3 URL under `STORAGE_DRIVER=s3` (all three visibility tiers, gated by the existing `resolveContentAccess` check) — `local` keeps streaming unchanged. Terraform ([0043](ADR/0043-terraform-project-adaptation.md) D8, 2026-08-18) provisions the private bucket + a dedicated app IRSA role. The live Helm release ran with `STORAGE_DRIVER=s3` and the app's IRSA role wired (2026-08-27, §9), cutover switched on — the bucket and cluster were destroyed 2026-08-28 (§9) once proven. **Re-applied 2026-08-29/30** for [ADR 0047](ADR/0047-observability-prometheus-grafana.md) D4's live verification, `values-prod.yaml` still carrying `STORAGE_DRIVER=s3`; that session's own checks covered only the metrics path, leaving an actual upload/read round-trip against the live bucket unverified. **Closed 2026-09-30** ([ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md)'s real-user-flow addendum): one image, one audio, and one video were uploaded through the real `UploadForm`, promoted, and actually decoded and played back in a real browser (`readyState 4`, `currentTime` advancing, no decode error) via the presigned-redirect path — not just a direct file-content fetch, the full app flow (post attachment surfaced a separate, now-fixed `PostService` bug on the way, see that addendum). The redirect's Range-request/seek behavior across `frontend`/`admin` media players still wasn't exercised and remains unverified. | [0029](ADR/0029-storage-port-adapter.md), [0036](ADR/0036-s3-presigned-content-redirect.md), [0043](ADR/0043-terraform-project-adaptation.md), [0062](ADR/0062-admin-same-alb-subpath-routing.md) |
+| **S3** | Object storage | 🔶 adapter ✅ / redirect ✅ / bucket code ✅ / cutover ✅ observed live (dated runs in §9) / upload-read round-trip ✅ 2026-09-30, Range/seek ✅ 2026-09-30 (frontend player; `admin/` has no player) | The `FileStorage` port + `S3Storage` implementation landed (unit-tested only). The proxy-streaming path was bandwidth-heavy on the app tier, so `GET /file/:id/content` now redirects (`302`) to a short-lived presigned S3 URL under `STORAGE_DRIVER=s3` (all three visibility tiers, gated by the existing `resolveContentAccess` check) — `local` keeps streaming unchanged. Terraform ([0043](ADR/0043-terraform-project-adaptation.md) D8, 2026-08-18) provisions the private bucket + a dedicated app IRSA role. The live Helm release ran with `STORAGE_DRIVER=s3` and the app's IRSA role wired (2026-08-27, §9), cutover switched on — the bucket and cluster were destroyed 2026-08-28 (§9) once proven. **Re-applied 2026-08-29/30** for [ADR 0047](ADR/0047-observability-prometheus-grafana.md) D4's live verification, `values-prod.yaml` still carrying `STORAGE_DRIVER=s3`; that session's own checks covered only the metrics path, leaving an actual upload/read round-trip against the live bucket unverified. **Closed 2026-09-30** ([ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md)'s real-user-flow addendum): one image, one audio, and one video were uploaded through the real `UploadForm`, promoted, and actually decoded and played back in a real browser (`readyState 4`, `currentTime` advancing, no decode error) via the presigned-redirect path — not just a direct file-content fetch, the full app flow (post attachment surfaced a separate, now-fixed `PostService` bug on the way, see that addendum). **Range/seek closed the same day, on the redeployed stack** ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.md)'s 2026-09-30 second addendum): in the `frontend/` player a seek sent `Range: bytes=1212416-` straight to the presigned S3 URL and got `206` with `Content-Range: bytes 1212416-3133225/3133226`, and playback moved on with no error. `admin/` has no media player at all (its dashboard only counts files), so there was nothing there to check. | [0029](ADR/0029-storage-port-adapter.md), [0036](ADR/0036-s3-presigned-content-redirect.md), [0043](ADR/0043-terraform-project-adaptation.md), [0062](ADR/0062-admin-same-alb-subpath-routing.md) |
 | **Health / readiness** | Probes | ✅ | `GET /health/live` + `GET /health/ready` for LB/orchestrator probes. | [0031](ADR/0031-health-and-readiness-endpoints.md) |
 | **Migration as a separate step** | Deploy safety | 🔶 compose ✅ / K8s Job 🆕 | `docker-compose.yml`'s one-shot `migrate` service models the eventual **Kubernetes Job**, so a scaled `api` never races `migration:run`. The K8s Job itself is pending. | [0032](ADR/0032-migration-as-separate-deploy-step.md) |
 | **Kubernetes** | Orchestration | ✅ deployed live (dated runs in §9) | The standalone static manifests formerly under `k8s/pod/`, `k8s/deployment/`, `k8s/cluster/` were deleted 2026-08-17 ([0042](ADR/0042-k8s-helm-directory-consolidation.md)) — they duplicated a strict subset of what the Helm chart below already renders, with no consumer of their own (no CI job, no compose reference). The Kubernetes manifests now exist only as the Helm chart's `templates/` (`k8s/helm/`). The live cluster deploy (on AWS) landed 2026-08-27 (§9) — then the underlying cluster was destroyed 2026-08-28 (§9) once that was proven. **Re-applied 2026-08-29/30** for [ADR 0047](ADR/0047-observability-prometheus-grafana.md) D4's live verification — `kubectl get nodes` shows 2 `Ready` nodes, confirmed live at the time of this edit. `bash k8s/infra/terraform/deploy.sh all` reproduces it; treat this cell as a snapshot, re-verify with `kubectl get nodes` before trusting it. | commit `48a89f2`, [0041](ADR/0041-helm-chart-project-adaptation.md), [0042](ADR/0042-k8s-helm-directory-consolidation.md) |
@@ -859,6 +859,9 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   at the time. **Resolved 2026-09-08** as its own pass — see
   [frontend/docs/STYLE-PLAN.md](../frontend/docs/STYLE-PLAN.md) > item 4.
   Full decision trail: [frontend/docs/STYLE-PLAN.md](../frontend/docs/STYLE-PLAN.md) > item 3.
+  **Amended 2026-10-01:** the fonts became Noto Sans KR (`--sans`) and Hahmlet (`--heading`), for
+  Hangul and Latin alike — two self-hosted dependencies, so the "zero new dependency" reason above
+  no longer holds ([CHANGELOG.md](CHANGELOG.md) 2026-10-01, and the amendment under STYLE-PLAN item 3).
 - ~~A small-screen layout for `admin/`~~ (recorded 2026-08-24) — **decided 2026-09-08: keep
   horizontal scroll, don't build cards.** The console has no deploy target and is operated on
   a desktop, so exposure is nil; a comparison table (column-hiding vs. card conversion vs.
@@ -1059,8 +1062,7 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   clamd ran on Graviton, Ready in 40 s at about 1.02 GiB (ADR 0059 Addendum, and the local
   amd64/arm64 measurements before it); all pods fit on the two `t4g.medium` nodes (23 of 34 pod
   slots); and a destroy that skips `addons/` leaves IAM roles and policies, a CloudFormation stack
-  and a stale state (`k8s/infra/terraform/README.md` > Destroy). Still open: a second zone
-  getting the same name servers, and confirming the Prometheus rule that closes the metrics gap
+  and a stale state (`k8s/infra/terraform/README.md` > Destroy). Still open: confirming the Prometheus rule that closes the metrics gap
   while Ingress is off. Resolved since: an EICAR upload through the app now answers
   `400 UPLOAD_MALWARE_DETECTED` and a clean file passes through, is promoted, and appears in the
   file board ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.md)'s 2026-09-30 addendum, only
@@ -1547,6 +1549,49 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   dependencies pruned — distroless was already weighed and deferred with a stated reason (ADR
   0030). No code changed. Revisit only once real deployment traffic, or a concrete measured
   problem (a chunk-size warning, a bloated pushed image), actually shows up.
+  **Update 2026-10-02:** the figures above are as of 2026-09-16. `frontend/` now has 5
+  production packages (two font packages, [CHANGELOG.md](CHANGELOG.md) 2026-10-01) and its
+  `dist` is about 6.3MB, almost all of it woff2 slices that a browser requests only as a page
+  needs them. The conclusion stands.
+- ~~**`admin/` dependency advisories — `axios`**~~ — **found and patched 2026-10-02
+  (`40d6227`).** A read-only
+  `pnpm audit --prod` in `admin/` reports 12 advisories, all on `axios` (7 high, 5 moderate;
+  every vulnerable range ends below 1.20.0, patched `>=1.20.0`). `axios` is a direct production
+  dependency (`^1.15.2`, installed 1.19.0), so `pnpm update axios` would reach 1.20.0. Found
+  while patching `frontend/`'s `react-router-dom` ([CHANGELOG.md](CHANGELOG.md) 2026-10-02);
+  `admin/` was not touched. **Assessed 2026-10-02** from the advisory summaries and `admin/`'s
+  code, not by testing: `admin/` uses one `axios.create({ baseURL, withCredentials })` instance
+  with two interceptors and 15 `api.get/post/patch/delete` calls, in a browser (the XHR adapter);
+  it sets no `adapter`, `proxy` or `maxRedirects` and builds no `FormData`. Six of the 12 concern
+  Node-only code (`fromDataURI`, `shouldBypassProxy`, the HTTP/2 adapter twice, the Node HTTP
+  adapter, `NO_PROXY`), three concern the fetch adapter, and the other three need `toFormData`, a
+  call without a method, or an interceptor that returns a replacement config — none of which
+  `admin/` does (the 401 retry `api(original)` carries its original method, and the request
+  interceptor returns the same config object). Exposure looks low, but the patch is cheap:
+  1.19.0 → 1.20.0 is inside the declared range. Local checks are `pnpm lint`, `pnpm test` and
+  `pnpm build` in `admin/`; its e2e needs the backend and a seeded superadmin, so CI's `admin-e2e`
+  is the check. The `frontend/` patch was the pattern: update, `pnpm audit --prod`, then those
+  checks. **Patched:** `axios` 1.19.0 → 1.20.0 (the range floor is now `^1.20.0`);
+  `pnpm audit --prod` reports no known vulnerabilities; lint (no errors), `pnpm test` (24/24)
+  and `pnpm build` pass, and the 401 → refresh → retry interceptor flow was run against the real
+  axios 1.20.0 and a local server, since the unit tests mock `axios`. `admin-e2e` has not run on
+  it yet; CI will.
+- **Korean fluency pass over four `.ko.md` files** — **deferred 2026-10-02, not started.**
+  CLAUDE.md's Documentation Convention asks that touching an existing `.ko.md` re-read the whole
+  file and fix passages that read as a word-for-word translation, in the same change (fluency only,
+  never content the English sibling lacks). The 2026-10-01/02 frontend session edited seven `.ko.md`
+  files and re-read three of them in full: `docs/ADR/0060-frontend-same-alb-path-routing.ko.md`,
+  `frontend/docs/STYLE-PLAN.ko.md` and `frontend/docs/API-CONTRACT.ko.md` (that pass fixed one
+  untranslated "Addendum" heading in ADR 0060). Four were not re-read: `docs/CHANGELOG.ko.md` (about
+  2,850 lines, 81 added this session), `docs/ROADMAP.ko.md` (about 1,590, 21 added),
+  `frontend/CLAUDE.ko.md` (177, 27 added) and `frontend/README.ko.md` (126, 13 added). The added
+  passages were written as Korean prose, not translated line by line; nothing around them was
+  re-read. Scope when picked up: those four files in full, Korean wording only. Keep the heading
+  hierarchy, table layout, links, code blocks, identifiers and numbers identical to the English
+  sibling, then check EN/KO symmetry (heading and entry counts) and links. `CHANGELOG.ko.md` and
+  `ROADMAP.ko.md` are most of the effort and can go separately from the two `frontend/` files.
+  Revisit when explicitly requested, or the next time one of the four is edited at length. Also
+  listed in CLAUDE.md > Known Gaps.
 
 ## 8. Advisory notes
 

@@ -10,38 +10,44 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { CommentListResponse, CommentResponse, UpdateCommentRequest } from '../../api/types'
+import { useLanguage } from '../../i18n/useLanguage'
+import type { Translatable } from '../../i18n/messages'
 import styles from './CommentThread.module.css'
 
 const TAKE = 20
 
-// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
-function messageForError(error: unknown): string {
+// 목적: 댓글 목록 조회 실패 응답을 화면에 보여줄 메시지 키로 바꾼다.
+// 이유: 한/영 토글 후에도 떠 있는 에러가 새 언어로 다시 그려지도록 번역된 문자열이 아니라 키를 돌려준다.
+// 방법: ApiError의 고정 code로 switch(backend ADR 0011)해 키를 고르고, 문구는 렌더 시 t()가 만든다.
+function messageForError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.POST_NOT_FOUND:
-        return 'Post not found.'
+        return 'common.postNotFound'
       default:
-        return 'Failed to load comments.'
+        return 'comment.err.loadFailed'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
-// 수정/삭제의 에러는 목록 조회와는 다른 코드 집합으로 분기한다.
-function messageForActionError(error: unknown): string {
+// 목적: 댓글 수정/삭제 실패 응답을 화면에 보여줄 메시지 키로 바꾼다(목록 조회와는 다른 코드 집합).
+// 이유: messageForError와 같다 — 번역된 문자열이 아니라 키(또는 서버가 준 raw 문구)를 돌려준다.
+// 방법: ApiError의 고정 code로 switch해 키를 고르고, VALIDATION_FAILED만 서버 문구를 { raw }로 감싼다.
+function messageForActionError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.COMMENT_NOT_FOUND:
-        return 'Comment not found.'
+        return 'comment.err.notFound'
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return 'Only the author or an admin can do this.'
+        return 'common.onlyAuthorOrAdmin'
       case ErrorCode.VALIDATION_FAILED:
-        return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
+        return { raw: Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message }
       default:
-        return 'The action failed.'
+        return 'common.actionFailed'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
 export function CommentThread({
@@ -53,10 +59,11 @@ export function CommentThread({
   currentUserId: number | null
   refreshSignal: number
 }) {
+  const { language, t } = useLanguage()
   const [comments, setComments] = useState<CommentResponse[] | null>(null)
   const [total, setTotal] = useState(0)
-  const [error, setError] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
+  const [error, setError] = useState<Translatable | null>(null)
+  const [actionError, setActionError] = useState<Translatable | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editBody, setEditBody] = useState('')
@@ -124,7 +131,7 @@ export function CommentThread({
   // 이유: 하드 삭제는 비가역이므로(ADR 0020) 확인 대화상자를 거친다.
   // 방법: DELETE /comment/:id → 성공 시 로컬 목록에서 제거하고 총 개수를 1 줄인다.
   function deleteComment(id: number) {
-    if (!window.confirm('Delete this comment? This cannot be undone.')) return
+    if (!window.confirm(t('comment.confirmDelete'))) return
     setActionError(null)
     setBusyId(id)
     api
@@ -141,11 +148,13 @@ export function CommentThread({
 
   return (
     <section className={styles.section}>
-      <h2 className={styles.heading}>Comments {total > 0 ? `(${total})` : ''}</h2>
-      {error && <p className={styles.error}>{error}</p>}
-      {actionError && <p className={styles.error}>{actionError}</p>}
-      {comments === null && !error && <p>Loading comments…</p>}
-      {comments && comments.length === 0 && <p className={styles.empty}>No comments yet.</p>}
+      <h2 className={styles.heading}>
+        {t('comment.heading')} {total > 0 ? `(${total})` : ''}
+      </h2>
+      {error && <p className={styles.error}>{t(error)}</p>}
+      {actionError && <p className={styles.error}>{t(actionError)}</p>}
+      {comments === null && !error && <p>{t('common.loading')}</p>}
+      {comments && comments.length === 0 && <p className={styles.empty}>{t('comment.empty')}</p>}
       {comments && comments.length > 0 && (
         <ul className={styles.list}>
           {comments.map((comment) => {
@@ -154,8 +163,8 @@ export function CommentThread({
             return (
               <li key={comment.id} className={styles.item}>
                 <div className={styles.itemHeader}>
-                  <span>{comment.creator?.email ?? 'unknown'}</span>
-                  <span>{new Date(comment.createdAt).toLocaleString()}</span>
+                  <span>{comment.creator?.email ?? t('comment.unknownAuthor')}</span>
+                  <span>{new Date(comment.createdAt).toLocaleString(language === 'ko' ? 'ko-KR' : undefined)}</span>
                 </div>
                 {editingId === comment.id ? (
                   <div className={styles.editBox}>
@@ -169,10 +178,10 @@ export function CommentThread({
                     />
                     <div className={styles.actions}>
                       <button type="button" className={styles.button} disabled={busy} onClick={() => submitEdit(comment.id)}>
-                        Save
+                        {t('common.save')}
                       </button>
                       <button type="button" className={styles.button} disabled={busy} onClick={cancelEdit}>
-                        Cancel
+                        {t('common.cancel')}
                       </button>
                     </div>
                   </div>
@@ -182,7 +191,7 @@ export function CommentThread({
                     {canManage && (
                       <div className={styles.actions}>
                         <button type="button" className={styles.button} disabled={busy} onClick={() => startEdit(comment)}>
-                          Edit
+                          {t('common.edit')}
                         </button>
                         <button
                           type="button"
@@ -190,7 +199,7 @@ export function CommentThread({
                           disabled={busy}
                           onClick={() => deleteComment(comment.id)}
                         >
-                          Delete
+                          {t('common.delete')}
                         </button>
                       </div>
                     )}
@@ -203,7 +212,7 @@ export function CommentThread({
       )}
       {canLoadMore && (
         <button type="button" className={styles.loadMoreButton} disabled={loadingMore} onClick={loadMore}>
-          {loadingMore ? 'Loading…' : 'Load more'}
+          {loadingMore ? t('common.loading') : t('common.loadMore')}
         </button>
       )}
     </section>

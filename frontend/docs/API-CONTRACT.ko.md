@@ -45,7 +45,7 @@
 
 | 호출 | 요청 | 응답 |
 |---|---|---|
-| `POST /auth/register` | `Authorization: Basic base64(email:password)` | `201` user (세션 없음) |
+| `POST /auth/register` | `Authorization: Basic base64(email:password)` | `201` user (세션 없음); 비밀번호가 10자 미만이거나 소문자·대문자·숫자·기호 중 하나라도 빠지면 `400 AUTH_WEAK_PASSWORD` (이메일 중복 확인보다 먼저 검사) |
 | `POST /auth/signin` | `Authorization: Basic base64(email:password)` | `{ accessToken }` + `Set-Cookie: refreshToken` |
 | `POST /auth/token/refresh` | refresh 쿠키 (자동) | `{ accessToken }` + 회전된 쿠키 |
 | `POST /auth/signout` | `Authorization: Bearer <access>` | `{ success: true }` + 쿠키 삭제 |
@@ -97,8 +97,10 @@
 - 검증 실패는 `code: VALIDATION_FAILED`와 배열 형태의 `message`를 사용한다.
 - `ApiError`(`src/api/client.ts`)는 UI 분기를 위해 `status`와 `code`를 갖고 있다.
 - **모든 라우트가 `429 RATE_LIMITED`를 반환할 수 있다**(backend ADR 0053) — 특정
-  리소스에 묶이지 않은 전역 분당 100회 기본값이다. 이 앱 어디에도 아직 전용 UI
-  메시지로 처리되지 않고, 호출부가 이미 갖고 있는 일반적인 에러 표시로 흘러간다.
+  리소스에 묶이지 않은 전역 분당 100회 기본값이다(`/auth/register`,
+  `/auth/signin`, `/auth/token/refresh`는 분당 5회로 더 조여져 있다, backend ADR 0054).
+  전용 UI 메시지가 있는 곳은 `LoginPage`뿐이고, 나머지 화면은 아직 각자 갖고 있는
+  일반적인 에러 표시로 흘러간다.
 
 ## 리소스 라우트 (정식, 고정 — 백엔드 ADR 0010)
 

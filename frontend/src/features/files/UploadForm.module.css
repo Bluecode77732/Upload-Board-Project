@@ -1,11 +1,15 @@
 /* 이 폼을 감싸는 페이지는 미리보기 그리드를 위해 1126px로 넓어졌다(DashboardPage.module.css).
-   폼까지 그만큼 늘어나면 산만해 보이므로, 원래 너비를 유지하고 가운데 정렬한다. */
+   폼까지 그만큼 늘어나면 산만해 보이므로, 원래 너비를 유지하고 가운데 정렬한다. PostForm/
+   SettingsPage의 카드와 같은 규격이다 — box-sizing: border-box여야 padding·border를 포함해
+   세 화면에서 정확히 같은 720px가 된다. */
 .form {
   display: grid;
   gap: 14px;
+  box-sizing: border-box;
   max-width: 720px;
   margin: 16px auto;
   padding: 20px;
+  text-align: left;
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 10px;

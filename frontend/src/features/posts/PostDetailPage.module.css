@@ -1,8 +1,6 @@
+/* 모든 인증 화면이 같은 main 규격을 쓴다(src/shared/page.module.css). */
 .page {
-  max-width: 720px;
-  margin: 5vh auto;
-  padding: 24px;
-  text-align: left;
+  composes: page from '../../shared/page.module.css';
 }
 
 .backLink {
@@ -174,11 +172,4 @@
 .deleteButton:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-@media (max-width: 640px) {
-  .page {
-    margin: 2vh auto;
-    padding: 16px;
-  }
 }

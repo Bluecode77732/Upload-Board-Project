@@ -8,8 +8,10 @@ for that work — implementation happens in separate, dispatched sessions (see
 **Status (2026-08-14): all 7 page-conversion items complete** — see the
 "Page-by-page task list" below for the per-item landing notes and
 [ROADMAP.md](../../docs/ROADMAP.md) > 7 for the plan-level record. Two related
-items surfaced during the initial walkthrough stay deliberately out of scope
-and open — see "Related but out of scope" and "Open questions" below.
+items surfaced during the initial walkthrough were deliberately left out of
+scope; both have since been resolved (S3 playback CORS 2026-08-16, the
+Korean/English text split 2026-10-01) — see "Related but out of scope" and
+"Open questions" below.
 
 > **Later change (2026-08-24)**: item 4's file board no longer looks like what
 > that row describes — its text list and Previous/Next pager were replaced by a
@@ -146,17 +148,22 @@ because whoever touches these files for restyling will see them:
   and `detail.spec.ts:73`'s stale redirect-leg assertion fixed the same day —
   nothing from this finding remains open. See ADR 0036 > "Addendum
   (2026-08-16)".
-- **Korean/English UI-text split**: `features/posts/*` (PostForm, PostDetailPage,
-  CommentThread, CommentForm) hardcodes Korean UI strings and error messages;
-  `features/auth/*` and `features/files/*` are English-only. Not an i18n
-  framework decision to make silently inside a styling pass — separate task.
+- ~~**Korean/English UI-text split**~~ — **resolved 2026-10-01** (`ead3b90`,
+  [CHANGELOG.md](../../docs/CHANGELOG.md)). It was left as its own task because
+  an i18n framework is not a decision to make silently inside a styling pass.
+  Every screen now takes its text from `src/i18n/messages.ts` (English by
+  default, a Korean dictionary typed to the same keys) and a `NavBar` toggle
+  switches between them — no i18n library, mirroring `ThemeProvider`. Text the
+  server sends is shown as received, in English.
 
 ## Open questions
 
 1. ~~Confirm the proposed palette~~ — **confirmed 2026-08-14**, kept the
    existing purple brand seed. Item 1 is clear to dispatch.
-2. Confirm whether the two remaining "related but out of scope" items above
-   should be picked up later as their own tasks, or intentionally left alone.
+2. ~~Confirm whether the two remaining "related but out of scope" items above
+   should be picked up later as their own tasks, or intentionally left alone.~~
+   — **resolved 2026-10-01**: both were picked up as their own tasks (S3
+   playback CORS 2026-08-16, the Korean/English text split 2026-10-01).
 3. ~~**Typography was never actually decided**~~ (recorded 2026-08-25) —
    **resolved 2026-09-07**. The exploration ran as a comparison-table Q&A
    (per CLAUDE.md's Clarification Protocol), then an artifact preview page
@@ -167,7 +174,15 @@ because whoever touches these files for restyling will see them:
    Roman', serif` (was byte-identical to `--sans`). Zero new dependency, so
    `frontend/CLAUDE.md`'s dependency-proposal gate never triggers — the
    lowest-risk candidate on the table, chosen over the 5 web-font options.
-   `--sans` is untouched.
+   `--sans` is untouched. **Amended 2026-10-01 (Hangul and Latin fonts):** system
+   fonts left Korean to each OS (on Windows headings fell to Batang and body text to
+   Malgun Gothic) and buttons to the browser default Arial. A comparison-table Q&A and
+   an artifact preview picked option C: `@fontsource-variable/noto-sans-kr` for
+   `--sans` and `@fontsource-variable/hahmlet` for `--heading`, applied to Hangul and
+   Latin alike, with the heading letter-spacing unchanged. That is two dependencies
+   (OFL-1.1, variable 100–900), self-hosted because the nginx CSP is `font-src 'self'`,
+   so the "zero new dependency" reason above no longer holds for typography. Buttons
+   and inputs now inherit `font-family` (not `font`, which would resize them).
 4. ~~**No motion, and depth used once**~~ (recorded 2026-08-25, alongside item 3)
    — **resolved 2026-09-08**. Item 3's typography session had stayed scoped
    to the mark + heading font and deliberately left this open; this pass
@@ -206,6 +221,32 @@ because whoever touches these files for restyling will see them:
    `prefers-color-scheme` block for browsers that honor it in a favicon, a
    flat fallback for those that don't) since the browser tab can't see page
    CSS custom properties. `icons.svg` is deleted.
+6. ~~**File screen: header width**~~ (recorded 2026-10-02) — **decided
+   2026-10-02: option (a), keep the current layout.** Since `3eac5d2` every
+   authenticated screen puts the nav header and the heading in the same 720px
+   column, and on File the preview grid below is 1076px wide, so the header is
+   narrower than the grid. The three options were rendered against the real
+   app side by side (boxes measured at 1280px): (a) leave it — the nav links
+   sit at x=280 on every screen, in line with the title and cards; (b) widen
+   the header on File only — the nav links jump from x=280 to x=102 (178px)
+   when moving between Post and File; (c) widen the header on every screen —
+   no jump, but the nav links sit at x=102, left of the title and cards, on
+   every screen, and the header is wider than the content on four of the five
+   screens. (b) and (c) would also have meant changing `e2e/layout.spec.ts`,
+   which asserts one header box on every screen. (a) keeps both. Revisit if
+   the File grid's width ever changes.
+7. ~~**Font license notice (OFL-1.1)**~~ (recorded 2026-10-02) — **checked and
+   decided 2026-10-02: no notice file.** `dist/` holds `assets/` (woff2 and
+   CSS), `favicon.svg` and `index.html`, with no license text in it, so the
+   woff2 metadata was read. All 216 shipped files (byte-identical to the
+   `@fontsource-variable/*` package files) carry the copyright (name ID 0) and
+   the OFL license URL (name ID 14); the license description field (name ID
+   13) is empty, so the license text itself is not embedded. OFL-1.1 lets the
+   notice and license travel as machine-readable metadata inside the font
+   file, and the files are shipped unmodified, so a separate file was not
+   added. Revisit if the project adds a `NOTICE`/third-party file for another
+   reason, or if the fonts are ever re-subsetted or converted (the metadata
+   would need checking again). A project decision, not legal advice.
 
 ## Ready-to-paste prompts
 

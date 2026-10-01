@@ -12,6 +12,8 @@ export const ErrorCode = {
   AUTH_BAD_TOKEN_FORMAT: 'AUTH_BAD_TOKEN_FORMAT',
   AUTH_INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
   AUTH_EMAIL_TAKEN: 'AUTH_EMAIL_TAKEN',
+  // register()에 넘긴 비밀번호가 최소 강도(10자 이상 + 소문자·대문자·숫자·기호 모두 포함)에 못 미친 경우.
+  AUTH_WEAK_PASSWORD: 'AUTH_WEAK_PASSWORD',
   FILE_TITLE_TAKEN: 'FILE_TITLE_TAKEN',
   FILE_INVALID_PATH: 'FILE_INVALID_PATH',
   // unlisted 파일의 콘텐츠를 공유 토큰 없이/틀린 토큰으로/만료된 토큰으로 요청한 경우(ADR 0025).

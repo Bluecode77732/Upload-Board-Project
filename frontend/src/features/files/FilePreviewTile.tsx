@@ -9,25 +9,29 @@ import { Link } from 'react-router-dom'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { FileResponse } from '../../api/types'
+import { useLanguage } from '../../i18n/useLanguage'
+import type { Translatable } from '../../i18n/messages'
 import { VisibilityBadge } from './VisibilityBadge'
 import styles from './FilePreviewTile.module.css'
 
-// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011). FileDetailPage의
-// 문구보다 짧게 유지한다 — 타일에는 문장이 아니라 짧은 구 하나 들어갈 공간뿐이다.
-function messageForPreviewError(error: unknown): string {
+// 목적: 미리보기 읽기 실패 응답을 타일에 넣을 짧은 메시지 키로 바꾼다.
+// 이유: 한/영 토글 후에도 떠 있는 에러가 새 언어로 다시 그려지도록 번역된 문자열이 아니라 키를 돌려준다.
+// 방법: ApiError의 고정 code로 switch(backend ADR 0011)한다. FileDetailPage의 문구보다 짧게 유지한다 —
+//   타일에는 문장이 아니라 짧은 구 하나 들어갈 공간뿐이다.
+function messageForPreviewError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return 'No access'
+        return 'preview.noAccess'
       case ErrorCode.FILE_NOT_FOUND:
-        return 'Not found'
+        return 'preview.notFound'
       case ErrorCode.FILE_SHARE_INVALID:
-        return 'Share link expired'
+        return 'preview.shareExpired'
       default:
-        return 'Preview unavailable'
+        return 'preview.unavailable'
     }
   }
-  return 'Preview unavailable'
+  return 'preview.unavailable'
 }
 
 // 목적: 이 파일의 미리보기 바이트를 인증 없이 직접 읽을 수 있는 URL을 돌려준다.
@@ -51,10 +55,11 @@ interface FilePreviewTileProps {
 //   영상은 100MB까지 갈 수 있어 클릭한 뒤에만, 오디오는 볼 프레임이 없으므로 아예 읽지 않는다.
 //   private 파일은 objectURL로 받아 언마운트/파일 변경 시 revoke한다.
 export function FilePreviewTile({ file, onFilterCreator }: FilePreviewTileProps) {
+  const { t } = useLanguage()
   const [inView, setInView] = useState(false)
   const [videoRequested, setVideoRequested] = useState(false)
   const [objectUrl, setObjectUrl] = useState<string | null>(null)
-  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [previewError, setPreviewError] = useState<Translatable | null>(null)
   const frameRef = useRef<HTMLDivElement | null>(null)
 
   // 최초 교차 시점에 래치를 건다: 한 번 보인 타일은 다시 스크롤해서 지나가도 아래 fetch를
@@ -116,7 +121,7 @@ export function FilePreviewTile({ file, onFilterCreator }: FilePreviewTileProps)
           <span className={styles.icon} aria-hidden="true">
             ⚠
           </span>
-          <span className={styles.note}>{previewError}</span>
+          <span className={styles.note}>{t(previewError)}</span>
         </p>
       )
     }
@@ -127,7 +132,7 @@ export function FilePreviewTile({ file, onFilterCreator }: FilePreviewTileProps)
           <span className={styles.icon} aria-hidden="true">
             🎵
           </span>
-          <span className={styles.note}>Audio</span>
+          <span className={styles.note}>{t('preview.audio')}</span>
         </p>
       )
     }
@@ -143,7 +148,7 @@ export function FilePreviewTile({ file, onFilterCreator }: FilePreviewTileProps)
             className={styles.loadButton}
             onClick={() => setVideoRequested(true)}
           >
-            Load preview
+            {t('preview.load')}
           </button>
         </div>
       )
@@ -155,7 +160,7 @@ export function FilePreviewTile({ file, onFilterCreator }: FilePreviewTileProps)
           <span className={styles.icon} aria-hidden="true">
             {file.mediaType === 'video' ? '🎬' : '🖼'}
           </span>
-          <span className={styles.note}>Loading…</span>
+          <span className={styles.note}>{t('common.loading')}</span>
         </p>
       )
     }
@@ -169,7 +174,7 @@ export function FilePreviewTile({ file, onFilterCreator }: FilePreviewTileProps)
           alt={file.title}
           className={styles.media}
           loading="lazy"
-          onError={() => setPreviewError('Preview unavailable')}
+          onError={() => setPreviewError('preview.unavailable')}
         />
       )
     }
@@ -181,7 +186,7 @@ export function FilePreviewTile({ file, onFilterCreator }: FilePreviewTileProps)
         preload="metadata"
         muted
         controls
-        onError={() => setPreviewError('Preview unavailable')}
+        onError={() => setPreviewError('preview.unavailable')}
       />
     )
   }
@@ -200,7 +205,7 @@ export function FilePreviewTile({ file, onFilterCreator }: FilePreviewTileProps)
       {creator && (
         <button
           type="button"
-          title="Filter the list to this creator"
+          title={t('board.creatorFilterTitle')}
           className={styles.creatorButton}
           onClick={() => onFilterCreator(creator.id)}
         >

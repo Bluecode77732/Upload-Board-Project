@@ -1689,6 +1689,13 @@ Architecture Decisions가 계속 유효하다.
   전용 시험 — 같은 기본 `keepAlive` agent 모양 — 도 소켓을 일부러 열어 둔 채로 똑같이 빨리
   종료해 종료 속도 면에서는 닫혔다. 실제 `S3Client` 인스턴스는 여전히 시험하지 않았다,
   ADR 0061 두 번째 Addendum)
+- `.ko.md` 네 개를 문서 규약이 요구하는 파일 전체 재독 없이 수정했다(2026-10-02 기록).
+  2026-10-01/02 프론트엔드 세션은 `.ko.md` 7개를 수정했고, 3개(`docs/ADR/0060-…ko.md`,
+  `frontend/docs/STYLE-PLAN.ko.md`, `frontend/docs/API-CONTRACT.ko.md`)는 전체를 다시 읽었지만
+  4개는 읽지 않았다: `docs/CHANGELOG.ko.md`(약 2,850줄), `docs/ROADMAP.ko.md`(약 1,590줄),
+  `frontend/CLAUDE.ko.md`, `frontend/README.ko.md`. 그 세션에 추가한 부분만 자연스러운 한국어로
+  썼고 그 파일들의 나머지는 다시 읽지 않았다. 일정은 없다 — 이 점검은 명시적 요청이 있을 때 하는
+  작업이고 한국어 표현만 다룬다. 범위, 방법, 착수 조건은 `docs/ROADMAP.ko.md` §7에 있다.
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

@@ -109,7 +109,7 @@ test('a private file plays for its owner via an authenticated blob fetch and rev
   await expect(page.getByRole('button', { name: 'Rotate share link' })).toHaveCount(0)
   await expect(page.getByText('Share link:')).toHaveCount(0)
 
-  await page.getByRole('link', { name: 'Back to files' }).click()
+  await page.getByRole('link', { name: 'Back to file list' }).click()
   await expect(page).toHaveURL(/\/files$/)
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __revokedUrls: string[] }).__revokedUrls.length))
@@ -255,5 +255,5 @@ test('a file referenced by a post cannot be deleted (409 FILE_IN_USE) until the 
   await expect(page).toHaveURL(/\/files$/)
 
   await page.getByLabel('Search').fill(title)
-  await expect(page.getByText('No files match the current filters.')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('No file matches the current filter.')).toBeVisible({ timeout: 10_000 })
 })

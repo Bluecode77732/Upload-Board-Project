@@ -12,30 +12,32 @@
 import { test, expect } from '@playwright/test'
 import { registerAndSignIn, goToFiles, uniqueEmail } from './helpers'
 
-test('authenticated home is the post board, reachable via the NavBar "Posts" link', async ({ page }) => {
+// 내비 링크·제목 이름이 단수("Post"/"File")라 "New post", "Upload a file" 같은 다른 제목이나 게시글/파일
+// 제목에도 부분 일치한다 — 이 파일의 쿼리는 전부 exact: true를 쓴다(frontend/CLAUDE.md E2E gotchas).
+test('authenticated home is the post board, reachable via the NavBar "Post" link', async ({ page }) => {
   await registerAndSignIn(page, uniqueEmail('nav-home'))
 
-  await expect(page.getByRole('heading', { name: 'Posts' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Posts' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Files', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Post', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Post', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'File', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
 })
 
-test('NavBar "Files" link reaches the file board at /files, not swallowed by the dev proxy', async ({
+test('NavBar "File" link reaches the file board at /files, not swallowed by the dev proxy', async ({
   page,
 }) => {
   await registerAndSignIn(page, uniqueEmail('nav-files'))
 
   await goToFiles(page)
 
-  await expect(page.getByRole('heading', { name: 'Files' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'File', exact: true })).toBeVisible()
   // 프록시된 백엔드 404 본문이 아니라 SPA가 실제로 렌더링됐음(업로드 폼 존재)을 확인한다 —
   // 단순한 '/file' 프록시 접두사가 "/files"에 대해 정확히 이런 실패 방식을 만들어낸다.
   await expect(page.getByLabel('Title', { exact: true })).toBeVisible()
 
-  await page.getByRole('link', { name: 'Posts' }).click()
+  await page.getByRole('link', { name: 'Post', exact: true }).click()
   await expect(page).toHaveURL(/\/$/)
-  await expect(page.getByRole('heading', { name: 'Posts' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Post', exact: true })).toBeVisible()
 })
 
 test('a direct load of /files renders the file board (regex-anchored proxy, not a backend 404)', async ({
@@ -45,7 +47,7 @@ test('a direct load of /files renders the file board (regex-anchored proxy, not 
 
   await page.goto('/files')
 
-  await expect(page.getByRole('heading', { name: 'Files' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'File', exact: true })).toBeVisible()
   await expect(page.getByLabel('Title', { exact: true })).toBeVisible()
 })
 
@@ -59,10 +61,10 @@ test('a direct load of /posts/:id renders PostDetailPage (regex-anchored proxy, 
   await page.goto('/posts/999999')
 
   await expect(page.getByText('Post not found.')).toBeVisible()
-  // exact: true — 이게 없으면 PostDetailPage 자체의 에러 상태 "Back to posts" 링크도
-  // "Posts"에 대한 단순 부분 문자열 쿼리에 걸린다(frontend/CLAUDE.md E2E gotchas).
-  await expect(page.getByRole('link', { name: 'Posts', exact: true })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Files', exact: true })).toBeVisible()
+  // exact: true — 이게 없으면 PostDetailPage 자체의 에러 상태 "Back to post list" 링크도
+  // "Post"에 대한 단순 부분 문자열 쿼리에 걸린다(frontend/CLAUDE.md E2E gotchas).
+  await expect(page.getByRole('link', { name: 'Post', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'File', exact: true })).toBeVisible()
 })
 
 test('unauthenticated visits to /files and /posts/:id redirect to /login', async ({ page }) => {

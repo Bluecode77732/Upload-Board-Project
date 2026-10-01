@@ -13,6 +13,108 @@
 ## [Unreleased]
 
 ### 변경
+- **문서: 2026-10-01/02 프론트엔드 세션의 기록 (2026-10-02)** — 문서만 바꿨고, `frontend/nginx.conf`에
+  주석 한 블록을 더했다(`94c8373`, CSP 값은 그대로다). 아래 항목들이 이미 가리키는 것 외에:
+  `frontend/docs/STYLE-PLAN.md`가 "한글/영어 UI 텍스트 혼용" 항목과 확인 필요 사항 2번, 6번(File 헤더는
+  720px 칼럼에 둔다), 7번(라이선스 고지 파일은 두지 않는다)을 닫았다. [ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md)에는
+  CSP 아래의 글꼴에 대한 2026-10-01 추가 기록이 생겼고, 한국어판에서 번역되지 않았던 첫 Addendum 제목을
+  고쳤다. ROADMAP §7에는 `admin/` axios 항목(패치함)과 `.ko.md` 한국어 점검 항목이 생겼고, 2026-09-07
+  서체 행에는 "변경" 문장을 덧붙였으며(여전히 "시스템 세리프, 신규 의존성 0건"이라고 적혀 있었다),
+  2026-09-16 크기 행에는 새 수치(`frontend/` production 패키지 5개, `dist` 약 6.3MB)를 적었다. CLAUDE.md >
+  Known Gaps에는 파일 전체를 다시 읽지 않고 수정한 `.ko.md` 네 개를 올렸고, `frontend/CLAUDE.md`에는 UI
+  문구, 페이지 셸, 글꼴, 스텁 기반 e2e 규칙이 들어갔으며, nginx 주석은 글꼴을 자체 호스팅해야 하는 이유와
+  Vite가 `.woff2`를 인라인하면 안 되는 이유를 적는다. 하지 않은 것: `CHANGELOG.ko.md`, `ROADMAP.ko.md`,
+  `frontend/CLAUDE.ko.md`, `frontend/README.ko.md`의 한국어 점검([ROADMAP.ko.md](ROADMAP.ko.md) §7).
+- **`admin/`: axios 1.19.0 → 1.20.0 (2026-10-02, `40d6227`)** — 아래 `frontend/` 항목에서 말한, 읽기
+  전용으로 돌린 `pnpm audit --prod`가 1.20.0 미만 `axios`에 대한 12건(high 7, moderate 5)을 보고했다.
+  취약점 요약을 `admin/` 코드(`axios.create` 인스턴스 하나, 브라우저의 XHR 어댑터, `FormData`·`proxy`·
+  `maxRedirects`·`adapter` 없음)와 맞춰 읽으면 6건은 Node 전용 코드, 3건은 fetch 어댑터, 3건은 `admin/`이
+  쓰지 않는 기능에 해당해 노출은 낮아 보였다. 패치가 싸서 그래도 올렸다. `pnpm update axios`로 선언된 범위
+  안에서 올렸고 범위 하한은 이제 `^1.20.0`이며, 잠금 파일 변경은 `axios`뿐이다. `pnpm audit --prod`는 이제
+  알려진 취약점이 없다고 나오고, lint(에러 없음, `protected-route.tsx`의 기존 경고 1건)·`pnpm test`(24/24)·
+  `pnpm build`가 통과한다. 단위 테스트가 `axios`를 mock으로 대체하므로 401 → 갱신 → 재시도 인터셉터 흐름도
+  실제 1.20.0과 로컬 서버로 한 번 돌려 확인했다(만료된 토큰 → 401 → 새 토큰으로 재시도 → 200). 돌리지 않은
+  것: `admin-e2e`(백엔드와 시드된 superadmin이 필요하다)이며 CI가 확인한다. 평가는
+  [ROADMAP.ko.md](ROADMAP.ko.md) §7에 있다.
+- **`frontend/`: react-router-dom 7.18.1 → 7.18.4 (2026-10-02, `e251b57`)** — 아래 글꼴을 추가하다가
+  `pnpm audit --prod`가 `react-router` `>=7.12.0 <7.18.2`에서 high 취약점 1건(RSC 모드 CSRF 우회,
+  GHSA-qwww-vcr4-c8h2)을 보고했다. 글꼴 때문에 생긴 것이 아니다: 그 설치의 잠금 파일 diff는 글꼴 패키지
+  둘만 바꿨다. 이 앱은 RSC 모드를 쓰지 않지만 패치 버전이 있어, `react-router-dom`을 범위 안 최신 7.x로
+  올렸다(`react-router`도 같은 버전으로 고정된다). 이제 `frontend/`의 `pnpm audit --prod`는 알려진
+  취약점이 없다고 나오고, lint·`tsc`·build·스텁 기반 e2e가 통과하며 코드 변경은 없다. `admin/`은 건드리지
+  않았다 — 읽기 전용으로 돌린 `pnpm audit --prod`에서 `axios` 취약점 12건(high 7, moderate 5)이 보였고,
+  이 항목은 그것을 다루지 않는다. 그 취약점은 위 항목에서 따로 패치했다.
+- **프론트엔드: 본문 Noto Sans KR + 제목 Hahmlet, 한글과 영문 모두 (2026-10-01, `f31cd1a`,
+  [ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md) 2026-10-01 추가 기록)** — UI는 직접 불러오는
+  글꼴 파일이 없었다. 한글은 OS에 맡겨졌고(CDP로 측정: Windows에서 제목은 바탕체, 본문은 맑은 고딕),
+  일부 클래스만 `font: inherit`을 써서 버튼·입력창·select는 브라우저 기본 Arial로 그려졌다. 비교표와
+  두 후보를 나란히 보여 주는 아티팩트 미리보기를 거쳐 C안이 선택됐다: `--sans`에
+  `@fontsource-variable/noto-sans-kr`, `--heading`에 `@fontsource-variable/hahmlet`을 한글·영문 모두에
+  적용하고, 제목 자간(−1.68px)은 그대로 둔다. 둘 다 OFL-1.1에 굵기 100–900 가변이다(앱은
+  `font-synthesis: none`에서 400/500/600/700을 쓴다). `main.tsx`에서 불러와 `/assets`로 자체 호스팅한다:
+  nginx CSP가 `font-src 'self'`라 CDN은 막힌다. `index.css`에는 `button, input, select, textarea {
+  font-family: inherit }`을 더했다 — `font: inherit`은 13px대 컨트롤까지 키운다. 검증 중 발견한 문제: Vite가
+  Hahmlet의 2–4KB 조각 2개를 `data:` URI로 인라인했고 CSP가 이를 막아 페이지를 열 때마다 콘솔 에러가 2건
+  났다. 그래서 `frontend/vite.config.ts`(명시적 승인을 받았다)가 `.woff2`를 인라인하지 않게 했다. CSP에
+  `data:`를 허용하는 것이 다른 선택지였고 택하지 않았다. 비용: 의존성 2개, `dist/`에 woff2 216개(약 5.7MB,
+  브라우저는 페이지의 글자에 필요한 조각만 요청한다). 검증: `nginx.conf`에서 읽은 CSP를 그대로 붙여 서빙한
+  빌드 결과를 Chromium(한국어·영어)에서 열면 제목은 Hahmlet, 나머지는 Noto Sans KR로 그려지고 콘솔
+  에러가 없다(Vite 변경 전에는 2건). 새 `e2e/fonts.spec.ts`는 CDP로 플랫폼 글꼴을 읽으며 예전
+  `index.css`에서는 실패한다. 확인하지 못한 것: nginx 이미지와 라이브 ALB(CSP 확인은 헤더를 복사한 Node
+  서버로 했다). `frontend/docs/STYLE-PLAN.md` 3번 항목에, 2026-09-07의 "신규 의존성 0건"이라는 이유가
+  타이포그래피에서는 더 이상 성립하지 않는다고 기록했다. 2026-10-02 확인: 배포되는 woff2는 모두 패키지
+  파일과 바이트까지 같고 메타데이터에 저작권과 OFL-1.1 URL이 들어 있어서 별도 고지 파일은 추가하지
+  않았다(`frontend/docs/STYLE-PLAN.md` 확인 필요 사항 7번).
+- **프론트엔드: 인증된 모든 화면이 하나의 `main` 박스와 720px 칼럼을 쓴다 (2026-10-01, `3eac5d2`)** —
+  헤더·`main`·폼의 폭이 화면마다 달랐다. 1280px에서 측정하면 `main`은 Post 768px, File 1124px, Setting
+  768px, Post 상세 395px, File 상세 524px였고, 내비 헤더는 720/1076/720/347/476px, `h1`은 두 화면에서
+  가운데, 세 화면에서 왼쪽 정렬이었다. 원인: flex column인 `#root` 안에서 페이지마다 둔
+  `.page { margin: auto }`가 `main` 폭을 내용물에 맞춰 줄였다. 새 `src/shared/page.module.css`가 CSS Modules
+  `composes`로 모든 인증 화면에 같은 박스(1126px 안, padding 24/24/80, 왼쪽 정렬)를 준다. `main`의 직계
+  자식은 하나의 720px 칼럼에 놓이고, File의 미리보기 그리드(`wide`)만 그보다 넓다 — 그래서 `FileBoard`는
+  `<section>` 대신 프래그먼트를 돌려준다. 인라인인 "Back to …" 링크는 블록으로 바꿔 칼럼과 줄을 맞춘다.
+  가운데 카드인 `LoginPage`는 일부러 뺐다. 카드와 필터 패널을 720px로, 미리보기 그리드는 넓게 두는 안은
+  `ead3b90`에서 비교표로 골랐다. Post·File의 `h1`이 왼쪽 정렬이 된 것은 부수 효과다. 2026-10-02 결정: File 헤더는
+  720px 칼럼에 그대로 둔다(`frontend/docs/STYLE-PLAN.md` 확인 필요 사항 6번) — 넓히면 Post와 File 사이를
+  오갈 때 내비 링크가 178px 뛰거나, 모든 화면에서 내비 링크가 내용보다 왼쪽에 놓인다. 검증: 다섯 화면 모두
+  1280/900/375px에서 같은 박스이고, 새 `e2e/layout.spec.ts`(데스크톱·모바일, API 스텁, 계정 생성 없음)는
+  File 상세의 CSS를 되돌리면 실패한다. 규칙은 `frontend/CLAUDE.md`에 적었다.
+- **프론트엔드: 한/영 전환, 단수 명사, "Date" 라벨 (2026-10-01, `ead3b90`)** — `NavBar`의 테마 토글
+  왼쪽에 같은 40×40 원형 버튼을 두어 모든 UI 문구를 영어(기본)와 한국어로 전환한다. 선택은
+  `localStorage`(`ui-lang`)에 저장되고 `<html lang>`에 반영된다. i18n 라이브러리는 없다: `src/i18n/`가
+  `ThemeProvider`(컨텍스트, provider, 훅)를 본떴고, `messages.ts`의 두 사전 중 `ko`가
+  `Record<MessageKey, string>`이라 번역이 빠지면 `tsc`가 실패한다. `ApiError`를 문구로 바꾸는 함수는
+  `Translatable`(키, 또는 서버 문구를 그대로 보여줄 때의 `{ raw }`)을 돌려주고 컴포넌트가 렌더 시점에
+  번역하므로, 에러가 떠 있는 상태에서 언어를 바꿔도 새 언어로 다시 그려진다. 영어 문구의 명사는
+  단수(Post, File, Setting)이고 문장도 그에 맞게 고쳤다. URL은 `/post`, `/file`이 API prefix라
+  `/posts/:id`, `/files` 그대로다. 정렬 라벨은 Post와 File 모두에서 `createdAt`을 "Date"로 보여준다(요청
+  값은 그대로). 같은 커밋에서 File의 필터 패널을 업로드 카드와 같은 720px에 맞췄고(폭은 비교표로
+  골랐다), Post의 검색창도 File처럼 남는 폭을 채우게 했다. 다루지 않은 것: 서버가 보내는 문구(`USER_HAS_FILES`
+  메시지, `VALIDATION_FAILED` 배열)는 받은 그대로 영어로 보이고, 로그인 화면은 테마 토글이 없어 언어 토글도
+  없다. `frontend/docs/STYLE-PLAN.md`의 "한글/영어 UI 텍스트 혼용" 항목은 해결로 표시했다. 검증: 스텁
+  기반 `e2e/language.spec.ts`(토글, 새로고침, 크기와 위치)와 이름이 바뀐 셀렉터 확인. 실제 계정을 만드는
+  e2e는 로컬에서 돌리지 않았고 CI에 맡긴다.
+- **프론트엔드: 로그인 화면의 약한 비밀번호·요청 한도 문구, 파일 입력 초기화, 폼 카드 폭 통일
+  (2026-10-01, `906ce3c`)** — `password`로 가입하면 "Something went wrong"만 보였다. 백엔드의
+  `AUTH_WEAK_PASSWORD`(2026-09-11)가 `src/api/errorCodes.ts`에 추가된 적이 없고(37개 중 빠진 유일한
+  코드) `LoginPage`에도 분기가 없었다. 이 코드와 `RATE_LIMITED`(429, 분당 5회 인증 제한)에 각자의 문구를
+  달았다. `frontend/docs/API-CONTRACT.md`(+ko)에 register의 `400`과 `429`를 전용 문구로 처리하는 곳이
+  `LoginPage`뿐이라는 점을 적었다 — 다른 화면은 일반 문구 그대로이며, 비교표로 로그인 화면만 포함하기로
+  정했다. `UploadForm`의 비제어 파일 입력은 업로드 성공이나 타입 전환 뒤에 컴포넌트 상태는 비었는데도
+  이전 파일을 계속 보여줬고, 그래서 같은 파일을 다시 고르면 `change` 이벤트가 오지 않았다. 이제 입력
+  요소를 다시 마운트한다(`key`). Choose File 클릭이 실제로 막히는 현상은 재현하지 못했다. Post·File·Setting의
+  폼 카드도 하나의 모양(720px, `border-box`, 가운데 정렬)으로 맞췄다. 검증: 로컬 백엔드에 대한 실제 확인
+  (`password`로 `POST /auth/register` → 400, 문구 표시, 계정 생성 없음), 새 e2e 2개(429는 스텁)가 예전
+  `LoginPage`에서는 실패한다.
+- **2026-09-30 라이브 확인 결과 기록 (2026-09-30, [ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md),
+  [0059](ADR/0059-upload-malware-scanning-clamav.ko.md), [0062](ADR/0062-admin-same-alb-subpath-routing.ko.md),
+  [0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md) 추가 기록)** — 문서 변경이며,
+  `values-prod.yaml`의 Ingress 인증서 ARN도 바꿨다. 재사용 위임 세트로 만든 두 번째 zone이 같은
+  네임서버를 받았다(ADR 0063 확인 5, 생성과 삭제는 개발자가 실행하고 세션은 zone 목록을 읽었다).
+  재배포한 스택에서 unlisted 첨부 수정(`1c845a3`)이 소유자에게 동작하고, 프론트가
+  `UPLOAD_MALWARE_DETECTED`에 전용 문구를 보여 주며(`5d268b2`), `frontend/` 플레이어의 seek이 S3에서
+  `206`으로 처리된다 — ADR 0036 D6의 미해결 항목이다. `admin/`에는 미디어 플레이어가 없어 그쪽은 확인할
+  대상이 없다. `k8s/helm/README.md`와 ROADMAP의 S3 행에도 같은 결과를 적었다.
 - **라이브 실행 문서를 바로잡고 보충 (2026-09-27, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md),
   [0060](ADR/0060-frontend-same-alb-path-routing.ko.md), [0057](ADR/0057-terraform-state-backend-s3-native-lock.ko.md)
   추가 기록)** — 문서만 바꿨다. 2026-09-26 기록은 `/admin/`의 `200`이 admin 규칙이 제대로 라우팅됐다는

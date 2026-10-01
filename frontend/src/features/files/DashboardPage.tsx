@@ -4,12 +4,14 @@
 //   업로드가 성공하면 refreshSignal을 올려 보드가 자신의 쿼리를 다시 실행한다.
 
 import { useState } from 'react'
+import { useLanguage } from '../../i18n/useLanguage'
 import { NavBar } from '../../shared/NavBar'
 import { FileBoard } from './FileBoard'
 import { UploadForm } from './UploadForm'
 import styles from './DashboardPage.module.css'
 
 export function DashboardPage() {
+  const { t } = useLanguage()
   // 값 자체에는 의미가 없다 — FileBoard는 이 값의 변화를 자신의 현재 쿼리를 다시 가져오라는
   // 신호로만 쓴다; 업로드 폼은 그 쿼리가 무엇인지 알지도 신경 쓰지도 않는다.
   const [refreshSignal, setRefreshSignal] = useState(0)
@@ -17,7 +19,7 @@ export function DashboardPage() {
   return (
     <main className={styles.page}>
       <NavBar />
-      <h1>Files</h1>
+      <h1>{t('file.heading')}</h1>
       <UploadForm onUploaded={() => setRefreshSignal((n) => n + 1)} />
       <FileBoard refreshSignal={refreshSignal} />
     </main>

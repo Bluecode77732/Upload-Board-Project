@@ -43,7 +43,7 @@ XSS payload cannot exfiltrate a persistable credential.
 
 | Call | Request | Response |
 |---|---|---|
-| `POST /auth/register` | `Authorization: Basic base64(email:password)` | `201` user (no session) |
+| `POST /auth/register` | `Authorization: Basic base64(email:password)` | `201` user (no session); `400 AUTH_WEAK_PASSWORD` if the password is under 10 characters or lacks a lowercase letter, an uppercase letter, a digit, or a symbol (checked before the email-uniqueness lookup) |
 | `POST /auth/signin` | `Authorization: Basic base64(email:password)` | `{ accessToken }` + `Set-Cookie: refreshToken` |
 | `POST /auth/token/refresh` | refresh cookie (automatic) | `{ accessToken }` + rotated cookie |
 | `POST /auth/signout` | `Authorization: Bearer <access>` | `{ success: true }` + cookie cleared |
@@ -94,9 +94,10 @@ Every error is the frozen `ErrorBody` shape:
 - Validation failures use `code: VALIDATION_FAILED` with a `message` **array**.
 - `ApiError` (`src/api/client.ts`) carries `status` and `code` for UI branching.
 - **Every route can return `429 RATE_LIMITED`** (backend ADR 0053) — a global
-  100 requests/minute default, not tied to any one resource. Not yet handled with a
-  dedicated UI message anywhere in this app; it currently falls through to whatever
-  generic error display a caller already has.
+  100 requests/minute default, not tied to any one resource (`/auth/register`,
+  `/auth/signin` and `/auth/token/refresh` tighten it to 5/minute, backend ADR 0054).
+  Only `LoginPage` shows a dedicated message for it; every other screen still falls
+  through to whatever generic error display it already has.
 
 ## Resource routes (canonical, frozen — backend ADR 0010)
 

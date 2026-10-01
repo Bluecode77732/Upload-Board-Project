@@ -8,71 +8,86 @@ import { useState, type FormEvent } from 'react'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { AttachResponse, FileResponse } from '../../api/types'
+import { useLanguage } from '../../i18n/useLanguage'
+import type { MessageKey, Translatable } from '../../i18n/messages'
 import styles from './UploadForm.module.css'
 
 // 백엔드의 필드별 허용목록(upload.controller.ts UPLOAD_ALLOWLIST, ADR 0027)을 그대로 반영한다:
 // 이 세 multipart 필드 중 정확히 하나만, 필드마다 고유한 확장자/mimetype과 100MB 상한을 가진다.
 type UploadFieldType = 'image' | 'audio' | 'video'
 
-const FIELD_CONFIG: Record<UploadFieldType, { label: string; accept: string; hint: string }> = {
-  image: { label: 'Image', accept: 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp', hint: 'jpg, jpeg, png, webp' },
-  audio: { label: 'Audio', accept: 'audio/mpeg,.mp3', hint: 'mp3' },
-  video: { label: 'Video', accept: 'video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm', hint: 'mp4, mov, webm' },
+// label은 번역 키이고, hint(확장자 목록)는 언어와 무관한 식별자라 번역하지 않는다.
+const FIELD_CONFIG: Record<UploadFieldType, { label: MessageKey; accept: string; hint: string }> = {
+  image: { label: 'upload.type.image', accept: 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp', hint: 'jpg, jpeg, png, webp' },
+  audio: { label: 'upload.type.audio', accept: 'audio/mpeg,.mp3', hint: 'mp3' },
+  video: { label: 'upload.type.video', accept: 'video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm', hint: 'mp4, mov, webm' },
 }
 
-function messageForError(error: unknown, fieldType: UploadFieldType): string {
+// 목적: 업로드 실패 응답을 화면에 보여줄 메시지 키로 바꾼다.
+// 이유: 한/영 토글 후에도 떠 있는 에러가 새 언어로 다시 그려지도록 번역된 문자열이 아니라 키를 돌려준다.
+//       타입별 문구(허용 형식, 파일 선택 요청)는 키를 타입마다 따로 둬서 한국어도 완전한 문장이 되게 했다.
+// 방법: ApiError의 고정 code로 switch(backend ADR 0011)해 키를 고르고, 문구는 렌더 시 t()가 만든다.
+function messageForError(error: unknown, fieldType: UploadFieldType): Translatable {
   if (error instanceof ApiError) {
-    // 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
     switch (error.code) {
       case ErrorCode.UPLOAD_INVALID_TYPE:
-        return `Only ${FIELD_CONFIG[fieldType].label.toLowerCase()} files are allowed (${FIELD_CONFIG[fieldType].hint}).`
+        return `upload.err.invalidType.${fieldType}`
       case ErrorCode.UPLOAD_FILE_REQUIRED:
-        return `Please choose a ${FIELD_CONFIG[fieldType].label.toLowerCase()} file to upload.`
+        return `upload.err.fileRequired.${fieldType}`
       case ErrorCode.UPLOAD_MULTIPLE_FIELDS:
         // 이 폼에서는 도달할 수 없다(항상 필드 하나만 보낸다), 그래도 실제 백엔드 코드다(ADR 0025 D5).
-        return 'Only one file may be attached at a time.'
+        return 'upload.err.multipleFields'
       case ErrorCode.PAYLOAD_TOO_LARGE:
-        return 'That file is too large — the limit is 100 MB.'
+        return 'upload.err.tooLarge'
       case ErrorCode.FILE_TITLE_TAKEN:
-        return 'A file with that title already exists — pick another.'
+        return 'upload.err.titleTaken'
       case ErrorCode.FILE_INVALID_PATH:
-        return 'Upload could not be completed — please try again.'
+        return 'upload.err.invalidPath'
       case ErrorCode.FILE_ALREADY_CLAIMED:
         // 이 temp 업로드는 이미 다른 사람이 승격시켰다(ADR 0019, 409).
-        return 'That upload was already claimed — please attach the file again.'
+        return 'upload.err.alreadyClaimed'
       case ErrorCode.UPLOAD_MALWARE_DETECTED:
         // ClamAV가 콘텐츠에서 악성코드를 확정 탐지했다(ADR 0059 D3) — 확장자/mimetype
         // 허용목록은 이미 통과했으므로 사용자에게는 스캔 결과로 명확히 알린다.
-        return 'This file was rejected by our malware scanner. If you believe this is a mistake, please try a different file.'
+        return 'upload.err.malware'
       case ErrorCode.UPLOAD_SCAN_UNAVAILABLE:
         // 스캐너에 연결할 수 없거나 재시도가 모두 타임아웃됐다(ADR 0059 D4, fail-closed) —
         // 파일 자체가 아니라 스캔 자체가 되지 않았다는 뜻이라 재시도를 안내한다.
-        return 'The malware scanner is temporarily unavailable — please try again shortly.'
+        return 'upload.err.scanUnavailable'
       case ErrorCode.VALIDATION_FAILED:
-        return 'Please enter a title and choose a file.'
+        return 'upload.err.validation'
       default:
-        return 'Upload failed. Please try again.'
+        return 'upload.err.default'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
 export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
+  const { t } = useLanguage()
   const [title, setTitle] = useState('')
   const [fieldType, setFieldType] = useState<UploadFieldType>('video')
   const [file, setFile] = useState<File | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Translatable | null>(null)
   const [busy, setBusy] = useState(false)
   // 지금까지 전송된 1단계(attach 업로드)의 진행률(0-100); 대기 중이거나 2단계(작은 JSON
   // promote 호출 — 그 자체로는 의미 있는 진행률이 없다) 동안에는 null.
   const [progress, setProgress] = useState<number | null>(null)
   // replay된 청구(200)와 신규 승격(201, ADR 0019)을 구분한다 — 다음 제출 시 초기화해
   // 오래된 안내 문구가 그 업로드가 끝난 뒤까지 남아있지 않게 한다.
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<Translatable | null>(null)
+  // 파일 입력은 uncontrolled라 setFile(null)만으로는 브라우저가 들고 있는 선택이 비워지지 않는다 —
+  // 이 값을 올려 입력 요소를 새로 마운트시키면 화면에 보이는 파일명과 state가 함께 초기화된다.
+  const [fileInputKey, setFileInputKey] = useState(0)
 
+  // 목적: 업로드 타입(image/audio/video)을 바꾸고, 앞서 고른 파일을 입력창과 state 양쪽에서 비운다.
+  // 이유: 입력창이 이전 파일명을 계속 보여주는데 state는 null이라, 같은 파일을 다시 고르면 change
+  //       이벤트가 오지 않고 "Please choose a … file"이 떠서 Choose File이 먹통처럼 보였다.
+  // 방법: setFile(null)에 더해 fileInputKey를 올려 입력 요소를 remount한다.
   function onFieldTypeChange(next: UploadFieldType) {
     setFieldType(next)
     setFile(null) // 한 타입에서 고른 파일은 다른 타입의 허용목록에서는 유효하지 않다
+    setFileInputKey((k) => k + 1)
   }
 
   // 목적: 두 단계 업로드(attach→promote)를 수행하고, promote 응답이 신규(201)인지 이미 청구된
@@ -81,13 +96,14 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
   //       status를 읽는다. 409 FILE_ALREADY_CLAIMED(다른 사람이 이미 청구)는 이 얘기와 다르며
   //       messageForError가 이미 처리한다.
   // 방법: attach는 그대로 두고, promote만 api.postWithStatus로 바꿔 status===200이면 replay 문구,
-  //       201이면 기존 성공 흐름(별도 안내 없음).
+  //       201이면 기존 성공 흐름(별도 안내 없음). 성공하면 fileInputKey를 올려 입력창도 비운다 —
+  //       실패했을 때는 파일을 그대로 둬서 같은 파일로 바로 재시도할 수 있다.
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
     setNotice(null)
     if (!file) {
-      setError(`Please choose a ${FIELD_CONFIG[fieldType].label.toLowerCase()} file to upload.`)
+      setError(`upload.err.fileRequired.${fieldType}`)
       return
     }
     setBusy(true)
@@ -107,11 +123,12 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
       setProgress(null)
       const { status } = await api.postWithStatus<FileResponse>('/file', { title, filePath: filename })
       if (status === 200) {
-        setNotice('This file was already uploaded — reusing the existing entry.')
+        setNotice('upload.notice.replayed')
       }
 
       setTitle('')
       setFile(null)
+      setFileInputKey((k) => k + 1)
       onUploaded()
     } catch (err) {
       setError(messageForError(err, fieldType))
@@ -123,9 +140,9 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
 
   return (
     <form onSubmit={onSubmit} className={styles.form}>
-      <h2 className={styles.heading}>Upload a file</h2>
+      <h2 className={styles.heading}>{t('upload.heading')}</h2>
       <label className={styles.field}>
-        Title
+        {t('common.title')}
         <input className={styles.input} value={title} onChange={(e) => setTitle(e.target.value)} required />
       </label>
       <div className={styles.radioGroup}>
@@ -139,13 +156,14 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
               onChange={() => onFieldTypeChange(type)}
               disabled={busy}
             />
-            {FIELD_CONFIG[type].label}
+            {t(FIELD_CONFIG[type].label)}
           </label>
         ))}
       </div>
       <label className={styles.field}>
-        {FIELD_CONFIG[fieldType].label} file ({FIELD_CONFIG[fieldType].hint} · max 100 MB)
+        {t('upload.fileLabel', { type: t(FIELD_CONFIG[fieldType].label), hint: FIELD_CONFIG[fieldType].hint })}
         <input
+          key={fileInputKey}
           type="file"
           className={styles.fileInput}
           accept={FIELD_CONFIG[fieldType].accept}
@@ -159,10 +177,10 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
           <span className={styles.progressText}>{progress}%</span>
         </div>
       )}
-      {notice && <p className={styles.notice}>{notice}</p>}
-      {error && <p className={styles.error}>{error}</p>}
+      {notice && <p className={styles.notice}>{t(notice)}</p>}
+      {error && <p className={styles.error}>{t(error)}</p>}
       <button type="submit" className={styles.submit} disabled={busy}>
-        {busy ? 'Uploading…' : 'Upload'}
+        {busy ? t('upload.submitting') : t('upload.submit')}
       </button>
     </form>
   )

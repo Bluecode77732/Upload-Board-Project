@@ -10,6 +10,8 @@ import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import { FILE_SORT_FIELDS, SORT_ORDERS } from '../../api/types'
 import type { FileListResponse, FileResponse, FileSortField, SortOrder } from '../../api/types'
+import { useLanguage } from '../../i18n/useLanguage'
+import type { MessageKey, Translatable } from '../../i18n/messages'
 import { FilePreviewTile } from './FilePreviewTile'
 import styles from './FileBoard.module.css'
 
@@ -19,20 +21,30 @@ const TAKE = 9
 // 가만히 스크롤만 해서는 테이블 전체가 메모리로 딸려 들어오지 않는다.
 const AUTO_LOAD_MAX = 180
 
-// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
-function messageForError(error: unknown): string {
+// 서버에 보내는 sortBy 값은 그대로 두고 화면 라벨만 바꾼다 — createdAt은 사용자에게 "Date"로 보인다.
+const SORT_FIELD_LABEL: Record<FileSortField, MessageKey> = {
+  createdAt: 'sort.date',
+  title: 'sort.title',
+  id: 'sort.id',
+}
+
+// 목적: 파일 목록 조회 실패 응답을 화면에 보여줄 메시지 키로 바꾼다.
+// 이유: 한/영 토글 후에도 떠 있는 에러가 새 언어로 다시 그려지도록 번역된 문자열이 아니라 키를 돌려준다.
+// 방법: ApiError의 고정 code로 switch(backend ADR 0011)해 키를 고르고, 문구는 렌더 시 t()가 만든다.
+function messageForError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.VALIDATION_FAILED:
-        return 'Invalid search or filter value.'
+        return 'board.err.invalidFilter'
       default:
-        return 'Failed to load files.'
+        return 'file.err.loadFailed'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
 export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
+  const { t } = useLanguage()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [sortBy, setSortBy] = useState<FileSortField>('createdAt')
@@ -41,7 +53,7 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
   const [files, setFiles] = useState<FileResponse[] | null>(null)
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Translatable | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   // 가장 최신 요청만 상태를 쓸 수 있다: 그렇지 않으면 요청 도중 필터가 바뀌었을 때 오래된
   // 페이지가 새 쿼리의 결과 뒤에 이어 붙어버릴 수 있다.
@@ -124,21 +136,23 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
   const filtersActive =
     search !== '' || sortBy !== 'createdAt' || order !== 'DESC' || creatorIdInput !== ''
 
+  // 래퍼 없이 프래그먼트로 돌려준다 — 필터·안내 문구·푸터는 main의 720px 칼럼에, 그리드만 칼럼보다 넓게
+  // 놓이려면 이 요소들이 main(src/shared/page.module.css)의 직계 자식이어야 하기 때문이다.
   return (
-    <section className={styles.board}>
+    <>
       <div className={styles.filters}>
         <label className={`${styles.field} ${styles.searchField}`}>
-          Search
+          {t('common.search')}
           <input
             className={styles.input}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             maxLength={100}
-            placeholder="Title contains…"
+            placeholder={t('board.searchPlaceholder')}
           />
         </label>
         <label className={styles.field}>
-          Sort by
+          {t('board.sortBy')}
           <select
             className={styles.select}
             value={sortBy}
@@ -146,13 +160,13 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
           >
             {FILE_SORT_FIELDS.map((field) => (
               <option key={field} value={field}>
-                {field}
+                {t(SORT_FIELD_LABEL[field])}
               </option>
             ))}
           </select>
         </label>
         <label className={styles.field}>
-          Order
+          {t('board.order')}
           <select
             className={styles.select}
             value={order}
@@ -160,19 +174,19 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
           >
             {SORT_ORDERS.map((direction) => (
               <option key={direction} value={direction}>
-                {direction === 'ASC' ? 'Ascending' : 'Descending'}
+                {t(direction === 'ASC' ? 'sort.ascending' : 'sort.descending')}
               </option>
             ))}
           </select>
         </label>
         <label className={styles.field}>
-          Creator ID
+          {t('common.creatorId')}
           <input
             className={`${styles.input} ${styles.creatorInput}`}
             value={creatorIdInput}
             onChange={(e) => setCreatorIdInput(e.target.value)}
             inputMode="numeric"
-            placeholder="Any"
+            placeholder={t('board.anyCreator')}
           />
         </label>
         {filtersActive && (
@@ -186,15 +200,15 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
               setCreatorIdInput('')
             }}
           >
-            Clear filters
+            {t('board.clearFilter')}
           </button>
         )}
       </div>
 
-      {!creatorIdValid && <p className={styles.error}>Creator ID must be a positive whole number.</p>}
-      {error && <p className={styles.error}>{error}</p>}
-      {files === null && !error && <p>Loading files…</p>}
-      {files && files.length === 0 && <p>No files match the current filters.</p>}
+      {!creatorIdValid && <p className={styles.error}>{t('board.err.creatorIdInvalid')}</p>}
+      {error && <p className={styles.error}>{t(error)}</p>}
+      {files === null && !error && <p>{t('common.loading')}</p>}
+      {files && files.length === 0 && <p>{t('file.empty')}</p>}
       {files && files.length > 0 && (
         <ul className={styles.grid}>
           {files.map((file) => (
@@ -213,9 +227,7 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
 
       {files && total > 0 && (
         <div className={styles.footer}>
-          <span>
-            Showing {loadedCount} of {total}
-          </span>
+          <span>{t('file.footer.showing', { loaded: loadedCount, total })}</span>
           {hasMore && (
             <button
               type="button"
@@ -223,16 +235,14 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
               disabled={loading}
               onClick={() => fetchPage(loadedCount, true)}
             >
-              {loading ? 'Loading…' : 'Load more'}
+              {loading ? t('common.loading') : t('common.loadMore')}
             </button>
           )}
           {hasMore && autoLoadPaused && (
-            <span className={styles.autoPausedNote}>
-              Auto-loading paused past {AUTO_LOAD_MAX} files.
-            </span>
+            <span className={styles.autoPausedNote}>{t('file.autoPaused', { max: AUTO_LOAD_MAX })}</span>
           )}
         </div>
       )}
-    </section>
+    </>
   )
 }

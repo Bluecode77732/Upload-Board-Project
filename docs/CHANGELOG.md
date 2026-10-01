@@ -13,6 +13,125 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Docs: records for the 2026-10-01/02 frontend session (2026-10-02)** — documentation only, plus one
+  comment block in `frontend/nginx.conf` (`94c8373`; the CSP value is unchanged). Beyond what the
+  entries below already cite: `frontend/docs/STYLE-PLAN.md` closes its "Korean/English UI-text split"
+  item and open questions 2, 6 (the File header stays in the 720px column) and 7 (no license notice
+  file); [ADR 0060](ADR/0060-frontend-same-alb-path-routing.md) gained a 2026-10-01 Addendum on fonts
+  under the CSP, and its Korean sibling's untranslated first Addendum heading was fixed; ROADMAP §7
+  gained the `admin/` axios row (patched) and the `.ko.md` fluency row, its 2026-09-07 typeface row got
+  an "Amended" note (it still read "system serif, zero new dependency"), and its 2026-09-16 size row got
+  the new figures (`frontend/` now has 5 production packages and a `dist` of about 6.3MB); CLAUDE.md >
+  Known Gaps lists the four `.ko.md` files edited without a whole-file re-read; `frontend/CLAUDE.md`
+  gained the UI-text, page-shell, font and stub-based e2e rules; and the nginx comment says why fonts
+  must be self-hosted and why Vite must not inline `.woff2`. Not done: the Korean fluency pass over
+  `CHANGELOG.ko.md`, `ROADMAP.ko.md`, `frontend/CLAUDE.ko.md` and `frontend/README.ko.md`
+  ([ROADMAP.md](ROADMAP.md) §7).
+- **`admin/`: axios 1.19.0 → 1.20.0 (2026-10-02, `40d6227`)** — the read-only `pnpm audit --prod`
+  noted in the `frontend/` entry below reported 12 advisories on `axios` below 1.20.0 (7 high, 5
+  moderate). Reading the advisory summaries against `admin/`'s code (one `axios.create` instance,
+  the browser's XHR adapter, no `FormData`, `proxy`, `maxRedirects` or `adapter`) put six of them on
+  Node-only code, three on the fetch adapter and three on features `admin/` does not use, so the
+  exposure looked low; the patch was cheap, so it was made anyway. `pnpm update axios` moved it
+  inside the declared range and the range floor is now `^1.20.0`; the lockfile diff is `axios`
+  only. `pnpm audit --prod` now reports no known vulnerabilities; lint (no errors, one existing
+  warning in `protected-route.tsx`), `pnpm test` (24/24) and `pnpm build` pass. The unit tests mock
+  `axios`, so the 401 → refresh → retry interceptor flow was also run once against the real 1.20.0
+  and a local server (stale token → 401 → retry with the fresh token → 200). Not run: `admin-e2e`
+  (it needs the backend and a seeded superadmin), which CI covers. [ROADMAP.md](ROADMAP.md) §7
+  records the assessment.
+- **`frontend/`: react-router-dom 7.18.1 → 7.18.4 (2026-10-02, `e251b57`)** — adding the fonts
+  below made `pnpm audit --prod` report one high advisory on `react-router` `>=7.12.0 <7.18.2`
+  (RSC-mode CSRF bypass, GHSA-qwww-vcr4-c8h2). It predates them: that install's lockfile diff
+  touched only the two font packages. The app does not use RSC mode, but a patched release exists,
+  so `react-router-dom` moved to the highest 7.x (it pins `react-router` to the same version).
+  `pnpm audit --prod` now reports no known vulnerabilities for `frontend/`; lint, `tsc`, build and
+  the stub-based e2e specs pass; no code changed. `admin/` was not touched — a read-only `pnpm
+  audit --prod` there lists 12 `axios` advisories (7 high, 5 moderate) that this entry does not
+  address; they were patched separately, in the entry above.
+- **Frontend: Noto Sans KR body and Hahmlet headings, for Hangul and Latin (2026-10-01,
+  `f31cd1a`, [ADR 0060](ADR/0060-frontend-same-alb-path-routing.md) 2026-10-01 Addendum)** — the
+  UI loaded no font files. Hangul fell to the OS (measured through CDP: on Windows headings drew in
+  Batang and body text in Malgun Gothic), and buttons, inputs and selects drew in the browser's
+  default Arial because only some classes set `font: inherit`. A comparison table and then an
+  artifact preview of both candidates picked option C: `@fontsource-variable/noto-sans-kr` for
+  `--sans` and `@fontsource-variable/hahmlet` for `--heading`, for Hangul and Latin alike, with the
+  heading letter-spacing unchanged (−1.68px). Both are OFL-1.1 and variable 100–900 (the app uses
+  400/500/600/700 under `font-synthesis: none`), imported in `main.tsx` and self-hosted into
+  `/assets`: the nginx CSP is `font-src 'self'`, so a CDN is blocked. `index.css` adds `button,
+  input, select, textarea { font-family: inherit }` — `font: inherit` would have grown the 13px
+  controls. Found while verifying: Vite inlined two 2–4KB Hahmlet slices as `data:` URIs, which
+  the CSP blocks (two console errors on every page load), so `frontend/vite.config.ts` (explicit
+  approval given) no longer inlines `.woff2`; allowing `data:` in the CSP was the other option and
+  was not taken. Cost: two dependencies and 216 more woff2 files in `dist/` (about 5.7MB; a browser
+  requests only the slices a page's characters need). Verified: the built `dist/`, served with the
+  exact CSP read from `nginx.conf`, draws headings in Hahmlet and everything else in Noto Sans KR in
+  Chromium (Korean and English) with no console error (two before the Vite change); the new
+  `e2e/fonts.spec.ts` reads the platform font through CDP and fails on the old `index.css`. Not
+  verified: the nginx image and a live ALB (the CSP check used a Node server that copies the
+  header). `frontend/docs/STYLE-PLAN.md` item 3 records that 2026-09-07's "zero new dependency"
+  reason no longer holds for typography. Checked 2026-10-02: every shipped woff2 is
+  byte-identical to its package file and carries the copyright and the OFL-1.1 URL in its
+  metadata, so no separate notice file was added (`frontend/docs/STYLE-PLAN.md` open question 7).
+- **Frontend: one `main` box and one 720px column on every authenticated screen (2026-10-01,
+  `3eac5d2`)** — the header, `main` and forms differed in width per screen. Measured at 1280px,
+  `main` was 768px on Post, 1124px on File, 768px on Setting, 395px on the Post detail and 524px on
+  the File detail; the nav header was 720/1076/720/347/476px, and the `h1` was centered on two
+  screens and left-aligned on three. Cause: each page's own `.page { margin: auto }` inside the
+  flex-column `#root` shrank `main` to its content. The new `src/shared/page.module.css` gives every
+  authenticated page the same box (inside 1126px, padding 24/24/80, left-aligned text) through CSS
+  Modules `composes`. The direct children of `main` sit in one 720px column, and only the File
+  preview grid (`wide`) is wider — which is why `FileBoard` now returns a fragment instead of a
+  `<section>`. The inline "Back to …" link becomes a block so it lines up with the column.
+  `LoginPage`, a centered card, is left out on purpose. The 720px width for the card and filter
+  panel, with the preview grid wide, was chosen from a comparison table in `ead3b90`. The
+  left-aligned `h1` on Post and File is a side effect. Decided 2026-10-02: the File header stays in
+  the 720px column (`frontend/docs/STYLE-PLAN.md` open question 6) — widening it would make the
+  nav links jump 178px between Post and File, or put them left of the content on every screen. Verified: the same boxes at 1280/900/375px on all five screens,
+  and the new `e2e/layout.spec.ts` (desktop and phone, stubbed API, no account created) fails when
+  File detail's CSS is put back. `frontend/CLAUDE.md` records the rule.
+- **Frontend: English/Korean toggle, singular nouns, "Date" label (2026-10-01, `ead3b90`)** — a
+  40×40 round button left of the theme toggle in `NavBar` switches every UI string between English
+  (default) and Korean; the choice is kept in `localStorage` (`ui-lang`) and sets `<html lang>`.
+  There is no i18n library: `src/i18n/` mirrors `ThemeProvider` (context, provider, hook), and
+  `messages.ts` holds both dictionaries with `ko` typed as `Record<MessageKey, string>`, so a missing
+  translation fails `tsc`. `ApiError` mappers return a `Translatable` (a key, or `{ raw }` for
+  server text) that components translate at render, so a language switch also re-renders an error
+  already on screen. English text uses singular nouns (Post, File, Setting) and the sentences were
+  reworded to match; the URLs stay `/posts/:id` and `/files` because `/post` and `/file` are API
+  prefixes. The sort label shows "Date" for `createdAt` (the request value is unchanged) on both
+  Post and File. The same commit lined File's filter panel up with its upload card at 720px, the
+  width picked from a comparison table, and let Post's search field take the spare width as File's
+  does. Not covered: text the server sends (the `USER_HAS_FILES` message, `VALIDATION_FAILED`
+  arrays) shows as received, in English, and the login screen has no language toggle because it has
+  no theme toggle either. `frontend/docs/STYLE-PLAN.md`'s "Korean/English UI-text split" item is
+  marked resolved. Verified: stub-based `e2e/language.spec.ts` (toggle, reload, size and position)
+  and a probe of the renamed selectors; the e2e specs that register real accounts were not run
+  locally and are left to CI.
+- **Frontend: weak-password and rate-limit messages on the login screen, file-input reset, form
+  cards at one width (2026-10-01, `906ce3c`)** — registering with `password` showed only
+  "Something went wrong": the backend's `AUTH_WEAK_PASSWORD` (2026-09-11) was never added to
+  `src/api/errorCodes.ts` (the only one of the 37 codes missing) and `LoginPage` had no branch for
+  it. It and `RATE_LIMITED` (429, the 5/minute auth limit) now have their own messages;
+  `frontend/docs/API-CONTRACT.md`(+ko) records the register `400` and that only `LoginPage`
+  handles `429` — the other screens keep their generic message, a comparison table settled on
+  login-only. `UploadForm`'s uncontrolled file input kept showing the previous file after a
+  successful upload or a type switch while the component state was empty, so choosing the same file
+  again fired no `change` event; the input now remounts (`key`). A Choose File click that is
+  actually blocked was not reproduced. The Post, File and Setting form cards also got one shape
+  (720px, `border-box`, centered). Verified: live against the local backend (`POST /auth/register`
+  with `password` → 400, the message shown, no account created); two new e2e tests (the 429 one
+  stubbed) fail on the old `LoginPage`.
+- **Live checks of 2026-09-30 recorded (2026-09-30, [ADR 0036](ADR/0036-s3-presigned-content-redirect.md),
+  [0059](ADR/0059-upload-malware-scanning-clamav.md), [0062](ADR/0062-admin-same-alb-subpath-routing.md)
+  and [0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md) Addenda)** — documentation only, plus
+  the Ingress certificate ARN in `values-prod.yaml`. A second zone created with the reusable
+  delegation set got its name servers (ADR 0063 check 5; the developer ran the create and delete,
+  the session read the zone list). On the redeployed stack the unlisted-attachment fix (`1c845a3`)
+  works for the owner, the frontend shows its own message for `UPLOAD_MALWARE_DETECTED` (`5d268b2`),
+  and a seek in the `frontend/` player is served by S3 as `206` — ADR 0036 D6's open item. `admin/`
+  has no media player, so that half has nothing to check. `k8s/helm/README.md` and the ROADMAP S3 row
+  carry the same result.
 - **Live-run docs corrected and completed (2026-09-27, [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md),
   [0060](ADR/0060-frontend-same-alb-path-routing.md) and [0057](ADR/0057-terraform-state-backend-s3-native-lock.md)
   Addenda)** — documentation only. The 2026-09-26 records said the `/admin/` `200` showed the admin

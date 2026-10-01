@@ -35,7 +35,9 @@
   gap: 12px;
 }
 
-.themeToggle {
+/* 언어 토글은 테마 토글과 같은 40x40 원형이다 — 두 버튼이 한 쌍으로 보이도록 규칙을 공유한다. */
+.themeToggle,
+.langToggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -50,11 +52,17 @@
   transition: var(--transition);
 }
 
-.themeToggle:hover {
+.langToggle {
+  font-weight: 700;
+}
+
+.themeToggle:hover,
+.langToggle:hover {
   border-color: var(--brand);
 }
 
-.themeToggle:focus-visible {
+.themeToggle:focus-visible,
+.langToggle:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
 }

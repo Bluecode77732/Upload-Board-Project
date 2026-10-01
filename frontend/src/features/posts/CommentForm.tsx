@@ -9,25 +9,32 @@ import { useState, type FormEvent } from 'react'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { CommentResponse, CreateCommentRequest } from '../../api/types'
+import { useLanguage } from '../../i18n/useLanguage'
+import type { Translatable } from '../../i18n/messages'
 import styles from './CommentForm.module.css'
 
-function messageForError(error: unknown): string {
+// 목적: 댓글 생성 실패 응답을 화면에 보여줄 메시지 키로 바꾼다.
+// 이유: 한/영 토글 후에도 떠 있는 에러가 새 언어로 다시 그려지도록 번역된 문자열이 아니라 키를 돌려준다.
+//       VALIDATION_FAILED만은 서버가 준 문구 그대로를 보여줘야 해서 { raw }로 감싼다.
+// 방법: ApiError의 고정 code로 switch해 키를 고르고, 문구는 렌더 시 t()가 만든다.
+function messageForError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.POST_NOT_FOUND:
-        return 'Post not found.'
+        return 'common.postNotFound'
       case ErrorCode.VALIDATION_FAILED:
-        return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
+        return { raw: Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message }
       default:
-        return 'Failed to post the comment.'
+        return 'comment.err.postFailed'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
 export function CommentForm({ postId, onCreated }: { postId: number; onCreated: () => void }) {
+  const { t } = useLanguage()
   const [body, setBody] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Translatable | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function onSubmit(event: FormEvent) {
@@ -56,11 +63,11 @@ export function CommentForm({ postId, onCreated }: { postId: number; onCreated: 
         rows={3}
         required
         disabled={busy}
-        placeholder="Write a comment…"
+        placeholder={t('comment.placeholder')}
       />
-      {error && <p className={styles.error}>{error}</p>}
+      {error && <p className={styles.error}>{t(error)}</p>}
       <button type="submit" className={styles.submit} disabled={busy}>
-        {busy ? 'Posting…' : 'Post comment'}
+        {busy ? t('common.posting') : t('comment.submit')}
       </button>
     </form>
   )

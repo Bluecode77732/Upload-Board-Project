@@ -17,82 +17,88 @@ import type {
   User,
 } from '../../api/types'
 import { useAuth } from '../../auth/useAuth'
+import { useLanguage } from '../../i18n/useLanguage'
+import type { Translatable } from '../../i18n/messages'
 import { NavBar } from '../../shared/NavBar'
 import { VisibilityBadge } from './VisibilityBadge'
 import styles from './FileDetailPage.module.css'
 
 const VISIBILITY_OPTIONS: FileVisibility[] = ['public', 'private', 'unlisted']
 
-// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
-function messageForError(error: unknown): string {
+// 목적: 파일 읽기/재생 실패 응답을 화면에 보여줄 메시지 키로 바꾼다.
+// 이유: 한/영 토글 후에도 떠 있는 에러가 새 언어로 다시 그려지도록 번역된 문자열이 아니라 키를 돌려준다.
+// 방법: ApiError의 고정 code로 switch(backend ADR 0011)해 키를 고르고, 문구는 렌더 시 t()가 만든다.
+function messageForError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.FILE_NOT_FOUND:
-        return 'File not found.'
+        return 'common.fileNotFound'
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return 'You do not have permission to view this file.'
+        return 'fileDetail.err.noPermission'
       case ErrorCode.FILE_SHARE_INVALID:
-        return 'This share link is missing, invalid, or expired.'
+        return 'fileDetail.err.shareInvalid'
       default:
-        return 'Failed to load the file.'
+        return 'fileDetail.err.loadFailed'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
-// 관리 액션(visibility 토글, 공유 링크 회전, 삭제)의 에러는 읽기/재생과는 다른 코드 집합으로
-// 분기한다(409 FILE_IN_USE는 삭제에만 해당한다).
-function messageForManageError(error: unknown): string {
+// 목적: 관리 액션(visibility 토글, 공유 링크 회전, 삭제) 실패 응답을 메시지 키로 바꾼다.
+// 이유: 읽기/재생과는 다른 코드 집합으로 분기해야 한다(409 FILE_IN_USE는 삭제에만 해당한다). 그리고
+//       messageForError와 같은 이유로 번역된 문자열이 아니라 키(또는 서버가 준 raw 문구)를 돌려준다.
+// 방법: ApiError의 고정 code로 switch해 키를 고르고, VALIDATION_FAILED만 서버 문구를 { raw }로 감싼다.
+function messageForManageError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return 'Only the file creator or an admin can manage this file.'
+        return 'fileDetail.err.manageNotOwner'
       case ErrorCode.FILE_IN_USE:
-        return 'This file is attached to a post and cannot be deleted. Delete the post first.'
+        return 'fileDetail.err.inUse'
       case ErrorCode.FILE_NOT_FOUND:
-        return 'File not found.'
+        return 'common.fileNotFound'
       case ErrorCode.VALIDATION_FAILED:
-        return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
+        return { raw: Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message }
       default:
-        return 'The action failed.'
+        return 'common.actionFailed'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
 type TransferAction = 'propose' | 'cancel' | 'accept' | 'reject'
 
-// 이전 액션(propose/accept/reject/cancel)의 에러는 ADR 0050 코드에 더해 USER_NOT_FOUND(이메일→id
-// 조회 단계)와 VALIDATION_FAILED(propose 폼의 잘못된 형식 이메일은 백엔드에 다른 형태로 도달할
-// 일이 없다)로 분기한다. FORBIDDEN_NOT_OWNER는 호출한 액션에 맞춰 문구를 골라야 한다: propose는
-// creator-or-admin 그대로지만, cancel은 creator 전용으로 좁혀졌다(그러지 않으면 admin이 아무
-// 이유 없이 다른 두 사용자 사이의 대기 중인 이전을 취소할 수 있었을 것이다 — canManage()를
-// 재사용하다 딸려온 권한이지 의도한 결정이 아니다; propose의 admin 분기는 영향받지 않으며
-// 그 자체로 ADR 0050 D4 근거가 있다).
-function messageForTransferError(error: unknown, action: TransferAction): string {
+// 목적: 이전 액션(propose/accept/reject/cancel) 실패 응답을 화면에 보여줄 메시지 키로 바꾼다.
+// 이유: ADR 0050 코드에 더해 USER_NOT_FOUND(이메일→id 조회 단계)와 VALIDATION_FAILED(propose 폼의 잘못된
+//       형식 이메일은 백엔드에 다른 형태로 도달할 일이 없다)로 분기해야 한다. FORBIDDEN_NOT_OWNER는
+//       호출한 액션에 맞춰 문구를 골라야 한다: propose는 creator-or-admin 그대로지만, cancel은 creator
+//       전용으로 좁혀졌다(그러지 않으면 admin이 아무 이유 없이 다른 두 사용자 사이의 대기 중인 이전을
+//       취소할 수 있었을 것이다 — canManage()를 재사용하다 딸려온 권한이지 의도한 결정이 아니다; propose의
+//       admin 분기는 영향받지 않으며 그 자체로 ADR 0050 D4 근거가 있다). 한/영 토글 후에도 에러가
+//       새 언어로 다시 그려지도록 번역된 문자열이 아니라 키를 돌려준다.
+// 방법: ApiError의 고정 code로 switch하고 FORBIDDEN_NOT_OWNER만 action으로 다시 가른다.
+function messageForTransferError(error: unknown, action: TransferAction): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.USER_NOT_FOUND:
-        return 'No user found with that email.'
+        return 'transfer.err.userNotFound'
       case ErrorCode.FILE_TRANSFER_INVALID_TARGET:
-        return 'You already own this file.'
+        return 'transfer.err.invalidTarget'
       case ErrorCode.FILE_TRANSFER_PENDING:
-        return 'A transfer is already pending. Cancel it before proposing a new one.'
+        return 'transfer.err.pending'
       case ErrorCode.FILE_NO_PENDING_TRANSFER:
-        return 'No transfer is pending on this file.'
+        return 'transfer.err.noPending'
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return action === 'cancel'
-          ? 'Only the file creator can cancel a transfer.'
-          : 'Only the file creator or an admin can propose a transfer.'
+        return action === 'cancel' ? 'transfer.err.cancelNotOwner' : 'transfer.err.proposeNotOwner'
       case ErrorCode.FORBIDDEN_NOT_TRANSFER_TARGET:
-        return 'Only the proposed recipient can accept or reject this transfer.'
+        return 'transfer.err.notTarget'
       case ErrorCode.VALIDATION_FAILED:
-        return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
+        return { raw: Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message }
       default:
-        return 'The transfer action failed.'
+        return 'transfer.err.default'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
 // 목적: mediaType(image/audio/video)에 맞는 재생 태그를 고른다.
@@ -117,24 +123,25 @@ export function FileDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { currentUserId } = useAuth()
+  const { t } = useLanguage()
   const fileId = id !== undefined && /^\d+$/.test(id) ? Number(id) : null
 
   const [file, setFile] = useState<FileResponse | null>(null)
-  const [metaError, setMetaError] = useState<string | null>(null)
-  const [playbackError, setPlaybackError] = useState<string | null>(null)
+  const [metaError, setMetaError] = useState<Translatable | null>(null)
+  const [playbackError, setPlaybackError] = useState<Translatable | null>(null)
   const [objectUrl, setObjectUrl] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
-  const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<Translatable | null>(null)
+  const [copyFeedback, setCopyFeedback] = useState<Translatable | null>(null)
   const [busy, setBusy] = useState(false)
   const [transferEmail, setTransferEmail] = useState('')
-  const [transferError, setTransferError] = useState<string | null>(null)
+  const [transferError, setTransferError] = useState<Translatable | null>(null)
   const [transferBusy, setTransferBusy] = useState(false)
 
   useEffect(() => {
     setFile(null)
     setMetaError(null)
     if (fileId === null) {
-      setMetaError('Invalid file id.')
+      setMetaError('fileDetail.err.invalidId')
       return
     }
     api
@@ -176,7 +183,7 @@ export function FileDetailPage() {
     if (!file) return
     api
       .getBlob(`/file/${file.id}/content`)
-      .then(() => setPlaybackError('Playback failed — the browser could not play this file.'))
+      .then(() => setPlaybackError('fileDetail.err.playbackFailed'))
       .catch((err: unknown) => setPlaybackError(messageForError(err)))
   }
 
@@ -222,8 +229,8 @@ export function FileDetailPage() {
     if (!file?.shareUrl) return
     navigator.clipboard
       .writeText(file.shareUrl)
-      .then(() => setCopyFeedback('Copied.'))
-      .catch(() => setCopyFeedback('Could not copy — copy it manually.'))
+      .then(() => setCopyFeedback('fileDetail.copied'))
+      .catch(() => setCopyFeedback('fileDetail.copyFailed'))
   }
 
   // 목적: 소유자/관리자가 파일 행과 저장된 바이트를 삭제한다.
@@ -232,7 +239,7 @@ export function FileDetailPage() {
   // 방법: 확인 대화상자 → DELETE /file/:id → 성공 시 목록으로 이동, 실패 시 에러만 표시.
   function handleDelete() {
     if (!file) return
-    if (!window.confirm(`Delete "${file.title}"? This cannot be undone.`)) return
+    if (!window.confirm(t('common.confirmDelete', { title: file.title }))) return
     setActionError(null)
     setBusy(true)
     api
@@ -318,9 +325,9 @@ export function FileDetailPage() {
     return (
       <main className={styles.page}>
         <NavBar />
-        <p className={styles.error}>{metaError}</p>
+        <p className={styles.error}>{t(metaError)}</p>
         <Link to="/files" className={styles.backLink}>
-          Back to files
+          {t('fileDetail.back')}
         </Link>
       </main>
     )
@@ -330,7 +337,7 @@ export function FileDetailPage() {
     return (
       <main className={styles.page}>
         <NavBar />
-        <p>Loading…</p>
+        <p>{t('common.loading')}</p>
       </main>
     )
   }
@@ -339,22 +346,24 @@ export function FileDetailPage() {
     <main className={styles.page}>
       <NavBar />
       <Link to="/files" className={styles.backLink}>
-        Back to files
+        {t('fileDetail.back')}
       </Link>
       <header className={styles.header}>
         <VisibilityBadge visibility={file.visibility} />
         {file.pendingTransferTo && (canManage || isPendingTarget) && (
           <span className={styles.pendingBadge}>
-            {canManage ? `Transfer pending → ${file.pendingTransferTo.email}` : 'Transfer proposed to you'}
+            {canManage
+              ? t('fileDetail.pendingBadge', { email: file.pendingTransferTo.email })
+              : t('transfer.proposedToYou')}
           </span>
         )}
         <h1 className={styles.title} title={file.title}>
           {file.title}
         </h1>
       </header>
-      {file.creator && <p className={styles.meta}>Uploaded by {file.creator.email}</p>}
+      {file.creator && <p className={styles.meta}>{t('fileDetail.uploadedBy', { email: file.creator.email })}</p>}
 
-      {playbackError && <p className={styles.error}>{playbackError}</p>}
+      {playbackError && <p className={styles.error}>{t(playbackError)}</p>}
 
       <div className={styles.playerWrapper}>
         {file.visibility === 'private' ? (
@@ -364,7 +373,7 @@ export function FileDetailPage() {
               className: styles.player,
             })
           ) : (
-            !playbackError && <p className={styles.loadingText}>Loading content…</p>
+            !playbackError && <p className={styles.loadingText}>{t('fileDetail.loadingContent')}</p>
           )
         ) : (
           renderMediaElement(file.mediaType, file.title, {
@@ -377,23 +386,23 @@ export function FileDetailPage() {
 
       {file.visibility === 'unlisted' && file.shareUrl && (
         <p className={styles.shareBox}>
-          Share link: <code className={styles.shareCode}>{file.shareUrl}</code>
+          {t('fileDetail.shareLink')} <code className={styles.shareCode}>{file.shareUrl}</code>
           {canManage && (
             <button type="button" onClick={handleCopyShareLink} className={styles.copyButton}>
-              Copy
+              {t('fileDetail.copy')}
             </button>
           )}
-          {copyFeedback && <span className={styles.copyFeedback}>{copyFeedback}</span>}
+          {copyFeedback && <span className={styles.copyFeedback}>{t(copyFeedback)}</span>}
         </p>
       )}
 
       {canManage && (
         <section className={styles.manage}>
-          <h2 className={styles.manageHeading}>Manage</h2>
-          {actionError && <p className={styles.error}>{actionError}</p>}
+          <h2 className={styles.manageHeading}>{t('fileDetail.manage')}</h2>
+          {actionError && <p className={styles.error}>{t(actionError)}</p>}
           <div className={styles.controls}>
             <label className={styles.visibilityLabel}>
-              Visibility
+              {t('fileDetail.visibility')}
               <select
                 className={styles.select}
                 value={file.visibility}
@@ -402,18 +411,18 @@ export function FileDetailPage() {
               >
                 {VISIBILITY_OPTIONS.map((option) => (
                   <option key={option} value={option}>
-                    {option}
+                    {t(`visibility.option.${option}`)}
                   </option>
                 ))}
               </select>
             </label>
             {file.visibility === 'unlisted' && (
               <button type="button" disabled={busy} onClick={handleRotateShareToken} className={styles.rotateButton}>
-                Rotate share link
+                {t('fileDetail.rotate')}
               </button>
             )}
             <button type="button" disabled={busy} onClick={handleDelete} className={styles.deleteButton}>
-              Delete file
+              {t('fileDetail.delete')}
             </button>
           </div>
         </section>
@@ -421,13 +430,14 @@ export function FileDetailPage() {
 
       {canManage && (
         <section className={styles.manage}>
-          <h2 className={styles.manageHeading}>Transfer ownership</h2>
-          {transferError && <p className={styles.error}>{transferError}</p>}
+          <h2 className={styles.manageHeading}>{t('transfer.heading')}</h2>
+          {transferError && <p className={styles.error}>{t(transferError)}</p>}
           {file.pendingTransferTo ? (
             <div className={styles.controls}>
               <p className={styles.meta}>
-                Pending transfer to <strong>{file.pendingTransferTo.email}</strong> — not moved
-                until they accept.
+                {t('transfer.pendingPrefix')}
+                <strong>{file.pendingTransferTo.email}</strong>
+                {t('transfer.pendingSuffix')}
               </p>
               <button
                 type="button"
@@ -435,13 +445,13 @@ export function FileDetailPage() {
                 onClick={handleCancelTransfer}
                 className={styles.deleteButton}
               >
-                Cancel transfer
+                {t('transfer.cancel')}
               </button>
             </div>
           ) : (
             <form className={styles.controls} onSubmit={handleProposeTransfer}>
               <label className={styles.visibilityLabel}>
-                Recipient email
+                {t('transfer.recipientEmail')}
                 <input
                   type="email"
                   required
@@ -456,7 +466,7 @@ export function FileDetailPage() {
                 disabled={transferBusy || !transferEmail.trim()}
                 className={styles.rotateButton}
               >
-                Propose transfer
+                {t('transfer.propose')}
               </button>
             </form>
           )}
@@ -465,9 +475,9 @@ export function FileDetailPage() {
 
       {isPendingTarget && file.pendingTransferTo && (
         <section className={styles.manage}>
-          <h2 className={styles.manageHeading}>Transfer proposed to you</h2>
-          {transferError && <p className={styles.error}>{transferError}</p>}
-          <p className={styles.meta}>The current owner wants to transfer this file to you.</p>
+          <h2 className={styles.manageHeading}>{t('transfer.proposedToYou')}</h2>
+          {transferError && <p className={styles.error}>{t(transferError)}</p>}
+          <p className={styles.meta}>{t('transfer.incomingText')}</p>
           <div className={styles.controls}>
             <button
               type="button"
@@ -475,7 +485,7 @@ export function FileDetailPage() {
               onClick={handleAcceptTransfer}
               className={styles.rotateButton}
             >
-              Accept
+              {t('transfer.accept')}
             </button>
             <button
               type="button"
@@ -483,7 +493,7 @@ export function FileDetailPage() {
               onClick={handleRejectTransfer}
               className={styles.deleteButton}
             >
-              Reject
+              {t('transfer.reject')}
             </button>
           </div>
         </section>

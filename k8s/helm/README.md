@@ -539,6 +539,12 @@ pass observed; an item with no "observed" note is still open:
   that the browser followed through the same redirect natively. All three rendered the real
   test image (`naturalWidth: 4`, not a broken-image placeholder) with zero console errors —
   the CSP wildcard does match the bucket's actual virtual-hosted-style host (ADR 0036 addendum).
+  Observed 2026-09-30 (redeployed stack, the developer ran the deploy, Playwright): an `unlisted`
+  video attached to a post rendered for its owner, its content request carrying the share token
+  (`302` → presigned S3 URL), and a seek in the `frontend/` player sent `Range: bytes=1212416-` to
+  S3 and got `206` with a matching `Content-Range` ([ADR 0059](../../docs/ADR/0059-upload-malware-scanning-clamav.md)'s
+  second 2026-09-30 addendum). `admin/` has no media player, so nothing there was checked. Not
+  tested: a seek after the URL's TTL, other browsers, audio.
 - The real client IP reaches the rate limiter (`trust proxy` = `10.0.0.0/16`, ADR 0054
   addendum): from one client the sixth `POST /auth/signin` within a minute answers 429, while
   a second client on another IP is not throttled at all. If every visitor shares one bucket,

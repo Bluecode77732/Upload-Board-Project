@@ -332,3 +332,12 @@ URL → `200`, objectURL로 변환); 같은 파일을 `public`으로 바꾸고 �
 설정하지 않으므로 presigned URL은 virtual-hosted-style
 (`{bucket}.s3.{region}.amazonaws.com`)이고, CSP 와일드카드가 이를 매치한다.
 테스트 파일과 그 일회용 계정은 확인 후 삭제했다.
+
+### Addendum (2026-09-30) — D6의 Range/seek 항목, `frontend/` 플레이어에서 확인
+
+D6은 "리다이렉트를 거친 Range 요청 동작"을 미검증으로 남겼다. 재배포한 스택(`STORAGE_DRIVER=s3`)에서
+`frontend/` 게시글 페이지의 `<video>`를 seek하자 `Range: bytes=1212416-`가 presigned S3 URL로 바로 갔고
+`Content-Range: bytes 1212416-3133225/3133226`의 `206`이 돌아왔다. 재생은 에러 없이 이어졌고 seek 요청이
+앱을 다시 거치지 않았다. Chromium만 썼고, URL의 TTL 이후 seek과 오디오는 시도하지 않았다. `admin/`에는
+미디어 플레이어가 없어 확인할 소비자가 없다. 자세한 내용은 [ADR 0059](0059-upload-malware-scanning-clamav.ko.md)의
+2026-09-30 두 번째 추가 기록에 있다. 위의 D6 본문은 쓰인 그대로 둔다.

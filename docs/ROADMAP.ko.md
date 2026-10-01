@@ -404,7 +404,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 |---|---|---|---|---|
 | **Docker** | 컨테이너화 | ✅ + 하드닝, 멀티아치 완료 | 멀티스테이지 이미지(Stage 1); 이제 전용 **비루트** 사용자로 실행 + `HEALTHCHECK`. **멀티아치(ARM/Graviton)는 완료돼 라이브로 검증됨** — 유예가 아니다: bcrypt "x64 전용" 전제는 2026-08-12 정정됐고([0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md)), CI는 `main`에서 실제 `linux/amd64,linux/arm64` 이미지를 발행하며, graviton 노드그룹이 2026-08-27 실서비스를 운영했다. **distroless** 베이스는 검토 후 계속 **유예**(감수 — 검증된 Node 24 distroless 태그도 없고, 대체 디버그 수단 없이 유일한 디버그 경로(`docker exec`)를 잃는다). | [0015](ADR/0015-docker-and-compose.ko.md), [0030](ADR/0030-container-non-root-and-arch-stance.ko.md), [0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md) |
 | **GitHub Actions** | CI(/CD) | 🔶 CI + 이미지 게시 | push/PR에서 `lint`+unit+e2e 워크플로 — 이제 `frontend-e2e`/`admin-e2e`와 `frontend/`/`admin/`의 lint/unit 잡도 포함(둘 다 이전엔 CI에서 검증되지 않았다). **AWS로의 배포 파이프라인(CD)은 여전히 없음** — AWS가 대상이 될 때 추가. **예외, 2026-08-13 기록**: 명시적 요청으로 `docker-publish` 잡이 추가됐다 — main 푸시마다 `linux/amd64,linux/arm64`를 buildx로 빌드해 `bluecode1775/sharenpo`를 Docker Hub에 푸시한다. 이것은 이미지 게시 CD이지 앱 배포가 아니며, 해당 커밋(`1b72ec9`) 자체가 이 행이 정한 계획(AWS가 대상이 될 때만 CD)을 대체하는 게 아니라 그보다 앞서 진행하는 것이라고 명시하고 있다. | [0016](ADR/0016-github-actions-ci.ko.md) |
-| **S3** | 오브젝트 스토리지 | 🔶 어댑터 ✅ / 리다이렉트 ✅ / 버킷 코드 ✅ / 전환 ✅ 라이브에서 관찰(날짜별 실행은 §9) / 업로드-읽기 왕복 ✅ 2026-09-30, Range 동작은 여전히 미검증 | `FileStorage` 포트 + `S3Storage` 구현 랜딩(단위테스트만). 프록시 스트리밍 경로가 앱 계층에 대역폭 부담을 지우고 있어, `STORAGE_DRIVER=s3`에서는 `GET /file/:id/content`가 이제 수명이 짧은 presigned S3 URL로 `302` 리다이렉트한다(세 가시성 등급 전부, 기존 `resolveContentAccess` 검사로 게이트) — `local`은 기존 스트리밍 그대로. Terraform([0043](ADR/0043-terraform-project-adaptation.ko.md) D8, 2026-08-18)이 private 버킷 + 앱 전용 IRSA 역할을 프로비저닝한다. 실제 Helm 릴리스가 `STORAGE_DRIVER=s3`와 앱의 IRSA 역할이 연결된 채로 동작했었고(2026-08-27, §9) 전환도 켜져 있었지만, 검증이 끝난 뒤 2026-08-28에 버킷과 클러스터가 destroy됐다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 2026-08-29/30에 재적용** — `values-prod.yaml`은 여전히 `STORAGE_DRIVER=s3`를 담고 있다. 그 세션의 확인은 메트릭 경로만 다뤄서, 실제 버킷을 상대로 한 업로드/읽기 왕복은 미검증으로 남아 있었다. **2026-09-30에 닫힘**([ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)의 실사용자 흐름 추가 기록): 이미지 1개·오디오 1개·비디오 1개를 실제 `UploadForm`으로 올리고 승격시킨 뒤, presigned 리다이렉트 경로를 거쳐 실제 브라우저에서 디코딩·재생까지 확인했다(`readyState 4`, `currentTime` 진행, 디코드 에러 없음) — 파일 콘텐츠를 직접 fetch한 게 아니라 앱 전체 흐름을 거쳤다(게시글 첨부 과정에서 별도의, 지금은 고친 `PostService` 버그도 함께 찾았다 — 그 추가 기록 참고). `frontend`/`admin` 미디어 플레이어의 리다이렉트-경유 Range 요청/탐색 동작은 이번에도 다루지 않아 여전히 미검증이다. | [0029](ADR/0029-storage-port-adapter.ko.md), [0036](ADR/0036-s3-presigned-content-redirect.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md), [0062](ADR/0062-admin-same-alb-subpath-routing.ko.md) |
+| **S3** | 오브젝트 스토리지 | 🔶 어댑터 ✅ / 리다이렉트 ✅ / 버킷 코드 ✅ / 전환 ✅ 라이브에서 관찰(날짜별 실행은 §9) / 업로드-읽기 왕복 ✅ 2026-09-30, Range/seek ✅ 2026-09-30 (frontend 플레이어, `admin/`에는 플레이어 없음) | `FileStorage` 포트 + `S3Storage` 구현 랜딩(단위테스트만). 프록시 스트리밍 경로가 앱 계층에 대역폭 부담을 지우고 있어, `STORAGE_DRIVER=s3`에서는 `GET /file/:id/content`가 이제 수명이 짧은 presigned S3 URL로 `302` 리다이렉트한다(세 가시성 등급 전부, 기존 `resolveContentAccess` 검사로 게이트) — `local`은 기존 스트리밍 그대로. Terraform([0043](ADR/0043-terraform-project-adaptation.ko.md) D8, 2026-08-18)이 private 버킷 + 앱 전용 IRSA 역할을 프로비저닝한다. 실제 Helm 릴리스가 `STORAGE_DRIVER=s3`와 앱의 IRSA 역할이 연결된 채로 동작했었고(2026-08-27, §9) 전환도 켜져 있었지만, 검증이 끝난 뒤 2026-08-28에 버킷과 클러스터가 destroy됐다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 2026-08-29/30에 재적용** — `values-prod.yaml`은 여전히 `STORAGE_DRIVER=s3`를 담고 있다. 그 세션의 확인은 메트릭 경로만 다뤄서, 실제 버킷을 상대로 한 업로드/읽기 왕복은 미검증으로 남아 있었다. **2026-09-30에 닫힘**([ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)의 실사용자 흐름 추가 기록): 이미지 1개·오디오 1개·비디오 1개를 실제 `UploadForm`으로 올리고 승격시킨 뒤, presigned 리다이렉트 경로를 거쳐 실제 브라우저에서 디코딩·재생까지 확인했다(`readyState 4`, `currentTime` 진행, 디코드 에러 없음) — 파일 콘텐츠를 직접 fetch한 게 아니라 앱 전체 흐름을 거쳤다(게시글 첨부 과정에서 별도의, 지금은 고친 `PostService` 버그도 함께 찾았다 — 그 추가 기록 참고). **Range/seek는 같은 날 재배포한 스택에서 닫혔다**([ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md)의 2026-09-30 두 번째 추가 기록): `frontend/` 플레이어에서 seek하면 `Range: bytes=1212416-`가 presigned S3 URL로 바로 갔고 `Content-Range: bytes 1212416-3133225/3133226`의 `206`이 돌아왔으며, 재생은 에러 없이 이어졌다. `admin/`에는 미디어 플레이어가 아예 없어서(대시보드는 파일 개수만 센다) 확인할 대상이 없었다. | [0029](ADR/0029-storage-port-adapter.ko.md), [0036](ADR/0036-s3-presigned-content-redirect.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md), [0062](ADR/0062-admin-same-alb-subpath-routing.ko.md) |
 | **헬스/레디니스** | 프로브 | ✅ | LB·오케스트레이터 프로브용 `GET /health/live` + `GET /health/ready`. | [0031](ADR/0031-health-and-readiness-endpoints.ko.md) |
 | **마이그레이션 분리 단계** | 배포 안전 | 🔶 compose ✅ / K8s Job 🆕 | `docker-compose.yml`의 원샷 `migrate` 서비스가 향후 **Kubernetes Job**을 모델링 — 스케일된 `api`가 `migration:run`을 경합하지 않도록. K8s Job 자체는 예정. | [0032](ADR/0032-migration-as-separate-deploy-step.ko.md) |
 | **Kubernetes** | 오케스트레이션 | ✅ 라이브에 배포됨(날짜별 실행은 §9) | 예전 `k8s/pod/`, `k8s/deployment/`, `k8s/cluster/` 아래 있던 독립 정적 매니페스트는 2026-08-17 삭제됐다([0042](ADR/0042-k8s-helm-directory-consolidation.ko.md)) — 아래 Helm 차트가 이미 렌더링하는 것의 엄격한 부분집합을 중복했을 뿐, 소비하는 곳도 없었다(CI 잡도, compose 참조도 없음). Kubernetes 매니페스트는 이제 Helm 차트의 `templates/`(`k8s/helm/`)로만 존재한다. 실제 클러스터 배포(AWS)가 2026-08-27 반영됐고(§9), 검증이 끝난 2026-08-28에 밑단 클러스터를 destroy했다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 2026-08-29/30에 재적용** — 이 수정 시점 기준 `kubectl get nodes`가 `Ready` 노드 2개를 보여준다. `bash k8s/infra/terraform/deploy.sh all`로 재현 가능하며, 믿기 전에 `kubectl get nodes`로 재확인할 것 — 이 칸도 스냅샷이다. | 커밋 `48a89f2`, [0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0042](ADR/0042-k8s-helm-directory-consolidation.ko.md) |
@@ -817,6 +817,9 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   **2026-09-08 별도 작업으로 해결** —
   [frontend/docs/STYLE-PLAN.ko.md](../frontend/docs/STYLE-PLAN.ko.md) > 4번 항목 참고.
   전체 결정 경위: [frontend/docs/STYLE-PLAN.ko.md](../frontend/docs/STYLE-PLAN.ko.md) > 3번 항목.
+  **2026-10-01 변경:** 글꼴이 한글·영문 모두 Noto Sans KR(`--sans`)과 Hahmlet(`--heading`)으로
+  바뀌었다 — 자체 호스팅 의존성 2개라 위의 "신규 의존성 0건"이라는 이유는 더 이상 성립하지 않는다
+  ([CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-01, STYLE-PLAN 3번 항목 아래의 보완 기록).
 - ~~`admin/`의 작은 화면 전용 레이아웃~~ (2026-08-24 기록) — **2026-09-08 결정: 가로 스크롤
   유지, 카드 전환은 하지 않음.** 이 콘솔은 배포 대상이 없고 데스크톱에서 운영되므로 노출이
   사실상 없다. 비교표(컬럼 숨기기 vs. 카드 전환 vs. 현행 유지)로 트레이드오프를 그대로
@@ -1007,7 +1010,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   됐고 메모리는 약 1.02 GiB였다(ADR 0059 추가 기록, 그 앞의 로컬 amd64/arm64 측정 포함). 모든 파드가
   `t4g.medium` 2대에 들어갔다(파드 슬롯 34개 중 23개). `addons/`를 건너뛴 destroy는 IAM 역할·정책,
   CloudFormation 스택, 낡은 state를 남긴다(`k8s/infra/terraform/README.md`의 Destroy). 아직 열려 있는
-  것: 두 번째 zone이 같은 네임서버를 받는지, Ingress가 꺼져 있는 동안의 메트릭 공백을 닫는 Prometheus
+  것: Ingress가 꺼져 있는 동안의 메트릭 공백을 닫는 Prometheus
   규칙의 확인. 그 사이 닫힌 항목: 앱을 거친 EICAR 업로드는 이제 `400 UPLOAD_MALWARE_DETECTED`로 답하고,
   정상 파일은 통과해 승격까지 마치고 파일 목록에 나타난다
   ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md)의 2026-09-30 추가 기록 — 이전에는 스캐너
@@ -1472,6 +1475,40 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   `-slim` 베이스 멀티스테이지 빌드로 dev 의존성을 정리한 상태다 — distroless는 이미
   검토 후 사유를 남기고 보류했다(ADR 0030). 코드 변경 없음. 실제 배포 트래픽이 생기거나
   실측된 문제(청크 크기 경고, 비대해진 배포 이미지)가 실제로 나타날 때만 재검토한다.
+  **2026-10-02 갱신:** 위 수치는 2026-09-16 기준이다. `frontend/`는 이제 production 패키지가
+  5개(글꼴 패키지 2개, [CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-01)이고 `dist`는 약 6.3MB이며,
+  거의 전부 브라우저가 페이지에 필요한 만큼만 요청하는 woff2 조각이다. 결론은 그대로다.
+- ~~**`admin/` 의존성 취약점 — `axios`**~~ — **2026-10-02 발견 및 패치(`40d6227`).** `admin/`에서 읽기 전용으로 돌린
+  `pnpm audit --prod`가 전부 `axios`에 대한 12건(high 7, moderate 5)을 보고한다. 취약 범위는 모두 1.20.0
+  미만에서 끝나고 패치는 `>=1.20.0`이다. `axios`는 직접 production 의존성(`^1.15.2`, 설치 1.19.0)이라
+  `pnpm update axios`로 1.20.0에 닿는다. `frontend/`의 `react-router-dom`을 패치하다가
+  발견했고([CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-02) `admin/`은 건드리지 않았다. **2026-10-02
+  평가**: 테스트가 아니라 취약점 요약과 `admin/` 코드를 읽어서 판단했다. `admin/`은 브라우저(XHR 어댑터)에서
+  `axios.create({ baseURL, withCredentials })` 인스턴스 하나, 인터셉터 둘, `api.get/post/patch/delete` 호출
+  15개만 쓰고, `adapter`·`proxy`·`maxRedirects`를 설정하지 않으며 `FormData`도 만들지 않는다. 12건 중 6건은
+  Node 전용 코드(`fromDataURI`, `shouldBypassProxy`, HTTP/2 어댑터 2건, Node HTTP 어댑터, `NO_PROXY`),
+  3건은 fetch 어댑터에 관한 것이고, 나머지 3건은 `toFormData`, method 없는 호출, 교체된 config를 돌려주는
+  인터셉터가 있어야 하는데 `admin/`은 그중 어느 것도 하지 않는다(401 재시도의 `api(original)`은 원래
+  method를 갖고 있고, 요청 인터셉터는 같은 config 객체를 그대로 돌려준다). 노출은 낮아 보이지만 패치는
+  싸다: 1.19.0 → 1.20.0은 선언된 범위 안이다. 로컬 확인은 `admin/`의 `pnpm lint`·`pnpm test`·`pnpm build`이고,
+  e2e는 백엔드와 시드된 superadmin이 필요해서 CI의 `admin-e2e`가 확인한다. `frontend/`의 패치가 선례였다:
+  업데이트, `pnpm audit --prod`, 그다음 위 확인. **패치함:** `axios` 1.19.0 → 1.20.0(범위 하한은 이제
+  `^1.20.0`). `pnpm audit --prod`는 알려진 취약점이 없다고 나오고, lint(에러 없음)·`pnpm test`(24/24)·
+  `pnpm build`가 통과한다. 단위 테스트가 `axios`를 mock으로 대체하므로 401 → 갱신 → 재시도 인터셉터 흐름은
+  실제 axios 1.20.0과 로컬 서버로 따로 돌려 확인했다. `admin-e2e`는 아직 돌지 않았고 CI가 돌린다.
+- **`.ko.md` 네 개의 한국어 점검** — **2026-10-02 보류, 시작하지 않음.** CLAUDE.md의 문서 규약은 기존
+  `.ko.md`를 건드리면 같은 변경에서 파일 전체를 다시 읽고 직역처럼 읽히는 부분을 고치라고 한다(한국어
+  표현만, 영어판에 없는 내용은 절대 넣지 않는다). 2026-10-01/02 프론트엔드 세션은 `.ko.md` 7개를 수정했고
+  그중 3개는 전체를 다시 읽었다: `docs/ADR/0060-frontend-same-alb-path-routing.ko.md`,
+  `frontend/docs/STYLE-PLAN.ko.md`, `frontend/docs/API-CONTRACT.ko.md`(이 점검에서 ADR 0060의
+  번역되지 않은 "Addendum" 제목 하나를 고쳤다). 나머지 4개는 다시 읽지 않았다: `docs/CHANGELOG.ko.md`(약
+  2,850줄, 이번 세션에 81줄 추가), `docs/ROADMAP.ko.md`(약 1,590줄, 21줄 추가), `frontend/CLAUDE.ko.md`(177줄,
+  27줄 추가), `frontend/README.ko.md`(126줄, 13줄 추가). 추가한 부분은 줄 단위 번역이 아니라 한국어 문장으로
+  썼지만 그 주변은 다시 읽지 않았다. 착수할 때의 범위: 이 네 파일 전체, 한국어 표현만. 제목 계층, 표 구성,
+  링크, 코드 블록, 식별자, 수치는 영어판과 똑같이 두고, 끝나면 EN/KO 대칭(제목·항목 수)과 링크를 확인한다.
+  `CHANGELOG.ko.md`와 `ROADMAP.ko.md`가 작업량 대부분이라 `frontend/`의 두 파일과 따로 진행해도 된다.
+  명시적으로 요청받을 때, 또는 이 네 파일 중 하나를 크게 고칠 때 다시 본다. CLAUDE.md > Known Gaps에도
+  올려 두었다.
 
 ## 8. Advisory 노트
 

@@ -13,6 +13,8 @@ instead (backend ROADMAP.md > Stage 5).
 - **react-router-dom** — routing, including a protected route guard
 - **TypeScript** — strict build (`tsc -b`), no `any`
 - **oxlint** — linting
+- **Noto Sans KR + Hahmlet** (`@fontsource-variable/*`, OFL-1.1, variable 100–900) — the UI
+  fonts for Hangul and Latin alike, self-hosted into `/assets` (the nginx CSP is `font-src 'self'`)
 - **Playwright** (`@playwright/test`, chromium only) — browser-level E2E, `frontend/e2e/`
   (`auth`/`upload`/`board`/`detail` specs cover register-signin-signout, the two-phase
   video upload, the file board's search/sort/pagination/visibility badges, and
@@ -21,7 +23,12 @@ instead (backend ROADMAP.md > Stage 5).
   direct load of `/posts/:id` rendering the real `PostDetailPage`; `posts` covers
   creating a post through PostForm — with and without an attached file — and the
   resulting board row/detail link, landing on the post's own title/body once
-  `PostDetailPage` stopped being a placeholder)
+  `PostDetailPage` stopped being a placeholder; `language` covers the NavBar en/ko toggle,
+  its persistence across a reload, and its size and position next to the theme toggle;
+  `layout` checks that every authenticated screen shares one `main` box and one 720px column;
+  `fonts` checks that headings and body text are really drawn with the Hahmlet and Noto Sans
+  KR web fonts rather than a silent system fallback; those three stub the API, so they create no
+  account and need no backend — see `frontend/CLAUDE.md`)
 - Plain `fetch` wrapper (`src/api/client.ts`) — no data-fetching or state library yet
   (plus an `XMLHttpRequest` path in the same file for upload-progress reporting,
   since `fetch` exposes no upload-progress event)
@@ -49,8 +56,13 @@ src/
 │                 errorCodes + types (mirror of the backend contract, now including
 │                 PostResponse/CommentResponse)
 ├── auth/         session state: AuthProvider (silent refresh), useAuth, RequireAuth guard
-├── shared/       NavBar — the Posts/Files/Sign out header shown on every
-│                 authenticated screen
+├── i18n/         English/Korean UI text: LanguageProvider (choice saved in localStorage
+│                 `ui-lang`, English by default), useLanguage's `t()`, and messages.ts
+│                 (the en dictionary plus `ko`, a Record over the same keys — a missing
+│                 translation fails `tsc`). Server-sent message text is shown as received
+├── shared/       NavBar — the Post/File/Setting links, language and theme toggles, and
+│                 Sign out, shown on every authenticated screen; page.module.css — the one
+│                 `<main>` box (and 720px column) every authenticated screen composes
 └── features/
     ├── auth/     LoginPage (Basic signin/register)
     ├── posts/    PostBoard (protected, "/" — the app's home: PostForm + the post list —
