@@ -19,8 +19,12 @@
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
   --transition: all 150ms ease;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: ui-serif, Georgia, 'Times New Roman', serif;
+  /* 한글·영문 모두 웹 폰트를 먼저 쓰고, 못 받으면 예전 시스템 글꼴로 대체된다. 파일은 npm 패키지
+     (@fontsource-variable/*)를 main.tsx에서 불러와 같은 origin의 /assets로 내보낸다 — nginx CSP가
+     `font-src 'self'`라 외부 CDN(Google Fonts 등)은 막힌다. 두 글꼴 모두 굵기 100–900 가변이라 앱이 쓰는
+     400/500/600/700이 `font-synthesis: none`에서도 그대로 나온다. */
+  --sans: 'Noto Sans KR Variable', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --heading: 'Hahmlet Variable', ui-serif, Georgia, 'Times New Roman', serif;
   --mono: ui-monospace, Consolas, monospace;
 
   font: 18px/145% var(--sans);
@@ -98,6 +102,15 @@
 
 body {
   margin: 0;
+}
+
+/* 버튼·입력창은 브라우저 기본 글꼴(Arial)로 그려져 위의 글꼴 변수가 닿지 않았다. 크기는 그대로 두고
+   글꼴 패밀리만 상속시킨다 — `font: inherit`은 13px대 버튼·입력창까지 본문 크기로 키워 버린다. */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 h1,

@@ -13,6 +13,8 @@ instead (backend ROADMAP.md > Stage 5).
 - **react-router-dom** — routing, including a protected route guard
 - **TypeScript** — strict build (`tsc -b`), no `any`
 - **oxlint** — linting
+- **Noto Sans KR + Hahmlet** (`@fontsource-variable/*`, OFL-1.1, variable 100–900) — the UI
+  fonts for Hangul and Latin alike, self-hosted into `/assets` (the nginx CSP is `font-src 'self'`)
 - **Playwright** (`@playwright/test`, chromium only) — browser-level E2E, `frontend/e2e/`
   (`auth`/`upload`/`board`/`detail` specs cover register-signin-signout, the two-phase
   video upload, the file board's search/sort/pagination/visibility badges, and
@@ -23,7 +25,9 @@ instead (backend ROADMAP.md > Stage 5).
   resulting board row/detail link, landing on the post's own title/body once
   `PostDetailPage` stopped being a placeholder; `language` covers the NavBar en/ko toggle,
   its persistence across a reload, and its size and position next to the theme toggle;
-  `layout` checks that every authenticated screen shares one `main` box and one 720px column)
+  `layout` checks that every authenticated screen shares one `main` box and one 720px column;
+  `fonts` checks that headings and body text are really drawn with the Hahmlet and Noto Sans
+  KR web fonts rather than a silent system fallback)
 - Plain `fetch` wrapper (`src/api/client.ts`) — no data-fetching or state library yet
   (plus an `XMLHttpRequest` path in the same file for upload-progress reporting,
   since `fetch` exposes no upload-progress event)

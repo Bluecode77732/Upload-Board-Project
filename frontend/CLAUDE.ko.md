@@ -90,6 +90,13 @@
   자식이어야 한다(그래서 `FileBoard`가 프래그먼트를 돌려준다). flex column인 `#root` 안에서 화면이
   자기 `margin: auto`를 쓰면 폭이 내용물에 맞춰 줄어드는데, 이것이 헤더·main·폼이 화면마다 달랐던
   원인이다. `LoginPage`는 의도적인 유일한 예외다(가운데 카드). `e2e/layout.spec.ts`가 이를 지킨다.
+- **글꼴**: `--sans`는 Noto Sans KR, `--heading`은 Hahmlet(가변, 100–900)이며 한글과 영문에 똑같이
+  적용된다. `main.tsx`에서 불러오는 `@fontsource-variable/*`가 `/assets`로 나간다. CDN(Google Fonts
+  등)을 링크하지 않는다 — nginx CSP가 `font-src 'self'`다. 패밀리 이름은 `'Noto Sans KR Variable'`,
+  `'Hahmlet Variable'`이고, 예전 시스템 글꼴 목록은 그 뒤에 폴백으로 남아 있다. `button, input,
+  select, textarea`는 `font-family`만 상속한다(`font`는 13px대 컨트롤까지 키우므로 쓰지 않는다).
+  computed `font-family`로는 웹 폰트와 조용한 폴백을 구분할 수 없어서, `e2e/fonts.spec.ts`가
+  브라우저가 실제로 쓴 플랫폼 글꼴을 읽는다.
 - **파일 헤더 주석**(새 파일에만): imports 위에 세 줄 — 목적(Purpose) /
   사용처(Usage) / 근거(Rationale) — 기존 파일과 동일한 형식으로.
   (2026-09-09에 영어 라벨에서 한글로 전환 — 루트 CLAUDE.md의 File Creation

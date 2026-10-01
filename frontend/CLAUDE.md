@@ -92,6 +92,13 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   its own `margin: auto` inside the flex-column `#root` shrinks to its content, which is what once
   made the header, main and forms differ per screen. `LoginPage` is the one deliberate exception (a
   centered card). `e2e/layout.spec.ts` guards this.
+- **Fonts**: `--sans` is Noto Sans KR and `--heading` is Hahmlet (variable, 100–900), for Hangul and
+  Latin alike, from `@fontsource-variable/*` imported in `main.tsx` and emitted into `/assets`. Never
+  link a CDN (Google Fonts etc.) — the nginx CSP is `font-src 'self'`. The families are named
+  `'Noto Sans KR Variable'` and `'Hahmlet Variable'`; the old system stacks stay after them as the
+  fallback. `button, input, select, textarea` inherit `font-family` only (never `font`, which would
+  grow the 13px controls). A computed `font-family` cannot tell a web font from a silent fallback, so
+  `e2e/fonts.spec.ts` reads the platform font the browser actually used.
 - **File header comment** (new files only): three lines — 목적 (Purpose) / 사용처
   (Usage) / 근거 (Rationale) — above the imports, matching the existing files.
   (Switched from English labels to Korean 2026-09-09, matching the root

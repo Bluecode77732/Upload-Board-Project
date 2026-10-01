@@ -12,6 +12,8 @@ REST API를 HTTP로 소비한다. 이 앱에는 `/admin` 라우트가 **없다**
 - **react-router-dom** — 라우팅, 보호된 라우트 가드 포함
 - **TypeScript** — strict 빌드(`tsc -b`), `any` 사용 안 함
 - **oxlint** — 린팅
+- **Noto Sans KR + Hahmlet** (`@fontsource-variable/*`, OFL-1.1, 굵기 100–900 가변) — 한글과
+  영문 모두에 쓰는 UI 글꼴이며 `/assets`로 자체 호스팅한다(nginx CSP가 `font-src 'self'`다)
 - **Playwright** (`@playwright/test`, chromium만 설치) — 브라우저 수준 E2E, `frontend/e2e/`
   (`auth`/`upload`/`board`/`detail` 스펙이 회원가입-로그인-로그아웃, 2단계 영상 업로드,
   파일 보드의 검색/정렬/페이지네이션/visibility 배지, FileDetailPage의 접근 제어
@@ -23,7 +25,8 @@ REST API를 HTTP로 소비한다. 이 앱에는 `/admin` 라우트가 **없다**
   더 이상 자리표시자가 아니게 되면서 게시글 자신의 title/body에 도착하는지까지
   확인한다; `language` 스펙은 NavBar의 한/영 토글, 새로고침 후 유지, 그리고 테마
   토글 옆에서의 크기와 위치를 검증하고, `layout` 스펙은 인증된 모든 화면이 하나의 `main`
-  박스와 720px 칼럼을 쓰는지 검증한다)
+  박스와 720px 칼럼을 쓰는지 검증하며, `fonts` 스펙은 제목과 본문이 조용한 시스템 글꼴
+  폴백이 아니라 Hahmlet·Noto Sans KR 웹 폰트로 실제 그려지는지 검증한다)
 - 순수 `fetch` 래퍼(`src/api/client.ts`) — 데이터 페칭/상태 관리 라이브러리는 아직 없음
   (같은 파일에 업로드 진행률 보고용 `XMLHttpRequest` 경로도 함께 있다 —
   `fetch`는 업로드 진행률 이벤트를 제공하지 않기 때문)

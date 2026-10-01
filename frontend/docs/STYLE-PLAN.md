@@ -167,7 +167,15 @@ because whoever touches these files for restyling will see them:
    Roman', serif` (was byte-identical to `--sans`). Zero new dependency, so
    `frontend/CLAUDE.md`'s dependency-proposal gate never triggers — the
    lowest-risk candidate on the table, chosen over the 5 web-font options.
-   `--sans` is untouched.
+   `--sans` is untouched. **Amended 2026-10-01 (Hangul and Latin fonts):** system
+   fonts left Korean to each OS (on Windows headings fell to Batang and body text to
+   Malgun Gothic) and buttons to the browser default Arial. A comparison-table Q&A and
+   an artifact preview picked option C: `@fontsource-variable/noto-sans-kr` for
+   `--sans` and `@fontsource-variable/hahmlet` for `--heading`, applied to Hangul and
+   Latin alike, with the heading letter-spacing unchanged. That is two dependencies
+   (OFL-1.1, variable 100–900), self-hosted because the nginx CSP is `font-src 'self'`,
+   so the "zero new dependency" reason above no longer holds for typography. Buttons
+   and inputs now inherit `font-family` (not `font`, which would resize them).
 4. ~~**No motion, and depth used once**~~ (recorded 2026-08-25, alongside item 3)
    — **resolved 2026-09-08**. Item 3's typography session had stayed scoped
    to the mark + heading font and deliberately left this open; this pass
