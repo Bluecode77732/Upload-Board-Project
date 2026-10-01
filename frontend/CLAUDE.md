@@ -75,6 +75,15 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
 - **Fast-refresh**: a file that exports a component must not also export a
   context object or hook — keep context/provider/hook in separate files (see
   `src/auth/`).
+- **UI text is bilingual (en/ko)**: every user-visible string goes through `useLanguage().t(key)`
+  with an entry in both dictionaries of `src/i18n/messages.ts` — `ko` is a
+  `Record<MessageKey, string>`, so a missing translation fails `tsc`. English is the default and
+  what the e2e specs assert, so keep an existing English sentence unchanged unless the spec that
+  asserts it changes with it. Use singular nouns in English text (Post, File, Setting). An
+  `ApiError` mapper (`messageForError`) returns a `Translatable` (a key, or `{ raw }` for server
+  text shown as received) and the component stores that in state and calls `t()` at render, so a
+  language switch re-renders an error that is already on screen. The URL paths `/posts/:id` and
+  `/files` stay plural on purpose (`/post`, `/file` are API prefixes — see Production image).
 - **File header comment** (new files only): three lines — 목적 (Purpose) / 사용처
   (Usage) / 근거 (Rationale) — above the imports, matching the existing files.
   (Switched from English labels to Korean 2026-09-09, matching the root
@@ -105,7 +114,9 @@ that will resurface in any new spec unless avoided up front:
   its options spell out "...title..."), and a test-generated email containing a common
   word can match an unrelated button (`getByRole('button', { name: 'Upload' })` matched
   a creator-filter button whose accessible name was `e2e-upload-...@example.com`). Pass
-  `{ exact: true }` on any label/role query whose text is a short common word.
+  `{ exact: true }` on any label/role query whose text is a short common word — the nav
+  links and headings are now the single words "Post" and "File", which also substring-match
+  "New post", "Upload a file" and any post or file title containing them.
 
 ## Commands
 

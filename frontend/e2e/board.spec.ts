@@ -79,6 +79,6 @@ test('a file not matching the search term is not shown', async ({ page }) => {
 
   await page.getByLabel('Search').fill(`${token}-does-not-exist`)
 
-  await expect(page.getByText('No files match the current filters.')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('No file matches the current filter.')).toBeVisible({ timeout: 10_000 })
   await expect(page.locator('ul li')).toHaveCount(0)
 })

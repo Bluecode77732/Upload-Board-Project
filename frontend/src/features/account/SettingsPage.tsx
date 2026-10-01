@@ -9,28 +9,33 @@ import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import { useAuth } from '../../auth/useAuth'
+import { useLanguage } from '../../i18n/useLanguage'
+import type { Translatable } from '../../i18n/messages'
 import { NavBar } from '../../shared/NavBar'
 import styles from './SettingsPage.module.css'
 
-// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
-function messageForError(error: unknown): string {
+// 목적: 계정 삭제 실패 응답을 화면에 보여줄 메시지 키로 바꾼다.
+// 이유: 한/영 토글 후에도 떠 있는 에러가 새 언어로 다시 그려지도록 번역된 문자열이 아니라 키를 돌려준다.
+// 방법: ApiError의 고정 code로 switch(backend ADR 0011)해 키를 고르고, 문구는 렌더 시 t()가 만든다.
+function messageForError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.USER_FILES_IN_USE:
-        return "One of your files is attached to another user's post and cannot be deleted yet — ask them to remove the post first (ADR 0024)."
+        return 'settings.err.filesInUse'
       default:
-        return 'Failed to delete your account. Please try again.'
+        return 'settings.err.deleteFailed'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
 export function SettingsPage() {
   const { currentUserId, signOut } = useAuth()
+  const { t } = useLanguage()
   const navigate = useNavigate()
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Translatable | null>(null)
   // 백엔드의 409 USER_HAS_FILES 메시지(파일 개수 포함) — 백엔드가 이미 계산한 개수를
-  // 다시 산출하지 않도록 그대로 표시한다.
+  // 다시 산출하지 않도록 그대로 표시한다(서버가 준 영어 문구라 번역하지 않는다).
   const [filesWarning, setFilesWarning] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -59,7 +64,7 @@ export function SettingsPage() {
 
   function handleDeleteAccount() {
     if (currentUserId === null) return
-    if (!window.confirm('Delete your account? This cannot be undone.')) return
+    if (!window.confirm(t('settings.confirmDelete'))) return
     setError(null)
     setFilesWarning(null)
     setBusy(true)
@@ -67,7 +72,7 @@ export function SettingsPage() {
   }
 
   function handleConfirmDeleteWithFiles() {
-    if (!window.confirm('Delete your account AND all your files? This cannot be undone.')) return
+    if (!window.confirm(t('settings.confirmDeleteWithFiles'))) return
     setFilesWarning(null)
     setBusy(true)
     void deleteAccount(true)
@@ -76,11 +81,11 @@ export function SettingsPage() {
   return (
     <main className={styles.page}>
       <NavBar />
-      <h1>Settings</h1>
+      <h1>{t('settings.heading')}</h1>
       <section className={styles.danger}>
-        <h2 className={styles.dangerHeading}>Delete account</h2>
-        <p className={styles.meta}>Permanently deletes your account. This cannot be undone.</p>
-        {error && <p className={styles.error}>{error}</p>}
+        <h2 className={styles.dangerHeading}>{t('settings.deleteHeading')}</h2>
+        <p className={styles.meta}>{t('settings.deleteDescription')}</p>
+        {error && <p className={styles.error}>{t(error)}</p>}
         {filesWarning && (
           <div className={styles.warningBox}>
             <p className={styles.warningText}>{filesWarning}</p>
@@ -90,12 +95,12 @@ export function SettingsPage() {
               onClick={handleConfirmDeleteWithFiles}
               className={styles.deleteButton}
             >
-              Delete account and all files
+              {t('settings.deleteWithFiles')}
             </button>
           </div>
         )}
         <button type="button" disabled={busy} onClick={handleDeleteAccount} className={styles.deleteButton}>
-          Delete account
+          {t('settings.deleteButton')}
         </button>
       </section>
     </main>

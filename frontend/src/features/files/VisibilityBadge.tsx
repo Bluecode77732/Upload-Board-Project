@@ -4,12 +4,14 @@
 //   FileBoard의 렌더 결과가 그대로 유지됐고, 두 파일을 건드리는데도 수정 위험은 매우 낮게 유지됐다.
 
 import type { FileVisibility } from '../../api/types'
+import { useLanguage } from '../../i18n/useLanguage'
+import type { MessageKey } from '../../i18n/messages'
 import styles from './VisibilityBadge.module.css'
 
-const VISIBILITY_LABEL: Record<FileVisibility, string> = {
-  public: 'Public',
-  private: 'Private',
-  unlisted: 'Unlisted',
+const VISIBILITY_LABEL: Record<FileVisibility, MessageKey> = {
+  public: 'visibility.public',
+  private: 'visibility.private',
+  unlisted: 'visibility.unlisted',
 }
 
 const VISIBILITY_CLASS: Record<FileVisibility, string> = {
@@ -19,5 +21,6 @@ const VISIBILITY_CLASS: Record<FileVisibility, string> = {
 }
 
 export function VisibilityBadge({ visibility }: { visibility: FileVisibility }) {
-  return <span className={`${styles.badge} ${VISIBILITY_CLASS[visibility]}`}>{VISIBILITY_LABEL[visibility]}</span>
+  const { t } = useLanguage()
+  return <span className={`${styles.badge} ${VISIBILITY_CLASS[visibility]}`}>{t(VISIBILITY_LABEL[visibility])}</span>
 }

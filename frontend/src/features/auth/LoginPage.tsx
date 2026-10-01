@@ -8,40 +8,44 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
+import { useLanguage } from '../../i18n/useLanguage'
+import type { Translatable } from '../../i18n/messages'
 import styles from './LoginPage.module.css'
 
-// 목적: 로그인/가입 실패 응답을 화면에 보여줄 한 줄 문구로 바꾼다.
+// 목적: 로그인/가입 실패 응답을 화면에 보여줄 메시지 키로 바꾼다.
 // 이유: 비밀번호가 약해 가입이 거절돼도 AUTH_WEAK_PASSWORD가 default로 떨어져 "Something went wrong"만
-//       보였고, 분당 5회 제한(RATE_LIMITED)에 걸려도 똑같았다 — 사용자는 무엇을 고쳐야 하는지 알 수 없었다.
-// 방법: ApiError의 고정 code로 switch(message는 파싱하지 않는다). 두 코드에 서버 규칙·상황과 맞는 문구를 달았다.
-function messageForError(error: unknown): string {
+//       보였고, 분당 5회 제한(RATE_LIMITED)에 걸려도 똑같았다. 또 한/영 토글 후에도 떠 있는 에러가
+//       새 언어로 다시 그려지도록 번역된 문자열이 아니라 키를 돌려준다.
+// 방법: ApiError의 고정 code로 switch(message는 파싱하지 않는다)해 키를 고르고, 문구는 렌더 시 t()가 만든다.
+function messageForError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     // 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
     switch (error.code) {
       case ErrorCode.AUTH_INVALID_CREDENTIALS:
-        return 'Incorrect email or password.'
+        return 'login.err.invalidCredentials'
       case ErrorCode.AUTH_EMAIL_TAKEN:
-        return 'That email is already registered — try signing in.'
+        return 'login.err.emailTaken'
       case ErrorCode.AUTH_WEAK_PASSWORD:
-        return 'Password must be at least 10 characters and include lowercase, uppercase, a digit, and a symbol.'
+        return 'login.err.weakPassword'
       case ErrorCode.RATE_LIMITED:
-        return 'Too many attempts. Please wait a minute and try again.'
+        return 'login.err.rateLimited'
       case ErrorCode.VALIDATION_FAILED:
-        return 'Please enter a valid email and password.'
+        return 'login.err.validation'
       default:
-        return 'Something went wrong. Please try again.'
+        return 'login.err.default'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
 export function LoginPage() {
   const { signIn, register } = useAuth()
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mode, setMode] = useState<'signin' | 'register'>('signin')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Translatable | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function onSubmit(event: FormEvent) {
@@ -71,10 +75,10 @@ export function LoginPage() {
           </svg>
           <span>Sharenpo</span>
         </div>
-        <h1 className={styles.heading}>{mode === 'signin' ? 'Sign in' : 'Register'}</h1>
+        <h1 className={styles.heading}>{t(mode === 'signin' ? 'login.signIn' : 'login.register')}</h1>
         <form onSubmit={onSubmit} className={styles.form}>
           <label className={styles.field}>
-            Email
+            {t('login.email')}
             <input
               type="email"
               className={styles.input}
@@ -85,7 +89,7 @@ export function LoginPage() {
             />
           </label>
           <label className={styles.field}>
-            Password
+            {t('login.password')}
             <input
               type="password"
               className={styles.input}
@@ -95,9 +99,9 @@ export function LoginPage() {
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
             />
           </label>
-          {error && <p className={styles.error}>{error}</p>}
+          {error && <p className={styles.error}>{t(error)}</p>}
           <button type="submit" className={styles.submit} disabled={busy}>
-            {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Register & sign in'}
+            {busy ? t('login.wait') : t(mode === 'signin' ? 'login.signIn' : 'login.registerAndSignIn')}
           </button>
         </form>
         <button
@@ -108,7 +112,7 @@ export function LoginPage() {
             setError(null)
           }}
         >
-          {mode === 'signin' ? 'Need an account? Register' : 'Have an account? Sign in'}
+          {t(mode === 'signin' ? 'login.switchToRegister' : 'login.switchToSignIn')}
         </button>
       </div>
     </main>

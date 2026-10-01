@@ -49,9 +49,11 @@ export async function registerAndSignIn(page: Page, email: string, password = TE
 // 파일 보드(업로드 폼 + FileBoard)는 /files에 있다, 이제 PostBoard가 된 홈 "/"이 아니다 —
 // 업로드 폼이나 파일 목록을 대상으로 단언하는 spec에서는 registerAndSignIn 다음에 호출한다.
 export async function goToFiles(page: Page): Promise<void> {
-  await page.getByRole('link', { name: 'Files', exact: true }).click()
+  // 내비 링크와 제목 이름이 단수("File")가 되면서 "Upload a file" 같은 다른 제목·파일 제목에도 부분
+  // 일치하므로 exact: true가 필수다(frontend/CLAUDE.md E2E gotchas).
+  await page.getByRole('link', { name: 'File', exact: true }).click()
   await expect(page).toHaveURL(/\/files$/)
-  await expect(page.getByRole('heading', { name: 'Files' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'File', exact: true })).toBeVisible()
 }
 
 // 게시글 보드 홈("/")으로 돌아간다. URL만이 아니라 PostForm 자체의 heading도 기다린다 —
@@ -59,7 +61,7 @@ export async function goToFiles(page: Page): Promise<void> {
 // "Title"/"Body" 라벨)이 실제로 마운트되기 전이다; URL 단언 직후 바로 필드를 채우면
 // 이 전환과 경쟁 상태가 돼 이전 페이지의 아직 남아있는 DOM에 입력될 수 있다.
 export async function goToHome(page: Page): Promise<void> {
-  await page.getByRole('link', { name: 'Posts' }).click()
+  await page.getByRole('link', { name: 'Post', exact: true }).click()
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole('heading', { name: 'New post' })).toBeVisible()
 }

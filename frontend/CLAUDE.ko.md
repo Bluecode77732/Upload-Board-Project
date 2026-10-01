@@ -73,6 +73,16 @@
 - **Fast-refresh**: 컴포넌트를 export하는 파일은 context 객체나 훅을 같이
   export하면 안 된다 — context/provider/훅은 별도 파일에 둔다(`src/auth/`
   참고).
+- **UI 문구는 한/영 이중 언어**: 사용자에게 보이는 모든 문자열은
+  `useLanguage().t(key)`를 거치며, `src/i18n/messages.ts`의 두 사전에 모두 항목이
+  있어야 한다 — `ko`가 `Record<MessageKey, string>`이라 번역이 빠지면 `tsc`가
+  실패한다. 영어가 기본값이고 e2e spec이 단언하는 언어이므로, 기존 영어 문장은 그것을
+  단언하는 spec을 함께 바꾸지 않는 한 그대로 둔다. 영어 문구의 명사는 단수로 쓴다(Post,
+  File, Setting). `ApiError`를 문구로 바꾸는 함수(`messageForError`)는 `Translatable`(키, 또는
+  서버가 준 문구를 그대로 보여줄 때의 `{ raw }`)을 돌려주고, 컴포넌트는 이를 state에 담아 두었다가
+  렌더 시점에 `t()`를 부른다 — 그래서 에러가 이미 떠 있는 상태에서 언어를 바꿔도 새 언어로 다시
+  그려진다. URL 경로 `/posts/:id`와 `/files`는 일부러 복수형으로 둔다(`/post`, `/file`은 API
+  prefix다 — Production image 참고).
 - **파일 헤더 주석**(새 파일에만): imports 위에 세 줄 — 목적(Purpose) /
   사용처(Usage) / 근거(Rationale) — 기존 파일과 동일한 형식으로.
   (2026-09-09에 영어 라벨에서 한글로 전환 — 루트 CLAUDE.md의 File Creation
@@ -106,7 +116,9 @@
   그리고 테스트가 생성한 이메일에 흔한 단어가 들어 있으면 관계없는 버튼과
   매칭될 수 있다(`getByRole('button', { name: 'Upload' })`가 접근성 이름이
   `e2e-upload-...@example.com`인 creator-filter 버튼에 매칭됐다). 텍스트가
-  짧고 흔한 단어인 라벨/role 쿼리에는 `{ exact: true }`를 준다.
+  짧고 흔한 단어인 라벨/role 쿼리에는 `{ exact: true }`를 준다 — 이제 내비 링크와 제목이
+  "Post", "File"이라는 한 단어라서 "New post", "Upload a file", 그리고 그 단어가 들어간 모든
+  게시글·파일 제목에도 부분 일치한다.
 
 ## 명령어
 

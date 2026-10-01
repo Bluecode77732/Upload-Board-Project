@@ -7,33 +7,39 @@ import { useState, type FormEvent } from 'react'
 import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { CreatePostRequest, PostResponse } from '../../api/types'
+import { useLanguage } from '../../i18n/useLanguage'
+import type { Translatable } from '../../i18n/messages'
 import { FilePicker } from './FilePicker'
 import styles from './PostForm.module.css'
 
-// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
-function messageForError(error: unknown): string {
+// 목적: 게시글 생성 실패 응답을 화면에 보여줄 메시지 키로 바꾼다.
+// 이유: 한/영 토글 후에도 떠 있는 에러가 새 언어로 다시 그려지도록 번역된 문자열이 아니라 키를 돌려준다.
+//       VALIDATION_FAILED만은 서버가 준 문구 그대로를 보여줘야 해서 { raw }로 감싼다.
+// 방법: ApiError의 고정 code로 switch(backend ADR 0011)해 키를 고르고, 문구는 렌더 시 t()가 만든다.
+function messageForError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.POST_FILE_TAKEN:
-        return 'That file is already attached to another post.'
+        return 'postForm.err.fileTaken'
       case ErrorCode.FILE_NOT_FOUND:
-        return 'The selected file could not be found.'
+        return 'postForm.err.fileNotFound'
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return 'You can only attach files you uploaded yourself.'
+        return 'postForm.err.notOwner'
       case ErrorCode.VALIDATION_FAILED:
-        return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
+        return { raw: Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message }
       default:
-        return 'Failed to create the post. Please try again.'
+        return 'postForm.err.createFailed'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
 export function PostForm({ onCreated }: { onCreated: () => void }) {
+  const { t } = useLanguage()
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [fileId, setFileId] = useState<number | undefined>(undefined)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Translatable | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function onSubmit(event: FormEvent) {
@@ -56,9 +62,9 @@ export function PostForm({ onCreated }: { onCreated: () => void }) {
 
   return (
     <form onSubmit={onSubmit} className={styles.form}>
-      <h2 className={styles.heading}>New post</h2>
+      <h2 className={styles.heading}>{t('postForm.heading')}</h2>
       <label className={styles.field}>
-        Title
+        {t('common.title')}
         <input
           className={styles.input}
           value={title}
@@ -69,7 +75,7 @@ export function PostForm({ onCreated }: { onCreated: () => void }) {
         />
       </label>
       <label className={styles.field}>
-        Body
+        {t('common.body')}
         <textarea
           className={styles.textarea}
           value={body}
@@ -81,9 +87,9 @@ export function PostForm({ onCreated }: { onCreated: () => void }) {
         />
       </label>
       <FilePicker value={fileId} onChange={setFileId} disabled={busy} />
-      {error && <p className={styles.error}>{error}</p>}
+      {error && <p className={styles.error}>{t(error)}</p>}
       <button type="submit" className={styles.submit} disabled={busy}>
-        {busy ? 'Posting…' : 'Post'}
+        {busy ? t('common.posting') : t('postForm.submit')}
       </button>
     </form>
   )

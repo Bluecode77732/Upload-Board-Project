@@ -5,12 +5,14 @@
 
 import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
+import { useLanguage } from '../i18n/useLanguage'
 import { useAuth } from './useAuth'
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { status } = useAuth()
+  const { t } = useLanguage()
 
-  if (status === 'loading') return <p style={{ padding: 24 }}>Loading…</p>
+  if (status === 'loading') return <p style={{ padding: 24 }}>{t('common.loading')}</p>
   if (status === 'anonymous') return <Navigate to="/login" replace />
   return <>{children}</>
 }

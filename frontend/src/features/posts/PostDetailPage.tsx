@@ -12,55 +12,65 @@ import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { FileMediaType, PostResponse, UpdatePostRequest } from '../../api/types'
 import { useAuth } from '../../auth/useAuth'
+import { useLanguage } from '../../i18n/useLanguage'
+import type { Translatable } from '../../i18n/messages'
 import { NavBar } from '../../shared/NavBar'
 import { CommentForm } from './CommentForm'
 import { CommentThread } from './CommentThread'
 import styles from './PostDetailPage.module.css'
 
-// 사람이 읽는 메시지가 아니라 고정된 code로 분기한다(backend ADR 0011).
-function messageForError(error: unknown): string {
+// 목적: 게시글 읽기 실패 응답을 화면에 보여줄 메시지 키로 바꾼다.
+// 이유: 한/영 토글 후에도 떠 있는 에러가 새 언어로 다시 그려지도록 번역된 문자열이 아니라 키를 돌려준다.
+// 방법: ApiError의 고정 code로 switch(backend ADR 0011)해 키를 고르고, 문구는 렌더 시 t()가 만든다.
+function messageForError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.POST_NOT_FOUND:
-        return 'Post not found.'
+        return 'common.postNotFound'
       default:
-        return 'Failed to load the post.'
+        return 'postDetail.err.loadFailed'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
-// 관리 액션(수정, 삭제)의 에러는 읽기와는 다른 코드 집합으로 분기한다.
-function messageForManageError(error: unknown): string {
+// 목적: 관리 액션(수정, 삭제) 실패 응답을 메시지 키로 바꾼다.
+// 이유: 읽기와는 다른 코드 집합으로 분기해야 하고, messageForError와 같은 이유로 키(또는 서버가 준
+//       raw 문구)를 돌려준다.
+// 방법: ApiError의 고정 code로 switch해 키를 고르고, VALIDATION_FAILED만 서버 문구를 { raw }로 감싼다.
+function messageForManageError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return 'Only the author or an admin can do this.'
+        return 'common.onlyAuthorOrAdmin'
       case ErrorCode.POST_NOT_FOUND:
-        return 'Post not found.'
+        return 'common.postNotFound'
       case ErrorCode.VALIDATION_FAILED:
-        return Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message
+        return { raw: Array.isArray(error.body?.message) ? error.body.message.join(', ') : error.message }
       default:
-        return 'The action failed.'
+        return 'common.actionFailed'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
-function messageForPlaybackError(error: unknown): string {
+// 목적: 첨부 파일 재생 실패 응답을 화면에 보여줄 메시지 키로 바꾼다.
+// 이유: messageForError와 같다 — 번역된 문자열이 아니라 키를 돌려준다.
+// 방법: ApiError의 고정 code로 switch해 키를 고른다(FileDetailPage의 읽기 에러와 같은 문구 키를 쓴다).
+function messageForPlaybackError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.FILE_NOT_FOUND:
-        return 'File not found.'
+        return 'common.fileNotFound'
       case ErrorCode.FORBIDDEN_NOT_OWNER:
-        return 'You do not have permission to view this file.'
+        return 'fileDetail.err.noPermission'
       case ErrorCode.FILE_SHARE_INVALID:
-        return 'This share link is missing, invalid, or expired.'
+        return 'fileDetail.err.shareInvalid'
       default:
-        return 'Failed to load the file.'
+        return 'fileDetail.err.loadFailed'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
 // 목적: mediaType(image/audio/video)에 맞는 재생 태그를 고른다.
@@ -85,17 +95,18 @@ export function PostDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { currentUserId } = useAuth()
+  const { t } = useLanguage()
   const postId = id !== undefined && /^\d+$/.test(id) ? Number(id) : null
 
   const [post, setPost] = useState<PostResponse | null>(null)
-  const [metaError, setMetaError] = useState<string | null>(null)
-  const [playbackError, setPlaybackError] = useState<string | null>(null)
+  const [metaError, setMetaError] = useState<Translatable | null>(null)
+  const [playbackError, setPlaybackError] = useState<Translatable | null>(null)
   const [objectUrl, setObjectUrl] = useState<string | null>(null)
 
   const [editing, setEditing] = useState(false)
   const [editTitle, setEditTitle] = useState('')
   const [editBody, setEditBody] = useState('')
-  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<Translatable | null>(null)
   const [busy, setBusy] = useState(false)
 
   // 값 자체에는 의미가 없다 — 값을 올리면 CommentThread의 현재 쿼리만 다시 트리거된다
@@ -106,7 +117,7 @@ export function PostDetailPage() {
     setPost(null)
     setMetaError(null)
     if (postId === null) {
-      setMetaError('Invalid post id.')
+      setMetaError('postDetail.err.invalidId')
       return
     }
     api
@@ -147,7 +158,7 @@ export function PostDetailPage() {
     if (!file) return
     api
       .getBlob(`/file/${file.id}/content`)
-      .then(() => setPlaybackError('Playback failed — the browser could not play this file.'))
+      .then(() => setPlaybackError('fileDetail.err.playbackFailed'))
       .catch((err: unknown) => setPlaybackError(messageForPlaybackError(err)))
   }
 
@@ -191,7 +202,7 @@ export function PostDetailPage() {
   // 방법: 확인 대화상자 → DELETE /post/:id → 성공 시 홈으로 이동.
   function handleDelete() {
     if (!post) return
-    if (!window.confirm(`Delete "${post.title}"? This cannot be undone.`)) return
+    if (!window.confirm(t('common.confirmDelete', { title: post.title }))) return
     setActionError(null)
     setBusy(true)
     api
@@ -207,9 +218,9 @@ export function PostDetailPage() {
     return (
       <main className={styles.page}>
         <NavBar />
-        <p className={styles.error}>{metaError}</p>
+        <p className={styles.error}>{t(metaError)}</p>
         <Link to="/" className={styles.backLink}>
-          Back to posts
+          {t('postDetail.back')}
         </Link>
       </main>
     )
@@ -219,7 +230,7 @@ export function PostDetailPage() {
     return (
       <main className={styles.page}>
         <NavBar />
-        <p>Loading…</p>
+        <p>{t('common.loading')}</p>
       </main>
     )
   }
@@ -228,13 +239,13 @@ export function PostDetailPage() {
     <main className={styles.page}>
       <NavBar />
       <Link to="/" className={styles.backLink}>
-        Back to posts
+        {t('postDetail.back')}
       </Link>
 
       {editing ? (
         <div className={styles.editForm}>
           <label className={styles.field}>
-            Title
+            {t('common.title')}
             <input
               className={styles.input}
               value={editTitle}
@@ -245,7 +256,7 @@ export function PostDetailPage() {
             />
           </label>
           <label className={styles.field}>
-            Body
+            {t('common.body')}
             <textarea
               className={styles.textarea}
               value={editBody}
@@ -256,13 +267,13 @@ export function PostDetailPage() {
               disabled={busy}
             />
           </label>
-          {actionError && <p className={styles.error}>{actionError}</p>}
+          {actionError && <p className={styles.error}>{t(actionError)}</p>}
           <div className={styles.actions}>
             <button type="button" className={styles.primaryButton} disabled={busy} onClick={submitEdit}>
-              Save
+              {t('common.save')}
             </button>
             <button type="button" className={styles.button} disabled={busy} onClick={cancelEdit}>
-              Cancel
+              {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -276,7 +287,7 @@ export function PostDetailPage() {
 
           {post.file && (
             <div className={styles.playerWrapper}>
-              {playbackError && <p className={styles.error}>{playbackError}</p>}
+              {playbackError && <p className={styles.error}>{t(playbackError)}</p>}
               {post.file.visibility === 'private' ? (
                 objectUrl ? (
                   renderMediaElement(post.file.mediaType, post.file.title, {
@@ -284,7 +295,7 @@ export function PostDetailPage() {
                     className: styles.player,
                   })
                 ) : (
-                  !playbackError && <p className={styles.loadingText}>Loading content…</p>
+                  !playbackError && <p className={styles.loadingText}>{t('fileDetail.loadingContent')}</p>
                 )
               ) : (
                 renderMediaElement(post.file.mediaType, post.file.title, {
@@ -299,14 +310,14 @@ export function PostDetailPage() {
           {canManage && (
             <div className={styles.actions}>
               <button type="button" className={styles.button} disabled={busy} onClick={startEdit}>
-                Edit
+                {t('common.edit')}
               </button>
               <button type="button" className={styles.deleteButton} disabled={busy} onClick={handleDelete}>
-                Delete
+                {t('common.delete')}
               </button>
             </div>
           )}
-          {actionError && <p className={styles.error}>{actionError}</p>}
+          {actionError && <p className={styles.error}>{t(actionError)}</p>}
         </>
       )}
 

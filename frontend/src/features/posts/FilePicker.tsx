@@ -9,20 +9,25 @@ import { api, ApiError } from '../../api/client'
 import { ErrorCode } from '../../api/errorCodes'
 import type { FileListResponse, FileResponse } from '../../api/types'
 import { useAuth } from '../../auth/useAuth'
+import { useLanguage } from '../../i18n/useLanguage'
+import type { Translatable } from '../../i18n/messages'
 import styles from './FilePicker.module.css'
 
 const TAKE = 50
 
-function messageForError(error: unknown): string {
+// 목적: 내 파일 목록 조회 실패 응답을 화면에 보여줄 메시지 키로 바꾼다.
+// 이유: 한/영 토글 후에도 떠 있는 에러가 새 언어로 다시 그려지도록 번역된 문자열이 아니라 키를 돌려준다.
+// 방법: ApiError의 고정 code로 switch해 키를 고르고, 문구는 렌더 시 t()가 만든다.
+function messageForError(error: unknown): Translatable {
   if (error instanceof ApiError) {
     switch (error.code) {
       case ErrorCode.VALIDATION_FAILED:
-        return 'Invalid search value.'
+        return 'filePicker.err.invalidSearch'
       default:
-        return 'Failed to load your files.'
+        return 'filePicker.err.loadFailed'
     }
   }
-  return 'Network error. Is the backend running?'
+  return 'common.networkError'
 }
 
 export function FilePicker({
@@ -35,10 +40,11 @@ export function FilePicker({
   disabled?: boolean
 }) {
   const { currentUserId } = useAuth()
+  const { t } = useLanguage()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [files, setFiles] = useState<FileResponse[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Translatable | null>(null)
 
   // 자유 텍스트 검색을 디바운스해 키 입력마다 요청이 나가지 않게 한다.
   useEffect(() => {
@@ -69,18 +75,18 @@ export function FilePicker({
   return (
     <div className={styles.wrapper}>
       <label className={styles.field}>
-        Attach a file (optional)
+        {t('filePicker.label')}
         <input
           className={styles.input}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           maxLength={100}
-          placeholder="Search your files…"
+          placeholder={t('filePicker.searchPlaceholder')}
           disabled={disabled}
         />
       </label>
-      {error && <p className={styles.error}>{error}</p>}
-      {files === null && !error && <p className={styles.loadingText}>Loading your files…</p>}
+      {error && <p className={styles.error}>{t(error)}</p>}
+      {files === null && !error && <p className={styles.loadingText}>{t('filePicker.loading')}</p>}
       <div className={styles.listBox}>
         <label className={styles.radioLabel}>
           <input
@@ -90,9 +96,9 @@ export function FilePicker({
             onChange={() => onChange(undefined)}
             disabled={disabled}
           />
-          No file
+          {t('filePicker.none')}
         </label>
-        {files && files.length === 0 && <p className={styles.emptyText}>No files found.</p>}
+        {files && files.length === 0 && <p className={styles.emptyText}>{t('filePicker.empty')}</p>}
         {files?.map((file) => (
           <label key={file.id} className={styles.radioLabel}>
             <input

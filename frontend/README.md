@@ -21,7 +21,8 @@ instead (backend ROADMAP.md > Stage 5).
   direct load of `/posts/:id` rendering the real `PostDetailPage`; `posts` covers
   creating a post through PostForm — with and without an attached file — and the
   resulting board row/detail link, landing on the post's own title/body once
-  `PostDetailPage` stopped being a placeholder)
+  `PostDetailPage` stopped being a placeholder; `language` covers the NavBar en/ko toggle,
+  its persistence across a reload, and its size and position next to the theme toggle)
 - Plain `fetch` wrapper (`src/api/client.ts`) — no data-fetching or state library yet
   (plus an `XMLHttpRequest` path in the same file for upload-progress reporting,
   since `fetch` exposes no upload-progress event)
@@ -49,8 +50,12 @@ src/
 │                 errorCodes + types (mirror of the backend contract, now including
 │                 PostResponse/CommentResponse)
 ├── auth/         session state: AuthProvider (silent refresh), useAuth, RequireAuth guard
-├── shared/       NavBar — the Posts/Files/Sign out header shown on every
-│                 authenticated screen
+├── i18n/         English/Korean UI text: LanguageProvider (choice saved in localStorage
+│                 `ui-lang`, English by default), useLanguage's `t()`, and messages.ts
+│                 (the en dictionary plus `ko`, a Record over the same keys — a missing
+│                 translation fails `tsc`). Server-sent message text is shown as received
+├── shared/       NavBar — the Post/File/Setting links, language and theme toggles, and
+│                 Sign out, shown on every authenticated screen
 └── features/
     ├── auth/     LoginPage (Basic signin/register)
     ├── posts/    PostBoard (protected, "/" — the app's home: PostForm + the post list —

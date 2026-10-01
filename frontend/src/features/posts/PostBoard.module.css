@@ -34,6 +34,13 @@
   font-size: 0.9rem;
 }
 
+/* Files의 필터 패널(FileBoard.module.css)과 같은 규격이다 — 검색창이 행에서 남는 너비를 차지해
+   두 화면의 필터 패널이 같은 모양으로 보이게 한다. */
+.searchField {
+  flex: 1 1 240px;
+  min-width: 180px;
+}
+
 .input,
 .select {
   padding: 8px 10px;
@@ -194,6 +201,10 @@
 
   .field {
     width: 100%;
+  }
+
+  .searchField {
+    flex-basis: 100%;
   }
 
   /* `100%`가 아니라 `width: auto`인 이유: 이 입력 요소들은 content-box라서 퍼센트 너비를
