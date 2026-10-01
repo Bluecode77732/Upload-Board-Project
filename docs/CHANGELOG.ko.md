@@ -13,6 +13,17 @@
 ## [Unreleased]
 
 ### 변경
+- **`admin/`: axios 1.19.0 → 1.20.0 (2026-10-02, `40d6227`)** — 아래 `frontend/` 항목에서 말한, 읽기
+  전용으로 돌린 `pnpm audit --prod`가 1.20.0 미만 `axios`에 대한 12건(high 7, moderate 5)을 보고했다.
+  취약점 요약을 `admin/` 코드(`axios.create` 인스턴스 하나, 브라우저의 XHR 어댑터, `FormData`·`proxy`·
+  `maxRedirects`·`adapter` 없음)와 맞춰 읽으면 6건은 Node 전용 코드, 3건은 fetch 어댑터, 3건은 `admin/`이
+  쓰지 않는 기능에 해당해 노출은 낮아 보였다. 패치가 싸서 그래도 올렸다. `pnpm update axios`로 선언된 범위
+  안에서 올렸고 범위 하한은 이제 `^1.20.0`이며, 잠금 파일 변경은 `axios`뿐이다. `pnpm audit --prod`는 이제
+  알려진 취약점이 없다고 나오고, lint(에러 없음, `protected-route.tsx`의 기존 경고 1건)·`pnpm test`(24/24)·
+  `pnpm build`가 통과한다. 단위 테스트가 `axios`를 mock으로 대체하므로 401 → 갱신 → 재시도 인터셉터 흐름도
+  실제 1.20.0과 로컬 서버로 한 번 돌려 확인했다(만료된 토큰 → 401 → 새 토큰으로 재시도 → 200). 돌리지 않은
+  것: `admin-e2e`(백엔드와 시드된 superadmin이 필요하다)이며 CI가 확인한다. 평가는
+  [ROADMAP.ko.md](ROADMAP.ko.md) §7에 있다.
 - **`frontend/`: react-router-dom 7.18.1 → 7.18.4 (2026-10-02, `e251b57`)** — 아래 글꼴을 추가하다가
   `pnpm audit --prod`가 `react-router` `>=7.12.0 <7.18.2`에서 high 취약점 1건(RSC 모드 CSRF 우회,
   GHSA-qwww-vcr4-c8h2)을 보고했다. 글꼴 때문에 생긴 것이 아니다: 그 설치의 잠금 파일 diff는 글꼴 패키지
@@ -20,7 +31,7 @@
   올렸다(`react-router`도 같은 버전으로 고정된다). 이제 `frontend/`의 `pnpm audit --prod`는 알려진
   취약점이 없다고 나오고, lint·`tsc`·build·스텁 기반 e2e가 통과하며 코드 변경은 없다. `admin/`은 건드리지
   않았다 — 읽기 전용으로 돌린 `pnpm audit --prod`에서 `axios` 취약점 12건(high 7, moderate 5)이 보였고,
-  이 항목은 그것을 다루지 않는다. [ROADMAP.ko.md](ROADMAP.ko.md) §7이 추적한다.
+  이 항목은 그것을 다루지 않는다. 그 취약점은 위 항목에서 따로 패치했다.
 - **프론트엔드: 본문 Noto Sans KR + 제목 Hahmlet, 한글과 영문 모두 (2026-10-01, `f31cd1a`,
   [ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md) 2026-10-01 추가 기록)** — UI는 직접 불러오는
   글꼴 파일이 없었다. 한글은 OS에 맡겨졌고(CDP로 측정: Windows에서 제목은 바탕체, 본문은 맑은 고딕),

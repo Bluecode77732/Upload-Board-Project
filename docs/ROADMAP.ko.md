@@ -1475,7 +1475,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   **2026-10-02 갱신:** 위 수치는 2026-09-16 기준이다. `frontend/`는 이제 production 패키지가
   5개(글꼴 패키지 2개, [CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-01)이고 `dist`는 약 6.3MB이며,
   거의 전부 브라우저가 페이지에 필요한 만큼만 요청하는 woff2 조각이다. 결론은 그대로다.
-- **`admin/` 의존성 취약점 — `axios`** — **2026-10-02 발견, 미해결.** `admin/`에서 읽기 전용으로 돌린
+- ~~**`admin/` 의존성 취약점 — `axios`**~~ — **2026-10-02 발견 및 패치(`40d6227`).** `admin/`에서 읽기 전용으로 돌린
   `pnpm audit --prod`가 전부 `axios`에 대한 12건(high 7, moderate 5)을 보고한다. 취약 범위는 모두 1.20.0
   미만에서 끝나고 패치는 `>=1.20.0`이다. `axios`는 직접 production 의존성(`^1.15.2`, 설치 1.19.0)이라
   `pnpm update axios`로 1.20.0에 닿는다. `frontend/`의 `react-router-dom`을 패치하다가
@@ -1488,8 +1488,11 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   인터셉터가 있어야 하는데 `admin/`은 그중 어느 것도 하지 않는다(401 재시도의 `api(original)`은 원래
   method를 갖고 있고, 요청 인터셉터는 같은 config 객체를 그대로 돌려준다). 노출은 낮아 보이지만 패치는
   싸다: 1.19.0 → 1.20.0은 선언된 범위 안이다. 로컬 확인은 `admin/`의 `pnpm lint`·`pnpm test`·`pnpm build`이고,
-  e2e는 백엔드와 시드된 superadmin이 필요해서 CI의 `admin-e2e`가 확인한다. `frontend/`의 패치가 선례다:
-  업데이트, `pnpm audit --prod`, 그다음 위 확인. 아직 패치하지 않았고 개발자의 승인을 기다린다.
+  e2e는 백엔드와 시드된 superadmin이 필요해서 CI의 `admin-e2e`가 확인한다. `frontend/`의 패치가 선례였다:
+  업데이트, `pnpm audit --prod`, 그다음 위 확인. **패치함:** `axios` 1.19.0 → 1.20.0(범위 하한은 이제
+  `^1.20.0`). `pnpm audit --prod`는 알려진 취약점이 없다고 나오고, lint(에러 없음)·`pnpm test`(24/24)·
+  `pnpm build`가 통과한다. 단위 테스트가 `axios`를 mock으로 대체하므로 401 → 갱신 → 재시도 인터셉터 흐름은
+  실제 axios 1.20.0과 로컬 서버로 따로 돌려 확인했다. `admin-e2e`는 아직 돌지 않았고 CI가 돌린다.
 
 ## 8. Advisory 노트
 

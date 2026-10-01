@@ -13,6 +13,19 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **`admin/`: axios 1.19.0 → 1.20.0 (2026-10-02, `40d6227`)** — the read-only `pnpm audit --prod`
+  noted in the `frontend/` entry below reported 12 advisories on `axios` below 1.20.0 (7 high, 5
+  moderate). Reading the advisory summaries against `admin/`'s code (one `axios.create` instance,
+  the browser's XHR adapter, no `FormData`, `proxy`, `maxRedirects` or `adapter`) put six of them on
+  Node-only code, three on the fetch adapter and three on features `admin/` does not use, so the
+  exposure looked low; the patch was cheap, so it was made anyway. `pnpm update axios` moved it
+  inside the declared range and the range floor is now `^1.20.0`; the lockfile diff is `axios`
+  only. `pnpm audit --prod` now reports no known vulnerabilities; lint (no errors, one existing
+  warning in `protected-route.tsx`), `pnpm test` (24/24) and `pnpm build` pass. The unit tests mock
+  `axios`, so the 401 → refresh → retry interceptor flow was also run once against the real 1.20.0
+  and a local server (stale token → 401 → retry with the fresh token → 200). Not run: `admin-e2e`
+  (it needs the backend and a seeded superadmin), which CI covers. [ROADMAP.md](ROADMAP.md) §7
+  records the assessment.
 - **`frontend/`: react-router-dom 7.18.1 → 7.18.4 (2026-10-02, `e251b57`)** — adding the fonts
   below made `pnpm audit --prod` report one high advisory on `react-router` `>=7.12.0 <7.18.2`
   (RSC-mode CSRF bypass, GHSA-qwww-vcr4-c8h2). It predates them: that install's lockfile diff
@@ -21,7 +34,7 @@ development line (package.json version).
   `pnpm audit --prod` now reports no known vulnerabilities for `frontend/`; lint, `tsc`, build and
   the stub-based e2e specs pass; no code changed. `admin/` was not touched — a read-only `pnpm
   audit --prod` there lists 12 `axios` advisories (7 high, 5 moderate) that this entry does not
-  address; [ROADMAP.md](ROADMAP.md) §7 tracks them.
+  address; they were patched separately, in the entry above.
 - **Frontend: Noto Sans KR body and Hahmlet headings, for Hangul and Latin (2026-10-01,
   `f31cd1a`, [ADR 0060](ADR/0060-frontend-same-alb-path-routing.md) 2026-10-01 Addendum)** — the
   UI loaded no font files. Hangul fell to the OS (measured through CDP: on Windows headings drew in

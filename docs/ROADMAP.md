@@ -1550,7 +1550,8 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   production packages (two font packages, [CHANGELOG.md](CHANGELOG.md) 2026-10-01) and its
   `dist` is about 6.3MB, almost all of it woff2 slices that a browser requests only as a page
   needs them. The conclusion stands.
-- **`admin/` dependency advisories — `axios`** — **found 2026-10-02, open.** A read-only
+- ~~**`admin/` dependency advisories — `axios`**~~ — **found and patched 2026-10-02
+  (`40d6227`).** A read-only
   `pnpm audit --prod` in `admin/` reports 12 advisories, all on `axios` (7 high, 5 moderate;
   every vulnerable range ends below 1.20.0, patched `>=1.20.0`). `axios` is a direct production
   dependency (`^1.15.2`, installed 1.19.0), so `pnpm update axios` would reach 1.20.0. Found
@@ -1566,8 +1567,12 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   interceptor returns the same config object). Exposure looks low, but the patch is cheap:
   1.19.0 → 1.20.0 is inside the declared range. Local checks are `pnpm lint`, `pnpm test` and
   `pnpm build` in `admin/`; its e2e needs the backend and a seeded superadmin, so CI's `admin-e2e`
-  is the check. The `frontend/` patch is the pattern: update, `pnpm audit --prod`, then those
-  checks. Not patched yet; waiting on the developer's go-ahead.
+  is the check. The `frontend/` patch was the pattern: update, `pnpm audit --prod`, then those
+  checks. **Patched:** `axios` 1.19.0 → 1.20.0 (the range floor is now `^1.20.0`);
+  `pnpm audit --prod` reports no known vulnerabilities; lint (no errors), `pnpm test` (24/24)
+  and `pnpm build` pass, and the 401 → refresh → retry interceptor flow was run against the real
+  axios 1.20.0 and a local server, since the unit tests mock `axios`. `admin-e2e` has not run on
+  it yet; CI will.
 
 ## 8. Advisory notes
 
