@@ -230,16 +230,18 @@ because whoever touches these files for restyling will see them:
    every screen to the grid's 1076px, keeping the content in the 720px
    column. `e2e/layout.spec.ts` asserts that the header box is identical on
    every screen, so (b) and (c) mean changing that spec. Not decided.
-7. **Font license notice (OFL-1.1)** (recorded 2026-10-02, open) — `dist/`
-   holds `assets/` (woff2 and CSS), `favicon.svg` and `index.html`, with no
-   license text in it. OFL-1.1 asks that copies of the font software carry
-   the copyright notice and the license, as a text file, a header, or
-   metadata inside the font file. Both packages carry a `LICENSE` under
-   `node_modules/@fontsource-variable/*`; whether the subsetted woff2 files
-   keep it in their metadata was not checked. Options: (a) leave it; (b)
-   check the woff2 metadata first, then decide; (c) add a notice file served
-   from `public/` (not under an API prefix, see `frontend/CLAUDE.md`). Not
-   decided; this is a project decision, not legal advice.
+7. ~~**Font license notice (OFL-1.1)**~~ (recorded 2026-10-02) — **checked and
+   decided 2026-10-02: no notice file.** `dist/` holds `assets/` (woff2 and
+   CSS), `favicon.svg` and `index.html`, with no license text in it, so the
+   woff2 metadata was read. All 216 shipped files (byte-identical to the
+   `@fontsource-variable/*` package files) carry the copyright (name ID 0) and
+   the OFL license URL (name ID 14); the license description field (name ID
+   13) is empty, so the license text itself is not embedded. OFL-1.1 lets the
+   notice and license travel as machine-readable metadata inside the font
+   file, and the files are shipped unmodified, so a separate file was not
+   added. Revisit if the project adds a `NOTICE`/third-party file for another
+   reason, or if the fonts are ever re-subsetted or converted (the metadata
+   would need checking again). A project decision, not legal advice.
 
 ## Ready-to-paste prompts
 

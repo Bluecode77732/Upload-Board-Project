@@ -1555,10 +1555,19 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   every vulnerable range ends below 1.20.0, patched `>=1.20.0`). `axios` is a direct production
   dependency (`^1.15.2`, installed 1.19.0), so `pnpm update axios` would reach 1.20.0. Found
   while patching `frontend/`'s `react-router-dom` ([CHANGELOG.md](CHANGELOG.md) 2026-10-02);
-  `admin/` was not touched. Not assessed: how many of the 12 apply to a browser bundle — several
-  titles name Node-only parts (the HTTP/2 and Node HTTP adapters, proxy bypass). The `frontend/`
-  patch is the pattern: update, `pnpm audit --prod`, then the `admin/` lint, unit and e2e jobs.
-  Revisit with the next `admin/` change, or whenever the developer decides to patch.
+  `admin/` was not touched. **Assessed 2026-10-02** from the advisory summaries and `admin/`'s
+  code, not by testing: `admin/` uses one `axios.create({ baseURL, withCredentials })` instance
+  with two interceptors and 15 `api.get/post/patch/delete` calls, in a browser (the XHR adapter);
+  it sets no `adapter`, `proxy` or `maxRedirects` and builds no `FormData`. Six of the 12 concern
+  Node-only code (`fromDataURI`, `shouldBypassProxy`, the HTTP/2 adapter twice, the Node HTTP
+  adapter, `NO_PROXY`), three concern the fetch adapter, and the other three need `toFormData`, a
+  call without a method, or an interceptor that returns a replacement config — none of which
+  `admin/` does (the 401 retry `api(original)` carries its original method, and the request
+  interceptor returns the same config object). Exposure looks low, but the patch is cheap:
+  1.19.0 → 1.20.0 is inside the declared range. Local checks are `pnpm lint`, `pnpm test` and
+  `pnpm build` in `admin/`; its e2e needs the backend and a seeded superadmin, so CI's `admin-e2e`
+  is the check. The `frontend/` patch is the pattern: update, `pnpm audit --prod`, then those
+  checks. Not patched yet; waiting on the developer's go-ahead.
 
 ## 8. Advisory notes
 

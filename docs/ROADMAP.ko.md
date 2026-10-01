@@ -1479,10 +1479,17 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   `pnpm audit --prod`가 전부 `axios`에 대한 12건(high 7, moderate 5)을 보고한다. 취약 범위는 모두 1.20.0
   미만에서 끝나고 패치는 `>=1.20.0`이다. `axios`는 직접 production 의존성(`^1.15.2`, 설치 1.19.0)이라
   `pnpm update axios`로 1.20.0에 닿는다. `frontend/`의 `react-router-dom`을 패치하다가
-  발견했고([CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-02) `admin/`은 건드리지 않았다. 확인하지 않은
-  것: 12건 중 브라우저 번들에 해당하는 것이 몇 건인지 — 제목 중 일부는 Node 전용 구성 요소(HTTP/2와 Node
-  HTTP 어댑터, 프록시 우회)를 가리킨다. `frontend/`의 패치가 선례다: 업데이트, `pnpm audit --prod`, 그다음
-  `admin/`의 lint·unit·e2e 잡. 다음 `admin/` 변경 때, 또는 개발자가 패치하기로 정할 때 다시 본다.
+  발견했고([CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-02) `admin/`은 건드리지 않았다. **2026-10-02
+  평가**: 테스트가 아니라 취약점 요약과 `admin/` 코드를 읽어서 판단했다. `admin/`은 브라우저(XHR 어댑터)에서
+  `axios.create({ baseURL, withCredentials })` 인스턴스 하나, 인터셉터 둘, `api.get/post/patch/delete` 호출
+  15개만 쓰고, `adapter`·`proxy`·`maxRedirects`를 설정하지 않으며 `FormData`도 만들지 않는다. 12건 중 6건은
+  Node 전용 코드(`fromDataURI`, `shouldBypassProxy`, HTTP/2 어댑터 2건, Node HTTP 어댑터, `NO_PROXY`),
+  3건은 fetch 어댑터에 관한 것이고, 나머지 3건은 `toFormData`, method 없는 호출, 교체된 config를 돌려주는
+  인터셉터가 있어야 하는데 `admin/`은 그중 어느 것도 하지 않는다(401 재시도의 `api(original)`은 원래
+  method를 갖고 있고, 요청 인터셉터는 같은 config 객체를 그대로 돌려준다). 노출은 낮아 보이지만 패치는
+  싸다: 1.19.0 → 1.20.0은 선언된 범위 안이다. 로컬 확인은 `admin/`의 `pnpm lint`·`pnpm test`·`pnpm build`이고,
+  e2e는 백엔드와 시드된 superadmin이 필요해서 CI의 `admin-e2e`가 확인한다. `frontend/`의 패치가 선례다:
+  업데이트, `pnpm audit --prod`, 그다음 위 확인. 아직 패치하지 않았고 개발자의 승인을 기다린다.
 
 ## 8. Advisory 노트
 

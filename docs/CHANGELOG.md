@@ -43,8 +43,9 @@ development line (package.json version).
   `e2e/fonts.spec.ts` reads the platform font through CDP and fails on the old `index.css`. Not
   verified: the nginx image and a live ALB (the CSP check used a Node server that copies the
   header). `frontend/docs/STYLE-PLAN.md` item 3 records that 2026-09-07's "zero new dependency"
-  reason no longer holds for typography. Open: whether the build should carry the OFL-1.1 license
-  text (`frontend/docs/STYLE-PLAN.md` open question 7).
+  reason no longer holds for typography. Checked 2026-10-02: every shipped woff2 is
+  byte-identical to its package file and carries the copyright and the OFL-1.1 URL in its
+  metadata, so no separate notice file was added (`frontend/docs/STYLE-PLAN.md` open question 7).
 - **Frontend: one `main` box and one 720px column on every authenticated screen (2026-10-01,
   `3eac5d2`)** — the header, `main` and forms differed in width per screen. Measured at 1280px,
   `main` was 768px on Post, 1124px on File, 768px on Setting, 395px on the Post detail and 524px on
