@@ -1573,6 +1573,22 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   and `pnpm build` pass, and the 401 → refresh → retry interceptor flow was run against the real
   axios 1.20.0 and a local server, since the unit tests mock `axios`. `admin-e2e` has not run on
   it yet; CI will.
+- **Korean fluency pass over four `.ko.md` files** — **deferred 2026-10-02, not started.**
+  CLAUDE.md's Documentation Convention asks that touching an existing `.ko.md` re-read the whole
+  file and fix passages that read as a word-for-word translation, in the same change (fluency only,
+  never content the English sibling lacks). The 2026-10-01/02 frontend session edited seven `.ko.md`
+  files and re-read three of them in full: `docs/ADR/0060-frontend-same-alb-path-routing.ko.md`,
+  `frontend/docs/STYLE-PLAN.ko.md` and `frontend/docs/API-CONTRACT.ko.md` (that pass fixed one
+  untranslated "Addendum" heading in ADR 0060). Four were not re-read: `docs/CHANGELOG.ko.md` (about
+  2,850 lines, 81 added this session), `docs/ROADMAP.ko.md` (about 1,590, 21 added),
+  `frontend/CLAUDE.ko.md` (177, 27 added) and `frontend/README.ko.md` (126, 13 added). The added
+  passages were written as Korean prose, not translated line by line; nothing around them was
+  re-read. Scope when picked up: those four files in full, Korean wording only. Keep the heading
+  hierarchy, table layout, links, code blocks, identifiers and numbers identical to the English
+  sibling, then check EN/KO symmetry (heading and entry counts) and links. `CHANGELOG.ko.md` and
+  `ROADMAP.ko.md` are most of the effort and can go separately from the two `frontend/` files.
+  Revisit when explicitly requested, or the next time one of the four is edited at length. Also
+  listed in CLAUDE.md > Known Gaps.
 
 ## 8. Advisory notes
 

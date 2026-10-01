@@ -1493,6 +1493,19 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   `^1.20.0`). `pnpm audit --prod`는 알려진 취약점이 없다고 나오고, lint(에러 없음)·`pnpm test`(24/24)·
   `pnpm build`가 통과한다. 단위 테스트가 `axios`를 mock으로 대체하므로 401 → 갱신 → 재시도 인터셉터 흐름은
   실제 axios 1.20.0과 로컬 서버로 따로 돌려 확인했다. `admin-e2e`는 아직 돌지 않았고 CI가 돌린다.
+- **`.ko.md` 네 개의 한국어 점검** — **2026-10-02 보류, 시작하지 않음.** CLAUDE.md의 문서 규약은 기존
+  `.ko.md`를 건드리면 같은 변경에서 파일 전체를 다시 읽고 직역처럼 읽히는 부분을 고치라고 한다(한국어
+  표현만, 영어판에 없는 내용은 절대 넣지 않는다). 2026-10-01/02 프론트엔드 세션은 `.ko.md` 7개를 수정했고
+  그중 3개는 전체를 다시 읽었다: `docs/ADR/0060-frontend-same-alb-path-routing.ko.md`,
+  `frontend/docs/STYLE-PLAN.ko.md`, `frontend/docs/API-CONTRACT.ko.md`(이 점검에서 ADR 0060의
+  번역되지 않은 "Addendum" 제목 하나를 고쳤다). 나머지 4개는 다시 읽지 않았다: `docs/CHANGELOG.ko.md`(약
+  2,850줄, 이번 세션에 81줄 추가), `docs/ROADMAP.ko.md`(약 1,590줄, 21줄 추가), `frontend/CLAUDE.ko.md`(177줄,
+  27줄 추가), `frontend/README.ko.md`(126줄, 13줄 추가). 추가한 부분은 줄 단위 번역이 아니라 한국어 문장으로
+  썼지만 그 주변은 다시 읽지 않았다. 착수할 때의 범위: 이 네 파일 전체, 한국어 표현만. 제목 계층, 표 구성,
+  링크, 코드 블록, 식별자, 수치는 영어판과 똑같이 두고, 끝나면 EN/KO 대칭(제목·항목 수)과 링크를 확인한다.
+  `CHANGELOG.ko.md`와 `ROADMAP.ko.md`가 작업량 대부분이라 `frontend/`의 두 파일과 따로 진행해도 된다.
+  명시적으로 요청받을 때, 또는 이 네 파일 중 하나를 크게 고칠 때 다시 본다. CLAUDE.md > Known Gaps에도
+  올려 두었다.
 
 ## 8. Advisory 노트
 
