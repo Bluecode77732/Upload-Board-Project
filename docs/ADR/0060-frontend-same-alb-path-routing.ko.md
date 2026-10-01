@@ -230,7 +230,7 @@ replica 수, nginx 보안 헤더의 정확한 구성, 캐시 정책.
    HTML(또는 404)을 돌려주고 백엔드 응답은 절대 돌려주지 않는지.
 7. **`admin/` 호스팅** — 별도 결정(D4).
 
-### Addendum (2026-09-21) — 구현 완료
+### 추가 기록 (2026-09-21) — 구현 완료
 
 후속 작업 1~4번이 반영됐다. 5번은 `vite.config.ts` 주석만 빼고 반영됐고(명시적 승인이 필요하다),
 6번은 클러스터 없이 할 수 있는 검증까지 끝났으며, 7번은 아직 열려 있다.
@@ -356,3 +356,27 @@ Addendum에 기록했다.
   지난번처럼 `curl`만 썼다.
 
 `/admin`의 순서와 본문은 여기가 아니라 ADR 0062의 2026-09-29 추가 기록에 적었다.
+
+### 추가 기록 (2026-10-01) — CSP 아래의 웹 폰트
+
+프론트엔드에 웹 폰트 두 개가 들어왔다([CHANGELOG.md](../CHANGELOG.ko.md) `[Unreleased]`, `f31cd1a`).
+라우팅, Ingress, `nginx.conf`의 CSP는 바뀌지 않았다. 글꼴을 바꿀 때 CSP가 강제하는 두 가지와, 무엇을
+확인했고 무엇을 확인하지 못했는지를 적는다.
+
+- **글꼴은 같은 origin에서 와야 한다.** CSP가 `style-src 'self'`, `font-src 'self'`라서 CDN(Google
+  Fonts, jsDelivr)의 스타일시트나 글꼴은 막힌다. `@fontsource-variable/noto-sans-kr`와
+  `@fontsource-variable/hahmlet`을 `main.tsx`에서 불러오고, Vite가 woff2 조각을 `/assets/`로 내보내면
+  nginx가 위에서 정한 1년 캐시로 서빙한다. `dist/`에 woff2 216개(약 5.7MB)가 늘었고, 브라우저는 페이지에
+  나온 글자에 필요한 조각만 요청한다.
+- **Vite는 작은 파일을 인라인하고, `data:`는 `font-src`에 없다.** 4KB 미만 자산은 CSS 안의 `data:` URI가
+  된다. Hahmlet 조각 2개(약 3.5KB, 2.2KB, 강희 부수와 괘선·도형 기호 범위)가 인라인됐고 CSP가 이를 막아
+  페이지를 열 때마다 에러가 2건 났다. `frontend/vite.config.ts`가 이제 `build.assetsInlineLimit`에서
+  `.woff2`는 `false`를 돌려준다. `font-src`에 `data:`를 추가해도 해결됐겠지만, CSP를 지금만큼
+  엄격하게 두려고 택하지 않았다.
+- **확인한 것.** `nginx.conf`에서 읽은 CSP 헤더를 그대로 보내는 로컬 Node 정적 서버로 빌드된 `dist/`를
+  서빙하고, Chromium(Playwright)에서 한국어와 영어로 열었다. 제목은 Hahmlet, 라벨·버튼·링크는 Noto Sans
+  KR로 그려졌고(CDP `CSS.getPlatformFontsForNode`로 읽었다) 콘솔과 CSP 에러가 없었다 — Vite 변경 전에는
+  2건이었다. `frontend/e2e/fonts.spec.ts`가 같은 배정을 Vite dev 서버에서 계속 검사한다.
+- **확인하지 못한 것.** nginx 자체와 이미지(위 서버는 헤더를 복사한 것이지 nginx가 아니다), 그리고 라이브
+  ALB — 글꼴을 그 경로로 요청해 본 적이 없다. 설정만 보면 `/assets/`에는 `expires 1y`가 걸려 있고,
+  `gzip_types`에는 `font/woff2`가 없는데 woff2는 이미 압축된 형식이다.

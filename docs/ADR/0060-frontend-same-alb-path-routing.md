@@ -373,3 +373,28 @@ live pass. The session read AWS and the cluster read-only and requested the publ
   the last, was `curl`-only.
 
 `/admin`'s ordering and body are recorded in ADR 0062's own 2026-09-29 addendum, not here.
+
+### Addendum (2026-10-01) — web fonts under the CSP
+
+The frontend gained two web fonts ([CHANGELOG.md](../CHANGELOG.md) `[Unreleased]`, `f31cd1a`). The
+routing, the Ingress and the CSP in `nginx.conf` are unchanged. This records two things the CSP forces
+on any font change, and what was and was not checked.
+
+- **Fonts have to be same-origin.** The CSP is `style-src 'self'` and `font-src 'self'`, so a
+  stylesheet or font from a CDN (Google Fonts, jsDelivr) is blocked. `@fontsource-variable/noto-sans-kr`
+  and `@fontsource-variable/hahmlet` are imported in `main.tsx`, and Vite emits their woff2 slices into
+  `/assets/`, which nginx serves with the one-year cache above. `dist/` grows by 216 woff2 files (about
+  5.7MB); a browser requests only the slices whose characters appear on the page.
+- **Vite inlines small files, and `data:` is not in `font-src`.** Assets under 4KB become `data:` URIs
+  in the CSS. Two Hahmlet slices (about 3.5KB and 2.2KB, covering Kangxi radicals and box-drawing and
+  geometric symbols) were inlined, the CSP blocked them, and every page load logged two errors.
+  `frontend/vite.config.ts` now sets `build.assetsInlineLimit` to return `false` for `.woff2`. Adding
+  `data:` to `font-src` would also have worked and was not chosen, to keep the CSP as strict as it was.
+- **Checked.** The built `dist/`, served by a local Node static server that sends the exact CSP header
+  read from `nginx.conf`, loaded in Chromium (Playwright) in Korean and in English: headings were drawn
+  with Hahmlet and labels, buttons and links with Noto Sans KR (read through CDP's
+  `CSS.getPlatformFontsForNode`), with no console or CSP errors — two errors before the Vite change.
+  `frontend/e2e/fonts.spec.ts` keeps that assignment checked against the Vite dev server.
+- **Not checked.** nginx itself and the image (the server above copies the header, it is not nginx),
+  and a live ALB — no font has been requested through it. From the config alone: `/assets/` carries
+  `expires 1y`, and `gzip_types` does not list `font/woff2`, which is already compressed.

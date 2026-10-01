@@ -8,8 +8,10 @@ for that work — implementation happens in separate, dispatched sessions (see
 **Status (2026-08-14): all 7 page-conversion items complete** — see the
 "Page-by-page task list" below for the per-item landing notes and
 [ROADMAP.md](../../docs/ROADMAP.md) > 7 for the plan-level record. Two related
-items surfaced during the initial walkthrough stay deliberately out of scope
-and open — see "Related but out of scope" and "Open questions" below.
+items surfaced during the initial walkthrough were deliberately left out of
+scope; both have since been resolved (S3 playback CORS 2026-08-16, the
+Korean/English text split 2026-10-01) — see "Related but out of scope" and
+"Open questions" below.
 
 > **Later change (2026-08-24)**: item 4's file board no longer looks like what
 > that row describes — its text list and Previous/Next pager were replaced by a
@@ -146,17 +148,22 @@ because whoever touches these files for restyling will see them:
   and `detail.spec.ts:73`'s stale redirect-leg assertion fixed the same day —
   nothing from this finding remains open. See ADR 0036 > "Addendum
   (2026-08-16)".
-- **Korean/English UI-text split**: `features/posts/*` (PostForm, PostDetailPage,
-  CommentThread, CommentForm) hardcodes Korean UI strings and error messages;
-  `features/auth/*` and `features/files/*` are English-only. Not an i18n
-  framework decision to make silently inside a styling pass — separate task.
+- ~~**Korean/English UI-text split**~~ — **resolved 2026-10-01** (`ead3b90`,
+  [CHANGELOG.md](../../docs/CHANGELOG.md)). It was left as its own task because
+  an i18n framework is not a decision to make silently inside a styling pass.
+  Every screen now takes its text from `src/i18n/messages.ts` (English by
+  default, a Korean dictionary typed to the same keys) and a `NavBar` toggle
+  switches between them — no i18n library, mirroring `ThemeProvider`. Text the
+  server sends is shown as received, in English.
 
 ## Open questions
 
 1. ~~Confirm the proposed palette~~ — **confirmed 2026-08-14**, kept the
    existing purple brand seed. Item 1 is clear to dispatch.
-2. Confirm whether the two remaining "related but out of scope" items above
-   should be picked up later as their own tasks, or intentionally left alone.
+2. ~~Confirm whether the two remaining "related but out of scope" items above
+   should be picked up later as their own tasks, or intentionally left alone.~~
+   — **resolved 2026-10-01**: both were picked up as their own tasks (S3
+   playback CORS 2026-08-16, the Korean/English text split 2026-10-01).
 3. ~~**Typography was never actually decided**~~ (recorded 2026-08-25) —
    **resolved 2026-09-07**. The exploration ran as a comparison-table Q&A
    (per CLAUDE.md's Clarification Protocol), then an artifact preview page

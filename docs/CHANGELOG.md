@@ -13,6 +13,84 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **`frontend/`: react-router-dom 7.18.1 → 7.18.4 (2026-10-02, `e251b57`)** — adding the fonts
+  below made `pnpm audit --prod` report one high advisory on `react-router` `>=7.12.0 <7.18.2`
+  (RSC-mode CSRF bypass, GHSA-qwww-vcr4-c8h2). It predates them: that install's lockfile diff
+  touched only the two font packages. The app does not use RSC mode, but a patched release exists,
+  so `react-router-dom` moved to the highest 7.x (it pins `react-router` to the same version).
+  `pnpm audit --prod` now reports no known vulnerabilities for `frontend/`; lint, `tsc`, build and
+  the stub-based e2e specs pass; no code changed. `admin/` was not touched — a read-only `pnpm
+  audit --prod` there lists several `axios` advisories (high and moderate) that this entry does
+  not address.
+- **Frontend: Noto Sans KR body and Hahmlet headings, for Hangul and Latin (2026-10-01,
+  `f31cd1a`, [ADR 0060](ADR/0060-frontend-same-alb-path-routing.md) 2026-10-01 Addendum)** — the
+  UI loaded no font files. Hangul fell to the OS (measured through CDP: on Windows headings drew in
+  Batang and body text in Malgun Gothic), and buttons, inputs and selects drew in the browser's
+  default Arial because only some classes set `font: inherit`. A comparison table and then an
+  artifact preview of both candidates picked option C: `@fontsource-variable/noto-sans-kr` for
+  `--sans` and `@fontsource-variable/hahmlet` for `--heading`, for Hangul and Latin alike, with the
+  heading letter-spacing unchanged (−1.68px). Both are OFL-1.1 and variable 100–900 (the app uses
+  400/500/600/700 under `font-synthesis: none`), imported in `main.tsx` and self-hosted into
+  `/assets`: the nginx CSP is `font-src 'self'`, so a CDN is blocked. `index.css` adds `button,
+  input, select, textarea { font-family: inherit }` — `font: inherit` would have grown the 13px
+  controls. Found while verifying: Vite inlined two 2–4KB Hahmlet slices as `data:` URIs, which
+  the CSP blocks (two console errors on every page load), so `frontend/vite.config.ts` (explicit
+  approval given) no longer inlines `.woff2`; allowing `data:` in the CSP was the other option and
+  was not taken. Cost: two dependencies and 216 more woff2 files in `dist/` (about 5.7MB; a browser
+  requests only the slices a page's characters need). Verified: the built `dist/`, served with the
+  exact CSP read from `nginx.conf`, draws headings in Hahmlet and everything else in Noto Sans KR in
+  Chromium (Korean and English) with no console error (two before the Vite change); the new
+  `e2e/fonts.spec.ts` reads the platform font through CDP and fails on the old `index.css`. Not
+  verified: the nginx image and a live ALB (the CSP check used a Node server that copies the
+  header). `frontend/docs/STYLE-PLAN.md` item 3 records that 2026-09-07's "zero new dependency"
+  reason no longer holds for typography.
+- **Frontend: one `main` box and one 720px column on every authenticated screen (2026-10-01,
+  `3eac5d2`)** — the header, `main` and forms differed in width per screen. Measured at 1280px,
+  `main` was 768px on Post, 1124px on File, 768px on Setting, 395px on the Post detail and 524px on
+  the File detail; the nav header was 720/1076/720/347/476px, and the `h1` was centered on two
+  screens and left-aligned on three. Cause: each page's own `.page { margin: auto }` inside the
+  flex-column `#root` shrank `main` to its content. The new `src/shared/page.module.css` gives every
+  authenticated page the same box (inside 1126px, padding 24/24/80, left-aligned text) through CSS
+  Modules `composes`. The direct children of `main` sit in one 720px column, and only the File
+  preview grid (`wide`) is wider — which is why `FileBoard` now returns a fragment instead of a
+  `<section>`. The inline "Back to …" link becomes a block so it lines up with the column.
+  `LoginPage`, a centered card, is left out on purpose. The 720px width for the card and filter
+  panel, with the preview grid wide, was chosen from a comparison table in `ead3b90`. The
+  left-aligned `h1` on Post and File is a side effect. Verified: the same boxes at 1280/900/375px on all five screens,
+  and the new `e2e/layout.spec.ts` (desktop and phone, stubbed API, no account created) fails when
+  File detail's CSS is put back. `frontend/CLAUDE.md` records the rule.
+- **Frontend: English/Korean toggle, singular nouns, "Date" label (2026-10-01, `ead3b90`)** — a
+  40×40 round button left of the theme toggle in `NavBar` switches every UI string between English
+  (default) and Korean; the choice is kept in `localStorage` (`ui-lang`) and sets `<html lang>`.
+  There is no i18n library: `src/i18n/` mirrors `ThemeProvider` (context, provider, hook), and
+  `messages.ts` holds both dictionaries with `ko` typed as `Record<MessageKey, string>`, so a missing
+  translation fails `tsc`. `ApiError` mappers return a `Translatable` (a key, or `{ raw }` for
+  server text) that components translate at render, so a language switch also re-renders an error
+  already on screen. English text uses singular nouns (Post, File, Setting) and the sentences were
+  reworded to match; the URLs stay `/posts/:id` and `/files` because `/post` and `/file` are API
+  prefixes. The sort label shows "Date" for `createdAt` (the request value is unchanged) on both
+  Post and File. The same commit lined File's filter panel up with its upload card at 720px, the
+  width picked from a comparison table, and let Post's search field take the spare width as File's
+  does. Not covered: text the server sends (the `USER_HAS_FILES` message, `VALIDATION_FAILED`
+  arrays) shows as received, in English, and the login screen has no language toggle because it has
+  no theme toggle either. `frontend/docs/STYLE-PLAN.md`'s "Korean/English UI-text split" item is
+  marked resolved. Verified: stub-based `e2e/language.spec.ts` (toggle, reload, size and position)
+  and a probe of the renamed selectors; the e2e specs that register real accounts were not run
+  locally and are left to CI.
+- **Frontend: weak-password and rate-limit messages on the login screen, file-input reset, form
+  cards at one width (2026-10-01, `906ce3c`)** — registering with `password` showed only
+  "Something went wrong": the backend's `AUTH_WEAK_PASSWORD` (2026-09-11) was never added to
+  `src/api/errorCodes.ts` (the only one of the 37 codes missing) and `LoginPage` had no branch for
+  it. It and `RATE_LIMITED` (429, the 5/minute auth limit) now have their own messages;
+  `frontend/docs/API-CONTRACT.md`(+ko) records the register `400` and that only `LoginPage`
+  handles `429` — the other screens keep their generic message, a comparison table settled on
+  login-only. `UploadForm`'s uncontrolled file input kept showing the previous file after a
+  successful upload or a type switch while the component state was empty, so choosing the same file
+  again fired no `change` event; the input now remounts (`key`). A Choose File click that is
+  actually blocked was not reproduced. The Post, File and Setting form cards also got one shape
+  (720px, `border-box`, centered). Verified: live against the local backend (`POST /auth/register`
+  with `password` → 400, the message shown, no account created); two new e2e tests (the 429 one
+  stubbed) fail on the old `LoginPage`.
 - **Live checks of 2026-09-30 recorded (2026-09-30, [ADR 0036](ADR/0036-s3-presigned-content-redirect.md),
   [0059](ADR/0059-upload-malware-scanning-clamav.md), [0062](ADR/0062-admin-same-alb-subpath-routing.md)
   and [0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md) Addenda)** — documentation only, plus
