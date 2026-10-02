@@ -13,6 +13,24 @@
 ## [Unreleased]
 
 ### 변경
+- **프론트엔드: 크기 고정된 댓글 박스, 폰의 40px 터치 영역, 테마에 맞춘 파일 버튼 (2026-10-02)** — 아래
+  항목의 후속이다. 새 댓글 박스와 댓글 수정 박스가 `resize: vertical`이었고 둘 다 `none`으로 바꿨다. 이제
+  앱의 어떤 텍스트 박스도 크기를 바꿀 수 없다. 폰 폭(`max-width: 640px`)이거나 터치 포인터일 때 누를 수 있는
+  요소가 40px 미만이었다: 내비 링크 23px, Sign out 39px, 업로드 폼과 파일 선택기의 라디오 라벨 23px, Post·File
+  목록의 링크와 작성자 버튼 23px(Post 행의 작성자 버튼은 39px), "Back to …" 링크 23px, 브라우저 기본 Choose
+  File 버튼 21px. 이제 모두 40px 이상이다(40×40 토글과 같은 크기이며, WCAG 2.2 AA는 24px, Apple 지침은
+  44px다). 링크와 버튼에는 `padding-block`을 줘서 말줄임과 줄바꿈이 그대로 동작하게 했고, 라디오 라벨에는
+  `min-height`를, 기본 회색 버튼에는 앱의 버튼 모양으로 바꾸는 `::file-selector-button` 스타일을 항상(데스크톱
+  포함) 적용했다. 640px보다 넓은 마우스 레이아웃은 그 밖에는 그대로다.
+  [frontend/CLAUDE.ko.md](../frontend/CLAUDE.ko.md)에 규칙과 그 과정에서 찾은 함정을 적었다: 실행 중인 Vite dev
+  서버는 다른 모듈이 `composes`하는 CSS 모듈의 옛 복사본을 계속 들고 있어서, `page.module.css`에 추가한 규칙이
+  서버를 재시작하기 전까지 일부 페이지에만 닿았다. 확인: 새 `touch-targets` spec(다섯 화면, 375px)과 확장한
+  `post-body` spec은 CSS 8개 중 하나라도 되돌리면 실패하고 지금은 통과한다. 스텁 기반 spec, lint,
+  `pnpm build`도 통과하며, 프론트엔드 e2e 전체 37개가 실제 백엔드에서 통과한다. 이를 위해 compose `api`가 로컬
+  저장소를 써야 했다: `.env`는 `s3`였고 버킷이 더 이상 없어서 모든 업로드가 500이었다(아래 항목). 이제
+  추적하지 않는 로컬 `docker-compose.override.yml`이 `STORAGE_DRIVER=local`로 바꾸고, 정리 서비스는 report-only로
+  두며, e2e용 rate limit 우회(`THROTTLE_ENABLED=false`, backend ADR 0054 D2)를 켠다. 이 파일을 지우면 `.env` 값으로
+  돌아간다. 하지 않은 것: 40px 기준을 넓은 마우스 레이아웃에는 적용하지 않았다.
 - **프론트엔드: 빈 목록 "아직 없음" 문구, 크기 고정된 Post 본문 박스, 폰에서 가로 스크롤 제거
   (2026-10-02)** — 화면을 직접 써 보며 찾은 네 가지를 고쳤다. Post·File 목록이 비면 필터를 건 적이 없어도
   (새 계정처럼) "No post matches the current filter."라고 말했다. 이제 검색어·정렬·작성자 ID 중 하나가

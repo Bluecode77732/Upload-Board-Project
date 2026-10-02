@@ -56,6 +56,13 @@
   font-size: 0.9rem;
 }
 
+/* 터치 화면에서는 라벨 전체가 누르는 면이다 — 23px였던 높이를 40px로 맞춘다. */
+@media (max-width: 640px), (pointer: coarse) {
+  .radioLabel {
+    min-height: 40px;
+  }
+}
+
 .emptyText {
   margin: 4px 0;
   color: var(--text-muted);

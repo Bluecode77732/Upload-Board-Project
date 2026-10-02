@@ -130,3 +130,14 @@
   outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
+
+/* 터치 화면에서는 타일의 제목 링크와 작성자 버튼(23px)이 손가락으로 누르기엔 낮다. */
+@media (max-width: 640px), (pointer: coarse) {
+  .title {
+    padding-block: 9px;
+  }
+
+  .creatorButton {
+    padding-block: 9px;
+  }
+}

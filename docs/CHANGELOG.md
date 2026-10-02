@@ -13,6 +13,28 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Frontend: fixed-size comment boxes, 40px tap targets on phones, a themed file button (2026-10-02)**
+  — follow-up to the entry below. The new-comment and comment-edit boxes were `resize: vertical`; both
+  are `none` now, so no text box in the app can be resized. At a phone width (`max-width: 640px`) or
+  with a coarse pointer, tappable elements measured under 40px: nav links 23px, Sign out 39px, the
+  radio labels of the upload form and the file picker 23px, the links and creator buttons in the Post
+  and File lists 23px (39px for the Post row's creator button), the "Back to …" link 23px, and the
+  browser's own Choose File button 21px. All are at least 40px now (the size of the 40×40 toggles; WCAG
+  2.2 AA asks for 24px, Apple's guidance is 44px): `padding-block` on the links and buttons, so text
+  ellipsis and wrapping keep working, `min-height` on the radio labels, and an always-on
+  `::file-selector-button` style that replaces the grey native button with the app's button look (on
+  desktop too). Mouse layouts wider than 640px are otherwise unchanged. [frontend/CLAUDE.md](../frontend/CLAUDE.md)
+  records the rule, and a gotcha found on the way: a running Vite dev server keeps stale copies of a
+  CSS Module that other modules `composes`, so a rule added to `page.module.css` reached only some
+  pages until the server was restarted. Verified: the new `touch-targets` spec (five screens at 375px)
+  and the extended `post-body` spec fail when any one of the eight CSS files is reverted and pass now;
+  the stub-based specs, lint and `pnpm build` pass; the whole frontend e2e suite, 37 tests, passes against
+  the real backend. That needed the compose `api` to use local storage: `.env` said `s3`, the bucket
+  no longer exists, and every upload returned 500 (the entry below). A local, untracked
+  `docker-compose.override.yml` now sets `STORAGE_DRIVER=local`, keeps the granted-file sweep
+  report-only and turns on the e2e rate-limit bypass (`THROTTLE_ENABLED=false`, backend ADR 0054 D2);
+  deleting that file returns to the `.env` values. Not done: the 40px floor was not applied to wide
+  mouse layouts.
 - **Frontend: "none yet" empty-list wording, fixed-size Post body boxes, no sideways scroll on a phone
   (2026-10-02)** — four fixes from a hands-on pass over the screens. An empty Post or File list said "No
   post matches the current filter." even when no filter was set (a new account); it now says "No post

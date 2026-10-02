@@ -99,6 +99,12 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   that holds it. `white-space: pre-wrap` alone does not break a long URL, and the box then stretches
   the whole page sideways. The nav bar wraps its controls onto a second row instead of clipping them
   at 320px. `e2e/overflow.spec.ts` checks every authenticated screen at 375px and 320px.
+- **Tap targets**: at phone widths (`max-width: 640px`) or with a coarse pointer, every link, button,
+  select, input and radio label is at least 40px tall (the size of the 40×40 toggles). Text links
+  get `padding-block` rather than `min-height`/`display: flex`, so `text-overflow: ellipsis` and
+  wrapping keep working; the browser's grey Choose File button is replaced by a themed
+  `::file-selector-button`. Wide mouse layouts stay as they were. `e2e/touch-targets.spec.ts` checks
+  all five screens at 375px.
 - **Fonts**: `--sans` is Noto Sans KR and `--heading` is Hahmlet (variable, 100–900), for Hangul and
   Latin alike, from `@fontsource-variable/*` imported in `main.tsx` and emitted into `/assets`. Never
   link a CDN (Google Fonts etc.) — the nginx CSP is `font-src 'self'`. The families are named
@@ -139,11 +145,15 @@ that will resurface in any new spec unless avoided up front:
   `{ exact: true }` on any label/role query whose text is a short common word — the nav
   links and headings are now the single words "Post" and "File", which also substring-match
   "New post", "Upload a file" and any post or file title containing them.
+- **A running Vite dev server can serve stale CSS-module copies.** When a file that other CSS Modules
+  `composes` (such as `src/shared/page.module.css`) changes, `pnpm dev` keeps old hashed copies, so a
+  rule added to it may not reach every page and a spec measures the old layout. Restart the dev server
+  (or stop it, so Playwright starts a fresh one) before trusting a CSS-only check.
 
 ### UI-only specs stub the API (`frontend/e2e/`)
 
-`layout`, `language`, `fonts`, `empty-state`, `overflow` and `post-body` check how the UI looks and
-behaves, not what the backend does.
+`layout`, `language`, `fonts`, `empty-state`, `overflow`, `post-body` and `touch-targets` check how the
+UI looks and behaves, not what the backend does.
 They call `stubAuthenticatedApi(page)` (`e2e/helpers.ts`) instead of `registerAndSignIn`: it answers
 the silent refresh with an unsigned token (the client only reads `sub`) and returns fixed data for
 the list, detail, comment and content requests. No account is created in the shared dev DB, none of

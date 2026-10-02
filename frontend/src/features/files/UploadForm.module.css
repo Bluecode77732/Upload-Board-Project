@@ -47,6 +47,26 @@
   color: var(--text-muted);
 }
 
+/* 브라우저 기본 회색 버튼(21px)은 어두운 테마와 어울리지 않고 폰에서 누르기도 어려웠다 — 다른 버튼과
+   같은 모양으로 40px 이상이 되게 한다. font-family만 상속하는 이유는 index.css 규칙과 같다. */
+.fileInput::file-selector-button {
+  margin-right: 12px;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.fileInput::file-selector-button:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
 .radioGroup {
   display: flex;
   gap: 16px;
@@ -58,6 +78,19 @@
   gap: 6px;
   color: var(--text);
   font-size: 0.95rem;
+}
+
+.radioLabel input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+/* 터치 화면에서는 라벨 전체가 누르는 면이다 — 23px였던 높이를 40px로 맞춘다. */
+@media (max-width: 640px), (pointer: coarse) {
+  .radioLabel {
+    min-height: 40px;
+  }
 }
 
 .progress {

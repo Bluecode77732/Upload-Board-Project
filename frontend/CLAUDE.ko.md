@@ -97,6 +97,11 @@
   `min-width: 0`도 준다. `white-space: pre-wrap`만으로는 긴 URL이 줄바뀜되지 않아, 박스가 페이지 전체를
   가로로 늘려 버린다. 내비게이션 바는 320px에서 컨트롤이 잘리지 않고 둘째 줄로 내려온다.
   `e2e/overflow.spec.ts`가 인증된 모든 화면을 375px와 320px에서 확인한다.
+- **터치 영역**: 폰 폭(`max-width: 640px`)이거나 터치 포인터일 때, 모든 링크·버튼·select·입력창·라디오
+  라벨은 세로 40px 이상이다(40×40 토글과 같은 크기). 텍스트 링크에는 `min-height`나 `display: flex` 대신
+  `padding-block`을 줘서 `text-overflow: ellipsis`와 줄바꿈이 그대로 동작하게 하고, 브라우저 기본 회색
+  Choose File 버튼은 테마에 맞춘 `::file-selector-button`으로 바꾼다. 넓은 마우스 레이아웃은 그대로다.
+  `e2e/touch-targets.spec.ts`가 다섯 화면을 375px에서 확인한다.
 - **글꼴**: `--sans`는 Noto Sans KR, `--heading`은 Hahmlet(가변, 100–900)이며 한글과 영문에 똑같이
   적용된다. `main.tsx`에서 불러오는 `@fontsource-variable/*`가 `/assets`로 나간다. CDN(Google Fonts
   등)을 링크하지 않는다 — nginx CSP가 `font-src 'self'`다. 패밀리 이름은 `'Noto Sans KR Variable'`,
@@ -140,11 +145,15 @@
   짧고 흔한 단어인 라벨/role 쿼리에는 `{ exact: true }`를 준다 — 이제 내비 링크와 제목이
   "Post", "File"이라는 한 단어라서 "New post", "Upload a file", 그리고 그 단어가 들어간 모든
   게시글·파일 제목에도 부분 일치한다.
+- **실행 중인 Vite dev 서버는 옛 CSS 모듈 복사본을 계속 내줄 수 있다.** 다른 CSS 모듈이 `composes`하는
+  파일(예: `src/shared/page.module.css`)을 고치면 `pnpm dev`가 해시가 다른 옛 복사본을 남겨 두어, 그
+  파일에 추가한 규칙이 일부 페이지에 닿지 않고 spec이 옛 레이아웃을 재게 된다. CSS만 바꾼 확인을 믿기 전에
+  dev 서버를 재시작한다(또는 서버를 내려 Playwright가 새 서버를 띄우게 한다).
 
 ### UI만 검증하는 spec은 API를 스텁한다 (`frontend/e2e/`)
 
-`layout`, `language`, `fonts`, `empty-state`, `overflow`, `post-body`는 백엔드가 하는 일이 아니라 UI가
-어떻게 보이고 동작하는지를 검증한다.
+`layout`, `language`, `fonts`, `empty-state`, `overflow`, `post-body`, `touch-targets`는 백엔드가 하는
+일이 아니라 UI가 어떻게 보이고 동작하는지를 검증한다.
 이 spec들은 `registerAndSignIn` 대신 `stubAuthenticatedApi(page)`(`e2e/helpers.ts`)를 호출한다: silent
 refresh에는 서명 없는 토큰을 돌려주고(클라이언트는 `sub`만 읽는다) 목록·상세·댓글·콘텐츠 요청에는 고정
 데이터를 돌려준다. 공유 dev DB에 계정이 생기지 않고, 분당 5회 인증 제한(backend ADR 0054)도 쓰지

@@ -178,6 +178,19 @@
   cursor: default;
 }
 
+/* 터치 화면에서는 행의 제목 링크와 작성자 버튼(23px)이 손가락으로 누르기엔 낮다. padding-block이라
+   말줄임(text-overflow)과 줄바꿈은 그대로 두고 높이만 40px 이상이 된다. */
+@media (max-width: 640px), (pointer: coarse) {
+  .rowInfo a {
+    padding-block: 9px;
+  }
+
+  /* 작성자 버튼은 글자가 0.9rem이라 9px로는 39px다. */
+  .creatorButton {
+    padding-block: 10px;
+  }
+}
+
 /* 좁은 화면: 페이지 여백을 되찾고, 필터가 잘게 줄바꿈되는 대신 한 줄씩 차지하게 하고,
    행의 제목을 작성자 위에 쌓아서 위에서 다룬 말줄임이 기본 읽기 방식이 아니라
    폴백이 되도록 한다. */

@@ -35,6 +35,13 @@ main.page > .wide {
   max-width: none;
 }
 
+/* 터치 화면에서는 "Back to …" 링크(23px)가 손가락으로 누르기엔 낮다. 위아래 padding으로 40px 이상을 만든다. */
+@media (max-width: 640px), (pointer: coarse) {
+  main.page > a {
+    padding-block: 9px;
+  }
+}
+
 @media (max-width: 640px) {
   .page {
     margin: 2vh auto;

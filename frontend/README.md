@@ -29,8 +29,9 @@ instead (backend ROADMAP.md > Stage 5).
   `fonts` checks that headings and body text are really drawn with the Hahmlet and Noto Sans
   KR web fonts rather than a silent system fallback; `empty-state` checks that an empty list says
   "none yet" until a filter is set; `overflow` checks that no authenticated screen scrolls sideways at
-  375px and 320px with a long email, title or URL; `post-body` checks that the Post body boxes cannot
-  be resized; those six stub the API, so they create no account and need no backend — see
+  375px and 320px with a long email, title or URL; `post-body` checks that the Post body and comment
+  boxes cannot be resized; `touch-targets` checks that every tappable element is at least 40px tall
+  at 375px; those seven stub the API, so they create no account and need no backend — see
   `frontend/CLAUDE.md`)
 - Plain `fetch` wrapper (`src/api/client.ts`) — no data-fetching or state library yet
   (plus an `XMLHttpRequest` path in the same file for upload-progress reporting,
