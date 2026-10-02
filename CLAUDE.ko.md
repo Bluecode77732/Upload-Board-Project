@@ -155,6 +155,10 @@ Never Do, 아키텍처 결정이 요구하는 것을 건너뛰는 결과로 이�
 | **Medium** | 일반적인 기능 추가/수정 | Requirement → Research → Design → Implementation → Testing → Review → Regression |
 | **Large** | 아키텍처 변경, DB 마이그레이션, 핵심 흐름 재작성 | Requirement → Impact → Research → Design(해당 시 Security/Performance Review 포함) → Implementation → Testing → Review → Fix → Regression → Release → Production Verification → Retrospective → Knowledge Capture |
 
+최소 금기 확인(분석 프로토콜 > 도입 분석)은 특정 규모에 속하는 단계가 아니다. Small을
+포함한 모든 규모에서, 이번 변경이 저장소에서 아직 쓰지 않은 도구나 API를 호출한다면
+구현에 들어가기 전에 수행한다.
+
 고위험 파일이나 스키마 변경을 건드리는 Large 작업은 이미 범위 준수에서 명시적 승인을
 요구한다 — 그 승인 절차는 여기서 어느 단계에 속하든 상관없이 그대로 적용된다.
 
@@ -227,7 +231,8 @@ Implementation과 Review는 같은 패스여서는 안 된다: Review는 구현�
   "미확인"으로 표시한 뒤 확인 방법을 제안한다. 반복해서 나오는 금기는 Never Do 후보로
   올린다.
 
-저장소에 이미 있는 의존성이라도 이번 변경에서 처음 호출하는 API라면 똑같이 적용한다.
+저장소에 이미 있는 의존성이라도 이번 변경에서 처음 호출하는 API라면 작업 규모와
+상관없이 똑같이 적용한다.
 근거: 도구 API에 대한 기억은 아무 신호 없이 낡는다 — Never Do Group 2의 `@Transaction()`
 금지(TypeORM 0.3에서 제거됨)가 선례다.
 

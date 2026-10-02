@@ -158,6 +158,10 @@ down:
 | **Medium** | A typical feature add or change | Requirement → Research → Design → Implementation → Testing → Review → Regression |
 | **Large** | Architectural change, DB migration, a core-flow rewrite | Requirement → Impact → Research → Design (+ Security/Performance Review where relevant) → Implementation → Testing → Review → Fix → Regression → Release → Production Verification → Retrospective → Knowledge Capture |
 
+The minimum do-nots check (Analysis Protocol > Introduction Analysis) is not a stage of any
+one scale: at every scale, including Small, it runs before Implementation whenever the change
+calls a tool or API this repo has not used before.
+
 A Large task that touches a high-blast-radius file or a schema change already requires
 explicit approval under Scope Discipline — that approval gate applies regardless of which
 stage it falls under here.
@@ -235,7 +239,8 @@ When a new tool, library, or concept is being introduced, always cover the follo
   propose a verification step instead of filling the gap from memory. A do-not that recurs
   is a candidate for Never Do.
 
-The same applies when a change first calls an API of a dependency already in the repo.
+The same applies, at any task scale, when a change first calls an API of a dependency
+already in the repo.
 Rationale: recall of a tool's API goes stale with no signal — the `@Transaction()` ban in
 Never Do Group 2 (removed in TypeORM 0.3) is the precedent.
 
