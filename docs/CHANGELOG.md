@@ -13,6 +13,25 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Frontend: the Post list no longer stretches past its column on tablets and laptops (2026-10-02)** —
+  found by running the real backend's data through 15 viewport sizes (phones 320–430px, landscape
+  phones, tablets, laptops 1280–1536px, 1920px; light/dark × English/Korean at five of them; 405 page
+  loads). Everything else passed; the Post list (`/`) at 641px and wider did not: a row with a long title
+  and a long creator email (an 89-character one) was 1416–1584px wide, the page scrolled sideways and the
+  email was cut off. `.list` is `display: grid`, whose default `auto` column takes its content's
+  min-content, and the title and email are `nowrap`, so the column grew to their combined width and the
+  ellipsis never applied. `grid-template-columns: minmax(0, 1fr)` on `.list` fixes it. The `overflow`
+  spec now also runs at 667, 768 and 1366px (its stubbed Post list already had a long title and email,
+  but it never ran above 375px); the three new widths fail on the old CSS and pass now. Verified with the
+  real data in a visible browser: 16 widths from 320 to 1920px × light/dark × English/Korean, 64 loads,
+  none scrolls sideways; up to 640px the rows stack as before, from 641px each row is as wide as the
+  720px column and the title and email end in `…`. Not done: with a very long creator email the email
+  still takes most of the row, so the title is cut shorter than it needs to be ("Post with audio …" at
+  1366px). Found in the same run and not fixed: the select boxes are 39px on phones (one pixel under the
+  40px floor), and in `pnpm dev` React StrictMode runs `AuthProvider`'s startup refresh twice, so the
+  second call replays the rotated cookie (401 `AUTH_REFRESH_REUSED`) and a second reload while signed in
+  ends at the login screen — the production build runs it once. The fix would send the startup call
+  through the existing single-flight `tryRefresh`; `AuthProvider.tsx` needs explicit approval first.
 - **Frontend: fixed-size comment boxes, 40px tap targets on phones, a themed file button (2026-10-02)**
   — follow-up to the entry below. The new-comment and comment-edit boxes were `resize: vertical`; both
   are `none` now, so no text box in the app can be resized. At a phone width (`max-width: 640px`) or

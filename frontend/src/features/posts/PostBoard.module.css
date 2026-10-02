@@ -79,11 +79,15 @@
   color: var(--danger);
 }
 
+/* grid의 열은 기본이 `auto`라 최솟값이 안의 min-content다. 행의 제목·이메일은 nowrap이라 긴 값이
+   들어오면 열이 칼럼(720px)을 넘어 1400px 이상으로 늘어났다(641px 이상, 말줄임도 안 걸렸다).
+   열의 최솟값을 0으로 낮춰 칼럼 폭 안에서 줄어들게 하고, 넘치는 글자는 말줄임으로 처리한다. */
 .list {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 

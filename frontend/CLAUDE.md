@@ -98,7 +98,10 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   able to break an unbroken string — `overflow-wrap: anywhere`, plus `min-width: 0` on a flex child
   that holds it. `white-space: pre-wrap` alone does not break a long URL, and the box then stretches
   the whole page sideways. The nav bar wraps its controls onto a second row instead of clipping them
-  at 320px. `e2e/overflow.spec.ts` checks every authenticated screen at 375px and 320px.
+  at 320px. A `display: grid` list needs `grid-template-columns: minmax(0, 1fr)`: the default `auto`
+  column takes its content's min-content, so `nowrap` titles and emails stretched the Post list past
+  1400px above 640px. `e2e/overflow.spec.ts` checks every authenticated screen at 320, 375, 667, 768
+  and 1366px.
 - **Tap targets**: at phone widths (`max-width: 640px`) or with a coarse pointer, every link, button,
   select, input and radio label is at least 40px tall (the size of the 40×40 toggles). Text links
   get `padding-block` rather than `min-height`/`display: flex`, so `text-overflow: ellipsis` and

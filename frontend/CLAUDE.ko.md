@@ -96,7 +96,10 @@
   긴 문자열도 끊을 수 있어야 한다 — `overflow-wrap: anywhere`를 쓰고, 그 텍스트를 담은 flex 자식에는
   `min-width: 0`도 준다. `white-space: pre-wrap`만으로는 긴 URL이 줄바뀜되지 않아, 박스가 페이지 전체를
   가로로 늘려 버린다. 내비게이션 바는 320px에서 컨트롤이 잘리지 않고 둘째 줄로 내려온다.
-  `e2e/overflow.spec.ts`가 인증된 모든 화면을 375px와 320px에서 확인한다.
+  `display: grid` 목록에는 `grid-template-columns: minmax(0, 1fr)`가 필요하다: 기본값 `auto` 열은 안의
+  내용의 min-content를 최솟값으로 잡아서, `nowrap`인 제목과 이메일이 640px 넘는 화면에서 Post 목록을
+  1400px 이상으로 늘렸다. `e2e/overflow.spec.ts`가 인증된 모든 화면을 320, 375, 667, 768, 1366px에서
+  확인한다.
 - **터치 영역**: 폰 폭(`max-width: 640px`)이거나 터치 포인터일 때, 모든 링크·버튼·select·입력창·라디오
   라벨은 세로 40px 이상이다(40×40 토글과 같은 크기). 텍스트 링크에는 `min-height`나 `display: flex` 대신
   `padding-block`을 줘서 `text-overflow: ellipsis`와 줄바꿈이 그대로 동작하게 하고, 브라우저 기본 회색
