@@ -228,6 +228,16 @@ When a new tool, library, or concept is being introduced, always cover the follo
 - Background: why it was created and what problem it solves
 - Implementation purpose: what specific goal it serves in this context
 - Practical disadvantages if not implemented, and the root causes of those disadvantages
+- Minimum do-nots: for the APIs this change will actually call, what the tool's own docs,
+  changelog, or advisories mark as removed, deprecated, or unsafe — read from the official
+  source in this session (Context7 MCP when connected), not recalled. Record the source,
+  version, and date checked for each. If no source can be reached, mark it "unverified" and
+  propose a verification step instead of filling the gap from memory. A do-not that recurs
+  is a candidate for Never Do.
+
+The same applies when a change first calls an API of a dependency already in the repo.
+Rationale: recall of a tool's API goes stale with no signal — the `@Transaction()` ban in
+Never Do Group 2 (removed in TypeORM 0.3) is the precedent.
 
 Do not write excessive code during this phase — the goal is to decide *whether and how*
 to introduce the thing before committing to an implementation, and premature code biases
