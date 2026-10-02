@@ -1,5 +1,8 @@
+/* flex-wrap: 320px처럼 링크와 세 컨트롤이 한 줄에 다 들어가지 않는 폭에서는 컨트롤이 아래 줄로 내려온다
+   (이전에는 Sign out이 폭 밖으로 잘렸다). 375px 이상에서는 한 줄 그대로다. */
 .header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
@@ -33,6 +36,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  /* 아래 줄로 내려와도 오른쪽에 붙는다. */
+  margin-left: auto;
 }
 
 /* 언어 토글은 테마 토글과 같은 40x40 원형이다 — 두 버튼이 한 쌍으로 보이도록 규칙을 공유한다. */
@@ -73,6 +78,8 @@
   background: var(--surface-raised);
   color: var(--text);
   padding: 9px 12px;
+  /* 좁은 폭에서 "Sign out"이 두 줄로 접히지 않게 한다. */
+  white-space: nowrap;
   cursor: pointer;
   transition: var(--transition);
 }

@@ -37,8 +37,9 @@
   font: inherit;
 }
 
+/* 높이는 rows가 정한다 — 사용자가 끌어서 바꾸지 못하게 하고, 긴 글은 박스 안에서 스크롤된다. */
 .textarea {
-  resize: vertical;
+  resize: none;
 }
 
 .input:focus-visible,

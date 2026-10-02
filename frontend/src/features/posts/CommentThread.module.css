@@ -38,9 +38,17 @@
   font-size: 0.85rem;
 }
 
+/* 긴 이메일이 날짜를 밀어내며 목록 칸을 폰 폭 밖으로 늘리지 않게, 작성자 쪽이 줄어들며 줄바꿈된다. */
+.itemHeader > :first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 공백 없는 긴 URL은 pre-wrap만으로는 줄이 바뀌지 않아 칸 전체를 가로로 밀어냈다. */
 .commentBody {
   margin: 8px 0 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .editBox {

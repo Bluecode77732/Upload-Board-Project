@@ -73,6 +73,7 @@ export const en = {
   // Post 목록/작성
   'post.heading': 'Post',
   'post.empty': 'No post matches the current filter.',
+  'post.noneYet': 'No post yet.',
   'post.attachedFileTitle': 'Has an attached file',
   'post.err.loadFailed': 'Failed to load the post list.',
   'postForm.heading': 'New post',
@@ -92,6 +93,7 @@ export const en = {
   // File 목록/업로드
   'file.heading': 'File',
   'file.empty': 'No file matches the current filter.',
+  'file.noneYet': 'No file yet.',
   'file.footer.showing': 'Showing {loaded} of {total}',
   'file.autoPaused': 'Auto-loading is paused (limit: {max}).',
   'file.err.loadFailed': 'Failed to load the file list.',
@@ -263,6 +265,7 @@ export const ko: Record<MessageKey, string> = {
 
   'post.heading': '게시글',
   'post.empty': '조건에 맞는 게시글이 없습니다.',
+  'post.noneYet': '아직 게시글이 없습니다.',
   'post.attachedFileTitle': '첨부 파일이 있습니다',
   'post.err.loadFailed': '게시글 목록을 불러오지 못했습니다.',
   'postForm.heading': '새 게시글',
@@ -281,6 +284,7 @@ export const ko: Record<MessageKey, string> = {
 
   'file.heading': '파일',
   'file.empty': '조건에 맞는 파일이 없습니다.',
+  'file.noneYet': '아직 파일이 없습니다.',
   'file.footer.showing': '총 {total}개 중 {loaded}개 표시',
   'file.autoPaused': '자동 불러오기가 중지되었습니다 (한도: {max}).',
   'file.err.loadFailed': '파일 목록을 불러오지 못했습니다.',

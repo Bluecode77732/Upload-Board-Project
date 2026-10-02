@@ -35,10 +35,12 @@
   overflow: hidden;
 }
 
+/* 긴 이메일이 한 줄로 늘어나 폰 폭을 넘지 않게 한다. */
 .meta {
   margin: 0 0 16px;
   color: var(--text-muted);
   font-size: 0.9rem;
+  overflow-wrap: anywhere;
 }
 
 .pendingBadge {

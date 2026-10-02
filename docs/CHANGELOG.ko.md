@@ -13,6 +13,25 @@
 ## [Unreleased]
 
 ### 변경
+- **프론트엔드: 빈 목록 "아직 없음" 문구, 크기 고정된 Post 본문 박스, 폰에서 가로 스크롤 제거
+  (2026-10-02)** — 화면을 직접 써 보며 찾은 네 가지를 고쳤다. Post·File 목록이 비면 필터를 건 적이 없어도
+  (새 계정처럼) "No post matches the current filter."라고 말했다. 이제 검색어·정렬·작성자 ID 중 하나가
+  기본값에서 벗어나기 전까지는 "No post yet." / "No file yet."(아직 없음)이고, 그 뒤에만 기존 문장이 나온다
+  (`board`·`detail` spec은 검색어를 입력한 뒤 그 문장을 단언하므로 영향이 없다). 새 글 폼과 글 수정 폼의
+  Body 박스는 `resize: vertical`이었고 둘 다 `none`으로 바꿨다(댓글 박스는 그대로다). 긴 텍스트로 재 보니
+  375px에서는 긴 URL이 든 댓글이 Post 상세를 897px까지 늘렸고, 긴 작성자 이메일이 File 상세를 화면 밖으로
+  밀었으며, 320px에서는 내비게이션 바의 Sign out이 7px 잘렸다. 댓글 본문·글 본문·메타 줄에
+  `overflow-wrap: anywhere`, 댓글 작성자에 `min-width: 0`, 내비게이션 바에 `flex-wrap`(Sign out은 한 줄 유지)을
+  줘서 고쳤고, 규칙은 [frontend/CLAUDE.ko.md](../frontend/CLAUDE.ko.md)에 적었다. 확인: 새 스텁 기반 spec
+  `empty-state`, `overflow`(375px·320px), `post-body`가 수정 전 코드에서는 실패하고 지금은 통과한다 —
+  넘침 수정 CSS 네 곳도 하나씩 되돌려 보았고 되돌릴 때마다 `overflow`가 실패한다 — 기존 `layout`·`language`·
+  `fonts` spec도 그대로 통과하며, lint와 `pnpm build`도 통과한다. File의 빈 목록 상태와 필터 문장으로의 전환은
+  두 언어 모두 실제 백엔드를 붙인 브라우저에서도 확인했다. 하지 않은 것: "Choose File이 안 눌린다"는 재현하지
+  못했다(Chromium, Edge, 일반 Chrome에서 되고, 크롬 시크릿 창 하나가 처음에 선택창을 열지 않다가 나중에
+  되었으며 원인은 모른다). 그래서 이쪽의 변경은 `906ce3c`의 입력창 초기화뿐이다. 32px 미만 터치 영역(내비 링크
+  23px, 라디오 13px, 기본 파일 버튼 21px)은 측정만 하고 그대로 두었다. UI로 업로드하는 `board`·`detail` spec은
+  로컬 compose 스택에서 돌리지 못했다: `api` 컨테이너가 S3 저장소 드라이버를 쓰는데 버킷이 더 이상 없어
+  `POST /upload/attach`가 500(`NoSuchBucket`)을 돌려준다.
 - **문서: 2026-10-01/02 프론트엔드 세션의 기록 (2026-10-02)** — 문서만 바꿨고, `frontend/nginx.conf`에
   주석 한 블록을 더했다(`94c8373`, CSP 값은 그대로다). 아래 항목들이 이미 가리키는 것 외에:
   `frontend/docs/STYLE-PLAN.md`가 "한글/영어 UI 텍스트 혼용" 항목과 확인 필요 사항 2번, 6번(File 헤더는

@@ -13,6 +13,28 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Frontend: "none yet" empty-list wording, fixed-size Post body boxes, no sideways scroll on a phone
+  (2026-10-02)** — four fixes from a hands-on pass over the screens. An empty Post or File list said "No
+  post matches the current filter." even when no filter was set (a new account); it now says "No post
+  yet." / "No file yet." until the search, sort or creator ID leaves its default, and only then the old
+  sentence (the `board` and `detail` specs assert that one with a search term typed, so they are
+  unaffected). The new-post form and the post edit form had `resize: vertical` on the Body box; both are
+  `none` now (the comment boxes are unchanged). Measured with long text, at 375px a comment holding a long
+  URL stretched Post detail to 897px, a long creator email pushed File detail past the edge, and at 320px
+  the nav bar clipped Sign out by 7px. `overflow-wrap: anywhere` on the comment body, post body and meta
+  lines, `min-width: 0` on the comment author, and `flex-wrap` on the nav bar (Sign out stays on one line)
+  fix them; [frontend/CLAUDE.md](../frontend/CLAUDE.md) records the rule. Verified: the new stub-based
+  specs `empty-state`, `overflow` (375px and 320px) and `post-body` fail on the old code and pass now —
+  each of the four overflow CSS changes was also reverted one at a time and each reversal fails
+  `overflow` — and the existing `layout`, `language` and `fonts` specs still pass; lint and `pnpm build`
+  pass; the File empty state and its switch to the filtered sentence, in both languages, were also checked
+  in a browser against the real backend. Not done: a Choose File that "cannot be pressed" was not
+  reproduced (it works in Chromium, Edge and Chrome; one Chrome Incognito window did not open the dialog
+  at first and worked later, cause unknown), so `906ce3c`'s stale-input fix is the only change there; touch
+  targets under 32px (nav links 23px, radios 13px, the native file button 21px) were measured and left
+  as they are. The `board` and `detail` specs, which upload through the UI, could not run against the
+  local compose stack: its `api` container uses the S3 storage driver, the bucket no longer exists, and
+  `POST /upload/attach` returns 500 (`NoSuchBucket`).
 - **Docs: records for the 2026-10-01/02 frontend session (2026-10-02)** — documentation only, plus one
   comment block in `frontend/nginx.conf` (`94c8373`; the CSP value is unchanged). Beyond what the
   entries below already cite: `frontend/docs/STYLE-PLAN.md` closes its "Korean/English UI-text split"

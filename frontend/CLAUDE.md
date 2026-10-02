@@ -79,7 +79,9 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   with an entry in both dictionaries of `src/i18n/messages.ts` — `ko` is a
   `Record<MessageKey, string>`, so a missing translation fails `tsc`. English is the default and
   what the e2e specs assert, so keep an existing English sentence unchanged unless the spec that
-  asserts it changes with it. Use singular nouns in English text (Post, File, Setting). An
+  asserts it changes with it. Use singular nouns in English text (Post, File, Setting). An empty
+  list says "No post yet." / "No file yet." until a filter is set, and only then "No … matches the
+  current filter." (`PostBoard`/`FileBoard`, `e2e/empty-state.spec.ts`). An
   `ApiError` mapper (`messageForError`) returns a `Translatable` (a key, or `{ raw }` for server
   text shown as received) and the component stores that in state and calls `t()` at render, so a
   language switch re-renders an error that is already on screen. The URL paths `/posts/:id` and
@@ -92,6 +94,11 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   its own `margin: auto` inside the flex-column `#root` shrinks to its content, which is what once
   made the header, main and forms differ per screen. `LoginPage` is the one deliberate exception (a
   centered card). `e2e/layout.spec.ts` guards this.
+- **Long text wraps**: any box that shows text a user typed (an email, a title, a pasted URL) must be
+  able to break an unbroken string — `overflow-wrap: anywhere`, plus `min-width: 0` on a flex child
+  that holds it. `white-space: pre-wrap` alone does not break a long URL, and the box then stretches
+  the whole page sideways. The nav bar wraps its controls onto a second row instead of clipping them
+  at 320px. `e2e/overflow.spec.ts` checks every authenticated screen at 375px and 320px.
 - **Fonts**: `--sans` is Noto Sans KR and `--heading` is Hahmlet (variable, 100–900), for Hangul and
   Latin alike, from `@fontsource-variable/*` imported in `main.tsx` and emitted into `/assets`. Never
   link a CDN (Google Fonts etc.) — the nginx CSP is `font-src 'self'`. The families are named
@@ -135,7 +142,8 @@ that will resurface in any new spec unless avoided up front:
 
 ### UI-only specs stub the API (`frontend/e2e/`)
 
-`layout`, `language` and `fonts` check how the UI looks and behaves, not what the backend does.
+`layout`, `language`, `fonts`, `empty-state`, `overflow` and `post-body` check how the UI looks and
+behaves, not what the backend does.
 They call `stubAuthenticatedApi(page)` (`e2e/helpers.ts`) instead of `registerAndSignIn`: it answers
 the silent refresh with an unsigned token (the client only reads `sub`) and returns fixed data for
 the list, detail, comment and content requests. No account is created in the shared dev DB, none of

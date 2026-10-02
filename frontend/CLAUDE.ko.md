@@ -78,7 +78,9 @@
   있어야 한다 — `ko`가 `Record<MessageKey, string>`이라 번역이 빠지면 `tsc`가
   실패한다. 영어가 기본값이고 e2e spec이 단언하는 언어이므로, 기존 영어 문장은 그것을
   단언하는 spec을 함께 바꾸지 않는 한 그대로 둔다. 영어 문구의 명사는 단수로 쓴다(Post,
-  File, Setting). `ApiError`를 문구로 바꾸는 함수(`messageForError`)는 `Translatable`(키, 또는
+  File, Setting). 목록이 비었을 때는 필터를 걸기 전까지 "No post yet." / "No file yet."(아직 없음)이라고
+  하고, 필터가 걸린 뒤에만 "No … matches the current filter."라고 한다(`PostBoard`/`FileBoard`,
+  `e2e/empty-state.spec.ts`). `ApiError`를 문구로 바꾸는 함수(`messageForError`)는 `Translatable`(키, 또는
   서버가 준 문구를 그대로 보여줄 때의 `{ raw }`)을 돌려주고, 컴포넌트는 이를 state에 담아 두었다가
   렌더 시점에 `t()`를 부른다 — 그래서 에러가 이미 떠 있는 상태에서 언어를 바꿔도 새 언어로 다시
   그려진다. URL 경로 `/posts/:id`와 `/files`는 일부러 복수형으로 둔다(`/post`, `/file`은 API
@@ -90,6 +92,11 @@
   자식이어야 한다(그래서 `FileBoard`가 프래그먼트를 돌려준다). flex column인 `#root` 안에서 화면이
   자기 `margin: auto`를 쓰면 폭이 내용물에 맞춰 줄어드는데, 이것이 헤더·main·폼이 화면마다 달랐던
   원인이다. `LoginPage`는 의도적인 유일한 예외다(가운데 카드). `e2e/layout.spec.ts`가 이를 지킨다.
+- **긴 텍스트는 줄바꿈한다**: 사용자가 입력한 텍스트(이메일, 제목, 붙여 넣은 URL)를 보여 주는 박스는 공백 없는
+  긴 문자열도 끊을 수 있어야 한다 — `overflow-wrap: anywhere`를 쓰고, 그 텍스트를 담은 flex 자식에는
+  `min-width: 0`도 준다. `white-space: pre-wrap`만으로는 긴 URL이 줄바뀜되지 않아, 박스가 페이지 전체를
+  가로로 늘려 버린다. 내비게이션 바는 320px에서 컨트롤이 잘리지 않고 둘째 줄로 내려온다.
+  `e2e/overflow.spec.ts`가 인증된 모든 화면을 375px와 320px에서 확인한다.
 - **글꼴**: `--sans`는 Noto Sans KR, `--heading`은 Hahmlet(가변, 100–900)이며 한글과 영문에 똑같이
   적용된다. `main.tsx`에서 불러오는 `@fontsource-variable/*`가 `/assets`로 나간다. CDN(Google Fonts
   등)을 링크하지 않는다 — nginx CSP가 `font-src 'self'`다. 패밀리 이름은 `'Noto Sans KR Variable'`,
@@ -136,7 +143,8 @@
 
 ### UI만 검증하는 spec은 API를 스텁한다 (`frontend/e2e/`)
 
-`layout`, `language`, `fonts`는 백엔드가 하는 일이 아니라 UI가 어떻게 보이고 동작하는지를 검증한다.
+`layout`, `language`, `fonts`, `empty-state`, `overflow`, `post-body`는 백엔드가 하는 일이 아니라 UI가
+어떻게 보이고 동작하는지를 검증한다.
 이 spec들은 `registerAndSignIn` 대신 `stubAuthenticatedApi(page)`(`e2e/helpers.ts`)를 호출한다: silent
 refresh에는 서명 없는 토큰을 돌려주고(클라이언트는 `sub`만 읽는다) 목록·상세·댓글·콘텐츠 요청에는 고정
 데이터를 돌려준다. 공유 dev DB에 계정이 생기지 않고, 분당 5회 인증 제한(backend ADR 0054)도 쓰지

@@ -43,6 +43,10 @@ function messageForError(error: unknown): Translatable {
   return 'common.networkError'
 }
 
+// 목적: 파일 검색/정렬/작성자 필터와 무한 스크롤 미리보기 그리드를 그린다.
+// 이유: 목록이 비었을 때 필터를 건 적도 없는데 "조건에 맞는 파일이 없다"고 말해, 없는 필터가 있는 것처럼 읽혔다.
+// 방법: 비었을 때 filtersActive(검색어·정렬·작성자 중 하나라도 기본값이 아님)면 "조건에 맞는 항목 없음",
+//       아니면 "아직 없음" 문구를 고른다.
 export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
   const { t } = useLanguage()
   const [search, setSearch] = useState('')
@@ -208,7 +212,7 @@ export function FileBoard({ refreshSignal }: { refreshSignal: number }) {
       {!creatorIdValid && <p className={styles.error}>{t('board.err.creatorIdInvalid')}</p>}
       {error && <p className={styles.error}>{t(error)}</p>}
       {files === null && !error && <p>{t('common.loading')}</p>}
-      {files && files.length === 0 && <p>{t('file.empty')}</p>}
+      {files && files.length === 0 && <p>{t(filtersActive ? 'file.empty' : 'file.noneYet')}</p>}
       {files && files.length > 0 && (
         <ul className={styles.grid}>
           {files.map((file) => (

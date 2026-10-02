@@ -28,11 +28,14 @@
   margin: 0;
   color: var(--text-muted);
   font-size: 0.9rem;
+  overflow-wrap: anywhere;
 }
 
+/* 본문에 붙여 넣은 긴 URL도 칸 안에서 줄이 바뀐다(댓글과 같은 이유). */
 .body {
   margin: 16px 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .error {
@@ -89,8 +92,9 @@
   font: inherit;
 }
 
+/* 작성 폼(PostForm)과 같다 — 높이는 rows가 정하고 사용자가 끌어서 바꾸지 못한다. */
 .textarea {
-  resize: vertical;
+  resize: none;
 }
 
 .input:focus-visible,
