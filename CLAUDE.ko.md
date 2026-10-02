@@ -63,6 +63,17 @@
     관리하는 NestJS REST API)을 바탕으로 효율적인 구현 방식을 고안한다: 이 앱에 맞지 않는
     범용적인 기본값을 끌어오기보다, 이 앱에 이미 맞는 기존 패턴(Project-Specific Principles,
     Architecture Decisions)을 재사용한다.
+12. 이 저장소에서 아직 쓰지 않은 도구나 API를 호출하기 전에 — 새 의존성이든, 기존
+    의존성이지만 저장소 안의 어떤 코드도 아직 호출하지 않은 API든 — 작업 규모와
+    상관없이 확인한다. 이번 변경이 호출할 API에 대해, 해당 도구의 공식 문서·changelog·
+    advisory가 제거됨·deprecated·안전하지 않음으로 표시한 것을 찾는다. 기억에 의존하지
+    말고 이번 세션에서 공식 출처를 직접 읽고(Context7 MCP가 연결돼 있으면 그것을 쓴다),
+    결과는 "최소 금기(Minimum do-nots)" 제목 아래에 항목마다 출처, 버전, 확인한 날짜를
+    붙여 보고한다. 출처에 닿지 못하면 기억으로 메우지 말고 "미확인"으로 표시한 뒤 확인
+    방법을 제안한다. 호출할 API가 모두 저장소에서 이미 쓰는 것이면 그렇다고 한 줄로
+    밝힌다. 반복해서 나오는 금기는 Never Do 후보로 올린다. 근거: 도구 API에 대한 기억은
+    아무 신호 없이 낡는다 — Never Do Group 2의 `@Transaction()` 금지(TypeORM 0.3에서
+    제거됨)가 선례다.
 
 ## 범위 준수
 
@@ -155,9 +166,8 @@ Never Do, 아키텍처 결정이 요구하는 것을 건너뛰는 결과로 이�
 | **Medium** | 일반적인 기능 추가/수정 | Requirement → Research → Design → Implementation → Testing → Review → Regression |
 | **Large** | 아키텍처 변경, DB 마이그레이션, 핵심 흐름 재작성 | Requirement → Impact → Research → Design(해당 시 Security/Performance Review 포함) → Implementation → Testing → Review → Fix → Regression → Release → Production Verification → Retrospective → Knowledge Capture |
 
-최소 금기 확인(분석 프로토콜 > 도입 분석)은 특정 규모에 속하는 단계가 아니다. Small을
-포함한 모든 규모에서, 이번 변경이 저장소에서 아직 쓰지 않은 도구나 API를 호출한다면
-구현에 들어가기 전에 수행한다.
+Hallucination Prevention 12번(저장소에서 처음 쓰는 도구·API의 최소 금기 확인)은 특정
+규모에 속하는 단계가 아니다. Small을 포함한 모든 규모에서 구현에 들어가기 전에 수행한다.
 
 고위험 파일이나 스키마 변경을 건드리는 Large 작업은 이미 범위 준수에서 명시적 승인을
 요구한다 — 그 승인 절차는 여기서 어느 단계에 속하든 상관없이 그대로 적용된다.
@@ -224,17 +234,8 @@ Implementation과 Review는 같은 패스여서는 안 된다: Review는 구현�
 - 배경: 왜 만들어졌고 어떤 문제를 해결하는가
 - 도입 목적: 이 맥락에서 구체적으로 어떤 목표에 기여하는가
 - 도입하지 않을 경우의 실질적 단점과 그 근본 원인
-- 최소 금기: 이번 변경이 실제로 호출할 API 중에서, 해당 도구의 공식 문서·changelog·
-  advisory가 제거됨·deprecated·안전하지 않음으로 표시한 것. 기억에 의존하지 말고 이번
-  세션에서 공식 출처를 직접 읽어 확인한다(Context7 MCP가 연결돼 있으면 그것을 쓴다).
-  항목마다 출처, 버전, 확인한 날짜를 남긴다. 출처에 닿지 못하면 기억으로 메우지 말고
-  "미확인"으로 표시한 뒤 확인 방법을 제안한다. 반복해서 나오는 금기는 Never Do 후보로
-  올린다.
-
-저장소에 이미 있는 의존성이라도 이번 변경에서 처음 호출하는 API라면 작업 규모와
-상관없이 똑같이 적용한다.
-근거: 도구 API에 대한 기억은 아무 신호 없이 낡는다 — Never Do Group 2의 `@Transaction()`
-금지(TypeORM 0.3에서 제거됨)가 선례다.
+- 최소 금기: 도입하는 도구에 대해 Hallucination Prevention 12번의 확인을 수행하고,
+  그 결과를 이 분석에 포함해 보고한다.
 
 이 단계에서는 코드를 과도하게 작성하지 않는다 — 목표는 구현에 착수하기 전에
 *도입할지, 한다면 어떻게 할지*를 결정하는 것이며, 성급한 코드는 그 결정을

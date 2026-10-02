@@ -66,6 +66,17 @@ Before making any change:
     image/audio/video upload and management) to shape an efficient implementation approach:
     reuse the pattern that already fits this specific app (Project-Specific Principles,
     Architecture Decisions) rather than reaching for a generic default that ignores it.
+12. Before calling a tool or API this repo has not used before — a new dependency, or an API
+    of an existing one that no code here calls yet — at any task scale: for the APIs this
+    change will call, look up what the tool's own docs, changelog, or advisories mark as
+    removed, deprecated, or unsafe. Read the official source in this session (Context7 MCP
+    when connected), not from recall, and report the result under a "Minimum do-nots"
+    heading with the source, version, and date checked for each item. If no source can be
+    reached, mark the item "unverified" and propose a verification step instead of filling
+    the gap from memory. If every API the change calls is already used here, say so in one
+    line instead. A do-not that recurs is a candidate for Never Do. Rationale: recall of a
+    tool's API goes stale with no signal — the `@Transaction()` ban in Never Do Group 2
+    (removed in TypeORM 0.3) is the precedent.
 
 ## Scope Discipline (범위 준수)
 
@@ -158,9 +169,8 @@ down:
 | **Medium** | A typical feature add or change | Requirement → Research → Design → Implementation → Testing → Review → Regression |
 | **Large** | Architectural change, DB migration, a core-flow rewrite | Requirement → Impact → Research → Design (+ Security/Performance Review where relevant) → Implementation → Testing → Review → Fix → Regression → Release → Production Verification → Retrospective → Knowledge Capture |
 
-The minimum do-nots check (Analysis Protocol > Introduction Analysis) is not a stage of any
-one scale: at every scale, including Small, it runs before Implementation whenever the change
-calls a tool or API this repo has not used before.
+Hallucination Prevention #12 (minimum do-nots for a tool or API new to this repo) is not a
+stage of any one scale: it runs before Implementation at every scale, including Small.
 
 A Large task that touches a high-blast-radius file or a schema change already requires
 explicit approval under Scope Discipline — that approval gate applies regardless of which
@@ -232,17 +242,8 @@ When a new tool, library, or concept is being introduced, always cover the follo
 - Background: why it was created and what problem it solves
 - Implementation purpose: what specific goal it serves in this context
 - Practical disadvantages if not implemented, and the root causes of those disadvantages
-- Minimum do-nots: for the APIs this change will actually call, what the tool's own docs,
-  changelog, or advisories mark as removed, deprecated, or unsafe — read from the official
-  source in this session (Context7 MCP when connected), not recalled. Record the source,
-  version, and date checked for each. If no source can be reached, mark it "unverified" and
-  propose a verification step instead of filling the gap from memory. A do-not that recurs
-  is a candidate for Never Do.
-
-The same applies, at any task scale, when a change first calls an API of a dependency
-already in the repo.
-Rationale: recall of a tool's API goes stale with no signal — the `@Transaction()` ban in
-Never Do Group 2 (removed in TypeORM 0.3) is the precedent.
+- Minimum do-nots: for the tool being introduced, run the check in Hallucination
+  Prevention #12 and report it in this analysis.
 
 Do not write excessive code during this phase — the goal is to decide *whether and how*
 to introduce the thing before committing to an implementation, and premature code biases
