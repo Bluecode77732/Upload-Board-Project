@@ -13,6 +13,29 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Frontend: reloading while signed in no longer ends the session in dev; select boxes are at least
+  40px on phones (2026-10-02)** — the two items the entry below left open, done with explicit approval.
+  `AuthProvider`'s startup refresh called `refreshAccessToken()` directly, so React StrictMode in `pnpm
+  dev` sent two requests per page load; the second replayed the cookie the first had just rotated (401
+  `AUTH_REFRESH_REUSED`) and the server dropped the session, so a second reload while signed in ended at
+  the login screen. It now goes through the existing single-flight `tryRefresh()`, so the two effect runs
+  share one request. A new real-backend `auth` test reloads three times and expects exactly one `201`
+  refresh per load and a signed-in page each time; it fails on the old code. In a visible Chrome, four
+  loads in a row stayed signed in with one refresh each, and two tabs opened at the same moment both
+  refreshed with `201` (one try; other timings were not tested). The select boxes (Sort by, Order,
+  Visibility) measured 39px in a visible Windows Chrome and 41px in headless, so a height check in
+  headless e2e cannot see them; they now declare `min-height: 40px` at phone widths and for touch
+  pointers, and the `touch-targets` spec (now run with mobile touch emulation) checks that declaration —
+  reverting any one of the three CSS files fails it. In the visible Chrome, 21 loads over seven phone
+  widths (320–640px) had every select at 40px, nothing under 40px and no sideways scroll. The whole
+  frontend e2e suite, 41 tests, passes against the real backend; lint and `pnpm build` pass. Minimum
+  do-nots for the four Playwright APIs new to `frontend/` (`isMobile`, `hasTouch`, `test.use()`,
+  `page.off()`; `document.fonts.ready`, the `Response` type and `tryRefresh` were already used here;
+  installed 1.62.1; playwright.dev `emulation`, `class-testoptions` and `events` read 2026-10-02, the
+  fetched pages show no docs version): `isMobile` is not supported in Firefox (this project runs
+  Chromium only) and `viewport: null` is discouraged; `hasTouch` has no caveats; `test.use()` overrides
+  options for one file; `page.off()` is documented and not deprecated. `AuthProvider.tsx` is a high-blast-radius file and was edited only after the explicit
+  approval.
 - **Frontend: the Post list no longer stretches past its column on tablets and laptops (2026-10-02)** —
   found by running the real backend's data through 15 viewport sizes (phones 320–430px, landscape
   phones, tablets, laptops 1280–1536px, 1920px; light/dark × English/Korean at five of them; 405 page

@@ -161,6 +161,13 @@
   outline-offset: 1px;
 }
 
+/* 터치 화면에서 선택 상자는 padding 8px로 39px라 40px 기준에 1px 모자랐다. */
+@media (max-width: 640px), (pointer: coarse) {
+  .select {
+    min-height: 40px;
+  }
+}
+
 .rotateButton {
   padding: 12px 14px;
   border: 1px solid var(--border);

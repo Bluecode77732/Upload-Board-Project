@@ -15,7 +15,8 @@ REST API를 HTTP로 소비한다. 이 앱에는 `/admin` 라우트가 **없다**
 - **Noto Sans KR + Hahmlet** (`@fontsource-variable/*`, OFL-1.1, 굵기 100–900 가변) — 한글과
   영문 모두에 쓰는 UI 글꼴이며 `/assets`로 자체 호스팅한다(nginx CSP가 `font-src 'self'`다)
 - **Playwright** (`@playwright/test`, chromium만 설치) — 브라우저 수준 E2E, `frontend/e2e/`
-  (`auth`/`upload`/`board`/`detail` 스펙이 회원가입-로그인-로그아웃, 2단계 영상 업로드,
+  (`auth`/`upload`/`board`/`detail` 스펙이 회원가입-로그인-로그아웃(과 새로고침해도 세션이 유지되고 페이지를
+  로드할 때마다 silent refresh가 정확히 한 번 나가는지), 2단계 영상 업로드,
   파일 보드의 검색/정렬/페이지네이션/visibility 배지, FileDetailPage의 접근 제어
   분기를 검증하고, `navigation` 스펙이 "/" ⇄ "/files" 라우트 분리와 NavBar, 그
   분리가 의존하는 dev 프록시 정규식 앵커링 수정, 그리고 `/posts/:id`를 직접 열었을 때

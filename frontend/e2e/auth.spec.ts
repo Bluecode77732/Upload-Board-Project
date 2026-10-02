@@ -3,7 +3,7 @@
 // 근거: 인증은 다른 모든 흐름(upload, board)이 그 뒤에 있는 게이트다 — registerAndSignIn을
 //   fixture 헬퍼로만 의존하지 않고 직접 검증하는 유일한 spec이다.
 
-import { test, expect } from '@playwright/test'
+import { test, expect, type Response } from '@playwright/test'
 import { registerAndSignIn, uniqueEmail, TEST_PASSWORD } from './helpers'
 
 test('registering a new account signs in and lands on the authenticated home', async ({ page }) => {
@@ -94,4 +94,26 @@ test('signing in with the wrong password surfaces the AUTH_INVALID_CREDENTIALS m
 
   await expect(page.getByText('Incorrect email or password.')).toBeVisible()
   await expect(page).toHaveURL(/\/login$/)
+})
+
+test('reloading while signed in keeps the session, and each page load refreshes it exactly once', async ({ page }) => {
+  await registerAndSignIn(page, uniqueEmail('auth-reload'))
+
+  // dev 모드의 StrictMode가 시작 refresh를 두 번 보내면, 두 번째가 이미 회전된 쿠키를 다시 보내 401
+  // AUTH_REFRESH_REUSED가 되고 서버가 세션을 폐기한다 — 두 번째 새로고침에서 로그인 화면이 됐다.
+  const statuses: number[] = []
+  const onResponse = (res: Response) => {
+    if (res.url().endsWith('/auth/token/refresh')) statuses.push(res.status())
+  }
+  page.on('response', onResponse)
+
+  for (const round of [1, 2, 3]) {
+    statuses.length = 0
+    await page.reload()
+    await expect(page.getByRole('button', { name: 'Sign out' }), `reload ${round}`).toBeVisible()
+    await page.waitForLoadState('networkidle')
+    expect(statuses, `refresh calls on reload ${round}`).toEqual([201])
+  }
+
+  page.off('response', onResponse)
 })

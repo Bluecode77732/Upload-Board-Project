@@ -16,7 +16,8 @@ instead (backend ROADMAP.md > Stage 5).
 - **Noto Sans KR + Hahmlet** (`@fontsource-variable/*`, OFL-1.1, variable 100–900) — the UI
   fonts for Hangul and Latin alike, self-hosted into `/assets` (the nginx CSP is `font-src 'self'`)
 - **Playwright** (`@playwright/test`, chromium only) — browser-level E2E, `frontend/e2e/`
-  (`auth`/`upload`/`board`/`detail` specs cover register-signin-signout, the two-phase
+  (`auth`/`upload`/`board`/`detail` specs cover register-signin-signout (and a reload keeping the
+  session, with exactly one silent refresh per page load), the two-phase
   video upload, the file board's search/sort/pagination/visibility badges, and
   FileDetailPage's access-control branches; `navigation` covers the "/" ⇄ "/files"
   route split, the NavBar, the dev-proxy regex-anchor fix that split depends on, and a

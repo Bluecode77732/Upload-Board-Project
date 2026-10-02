@@ -13,6 +13,26 @@
 ## [Unreleased]
 
 ### 변경
+- **프론트엔드: 로그인 상태로 새로고침해도 개발 모드에서 세션이 끊기지 않는다, 폰의 선택 상자는 40px 이상이다
+  (2026-10-02)** — 아래 항목이 열어 둔 두 가지를 명시적 승인을 받아 처리했다. `AuthProvider`의 시작 시 refresh가
+  `refreshAccessToken()`을 직접 불러서, `pnpm dev`의 React StrictMode가 페이지를 로드할 때마다 요청을 두 번 보냈다.
+  두 번째가 첫 번째가 막 회전시킨 쿠키를 다시 보내(401 `AUTH_REFRESH_REUSED`) 서버가 세션을 폐기했고, 그래서 로그인
+  상태로 두 번째 새로고침을 하면 로그인 화면이 됐다. 이제 기존 single-flight `tryRefresh()`를 거쳐 effect가 두 번
+  실행돼도 요청 하나를 나눠 쓴다. 새 실제 백엔드 `auth` 테스트가 세 번 새로고침하면서 로드마다 refresh가 정확히 `201` 한 번이고
+  매번 로그인된 화면인지 확인하며, 옛 코드에서는 실패한다. 눈에 보이는 Chrome에서 연속 네 번 로드해도 매번
+  로그인 상태에 refresh는 한 번이었고, 탭 두 개를 같은 순간에 열어도 둘 다 `201`이었다(한 번 시도했고 다른 타이밍은
+  시험하지 않았다). 선택 상자(정렬 기준, 순서, 공개 범위)는 눈에 보이는 Windows Chrome에서 39px, headless에서
+  41px로 측정돼 headless e2e의 높이 검사로는 보이지 않는다. 이제 폰 폭과 터치 포인터에서 `min-height: 40px`을 선언하고,
+  `touch-targets` spec(이제 모바일 터치 에뮬레이션으로 돈다)이 그 선언을 확인한다 — CSS 세 파일 중 하나라도 되돌리면
+  실패한다. 눈에 보이는 Chrome에서 폰 폭 7개(320–640px) 21번 로드는 모든 선택 상자가 40px, 40px 미만 요소 없음,
+  가로 스크롤 없음이었다. 프런트엔드 e2e 전체 41개가 실제 백엔드에서 통과하고 lint와 `pnpm build`도 통과한다.
+  `frontend/`에서 처음 쓰는 Playwright API 네 개(`isMobile`, `hasTouch`, `test.use()`, `page.off()`;
+  `document.fonts.ready`, `Response` 타입, `tryRefresh`는 이미 쓰고 있었다)의 최소 금기(설치된 버전 1.62.1;
+  playwright.dev의 `emulation`, `class-testoptions`, `events`를 2026-10-02에 읽었고 가져온 페이지에는 문서 버전이
+  없다): `isMobile`은 Firefox에서 지원되지 않고(이 프로젝트는 Chromium만 쓴다) `viewport: null`은 권장되지 않으며,
+  `hasTouch`는 주의 사항이 없고, `test.use()`는 파일 하나의 옵션을 덮어쓰며, `page.off()`는 문서에 있고 폐기되지
+  않았다. `AuthProvider.tsx`는 영향 범위가 큰 파일이라
+  명시적 승인을 받은 뒤에만 고쳤다.
 - **프론트엔드: 태블릿·랩톱에서 Post 목록이 칼럼 밖으로 늘어나지 않는다 (2026-10-02)** — 실제 백엔드의
   데이터로 화면 크기 15종(폰 320–430px, 가로 폰, 태블릿, 랩톱 1280–1536px, 1920px이며, 그중 다섯 크기는
   라이트·다크 × 영어·한국어까지, 총 405번 로드)을 돌려 찾았다. 나머지는 모두 통과했고 641px 이상의 Post 목록(`/`)만

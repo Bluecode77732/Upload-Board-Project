@@ -9,11 +9,15 @@ import {
   register as apiRegister,
   signin as apiSignin,
   signout as apiSignout,
-  refreshAccessToken,
+  tryRefresh,
 } from '../api/client'
 import { getAccessToken, getCurrentUserId, subscribe } from '../api/authStore'
 import { AuthContext, type AuthStatus } from './authContext'
 
+// 목적: 인증 상태(status, currentUserId)를 소유하고 signIn/register/signOut을 트리에 노출한다.
+// 이유: 개발 모드에서 새로고침할 때마다 시작 refresh 요청이 두 번 나가 두 번째가 AUTH_REFRESH_REUSED(401)로 세션을
+//       폐기했고, 로그인 상태로 두 번째 새로고침을 하면 로그인 화면이 됐다.
+// 방법: 마운트 시 세션 복구를 single-flight인 tryRefresh()로 부른다 — effect가 두 번 실행돼도 요청은 하나로 합쳐진다.
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [currentUserId, setCurrentUserId] = useState<number | null>(null)
@@ -26,17 +30,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  // 마운트 시 refresh 쿠키로 세션을 되살려본다.
+  // 마운트 시 refresh 쿠키로 세션을 되살려본다. refreshAccessToken()을 직접 부르면 개발 모드의
+  // StrictMode가 이 effect를 두 번 실행해 요청이 두 번 나가고, 두 번째가 이미 회전된 쿠키를 다시 보내
+  // 401 AUTH_REFRESH_REUSED로 세션이 폐기된다 — single-flight인 tryRefresh()를 거치면 요청이 하나로 합쳐진다.
   useEffect(() => {
     let cancelled = false
-    refreshAccessToken()
-      .catch(() => undefined)
-      .finally(() => {
-        if (!cancelled) {
-          setStatus(getAccessToken() ? 'authenticated' : 'anonymous')
-          setCurrentUserId(getCurrentUserId())
-        }
-      })
+    tryRefresh().finally(() => {
+      if (!cancelled) {
+        setStatus(getAccessToken() ? 'authenticated' : 'anonymous')
+        setCurrentUserId(getCurrentUserId())
+      }
+    })
     return () => {
       cancelled = true
     }

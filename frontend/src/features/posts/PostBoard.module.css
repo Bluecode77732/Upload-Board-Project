@@ -193,6 +193,11 @@
   .creatorButton {
     padding-block: 10px;
   }
+
+  /* 선택 상자는 padding 8px로 39px라 40px 기준에 1px 모자랐다. */
+  .select {
+    min-height: 40px;
+  }
 }
 
 /* 좁은 화면: 페이지 여백을 되찾고, 필터가 잘게 줄바꿈되는 대신 한 줄씩 차지하게 하고,
