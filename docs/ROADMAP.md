@@ -1592,6 +1592,18 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `ROADMAP.ko.md` are most of the effort and can go separately from the two `frontend/` files.
   Revisit when explicitly requested, or the next time one of the four is edited at length. Also
   listed in CLAUDE.md > Known Gaps.
+- **Malware scan gate passes a `null` verdict** — **found 2026-10-03, decided the same day: later task,
+  not started.** The 2026-10-03 backend dependency audit found that `clamscan`'s `scanStream` resolves
+  with `isInfected: null` ("Unable to scan") when `clamd` closes the connection normally and the reply
+  is empty, `COMMAND READ TIMED OUT`, or none of `OK`/`FOUND`/`ERROR`, and that `ScanService.scanBuffer`
+  and `UploadService.stageTemp` read `null` as clean, so the file is stored unscanned. Evidence, the
+  cases that do stay fail-closed, and the severity assessment (low to medium; read from source, not
+  reproduced against a real `clamd`) are in the [ADR 0059](ADR/0059-upload-malware-scanning-clamav.md)
+  Addendum (2026-10-03). Scope when picked up: `backend/upload/scan.service.ts` (treat `null` as a failed
+  attempt inside the retry `try`, narrow the type, update the function comment block),
+  `scan.service.spec.ts` (a `{ isInfected: null }` case), then `pnpm lint` and
+  `pnpm test -- scan.service`; no schema, env var or API change. Revisit before the stack is next
+  applied, or when explicitly requested. Also listed in CLAUDE.md > Known Gaps.
 
 ## 8. Advisory notes
 

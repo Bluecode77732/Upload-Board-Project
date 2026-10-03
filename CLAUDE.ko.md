@@ -1725,6 +1725,18 @@ Architecture Decisions가 계속 유효하다.
   `frontend/CLAUDE.ko.md`, `frontend/README.ko.md`. 그 세션에 추가한 부분만 자연스러운 한국어로
   썼고 그 파일들의 나머지는 다시 읽지 않았다. 일정은 없다 — 이 점검은 명시적 요청이 있을 때 하는
   작업이고 한국어 표현만 다룬다. 범위, 방법, 착수 조건은 `docs/ROADMAP.ko.md` §7에 있다.
+- 악성코드 스캔 게이트가 `null` 판정을 통과시킨다(2026-10-03 백엔드 의존성 점검에서 발견;
+  **2026-10-03 결정: 후속 과제, 시작하지 않음**). `clamd`가 연결을 정상적으로 닫았는데 응답이 비어 있거나
+  `COMMAND READ TIMED OUT`이거나 `OK`/`FOUND`/`ERROR` 어느 쪽도 아니면 `clamscan`의 `scanStream`은 reject하지
+  않고 `isInfected: null`("Unable to scan")로 resolve한다(`node_modules/clamscan/index.js:765-781`).
+  `ScanService.scanBuffer`가 이를 그대로 돌려주고(`backend/upload/scan.service.ts:73-74`, `boolean`으로
+  선언됨) `UploadService.stageTemp`는 `if (scanResult.isInfected)`만 확인하므로(`upload.service.ts:54`) 파일이
+  스캔되지 않은 채 `storage.saveTemp()`로 내려간다. ADR 0059 D4의 fail-closed는 reject되는 경우(연결·소켓 오류,
+  중단된 스캔, `ERROR` 응답)와 스캐너에 닿지 못하는 경우에는 그대로 유지된다. 단위 테스트는 `true`/`false`만
+  모킹한다. 평가는 낮음~중간이고, 소스를 읽어 확인했으며 실제 `clamd`로 재현하지는 않았다. 계획한 수정:
+  `scanBuffer`의 `try` 안에서 `null`을 실패한 시도로 처리해 기존 재시도와 503 `UPLOAD_SCAN_UNAVAILABLE` 경로를
+  타게 하고, 단위 테스트 케이스를 추가한다. 자세한 내용: ADR 0059 추가 기록(2026-10-03), `docs/ROADMAP.ko.md`
+  §7. 새 스캔 소비자는 `if (result.isInfected)` 검사를 그대로 베끼지 않는다.
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

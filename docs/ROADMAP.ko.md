@@ -1509,6 +1509,17 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   `CHANGELOG.ko.md`와 `ROADMAP.ko.md`가 작업량 대부분이라 `frontend/`의 두 파일과 따로 진행해도 된다.
   명시적으로 요청받을 때, 또는 이 네 파일 중 하나를 크게 고칠 때 다시 본다. CLAUDE.md > Known Gaps에도
   올려 두었다.
+- **악성코드 스캔 게이트가 `null` 판정을 통과시킨다** — **2026-10-03 발견, 같은 날 후속 과제로 결정,
+  시작하지 않음.** 2026-10-03 백엔드 의존성 점검에서, `clamd`가 연결을 정상적으로 닫았는데 응답이 비어 있거나
+  `COMMAND READ TIMED OUT`이거나 `OK`/`FOUND`/`ERROR` 어느 쪽도 아니면 `clamscan`의 `scanStream`이
+  `isInfected: null`("Unable to scan")로 resolve하고, `ScanService.scanBuffer`와 `UploadService.stageTemp`가 이
+  `null`을 깨끗한 파일로 읽어 스캔하지 않은 채 저장한다는 것을 찾았다. 근거, 그래도 fail-closed로 남는
+  경우, 심각도 평가(낮음~중간. 소스를 읽어 확인했고 실제 `clamd`로 재현하지는 않았다)는
+  [ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md)의 추가 기록(2026-10-03)에 있다. 착수할 때의
+  범위: `backend/upload/scan.service.ts`(재시도 `try` 안에서 `null`을 실패한 시도로 처리, 타입 좁히기, 함수 주석
+  블록 갱신), `scan.service.spec.ts`(`{ isInfected: null }` 케이스), 이어서 `pnpm lint`와
+  `pnpm test -- scan.service`. 스키마, 환경 변수, API 변경은 없다. 스택을 다시 적용하기 전에, 또는 명시적으로
+  요청받을 때 다시 본다. CLAUDE.md > Known Gaps에도 올려 두었다.
 
 ## 8. Advisory 노트
 

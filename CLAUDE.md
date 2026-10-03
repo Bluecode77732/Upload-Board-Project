@@ -1696,6 +1696,19 @@ Architecture Decisions above remain operative.
   passages added that session were written as natural Korean; the rest of those files was not
   re-read. Not scheduled — the pass is explicit-request work and fluency only. Scope, method and
   trigger: `docs/ROADMAP.md` §7.
+- The malware scan gate passes a `null` verdict (found 2026-10-03 by the backend dependency audit;
+  **decided 2026-10-03: later task, not started**). `clamscan`'s `scanStream` resolves, it does not
+  reject, with `isInfected: null` ("Unable to scan") when `clamd` closes the connection normally and the
+  reply is empty, `COMMAND READ TIMED OUT`, or none of `OK`/`FOUND`/`ERROR`
+  (`node_modules/clamscan/index.js:765-781`). `ScanService.scanBuffer` returns it unchanged
+  (`backend/upload/scan.service.ts:73-74`, declared `boolean`) and `UploadService.stageTemp` tests only
+  `if (scanResult.isInfected)` (`upload.service.ts:54`), so the file goes on to `storage.saveTemp()`
+  unscanned. ADR 0059 D4's fail-closed still holds for the cases that reject (connection and socket
+  errors, aborted scans, `ERROR` replies) and for an unreachable scanner; the unit specs mock only
+  `true`/`false`. Assessed low to medium; read from source, not reproduced against a real `clamd`.
+  Planned fix: treat `null` as a failed attempt inside `scanBuffer`'s `try` so the existing retry and
+  503 `UPLOAD_SCAN_UNAVAILABLE` path apply, plus a unit case. Details: ADR 0059 Addendum (2026-10-03),
+  `docs/ROADMAP.md` §7. A new scan consumer must not copy the `if (result.isInfected)` check on its own.
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for
