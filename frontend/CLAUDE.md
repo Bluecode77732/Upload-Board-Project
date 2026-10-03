@@ -21,6 +21,14 @@ Before any change:
    feature-folder layout) rather than introducing new abstractions.
 4. Run `pnpm build` (type-check) and `pnpm lint` before claiming success.
 5. Show the exact diff, state uncertainties explicitly.
+6. Before writing code that calls a library or API, at any task scale, check whether
+   `frontend/` already calls it. If every API is already used here, write "Minimum
+   do-nots: none new" in one line. For an API nothing here calls yet — a new dependency,
+   or a new API of an existing one (React, React Router, Vite, Playwright, ...) — read its
+   official docs, changelog, or advisories in this session, not from recall, for what is
+   removed, deprecated, or unsafe, and report it under a "Minimum do-nots" heading with the
+   source, version, and date checked for each item; mark anything unreachable
+   "unverified". Same rule as the root CLAUDE.md, Hallucination Prevention #12.
 
 ## Scope Discipline
 

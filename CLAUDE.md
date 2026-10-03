@@ -66,17 +66,17 @@ Before making any change:
     image/audio/video upload and management) to shape an efficient implementation approach:
     reuse the pattern that already fits this specific app (Project-Specific Principles,
     Architecture Decisions) rather than reaching for a generic default that ignores it.
-12. Before calling a tool or API this repo has not used before — a new dependency, or an API
-    of an existing one that no code here calls yet — at any task scale: for the APIs this
-    change will call, look up what the tool's own docs, changelog, or advisories mark as
-    removed, deprecated, or unsafe. Read the official source in this session (Context7 MCP
-    when connected), not from recall, and report the result under a "Minimum do-nots"
-    heading with the source, version, and date checked for each item. If no source can be
-    reached, mark the item "unverified" and propose a verification step instead of filling
-    the gap from memory. If every API the change calls is already used here, say so in one
-    line instead. A do-not that recurs is a candidate for Never Do. Rationale: recall of a
-    tool's API goes stale with no signal — the `@Transaction()` ban in Never Do Group 2
-    (removed in TypeORM 0.3) is the precedent.
+12. Before writing code that calls a tool or API, at any task scale, check whether this repo
+    already calls it. If every API this change calls is already used here, write "Minimum
+    do-nots: none new" in one line. For an API no code here calls yet — a new dependency, or
+    a new API of an existing one — look up what the tool's own docs, changelog, or advisories
+    mark as removed, deprecated, or unsafe. Read the official source in this session (Context7
+    MCP when connected), not from recall, and report it under a "Minimum do-nots" heading
+    with the source, version, and date checked for each item. If no source can be reached,
+    mark the item "unverified" and propose a verification step instead of filling the gap
+    from memory. A do-not that recurs is a candidate for Never Do. Rationale: recall of a
+    tool's API goes stale with no signal — the `@Transaction()` ban in the Transaction
+    Boundary table (removed in TypeORM 0.3) is the precedent.
 
 ## Scope Discipline (범위 준수)
 
@@ -520,6 +520,18 @@ getFiles(): Promise<FileEntity[]>
 // ✅
 getFiles(query: GetFilesDto): Promise<[FileEntity[], number]>
 // (the current getFiles(query: GetFilesDto) follows this — new list endpoints must too)
+
+// ❌ Deprecated TypeORM API → findByIds is @deprecated in 0.3 and removed in 1.0 (breaks on upgrade)
+await this.fileRepository.findByIds(ids)
+// ✅
+await this.fileRepository.find({ where: { id: In(ids) }, relations: ['creator'] })
+
+// ❌ A where value that can be undefined/null → TypeORM 0.3 silently drops that condition, so the
+//    query can match every row (fail-open read; 1.0 throws instead). This project does not set
+//    invalidWhereValuesBehavior.
+await this.fileRepository.findOne({ where: { id, creator: { id: userId } } })  // userId undefined at runtime → creator condition ignored
+// ✅ Type the value as non-optional and validate it at the boundary (DTO / @UserId) before it
+//    reaches a where; never build a where from a value that may be undefined
 ```
 
 ### GROUP 3 — Security
@@ -1233,9 +1245,10 @@ Do not suggest alternatives to these decisions without explicit request.
   the global pipe's `enableImplicitConversion` truthiness-casts `"false"` to `true` before
   any custom `@Transform` (measured, pinned by `delete-user-query.dto.spec.ts`). Any future
   boolean-ish query flag on a destructive path follows the same shape
-- Physical deletion is **post-commit and best-effort** via
-  `unlinkStoredFiles` (`backend/common/`), which refuses paths outside `file/upload/` and
-  reports failures for the caller to log at `warn`. `file/upload` is no longer entirely
+- Physical deletion is **post-commit and best-effort** via `FileStorage.unlink(keys)` (ADR
+  0029 — the old `unlinkStoredFiles` helper in `backend/common/` was retired into the
+  adapters), which refuses keys outside the granted (`file/upload/`) and temp (`temp_`)
+  namespaces and returns failures for the caller to log at `warn`. `file/upload` is no longer entirely
   unwatched: `FileModule`'s `GrantedCleanupService` scans it against
   `file_entity.filePath` on a schedule (ADR 0051) — but it ships report-only
   (`GRANTED_SWEEP_DRY_RUN` defaults `true`), so an operator must explicitly opt in

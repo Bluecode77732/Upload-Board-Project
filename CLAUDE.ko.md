@@ -2,7 +2,7 @@
 
 > 한국어 버전입니다. English version: [CLAUDE.md](CLAUDE.md)
 
-이 파일은 이 저장소에서 작업하는 Claude Code(claude.ai/code)를 위한 가이드를 제공한다.
+이 파일은 이 저장소에서 작업하는 Claude Code(claude.ai/code)가 따라야 할 지침을 담고 있다.
 
 > **여기 있는 규칙을 읽는 방법.** 규칙은 매번 다시 근거를 따지지 않고 바로 적용할 수 있도록
 > 지시문 형태로 작성되어 있다. 근거는 다음 세 곳 중 하나에 있으며, 우선순위 순서는 다음과
@@ -32,7 +32,7 @@
    - 임시파일 정리         → `backend/temp-cleanup/temp-cleanup.service.ts`(`@nestjs/schedule`의 `SchedulerRegistry` cron, `file/temp`에 대한 `temp_` 접두사 + TTL 스윕, ADR 0018)와 그 순수 핵심 로직인 `selectExpiredTempFiles`를 읽는다
    - 고아 granted 파일 회수 → `backend/file/granted-cleanup.service.ts`(export하지 않는 `FileModule` provider, `file/upload`를 `file_entity.filePath`와 대조해 훑는다, `GRANTED_SWEEP_DRY_RUN` 기본값 `true` — 리포트만, ADR 0051)와 그 순수 핵심 로직인 `selectOrphanedGrantedFiles`를 읽는다
    - 환경 변수 변경        → `backend/app.module.ts`의 Joi 스키마와 `.env.example`을 함께 읽는다 — 둘은 항상 동기화되어야 한다
-   - 엔티티/관계 변경      → `backend/file/entity/file.entity.ts`와 `backend/user/entity/user.entity.ts`를 함께 읽는다 — `creator` 관계는 양쪽에 모두 선언되어 있다. `backend/post/entity/post.entity.ts`와 `backend/comment/entity/comment.entity.ts`는 의도적으로 **단방향**이다(User/File/Post에 역방향 프로퍼티 없음) — 이를 "고치려" 하지 않는다(ADR 0023). 새 엔티티는 **`backend/entities.ts` 한 곳에만** 등록한다 — `app.module.ts`와 `backend/data-source.ts`가 모두 그 `ENTITIES` 배열 하나를 import하므로, 엔티티가 앱에는 살아 있지만 `migration:generate`에는 보이지 않는 상황이 생길 수 없다(2026-07-31 이전에는 수동 관리 목록이 두 개였고, 그 불일치 때문에 `generate`가 테이블 하나를 통째로 빠뜨리고도 성공했다고 보고한 적이 있다). e2e 스위트는 별도로 자기 줄이 필요하다: `test/e2e-utils.ts`(`MIGRATIONS` + `TABLES`) — 다만 이를 빠뜨리면 다음 실행에서 요란하게 실패한다
+   - 엔티티/관계 변경      → `backend/file/entity/file.entity.ts`와 `backend/user/entity/user.entity.ts`를 함께 읽는다 — `creator` 관계는 양쪽에 모두 선언되어 있다. `backend/post/entity/post.entity.ts`와 `backend/comment/entity/comment.entity.ts`는 의도적으로 **단방향**이다(User/File/Post에 역방향 프로퍼티 없음) — 이를 "고치려" 하지 않는다(ADR 0023). 새 엔티티는 **`backend/entities.ts` 한 곳에만** 등록한다 — `app.module.ts`와 `backend/data-source.ts`가 모두 그 `ENTITIES` 배열 하나를 import하므로, 엔티티가 앱에는 살아 있지만 `migration:generate`에는 보이지 않는 상황이 생길 수 없다(2026-07-31 이전에는 수동 관리 목록이 두 개였고, 그 불일치 때문에 `generate`가 테이블 하나를 통째로 빠뜨리고도 성공했다고 보고한 적이 있다). e2e 스위트는 별도로 자기 줄이 필요하다: `test/e2e-utils.ts`(`MIGRATIONS` + `TABLES`) — 다만 이를 빠뜨려도 다음 실행에서 조용히 넘어가지 않고 곧바로 실패한다
    - 정적 파일 서빙 변경   → `app.module.ts`의 `ServeStaticModule` 블록(`rootPath: file/temp`, `serveRoot: 'file/temp'` — `file/upload`는 의도적으로 마운트하지 않는다; granted 읽기는 대신 `GET /file/:id/content`를 거친다, ADR 0025/0026)을 읽는다
    - 요청 횟수 제한 변경   → `app.module.ts`의 `ThrottlerModule.forRootAsync` 블록(전역 기본값 + `skipIf` 기반 `THROTTLE_ENABLED` 우회, ADR 0054 D2)과 `APP_GUARD` 프로바이더, `backend/health/health.controller.ts` / `backend/metrics/metrics.controller.ts`의 `@SkipThrottle()` 예외, 그리고 `backend/auth/auth.controller.ts`(register/signIn/rotateAccessToken, 분당 5회) / `backend/upload/upload.controller.ts`(uploadMedia, 분당 15회)의 `@Throttle({ default: {...} })` 오버라이드(ADR 0053, ADR 0054)를 함께 읽는다
 2. 코드베이스에 존재함을 확인하지 않은 API, 파일, 함수, 타입을 절대 지어내지 않는다.
@@ -63,16 +63,16 @@
     관리하는 NestJS REST API)을 바탕으로 효율적인 구현 방식을 고안한다: 이 앱에 맞지 않는
     범용적인 기본값을 끌어오기보다, 이 앱에 이미 맞는 기존 패턴(Project-Specific Principles,
     Architecture Decisions)을 재사용한다.
-12. 이 저장소에서 아직 쓰지 않은 도구나 API를 호출하기 전에 — 새 의존성이든, 기존
-    의존성이지만 저장소 안의 어떤 코드도 아직 호출하지 않은 API든 — 작업 규모와
-    상관없이 확인한다. 이번 변경이 호출할 API에 대해, 해당 도구의 공식 문서·changelog·
+12. 도구나 API를 호출하는 코드를 쓰기 전에, 작업 규모와 상관없이 이 저장소가 이미 그것을
+    호출하고 있는지 확인한다. 이번 변경이 호출할 API가 모두 저장소에서 이미 쓰는 것이면
+    "최소 금기: 새로 없음"이라고 한 줄만 적는다. 저장소의 어떤 코드도 아직 호출하지 않은
+    API(새 의존성이든, 기존 의존성의 새 API든)가 있으면, 해당 도구의 공식 문서·changelog·
     advisory가 제거됨·deprecated·안전하지 않음으로 표시한 것을 찾는다. 기억에 의존하지
     말고 이번 세션에서 공식 출처를 직접 읽고(Context7 MCP가 연결돼 있으면 그것을 쓴다),
-    결과는 "최소 금기(Minimum do-nots)" 제목 아래에 항목마다 출처, 버전, 확인한 날짜를
-    붙여 보고한다. 출처에 닿지 못하면 기억으로 메우지 말고 "미확인"으로 표시한 뒤 확인
-    방법을 제안한다. 호출할 API가 모두 저장소에서 이미 쓰는 것이면 그렇다고 한 줄로
-    밝힌다. 반복해서 나오는 금기는 Never Do 후보로 올린다. 근거: 도구 API에 대한 기억은
-    아무 신호 없이 낡는다 — Never Do Group 2의 `@Transaction()` 금지(TypeORM 0.3에서
+    "최소 금기(Minimum do-nots)" 제목 아래에 항목마다 출처, 버전, 확인한 날짜를 붙여
+    보고한다. 출처에 닿지 못하면 기억으로 메우지 말고 "미확인"으로 표시한 뒤 확인 방법을
+    제안한다. 반복해서 나오는 금기는 Never Do 후보로 올린다. 근거: 도구 API에 대한 기억은
+    아무 신호 없이 낡는다 — Transaction Boundary 표의 `@Transaction()` 금지(TypeORM 0.3에서
     제거됨)가 선례다.
 
 ## 범위 준수
@@ -187,7 +187,7 @@ Implementation과 Review는 같은 패스여서는 안 된다: Review는 구현�
 
 ### 역할
 
-한 줄씩 — 무엇을 하는가만 밝힌다:
+역할마다 한 줄 — 어떻게가 아니라 무엇을 하는지만 적는다:
 
 - **Requirement Validation** — 실제로 무엇이 요구되는지 확인하고 모호함을 없앤다.
 - **Architect** — 전체 구조와 모듈 경계를 설계한다.
@@ -355,7 +355,7 @@ async uploadFile(dto: UploadFileDto, userId: number) { ... }
 위의 파일 헤더와 달리, 이것은 **수정된 함수에도 적용된다**, 새 함수에만 국한되지
 않는다: 함수의 동작을 바꾼다는 것은 그 블록이 여전히 지금의 동작을 정확히
 서술하는지 재확인하고, 같은 변경 안에서 갱신한다는 뜻이다. 이 블록은 함수가
-아무리 자명해 보여도 필수다 — 파일 헤더와 같은 "지금은 뻔함은 바랜다"는 이유다.
+아무리 자명해 보여도 필수다 — 파일 헤더와 같은 이유로, 지금은 뻔해 보여도 시간이 지나면 흐려지기 때문이다.
 이 지침은 함수 레벨 블록에 한해, 일반적인 "WHY만 남긴다"는 주석 원칙(Engineering
 Principles > Maintainability)보다 우선한다.
 
@@ -418,7 +418,7 @@ Principles > Maintainability)보다 우선한다.
 
 목표: 문서화 작업은 조사 → 계획 → 질문 → 작성 → 검증의 순서이며, "질문" 단계가
 핵심을 지탱한다. 이 프로토콜이 막으려는 구체적인 실패는, 작성자가 실제로는
-가져본 적 없는 추론된 근거 위에 세워진, 그럴듯하게 쓰인 문서다.
+품어 본 적 없는, 추론으로 채운 근거 위에 세워진 그럴듯한 문서다.
 
 ## Never Do — 금지 패턴
 다음 패턴들은 TypeScript를 쓰는 목적을 무력화하고 프로덕션 장애를 유발한다.
@@ -513,6 +513,18 @@ getFiles(): Promise<FileEntity[]>
 // ✅
 getFiles(query: GetFilesDto): Promise<[FileEntity[], number]>
 // (the current getFiles(query: GetFilesDto) follows this — new list endpoints must too)
+
+// ❌ Deprecated TypeORM API → findByIds is @deprecated in 0.3 and removed in 1.0 (breaks on upgrade)
+await this.fileRepository.findByIds(ids)
+// ✅
+await this.fileRepository.find({ where: { id: In(ids) }, relations: ['creator'] })
+
+// ❌ A where value that can be undefined/null → TypeORM 0.3 silently drops that condition, so the
+//    query can match every row (fail-open read; 1.0 throws instead). This project does not set
+//    invalidWhereValuesBehavior.
+await this.fileRepository.findOne({ where: { id, creator: { id: userId } } })  // userId undefined at runtime → creator condition ignored
+// ✅ Type the value as non-optional and validate it at the boundary (DTO / @UserId) before it
+//    reaches a where; never build a where from a value that may be undefined
 ```
 
 ### GROUP 3 — 보안
@@ -836,7 +848,7 @@ Conflict Protocol을 따른다.
   visibility는 `granted_` 행 위에 별도로 게이트되는 직교적 관심사다.
   `STORAGE_DRIVER=s3`에서는 `ServeStaticModule` 라우트가 아무것도 서빙하지
   않는다(temp 바이트가 로컬 디스크에 전혀 닿지 않는다) — 실제 흐름의 그 무엇도
-  그 경로로 읽지 않으므로 이는 결함이 아니라 받아들여진 잔여물이다(ADR 0029 D6).
+  그 경로로 읽지 않으므로 이는 결함이 아니라 감수하기로 한 잔여 한계다(ADR 0029 D6).
 - Goal: `filePath`를 건드리는 모든 새 코드는 접두사 상태 머신을 끝까지 유지한다.
   클라이언트가 제공한 경로 조각으로 `filePath`를 절대 구성하지 않는다 — 서버가
   이름을 생성하며(uuid + timestamp), 클라이언트는 그것을 그대로 돌려줄 뿐이다.
@@ -867,8 +879,8 @@ Conflict Protocol을 따른다.
 - 고아 granted 파일 회수(ADR 0051): 위에서 temp 파일을 훑는 것과 달리 `granted_`
   오브젝트의 고아 여부는 파일명만으론 판정할 수 **없다** — `file_entity.filePath`와의
   조인이 필요하다. granted 오브젝트가 행을 잃는 경우는 오직 커밋 후 unlink
-  실패나 좁은 삽입/삭제 경합(ADR 0020)뿐이지, 단순 미청구 때문이 아니기
-  때문이다. `FileModule`의 `GrantedCleanupService`(별도 모듈이 아니라 export하지
+  실패나 좁은 삽입/삭제 경합(ADR 0020)뿐이고, 단순히 claim되지 않았다는
+  이유로는 결코 생기지 않기 때문이다. `FileModule`의 `GrantedCleanupService`(별도 모듈이 아니라 export하지
   않는 provider)는 그 조인을 하려고 `storage.listGranted()`와 `FileEntity`
   리포지토리를 직접 읽어 file/upload를 주기적으로 훑되, 진행 중인
   `storage.promote()`를 고아로 오판하지 않도록 최소 나이
@@ -888,7 +900,7 @@ Conflict Protocol을 따른다.
 - Rationale: 둘 다 프레임워크 관용구다 — Passport의 전략/가드 계약과
   `@nestjs/mapped-types`의 `PartialType` 헬퍼 — 프로젝트가 만들어낸 계층이
   아니다; 이를 확장하는 것은 이 코드베이스가 프레임워크에 연결되는 방식이지,
-  조합과 저울질된 설계상의 선택이 아니다.
+  조합과 저울질해 내린 설계상의 선택이 아니다.
 - Goal: 이 두 지점 밖의 새로운 클래스 계층은 명시적 결정이 필요하다(Scope
   Discipline > 아키텍처 변경); 공유 동작의 지름길로 새 `extends` 관계를
   추가하지 않는다 — 대신 양쪽 호출부에 주입되는 공유 서비스를 우선한다.
@@ -995,7 +1007,7 @@ Conflict Protocol을 따른다.
   확장되었다; `PATCH /user/:id/role`은 superadmin 전용이다(SERIALIZABLE
   트랜잭션, 마지막 superadmin의 강등을 거부하고, 대상의 refresh 세션을 지운다).
   삭제와 역할 변경은 append-only인 `audit_log_entity`에 기록된다(FK 없음;
-  기본 커밋 이후에 기록됨). `SUPERADMIN_EMAIL`은 첫 superadmin의 대상 계정을
+  본 작업 커밋 이후에 기록됨). `SUPERADMIN_EMAIL`은 첫 superadmin이 될 계정을
   지정할 뿐, 승격은 부팅 시 자동이 아니라 의도적인 수동 단계
   (`pnpm promote-superadmin`)다 — 원래의 부팅 시 자동 승격은 그 이메일을 먼저
   등록한 사람을 소유자 검증 없이 그대로 신뢰했기 때문에 2026-09-09 제거됐다
@@ -1098,7 +1110,7 @@ Conflict Protocol을 따른다.
   `UPLOAD_MULTIPLE_FIELDS`. 이는 [ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md)
   (2단계 계약의 필드)과 [ADR 0010](docs/ADR/0010-frontend-split-and-api-surface-freeze.ko.md)
   (동결된 표면)을 **개정한다** — 아직 이를 채택하지 않은 실제 `frontend/`에
-  대한 破괴적 변경이다. `temp_{uuid}_{timestamp}.{ext}` 네이밍
+  대한 하위 호환을 깨는 변경이다. `temp_{uuid}_{timestamp}.{ext}` 네이밍
   (`file.originalname`에서 확장자를 읽음)은 Multer의 `diskStorage` 콜백에서
   `UploadService.stageTemp`(ADR 0029 D4)로 옮겨졌지만 그 외에는 영향받지 않았다
   — 이미 필드 이름과 무관했기 때문이다. 확장자 기반의 다른 두 조회도 새
@@ -1123,7 +1135,7 @@ Conflict Protocol을 따른다.
   `PostDetailPage.tsx`는 이제 `FileResponseDto.mediaType`을 기준으로
   `<img>`/`<audio controls>`/`<video controls>` 태그를 고른다 — 이전에는
   무조건 `<video>`만 렌더링해 업로드된 이미지나 mp3가 재생되지 않았다
-- **고아 granted 파일 회수(랜딩 2026-09-05 — [ADR
+- **고아 granted 파일 회수(도입 2026-09-05 — [ADR
   0051](docs/ADR/0051-orphaned-granted-file-reclaim.md))**: `FileStorage`에
   `listGranted()`가 추가된다(양쪽 어댑터 모두, `StorageTempEntry` 재사용).
   `FileModule`은 export하지 않는 `GrantedCleanupService` provider를 얻는다(별도
@@ -1135,7 +1147,7 @@ Conflict Protocol을 따른다.
   삭제하지 않고 **리포트만** 한다. 삭제 관점에서는 무해하게 출시된다: 코드
   경로는 있고 단위 테스트도 됐지만, 아직 이걸로 실제 데이터가 회수된 적은
   없으며 그러려면 코드 변경이 아니라 운영자의 결정이 필요하다
-- **악성코드 스캔(랜딩 2026-09-14, 라이브 검증 완료 — [ADR
+- **악성코드 스캔(도입 2026-09-14, 라이브 검증 완료 — [ADR
   0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md))**: 업로드는
   `UploadService.stageTemp()` 내부, `storage.saveTemp()`를 호출하기 전에
   Multer의 메모리 버퍼를 대상으로 동기 ClamAV 스캔 게이트를 거친다 — 감염
@@ -1244,7 +1256,7 @@ Conflict Protocol을 따른다.
   파일을 소유한 계정에 대해 확인되지 않으면 = 메시지에 개수가 담긴 409
   `USER_HAS_FILES`; `deleteFiles=false`는 미확인으로 취급된다.
   **게시글과 댓글은 무조건 삭제된다** — 이 플래그는 의도적으로 미디어
-  바이트만 지키며, 이를 넓히거나(또는 두 번째 플래그를 추가하는 것) 기각되었다
+  바이트만 지키며, 이를 넓히는 안(또는 두 번째 플래그를 추가하는 안)은 기각되었다
   (ADR 0023 D5). 댓글이 **먼저** 처리되며 그 순서는 핵심적이다: 계정이 *다른
   사람의* 게시글에 단 댓글은 게시글 FK 연쇄를 통해서는 닿을 수 없고, 이는
   소유 게시글이 삭제될 때만 발동한다. 감사 상세는 파일과 게시글 개수는
@@ -1254,17 +1266,18 @@ Conflict Protocol을 따른다.
   가져가지만**(`ON DELETE CASCADE` — 이 스키마의 유일한 것) **첨부된 파일은
   손대지 않는다** — 게시글은 파일을 참조할 뿐 소유하지 않는다.
   `DELETE /comment/:id`는 그 행만 삭제한다. 게시글이 참조하는 파일에 대한
-  `DELETE /file/:id`는 사전 확인 쿼리 없이 FK의 `23503`을 옮겨 409
-  `FILE_IN_USE`로 거부된다(사전 확인은 `File ↔ Post` 모듈 순환을 만들고 *게다가*
+  `DELETE /file/:id`는 사전 확인 쿼리 없이 FK의 `23503` 오류를 409
+  `FILE_IN_USE`로 변환해 거부한다(사전 확인은 `File ↔ Post` 모듈 순환을 만들고 *게다가*
   여전히 경합이 생긴다 — ADR 0023 D4)
 - 확인 플래그는 **문자열 리터럴**이다(`'true' | 'false'`), 절대 boolean이 아니다:
   전역 파이프의 `enableImplicitConversion`은 커스텀 `@Transform`보다 먼저
   `"false"`를 truthy하게 `true`로 캐스팅한다(측정되었고
   `delete-user-query.dto.spec.ts`로 고정되어 있다). 파괴적 경로의 향후
   boolean 비슷한 쿼리 플래그는 모두 같은 모양을 따른다
-- 물리적 삭제는 `unlinkStoredFiles`(`backend/common/`)를 통해 **커밋 이후,
-  best-effort로** 이루어지며, 이는 `file/upload/` 밖의 경로를 거부하고 실패를
-  호출자가 `warn`으로 로깅하도록 보고한다. 이제 `file/upload`를 아무도 훑지
+- 물리적 삭제는 `FileStorage.unlink(keys)`를 통해 **커밋 이후, best-effort로**
+  이루어진다(ADR 0029 — `backend/common/`의 옛 `unlinkStoredFiles`는 어댑터 안으로
+  흡수되며 폐기됐다). 이 메서드는 granted(`file/upload/`)와 temp(`temp_`) 영역 밖의
+  키를 거부하고, 실패는 호출자가 `warn`으로 로깅하도록 돌려준다. 이제 `file/upload`를 아무도 훑지
   않는 건 아니다: `FileModule`의 `GrantedCleanupService`가 `file_entity.filePath`와
   대조해 일정에 따라 훑는다(ADR 0051) — 다만 리포트만 하고 출시됐다
   (`GRANTED_SWEEP_DRY_RUN` 기본값 `true`), 그래서 운영자가 명시적으로 켜기
@@ -1272,11 +1285,11 @@ Conflict Protocol을 따른다.
 - 파일 행은 계정 연쇄 중에도 여전히 `FileService`의 책임이다: `UserService`가
   트랜잭션을 소유하고 자신의 `EntityManager`를 `findStoredPathsOfCreator` /
   `deleteFilesOfCreator`에 넘긴다
-- 두 파일-행 삭제 경로 모두 사전 확인 대신 FK의 `23503`을 옮긴다:
+- 두 파일-행 삭제 경로 모두 사전 확인 대신 FK의 `23503` 오류를 변환한다:
   `deleteFile` → 409 `FILE_IN_USE`, `deleteFilesOfCreator` → 409
   `USER_FILES_IN_USE`(ADR 0024 — `PATCH /file/:id { userId }`가 파일을 게시글
   아래에서 빼내 재할당할 수 있어 계정 연쇄가 낯선 사람의 게시글을 만날 수
-  있으므로 도달 가능하다). 새로운 파일-행 삭제 경로도 이를 옮겨야 한다;
+  있으므로 도달 가능하다). 새로운 파일-행 삭제 경로도 이를 변환해야 한다;
   `23503`이 클라이언트에 500으로 도달하게 두는 것은 ADR 0020과 ADR 0024가
   존재하는 이유인 결함 그 자체다
 - `comment.postId`는 이 스키마에서 **유일한** `ON DELETE CASCADE`이며 그
@@ -1408,7 +1421,7 @@ Architecture Decisions가 계속 유효하다.
   `.ts` 파일도 이를 import한 적이 없다 — 같은 날 저녁 프로젝트는 이미
   `@aws-sdk/client-s3`/`s3-request-presigner` v3로 정착했다, ADR 0036)은
   override 대신 아예 제거했고, 그 안에 번들된 취약한 `uuid`와 패치가
-  없는 region 검증 발견 사항도 함께 사라졌다. 개발 전이 의존성 발견
+  없는 region 검증 발견 사항도 함께 사라졌다. 개발 도구의 간접 의존성에서 나온 발견
   사항은 이번 범위 밖으로 남겨뒀다 — `--prod`를 뺀 일반 `pnpm audit`는
   이제 58건(2026-07-24 당시엔 몇 건 수준)을 보고하며, critical 1건(`ts-jest`를
   통한 `handlebars`)도 포함돼 있다 — 여전히 빌드/테스트 시점에만 관련되며
@@ -1427,7 +1440,7 @@ Architecture Decisions가 계속 유효하다.
   (ADR 0020): `DELETE /user/:id?deleteFiles=true`가 연쇄한다(게시글 행 →
   파일 행 → 사용자 행 → 저장된 파일; 게시글은 2026-07-31에 순서에
   합류했다, ADR 0023); 미확인이면 타입화된 409 `USER_HAS_FILES`다. 대체로
-  받아들여진 잔여물: 실패한 unlink(또는 경로 읽기와 삭제 사이에 삽입된 파일)는
+  감수하기로 한 잔여 한계: 실패한 unlink(또는 경로 읽기와 삭제 사이에 삽입된 파일)는
   디스크에 고아를 남긴다 — `warn`으로 로깅될 뿐 그 자리에서 복구되진 않는다.
   `GrantedCleanupService`(ADR 0051)가 이제 이런 종류의 고아를 일정에 따라
   찾아낼 수는 있지만, 리포트만 하고 출시됐다; 실제로 디스크 공간을 회수하려면
@@ -1438,7 +1451,7 @@ Architecture Decisions가 계속 유효하다.
 - ~~파일 소유권 재할당이 계정 삭제 시 FK 위반 500을 낼 수 있다~~ —
   **2026-07-31 해결**(ADR 0024): `FileService.deleteFilesOfCreator`가 형제
   메서드인 `deleteFile`이 이미 쓰던 기법과 같은 방식으로 `23503`을 타입화된
-  409 `USER_FILES_IN_USE`로 옮긴다. 이것이 의도적으로 하지 **않은** 두 가지가
+  409 `USER_FILES_IN_USE`로 변환한다. 이것이 의도적으로 하지 **않은** 두 가지가
   있고 둘 다 여전히 새 코드를 구속한다: 게시글↔파일 동일-작성자 규칙은 이제
   **생성 시점 규칙일 뿐 불변식이 아니다** — `PATCH /file/:id { userId }`가
   `FileService.assertAttachableBy`가 실행된 이후에 소유권을 재할당하므로 ADR
@@ -1446,7 +1459,7 @@ Architecture Decisions가 계속 유효하다.
   속성을 *보장*으로 원하는 것은 먼저 ADR 0024가 기록한 복합 FK 형태를 채택해야
   한다; 그리고 **`PostService.resolveAttachment`의 작성자-신원 검사는 여전히
   도달 가능하다** — 같은 결함의 또 다른 결과이므로 도달 불가능한 가드라며
-  "단순화"해서 없애지 않는다. 받아들여진 잔여물: 파일이 *다른 사용자의*
+  "단순화"해서 없애지 않는다. 감수하기로 한 잔여 한계: 파일이 *다른 사용자의*
   게시글에 첨부된 계정은 그 게시글이 제거되기 전까지 삭제할 수 없다(409,
   조치 가능함 — 어떤 admin이든 그 막는 게시글을 삭제할 수 있다)
 - ~~`PATCH /file/:id { userId }`는 어떤 결정으로도 정당화된 적이 없다~~ —
@@ -1454,7 +1467,7 @@ Architecture Decisions가 계속 유효하다.
   ADR 0024를 amend): 이 필드의 실제 목적(계정을 삭제·탈퇴하기 전 소유 파일을
   넘기는 것)이 이제 동의 기반 제안/수락/거절/취소 흐름으로 명시되고 구현됐다
   — 기존의 무동의 즉시 강제 이전은 제거됐다. ADR 0024의 `23503` →
-  `USER_FILES_IN_USE` 번역과 `PostService.resolveAttachment`의 작성자 검사
+  `USER_FILES_IN_USE` 변환과 `PostService.resolveAttachment`의 작성자 검사
   둘 다 **여전히 도달 가능하고 필요하다** — 동의는 "누가 이전을 트리거할 수
   있는지"만 바꿀 뿐, 수락된 이전이 여전히 같은 하위 invariant 붕괴를
   일으킨다는 사실은 바뀌지 않는다; 왜 0024를 대체가 아니라 amend하는지는
@@ -1635,7 +1648,7 @@ Architecture Decisions가 계속 유효하다.
   요구함, 이 결정은 그게 필요 없음), Lambda로 패키징한 ClamAV(같은 유지부담을
   지면서 구현 비용만 추가됨), 서드파티 스캔 API — VirusTotal/Cloudmersive
   (사용자가 업로드한 파일 바이트를 외부 벤더로 전송 — 이 프로젝트가 처음으로
-  받아들이게 될 유형의 노출). 랜딩: `UploadService.stageTemp()` 내부에서 temp
+  받아들이게 될 유형의 노출). 구현 내용: `UploadService.stageTemp()` 내부에서 temp
   쓰기 전에 메모리 버퍼를 스캔하는 `ScanService`(`clamscan` 감쌈), 스캐너
   접속 불가 시 fail-closed — 요약은 Architecture Decisions > File Storage 참고.
   위 회원가입 계정 열거 항목처럼 "검토 후 현행 유지"로 단순 기록하지 않은
@@ -1720,7 +1733,7 @@ lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 
 `creator`를 join하고 페이지네이션된다; `.env.example`은 `BASE_URL`을
 문서화한다; "300MB" 주석은 고쳐졌다; `@nestjs/jwt`는 `dependencies`로
 옮겨졌다; `saved!`/`updated!` 단언은 사라졌다 — `FileService`의 커밋 후
-재조회는 이제 `try` 밖에서 null 가드와 함께 산다.
+재조회는 이제 `try` 밖에서 null 가드와 함께 수행된다.
 
 ## 프로젝트 개요
 
@@ -1738,7 +1751,7 @@ CLAUDE.md는 저장소 루트의 백엔드를 관장한다**(`backend/`, `docs/A
 **다른 프로젝트에서 가져온 코드이지 처음부터 새로 만든 admin 클라이언트가
 아니다**. 작성자의 Chat Project admin 콘솔이며, 원래 통째로 복사되어
 수정 없이 *수정 기반*으로 커밋되었고, 두 가지 명시된 목적이 있다:
-(1) ADR 0013이 배송했지만 운영자 화면 없이 남겨두었던 **RBAC 역할
+(1) ADR 0013이 도입했지만 운영자 화면 없이 남겨두었던 **RBAC 역할
 계층의 운영 화면**이 되는 것 — 역할 목록, superadmin 전용
 `PATCH /user/:id/role`을 통한 승격/강등, `ROLE_CHANGE` 감사 뷰어;
 (2) **토큰 경제성** — 그 콘솔은 이미 같은 3단계 계층을 위해 만들어져
@@ -2139,7 +2152,7 @@ push되면 낡은 실행을 취소한다. 로컬 컨테이너화: 멀티 스테�
 **자동 배포 파이프라인(CD)도 git hook도 없다** — 앱은 AWS에 배포돼
 있지만(ROADMAP.md §9, 2026-08-27), GitHub Actions가 아니라 사람이 로컬
 세션에서 `helm upgrade`를 직접 실행해서다; CI는 여전히
-lint/test/build/**publish**만 돌리고(ADR 0048로 landed된 이미지 publish는
+lint/test/build/**publish**만 돌리고(ADR 0048로 도입된 이미지 publish는
 deploy와 다르다 — `helm upgrade`를 트리거하는 건 아무것도 없다), git hook
 툴체인도 설치되어 있지 않다. CI/CD 배포 파이프라인이나 hook이 있다고
 가정하지 않는다; 둘 중 하나를 추가하는 것은 명시적 요청이 필요한 작업이다.
@@ -2197,7 +2210,7 @@ Sentry/DB MCP/Chrome DevTools/Linear/Jira를 이 저장소의 실제 공백에 �
   가시성·소유권 게이트를 raw SQL로는 강제할 방법이 없어 우회 위험), Chrome
   DevTools MCP(Playwright MCP와 목적 중복 — 하나만 고른다면 이 프로젝트가 이미
   채택한 Playwright 기반 e2e 컨벤션과 일관된 쪽), Linear/Jira(이 저장소는 작업을
-  `docs/ADR/`/`docs/ROADMAP.md`/`docs/CHANGELOG.md`로 인repo 추적하며 외부
+  `docs/ADR/`/`docs/ROADMAP.md`/`docs/CHANGELOG.md`로 저장소 안에서 추적하며 외부
   트래커를 쓰지 않음)
 
 둘 다 적용되려면 세션 재시작이 필요하다 (MCP 서버는 세션 시작 시 로드되며 세션
