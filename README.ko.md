@@ -109,6 +109,11 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 `chown`하세요: `sudo chown -R 1001:1001 file/` (Windows/Mac Docker Desktop은 영향
 없음).
 
+`.env`는 건드리지 않고 이 머신에서만 값을 바꾸려면 — 예를 들어 `.env`가 S3를 가리키는데 버킷이
+없을 때 `STORAGE_DRIVER=local` — gitignore된 `.env.local`에 적으세요. `api`와 `migrate`가
+`.env` 뒤에 이 파일을 읽고, 호스트에서 돌리는 백엔드도 읽습니다
+([ADR 0015](docs/ADR/0015-docker-and-compose.ko.md) 2026-10-03 Addendum, Compose 2.24 이상 필요).
+
 ### AWS / Kubernetes 배포
 
 백엔드·`frontend/`·`admin/`은 하나의 ALB 뒤에서 하나의 Helm 릴리스로 배포됩니다

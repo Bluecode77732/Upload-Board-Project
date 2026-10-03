@@ -63,3 +63,30 @@ Stage 1 작업](../ROADMAP.ko.md))가 이제 살아있는 Postgres를 요구하�
 - 아직 프로덕션 수준은 아니다: 컨테이너가 root로 돌고 distroless 베이스·헬스
   엔드포인트·레지스트리 푸시가 없다. 이는 CI(Stage 1)와 Stage 4에서 각자의 기록과 함께
   도입된다.
+
+### Addendum (2026-10-03) — 머신별 덮어쓰기용 선택 파일 `.env.local`
+
+이제 `api`와 `migrate`는 `.env`를 읽은 뒤 선택 파일 `.env.local`도 읽는다
+(`docker-compose.yml`의 `x-env-files`, `required: false`이며 Compose 2.24 이상이 필요하다).
+배경: 개발자의 `.env`는 S3(`STORAGE_DRIVER=s3`)를 가리킬 수 있는데, AWS 스택을 내리면 버킷이
+사라져 모든 업로드가 500(`NoSuchBucket`)이 되고, `.env`는 실제 설정이 담긴 파일이다. 호스트에서
+돌리는 백엔드에는 이미 머신별 덮어쓰기가 있었다 — `backend/app.module.ts`가
+`['.env.local', '.env']`를 읽고 `.env.local`은 gitignore된다 — 그런데 compose는 읽지 않았고
+`.dockerignore`가 `.env.*`를 이미지에서 빼므로 `.env.local`이 컨테이너에 닿지 않았다. 이제
+gitignore된 파일 하나로 두 실행 방식의 로컬 값을 함께 바꾼다.
+호스트 쪽 덮어쓰기를 넣은 커밋(`3bd5dfd`, 2026-09-09)은 `.env.local`이 이미지에도, compose
+컨테이너에도 들어가지 않는다는 점을 라이브로 확인한 사항으로 적어 두었다. 이번 변경은 그중
+뒤쪽 절반만 뒤집는다. 이미지에는 여전히 들어가지 않고(`.dockerignore`), compose 컨테이너에는
+그 파일이 있는 머신에서 실행 시점에 주입된다.
+
+우선순위가 두 도구에서 반대다(Nest는 앞 파일, Compose는 뒤 파일이 이긴다). 그래서 목록 순서는
+`.env`, `.env.local`이다. 더미 파일로 만든 임시 시험에서 뒤 파일이 덮어쓰는 것과 `.env.local`이
+없어도 오류가 아님을 확인했고, 변경 뒤에는 임시 오버라이드 파일을 지워도 `api` 컨테이너가
+`STORAGE_DRIVER=local`로 떴으며, 그 상태에서 실제 업로드(ClamAV 검사, 저장 파일, 인증된 재생)가
+동작했다. compose 파일의 `environment:` 항목(`DB_HOST`, `CLAMD_HOST` 등)은 두 파일보다 계속
+우선한다.
+
+기각한 대안: `docker-compose.override.yml`(compose가 이름만으로 자동 로드하고 `.gitignore`에
+항목이 없어서 실수로 커밋되어 모두의 기본값을 바꿀 수 있다), `.env` 직접 수정(실제 설정이 담긴
+파일이라 여기의 AI 도구가 읽거나 쓰지 않는다). 바꾸지 않은 것: Joi 스키마와 `STORAGE_DRIVER`
+기본값(`local`) — [ADR 0029](0029-storage-port-adapter.ko.md) D3.

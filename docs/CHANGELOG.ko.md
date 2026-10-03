@@ -13,6 +13,23 @@
 ## [Unreleased]
 
 ### 변경
+- **Compose: `api`와 `migrate`가 `.env` 뒤에 선택 파일 `.env.local`도 읽는다 (2026-10-03,
+  [ADR 0015](ADR/0015-docker-and-compose.ko.md) Addendum)** — 개발자의 `.env`는 S3를 가리킬 수 있고,
+  AWS 스택을 내리면 버킷이 사라져 로컬 compose `api`를 거치는 모든 업로드가 500(`NoSuchBucket`)이었다.
+  호스트에서 돌리는 백엔드는 이미 gitignore된 `.env.local`을 `.env`보다 먼저 읽었지만
+  (`backend/app.module.ts`), compose는 `.env`만 읽고 `.dockerignore`가 `.env.*`를 이미지에서 빼므로 그
+  파일이 컨테이너에 닿지 않았다. 이제 `docker-compose.yml`이 두 서비스에 `x-env-files`(`.env`, 이어서
+  `required: false`인 `.env.local`, Compose 2.24 이상)를 정의한다. Compose는 뒤 파일이, Nest는 앞 파일이
+  이기므로 순서를 고정했다. `.env.example`에 공통 덮어쓰기 방법을 적었다. 이는 임시 해결책으로 추가했던 로컬
+  `docker-compose.override.yml`을 대체한다. 그 파일은 이름만으로 자동 로드되고 `.gitignore`에 항목이 없어
+  `git add -n .`에 올라오므로 실수로 커밋될 수 있었다. 확인: 더미 파일로 만든 임시 시험(뒤 파일이 덮어쓰고,
+  없어도 오류가 아님), 그리고 오버라이드를 지운 상태에서 `docker compose up -d`가 `migrate`를 exit 0으로
+  끝내고 `api`가 `STORAGE_DRIVER=local`로 healthy하게 떴으며 정리 서비스는 report-only, 요청 제한은 그대로 켜져
+  있었다. 눈에 보이는 브라우저에서 실제 업로드가 ClamAV 검사를 지나 저장되고 Private 타일로 보였으며 상세에서
+  인증된 fetch로 재생됐다(10.6초, 오류 없음). 검증 계정과 그 파일은 끝난 뒤 지웠다. 하지 않은 것: 프런트엔드 e2e
+  전체 재실행(`.env.local`에 `THROTTLE_ENABLED=false`를 넣었다 빼야 하고 앱 코드는 바뀐 게 없다). 이 과정에서
+  로컬 DB 계정 비밀번호가 앱이 쓰는 값과 어긋나 있었고(`migrate`의 `28P01`), DB 컨테이너 안에서 앱의 값으로 맞췄다
+  (`ALTER USER`, 값은 출력하지 않음).
 - **프론트엔드: 로그인 상태로 새로고침해도 개발 모드에서 세션이 끊기지 않는다, 폰의 선택 상자는 40px 이상이다
   (2026-10-02)** — 아래 항목이 열어 둔 두 가지를 명시적 승인을 받아 처리했다. `AuthProvider`의 시작 시 refresh가
   `refreshAccessToken()`을 직접 불러서, `pnpm dev`의 React StrictMode가 페이지를 로드할 때마다 요청을 두 번 보냈다.

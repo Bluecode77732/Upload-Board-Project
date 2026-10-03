@@ -13,6 +13,26 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Compose: `api` and `migrate` read an optional `.env.local` after `.env` (2026-10-03,
+  [ADR 0015](ADR/0015-docker-and-compose.md) Addendum)** — a developer's `.env` can point at S3, and
+  once the AWS stack is down the bucket is gone, so every upload through the local compose `api`
+  returned 500 (`NoSuchBucket`). The host-run backend already read a gitignored `.env.local` before
+  `.env` (`backend/app.module.ts`), but compose read only `.env` and `.dockerignore` keeps `.env.*` out
+  of the image, so that file never reached the container. `docker-compose.yml` now defines `x-env-files`
+  (`.env`, then `.env.local` with `required: false`, Compose 2.24+) for both services; the order is
+  fixed because Compose lets the later file win while Nest lets the first win. `.env.example` explains
+  the shared override. It replaces a local `docker-compose.override.yml` I had added as a workaround:
+  that file is loaded by name, nothing in `.gitignore` covered it, and `git add -n .` listed it, so it
+  could have been committed by accident. Verified: a throwaway test with dummy files (the later file
+  overrides, an absent file is not an error); then, with the override deleted, `docker compose up -d`
+  left `migrate` at exit 0 and `api` healthy on `STORAGE_DRIVER=local` with the cleanup sweep still
+  report-only and the rate limit still on; and in a visible browser a real upload went through the
+  ClamAV scan, was stored, appeared as a Private tile and played in the detail view over the
+  authenticated fetch (10.6s, no error). The verification account and its file were deleted afterwards.
+  Not run: the full frontend e2e suite again (it needs `THROTTLE_ENABLED=false` in `.env.local` and
+  back, and no app code changed). While getting here the local DB role password had drifted from the
+  one the app uses (`28P01` from `migrate`), and was set to the app's value from inside the DB
+  container (`ALTER USER`, nothing printed).
 - **Frontend: reloading while signed in no longer ends the session in dev; select boxes are at least
   40px on phones (2026-10-02)** — the two items the entry below left open, done with explicit approval.
   `AuthProvider`'s startup refresh called `refreshAccessToken()` directly, so React StrictMode in `pnpm

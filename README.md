@@ -109,6 +109,11 @@ service, not inside `api`'s boot ([ADR 0032](docs/ADR/0032-migration-as-separate
 the bind-mounted `./file` directory fails to write, `chown` it once:
 `sudo chown -R 1001:1001 file/` (Windows/Mac Docker Desktop is unaffected).
 
+To change a value only on your machine without touching `.env` — for example
+`STORAGE_DRIVER=local` while `.env` points at S3 and the bucket is gone — put it in the
+gitignored `.env.local`: `api` and `migrate` read it after `.env`, and so does a host-run
+backend ([ADR 0015](docs/ADR/0015-docker-and-compose.md) Addendum 2026-10-03; needs Compose 2.24+).
+
 ### Deploying to AWS / Kubernetes
 
 The backend, `frontend/`, and `admin/` ship as one Helm release behind one ALB
