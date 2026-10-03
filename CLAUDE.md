@@ -1688,14 +1688,15 @@ Architecture Decisions above remain operative.
   `S3Storage`'s `S3Client` — the same default `keepAlive` agent shape — exited just as fast
   with a socket left open on purpose, closing this for shutdown speed; a real `S3Client`
   instance is still untested, ADR 0061's second addendum)
-- Four `.ko.md` files were edited without the whole-file re-read the Documentation Convention asks
-  for (recorded 2026-10-02). The 2026-10-01/02 frontend session edited seven `.ko.md` files; three
-  were re-read in full (`docs/ADR/0060-…ko.md`, `frontend/docs/STYLE-PLAN.ko.md`,
-  `frontend/docs/API-CONTRACT.ko.md`) and four were not: `docs/CHANGELOG.ko.md` (about 2,850 lines),
-  `docs/ROADMAP.ko.md` (about 1,590), `frontend/CLAUDE.ko.md` and `frontend/README.ko.md`. Only the
-  passages added that session were written as natural Korean; the rest of those files was not
-  re-read. Not scheduled — the pass is explicit-request work and fluency only. Scope, method and
-  trigger: `docs/ROADMAP.md` §7.
+- ~~Four `.ko.md` files were edited without the whole-file re-read the Documentation Convention
+  asks for~~ (recorded 2026-10-02) — **resolved 2026-10-04**, on explicit request: `docs/CHANGELOG.ko.md`,
+  `docs/ROADMAP.ko.md`, `frontend/CLAUDE.ko.md` and `frontend/README.ko.md` were re-read in full and
+  fixed for Korean wording only. It found a run of 2026-08-12-era `CHANGELOG.ko.md` entries in the
+  polite `-습니다` register while the rest uses `-다` (unified), one stray duplicated sentence
+  fragment, a few literal translations, and 18 link targets that pointed at English siblings; EN/KO
+  heading, list and table-row counts and relative links were checked afterwards. Left as is:
+  `docs/ADR/0022-admin-console-import-from-chat-project.ko.md` renders single-flight as "단일 비행"
+  in three places. Record: `docs/CHANGELOG.md` 2026-10-04, `docs/ROADMAP.md` §7.
 - The malware scan gate passes a `null` verdict (found 2026-10-03 by the backend dependency audit;
   **decided 2026-10-03: later task, not started**). `clamscan`'s `scanStream` resolves, it does not
   reject, with `isInfected: null` ("Unable to scan") when `clamd` closes the connection normally and the

@@ -56,20 +56,18 @@ XSS payload cannot exfiltrate a persistable credential.
 
 #### Why Base64 / `btoa()`
 
-1. HTTP Header는 원래 ASCII 문자만 안전하게 전달하도록 설계되었다.
-2. 따라서 바이너리 데이터나 ASCII 범위를 벗어나는 데이터를 그대로 Header에
-   넣을 수 없다.
-3. 이 문제를 해결하기 위해 Base64 인코딩을 사용하여 데이터를 ASCII 문자열로
-   변환한다.
-4. Base64는 데이터를 암호화하는 것이 아니라, 전송 가능한 ASCII 문자열로
-   표현하는 인코딩 방식이다.
-5. Basic Authentication은 `username:password` 문자열을 Base64로 인코딩한 뒤
-   `Authorization: Basic <Base64>` 형식의 Header에 담아 전송한다.
-6. JavaScript에서는 브라우저 환경의 `btoa()`와 `atob()`가 Base64
-   인코딩·디코딩을 제공하지만, 이는 여러 구현 방법 중 하나일 뿐이며 환경마다
-   사용하는 API는 다를 수 있다.
+1. HTTP headers were designed to carry only ASCII characters safely.
+2. So binary data, or anything outside the ASCII range, cannot be put into a
+   header as is.
+3. Base64 encoding solves this by turning the data into an ASCII string.
+4. Base64 does not encrypt anything; it is an encoding that represents data as
+   an ASCII string that can be transmitted.
+5. Basic authentication encodes the `username:password` string in Base64 and
+   sends it in a header of the form `Authorization: Basic <Base64>`.
+6. In JavaScript, the browser's `btoa()` and `atob()` encode and decode Base64,
+   but that is only one way to do it, and the API differs by environment.
 
-인코딩은 보안이 아니므로 기밀성은 HTTPS가 담당한다.
+Encoding is not security, so confidentiality is HTTPS's job.
 
 ### Rotation & reuse
 
@@ -80,6 +78,16 @@ with `code: AUTH_REFRESH_REUSED`. The client treats any refresh failure as
 
 One session per account (backend anchors a single hash): a new sign-in
 elsewhere logs this one out on its next refresh.
+
+**Never send two refreshes with the same cookie.** The backend has no grace window
+(`rotateRefreshToken` clears the anchor on any mismatch), so the second request — which
+still carries the cookie the first one just rotated — reads as a replay and ends the
+session (`AUTH_REFRESH_REUSED`). Every refresh therefore goes through the single-flight
+`tryRefresh()` in `src/api/client.ts`: the startup recovery in `AuthProvider` and the
+401 retries share one in-flight call. That is how `pnpm dev` (React StrictMode runs the
+mount effect twice) stopped dropping the session on a second reload. The guard lives in
+module memory, so it covers one tab; two tabs refreshing at the same instant are not
+covered.
 
 ## Error contract (backend ADR 0011)
 

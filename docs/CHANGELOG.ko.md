@@ -13,6 +13,26 @@
 ## [Unreleased]
 
 ### 변경
+- **문서: single-flight 리프레시 규칙, e2e 선행 조건, 열려 있는 UI 메모 세 건, `.ko.md` 한국어 점검
+  (2026-10-04)** — 문서만 바꿨다. `frontend/CLAUDE.md` > 인증 불변식과
+  `frontend/docs/API-CONTRACT.md` > 회전과 재사용에 "리프레시는 모두 `tryRefresh()`를 거친다"는 규칙과
+  그 이유(백엔드에 유예 구간이 없어서 같은 쿠키로 두 번째 리프레시를 보내면 재사용으로 판정된다), 그리고 이
+  보호가 한 탭에만 적용된다는 점을 적었고, [ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md)에 같은 내용의
+  Addendum을 더했다. `frontend/README.md`는 실제 백엔드를 쓰는 e2e spec이 백엔드에 요구하는 것(마이그레이션이
+  적용된 Postgres, `STORAGE_DRIVER=local`, ClamAV, `THROTTLE_ENABLED=false`, 기본값 그대로의 `BASE_URL`)을
+  나열하고 compose의 `.env.local`을 가리킨다. `frontend/docs/STYLE-PLAN.md` 8번 항목이 2026-10-02의 터치
+  영역·줄바꿈 수정을 기록한다. ROADMAP §7에는 세 행이 생겼다: 레이아웃 두 건(작성자 이메일이 길면 Post 목록
+  제목이 짧게 잘린다, 360px 이하의 File 상세), single-flight 리프레시가 한 탭만 막는다는 점, 한 번 늦게 열린
+  Chrome 시크릿 창의 Choose File 대화상자. 영문 `frontend/docs/API-CONTRACT.md`가 2026-07-24부터 한국어로 담고
+  있던 "Why Base64" 절은 영어로 옮겼고 한글판은 그대로다. `docs/CHANGELOG.ko.md`, `docs/ROADMAP.ko.md`,
+  `frontend/CLAUDE.ko.md`, `frontend/README.ko.md`의 한국어 점검은 끝났다. 네 파일을 전체 다시 읽고 한국어
+  표현만 고쳤다. 찾은 것: 2026-08-12 무렵 `CHANGELOG.ko.md` 항목 한 구간(약 140줄)이 나머지와 달리 "-습니다"
+  문체여서 "-다"로 맞췄고, SIGTERM 항목에 문장 조각 하나가 중복돼 있어 지웠고, 직역 표현 몇 곳(단일 비행 무음
+  갱신, "landing", 복붙, `px` 뒤의 조사)을 고쳤고, `.ko.md`가 있는데도 영문판을 가리키던 `CHANGELOG.ko.md`와
+  `ROADMAP.ko.md`의 링크 대상 18개를 바꿨다. 끝난 뒤 확인한 것: 건드린 모든 쌍에서 EN/KO의 제목·목록·표 행 수가
+  같고 상대 링크가 모두 열린다(앵커는 README가 쓰는 둘만 확인했다). 하지 않은 것:
+  `docs/ADR/0022-admin-console-import-from-chat-project.ko.md`에도 single-flight를 "단일 비행"으로 옮긴 곳이
+  세 군데 있지만 이번 네 파일 밖이라 그대로 뒀다.
 - **Compose: `api`와 `migrate`가 `.env` 뒤에 선택 파일 `.env.local`도 읽는다 (2026-10-03,
   [ADR 0015](ADR/0015-docker-and-compose.ko.md) Addendum)** — 개발자의 `.env`는 S3를 가리킬 수 있고,
   AWS 스택을 내리면 버킷이 사라져 로컬 compose `api`를 거치는 모든 업로드가 500(`NoSuchBucket`)이었다.
@@ -61,7 +81,7 @@
   실제 데이터를 눈에 보이는 브라우저에서 확인했다: 320–1920px 16개 폭 × 라이트·다크 × 영어·한국어, 64번 로드에서 가로로
   스크롤되는 곳이 없고, 640px까지는 행이 예전처럼 세로로 쌓이며, 641px부터는 행 폭이 720px 칼럼과 같고 제목과
   이메일이 `…`로 끝난다. 하지 않은 것: 작성자 이메일이 아주 길면 이메일이 행의 대부분을 차지해서 제목이 필요 이상으로
-  짧게 잘린다(1366px에서 "Post with audio …"). 같은 실행에서 찾았고 고치지 않은 것: 폰에서 선택 상자가 39px다(40px
+  짧게 잘린다(1366px에서 "Post with audio …"). 같은 실행에서 찾았고 고치지 않은 것: 폰에서 선택 상자가 39px이다(40px
   기준에 1px 모자람). 그리고 `pnpm dev`에서는 React StrictMode가 `AuthProvider`의 시작 시 refresh를 두 번 실행해, 두 번째
   호출이 이미 회전된 쿠키를 다시 보내(401 `AUTH_REFRESH_REUSED`) 로그인 상태에서 두 번째로 새로고침하면 로그인
   화면이 된다 — 운영 빌드는 한 번만 실행한다. 고치려면 시작 시 호출을 기존 single-flight `tryRefresh`로 보내면 되고,
@@ -72,7 +92,7 @@
   요소가 40px 미만이었다: 내비 링크 23px, Sign out 39px, 업로드 폼과 파일 선택기의 라디오 라벨 23px, Post·File
   목록의 링크와 작성자 버튼 23px(Post 행의 작성자 버튼은 39px), "Back to …" 링크 23px, 브라우저 기본 Choose
   File 버튼 21px. 이제 모두 40px 이상이다(40×40 토글과 같은 크기이며, WCAG 2.2 AA는 24px, Apple 지침은
-  44px다). 링크와 버튼에는 `padding-block`을 줘서 말줄임과 줄바꿈이 그대로 동작하게 했고, 라디오 라벨에는
+  44px이다). 링크와 버튼에는 `padding-block`을 줘서 말줄임과 줄바꿈이 그대로 동작하게 했고, 라디오 라벨에는
   `min-height`를, 기본 회색 버튼에는 앱의 버튼 모양으로 바꾸는 `::file-selector-button` 스타일을 항상(데스크톱
   포함) 적용했다. 640px보다 넓은 마우스 레이아웃은 그 밖에는 그대로다.
   [frontend/CLAUDE.ko.md](../frontend/CLAUDE.ko.md)에 규칙과 그 과정에서 찾은 함정을 적었다: 실행 중인 Vite dev
@@ -546,7 +566,6 @@
   의도한 5초가 아니라 35초 늦게나마 깔끔하게 종료했다. 이는 측정 전에 적어 뒀던 "ALB의
   등록 해제 지연을 우연히 넘겼다"는 서술이 암시하던 반대쪽(유예가 부족하면 SIGTERM이
   아예 안 간다)을 정정한다. 실제 ALB의 드레인 지연 숫자는 여전히 미확인이다.
-  항목의 "프로세스가 그냥 죽는다"는 문장은 틀렸다).
 - **`ROADMAP.md`(+ko): §7의 낡은 "미착수" 항목 2건 추가 정정 (2026-09-08)** — 앞서
   고친 ARM/Graviton 건과 같은 유형의 버그. "AWS Secrets Manager+ESO 연동"과
   "Kubernetes Ingress/ALB + TLS 인증서 프로비저닝" 둘 다 여전히 "존재하지 않는
@@ -706,7 +725,7 @@
 - **프론트엔드: 남은 모든 버튼에 키보드 포커스 표시 (2026-09-08)** — 위 터치 타겟 행이
   의도적으로 미착수로 남겨둔 focus-visible 절반을 닫는다. `FilePreviewTile.module.css`/
   `FileBoard.module.css`에 이미 있던 패턴 `:focus-visible { outline: 2px solid
-  var(--brand); outline-offset: 2px; }`를 새로 고안하지 않고 그대로 복붙해 파일 9개에
+  var(--brand); outline-offset: 2px; }`를 새로 고안하지 않고 그대로 옮겨 파일 9개에
   걸친 셀렉터 20개에 추가했다: `NavBar`(`.themeToggle`, `.signOut`), `PostBoard`
   (`.clearButton`, `.creatorButton`, `.pageButton`), `PostDetailPage`(`.primaryButton`,
   `.button`, `.deleteButton`), `CommentThread`(`.button`, `.deleteButton`,
@@ -888,7 +907,7 @@
   Group 2 `getFiles(take, skip)` 예시는 원래 갭에 "같은 과제"로 묶여 있었지만 이번엔
   손대지 않았다 — 여전히 미해결이며 ROADMAP.md > Unscheduled에서 추적 중이다.
 - **`deploy.sh`: 이미지 태그를 더 이상 `values-prod.yaml`에 고정된 값 그대로 믿지 않고
-  배포 시점에 직접 조회함 (2026-09-03, [ROADMAP.md](ROADMAP.md) §7)** — "고정 태그도
+  배포 시점에 직접 조회함 (2026-09-03, [ROADMAP.md](ROADMAP.ko.md) §7)** — "고정 태그도
   결국 낡는다"는 반복 재발 문제를 닫는다(2026-08-28 첫 발견, 2026-08-29/30 재발 —
   `MetricsModule`이 `dev`에 랜딩됐는데 아무것도 고정 이미지를 다시 빌드해주지 않아서
   라이브 pod가 `/metrics`에 계속 404를 냈던 사례). `deploy_helm()`이 이제 대상 브랜치를
@@ -915,7 +934,7 @@
 
 ### 추가
 - **S3 IRSA용 전용 Helm `ServiceAccount` — `default` ServiceAccount 범위 갭 해소
-  (2026-09-03, [ROADMAP.md](ROADMAP.md) §7)** — `app-infra/`의 S3 IRSA 역할이
+  (2026-09-03, [ROADMAP.md](ROADMAP.ko.md) §7)** — `app-infra/`의 S3 IRSA 역할이
   네임스페이스의 `default` ServiceAccount에 annotate돼 있어서(2026-08-28부터 알려진 갭 —
   ADR 0043의 Addendum과 `k8s/infra/terraform/README.md`에 기록), 그걸 쓰는 네임스페이스의
   모든 pod에 S3 접근 권한이 열려 있었다 — 이 앱의 pod만이 아니라. 새
@@ -1090,7 +1109,7 @@
   실제로 그대로 통한다는 걸 확인했다. 그 과정에서 `terraform plan`으로는 보이지
   않는 apply 잔재 두 가지를 겪었다 — 둘 다 클러스터 쪽 상태라 Terraform이
   추적하지 못한다. (1) 새로 추가된 `kube-prometheus-stack` 애드온
-  ([ADR 0047](ADR/0047-observability-prometheus-grafana.md))의 Helm 릴리스가
+  ([ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md))의 Helm 릴리스가
   `pending-install`에 고착됨 — 실제 파드는 이미 `Running` 상태였지만, install
   도중 끊기는 바람에 Helm 자체의 릴리스 레코드도, Terraform state도 이 리소스가
   생성됐다는 걸 전혀 모르는 상태였다. `helm uninstall kube-prometheus-stack -n
@@ -1541,9 +1560,9 @@
   산출물은 없다). 이번 수정은 그 결정을 앞지르지 않는다.
   **(2) 약 600px 아래에서 컨트롤 접근 불가.** 세 테이블 모두 `overflow-hidden` 래퍼 안에
   있었고 `admin/src` 어디에도 `overflow-x-auto`가 없었다(반응형 유틸리티도 콘솔 전체에 2개뿐).
-  375px 뷰포트에서 실측: Users는 272px가 잘려 Created·Role·Actions 열이 통째로 사라졌고 —
+  375px 뷰포트에서 실측: Users는 272px이 잘려 Created·Role·Actions 열이 통째로 사라졌고 —
   즉 역할 `<select>`와 Delete 버튼, 이 콘솔의 두 가지 운영 동작이 사라진 것이다 — Logs는
-  233px가 잘려 Detail 열이 통째로 가려졌다. 정작 페이지 자체는 오버플로 0을 보고해 아무 신호도
+  233px이 잘려 Detail 열이 통째로 가려졌다. 정작 페이지 자체는 오버플로 0을 보고해 아무 신호도
   없었고, 스크롤바도 사용자가 밀어볼 방법도 없었다. 세 래퍼를 `overflow-x-auto`로 바꿔 접근을
   복구했고 카드의 라운드 클리핑도 유지된다. 이는 **최소 조치**다 — 휴대폰에서도 테이블은 여전히
   테이블이며, 작은 화면 전용 레이아웃은 과제로 남아 있다(ROADMAP > 7). 375px(역할 select와
@@ -1819,7 +1838,7 @@
 
 - **`frontend/`: `PostDetailPage`, `CommentThread`, `CommentForm`을 CSS Modules로
   전환·재디자인 — 확정된 스타일 전면 개편의 5개 라우트 페이지 중 마지막**
-  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md) 항목 7). 각
+  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.ko.md) 항목 7). 각
   컴포넌트마다 동일 위치에 `*.module.css`를 배치했다(`PostDetailPage.module.css`,
   `CommentThread.module.css`, `CommentForm.module.css`) — 마크업 구조·상태·API 호출은
   그대로 두고 `style={{}}` → `className={styles.x}`만 바꿨다. `PostDetailPage`의
@@ -1836,12 +1855,12 @@
   `pnpm test:e2e`로 검증: `PostDetailPage`를 실제로 거치는 `posts.spec.ts`와
   `navigation.spec.ts`는 수정 없이 통과; `detail.spec.ts`의 무관한 기존 실패 1건
   (`FileDetailPage`의 private 재생 어서션이 `200`을 기대하지만, 이 환경의
-  `STORAGE_DRIVER=s3` 설정([ADR 0036](ADR/0036-s3-presigned-content-redirect.md))
+  `STORAGE_DRIVER=s3` 설정([ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md))
   때문에 `302`가 반환됨)은 이번 변경과 무관 — 이 작업이 건드린 파일은 그 실패에
   관여하지 않는다.
 - **`frontend/`: `PostBoard`, `PostForm`, `FilePicker`를 CSS Modules로 전환·재디자인.**
   확정된 스타일 전면 개편의 4단계
-  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md) 항목 6). 각 컴포넌트마다
+  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.ko.md) 항목 6). 각 컴포넌트마다
   동일 위치에 `*.module.css`를 배치했다(`PostBoard.module.css`, `PostForm.module.css`,
   `FilePicker.module.css`) — 마크업 구조·상태·API 호출은 그대로 두고 `style={{}}` →
   `className={styles.x}`만 바꿨다. `PostBoard.module.css`는 (`DashboardPage.module.css`를
@@ -1857,7 +1876,7 @@
   가능한 라디오 목록, 행 레이아웃, 페이지네이션 어디에서도 시각적 회귀가 없었다.
 - **`frontend/`: `FileDetailPage`와 `VisibilityBadge`를 CSS Modules로 전환·재디자인하고,
   오래된 제목 겹침 버그를 근본 원인 수준에서 수정.** 확정된 스타일 전면 개편의 3단계
-  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md) 항목 5). 두 컴포넌트 모두
+  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.ko.md) 항목 5). 두 컴포넌트 모두
   동일 위치에 `*.module.css`를 배치했다(`FileDetailPage.module.css`,
   `VisibilityBadge.module.css`) — 플레이어를 테두리·둥근 모서리 패널로 감쌌고, 공유 링크
   박스와 Manage 패널을 토큰 체계로 재디자인했으며, 앱 전역 `#root { text-align: center }`
@@ -1883,7 +1902,7 @@
   전부(private/public/unlisted — 공유 링크 박스와 public/unlisted의 실제 영상 재생 포함).
 - **`frontend/`: `LoginPage`와 파일 게시판(`DashboardPage` + `FileBoard` + `UploadForm`)을
   CSS Modules로 전환하고 재디자인.** 확정된 스타일 전면 개편의 2단계
-  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md) 항목 3-4), 아래 토큰 기반
+  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.ko.md) 항목 3-4), 아래 토큰 기반
   작업 위에 올라간 첫 페이지들이다. 각 컴포넌트마다 동일 위치에 `*.module.css`를
   배치했다(`LoginPage.module.css`, `DashboardPage.module.css`, `FileBoard.module.css`,
   `UploadForm.module.css`) — 마크업 구조·상태·API 호출은 그대로이고 `style={{}}` →
@@ -1899,7 +1918,7 @@
   확인했다.
 - **`frontend/`: 토큰 기반 테마 기반 작업 — `ThemeProvider` + 명시적 라이트/다크 토글,
   `NavBar`를 CSS Modules로 전환.** 확정된 스타일 전면 개편의 1단계
-  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.md), 2026-08-14 결정) — 이후
+  ([`frontend/docs/STYLE-PLAN.md`](../frontend/docs/STYLE-PLAN.ko.md), 2026-08-14 결정) — 이후
   페이지별 재디자인 프롬프트가 전부 이 토큰 세트에 의존한다. `index.css`의 기존
   `--accent`/`--bg`/`--text-h` 블록을 병기가 아니라 **교체**했다 — 같은 날 STYLE-PLAN.md가
   확정한 팔레트로: `--brand`/`--brand-hover`/`--brand-contrast`,
@@ -1953,150 +1972,150 @@
   `GET /file/:id/content` 설명을 모두 맞춰 갱신했다(EN+KO 전체).
 - **CI: `frontend-e2e`/`admin-e2e` Playwright 잡, `frontend/`·`admin/`의 lint/unit
   커버리지 추가** — 둘 다 `pnpm lint`, `pnpm test`, `pnpm e2e` 스크립트가 있었지만 어떤
-  CI 잡도 실행한 적이 없어서, 이 두 폴더의 변경 사항은 검증 없이 머지되고 있었습니다.
+  CI 잡도 실행한 적이 없어서, 이 두 폴더의 변경 사항은 검증 없이 머지되고 있었다.
   `frontend-lint`(oxlint)와 `admin-lint-and-unit`(eslint + vitest)는 각자의 작업
-  디렉터리와 `pnpm-lock.yaml`에 범위를 한정합니다(둘 다 pnpm 워크스페이스가 아님).
+  디렉터리와 `pnpm-lock.yaml`에 범위를 한정한다(둘 다 pnpm 워크스페이스가 아님).
   `frontend-e2e`/`admin-e2e`는 잡 전용 Postgres 서비스를 대상으로 백엔드를
   빌드+마이그레이션+기동한 뒤(원시 포트 체크 대신 `GET /health/live`를 기다림)
-  Playwright를 구동합니다 — `admin-e2e`는 `admin/e2e/seed-superadmin.mjs`로 고정된
-  CI 전용 자격 증명을 이용해 superadmin도 시딩합니다(매 실행마다 새로 만들고 버리는
-  DB라 안전). 기존 백엔드 잡들에도 `actions/setup-node`의 pnpm 스토어 캐시를 활성화했습니다
+  Playwright를 구동한다 — `admin-e2e`는 `admin/e2e/seed-superadmin.mjs`로 고정된
+  CI 전용 자격 증명을 이용해 superadmin도 시딩한다(매 실행마다 새로 만들고 버리는
+  DB라 안전). 기존 백엔드 잡들에도 `actions/setup-node`의 pnpm 스토어 캐시를 활성화했다
   — 캐시 경로를 찾으려면 pnpm이 `PATH`에 있어야 해서 `corepack enable`을 `setup-node`
-  앞으로 옮겼습니다.
+  앞으로 옮겼다.
 - **2026-08-12에 추가된 `userId` 필터·CSV 내보내기·검색·정렬에 대한 admin e2e 커버리지** —
-  `admin/README.md`의 "Open items"에 테스트가 없다고 기록돼 있던 기능들입니다.
+  `admin/README.md`의 "Open items"에 테스트가 없다고 기록돼 있던 기능들이다.
   `logs.spec.ts`에 "View all" 링크의 `userId` 필터(그 해제 버튼 포함) 검증과 CSV 내보내기
   검증(파일을 내려받아 헤더 행과 필터링된 데이터 행을 확인)이 추가됐고, `users.spec.ts`에
-  검색창 테스트와 정렬 가능한 헤더 테스트가 추가됐습니다. `pnpm e2e` — 10/10 통과.
+  검색창 테스트와 정렬 가능한 헤더 테스트가 추가됐다. `pnpm e2e` — 10/10 통과.
 - **CI: `docker-publish` 잡 — 프로덕션 이미지를 Docker Hub에 자동 푸시.** `build-and-push.sh`가
-  수동으로 하던 일을 자동화했습니다: `main` 푸시에서 테스트 잡들이 통과하면
+  수동으로 하던 일을 자동화했다: `main` 푸시에서 테스트 잡들이 통과하면
   `linux/amd64,linux/arm64` 대상으로 프로덕션 스테이지를 buildx로 빌드해
-  `bluecode1775/sharenpo`를 `:latest`와 `:{sha}` 태그로 푸시합니다. `--push`를 직접
-  사용했습니다(스크립트의 별도 빌드 후 `docker push` 단계는, 빌드 단계에 `--push`/`--output`이
+  `bluecode1775/sharenpo`를 `:latest`와 `:{sha}` 태그로 푸시한다. `--push`를 직접
+  사용했다(스크립트의 별도 빌드 후 `docker push` 단계는, 빌드 단계에 `--push`/`--output`이
   없어 멀티플랫폼 빌드의 아키텍처별 결과물을 버리게 되므로 — 같은 수정을
-  `build-and-push.sh`의 태깅에도 적용해, 이전엔 암묵적이던 `:latest` 태그를 명시했습니다).
-  **`ROADMAP.md`가 정한 계획보다 앞서 나간 것**입니다(GitHub Actions CD는 AWS 배포 대상이
-  정해질 때까지, 그리고 자체 ADR이 나올 때까지 기다리기로 돼 있었습니다), 그리고
+  `build-and-push.sh`의 태깅에도 적용해, 이전엔 암묵적이던 `:latest` 태그를 명시했다).
+  **`ROADMAP.md`가 정한 계획보다 앞서 나간 것**이다(GitHub Actions CD는 AWS 배포 대상이
+  정해질 때까지, 그리고 자체 ADR이 나올 때까지 기다리기로 돼 있었다), 그리고
   [ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md)가 기록한 기존의 개인용
-  `bluecode1775/sharenpo` 푸시와도 별개입니다 — 명시적 요청으로 추가했습니다.
+  `bluecode1775/sharenpo` 푸시와도 별개이다 — 명시적 요청으로 추가했다.
   `ROADMAP.md`의 GitHub Actions 행은 이제 이것을 계획대로 된 일이 아니라 이름 붙인
-  예외로 기록합니다.
+  예외로 기록한다.
 - **`GET /user` 검색·정렬 추가, `GET /audit-log` 관련 유저 필터 추가** — 둘 다
   `admin/README.md`의 "What was adapted" 표에 "이 백엔드가 지원하지 않아 제거"로
-  기록돼 있던 기능입니다(유저 검색은 admin 콘솔의 검색창, 관련 활동 필터는 유저 상세
+  기록돼 있던 기능이다(유저 검색은 admin 콘솔의 검색창, 관련 활동 필터는 유저 상세
   패널용). `GetUsersDto`에 `search`(email에 대한 대소문자 구분 없는 부분일치, 와일드카드
   이스케이프), `sortBy`(`createdAt`|`email`|`id`, `USER_SORT_FIELDS`로 화이트리스트),
-  `order`를 추가해 `GetFilesDto`의 ADR 0021 형태를 그대로 따랐습니다. `UserService.findAll`은
+  `order`를 추가해 `GetFilesDto`의 ADR 0021 형태를 그대로 따랐다. `UserService.findAll`은
   단순 `findAndCount()` 호출에서 `createQueryBuilder` 조립으로 바뀌었고, 페이지 경계를
-  결정적으로 만들기 위해 `id`를 tiebreaker로 덧붙입니다(`role`은 정렬 후보에서 의도적으로
+  결정적으로 만들기 위해 `id`를 tiebreaker로 덧붙인다(`role`은 정렬 후보에서 의도적으로
   제외 — 3단계 문자열 enum은 정렬 의미가 약함). `AuditLogQueryDto`에는 `userId`를
   추가했고, `AuditLogService.findAll`은 `actorId = userId`와 `targetId = userId`를
   OR로 묶어(둘 다 주어지면 각 브랜치에 `action`을 AND) "이 계정과 관련된 모든 기록"을
-  한쪽만이 아니라 양쪽 다 답하도록 했습니다. 마이그레이션은 없습니다 — `actorId`/`targetId`에는
+  한쪽만이 아니라 양쪽 다 답하도록 했다. 마이그레이션은 없다 — `actorId`/`targetId`에는
   아직 전용 인덱스가 없고(엔티티의 유일한 인덱스는 `(action, createdAt)`) 현재 데이터
-  규모에서는 무방하다고 판단했습니다; 실제 트래픽이 생기면 인덱스를 추가하면 됩니다. 새
-  ADR은 만들지 않았습니다 — 기존 GET /file parity 선례를 따랐습니다.
+  규모에서는 무방하다고 판단했다; 실제 트래픽이 생기면 인덱스를 추가하면 된다. 새
+  ADR은 만들지 않았다 — 기존 GET /file parity 선례를 따랐다.
 
 - **admin 콘솔이 두 필터를 모두 소비하도록 연결** — `admin/src/pages/users-page.tsx`에
   400ms 디바운스가 걸린 이메일 검색창(`search`에 연결)과, 클릭하면 `sortBy`/`order`를
-  ▲/▼ 표시와 함께 토글하는 ID/Email/Created 헤더가 추가됐습니다(`role`은
+  ▲/▼ 표시와 함께 토글하는 ID/Email/Created 헤더가 추가됐다(`role`은
   `USER_SORT_FIELDS`와 마찬가지로 제외). 유저 상세 패널에는 "Recent activity" 절이
   생겼고(`GET /audit-log?userId={id}&take=5`, actor 또는 target), 하단의 "View all →"
-  링크가 `logs-page.tsx`로 연결됩니다. `logs-page.tsx`는 이제 자신의 URL에서
+  링크가 `logs-page.tsx`로 연결된다. `logs-page.tsx`는 이제 자신의 URL에서
   `useSearchParams`로 `?userId=`를 읽어 필터에 반영하며(기존 `action` 필터와 AND) —
   이 백엔드 필터가 없어서 `admin/README.md`에 "근사하지 않고 제거"로 기록됐던 사용자별
-  감사 조각이 복원됐습니다. `actionColor`/`AuditLog`는 같은 작업에서
+  감사 조각이 복원됐다. `actionColor`/`AuditLog`는 같은 작업에서
   `dashboard-page.tsx`, `logs-page.tsx`, `users-page.tsx`에서 `admin/src/lib/audit.ts`로
-  분리했습니다 — 새 "Recent activity" 절까지 더하면 동일 로직이 네 번째로 중복될
-  참이었습니다. `dashboard-page.tsx`는 별도로 file/post 총계 통계 카드를 얻었습니다
+  분리했다 — 새 "Recent activity" 절까지 더하면 동일 로직이 네 번째로 중복될
+  참이었다. `dashboard-page.tsx`는 별도로 file/post 총계 통계 카드를 얻었다
   (`GET /file`/`GET /post`를 `take: 1`로 호출해 튜플의 개수만 읽음). `admin/README.md`와
-  그 `.ko.md`가 이전에 제거했던 기능이 돌아온 것을 반영하도록 갱신됐습니다. 백엔드
-  파일은 건드리지 않았고, 새 ADR도 없습니다 — 위 항목이 이미 도입한 DTO를 admin
-  프런트엔드가 소비하는 것뿐입니다.
+  그 `.ko.md`가 이전에 제거했던 기능이 돌아온 것을 반영하도록 갱신됐다. 백엔드
+  파일은 건드리지 않았고, 새 ADR도 없다 — 위 항목이 이미 도입한 DTO를 admin
+  프런트엔드가 소비하는 것뿐이다.
 
 - **Docker 이미지 arm64 지원 — `bcrypt`는 이미 잘 동작하고, 컴파일이 필요 없음**
   ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md), [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)의
   "bcrypt prebuilt는 전부 x64" 주장을 정정). ADR 0030이 상정했던 Terraform/노드
   그룹 결정이 아니라, 아키텍처를 통일한 단일 멀티플랫폼 이미지를
   (`docker buildx build --platform linux/amd64,linux/arm64`) 배포하려는 목적에서
-  시작됐습니다. 조사 과정에서 pnpm 10이 기본적으로 의존성 설치 스크립트를
+  시작됐다. 조사 과정에서 pnpm 10이 기본적으로 의존성 설치 스크립트를
   차단한다는 사실을 발견했고(`pnpm install` 자체 출력의
   `Ignored build scripts: ... bcrypt` 경고), ADR 0030의 주장과 합쳐져 처음엔
-  arm64에서 겹치는 두 가지 문제로 보였습니다 — `package.json`에
+  arm64에서 겹치는 두 가지 문제로 보였다 — `package.json`에
   `pnpm.onlyBuiltDependencies: ["bcrypt"]`를 추가해 스크립트 실행을 승인하고
   arm64에서는 `node-gyp` 컴파일로 폴백하게 했고, 이 항목도 원래 그렇게
-  적었습니다. **틀렸습니다.** 실제로 돌려보고 나서야 잡았습니다: `docker run
+  적었다. **틀렸다.** 실제로 돌려보고 나서야 잡았다: `docker run
   --platform linux/arm64 node:24.8.0 sh -c "npm install bcrypt"`의 로그엔
   `node-gyp-build` 실행만 있고 컴파일러 출력이 전혀 없으며, 같은 컨테이너 안에서
-  `require('bcrypt').hashSync(...)`가 성공합니다. `bcrypt@6.0.0`은 동작하는
+  `require('bcrypt').hashSync(...)`가 성공한다. `bcrypt@6.0.0`은 동작하는
   arm64/glibc prebuilt도 번들하고 있고, 이건 스크립트가 아니라
   `node-gyp-build`가 tarball에서 이미 풀린 파일을 읽어 찾아내는 방식이라 —
   pnpm의 스크립트 차단은 어느 아키텍처에서도 bcrypt에 실질적인 위협이 된 적이
-  없습니다. `onlyBuiltDependencies`는 `package.json`에 비용 없는 안전장치로
+  없다. `onlyBuiltDependencies`는 `package.json`에 비용 없는 안전장치로
   남겨뒀지만(번들 prebuilt가 없는 미래 버전/플랫폼을 대비), 지금 당장 고치는
-  건 아무것도 없습니다. 위의 독립된 arm64 컨테이너 실행으로 검증했고, 이
-  Dockerfile 자체의 `pnpm install`로는 아직 검증하지 않았습니다.
+  건 아무것도 없다. 위의 독립된 arm64 컨테이너 실행으로 검증했고, 이
+  Dockerfile 자체의 `pnpm install`로는 아직 검증하지 않았다.
 
 ### 변경
 - **`Dockerfile`/`docker-compose.yml`: 빌드 속도, 이미지 크기, 로컬 dev 튜닝.**
   `pnpm install --frozen-lockfile`가 이제 BuildKit 캐시 마운트
   (`--mount=type=cache,id=pnpm-store,target=/pnpm-store` + `--store-dir /pnpm-store`) 위에서
   실행되어, lockfile 변경으로 레이어 캐시가 무효화되더라도 pnpm의 콘텐츠 주소 저장소(store)는
-  유지되므로 의존성이 바뀔 때마다 레지스트리에서 패키지를 전부 다시 받지 않습니다 — 빌드
-  전용이며 런타임에는 영향이 없습니다. production 스테이지는 더 이상 `package.json`을
-  복사하지 않습니다: `backend/` 어디에서도 런타임에 이를 읽지 않고(`require`/`readFileSync`
+  유지되므로 의존성이 바뀔 때마다 레지스트리에서 패키지를 전부 다시 받지 않는다 — 빌드
+  전용이며 런타임에는 영향이 없다. production 스테이지는 더 이상 `package.json`을
+  복사하지 않는다: `backend/` 어디에서도 런타임에 이를 읽지 않고(`require`/`readFileSync`
   사용처를 grep으로 확인; Swagger 버전은 `main.ts`에 `'1.0'`으로 하드코딩됨) 죽은 파일이었기
-  때문입니다. `docker-compose.yml`의 `db`/`api` 서비스는 로그 증가를 제한합니다(`json-file`
+  때문이다. `docker-compose.yml`의 `db`/`api` 서비스는 로그 증가를 제한한다(`json-file`
   드라이버, `max-size: 10m`, `max-file: 3`) — 기본 드라이버는 크기 제한이 없어 오래 켜두는
-  로컬 dev 컨테이너에서 로그가 무한정 쌓일 수 있었습니다. 스테이지 이름을 `build`/`runtime`에서
-  `development`/`production`으로 변경했습니다(순수 라벨 변경 — 다른 파일이 `--target`/
+  로컬 dev 컨테이너에서 로그가 무한정 쌓일 수 있었다. 스테이지 이름을 `build`/`runtime`에서
+  `development`/`production`으로 변경했다(순수 라벨 변경 — 다른 파일이 `--target`/
   `--from=`으로 기존 별칭을 참조하지 않음을 확인함). distroless/multi-arch와 compose
-  `restart` 정책은 검토했지만 적용하지 않았습니다: 전자는 ADR 0030의 미충족 전제조건으로 이미
+  `restart` 정책은 검토했지만 적용하지 않았다: 전자는 ADR 0030의 미충족 전제조건으로 이미
   보류된 상태이고, 후자는 편의성과 크래시 루프를 조용히 감추는 것 사이의 실질적인 트레이드오프가
-  있어 이번에 임의로 결정하지 않았습니다.
+  있어 이번에 임의로 결정하지 않았다.
 
 ### 수정
 - **`ARCHITECTURE.md`(.ko): `GET /user` 행이 여전히 검색/정렬 이전의 `findAndCount()`
-  호출을 서술하고 있었습니다** — `d889f73`가 이를 `GetUsersDto`/`createQueryBuilder`
-  조립으로 대체한 이후 오래된 상태였습니다. 실제
+  호출을 서술하고 있었다** — `d889f73`가 이를 `GetUsersDto`/`createQueryBuilder`
+  조립으로 대체한 이후 오래된 상태였다. 실제
   `take`/`skip`/`search`/`sortBy`/`order` 형태를 서술하도록 갱신했고, `GET /file` 행과
-  동일한 형태로 맞췄습니다(ADR 0021 대응). 이 문서의 다른 오래된 서술(RBAC 이전
+  동일한 형태로 맞췄다(ADR 0021 대응). 이 문서의 다른 오래된 서술(RBAC 이전
   `PATCH`/`DELETE /user` 문구, Module Map에서 빠진 Post/Comment/Storage/Health/
-  TempCleanup 모듈)은 이번 범위 밖입니다 — CLAUDE.md의 Known Gaps가 이미
-  `ARCHITECTURE.md` 전체 감사를 별도 작업으로 추적하고 있습니다.
+  TempCleanup 모듈)은 이번 범위 밖이다 — CLAUDE.md의 Known Gaps가 이미
+  `ARCHITECTURE.md` 전체 감사를 별도 작업으로 추적하고 있다.
 - **`admin/`: 제네릭한 "Admin Panel" 브랜딩과 `vercel.json`의 죽은 Chat Project CSP
-  도메인** — 2026-07-30에 수정 없이 이식됐던 잔재입니다(`admin/README.md` 적응 표의
+  도메인** — 2026-07-30에 수정 없이 이식됐던 잔재이다(`admin/README.md` 적응 표의
   "Deploy config" 행이 `vercel.json`을 의도적으로 손대지 않았다고 기록해 둔 부분).
   `index.html`의 `<title>`을 `"Upload Board Admin"`으로 바꾸고, `<head>`에 연결한 새
-  `admin/public/favicon.svg`("UB" 이니셜 마크)를 추가했습니다(색상·레이아웃은 그대로).
+  `admin/public/favicon.svg`("UB" 이니셜 마크)를 추가했다(색상·레이아웃은 그대로).
   `vercel.json`의 CSP `connect-src`는 더 이상 Chat Project의 실제 Railway 배포 주소
-  (`https://chat-project-production-3b22.up.railway.app`)를 가리키지 않습니다 —
+  (`https://chat-project-production-3b22.up.railway.app`)를 가리키지 않는다 —
   `http://localhost:3000`(이 백엔드의 로컬 개발 기본값, `.env.example`의 `BASE_URL`)으로
-  교체했으며, 이는 실제 배포 도메인이 아니라 명시적 플레이스홀더입니다: Stage 4가 아직 이
-  백엔드를 어디에 호스팅할지 정하지 않았으므로, 정해지면 다시 갱신해야 합니다. 배포
-  대상은 여전히 Vercel로 유지하기로 했으나(개발자와 확인함) 실제 배포는 아직 없습니다.
-  `admin/README.md`/`.ko.md`에 두 수정을 기록한 "출처 정리" 절이 추가됐습니다.
+  교체했으며, 이는 실제 배포 도메인이 아니라 명시적 플레이스홀더이다: Stage 4가 아직 이
+  백엔드를 어디에 호스팅할지 정하지 않았으므로, 정해지면 다시 갱신해야 한다. 배포
+  대상은 여전히 Vercel로 유지하기로 했으나(개발자와 확인함) 실제 배포는 아직 없다.
+  `admin/README.md`/`.ko.md`에 두 수정을 기록한 "출처 정리" 절이 추가됐다.
 - **`Dockerfile`: `pnpm prune --prod`가 무한정 멈추는 문제** — 위 캐시 마운트 변경 때문에
-  발생했습니다. `pnpm install`에 붙인 `--mount=type=cache`는 그 RUN 명령에만 존재하는데,
+  발생했다. `pnpm install`에 붙인 `--mount=type=cache`는 그 RUN 명령에만 존재하는데,
   다음 RUN(`pnpm build && pnpm prune --prod`)에는 더 이상 `/pnpm-store`가 없었고,
   `pnpm prune`이 더 이상 읽을 수 없는 store에서 링크된 `node_modules`를 발견하고는
-  "처음부터 지우고 재설치할까요? (Y/n)"라는 대화형 프롬프트로 넘어갔습니다. Docker 빌드에는
-  표준 입력이 없으므로 이 프롬프트는 영원히 응답을 받지 못하고 빌드가 멈춥니다(네트워크가
+  "처음부터 지우고 재설치할까요? (Y/n)"라는 대화형 프롬프트로 넘어갔다. Docker 빌드에는
+  표준 입력이 없으므로 이 프롬프트는 영원히 응답을 받지 못하고 빌드가 멈춘다(네트워크가
   느려서가 아니라 이것이 앞선 검증 빌드가 끝나지 않았던 진짜 이유이며, 그 과정에서 남은
-  orphan BuildKit 세션 두 개를 이후 `docker builder prune`으로 정리해야 했습니다).
+  orphan BuildKit 세션 두 개를 이후 `docker builder prune`으로 정리해야 했다).
   `pnpm prune`에는 store 경로를 지정할 `--store-dir` 옵션이 없어서(`pnpm prune --help`로
   확인) 같은 캐시(`id=pnpm-store`)를 build+prune RUN에도 마운트해 두 단계 모두에서 store가
-  보이게 하는 방식으로 고쳤습니다. Dockerfile을 읽는 것만으로는 못 잡고, 실제로
-  `docker build`를 실행해서야 발견했습니다.
+  보이게 하는 방식으로 고쳤다. Dockerfile을 읽는 것만으로는 못 잡고, 실제로
+  `docker build`를 실행해서야 발견했다.
 - **`.dockerignore`가 백엔드와 무관한 콘텐츠 약 926MB를 매 빌드마다 조용히 업로드하고
-  있었습니다.** `k8s`가 목록에 없어서 `k8s/infra/terraform/.terraform`(923MB —
+  있었다.** `k8s`가 목록에 없어서 `k8s/infra/terraform/.terraform`(923MB —
   Terraform provider 바이너리와 `vpc` 모듈 자체의 중첩 git 클론. 이전 커밋에서
   `.gitignore`에는 이미 추가됐지만, `.dockerignore`는 `.gitignore`를 읽지 않는 별개의
   메커니즘이라 반영되지 않았음)와 `assets/files/sample.mp4`(3MB, Dockerfile에서
   참조하지 않는 README용 데모 파일)가 매번 빌드 컨텍스트에 포함됐고, 플랫폼별로 컨텍스트를
-  전송하는 멀티플랫폼 `buildx build`에서는 그만큼 더 낭비됐습니다. 둘 다 이제
+  전송하는 멀티플랫폼 `buildx build`에서는 그만큼 더 낭비됐다. 둘 다 이제
   제외했으며, 최상위 항목 전체를 `du -sh`로 재확인해 그 외에 빠뜨린 큰 항목이 없음을
-  확인했습니다.
+  확인했다.
 
 ### 추가
 - **`frontend/`: Posts를 홈으로 승격, 파일 보드를 `/files`로 이동 — 게시글/댓글 보드 UI를 위한
@@ -2377,7 +2396,7 @@
   ([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)/
   [0026](ADR/0026-file-visibility-implementation.ko.md)/
   [0027](ADR/0027-media-type-expansion-implementation.ko.md)) — 위 백엔드 항목 둘이 남긴
-  breaking-change 공백을 닫는다([ROADMAP.md](ROADMAP.md) > 미배정). 파일 보드
+  breaking-change 공백을 닫는다([ROADMAP.md](ROADMAP.ko.md) > 미배정). 파일 보드
   (`frontend/src/features/files/FileBoard.tsx`)는 `GET /file`의 ADR 0021 쿼리 표면
   전체(디바운스된 검색, 정렬 필드/순서, 작성자 ID 필터, 페이지네이션)와 행마다
   `VisibilityBadge`를 얻는다. `FileDetailPage`(`/view/:id`)는 `fileUrl`을 접근 제어된
@@ -2605,7 +2624,7 @@
   ADR 0022가 그것에 답한다. *(2) 토큰 절약* — 수단. Chat Project의 콘솔은 **같은** 3단계 계층을
   대상으로 만들어졌기에(ROADMAP은 이 프로젝트의 RBAC 설계를 "Chat-project style"로 기록해 뒀다),
   그 사용자 페이지에 역할 컬럼, 배정 컨트롤, 사용자별 상세 패널, 사용자별 감사 조각이 이미 다
-  있다. 여기에 도메인 무관 골격(라우터, 라우트 가드, Zustand 인증 스토어, 단일 비행 무음 갱신
+  있다. 여기에 도메인 무관 골격(라우터, 라우트 가드, Zustand 인증 스토어, single-flight silent refresh
   가드, axios 인터셉터, Playwright·Vitest 하네스)까지 얹힌다. 이를 가져오는 비용은 프롬프트로
   하나씩 다시 생성하는 토큰의 극히 일부다 — 아낀 토큰은 API 차이분에 쓴다. **적응은 역할 관리
   조각에서 시작한다**: `PATCH /user/:id/role`, `GET /user`, `GET /user/:id`, `DELETE /user/:id`,

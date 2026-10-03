@@ -15,7 +15,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 **Stage 4의 "VOD 재생 접근 제어" 행을 일반화**했다 — 파일 가시성(공개/비공개/
 링크공유), 전체 미디어의 접근 제어 서빙, 미디어 타입 확장으로, 프로젝트 창립 목표를
 다시 정리하며 드러난 공백이다. 아래 모든 항목은 각각 독립된 설계·검토를 거치는
-전용 작업으로 진행한다 ([CLAUDE.md](../CLAUDE.md) > Scope Discipline).
+전용 작업으로 진행한다 ([CLAUDE.md](../CLAUDE.ko.md) > Scope Discipline).
 
 > **정합성 안내**: 이 계획의 항목 중 CLAUDE.md가 "명시적 요청 없이는 제안 금지"로
 > 표시한 것들(CI, Docker, 클라우드 스토리지/배포)은 **2026-07-23 명시적 결정**으로
@@ -161,14 +161,14 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 ## 2. 방법론
 
 - **전용 작업 단위.** 모든 로드맵 항목은 자체 설계·검토·문서화를 갖춘 독립
-  작업이다 — [CLAUDE.md](../CLAUDE.md) > Scope Discipline의 로드맵 차원 재서술이다.
+  작업이다 — [CLAUDE.md](../CLAUDE.ko.md) > Scope Discipline의 로드맵 차원 재서술이다.
   묶음 처리도, 부수 작업도 없다.
 - 6절의 단계(Stage)는 **의존 순서에 따른 묶음일 뿐 마일스톤이 아니다**: 진행은
   항목 단위로 이뤄지며, 단계 경계를 넘는 데 별도의 의식은 없다.
 
 ## 3. 설계 기준
 
-**동결 (변경 없음)** — 기존 3축, [CLAUDE.md](../CLAUDE.md)의 Never Do 그룹 1–3:
+**동결 (변경 없음)** — 기존 3축, [CLAUDE.md](../CLAUDE.ko.md)의 Never Do 그룹 1–3:
 런타임 안전, 데이터 무결성, 보안. 모든 로드맵 작업은 이 기준을 통과해야 하며,
 기준 자체는 로드맵의 대상이 아니다.
 
@@ -229,7 +229,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   미구현이다.
 - **결정**: 실제 업로드 게시판으로 확장 — 게시글이 업로드 파일을 참조하는
   post/comment 도메인. 엔티티 관계(post ↔ `FileEntity`, comment ↔ post/user)는
-  ([CLAUDE.md](../CLAUDE.md) > Scope Discipline의 스키마 변경 규약에 따라) 먼저 평문으로
+  ([CLAUDE.md](../CLAUDE.ko.md) > Scope Discipline의 스키마 변경 규약에 따라) 먼저 평문으로
   기술했고, 검토된 마이그레이션은 후속 구현 과제에서 반영한다.
 - **스키마는 2026-07-30 확정됐다** ([ADR 0023](ADR/0023-board-domain-schema.ko.md)) —
   구현에 앞선 설계 게이트이며 코드는 없다. 글은 자기 작성자가 올린 파일 하나만
@@ -612,14 +612,14 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   순서 의존성·재시도·전파 대기 로직)를 스크립트나 CI 파이프라인으로 감싸야 한다는
   근거가 된다 — 그리고 그것이 바로 위 ADR 0046이 지금 한 일이다.
 - ~~**Helm 차트에 전용 `ServiceAccount` 템플릿 추가 — `default` ServiceAccount 수동 IRSA
-  어노테이션을 대체**~~ — **차트 쪽 절반은 2026-09-02에 landing** (2026-08-28 기록) —
+  어노테이션을 대체**~~ — **차트 쪽 절반은 2026-09-02에 랜딩** (2026-08-28 기록) —
   `k8s/helm/templates/serviceaccount.yaml`(기본 비활성, `serviceAccount.create: false`,
   `ingress.yaml`과 같은 패턴, ADR 0041)이 이제 존재한다. `deployment.yml`은 새 헬퍼
   `sharenpo.serviceAccountName`을 통해 `serviceAccountName`을 여기 연결하며, 비활성일 땐
   `"default"`로 떨어져 기존 릴리스에 영향이 없다. `migration-job.yml`은 플래그가 켜져 있어도
   일부러 계속 `default`로 돈다 — DB 자격증명만 읽을 뿐 S3를 건드리지 않으므로, 앱의 IRSA
   신원을 붙이면 이유 없이 권한만 넓어진다(전체 사용법은 `k8s/helm/README.ko.md`의 "IRSA용
-  전용 ServiceAccount" 참고). **아직 landing 안 됨**: `app-infra/`의 `aws_iam_role.app` 신뢰
+  전용 ServiceAccount" 참고). **아직 랜딩하지 않음**: `app-infra/`의 `aws_iam_role.app` 신뢰
   정책은 여전히 `app-infra/main.tf`에 `system:serviceaccount:default:default`로 하드코딩돼
   있다 — 오늘 `serviceAccount.create`를 켜면 이 역할이 아직 신뢰하지 않는 ServiceAccount를
   만들 뿐이라, 그 정책을 갱신하기 전까진 IRSA 인증이 여전히 실패한다. 그 Terraform 쪽 절반이
@@ -664,7 +664,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   예시는 처음부터 그 결정을 반영하고 있었다 — 그 결정이 내려질 당시 `deploy.sh`/
   `values-prod.yaml`은 아직 존재하지도 않았고, 이틀 뒤 만들어지면서 그 결정을 따라가는
   대신 실제 첫 라이브 배포를 따라 `upload-board`로 드리프트했을 뿐이다. 전체 경위는
-  [CHANGELOG.md](CHANGELOG.md) `[Unreleased] > 수정` 참고.
+  [CHANGELOG.ko.md](CHANGELOG.ko.md) `[Unreleased] > 수정` 참고.
 - ~~**로그인 화면의 마크를 교체하거나 걷어내고, 쓰이지 않는 아이콘 스프라이트를 삭제**~~
   (2026-08-25 기록) — **2026-09-07 완료**. Sharenpo 통일 작업(`0a14039`)이 로그인 카드에
   워드마크와 나란히 `<img src="/favicon.svg">` 락업을 넣어 이름 변경 도중 마크를 새로 만드는
@@ -716,7 +716,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 - ~~키보드 포커스 표시 공백~~ (위 행에서 2026-08-24에 측정, 2026-09-08에 해결) — 위 행이
   `:focus-visible`이 없다고 나열했던 테두리/배경이 있는 버튼 전부가 이제
   `FilePreviewTile`/`FileBoard`에서 이미 검증된 패턴(`outline: 2px solid var(--brand);
-  outline-offset: 2px;`)을 그대로 복붙해 갖췄다 — 새로 고안하지 않았다: `NavBar`
+  outline-offset: 2px;`)을 그대로 옮겨 갖췄다 — 새로 고안하지 않았다: `NavBar`
   (`.themeToggle`, `.signOut`), `PostBoard`(`.clearButton`, `.creatorButton`,
   `.pageButton`), `PostDetailPage`(`.primaryButton`, `.button`, `.deleteButton`),
   `CommentThread`(`.button`, `.deleteButton`, `.loadMoreButton`),
@@ -1139,7 +1139,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   받았고(메시지의 개수도 정확), `deleteFiles=true` 재확인 요청이 실제로 연쇄
   삭제됐으며, `psql`/파일시스템 직접 확인으로 유저 행·파일 행·저장된 실물 파일이
   전부 실제로 사라졌음을 확인했다 — 200 응답만 본 것이 아니다
-  ([CLAUDE.md](../CLAUDE.md) > Project Overview).
+  ([CLAUDE.md](../CLAUDE.ko.md) > Project Overview).
 - ~~고아 `granted_` 파일 회수~~ (2026-07-30 기록,
   [ADR 0020](ADR/0020-account-deletion-cascade.ko.md)) — **설계 랜딩 2026-09-05**
   ([ADR 0051](ADR/0051-orphaned-granted-file-reclaim.ko.md)): 이 항목이 요구했던
@@ -1270,7 +1270,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 - 사전-의무화 서비스의 코드 내 트레이드오프 문서화 공백 (2026-08-02 기록) — 코드베이스
   전수 조사 결과, 트레이드오프 서술은 촘촘하되 **계층화**되어 있다: ADR은 결정 수준
   트레이드오프를 빠짐없이 담고(`## Consequences` 절 + 기각안, ADR당 마커 5~39개), 호출
-  지점 수준 — 의무 목적/이유/방법 블록의 `이유` 라인([CLAUDE.md](../CLAUDE.md) > File Creation
+  지점 수준 — 의무 목적/이유/방법 블록의 `이유` 라인([CLAUDE.md](../CLAUDE.ko.md) > File Creation
   Convention) — 은 게시판/가시성 세대 서비스에서는 촘촘하지만(`file.service` 17블록,
   `post.service` 12, `comment.service` 8), **가장 오래된 `auth.service.ts`에는 0블록으로
   부재**하며 그 트레이드오프는 [ADR 0001](ADR/0001-basic-token-authentication.ko.md) /
@@ -1496,19 +1496,39 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   `^1.20.0`). `pnpm audit --prod`는 알려진 취약점이 없다고 나오고, lint(에러 없음)·`pnpm test`(24/24)·
   `pnpm build`가 통과한다. 단위 테스트가 `axios`를 mock으로 대체하므로 401 → 갱신 → 재시도 인터셉터 흐름은
   실제 axios 1.20.0과 로컬 서버로 따로 돌려 확인했다. `admin-e2e`는 아직 돌지 않았고 CI가 돌린다.
-- **`.ko.md` 네 개의 한국어 점검** — **2026-10-02 보류, 시작하지 않음.** CLAUDE.md의 문서 규약은 기존
-  `.ko.md`를 건드리면 같은 변경에서 파일 전체를 다시 읽고 직역처럼 읽히는 부분을 고치라고 한다(한국어
-  표현만, 영어판에 없는 내용은 절대 넣지 않는다). 2026-10-01/02 프론트엔드 세션은 `.ko.md` 7개를 수정했고
-  그중 3개는 전체를 다시 읽었다: `docs/ADR/0060-frontend-same-alb-path-routing.ko.md`,
-  `frontend/docs/STYLE-PLAN.ko.md`, `frontend/docs/API-CONTRACT.ko.md`(이 점검에서 ADR 0060의
-  번역되지 않은 "Addendum" 제목 하나를 고쳤다). 나머지 4개는 다시 읽지 않았다: `docs/CHANGELOG.ko.md`(약
-  2,850줄, 이번 세션에 81줄 추가), `docs/ROADMAP.ko.md`(약 1,590줄, 21줄 추가), `frontend/CLAUDE.ko.md`(177줄,
-  27줄 추가), `frontend/README.ko.md`(126줄, 13줄 추가). 추가한 부분은 줄 단위 번역이 아니라 한국어 문장으로
-  썼지만 그 주변은 다시 읽지 않았다. 착수할 때의 범위: 이 네 파일 전체, 한국어 표현만. 제목 계층, 표 구성,
-  링크, 코드 블록, 식별자, 수치는 영어판과 똑같이 두고, 끝나면 EN/KO 대칭(제목·항목 수)과 링크를 확인한다.
-  `CHANGELOG.ko.md`와 `ROADMAP.ko.md`가 작업량 대부분이라 `frontend/`의 두 파일과 따로 진행해도 된다.
-  명시적으로 요청받을 때, 또는 이 네 파일 중 하나를 크게 고칠 때 다시 본다. CLAUDE.md > Known Gaps에도
-  올려 두었다.
+- ~~**`.ko.md` 네 개의 한국어 점검**~~ — **2026-10-02 보류, 2026-10-04 명시적 요청으로 완료.** CLAUDE.md의
+  문서 규약은 기존 `.ko.md`를 건드리면 같은 변경에서 파일 전체를 다시 읽고 직역처럼 읽히는 부분을 고치라고
+  한다(한국어 표현만, 영어판에 없는 내용은 절대 넣지 않는다). 2026-10-01/02 프론트엔드 세션은 `.ko.md` 7개를
+  수정했고 그중 3개는 전체를 다시 읽었다. 나머지 넷, 곧 `docs/CHANGELOG.ko.md`(약 2,850줄),
+  `docs/ROADMAP.ko.md`(약 1,590줄), `frontend/CLAUDE.ko.md`, `frontend/README.ko.md`를 2026-10-04에 전체
+  다시 읽었다. 찾은 것: 2026-08-12 무렵 `CHANGELOG.ko.md` 항목 한 구간(약 140줄)이 나머지 파일과 달리
+  "-습니다" 문체여서 "-다"로 맞췄고, 문장 조각 하나가 중복돼 있었고, 직역 표현 몇 곳과 잘못된 조사가
+  있었고, `.ko.md`가 있는데도 영문판을 가리키던 링크 대상이 18개였다. 제목 계층, 표 구성, 코드 블록,
+  식별자, 수치는 영어판과 똑같이 두었고, 끝난 뒤 EN/KO의 제목·목록·표 행 수와 상대 링크를 확인했다
+  ([CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-04). 덧붙이는 메모 하나:
+  `docs/ADR/0022-admin-console-import-from-chat-project.ko.md`는 이 네 파일 밖이지만 single-flight를
+  "단일 비행"으로 옮긴 곳이 세 군데 있다. CLAUDE.md > Known Gaps의 항목도 줄을 그었다.
+- **프론트엔드: 2026-10-02 실제 데이터 점검에서 남은 레이아웃 두 건** — **2026-10-02 발견, 고치지 않음,
+  일정 없음.** (1) Post 목록: 작성자 이메일이 아주 길면(테스트 데이터에서 89자) 이메일이 행의 대부분을
+  차지해서 제목이 필요 이상으로 짧게 잘린다(1366px에서 "Post with audio …"). (2) 360px 이하의 File 상세:
+  제목이 visibility 배지 옆에서 좁아져 숫자 중간에서 줄이 바뀌고, 긴 작성자 이메일은 군데군데 단어
+  중간에서 끊긴다. 두 경우 모두 넘치거나 동작이 멈추지는 않으며 외관 문제다. 첫 번째는
+  [CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-02의 "하지 않은 것"에 있고, 두 번째는 지금까지 세션
+  기록에만 있었다. 착수할 때의 범위: `PostBoard.module.css`(행 레이아웃)와
+  `FileDetailPage.module.css`(헤더), 긴 이메일 데이터로 다시 측정. 명시적으로 요청받을 때 다시 본다.
+- **프론트엔드: single-flight 리프레시는 한 탭만 막는다** — **2026-10-02 기록, 변경 계획 없음.**
+  `tryRefresh()`는 진행 중인 promise를 모듈 메모리에 두므로 한 탭 안의 리프레시만 직렬화한다. 백엔드에는
+  유예 구간이 없다. `rotateRefreshToken`은 해시가 어긋나면 무조건 앵커를 지우고 `AUTH_REFRESH_REUSED`로
+  답한다. 그러므로 코드대로라면 두 탭이 같은 순간에 같은 쿠키로 리프레시할 때 세션이 끝날 수 있다. 재현은
+  하지 못했다: 눈에 보이는 Chrome에서 탭 두 개를 같은 순간에 열었을 때 한 번 시도해 둘 다 `201`이었고,
+  다른 타이밍은 시험하지 않았으며 그때 통과한 이유도 밝히지 못했다. `frontend/CLAUDE.md` > 인증 불변식과
+  `frontend/docs/API-CONTRACT.md` > 회전과 재사용을 본다. 탭 여러 개를 열어 둔 채 로그아웃됐다는 보고가
+  들어오면 다시 본다.
+- **프론트엔드: Chrome 시크릿 창 한 곳에서 Choose File 대화상자가 열리지 않았다** — **2026-10-02 기록,
+  원인 모름.** "Choose File이 안 눌린다"는 보고는 재현하지 못했다: Chromium(Playwright), Edge, 일반 Chrome
+  창에서는 대화상자가 열렸고, Chrome 시크릿 창 하나는 처음에 열리지 않다가 나중에 열렸다. 코드에서 바뀐
+  것은 `906ce3c`의 stale input 수정뿐이다([CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-02). 다시 나타나면
+  Chrome 버전, 그 창의 확장 프로그램, `chrome://policy`, 다른 사이트의 파일 선택창이 열리는지를 적어 둔다.
 - **악성코드 스캔 게이트가 `null` 판정을 통과시킨다** — **2026-10-03 발견, 같은 날 후속 과제로 결정,
   시작하지 않음.** 2026-10-03 백엔드 의존성 점검에서, `clamd`가 연결을 정상적으로 닫았는데 응답이 비어 있거나
   `COMMAND READ TIMED OUT`이거나 `OK`/`FOUND`/`ERROR` 어느 쪽도 아니면 `clamscan`의 `scanStream`이
@@ -1539,7 +1559,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 
 | 항목 | 비고 |
 |---|---|
-| 2026-08-28 철거 이후 재배포로 다시 안정 상태에 도달 | 3-state Terraform(`cluster` → `app-infra` → `addons`) apply와 Helm 앱 설치를 다시 실행해, 2026-08-28 항목이 예고한 "같은 순서, 같은 `deploy.sh all`"이 실제로 그대로 통한다는 걸 확인했다. `terraform plan`으로는 보이지 않는 apply 잔재 두 가지를 겪었다 — 둘 다 Terraform이 추적하지 못하는 클러스터 쪽 상태다. (1) 새로 추가된 `kube-prometheus-stack` 애드온([ADR 0047](ADR/0047-observability-prometheus-grafana.md))의 Helm 릴리스가 `pending-install`에 고착됨 — 실제 파드는 이미 `Running` 상태였지만, install 도중 끊기는 바람에 Helm 자체의 릴리스 레코드도 Terraform state도 이 리소스가 생성됐다는 걸 전혀 모르는 상태였다. `helm uninstall kube-prometheus-stack -n kube-prometheus-stack` 실행 후 `addons/`에서 깨끗하게 `terraform apply`를 다시 돌려 `deployed`(revision 1)로 재생성했다. (2) 앱 Helm 릴리스(`upload-board`)가 pre-install 마이그레이션 Job에서 실패함(`CreateContainerConfigError: secret "upload-board-project-app-secrets" not found`, revision 1) — 원인은 ESO `SecretStore`/`ExternalSecret` 일회성 수동 적용과 `default` ServiceAccount의 IRSA 어노테이션(`k8s/infra/terraform/README.md`의 "After all three apply" 단계)이 철거 이후 다시 수행되지 않았기 때문이었다. 둘 다 Terraform 재적용으로는 재현되지 않는 클러스터 쪽 수동 단계다. `app-infra/`에서 `terraform output -raw external_secrets_manifest \| kubectl apply -f -`로 고쳤고(`externalsecret/upload-board-project-app-secrets`가 `SecretSynced`/`True`인 것까지 확인), 이어서 `kubectl annotate serviceaccount default eks.amazonaws.com/role-arn=$(terraform output -raw app_iam_role_arn)`를 실행했다 — 릴리스를 재시도하니 revision 2로 `deployed`에 도달했다. 실제로 확인한 결과: 마이그레이션 Job `Complete 1/1`, 앱 파드 `1/1 Running`, `GET /health/live`와 `GET /health/ready`(후자는 실제 DB 왕복 포함) 모두 `200 {"status":"ok"}` 응답. |
+| 2026-08-28 철거 이후 재배포로 다시 안정 상태에 도달 | 3-state Terraform(`cluster` → `app-infra` → `addons`) apply와 Helm 앱 설치를 다시 실행해, 2026-08-28 항목이 예고한 "같은 순서, 같은 `deploy.sh all`"이 실제로 그대로 통한다는 걸 확인했다. `terraform plan`으로는 보이지 않는 apply 잔재 두 가지를 겪었다 — 둘 다 Terraform이 추적하지 못하는 클러스터 쪽 상태다. (1) 새로 추가된 `kube-prometheus-stack` 애드온([ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md))의 Helm 릴리스가 `pending-install`에 고착됨 — 실제 파드는 이미 `Running` 상태였지만, install 도중 끊기는 바람에 Helm 자체의 릴리스 레코드도 Terraform state도 이 리소스가 생성됐다는 걸 전혀 모르는 상태였다. `helm uninstall kube-prometheus-stack -n kube-prometheus-stack` 실행 후 `addons/`에서 깨끗하게 `terraform apply`를 다시 돌려 `deployed`(revision 1)로 재생성했다. (2) 앱 Helm 릴리스(`upload-board`)가 pre-install 마이그레이션 Job에서 실패함(`CreateContainerConfigError: secret "upload-board-project-app-secrets" not found`, revision 1) — 원인은 ESO `SecretStore`/`ExternalSecret` 일회성 수동 적용과 `default` ServiceAccount의 IRSA 어노테이션(`k8s/infra/terraform/README.md`의 "After all three apply" 단계)이 철거 이후 다시 수행되지 않았기 때문이었다. 둘 다 Terraform 재적용으로는 재현되지 않는 클러스터 쪽 수동 단계다. `app-infra/`에서 `terraform output -raw external_secrets_manifest \| kubectl apply -f -`로 고쳤고(`externalsecret/upload-board-project-app-secrets`가 `SecretSynced`/`True`인 것까지 확인), 이어서 `kubectl annotate serviceaccount default eks.amazonaws.com/role-arn=$(terraform output -raw app_iam_role_arn)`를 실행했다 — 릴리스를 재시도하니 revision 2로 `deployed`에 도달했다. 실제로 확인한 결과: 마이그레이션 Job `Complete 1/1`, 앱 파드 `1/1 Running`, `GET /health/live`와 `GET /health/ready`(후자는 실제 DB 왕복 포함) 모두 `200 {"status":"ok"}` 응답. |
 
 ### 2026-08-28
 

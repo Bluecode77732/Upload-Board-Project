@@ -58,6 +58,14 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   from the backend 2026-09-07 — it never had a live caller here.)
 - On refresh failure (including `AUTH_REFRESH_REUSED`), the session is over:
   clear the token and route to `/login`.
+- **Every refresh goes through `tryRefresh()`** (`client.ts`, single-flight). The backend keeps one
+  refresh anchor per account and has no grace window, so a second `POST /auth/token/refresh` that
+  carries the cookie the first one just rotated reads as a replay: 401 `AUTH_REFRESH_REUSED`, session
+  over. `AuthProvider`'s startup recovery and the 401-retry paths in `client.ts` therefore share one
+  in-flight call. Never call `refreshAccessToken()` from a component or an effect — React StrictMode
+  runs mount effects twice in `pnpm dev`, which is how a second reload while signed in used to end at
+  the login screen (fixed 2026-10-02). The guard is module memory, so it serializes calls within one
+  tab only; two tabs refreshing at the same instant are not covered (tried once, both got `201`).
 
 ## API & Error Handling
 

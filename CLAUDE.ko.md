@@ -1718,13 +1718,14 @@ Architecture Decisions가 계속 유효하다.
   전용 시험 — 같은 기본 `keepAlive` agent 모양 — 도 소켓을 일부러 열어 둔 채로 똑같이 빨리
   종료해 종료 속도 면에서는 닫혔다. 실제 `S3Client` 인스턴스는 여전히 시험하지 않았다,
   ADR 0061 두 번째 Addendum)
-- `.ko.md` 네 개를 문서 규약이 요구하는 파일 전체 재독 없이 수정했다(2026-10-02 기록).
-  2026-10-01/02 프론트엔드 세션은 `.ko.md` 7개를 수정했고, 3개(`docs/ADR/0060-…ko.md`,
-  `frontend/docs/STYLE-PLAN.ko.md`, `frontend/docs/API-CONTRACT.ko.md`)는 전체를 다시 읽었지만
-  4개는 읽지 않았다: `docs/CHANGELOG.ko.md`(약 2,850줄), `docs/ROADMAP.ko.md`(약 1,590줄),
-  `frontend/CLAUDE.ko.md`, `frontend/README.ko.md`. 그 세션에 추가한 부분만 자연스러운 한국어로
-  썼고 그 파일들의 나머지는 다시 읽지 않았다. 일정은 없다 — 이 점검은 명시적 요청이 있을 때 하는
-  작업이고 한국어 표현만 다룬다. 범위, 방법, 착수 조건은 `docs/ROADMAP.ko.md` §7에 있다.
+- ~~`.ko.md` 네 개를 문서 규약이 요구하는 파일 전체 재독 없이 수정했다~~(2026-10-02 기록) —
+  **2026-10-04 해결**, 명시적 요청으로: `docs/CHANGELOG.ko.md`, `docs/ROADMAP.ko.md`,
+  `frontend/CLAUDE.ko.md`, `frontend/README.ko.md`를 전체 다시 읽고 한국어 표현만 고쳤다. 찾은 것:
+  2026-08-12 무렵 `CHANGELOG.ko.md` 항목 한 구간이 나머지와 달리 "-습니다" 문체여서 "-다"로 맞췄고,
+  문장 조각 하나가 중복돼 있었고, 직역 표현 몇 곳이 있었고, 영문판을 가리키던 링크 대상이 18개였다.
+  끝난 뒤 EN/KO의 제목·목록·표 행 수와 상대 링크를 확인했다. 그대로 둔 것:
+  `docs/ADR/0022-admin-console-import-from-chat-project.ko.md`에는 single-flight를 "단일 비행"으로 옮긴
+  곳이 세 군데 있다. 기록: `docs/CHANGELOG.ko.md` 2026-10-04, `docs/ROADMAP.ko.md` §7.
 - 악성코드 스캔 게이트가 `null` 판정을 통과시킨다(2026-10-03 백엔드 의존성 점검에서 발견;
   **2026-10-03 결정: 후속 과제, 시작하지 않음**). `clamd`가 연결을 정상적으로 닫았는데 응답이 비어 있거나
   `COMMAND READ TIMED OUT`이거나 `OK`/`FOUND`/`ERROR` 어느 쪽도 아니면 `clamscan`의 `scanStream`은 reject하지

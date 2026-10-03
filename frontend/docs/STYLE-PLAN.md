@@ -247,6 +247,22 @@ because whoever touches these files for restyling will see them:
    added. Revisit if the project adds a `NOTICE`/third-party file for another
    reason, or if the fonts are ever re-subsetted or converted (the metadata
    would need checking again). A project decision, not legal advice.
+8. ~~**Phone tap targets under 40px, and long text that stretched pages**~~
+   (found 2026-10-02 in a hands-on pass) — **done 2026-10-02**
+   ([CHANGELOG.md](../../docs/CHANGELOG.md)). At phone widths (`max-width: 640px`)
+   or with a coarse pointer, tappable elements measured under 40px: nav links
+   23px, Sign out 39px, the radio labels of the upload form and file picker
+   23px, links and creator buttons in the Post and File lists 23px (39px for the
+   Post row's creator button), "Back to …" links 23px, the select boxes 39px,
+   and the native Choose File button 21px. All are at least 40px now (the size
+   of the 40×40 toggles; WCAG 2.2 AA asks for 24px, Apple's guidance 44px). Long
+   text that users type (email, title, pasted URL) now wraps instead of
+   stretching the page: at 375px a comment holding a long URL made Post detail
+   897px wide, and from 641px the Post list reached 1584px. The rules live in
+   `frontend/CLAUDE.md` > Conventions and are guarded by the `touch-targets`,
+   `overflow` and `post-body` specs. Not done: the 40px floor is not applied to
+   wide mouse layouts, and a very long creator email still shortens the Post list
+   title ([ROADMAP.md](../../docs/ROADMAP.md) §7).
 
 ## Ready-to-paste prompts
 

@@ -1576,22 +1576,47 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   and `pnpm build` pass, and the 401 → refresh → retry interceptor flow was run against the real
   axios 1.20.0 and a local server, since the unit tests mock `axios`. `admin-e2e` has not run on
   it yet; CI will.
-- **Korean fluency pass over four `.ko.md` files** — **deferred 2026-10-02, not started.**
-  CLAUDE.md's Documentation Convention asks that touching an existing `.ko.md` re-read the whole
-  file and fix passages that read as a word-for-word translation, in the same change (fluency only,
-  never content the English sibling lacks). The 2026-10-01/02 frontend session edited seven `.ko.md`
-  files and re-read three of them in full: `docs/ADR/0060-frontend-same-alb-path-routing.ko.md`,
-  `frontend/docs/STYLE-PLAN.ko.md` and `frontend/docs/API-CONTRACT.ko.md` (that pass fixed one
-  untranslated "Addendum" heading in ADR 0060). Four were not re-read: `docs/CHANGELOG.ko.md` (about
-  2,850 lines, 81 added this session), `docs/ROADMAP.ko.md` (about 1,590, 21 added),
-  `frontend/CLAUDE.ko.md` (177, 27 added) and `frontend/README.ko.md` (126, 13 added). The added
-  passages were written as Korean prose, not translated line by line; nothing around them was
-  re-read. Scope when picked up: those four files in full, Korean wording only. Keep the heading
-  hierarchy, table layout, links, code blocks, identifiers and numbers identical to the English
-  sibling, then check EN/KO symmetry (heading and entry counts) and links. `CHANGELOG.ko.md` and
-  `ROADMAP.ko.md` are most of the effort and can go separately from the two `frontend/` files.
-  Revisit when explicitly requested, or the next time one of the four is edited at length. Also
-  listed in CLAUDE.md > Known Gaps.
+- ~~**Korean fluency pass over four `.ko.md` files**~~ — **deferred 2026-10-02, done 2026-10-04 on
+  explicit request.** CLAUDE.md's Documentation Convention asks that touching an existing `.ko.md`
+  re-read the whole file and fix passages that read as a word-for-word translation, in the same
+  change (fluency only, never content the English sibling lacks). The 2026-10-01/02 frontend
+  session edited seven `.ko.md` files and re-read three in full; the other four —
+  `docs/CHANGELOG.ko.md` (about 2,850 lines), `docs/ROADMAP.ko.md` (about 1,590),
+  `frontend/CLAUDE.ko.md` and `frontend/README.ko.md` — were re-read in full on 2026-10-04. What it
+  found: a run of 2026-08-12-era `CHANGELOG.ko.md` entries (about 140 lines) in the polite `-습니다`
+  register while the rest of the file uses `-다`, now unified; one stray duplicated sentence
+  fragment; a few literal translations and wrong particles; and 18 link targets that pointed at
+  English siblings although a `.ko.md` existed. Headings, table layout, code blocks, identifiers
+  and numbers were left as in the English siblings; EN/KO heading, list and table-row counts and
+  relative links were checked afterwards ([CHANGELOG.md](CHANGELOG.md) 2026-10-04). Open only
+  as a side note: `docs/ADR/0022-admin-console-import-from-chat-project.ko.md` renders
+  single-flight as "단일 비행" in three places, outside those four files. Also struck in CLAUDE.md >
+  Known Gaps.
+- **Frontend: two layout leftovers from the 2026-10-02 real-data pass** — **found 2026-10-02, not
+  fixed, not scheduled.** (1) Post list: with a very long creator email (89 characters in the test
+  data) the email keeps most of the row and the title is cut shorter than it needs to be ("Post with
+  audio …" at 1366px). (2) File detail at 360px and narrower: the title narrows next to the
+  visibility badge and breaks in the middle of a number, and a long creator email breaks mid-word in
+  places. Nothing overflows or stops working in either; both are cosmetic. The first is in
+  [CHANGELOG.md](CHANGELOG.md) 2026-10-02 under "Not done"; the second was only in the session
+  transcript until now. Scope when picked up: `PostBoard.module.css` (row layout) and
+  `FileDetailPage.module.css` (header), re-measured with the long-email data. Revisit when explicitly
+  requested.
+- **Frontend: the single-flight refresh covers one tab only** — **recorded 2026-10-02, no change
+  planned.** `tryRefresh()` keeps its in-flight promise in module memory, so it serializes refreshes
+  inside one tab. The backend has no grace window: `rotateRefreshToken` clears the anchor on any
+  mismatch and answers `AUTH_REFRESH_REUSED`, so by the code's logic two tabs that refresh at the same
+  instant with the same cookie can end the session. That was not reproduced: one try in a visible
+  Chrome, two tabs opened at the same moment, both got `201`; other timings were not tested and why
+  that one passed was not established. See `frontend/CLAUDE.md` > Auth Invariants and
+  `frontend/docs/API-CONTRACT.md` > Rotation & reuse. Revisit if a report of being signed out with
+  several tabs open comes in.
+- **Frontend: Choose File did not open its dialog in one Chrome Incognito window** — **recorded
+  2026-10-02, cause unknown.** A report that Choose File "cannot be pressed" was not reproduced: the
+  dialog opens in Chromium (Playwright), Edge and a regular Chrome window, and one Chrome Incognito
+  window did not open it at first and opened it later. The only code change is `906ce3c`'s stale-input
+  fix ([CHANGELOG.md](CHANGELOG.md) 2026-10-02). If it comes back, note the Chrome version, the
+  extensions in that window, `chrome://policy`, and whether another site's file picker opens.
 - **Malware scan gate passes a `null` verdict** — **found 2026-10-03, decided the same day: later task,
   not started.** The 2026-10-03 backend dependency audit found that `clamscan`'s `scanStream` resolves
   with `isInfected: null` ("Unable to scan") when `clamd` closes the connection normally and the reply

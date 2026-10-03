@@ -88,3 +88,25 @@ domain: 'sharenpo.cloud' }`로 도착했고, 이 ADR의 명세와 정확히 일�
 refresh 호출이 성공한 것) — 쿠키가 설정됐다는 것뿐 아니라 실제로 왕복까지
 된다는 것을 확인한다. 테스트 계정과 그 계정이 올린 파일 1개는 확인 후
 삭제했다.
+
+### Addendum (2026-10-02) — 한 번에 하나만: 클라이언트는 refresh 호출을 직렬화해야 한다
+
+위의 회전에는 유예 구간이 없고, 그래서 결과 절에 적지 않았던 규칙이 클라이언트에 걸린다.
+같은 쿠키를 실은 `POST /auth/token/refresh` 두 개는 둘 다 성공할 수 없다. 두 번째 요청은 첫
+번째가 방금 회전시킨 쿠키를 들고 도착하므로, `rotateRefreshToken`이 해시 불일치를 보고
+앵커를 지운 뒤 401 `AUTH_REFRESH_REUSED`로 답하고 세션이 끝난다. 이 문제는 `pnpm dev`에서
+드러났다. React StrictMode가 마운트 effect를 두 번 실행하는데 `AuthProvider`의 시작 시
+refresh가 `refreshAccessToken()`을 직접 불러서, 로그인한 채 두 번째로 새로고침하면 로그인
+화면이 됐다(운영 빌드는 effect를 한 번만 실행하므로 거기서는 보이지 않았다). `frontend/`에는
+401 재시도용 single-flight `tryRefresh()`가 이미 있었고, 시작 시 호출도 이제 그것을 거친다.
+그래서 effect가 두 번 실행돼도 요청은 하나다. 실제 백엔드를 쓰는 e2e 테스트가 세 번
+새로고침하면서 로드마다 refresh가 정확히 `201` 한 번인지 확인한다
+([CHANGELOG.ko.md](../CHANGELOG.ko.md) 2026-10-02).
+
+이 ADR의 계약은 그대로다. 새로 생긴 것은 클라이언트를 위한 규칙을 적어 둔 것이다: refresh를
+소비하는 쪽은 같은 쿠키 저장소 안에서 호출을 직렬화한다. 이 보호는 모듈 메모리에 있어서 한
+탭에만 적용된다. 두 탭이 같은 순간에 같은 쿠키로 refresh하는 경우는 막지 못하고, 백엔드에는
+그것을 흡수할 유예 구간이 없다. 눈에 보이는 Chrome에서 탭 두 개를 같은 순간에 열어 한 번
+시도했을 때는 둘 다 `201`이었고, 다른 타이밍은 시험하지 않았다
+([ROADMAP.ko.md](../ROADMAP.ko.md) §7). `frontend/CLAUDE.md` > 인증 불변식과
+`frontend/docs/API-CONTRACT.md` > 회전과 재사용을 본다.

@@ -129,3 +129,25 @@ pnpm preview    # serve the built app
 pnpm test:e2e   # Playwright E2E — needs the backend (+ its DB) reachable on :3000;
                 # starts/reuses the :5173 dev server itself (playwright.config.ts)
 ```
+
+`pnpm test:e2e` runs two kinds of specs (see
+[CLAUDE.md](CLAUDE.md#ui-only-specs-stub-the-api-frontende2e)). The UI-only ones stub the API and
+need only the dev server. `auth`, `upload`, `board`, `detail`, `posts` and `navigation` register
+real accounts, and `upload`, `board`, `detail` and `posts` also upload a file through the UI, so
+the backend on `:3000` has to be set up for that:
+
+- A reachable Postgres with the migrations applied. The accounts and files these specs create stay
+  in that database; nothing truncates it.
+- `STORAGE_DRIVER=local`. With `s3` and a bucket that no longer exists, `POST /upload/attach`
+  returns 500 (`NoSuchBucket`).
+- A reachable ClamAV (`CLAMD_HOST`/`CLAMD_PORT`; the compose `clamav` service locally). Every
+  upload is scanned, and an unreachable scanner answers 503 `UPLOAD_SCAN_UNAVAILABLE` (backend ADR
+  0059).
+- `THROTTLE_ENABLED=false`. Each spec registers and signs in again, which spends the 5/minute auth
+  limit (backend ADR 0054) and ends in 429 if the limit is on.
+- `BASE_URL` left at its default `http://localhost:3000`. `detail.spec.ts` calls the backend at
+  that origin (`BACKEND_BASE_URL`), and pointing `BASE_URL` at `:5173` made two of its tests fail.
+
+CI sets these in the `frontend-e2e` job of `.github/workflows/ci.yml`. For the compose `api`, put
+the per-machine values in a gitignored `.env.local`
+([ADR 0015](../docs/ADR/0015-docker-and-compose.md) Addendum).

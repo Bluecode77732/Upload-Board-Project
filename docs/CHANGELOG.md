@@ -13,6 +13,30 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Docs: the single-flight refresh rule, e2e prerequisites, three open UI notes, and the Korean
+  fluency pass (2026-10-04)** — documentation only. `frontend/CLAUDE.md` > Auth Invariants and
+  `frontend/docs/API-CONTRACT.md` > Rotation & reuse now say that every refresh goes through
+  `tryRefresh()`, why (the backend has no grace window, so a second refresh with the same cookie
+  reads as a replay), and that the guard covers one tab only; [ADR 0012](ADR/0012-refresh-cookie-rotation.md)
+  got a matching Addendum. `frontend/README.md` lists what the real-backend e2e specs need from the
+  backend (a migrated Postgres, `STORAGE_DRIVER=local`, ClamAV, `THROTTLE_ENABLED=false`, `BASE_URL`
+  at its default) and points at the compose `.env.local`. `frontend/docs/STYLE-PLAN.md` item 8
+  records the 2026-10-02 tap-target and text-wrap fix. ROADMAP §7 gained three rows: two layout
+  leftovers (a long creator email shortens the Post list title; File detail narrower than 360px),
+  the single-flight refresh covering one tab, and the Chrome Incognito Choose File dialog that
+  opened late once. The "Why Base64" section of `frontend/docs/API-CONTRACT.md`, which the English
+  file had carried in Korean since 2026-07-24, is now in English; the Korean sibling is unchanged.
+  The fluency pass over `docs/CHANGELOG.ko.md`, `docs/ROADMAP.ko.md`, `frontend/CLAUDE.ko.md` and
+  `frontend/README.ko.md` is done: all four re-read in full, Korean wording only. It found a run of
+  2026-08-12-era `CHANGELOG.ko.md` entries (about 140 lines) in the polite `-습니다` register while
+  the rest uses `-다`, now unified; one stray duplicated sentence fragment in the SIGTERM entry,
+  removed; a few literal translations (단일 비행 무음 갱신 for single-flight silent refresh,
+  "landing", 복붙, particles after `px`); and 18 link targets in `CHANGELOG.ko.md` and
+  `ROADMAP.ko.md` that pointed at English siblings although a `.ko.md` existed. Checked afterwards:
+  for every pair touched, EN and KO have the same number of headings, list items and table rows,
+  and every relative link resolves (anchors were checked only for the two the README uses). Not
+  done: `docs/ADR/0022-admin-console-import-from-chat-project.ko.md` also renders single-flight as
+  "단일 비행" in three places; it is outside those four files and was left as is.
 - **Compose: `api` and `migrate` read an optional `.env.local` after `.env` (2026-10-03,
   [ADR 0015](ADR/0015-docker-and-compose.md) Addendum)** — a developer's `.env` can point at S3, and
   once the AWS stack is down the bucket is gone, so every upload through the local compose `api`
