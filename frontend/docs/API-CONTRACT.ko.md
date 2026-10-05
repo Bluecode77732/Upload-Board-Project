@@ -150,6 +150,11 @@
 `temp_`→`granted_`), 응답은 `201`(신규) 또는 `200`(같은 claim의 멱등
 재생, ADR 0019)이다.
 
+API는 attach 요청 하나에 파일 하나를 받는다. 여러 파일을 올릴 때는 클라이언트가 이 두 호출을 파일마다
+하나씩 차례로 반복한다(`UploadForm.tsx`, backend ADR 0065). 필드는 파일의 확장자로 정하고, 한 번에
+15개까지만 보내며(attach는 분당 15회로 제한된다, `429 RATE_LIMITED`), promote가 실패한 줄은 다시
+attach하지 않고 이미 받은 `filename`으로 재시도한다.
+
 응답의 `fileUrl`은 **접근이 제어되는** 콘텐츠 엔드포인트
 `/file/:id/content`이며, 정적/공개 경로가 아니다(ADR 0025/0026): `public`
 파일은 토큰 없이 스트리밍되고, `private`은 creator/admin의 bearer가

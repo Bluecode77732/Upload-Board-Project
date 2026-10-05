@@ -12,6 +12,22 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Added
+- **Frontend: several files can be chosen at once and are uploaded one by one (2026-10-06)** — the
+  upload form's file input is now `multiple`. Each chosen file gets its own row with a title (the
+  file name without its extension by default), a progress bar and its own result. The type radio is
+  gone; the `image`/`audio`/`video` field is picked per file from its extension, so one selection can
+  mix kinds. Files are sent one at a time, each as the same attach → promote pair as before. A row
+  that fails (a taken title, a rejected scan) does not stop the others; after a title edit, pressing
+  Upload again retries only the promote step without sending the file again. A selection over 15
+  files is refused (the attach limit is 15/minute), and a 429 mid-run stops the run and keeps the
+  remaining rows. No backend or API change. Decision and the rejected alternative (the backend
+  taking several files in one request): [ADR 0065](ADR/0065-multi-file-upload-client-sequential.md).
+  Verified against the local compose stack: `upload.spec.ts` (3), the new stub-based
+  `upload-select.spec.ts` (3), `board`/`detail`/`posts` (10) through a shared `uploadThroughForm`
+  helper, and the 16 stub-based UI tests; `pnpm build` and `pnpm lint` pass. The real-backend specs
+  were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
+
 ### Changed
 - **Docs: an unclaimed upload filename is not bound to its uploader — recorded as later hardening
   (2026-10-06)** — documentation only, no code change. Between `POST /upload/attach` and the first

@@ -144,6 +144,11 @@ sent via `api.postForm` so the browser sets the boundary `Content-Type`) returns
 `POST /file` `{ title, filePath: filename }` promotes it (backend `temp_`→`granted_`),
 returning `201` (fresh) or `200` (idempotent replay of the same claim, ADR 0019).
 
+The API takes one file per attach request. To upload several files the client repeats this pair
+per file, one at a time (`UploadForm.tsx`, backend ADR 0065): the field is chosen from each file's
+extension, at most 15 files go in one run (attach is limited to 15/minute, `429 RATE_LIMITED`), and
+a row whose promote failed is retried with the `filename` it already has, without attaching again.
+
 `fileUrl` in responses is the **access-controlled** content endpoint
 `/file/:id/content`, NOT a static/public path (ADR 0025/0026): a `public` file streams
 without a token, `private` needs the creator/admin bearer, `unlisted` needs a matching

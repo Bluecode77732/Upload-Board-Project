@@ -6,21 +6,8 @@
 //   실행마다 고유한 토큰을 붙인 파일 두 개로 검증하면, 공유(never-truncated) dev DB에 뭐가
 //   더 있든 단언이 그것과 무관하게 유지된다.
 
-import { test, expect, type Page } from '@playwright/test'
-import { registerAndSignIn, goToFiles, uniqueEmail, uniqueTitle, VIDEO_FIXTURE_PATH } from './helpers'
-
-async function uploadVideo(page: Page, title: string) {
-  await page.getByLabel('Title', { exact: true }).fill(title)
-  await page.getByRole('radio', { name: 'Video' }).check()
-  // 먼저 비워야 <input type="file">에 실제 값 변경이 발생한다 — 한 테스트 안에서 반복
-  // 호출할 때 동일한 fixture 경로를 연달아 두 번 설정하면 change 이벤트가 안정적으로
-  // 발생하지 않는다.
-  const fileInput = page.getByLabel(/^Video file/)
-  await fileInput.setInputFiles([])
-  await fileInput.setInputFiles(VIDEO_FIXTURE_PATH)
-  await page.getByRole('button', { name: 'Upload', exact: true }).click()
-  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('', { timeout: 30_000 })
-}
+import { test, expect } from '@playwright/test'
+import { registerAndSignIn, goToFiles, uniqueEmail, uniqueTitle, uploadThroughForm } from './helpers'
 
 test('search, sort, and pagination reflect files uploaded through the board', async ({ page }) => {
   test.setTimeout(120_000)
@@ -33,8 +20,8 @@ test('search, sort, and pagination reflect files uploaded through the board', as
   await goToFiles(page)
 
   // Alpha를 먼저, Beta를 나중에 업로드한다 — 이렇게 하면 둘의 상대적 createdAt 순서가 고정된다.
-  await uploadVideo(page, titleAlpha)
-  await uploadVideo(page, titleBeta)
+  await uploadThroughForm(page, titleAlpha)
+  await uploadThroughForm(page, titleBeta)
 
   // --- 검색: 자유 텍스트 토큰이 정확히 이 두 행만 걸러내야 한다 ---
   await page.getByLabel('Search').fill(token)
@@ -75,7 +62,7 @@ test('a file not matching the search term is not shown', async ({ page }) => {
 
   await registerAndSignIn(page, uniqueEmail('board-nomatch'))
   await goToFiles(page)
-  await uploadVideo(page, token)
+  await uploadThroughForm(page, token)
 
   await page.getByLabel('Search').fill(`${token}-does-not-exist`)
 

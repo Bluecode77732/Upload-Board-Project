@@ -173,7 +173,7 @@
 
 ### UI만 검증하는 spec은 API를 스텁한다 (`frontend/e2e/`)
 
-`layout`, `language`, `fonts`, `empty-state`, `overflow`, `post-body`, `touch-targets`는 백엔드가 하는
+`layout`, `language`, `fonts`, `empty-state`, `overflow`, `post-body`, `touch-targets`, `upload-select`는 백엔드가 하는
 일이 아니라 UI가 어떻게 보이고 동작하는지를 검증한다.
 이 spec들은 `registerAndSignIn` 대신 `stubAuthenticatedApi(page)`(`e2e/helpers.ts`)를 호출한다: silent
 refresh에는 서명 없는 토큰을 돌려주고(클라이언트는 `sub`만 읽는다) 목록·상세·댓글·콘텐츠 요청에는 고정
@@ -183,6 +183,10 @@ refresh에는 서명 없는 토큰을 돌려주고(클라이언트는 `sub`만 �
 - **스텁 경로는 모두 경로 끝까지 고정한 정규식으로 쓴다**(헬퍼처럼 `/\/post(\?.*)?$/`). 클라이언트
   라우트 `/posts/:id`, `/files`는 API의 `/post`, `/file`과 접두사를 공유하므로 `/\/post/` 같은 느슨한
   패턴은 페이지 이동 요청까지 잡아 JSON으로 응답해 버린다.
+- **spec에서 파일을 올릴 때는 `uploadThroughForm(page, title)`(`e2e/helpers.ts`)을 쓴다.** 폼을 직접
+  조작하지 않는다. 폼은 파일을 여러 개 받아 하나씩 올린다(backend ADR 0065). 고른 파일은 Title 칸을 가진
+  줄이 되고, 두 단계가 모두 끝나면 그 줄에 "Uploaded"가 뜬다. 폼의 줄은 `<ol>`이라서 `ul li`는 여전히
+  보드의 행만 가리킨다.
 - **스텁은 백엔드 계약에 대해 아무것도 말해 주지 않는다.** 실제 응답에 기대는 spec(`auth`, `upload`,
   `board`, `detail`, `posts`, `navigation`)은 계속 실제 계정을 쓴다. `auth.spec.ts`의 429 테스트는 필요한
   응답 하나만 스텁하고, 약한 비밀번호 테스트는 실제 백엔드를 호출한다.

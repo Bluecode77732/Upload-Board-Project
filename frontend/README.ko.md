@@ -88,8 +88,8 @@ src/
     │             수정/삭제 가능, PATCH/DELETE /comment/:id), CommentForm(POST
     │             /post/:id/comment — 성공 시 재fetch를 트리거한다, 이 앱에는
     │             실시간/폴링 인프라가 없기 때문)
-    ├── files/    DashboardPage (보호됨, "/files" — 업로드 폼(이미지/오디오/비디오,
-                  업로드 진행률 표시줄 포함) + 파일 보드: 검색/정렬/
+    ├── files/    DashboardPage (보호됨, "/files" — 업로드 폼(여러 파일을 한 번에 골라
+                  하나씩 전송, 파일마다 진행률 표시줄) + 파일 보드: 검색/정렬/
                   작성자 필터/페이지네이션 + visibility 배지, FileBoard.tsx),
                   FileDetailPage (보호됨, "/view/:id" — 메타데이터 + visibility별
                   재생: public/unlisted은 src 직접 재생, private은 인증된

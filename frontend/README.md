@@ -87,8 +87,8 @@ src/
     │             own author/admin, PATCH/DELETE /comment/:id), and CommentForm (POST
     │             /post/:id/comment, triggers a refetch on success — no realtime/polling
     │             infrastructure exists in this app)
-    ├── files/    DashboardPage (protected, "/files" — upload form (image/audio/video,
-                  with upload-progress bar) + file board: search/sort/
+    ├── files/    DashboardPage (protected, "/files" — upload form (several files at once,
+                  sent one by one with a progress bar per file) + file board: search/sort/
                   creator filter/pagination + visibility badges, FileBoard.tsx) and
                   FileDetailPage (protected, "/view/:id" — metadata + visibility-gated
                   playback: direct src for public/unlisted, an authenticated

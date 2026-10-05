@@ -67,28 +67,88 @@
   color: var(--brand);
 }
 
-.radioGroup {
-  display: flex;
-  gap: 16px;
+/* 고른 파일 목록 — 파일 하나가 한 줄이고, 줄마다 제목·진행률·결과를 따로 가진다. 위에서부터 차례로
+   올라가므로 ol이다. */
+.list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.radioLabel {
+.row {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.rowHead {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+}
+
+/* 파일명은 사용자가 정한 긴 문자열일 수 있다 — 줄이 폼 밖으로 밀려나지 않게 끊는다. */
+.fileName {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--text);
   font-size: 0.95rem;
 }
 
-.radioLabel input {
-  width: 18px;
-  height: 18px;
-  margin: 0;
+.kind {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
 }
 
-/* 터치 화면에서는 라벨 전체가 누르는 면이다 — 23px였던 높이를 40px로 맞춘다. */
+.done {
+  color: var(--success);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.doneTitle {
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.remove {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.remove:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.remove:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.remove:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 터치 화면에서는 빼기 버튼도 40px 이상이어야 한다. */
 @media (max-width: 640px), (pointer: coarse) {
-  .radioLabel {
+  .remove {
     min-height: 40px;
   }
 }

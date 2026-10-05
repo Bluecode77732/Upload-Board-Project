@@ -174,7 +174,7 @@ that will resurface in any new spec unless avoided up front:
 
 ### UI-only specs stub the API (`frontend/e2e/`)
 
-`layout`, `language`, `fonts`, `empty-state`, `overflow`, `post-body` and `touch-targets` check how the
+`layout`, `language`, `fonts`, `empty-state`, `overflow`, `post-body`, `touch-targets` and `upload-select` check how the
 UI looks and behaves, not what the backend does.
 They call `stubAuthenticatedApi(page)` (`e2e/helpers.ts`) instead of `registerAndSignIn`: it answers
 the silent refresh with an unsigned token (the client only reads `sub`) and returns fixed data for
@@ -186,6 +186,10 @@ the 5/minute auth limit (backend ADR 0054) is spent, and the backend does not ha
   does). The client routes `/posts/:id` and `/files` share a prefix with the API's `/post` and
   `/file`, so a loose pattern such as `/\/post/` also matches the page navigations and would answer
   them with JSON.
+- **Upload a file in a spec through `uploadThroughForm(page, title)`** (`e2e/helpers.ts`), not by driving
+  the form by hand. The form takes several files and uploads them one by one (backend ADR 0065): a
+  chosen file becomes a row with its own Title box, and the row reads "Uploaded" when both steps are
+  done. The form's rows are an `<ol>`, so `ul li` still means the board's rows only.
 - **A stub says nothing about the backend contract.** Specs that depend on real responses (`auth`,
   `upload`, `board`, `detail`, `posts`, `navigation`) keep using real accounts. `auth.spec.ts`'s 429
   test stubs only the one response it needs, and its weak-password test hits the real backend.
