@@ -1540,6 +1540,15 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   블록 갱신), `scan.service.spec.ts`(`{ isInfected: null }` 케이스), 이어서 `pnpm lint`와
   `pnpm test -- scan.service`. 스키마, 환경 변수, API 변경은 없다. 스택을 다시 적용하기 전에, 또는 명시적으로
   요청받을 때 다시 본다. CLAUDE.md > Known Gaps에도 올려 두었다.
+- **청구 전 업로드 파일명은 업로더에게 묶여 있지 않다** — **2026-10-06 발견, 같은 날 추후 보강으로 결정,
+  시작하지 않음.** `POST /upload/attach`가 업로더를 남기지 않아서, attach와 첫 `POST /file` 사이에는 `temp_`
+  파일명을 아는 인증된 사용자라면 누구든 청구할 수 있고, 원래 업로더는 409 `FILE_ALREADY_CLAIMED`를 받는다.
+  로컬 compose 스택에서 임시 계정 두 개로 재현했다. 평가는 낮음이다. 파일명에 v4 UUID가 들어 있고, 요청·응답
+  본문으로만 오가며, 쓰려면 유효한 access token이 필요하고, 임시 파일 스윕(기본 24시간)과 함께 사라진다. 근거와
+  막히는 경우는 [ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)의 추가 기록(2026-10-06)에 있다. 닫으려면
+  파일명을 업로더에게 묶어야 하는데, `temp_` 이름 규칙과 `TEMP_FILENAME_PATTERN`을 건드리므로 먼저 별도 결정이
+  필요하다. 앱이 다시 공개 인터넷에서 닿게 되기 전에, 또는 명시적으로 요청받을 때 다시 본다. CLAUDE.md >
+  Known Gaps에도 올려 두었다.
 
 ## 8. Advisory 노트
 

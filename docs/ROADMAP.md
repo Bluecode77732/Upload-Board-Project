@@ -1629,6 +1629,16 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `scan.service.spec.ts` (a `{ isInfected: null }` case), then `pnpm lint` and
   `pnpm test -- scan.service`; no schema, env var or API change. Revisit before the stack is next
   applied, or when explicitly requested. Also listed in CLAUDE.md > Known Gaps.
+- **An unclaimed upload filename is not bound to its uploader** — **found 2026-10-06, decided the same
+  day: later hardening, not started.** `POST /upload/attach` records no uploader, so between attach and
+  the first `POST /file` any authenticated user who knows the `temp_` filename can claim it; the original
+  uploader then gets 409 `FILE_ALREADY_CLAIMED`. Reproduced on the local compose stack with two throwaway
+  accounts. Assessed low: the name carries a v4 UUID, travels only in request/response bodies, needs a
+  valid access token to use, and dies with the temp sweep (24h by default). Evidence and the cases that
+  do hold are in the [ADR 0019](ADR/0019-upload-claim-idempotency.md) Addendum (2026-10-06). Closing it
+  means binding the name to the uploader, which touches the `temp_` naming and `TEMP_FILENAME_PATTERN`
+  and needs its own decision first. Revisit before the app is next reachable from the public internet,
+  or when explicitly requested. Also listed in CLAUDE.md > Known Gaps.
 
 ## 8. Advisory notes
 

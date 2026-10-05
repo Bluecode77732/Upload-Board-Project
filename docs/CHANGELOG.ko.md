@@ -13,6 +13,11 @@
 ## [Unreleased]
 
 ### 변경
+- **문서: 청구 전 업로드 파일명은 업로더에게 묶여 있지 않다 — 추후 보강으로 기록 (2026-10-06)** — 문서만
+  바꿨고 코드 변경은 없다. `POST /upload/attach`와 첫 `POST /file` 사이에는 `temp_` 파일명을 아는 인증된
+  사용자라면 누구든 청구할 수 있다. attach가 업로더를 남기지 않기 때문이다. 로컬 compose 스택에서 임시 계정
+  두 개로 재현했고 평가는 낮음이다. [ADR 0019](ADR/0019-upload-claim-idempotency.ko.md)의 추가
+  기록(2026-10-06), [ROADMAP.ko.md](ROADMAP.ko.md) §7, CLAUDE.md > Known Gaps에 적었다.
 - **프론트엔드: 로그인 카드를 화면 정중앙에 두고 양옆 세로선을 없앰 (2026-10-05)** — `LoginPage`의
   `<main>`이 `min-height: 80vh` 상자여서 카드가 80vh 안에서만 가운데였고, 화면 중심보다 10vh 위에
   있었다. 이제 `#root`(flex column, `min-height: 100svh`)의 `flex: 1`을 차지한다. 양옆 세로선은

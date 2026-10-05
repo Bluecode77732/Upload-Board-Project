@@ -1738,6 +1738,15 @@ Architecture Decisions가 계속 유효하다.
   `scanBuffer`의 `try` 안에서 `null`을 실패한 시도로 처리해 기존 재시도와 503 `UPLOAD_SCAN_UNAVAILABLE` 경로를
   타게 하고, 단위 테스트 케이스를 추가한다. 자세한 내용: ADR 0059 추가 기록(2026-10-03), `docs/ROADMAP.ko.md`
   §7. 새 스캔 소비자는 `if (result.isInfected)` 검사를 그대로 베끼지 않는다.
+- 청구 전 업로드 파일명은 업로더에게 묶여 있지 않다(2026-10-06 발견; **2026-10-06 결정: 추후 보강, 시작하지
+  않음**). `POST /upload/attach`는 업로더를 남기지 않고, `FileService.uploadFile`은 `findClaim`과
+  `storage.existsTemp`만 보고 청구를 판정한다. 그래서 attach와 첫 `POST /file` 사이에는 `temp_` 파일명을 아는
+  인증된 사용자라면 누구든 청구할 수 있고, 원래 업로더는 409 `FILE_ALREADY_CLAIMED`를 받는다. 로컬 compose
+  스택에서 임시 계정 두 개로 재현했다. 평가는 낮음이다. 파일명에 v4 UUID가 들어 있고, 요청·응답 본문으로만
+  오가며, 유효한 access token이 필요하고, 임시 파일 스윕(`TEMP_SWEEP_TTL_HOURS`, 기본 24시간)과 함께 사라진다.
+  닫으려면 파일명을 업로더에게 묶어야 하는데, `temp_` 이름 규칙과 `TEMP_FILENAME_PATTERN`을 건드리므로 별도
+  결정이 필요하다. 자세한 내용: ADR 0019 추가 기록(2026-10-06), `docs/ROADMAP.ko.md` §7. 그때까지 attach
+  파일명을 업로더만 청구할 수 있는 것처럼 설명하지 않는다.
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

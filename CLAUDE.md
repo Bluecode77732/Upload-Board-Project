@@ -1710,6 +1710,16 @@ Architecture Decisions above remain operative.
   Planned fix: treat `null` as a failed attempt inside `scanBuffer`'s `try` so the existing retry and
   503 `UPLOAD_SCAN_UNAVAILABLE` path apply, plus a unit case. Details: ADR 0059 Addendum (2026-10-03),
   `docs/ROADMAP.md` §7. A new scan consumer must not copy the `if (result.isInfected)` check on its own.
+- An unclaimed upload filename is not bound to its uploader (found 2026-10-06; **decided 2026-10-06:
+  later hardening, not started**). `POST /upload/attach` records no uploader, and `FileService.uploadFile`
+  decides a claim from `findClaim` and `storage.existsTemp` only, so between attach and the first
+  `POST /file` any authenticated user who knows the `temp_` filename can claim it. The original uploader
+  then gets 409 `FILE_ALREADY_CLAIMED`. Reproduced on the local compose stack with two throwaway
+  accounts. Assessed low: the name carries a v4 UUID, travels only in request/response bodies, needs a
+  valid access token, and dies with the temp sweep (`TEMP_SWEEP_TTL_HOURS`, default 24h). Closing it
+  means binding the name to the uploader, which touches the `temp_` naming and `TEMP_FILENAME_PATTERN`
+  and needs its own decision. Details: ADR 0019 Addendum (2026-10-06), `docs/ROADMAP.md` §7. Until then,
+  do not describe the attach filename as something only its uploader can claim.
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for

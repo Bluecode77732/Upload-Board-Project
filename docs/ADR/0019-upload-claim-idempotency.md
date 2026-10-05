@@ -122,3 +122,36 @@ the same claimed temp filename — the real backend answered `200`, the resubmit
 was ignored exactly as this ADR's Consequences already specified, a direct `psql` read
 confirmed a single row still carrying the original title, and the notice rendered in the
 real running form.
+
+## Addendum (2026-10-06) — an unclaimed filename is not bound to its uploader
+
+Found while checking how far the per-file claim actually protects an upload. **Decided the same day:
+later hardening, not started.**
+
+`POST /upload/attach` records nowhere who attached a file: the temp name is `temp_{uuid}_{timestamp}`
+and there is no row behind it. `FileService.uploadFile` therefore decides a claim from two facts only,
+whether a row already holds that name (`findClaim`) and whether the temp object exists
+(`storage.existsTemp`). Between attach and the first `POST /file`, any authenticated user who knows the
+name can claim it. The file becomes theirs, and the original uploader's own `POST /file` then gets 409
+`FILE_ALREADY_CLAIMED`.
+
+Reproduced on the local compose stack with two throwaway accounts (deleted afterwards): A attached a
+file, B sent `POST /file` with A's unclaimed filename and got `201` as the owner. In the same run the
+neighbouring cases held: B claiming a name A had already claimed got 409 `FILE_ALREADY_CLAIMED`, a
+`../` path got 400 `VALIDATION_FAILED`, a well-formed name that was never issued got 400
+`FILE_INVALID_PATH`, and an attach with no token got 401.
+
+So the filename is a bearer token until it is claimed, not a token tied to the uploader. What keeps the
+exposure low:
+
+- the name carries a v4 UUID and cannot be guessed;
+- it appears only in the attach response body and the `POST /file` request body, never in a URL;
+- claiming needs a valid access token (`JwtAuthGuard`);
+- an unclaimed name stops working when the sweep removes the temp object (`TEMP_SWEEP_TTL_HOURS`,
+  default 24h, ADR 0018). That is longer than the 15–60 minutes usually recommended for an upload token.
+
+Assessed low. Closing it means binding the name to the uploader, which touches the `temp_` naming and
+`TEMP_FILENAME_PATTERN` and so needs its own decision; no shape is chosen here. Until then, this ADR's
+"identity-only" wording describes a claimed filename only. Do not describe the attach filename as
+something only its uploader can claim. Also listed in [ROADMAP.md](../ROADMAP.md) §7 and CLAUDE.md >
+Known Gaps.

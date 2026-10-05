@@ -13,6 +13,12 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Docs: an unclaimed upload filename is not bound to its uploader — recorded as later hardening
+  (2026-10-06)** — documentation only, no code change. Between `POST /upload/attach` and the first
+  `POST /file`, any authenticated user who knows the `temp_` filename can claim it, because attach
+  records no uploader. Reproduced on the local compose stack with two throwaway accounts; assessed low.
+  Recorded in the [ADR 0019](ADR/0019-upload-claim-idempotency.md) Addendum (2026-10-06),
+  [ROADMAP.md](ROADMAP.md) §7 and CLAUDE.md > Known Gaps.
 - **Frontend: the sign-in card sits at the exact center of the screen, without the side lines
   (2026-10-05)** — `LoginPage`'s `<main>` was a `min-height: 80vh` box, so the card was centered
   inside 80vh and sat 10vh above the middle of the screen; it now takes `flex: 1` of `#root`
