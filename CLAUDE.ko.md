@@ -1171,6 +1171,14 @@ Conflict Protocol을 따른다.
   `kind`+Calico 클러스터(ADR 0056 레시피, `k8s/helm/README.md`)로 라이브
   검증 완료 — 남은 건 AWS 자신의 VPC CNI 강제 에이전트뿐, ADR 0056도 이미
   안고 있는 것과 동일한 잔여 항목
+- **attach 요청당 파일 하나는 남은 흔적이 아니라 결정이다(2026-10-06, [ADR
+  0065](docs/ADR/0065-multi-file-upload-client-sequential.ko.md))**: 여러 파일 업로드는 클라이언트
+  (`frontend/`의 `UploadForm.tsx`)가 파일마다 attach → promote를 하나씩 차례로 반복하는 것이다. 백엔드는
+  필드당 `maxCount: 1`과 "`image`/`audio`/`video` 중 정확히 하나" 검사를 그대로 유지한다. 이유: 서버는 이미
+  요청 하나로 파일 하나를 처리하므로 고칠 것이 없고, 실패는 그 파일에서 끝나며, `memoryStorage`에서 한
+  요청이 쥐는 바이트가 파일 하나를 넘지 않는다. `POST /upload/attach`가 한 요청에 여러 파일을 받게 하자고
+  제안하지 않는다. 그 대안은 ADR 0065에서 검토하고 기각했다. 게시글 하나에 파일 여러 개를 붙이는 것은
+  별개이며 아직 결정하지 않은 스키마 문제다(ADR 0065 D5).
 - **절대 제안 금지**: 스트리밍/청크 업로드, CDN — 명시적으로 요청받지 않는 한.
   S3는 더 이상 이 목록에 없다: 스토리지 포트-어댑터(위 ADR 0029)가
   `S3Storage` 구현체와 `STORAGE_DRIVER` 스위치를 둘 다 이미 도입했지만,

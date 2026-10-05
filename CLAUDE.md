@@ -1152,6 +1152,15 @@ Do not suggest alternatives to these decisions without explicit request.
   live-verified against a throwaway `kind`+Calico cluster (ADR 0056's recipe,
   `k8s/helm/README.md`) — only AWS's own VPC CNI enforcement agent stays
   AWS-only-verifiable, the same residual ADR 0056 already carries
+- **One file per attach request is a decision, not a leftover (2026-10-06, [ADR
+  0065](docs/ADR/0065-multi-file-upload-client-sequential.md))**: multi-file upload is the client
+  (`frontend/`'s `UploadForm.tsx`) repeating attach → promote per file, one at a time. The backend
+  keeps `maxCount: 1` per field and the "exactly one of `image`/`audio`/`video`" check. The reasons:
+  the server already handles one file per request so nothing there needs fixing, a failure ends on
+  its own file, and with `memoryStorage` a request never holds more than one file's bytes. Do not
+  propose having `POST /upload/attach` accept several files in one request; that alternative was
+  weighed and rejected in ADR 0065. Several files on one post is a separate, undecided schema
+  question (ADR 0065 D5).
 - **Never suggest**: streaming/chunked upload, CDN — unless explicitly requested. S3 is no
   longer in this list: the storage port-adapter (ADR 0029, above) landed both an
   `S3Storage` implementation and the `STORAGE_DRIVER` switch, but `local` stays the
