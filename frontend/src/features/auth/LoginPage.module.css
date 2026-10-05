@@ -1,9 +1,17 @@
+/* flex: 1 — #root(flex column, min-height 100svh)의 남은 높이를 다 차지해 카드가 화면 정중앙에 온다.
+   예전의 min-height: 80vh는 80vh 상자 안에서만 가운데라 카드가 중심보다 10vh 위에 있었다. */
 .page {
   display: flex;
+  flex: 1;
   align-items: center;
   justify-content: center;
-  min-height: 80vh;
   padding: 24px;
+}
+
+/* #root의 좌우 세로선(index.css)은 1126px 폭 내용의 테두리다. 로그인 화면은 360px 카드뿐이라 선이
+   아무것도 감싸지 않으므로 이 화면에서만 끈다. :has()를 모르는 브라우저에서는 선이 그대로 남을 뿐이다. */
+:global(#root):has(> .page) {
+  border-inline: none;
 }
 
 .card {

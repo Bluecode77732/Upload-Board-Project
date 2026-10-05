@@ -13,6 +13,18 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Changed
+- **Frontend: the sign-in card sits at the exact center of the screen, without the side lines
+  (2026-10-05)** — `LoginPage`'s `<main>` was a `min-height: 80vh` box, so the card was centered
+  inside 80vh and sat 10vh above the middle of the screen; it now takes `flex: 1` of `#root`
+  (a flex column, `min-height: 100svh`). The two vertical lines are `#root`'s `border-inline`,
+  the frame of the 1126px content on authenticated screens; around a 360px card they framed
+  nothing, so `LoginPage.module.css` turns them off for this screen only
+  (`:global(#root):has(> .page)` — the first `:has()` in this app; a browser without it just keeps
+  the lines). Measured in a real browser at eight sizes from 2560×1440 to 375×667, sign-in and
+  register: the card's left/right and top/bottom gaps differ by 0.5px or less, also with an error
+  message showing; when the screen is shorter than the card it starts 16px from the top and
+  scrolls. Authenticated screens keep their lines. `pnpm build`, `pnpm lint` and the 16 stub-based
+  UI e2e tests pass; the real-backend e2e specs were not re-run for this CSS-only change.
 - **Docs: the single-flight refresh rule, e2e prerequisites, three open UI notes, and the Korean
   fluency pass (2026-10-04)** — documentation only. `frontend/CLAUDE.md` > Auth Invariants and
   `frontend/docs/API-CONTRACT.md` > Rotation & reuse now say that every refresh goes through

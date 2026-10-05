@@ -107,7 +107,8 @@
   파일의 `wide`를 composes한 요소(File의 미리보기 그리드)만 그보다 넓다. 그 요소는 `main`의 직계
   자식이어야 한다(그래서 `FileBoard`가 프래그먼트를 돌려준다). flex column인 `#root` 안에서 화면이
   자기 `margin: auto`를 쓰면 폭이 내용물에 맞춰 줄어드는데, 이것이 헤더·main·폼이 화면마다 달랐던
-  원인이다. `LoginPage`는 의도적인 유일한 예외다(가운데 카드). `e2e/layout.spec.ts`가 이를 지킨다.
+  원인이다. `LoginPage`는 의도적인 유일한 예외다(`flex: 1`로 `#root`를
+  채우고 `#root`의 양옆 선을 끈, 화면 정중앙의 카드). `e2e/layout.spec.ts`가 이를 지킨다.
 - **긴 텍스트는 줄바꿈한다**: 사용자가 입력한 텍스트(이메일, 제목, 붙여 넣은 URL)를 보여 주는 박스는 공백 없는
   긴 문자열도 끊을 수 있어야 한다 — `overflow-wrap: anywhere`를 쓰고, 그 텍스트를 담은 flex 자식에는
   `min-width: 0`도 준다. `white-space: pre-wrap`만으로는 긴 URL이 줄바뀜되지 않아, 박스가 페이지 전체를

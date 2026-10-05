@@ -108,8 +108,9 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   only an element that composes `wide` from the same file (the File preview grid) is wider, and it
   must be a direct child of `main` (which is why `FileBoard` returns a fragment). A page that sets
   its own `margin: auto` inside the flex-column `#root` shrinks to its content, which is what once
-  made the header, main and forms differ per screen. `LoginPage` is the one deliberate exception (a
-  centered card). `e2e/layout.spec.ts` guards this.
+  made the header, main and forms differ per screen. `LoginPage` is the one deliberate exception: a
+  card at the exact center of the screen, which fills `#root` with `flex: 1` and turns off `#root`'s
+  side lines. `e2e/layout.spec.ts` guards this.
 - **Long text wraps**: any box that shows text a user typed (an email, a title, a pasted URL) must be
   able to break an unbroken string — `overflow-wrap: anywhere`, plus `min-width: 0` on a flex child
   that holds it. `white-space: pre-wrap` alone does not break a long URL, and the box then stretches
