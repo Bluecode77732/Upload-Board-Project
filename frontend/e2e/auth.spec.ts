@@ -32,7 +32,7 @@ test('registering an already-used email surfaces the AUTH_EMAIL_TAKEN message', 
 
   await page.getByRole('button', { name: 'Need an account? Register' }).click()
   await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Password').fill(TEST_PASSWORD)
+  await page.getByLabel('Password', { exact: true }).fill(TEST_PASSWORD)
   await page.getByRole('button', { name: 'Register & sign in' }).click()
 
   // LoginPage의 messageForError는 ErrorCode.AUTH_EMAIL_TAKEN을 이 고정 문자열로 매핑한다 —
@@ -47,7 +47,7 @@ test('registering with a weak password surfaces the AUTH_WEAK_PASSWORD message',
   await page.goto('/login')
   await page.getByRole('button', { name: 'Need an account? Register' }).click()
   await page.getByLabel('Email').fill(uniqueEmail('auth-weakpw'))
-  await page.getByLabel('Password').fill('password')
+  await page.getByLabel('Password', { exact: true }).fill('password')
   await page.getByRole('button', { name: 'Register & sign in' }).click()
 
   await expect(
@@ -75,7 +75,7 @@ test('hitting the rate limit surfaces the RATE_LIMITED message', async ({ page }
 
   await page.goto('/login')
   await page.getByLabel('Email').fill(uniqueEmail('auth-ratelimit'))
-  await page.getByLabel('Password').fill(TEST_PASSWORD)
+  await page.getByLabel('Password', { exact: true }).fill(TEST_PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
 
   await expect(page.getByText('Too many attempts. Please wait a minute and try again.')).toBeVisible()
@@ -89,7 +89,7 @@ test('signing in with the wrong password surfaces the AUTH_INVALID_CREDENTIALS m
   await expect(page).toHaveURL(/\/login$/)
 
   await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Password').fill('WrongPassword!1')
+  await page.getByLabel('Password', { exact: true }).fill('WrongPassword!1')
   await page.getByRole('button', { name: 'Sign in' }).click()
 
   await expect(page.getByText('Incorrect email or password.')).toBeVisible()

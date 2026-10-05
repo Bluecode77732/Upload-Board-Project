@@ -73,7 +73,8 @@ export async function registerAndSignIn(page: Page, email: string, password = TE
   await page.goto('/login')
   await page.getByRole('button', { name: 'Need an account? Register' }).click()
   await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Password').fill(password)
+  // exact: 비밀번호 표시 버튼의 aria-label("Show password")과 부분 일치하지 않게 한다.
+  await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Register & sign in' }).click()
 
   await expect(page).toHaveURL(/\/$/)

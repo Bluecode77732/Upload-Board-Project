@@ -69,7 +69,8 @@ src/
 │                 언어·테마 토글, 로그아웃 헤더; page.module.css — 인증된 모든 화면이
 │                 composes하는 하나의 `<main>` 박스(와 720px 칼럼)
 └── features/
-    ├── auth/     LoginPage (Basic 로그인/회원가입)
+    ├── auth/     LoginPage (Basic 로그인/회원가입. 비밀번호 입력창 오른쪽 끝의 반투명 눈 버튼으로
+    │             입력한 비밀번호를 보거나 가린다)
     ├── posts/    PostBoard (보호됨, "/" — 앱의 홈: PostForm + 게시글 목록 —
     │             FileBoard를 그대로 본뜬 검색/정렬/작성자 필터/페이지네이션,
     │             행마다 첨부파일 아이콘, ADR 0021/0023), PostForm (title/body +

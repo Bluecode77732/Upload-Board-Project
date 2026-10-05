@@ -74,6 +74,59 @@
   outline-offset: 1px;
 }
 
+.passwordBox {
+  position: relative;
+}
+
+/* 오른쪽 여백은 버튼 폭만큼이다 — 긴 비밀번호가 버튼 밑으로 들어가지 않는다. */
+.passwordInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding-right: 44px;
+}
+
+/* Edge는 비밀번호 입력창에 자체 눈 아이콘을 그린다 — 두 개가 겹치지 않게 끈다. */
+.passwordInput::-ms-reveal {
+  display: none;
+}
+
+/* 입력창 높이를 그대로 채워(데스크톱 약 48px, 폰 약 45px) 터치 기준 40px을 따로 맞출 필요가 없다. */
+.reveal {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  opacity: 0.55;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.reveal svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.reveal:hover,
+.reveal:focus-visible {
+  opacity: 1;
+}
+
+.reveal:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -3px;
+}
+
 .error {
   margin: 0;
   color: var(--danger);

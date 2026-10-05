@@ -579,6 +579,23 @@
   코드 변경 없음 — 순수 문서.
 
 ### 추가
+- **프론트엔드: 로그인·가입 폼의 비밀번호 입력창에 표시/숨김 버튼 (2026-10-05)** — 가입은 10자 이상에
+  네 종류 문자를 모두 요구하는데, 입력한 비밀번호를 확인할 방법이 없었다. `LoginPage.tsx`의 비밀번호
+  입력창 오른쪽 끝에 반투명 눈 버튼(투명도 0.55, 마우스를 올리거나 키보드 포커스가 가면 1)을 넣었다.
+  누르면 입력창이 `password`와 `text` 사이를 오가고 버튼 이름도 "Show password"와 "Hide password"로
+  바뀐다(`login.showPassword`/`login.hidePassword`, en/ko). 값과 제출 흐름은 그대로다. 버튼 이름이
+  입력창의 접근성 이름에 섞이지 않도록 버튼은 `<label>` 밖에 두고 이 필드만 `htmlFor`로 이었다.
+  버튼이 입력창 높이(데스크톱 48px, 폰 45px)를 그대로 채우므로 터치 영역 40px 규칙을 지키고, Edge가
+  자체로 그리는 눈 아이콘은 `::-ms-reveal`로 껐다(Edge에서 확인하지는 않았다). `getByLabel`은
+  `aria-label`도 읽기 때문에 `e2e/helpers.ts`와 `e2e/auth.spec.ts`의 `getByLabel('Password')` 다섯
+  곳에 `exact: true`를 붙였고, 이유는 `frontend/CLAUDE.ko.md` > Playwright E2E 함정에 적었다. 검증:
+  `pnpm build`와 `pnpm lint` 통과. 실제 브라우저의 1920·1366·375px에서 마우스와 Tab + Enter로 토글이
+  되고, 긴 비밀번호가 버튼 밑으로 들어가지 않으며, 가입 모드에도 버튼이 있다. e2e 41개는 모두
+  통과했지만 한 번에 통과한 것은 아니다. 떠 있던 백엔드에 요청 제한이 켜져 있어 18개가 "Too many
+  attempts"에서 멈췄고, 이들을 1분 간격으로 나눠 다시 돌렸다. 그중 하나(`auth.spec.ts`의 새로고침
+  테스트)는 새로고침 한 번에 refresh가 두 번 나가 한 번 더 실패했다가, 이 변경을 넣은 상태와 뺀 상태
+  모두에서 통과했다. 원인은 확정하지 못했다(그 무렵 다른 세션이 실행 중인 dev 서버 아래에서
+  `main.tsx`를 고쳤다). 백엔드·계약·의존성 변경은 없다.
 - **ExternalDNS로 ALB DNS 레코드를 만들고, 재사용 위임 세트로 zone 네임서버를 고정
   (2026-09-25, [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md))** — 도메인을
   ALB로 잇는 레코드를 만드는 곳이 없었고, Route53 zone은 새로 만들 때마다 네임서버 4개가 바뀌어서

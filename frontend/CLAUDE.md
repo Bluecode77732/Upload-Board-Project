@@ -163,7 +163,9 @@ that will resurface in any new spec unless avoided up front:
   a creator-filter button whose accessible name was `e2e-upload-...@example.com`). Pass
   `{ exact: true }` on any label/role query whose text is a short common word — the nav
   links and headings are now the single words "Post" and "File", which also substring-match
-  "New post", "Upload a file" and any post or file title containing them.
+  "New post", "Upload a file" and any post or file title containing them. `getByLabel` also reads
+  `aria-label`: the login form's show/hide button is named "Show password", so the password box is
+  `getByLabel('Password', { exact: true })`.
 - **A running Vite dev server can serve stale CSS-module copies.** When a file that other CSS Modules
   `composes` (such as `src/shared/page.module.css`) changes, `pnpm dev` keeps old hashed copies, so a
   rule added to it may not reach every page and a spec measures the old layout. Restart the dev server

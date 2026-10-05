@@ -69,7 +69,8 @@ src/
 │                 Sign out, shown on every authenticated screen; page.module.css — the one
 │                 `<main>` box (and 720px column) every authenticated screen composes
 └── features/
-    ├── auth/     LoginPage (Basic signin/register)
+    ├── auth/     LoginPage (Basic signin/register; a half-transparent eye button at the
+    │             right end of the password box shows or hides what was typed)
     ├── posts/    PostBoard (protected, "/" — the app's home: PostForm + the post list —
     │             search/sort/creator filter/pagination mirroring FileBoard, attachment
     │             icon per row, ADR 0021/0023), PostForm (title/body + an optional

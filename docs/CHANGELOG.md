@@ -618,6 +618,26 @@ development line (package.json version).
   the §7 entries just never caught up with §6. No code change — pure documentation.
 
 ### Added
+- **Frontend: a show/hide button in the password box of the sign-in and register form
+  (2026-10-05)** — registration demands 10 characters with all four character classes, and there
+  was no way to check what had been typed. `LoginPage.tsx` now has a half-transparent eye button
+  (opacity 0.55, full on hover or keyboard focus) at the right end of the password box; it switches
+  the input between `password` and `text` and its name between "Show password" and "Hide password"
+  (`login.showPassword`/`login.hidePassword`, en/ko). The value and the submit flow are untouched.
+  The button sits outside the `<label>` (the field is tied with `htmlFor` instead) so its name does
+  not leak into the input's accessible name, it fills the input's height (48px desktop, 45px phone)
+  so the 40px tap-target rule holds, and Edge's own reveal icon is turned off with `::-ms-reveal`
+  (not checked in Edge). Because `getByLabel` also reads `aria-label`, the five
+  `getByLabel('Password')` calls in `e2e/helpers.ts` and `e2e/auth.spec.ts` gained `exact: true`;
+  `frontend/CLAUDE.md` > Playwright E2E gotchas records why. Verified: `pnpm build` and `pnpm lint`
+  pass; in a real browser at 1920, 1366 and 375px the toggle works by mouse and by Tab + Enter, a
+  long password does not run under the button, and the register mode has it too. All 41 e2e tests
+  passed, though not in one run: the backend that was up had throttling on, so 18 stopped at "Too
+  many attempts" and were re-run in batches a minute apart. One of them
+  (`auth.spec.ts`'s reload test) failed once more with two refresh calls per reload, then passed
+  both with and without this change; the cause was not pinned down (another session edited
+  `main.tsx` under the running dev server at about that time). No backend, contract or dependency
+  change.
 - **ALB DNS record via ExternalDNS, and a reusable delegation set that pins the zone's name
   servers (2026-09-25, [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md))** —
   nothing created the record that points the domain at the ALB, and a new Route53 zone gets four

@@ -163,7 +163,8 @@
   `e2e-upload-...@example.com`인 creator-filter 버튼에 매칭됐다). 텍스트가
   짧고 흔한 단어인 라벨/role 쿼리에는 `{ exact: true }`를 준다 — 이제 내비 링크와 제목이
   "Post", "File"이라는 한 단어라서 "New post", "Upload a file", 그리고 그 단어가 들어간 모든
-  게시글·파일 제목에도 부분 일치한다.
+  게시글·파일 제목에도 부분 일치한다. `getByLabel`은 `aria-label`도 읽는다. 로그인 폼의 표시/숨김
+  버튼 이름이 "Show password"라서 비밀번호 입력창은 `getByLabel('Password', { exact: true })`로 찾는다.
 - **실행 중인 Vite dev 서버는 옛 CSS 모듈 복사본을 계속 내줄 수 있다.** 다른 CSS 모듈이 `composes`하는
   파일(예: `src/shared/page.module.css`)을 고치면 `pnpm dev`가 해시가 다른 옛 복사본을 남겨 두어, 그
   파일에 추가한 규칙이 일부 페이지에 닿지 않고 spec이 옛 레이아웃을 재게 된다. CSS만 바꾼 확인을 믿기 전에

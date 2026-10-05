@@ -38,12 +38,16 @@ function messageForError(error: unknown): Translatable {
   return 'common.networkError'
 }
 
+// 목적: 이메일·비밀번호를 받아 로그인하거나, 가입 후 바로 로그인한다.
+// 이유: 가입 규칙(10자 이상, 네 종류 문자)이 까다로운데 입력한 비밀번호를 확인할 방법이 없었다.
+// 방법: showPassword로 입력창 type을 password/text로 바꾼다 — 값과 제출 흐름은 그대로다.
 export function LoginPage() {
   const { signIn, register } = useAuth()
   const { t } = useLanguage()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [mode, setMode] = useState<'signin' | 'register'>('signin')
   const [error, setError] = useState<Translatable | null>(null)
   const [busy, setBusy] = useState(false)
@@ -88,17 +92,34 @@ export function LoginPage() {
               autoComplete="email"
             />
           </label>
-          <label className={styles.field}>
-            {t('login.password')}
-            <input
-              type="password"
-              className={styles.input}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-            />
-          </label>
+          {/* 토글 버튼을 <label> 안에 두면 버튼 이름이 입력창의 접근성 이름에 섞이므로, 이 필드만
+              label을 htmlFor로 잇고 버튼은 label 밖에 둔다. */}
+          <div className={styles.field}>
+            <label htmlFor="login-password">{t('login.password')}</label>
+            <div className={styles.passwordBox}>
+              <input
+                id="login-password"
+                type={showPassword ? 'text' : 'password'}
+                className={`${styles.input} ${styles.passwordInput}`}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              />
+              <button
+                type="button"
+                className={styles.reveal}
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={t(showPassword ? 'login.hidePassword' : 'login.showPassword')}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+                  <circle cx="12" cy="12" r="3" />
+                  {showPassword && <path d="M4 4l16 16" />}
+                </svg>
+              </button>
+            </div>
+          </div>
           {error && <p className={styles.error}>{t(error)}</p>}
           <button type="submit" className={styles.submit} disabled={busy}>
             {busy ? t('login.wait') : t(mode === 'signin' ? 'login.signIn' : 'login.registerAndSignIn')}
