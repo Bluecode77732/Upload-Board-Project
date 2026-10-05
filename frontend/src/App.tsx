@@ -1,3 +1,7 @@
+// 목적: 앱의 라우트 표 — 어떤 경로가 어떤 화면을 그리고, 어느 것이 로그인을 요구하는지 한곳에 둔다.
+// 사용처: main.tsx가 BrowserRouter·AuthProvider 안에 렌더링한다.
+// 근거: 클라이언트 경로는 API 접두사(/post, /file, /user)와 겹치면 안 돼서, 그 제약을 한 파일에서 지킨다.
+
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { SettingsPage } from './features/account/SettingsPage'
 import { LoginPage } from './features/auth/LoginPage'
