@@ -111,12 +111,17 @@
   채우고 `#root`의 양옆 선을 끈, 화면 정중앙의 카드). `e2e/layout.spec.ts`가 이를 지킨다.
 - **긴 텍스트는 줄바꿈한다**: 사용자가 입력한 텍스트(이메일, 제목, 붙여 넣은 URL)를 보여 주는 박스는 공백 없는
   긴 문자열도 끊을 수 있어야 한다 — `overflow-wrap: anywhere`를 쓰고, 그 텍스트를 담은 flex 자식에는
-  `min-width: 0`도 준다. `white-space: pre-wrap`만으로는 긴 URL이 줄바뀜되지 않아, 박스가 페이지 전체를
+  `min-width: 0`도 준다. `white-space: pre-wrap`만으로는 긴 URL이 줄바꿈되지 않아, 박스가 페이지 전체를
   가로로 늘려 버린다. 내비게이션 바는 320px에서 컨트롤이 잘리지 않고 둘째 줄로 내려온다.
   `display: grid` 목록에는 `grid-template-columns: minmax(0, 1fr)`가 필요하다: 기본값 `auto` 열은 안의
   내용의 min-content를 최솟값으로 잡아서, `nowrap`인 제목과 이메일이 640px 넘는 화면에서 Post 목록을
-  1400px 이상으로 늘렸다. `e2e/overflow.spec.ts`가 인증된 모든 화면을 320, 375, 667, 768, 1366px에서
-  확인한다.
+  1400px 이상으로 늘렸다. 텍스트 `<input>`을 담은 grid(폼, 라벨, 업로드 줄)도 입력창에 이르는 모든
+  단계에 같은 규칙이 필요하다: `<input>`에는 고유 폭(`size=20`)이 있어 `auto` 열이 그보다 좁아지지
+  못하는데, 이 폭은 플랫폼의 글꼴 엔진마다 다르다(Noto Sans KR 16px에서 Windows 215px, Linux 350px).
+  그래서 Linux에서는 New post 폼이 375px 화면에서 382px였다. flex 줄에서는 라벨과 컨트롤에
+  `min-width: 0`을 준다(`FileDetailPage`의 양도 폼). `e2e/overflow.spec.ts`가 인증된 모든 화면을 320,
+  375, 667, 768, 1366px에서 확인하고, 그 화면들이 저절로 열지 않는 폼(로그인, 업로드 줄, Post 수정,
+  소유권 양도)은 320px와 375px에서 확인한다.
 - **터치 영역**: 폰 폭(`max-width: 640px`)이거나 터치 포인터일 때, 모든 링크·버튼·select·입력창·라디오
   라벨은 세로 40px 이상이다(40×40 토글과 같은 크기). 텍스트 링크에는 `min-height`나 `display: flex` 대신
   `padding-block`을 줘서 `text-overflow: ellipsis`와 줄바꿈이 그대로 동작하게 하고, 브라우저 기본 회색
@@ -170,6 +175,19 @@
   파일(예: `src/shared/page.module.css`)을 고치면 `pnpm dev`가 해시가 다른 옛 복사본을 남겨 두어, 그
   파일에 추가한 규칙이 일부 페이지에 닿지 않고 spec이 옛 레이아웃을 재게 된다. CSS만 바꾼 확인을 믿기 전에
   dev 서버를 재시작한다(또는 서버를 내려 Playwright가 새 서버를 띄우게 한다).
+- **레이아웃 spec은 Windows에서 통과하고 Linux CI 러너에서 실패할 수 있다.** Chromium도 웹 폰트도 같지만
+  글꼴 엔진이 달라서 폼 컨트롤의 고유 폭이 다르게 나온다(「긴 텍스트는 줄바꿈한다」 참고).
+  `overflow.spec.ts`가 이렇게 dev에서 세 번 연속 실패했고(2026-10-05), 그동안 로컬 실행은 매번 통과했다.
+  설치된 `@playwright/test` 버전과 태그가 같은 Playwright 이미지에서 재현한다. CI가 내려받는 것과 같은
+  브라우저 빌드가 들어 있다. Windows의 `node_modules`에는 Windows용 바이너리가 있으므로, 마운트한
+  폴더에서 바로 돌리지 말고 소스를 컨테이너 안으로 복사한다:
+
+  ```powershell
+  # PowerShell, from frontend/ (Git Bash rewrites the /src path). The stub-based specs need no backend.
+  docker run -d --name pw --init --ipc=host -e CI=true -v "${PWD}:/src:ro" mcr.microsoft.com/playwright:v1.62.1-noble sleep infinity
+  docker exec pw bash -c 'mkdir /work && cd /src && cp -r src e2e public index.html package.json pnpm-lock.yaml playwright.config.ts vite.config.ts tsconfig*.json /work/ && cd /work && npm i -g pnpm@10.14.0 && pnpm install --frozen-lockfile && pnpm exec playwright test overflow'
+  docker rm -f pw
+  ```
 
 ### UI만 검증하는 spec은 API를 스텁한다 (`frontend/e2e/`)
 

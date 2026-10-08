@@ -63,8 +63,11 @@
   text-align: center;
 }
 
+/* .editForm·.field 모두 열의 최솟값이 0이다 — Title 입력창의 고유 폭이 수정 폼을 화면 밖으로 밀어내지
+   않는다(PostForm.module.css의 .form 주석). */
 .editForm {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin: 16px 0;
   padding: 20px;
@@ -76,6 +79,7 @@
 
 .field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   text-align: left;
   color: var(--text-muted);

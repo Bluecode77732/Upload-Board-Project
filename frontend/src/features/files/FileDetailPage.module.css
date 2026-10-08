@@ -139,15 +139,20 @@
   flex-wrap: wrap;
 }
 
+/* min-width: 0 (라벨과 그 안의 컨트롤 둘 다) — 양도 폼의 이메일 입력창은 고유 폭이 폰 폭보다 넓을 수
+   있다(PostForm.module.css의 .form 주석). flex 항목은 기본적으로 내용의 최소 폭 밑으로 줄지 않아,
+   Linux에서 라벨이 375px 화면의 434px까지 나갔다. */
 .visibilityLabel {
   display: flex;
   gap: 8px;
   align-items: center;
+  min-width: 0;
   color: var(--text-muted);
   font-size: 0.9rem;
 }
 
 .select {
+  min-width: 0;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;

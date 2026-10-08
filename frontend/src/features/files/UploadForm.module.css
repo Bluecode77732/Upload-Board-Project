@@ -1,9 +1,13 @@
 /* 이 폼을 감싸는 페이지는 미리보기 그리드를 위해 1126px로 넓어졌다(DashboardPage.module.css).
    폼까지 그만큼 늘어나면 산만해 보이므로, 원래 너비를 유지하고 가운데 정렬한다. PostForm/
    SettingsPage의 카드와 같은 규격이다 — box-sizing: border-box여야 padding·border를 포함해
-   세 화면에서 정확히 같은 720px가 된다. */
+   세 화면에서 정확히 같은 720px가 된다.
+
+   .form·.field·.row 모두 열의 최솟값이 0이다 — 파일 줄의 Title 입력창 고유 폭이 폼을 밀어내지 않는다
+   (PostForm.module.css의 .form 주석). */
 .form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   box-sizing: border-box;
   max-width: 720px;
@@ -23,6 +27,7 @@
 
 .field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   text-align: left;
   color: var(--text-muted);
@@ -80,6 +85,7 @@
 
 .row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   padding: 12px;
   border: 1px solid var(--border);

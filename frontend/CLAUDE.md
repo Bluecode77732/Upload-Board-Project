@@ -117,8 +117,14 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   the whole page sideways. The nav bar wraps its controls onto a second row instead of clipping them
   at 320px. A `display: grid` list needs `grid-template-columns: minmax(0, 1fr)`: the default `auto`
   column takes its content's min-content, so `nowrap` titles and emails stretched the Post list past
-  1400px above 640px. `e2e/overflow.spec.ts` checks every authenticated screen at 320, 375, 667, 768
-  and 1366px.
+  1400px above 640px. A grid that holds a text `<input>` (a form, a label, an upload row) needs the
+  same rule on every level down to the input: an `<input>` has an intrinsic width (`size=20`) the
+  `auto` column cannot go below, and that width depends on the platform's font engine — 215px on
+  Windows, 350px on Linux for Noto Sans KR at 16px — so on Linux the New post form was 382px wide in
+  a 375px viewport. In a flex row, give the label and the control `min-width: 0` instead (the
+  transfer form in `FileDetailPage`). `e2e/overflow.spec.ts` checks every authenticated screen at
+  320, 375, 667, 768 and 1366px, and at 320 and 375px the forms those screens do not open by
+  themselves (login, an upload row, Post edit, ownership transfer).
 - **Tap targets**: at phone widths (`max-width: 640px`) or with a coarse pointer, every link, button,
   select, input and radio label is at least 40px tall (the size of the 40×40 toggles). Text links
   get `padding-block` rather than `min-height`/`display: flex`, so `text-overflow: ellipsis` and
@@ -171,6 +177,19 @@ that will resurface in any new spec unless avoided up front:
   `composes` (such as `src/shared/page.module.css`) changes, `pnpm dev` keeps old hashed copies, so a
   rule added to it may not reach every page and a spec measures the old layout. Restart the dev server
   (or stop it, so Playwright starts a fresh one) before trusting a CSS-only check.
+- **A layout spec can pass on Windows and fail on the Linux CI runner.** Same Chromium, same web font,
+  different font engine: form controls get different intrinsic widths (see "Long text wraps").
+  `overflow.spec.ts` failed three dev runs in a row this way (2026-10-05) while every local run
+  passed. Reproduce in the Playwright image whose tag matches the installed `@playwright/test`
+  version; it ships the same browser build CI downloads. Copy the sources into the container rather
+  than running in the mount, because the Windows `node_modules` holds Windows binaries:
+
+  ```powershell
+  # PowerShell, from frontend/ (Git Bash rewrites the /src path). The stub-based specs need no backend.
+  docker run -d --name pw --init --ipc=host -e CI=true -v "${PWD}:/src:ro" mcr.microsoft.com/playwright:v1.62.1-noble sleep infinity
+  docker exec pw bash -c 'mkdir /work && cd /src && cp -r src e2e public index.html package.json pnpm-lock.yaml playwright.config.ts vite.config.ts tsconfig*.json /work/ && cd /work && npm i -g pnpm@10.14.0 && pnpm install --frozen-lockfile && pnpm exec playwright test overflow'
+  docker rm -f pw
+  ```
 
 ### UI-only specs stub the API (`frontend/e2e/`)
 

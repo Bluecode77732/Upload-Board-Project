@@ -55,13 +55,17 @@
   text-align: center;
 }
 
+/* 두 grid 모두 열의 최솟값이 0이다 — 입력창의 고유 폭이 카드를 폰 폭보다 넓게 붙잡지 않는다
+   (PostForm.module.css의 .form 주석). 이게 없으면 Linux에서 카드가 375px 화면에서 393px였다. */
 .form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
 .field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   text-align: left;
   color: var(--text-muted);

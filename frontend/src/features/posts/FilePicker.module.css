@@ -1,10 +1,14 @@
+/* 두 grid 모두 열의 최솟값이 0이다 — 검색 입력창의 고유 폭이 폼을 밀어내지 않는다
+   (PostForm.module.css의 .form 주석). */
 .wrapper {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
 .field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   text-align: left;
   color: var(--text-muted);
