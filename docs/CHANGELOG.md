@@ -29,6 +29,44 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Frontend: forms no longer push past a phone's width on Linux — the cause of the failing dev CI
+  (2026-10-08, `c08d9e0`; live check 2026-10-09)** — `frontend-e2e` failed three dev runs in a row
+  (`5f2f9f0`, `310d72b`, `9d4c59a`) on `overflow.spec.ts` at 375 and 320px, and
+  `docker-publish-frontend` was skipped each time; every local Windows run passed. Reproduced in the
+  Playwright 1.62.1 Linux image: `/` was 382px wide at both widths. The cause is the text `<input>`.
+  It has an intrinsic width (`size=20`) that depends on the platform's font engine: with the same
+  Chromium 151 and the same Noto Sans KR at 16px it measured 215px on Windows and 350px on Linux. A
+  grid with no column definition (`auto`) cannot go below that width, so the New post form's column
+  was 348px on Linux and 219px on Windows, and only Linux overflowed. `<textarea>` is not affected:
+  the comment form, which holds only one, stayed inside its column on Linux. The spec was right; its
+  threshold and widths are unchanged. A sweep on Linux found the same cause in eight places: the New
+  post form and its file picker, the Post and File filter panels (29px past their label at 375px, past
+  the screen at 320px), the upload row that appears once a file is chosen (395px), the sign-in card
+  (384px), the Post edit form (386px) and the ownership-transfer form on File detail (434px). Fix:
+  `grid-template-columns: minmax(0, 1fr)` on every grid from the form down to the input, in seven CSS
+  modules, and `min-width: 0` on the label and control of the transfer form, which is a flex row.
+  `overflow.spec.ts` gained two tests (375 and 320px) for the four states the existing test never
+  opens: sign-in, a chosen upload row, Post edit, ownership transfer. They fail on the old CSS on
+  Linux; on Windows they pass either way. `frontend/CLAUDE.md` records the rule and the command that
+  reproduces a Linux-only layout failure locally. Verified on Linux (the Playwright image, with the
+  backend, Postgres 16 and ClamAV in throwaway containers and CI's env values): `overflow.spec.ts`
+  7/7, the whole frontend e2e 47/47, `pnpm lint` clean. Then on Actions, run 37754245494: all nine
+  jobs passed and `docker-publish-frontend` published the image. On Windows the position and size of
+  every element (1,674 over six widths × eight states) is the same before and after, except the
+  transfer form's email box at 320px (215px → 187px; its label 287.9px → 286px). On Linux above 640px
+  the only change is inputs that had been wider than their own label or card coming back inside it
+  (sign-in 381px → 360px, filter search 377px → 329px). Live check (2026-10-09): a visible Chromium on
+  Windows against a real backend from this commit in a throwaway Docker stack (a fresh Postgres 16
+  with all ten migrations, ClamAV; not the compose dev database). Signed up and signed in, posted with
+  a long title and an unbroken URL, uploaded `sample.mp4` through the form (real scan and promote),
+  saved an edit of the post, opened the file's detail as its owner, signed out. No sideways scroll and
+  no control outside its box at any step. The window was asked for 375, 320 and 1366px and, at the
+  display's 110% scaling, was 341, 291 and 1242px wide (the chosen upload row was measured at 341px
+  only). What this run shows is that nothing broke in real use on Windows; Windows does not show the
+  defect, so the fix itself rests on the Linux runs. Not done: no real Android phone was tried
+  (Android's Chrome uses the same family of font engine as Linux, so the overflow was probably there
+  too; not confirmed). Seen and left: the transfer form's email box is 58px tall at 320px, visibly
+  taller than the select above it, the same before and after ([ROADMAP.md](ROADMAP.md) §7).
 - **Docs: an unclaimed upload filename is not bound to its uploader — recorded as later hardening
   (2026-10-06)** — documentation only, no code change. Between `POST /upload/attach` and the first
   `POST /file`, any authenticated user who knows the `temp_` filename can claim it, because attach

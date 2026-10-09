@@ -1639,6 +1639,15 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   means binding the name to the uploader, which touches the `temp_` naming and `TEMP_FILENAME_PATTERN`
   and needs its own decision first. Revisit before the app is next reachable from the public internet,
   or when explicitly requested. Also listed in CLAUDE.md > Known Gaps.
+- **Frontend: two leftovers from the 2026-10-08 Linux input-width fix** — **recorded 2026-10-09, not
+  fixed, not scheduled.** (1) No real Android phone was tried. The overflow came from the text
+  `<input>`'s intrinsic width, 350px on Linux against 215px on Windows. Android's Chrome uses the same
+  family of font engine as Linux, so phones probably had the overflow too and should be free of it
+  now; neither was observed on a device. (2) File detail, ownership-transfer form: the email box is
+  58px tall at 320px, visibly taller than the select above it. It was the same before the fix and the
+  cause was not looked into; cosmetic. Details: [CHANGELOG.md](CHANGELOG.md) 2026-10-08. Scope when
+  picked up: for (1), open the sign-in screen and the five authenticated screens on a phone; for (2),
+  `FileDetailPage.module.css` (`.visibilityLabel`, `.select`). Revisit when explicitly requested.
 
 ## 8. Advisory notes
 

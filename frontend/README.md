@@ -30,7 +30,9 @@ instead (backend ROADMAP.md > Stage 5).
   `fonts` checks that headings and body text are really drawn with the Hahmlet and Noto Sans
   KR web fonts rather than a silent system fallback; `empty-state` checks that an empty list says
   "none yet" until a filter is set; `overflow` checks that no authenticated screen scrolls sideways at
-  320, 375, 667, 768 and 1366px with a long email, title or URL; `post-body` checks that the Post body and comment
+  320, 375, 667, 768 and 1366px with a long email, title or URL, nor do the forms with a text input
+  those screens do not open by themselves (sign-in, a chosen upload row, Post edit, ownership
+  transfer) at 320 and 375px; `post-body` checks that the Post body and comment
   boxes cannot be resized; `touch-targets` checks that every tappable element is at least 40px tall
   at 375px; those seven stub the API, so they create no account and need no backend — see
   `frontend/CLAUDE.md`)

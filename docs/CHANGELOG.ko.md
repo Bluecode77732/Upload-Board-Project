@@ -27,6 +27,39 @@
   spec은 1분 간격의 묶음으로 나눠 돌렸다.
 
 ### 변경
+- **프론트엔드: Linux에서 폼이 폰 폭 밖으로 밀려나던 문제 — dev CI가 실패하던 원인 (2026-10-08,
+  `c08d9e0`; 라이브 확인 2026-10-09)** — `frontend-e2e`가 dev에서 세 번 연속(`5f2f9f0`, `310d72b`,
+  `9d4c59a`) `overflow.spec.ts`의 375px·320px에서 실패했고, 그때마다 `docker-publish-frontend`가
+  skip됐다. 로컬 Windows 실행은 매번 통과했다. Playwright 1.62.1 Linux 이미지에서 재현했다. `/`가 두 폭
+  모두에서 382px였다. 원인은 텍스트 `<input>`이다. `<input>`에는 고유 폭(`size=20`)이 있고, 이 폭은
+  플랫폼의 글꼴 엔진마다 다르다. 같은 Chromium 151, 같은 Noto Sans KR 16px에서 Windows는 215px, Linux는
+  350px로 쟀다. 열을 정하지 않은 grid(`auto`)는 그 폭보다 좁아지지 못해서, New post 폼의 열이 Linux에서는
+  348px, Windows에서는 219px였고 Linux에서만 넘쳤다. `<textarea>`는 해당하지 않는다. `<textarea>` 하나만
+  든 댓글 폼은 Linux에서도 칼럼 안에 있었다. spec은 옳았고, 임계값과 폭 목록은 그대로다. Linux에서 전
+  화면을 훑어 같은 원인을 여덟 곳에서 찾았다: New post 폼과 그 안의 파일 선택기, Post·File 필터
+  패널(375px에서 라벨 밖으로 29px, 320px에서는 화면 밖), 파일을 고르면 생기는 업로드 줄(395px), 로그인
+  카드(384px), Post 수정 폼(386px), File 상세의 소유권 양도 폼(434px). 수정: CSS 모듈 일곱 개에서 폼부터
+  입력창까지의 모든 grid에 `grid-template-columns: minmax(0, 1fr)`을 주고, flex 줄인 양도 폼은 라벨과
+  컨트롤에 `min-width: 0`을 줬다. `overflow.spec.ts`에는 기존 테스트가 열지 않는 네 상태(로그인, 파일을
+  고른 업로드 줄, Post 수정, 소유권 양도)를 375px·320px에서 보는 테스트 두 개를 더했다. Linux에서 옛
+  CSS로는 실패하고, Windows에서는 고치기 전에도 통과한다. `frontend/CLAUDE.md`에 이 규칙과, Linux에서만
+  나는 레이아웃 실패를 로컬에서 재현하는 명령을 적었다. Linux에서 검증했다(Playwright 이미지, 백엔드·
+  Postgres 16·ClamAV는 일회용 컨테이너, 환경 변수는 CI의 값): `overflow.spec.ts` 7/7, frontend e2e 전체
+  47/47, `pnpm lint` 통과. 이어서 Actions run 37754245494에서 job 아홉 개가 모두 통과했고
+  `docker-publish-frontend`가 이미지를 발행했다. Windows에서는 모든 요소의 위치와 크기(여섯 폭 × 여덟
+  상태, 1,674개)가 수정 전후로 같다. 다른 곳은 320px 양도 폼의 이메일 입력창 하나다(215px → 187px, 라벨은
+  287.9px → 286px). 640px 넘는 Linux 화면에서 바뀐 것은 자기 라벨이나 카드보다 넓던 입력창이 그 안으로
+  돌아온 것뿐이다(로그인 381px → 360px, 필터 검색창 377px → 329px). 라이브 확인(2026-10-09): Windows의
+  보이는 Chromium으로, 일회용 Docker 스택(마이그레이션 열 개를 모두 적용한 새 Postgres 16, ClamAV.
+  compose의 dev DB가 아니다)에 띄운 이 커밋의 실제 백엔드를 썼다. 가입하고 로그인한 뒤, 긴 제목과 공백
+  없는 URL로 글을 올리고, 폼으로 `sample.mp4`를 올리고(실제 스캔과 promote), 글을 수정해 저장하고, 파일
+  상세를 소유자로 열고, 로그아웃했다. 어느 단계에서도 가로 스크롤이 없었고 상자 밖으로 나간 컨트롤도
+  없었다. 창은 375·320·1366px로 요청했고, 화면 배율 110%에서 실제 폭은 341·291·1242px였다(파일을 고른
+  업로드 줄은 341px에서만 쟀다). 이 확인이 보여 주는 것은 Windows의 실제 사용에서 깨진 것이 없다는
+  점이다. Windows에서는 결함이 나타나지 않으므로 수정 자체의 근거는 Linux 실행이다. 하지 않은 것: 실제
+  안드로이드 폰에서는 보지 않았다(안드로이드 Chrome은 Linux와 같은 계열의 글꼴 엔진을 써서 같은 넘침이
+  있었을 가능성이 높지만 확인하지 않았다). 보고 그대로 둔 것: 양도 폼의 이메일 입력창이 320px에서 58px로,
+  위의 선택 상자보다 눈에 띄게 높다. 수정 전후가 같다([ROADMAP.ko.md](ROADMAP.ko.md) §7).
 - **문서: 청구 전 업로드 파일명은 업로더에게 묶여 있지 않다 — 추후 보강으로 기록 (2026-10-06)** — 문서만
   바꿨고 코드 변경은 없다. `POST /upload/attach`와 첫 `POST /file` 사이에는 `temp_` 파일명을 아는 인증된
   사용자라면 누구든 청구할 수 있다. attach가 업로더를 남기지 않기 때문이다. 로컬 compose 스택에서 임시 계정
