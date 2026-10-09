@@ -1,21 +1,47 @@
+[![CI](https://github.com/Bluecode77732/Upload-Board-Project/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Bluecode77732/Upload-Board-Project/actions/workflows/ci.yml)
 ![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=flat&logo=nestjs&logoColor=white)
+![React](https://img.shields.io/badge/React-087EA4?style=flat&logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=flat&logo=kubernetes&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-844FBA?style=flat&logo=terraform&logoColor=white)
 ![Jest](https://img.shields.io/badge/Jest-C21325?style=flat&logo=jest&logoColor=white)
 
 # Sharenpo
 
 > 한국어 버전: [README.ko.md](README.ko.md)
 
-A NestJS REST API where authenticated users upload and manage image, audio, and video
-files. JWT auth (Passport), PostgreSQL via TypeORM, Multer disk storage, transaction-safe
-file promotion, Swagger documentation. A local/portfolio backend project — no
-deploy pipeline. A React + Vite browser frontend lives in the `frontend/`
-subfolder of this repository ([ADR 0010](docs/ADR/0010-frontend-split-and-api-surface-freeze.md));
-this README covers the backend at the repo root.
+A service where signed-in users upload images, audio and video, choose who can see each file,
+and share them on a board with posts and comments. It is a NestJS API, a React client and an
+admin console, deployed to AWS/EKS with Helm and Terraform and observed with Prometheus and
+Grafana.
 
-- Timeline: 6 weeks (initial build), ongoing refinement
-- Skills: TypeORM, PostgreSQL, transactions, DTO validation, Passport, guards, Jest, Swagger
+- Timeline: first commit 2025-12-17, still in progress
+- Scope: one developer, AI-assisted under the contract in [CLAUDE.md](CLAUDE.md) — backend,
+  `frontend/`, `admin/`, containers, CI, Helm and Terraform
+- This README covers the whole repository. The backend sits at the repo root; the clients have
+  their own READMEs ([frontend/](frontend/README.md), [admin/](admin/README.md))
+
+## Screenshots
+
+Local stack with throwaway demo data, English UI, light theme. The UI also runs in Korean and
+in a dark theme.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/en/03-file-board.png" alt="File board: preview grid with visibility badges, search, sort and creator filter"><br><sub><b>File board</b> — preview grid, visibility badges, search, sort and creator filter</sub></td>
+<td width="50%"><img src="docs/images/en/04-file-detail.png" alt="File detail: image shown to its owner, visibility control and ownership transfer form"><br><sub><b>File detail</b> — access-checked playback, visibility control, ownership transfer</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/en/02-post-board.png" alt="Post board: new post form with an optional attached file, and the post list"><br><sub><b>Post board</b> — new post with an optional attached file, search and pagination</sub></td>
+<td width="50%"><img src="docs/images/en/05-post-detail.png" alt="Post detail: attached image and a flat, oldest-first comment thread"><br><sub><b>Post detail</b> — attached media and a flat, oldest-first comment thread</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/en/06-admin-dashboard.png" alt="Admin dashboard: totals and recent audit logs"><br><sub><b>Admin console</b> — totals and recent audit logs (the admin UI is English only)</sub></td>
+<td width="50%"><img src="docs/images/en/01-login.png" alt="Sign-in card"><br><sub><b>Sign in</b> — Basic-token sign-in, register toggle, show/hide password</sub></td>
+</tr>
+</table>
 
 ## Documentation
 
@@ -27,8 +53,53 @@ this README covers the backend at the repo root.
 | [ROADMAP.md](docs/ROADMAP.md) | Full staged project plan and known gaps |
 | [CONTRIBUTING.md](docs/CONTRIBUTING.md) | Development workflow and conventions |
 | [CLAUDE.md](CLAUDE.md) | Operating contract for AI-assisted development |
+| [frontend/README.md](frontend/README.md) | React client — structure, auth model, E2E |
+| [admin/README.md](admin/README.md) | Admin console — what was adapted and how it is hosted |
+| [k8s/helm/README.md](k8s/helm/README.md) | Helm chart — values, secrets, NetworkPolicy |
+| [k8s/infra/terraform/README.md](k8s/infra/terraform/README.md) | Terraform — three states, apply and destroy order |
 
 Each document has a Korean sibling (`*.ko.md`).
+
+## Architecture
+
+One Helm release runs three workloads behind one ALB. The Ingress is an explicit path
+allow-list: `/health`, `/metrics` and `/doc` are not routed to it
+([ADR 0058](docs/ADR/0058-ingress-path-allowlist.md)).
+
+```mermaid
+flowchart LR
+  U[Browser] --> ALB["AWS ALB<br/>Ingress path allow-list"]
+  ALB -- "/" --> FE["frontend<br/>nginx + React SPA"]
+  ALB -- "/admin" --> AD["admin<br/>nginx + React SPA"]
+  ALB -- "/auth /user /post /comment<br/>/file /upload /audit-log" --> API["backend<br/>NestJS API"]
+  API --> PG[("PostgreSQL<br/>RDS")]
+  API --> ST{{"FileStorage port"}}
+  ST --> LD["local disk"]
+  ST --> S3[("S3<br/>presigned redirect")]
+  API --> CL["ClamAV<br/>clamd"]
+  PR["Prometheus + Grafana"] -. "scrapes /metrics" .-> API
+```
+
+An upload is two requests. The first scans and stages a `temp_` file; the second promotes it in
+one transaction and gives it an owner and a visibility
+([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md)):
+
+```mermaid
+flowchart LR
+  A["POST /upload/attach"] --> B{"ClamAV scan"}
+  B -- infected --> X["400 UPLOAD_MALWARE_DETECTED"]
+  B -- "scanner down" --> Y["503 UPLOAD_SCAN_UNAVAILABLE"]
+  B -- clean --> C["temp_{uuid}_{timestamp}"]
+  C --> D["POST /file<br/>one DB transaction"]
+  D --> E["granted_… object<br/>+ FileEntity row"]
+  E --> F["GET /file/:id/content<br/>visibility gate"]
+```
+
+Backend modules, split by single responsibility: **Auth** (tokens), **User**, **File**
+(metadata and the visibility gate), **Post**, **Comment**, **Upload** (staging), **AuditLog**,
+plus operational modules — **Storage** (the `FileStorage` port with local-disk and S3 adapters),
+**TempCleanup** (orphan sweep), **Health** and **Metrics**. See
+[ARCHITECTURE.md](docs/ARCHITECTURE.md) for the request and data flow.
 
 ## Features
 
@@ -52,6 +123,61 @@ Each document has a Korean sibling (`*.ko.md`).
   ([ADR 0053](docs/ADR/0053-global-rate-limiting.md),
   [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
 - **Swagger** — full API documentation and manual test bench at `/doc`
+- **Upload malware scanning** — every upload is scanned by ClamAV in memory before anything
+  is written. A match is refused, and an unreachable scanner fails closed instead of skipping
+  the check ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md))
+- **File visibility** — every file is `public`, `private` (default) or `unlisted`. Unlisted
+  files are opened with a share link whose token can be rotated or given an expiry. Bytes are
+  served only through the access-checked `GET /file/:id/content`, never from a static folder
+  ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md),
+  [ADR 0026](docs/ADR/0026-file-visibility-implementation.md))
+- **Storage port** — file operations go through a `FileStorage` interface with a local-disk
+  and an S3 adapter, chosen by `STORAGE_DRIVER`. Under S3 a passing access check redirects to a
+  short-lived presigned URL, so the app server leaves the byte-serving path
+  ([ADR 0029](docs/ADR/0029-storage-port-adapter.md),
+  [ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md))
+- **Board** — posts with an optional attached file, and flat comment threads. Lists share one
+  search, filter, sort and pagination contract
+  ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md),
+  [ADR 0023](docs/ADR/0023-board-domain-schema.md))
+- **Account and file lifecycle** — account deletion cascades only on an explicit
+  confirmation, and every delete is irreversible by design
+  ([ADR 0020](docs/ADR/0020-account-deletion-cascade.md)). Moving a file to another owner needs
+  the recipient's consent: propose, accept, reject or cancel
+  ([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.md))
+- **Hardening** — security response headers
+  ([ADR 0055](docs/ADR/0055-helmet-security-headers.md)), a strength check on token secrets
+  and passwords, a non-root container image
+  ([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.md)), a default-deny
+  NetworkPolicy ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.md)) and the
+  Ingress path allow-list above
+- **Operations** — liveness/readiness endpoints
+  ([ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.md)), Prometheus metrics with
+  Grafana ([ADR 0047](docs/ADR/0047-observability-prometheus-grafana.md)), and scheduled
+  sweeps for orphaned `temp_` files ([ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.md))
+  and orphaned `granted_` files, which only reports until an operator turns deletion on
+  ([ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md))
+- **React client (`frontend/`)** — sign-in and register, the post board with comments, the file
+  board as a preview grid, playback by media type, visibility and share-link management,
+  ownership-transfer actions and account deletion. The upload form takes up to 15 files at
+  once and sends them one by one with a progress bar per file
+  ([ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.md)). The UI is English or
+  Korean and has a light and a dark theme
+- **Admin console (`admin/`)** — login, a dashboard with totals and recent audit logs, the
+  user list with role management, and the audit-log viewer. It is served under `/admin` on the
+  same ALB ([ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.md))
+
+## Tech stack
+
+| Layer | What it uses |
+|---|---|
+| Backend | NestJS 11 (Express), TypeScript, TypeORM 0.3 with PostgreSQL, Passport JWT with separate access and refresh secrets, bcrypt, class-validator and Joi, `@nestjs/throttler`, helmet, `prom-client`, `clamscan`, AWS SDK v3 (S3 and presigned URLs), Swagger |
+| Transactions | Manual QueryRunner where a filesystem move must commit with the DB write, `dataSource.transaction()` for pure DB writes ([ADR 0004](docs/ADR/0004-transaction-pattern-selection.md)). `synchronize: false`, schema by TypeORM migrations ([ADR 0006](docs/ADR/0006-schema-policy-and-migration-adoption.md)) |
+| `frontend/` | React 19, Vite, React Router 7, TypeScript, CSS Modules, plain `fetch` wrapper — no state or data-fetching library |
+| `admin/` | React 19, Vite, React Router 7, Zustand, axios, TypeScript |
+| Tests | Jest unit tests for the services, a backend E2E suite against a real PostgreSQL, Playwright E2E for `frontend/` and `admin/` |
+| Containers and CI | Multi-stage Docker images (`linux/amd64` and `linux/arm64` from `main`), Docker Compose, GitHub Actions |
+| Deployment | Helm chart, Terraform in three states (`cluster`, `app-infra`, `addons`) — VPC, EKS, RDS, S3, Secrets Manager, Route 53 and ACM, ALB Controller, External Secrets, ExternalDNS, kube-prometheus-stack |
 
 ## Quick Start
 
@@ -138,6 +264,11 @@ sync, or turning `ingress.enabled` on; those stay manual (see the Terraform READ
 ([ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.md)); nothing in
 this repository runs `terraform apply` or `helm upgrade` automatically.
 
+This stack has been applied to real AWS and verified there more than once. This README does
+not say whether it is up right now, because that goes stale the day someone runs `apply` or
+`destroy`; the dated log is [ROADMAP.md](docs/ROADMAP.md) §9, and the live state is read from
+AWS.
+
 ### Environment variables
 
 Required (Joi-validated at boot — missing vars fail fast): `ENV`, `DB_TYPE`
@@ -174,7 +305,9 @@ global rate limit and the tighter per-route auth/upload limits —
 
 ## API Endpoints
 
-All endpoints except `/auth/*` require a Bearer access token.
+Every endpoint requires a Bearer access token except `/auth/*`, the operational `/health/*` and
+`/metrics`, and `GET /file/:id/content`, whose access depends on the file's visibility (it
+takes an optional token). Swagger lists every route at `/doc`.
 
 **Authentication** — the refresh token travels only as an httpOnly cookie
 (`SameSite=Strict`, `Path=/auth/token`); browsers must call refresh/signout with
@@ -197,6 +330,10 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](docs/ADR/0013-rbac-and-audit-
   rejected as 400 `VALIDATION_FAILED` rather than silently ignored — the global
   `ValidationPipe`'s `forbidNonWhitelisted` treats a typo like `?orderby=email` as an
   error. Response is a `[users, totalCount]` tuple, matching `GET /file`
+- `GET /user/lookup?email=` — resolve an exact email to a user. Any signed-in user may call it,
+  with the same per-user disclosure as `GET /user/:id`; 404 `USER_NOT_FOUND` if no account has
+  that email. It lets the ownership-transfer form find its recipient
+  ([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.md))
 - `GET /user/:id` — get a user
 - `PATCH /user/:id` — update a user (self, or an admin/superadmin acting on a
   strictly lower-ranked account — an admin cannot modify a peer admin or a superadmin)
@@ -266,6 +403,16 @@ Roles: `user` / `admin` / `superadmin` ([ADR 0013](docs/ADR/0013-rbac-and-audit-
 - `DELETE /file/:id` — delete file metadata and the stored file (creator or admin). A file
   attached to a post is refused with 409 `FILE_IN_USE` — delete the post first
   ([ADR 0023](docs/ADR/0023-board-domain-schema.md))
+- `POST /file/:id/transfer` — propose moving the file to another user (`{ userId }`; creator or
+  admin). Nothing moves yet. 400 `FILE_TRANSFER_INVALID_TARGET` if the target already owns it,
+  404 `USER_NOT_FOUND` for an unknown target, 409 `FILE_TRANSFER_PENDING` if a proposal is
+  already waiting ([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.md))
+- `POST /file/:id/transfer/accept` and `POST /file/:id/transfer/reject` — answer a pending
+  proposal. Only the proposed recipient may do so, and an admin cannot answer for them (403
+  `FORBIDDEN_NOT_TRANSFER_TARGET`). Accepting moves ownership to the caller; 400
+  `FILE_NO_PENDING_TRANSFER` if nothing is pending
+- `DELETE /file/:id/transfer` — cancel an unanswered proposal. Only the file's creator may; an
+  admin cannot cancel someone else's proposal (403 `FORBIDDEN_NOT_OWNER`)
 
 **Post** — the board itself ([ADR 0023](docs/ADR/0023-board-domain-schema.md)). A post carries
 text plus an optional reference to **one** file the author created; the file is *referenced*,
@@ -351,46 +498,57 @@ with a `message` array; when `ENV=dev` a `stack` field is included.
 
 See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full request and data flow.
 
-## Stack
+## Testing and CI
 
-- **NestJS** (Express platform) — modular monolith: Auth / User / File / Upload,
-  split by single responsibility
-- **TypeORM + PostgreSQL** — `synchronize: false`; manual QueryRunner transactions
-  where a filesystem side effect must commit with the DB write
-  ([ADR 0004](docs/ADR/0004-transaction-pattern-selection.md))
-- **Passport** — `jwt` strategy behind `JwtAuthGuard`
-- **Multer** — disk storage with server-generated filenames (`temp_{uuid}_{timestamp}`)
-- **`@nestjs/throttler`** — global `APP_GUARD` rate limiting, 100 req/min default per route,
-  5/min on auth and 15/min on upload
-  ([ADR 0053](docs/ADR/0053-global-rate-limiting.md),
-  [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
-- **Jest** — unit tests colocated as `*.spec.ts`; repository/QueryRunner mocks, no DB access
-- **Swagger** — `/doc`, with `persistAuthorization` for a persistent Bearer session
+- **Unit tests** — Jest, colocated as `*.spec.ts`. Only the services are measured for coverage;
+  repositories and the QueryRunner are mocked, so no database is needed (`pnpm test`).
+- **Backend E2E** — `pnpm test:e2e` runs the real app against a real PostgreSQL. It builds a
+  throwaway `sharenpo_e2e` database from the real migrations, truncates it between tests and
+  drops it afterwards; the dev database is never touched.
+- **Client E2E** — Playwright in `frontend/` and `admin/` (see each folder's README).
+- **GitHub Actions** ([ADR 0016](docs/ADR/0016-github-actions-ci.md),
+  [ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.md)) — lint and unit
+  tests, backend E2E against a PostgreSQL service and a ClamAV service, lint and E2E for each
+  client, then image publishing for the backend, `frontend/` and `admin/`. Before an image is
+  pushed, the built image is booted against a throwaway database and its `HEALTHCHECK` is
+  polled until healthy.
+- There is no deploy pipeline and there are no git hooks. CI stops at publishing images.
 
-## Known Limitations
+## Known limitations
 
-Tracked in [ROADMAP.md](docs/ROADMAP.md) — since 2026-07-23 the full staged project
-plan. Highlights: **Stage 1 foundation is complete** — toolchain pinning,
-Docker/compose, CI (GitHub Actions), logging conventions, and the e2e rewrite all
-landed 2026-07-25 (ADR 0014–0017), and the e2e suite covers the
-auth/ownership/pagination/promotion paths. **Stage 2 has begun** — orphan temp-file
-cleanup landed 2026-07-26 ([ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.md)).
-**File visibility landed 2026-08-01** — every stored file now has a
-`public`/`private`/`unlisted` state (default `private`) and is served only through the
-access-controlled `GET /file/:id/content`; `file/upload` is no longer statically exposed
-([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md) D1/D2/D3/D6,
-[ADR 0026](docs/ADR/0026-file-visibility-implementation.md)). **Media-type expansion also
-landed 2026-08-01** — `POST /upload/attach` now takes one of three type-specific fields
-(`image`/`audio`/`video`), each with its own allowlist
-([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md) D4/D5,
-[ADR 0027](docs/ADR/0027-media-type-expansion-implementation.md)). Both changes are breaking
-for the live `frontend/` consumer, which has not yet adopted either. **Container hardening
-landed 2026-08-08** — non-root image user, liveness/readiness endpoints, and migrations
-moved to their own deploy step ([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.md)–
-[ADR 0032](docs/ADR/0032-migration-as-separate-deploy-step.md)); a distroless runtime base, a
-real secrets manager, and HTTPS termination stay open items ([ADR 0033](docs/ADR/0033-secrets-delivery-target.md),
-[ADR 0034](docs/ADR/0034-https-termination-stance.md), and ROADMAP.md > Unscheduled for
-distroless). `pnpm lint` is clean as of 2026-07-22.
+Open items, each recorded where it was found. The full list is in
+[ROADMAP.md](docs/ROADMAP.md) §7 and CLAUDE.md > Known Gaps.
+
+- **A scan result of "unable to scan" passes the upload gate.** `clamscan` can answer
+  `isInfected: null` when `clamd` closes the connection with an empty reply or a command times
+  out, and the gate reads that as clean, so the file is stored unscanned. Connection errors and
+  an unreachable scanner still fail closed. Read from source, not reproduced against a real
+  `clamd`; the planned fix is small and scoped
+  ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md), addendum 2026-10-03).
+- **An unclaimed upload filename is not bound to its uploader.** Between `POST /upload/attach`
+  and the first `POST /file`, any signed-in user who knows the `temp_` filename can claim it,
+  and the uploader then gets 409 `FILE_ALREADY_CLAIMED`. Reproduced locally. Assessed low: the
+  name carries a v4 UUID, travels only in request and response bodies, and expires with the
+  temp sweep (24 hours by default)
+  ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md), addendum 2026-10-06).
+- **A refresh can race across browser tabs.** The server keeps one refresh anchor per account
+  and has no grace window. The client serializes refreshes inside one tab, so two tabs
+  refreshing at the same instant could end the session. One attempt did not reproduce it.
+- **An interrupted upload restarts from zero.** Each upload is one buffered request, and there
+  is no resumable or chunked upload; none is designed.
+- **A post references at most one file.** Several files on one post is a schema change that
+  has not been decided ([ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.md) D5).
+- **Registration reveals that an email is taken** (`AUTH_EMAIL_TAKEN`), while sign-in hides
+  why it failed. This was weighed and accepted, because the client shows a specific message for
+  it and the 5/minute limit is the only mitigation ([ROADMAP.md](docs/ROADMAP.md) §7).
+- **Rate-limit counters live in each instance's memory.** More than one replica would need
+  shared storage to keep one real ceiling
+  ([ADR 0053](docs/ADR/0053-global-rate-limiting.md)).
+- **Delivery stops at images.** A person runs the deploy, and a service mesh (Istio) was
+  deliberately left out because this project has one backend workload and no east-west
+  traffic for it to manage.
+- **Dependencies.** `pnpm audit --prod` found no known vulnerabilities on 2026-10-09. A plain
+  `pnpm audit` reported 65 that day (3 critical), all in build and test tooling.
 
 ## License
 
