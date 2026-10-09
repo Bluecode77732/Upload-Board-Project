@@ -26,7 +26,8 @@ Grafana.
 ## Screenshots
 
 Local stack with throwaway demo data, English UI, light theme. The UI also runs in Korean and
-in a dark theme.
+in a dark theme. The last four pictures (public and unlisted files, video and audio) were taken
+in a browser that relaxed one local-only header; see [Known limitations](#known-limitations).
 
 <table>
 <tr>
@@ -40,6 +41,14 @@ in a dark theme.
 <tr>
 <td width="50%"><img src="docs/images/en/06-admin-dashboard.png" alt="Admin dashboard: totals and recent audit logs"><br><sub><b>Admin console</b> — totals and recent audit logs (the admin UI is English only)</sub></td>
 <td width="50%"><img src="docs/images/en/01-login.png" alt="Sign-in card"><br><sub><b>Sign in</b> — Basic-token sign-in, register toggle, show/hide password</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/en/07-file-board-media.png" alt="File board with image, video and audio tiles and Public, Unlisted and Private badges"><br><sub><b>Mixed media</b> — image, video and audio tiles with Public, Unlisted and Private badges</sub></td>
+<td width="50%"><img src="docs/images/en/08-unlisted-share.png" alt="Unlisted file with its share link, a rotate button and the visibility control"><br><sub><b>Unlisted file</b> — opened by a share link whose token can be rotated or given an expiry</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/en/09-video-player.png" alt="A public video with the browser's player controls"><br><sub><b>Video</b> — a public video, served with Range support for seeking</sub></td>
+<td width="50%"><img src="docs/images/en/10-audio-player.png" alt="A public audio file with the browser's audio player"><br><sub><b>Audio</b> — a public audio file in the browser's own player</sub></td>
 </tr>
 </table>
 
@@ -544,6 +553,14 @@ Open items, each recorded where it was found. The full list is in
 - **Rate-limit counters live in each instance's memory.** More than one replica would need
   shared storage to keep one real ceiling
   ([ADR 0053](docs/ADR/0053-global-rate-limiting.md)).
+- **Public and unlisted media does not render in the local dev setup.** Locally the client runs
+  on `:5173` and the API on `:3000`, file URLs point at `:3000`, and the API's helmet default
+  sends `Cross-Origin-Resource-Policy: same-origin`, so the browser refuses to embed those files
+  directly. Private files still show, because the client fetches them through the dev proxy.
+  The screenshots above were taken with that one header relaxed in the capture browser. Behind
+  one ALB the client and the API share an origin ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md)),
+  so the problem is not expected there, but it has not been observed in a browser on the
+  deployed stack.
 - **Delivery stops at images.** A person runs the deploy, and a service mesh (Istio) was
   deliberately left out because this project has one backend workload and no east-west
   traffic for it to manage.

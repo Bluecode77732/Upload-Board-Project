@@ -26,7 +26,8 @@
 ## 스크린샷
 
 임시 데모 데이터를 넣은 로컬 스택, 한국어 UI, 라이트 테마로 찍었습니다. UI는 영어와 다크
-테마도 지원합니다.
+테마도 지원합니다. 마지막 네 장(공개·링크 공유 파일, 영상, 오디오)은 로컬 전용 헤더 하나를
+완화한 브라우저로 찍었습니다. [알려진 한계](#알려진-한계)를 참고하세요.
 
 <table>
 <tr>
@@ -40,6 +41,14 @@
 <tr>
 <td width="50%"><img src="docs/images/ko/06-admin-dashboard.png" alt="관리자 대시보드: 총계와 최근 감사 로그"><br><sub><b>관리자 콘솔</b> — 총계와 최근 감사 로그(관리자 UI는 영어만 지원)</sub></td>
 <td width="50%"><img src="docs/images/ko/01-login.png" alt="로그인 카드"><br><sub><b>로그인</b> — Basic 토큰 로그인, 회원가입 전환, 비밀번호 표시/숨김</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/ko/07-file-board-media.png" alt="이미지·영상·오디오 타일과 공개·링크 공유·비공개 배지가 보이는 파일 보드"><br><sub><b>여러 미디어</b> — 이미지·영상·오디오 타일과 공개·링크 공유·비공개 배지</sub></td>
+<td width="50%"><img src="docs/images/ko/08-unlisted-share.png" alt="공유 링크, 링크 재발급 버튼, 공개 범위 설정이 보이는 링크 공유 파일"><br><sub><b>링크 공유 파일</b> — 공유 링크로 열며, 링크의 토큰은 재발급하거나 만료 시각을 둘 수 있습니다</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/ko/09-video-player.png" alt="브라우저 기본 컨트롤이 보이는 공개 영상"><br><sub><b>영상</b> — 탐색을 위해 Range 요청을 지원하는 공개 영상</sub></td>
+<td width="50%"><img src="docs/images/ko/10-audio-player.png" alt="브라우저 기본 플레이어가 보이는 공개 오디오"><br><sub><b>오디오</b> — 브라우저 기본 플레이어로 재생하는 공개 오디오</sub></td>
 </tr>
 </table>
 
@@ -533,6 +542,13 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
   보여 주고 있고, 분당 5회 제한이 유일한 완화책입니다([ROADMAP.ko.md](docs/ROADMAP.ko.md) §7).
 - **요청 횟수 카운터는 인스턴스 메모리에 있습니다.** 레플리카가 둘 이상이면 하나의 진짜 상한을
   지키려고 공유 저장소가 필요합니다([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md)).
+- **로컬 개발 환경에서는 공개·링크 공유 미디어가 렌더링되지 않습니다.** 로컬에서는 클라이언트가
+  `:5173`, API가 `:3000`에서 돌고 파일 URL은 `:3000`을 가리키는데, API의 helmet 기본값이
+  `Cross-Origin-Resource-Policy: same-origin`을 보내므로 브라우저가 그 파일을 직접 삽입하지
+  못하게 막습니다. 비공개 파일은 클라이언트가 개발 프록시를 거쳐 가져오기 때문에 그대로
+  보입니다. 위 스크린샷은 촬영용 브라우저에서 이 헤더 하나를 완화해 찍었습니다. 하나의 ALB 뒤에서는
+  클라이언트와 API가 같은 출처를 쓰므로([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.ko.md))
+  그곳에서는 생기지 않으리라 보지만, 배포된 스택의 브라우저에서 확인하지는 않았습니다.
 - **전달은 이미지 발행에서 멈춥니다.** 배포는 사람이 실행합니다. 서비스 메시(Istio)는 일부러
   넣지 않았습니다. 이 프로젝트는 백엔드 워크로드가 하나뿐이라 메시가 관리할 서비스 간 트래픽이
   없기 때문입니다.
