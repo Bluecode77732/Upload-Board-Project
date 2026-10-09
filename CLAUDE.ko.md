@@ -1418,22 +1418,22 @@ GitHub Actions · Prometheus · Grafana · Terraform · Istio[Terraform 이후 �
 Architecture Decisions가 계속 유효하다.
 
 **알려진 격차**(문서화되었으나 아직 일정에 없음):
-- `pnpm audit --prod`는 **2026-09-10 기준 깨끗함**: qs(DoS + array-limit
-  우회, `>=6.16.0`)와 brace-expansion(DoS, `>=2.1.4`,
-  `typeorm>glob>minimatch` 경로)을 `pnpm.overrides`에 신규 항목 두 개로
-  고정했고, 기존 multer(`^2.3.0`)와 `@nestjs/swagger>js-yaml`(`^4.3.2`)
-  override는 새로 공개된 DoS·CPU 소모 취약점을 덮도록 기존 하한선보다
-  올렸다. joi는 기존 `^18.2.3` 범위 안에서 `pnpm update joi`로 `18.2.8`
-  (프로토타입 오염 수정)까지 올라갔다 — override는 필요 없었다. 안 쓰는
-  구형 `aws-sdk` v2 의존성(2026-08-13 설치, `git log`로 확인한 결과 어떤
-  `.ts` 파일도 이를 import한 적이 없다 — 같은 날 저녁 프로젝트는 이미
-  `@aws-sdk/client-s3`/`s3-request-presigner` v3로 정착했다, ADR 0036)은
-  override 대신 아예 제거했고, 그 안에 번들된 취약한 `uuid`와 패치가
-  없는 region 검증 발견 사항도 함께 사라졌다. 개발 도구의 간접 의존성에서 나온 발견
-  사항은 이번 범위 밖으로 남겨뒀다 — `--prod`를 뺀 일반 `pnpm audit`는
-  이제 58건(2026-07-24 당시엔 몇 건 수준)을 보고하며, critical 1건(`ts-jest`를
-  통한 `handlebars`)도 포함돼 있다 — 여전히 빌드/테스트 시점에만 관련되며
-  jest/@nestjs/cli/eslint 툴체인의 업스트림 릴리스를 기다리는 중이다
+- `pnpm audit --prod`는 **2026-10-08 기준 깨끗하다**. 2026-09-10에 한 번 0건이 됐다가
+  새 권고 6건이 나왔고, 새 의존성 없이 override와 범위 안 업데이트만으로 막았다.
+  proxy-addr(critical, GHSA-jqcg-44mw-7w3h, `express` 경유)는 `"proxy-addr": "^2.0.8"`
+  override를 새로 넣었고, brace-expansion(high 2건 + moderate 1건, `typeorm>glob>minimatch`
+  경유)은 기존 override 하한을 `^2.1.7`로 올렸다. multer(moderate, GHSA-3pph-fpjx-jg34)는
+  직접 의존성 범위와 override를 둘 다 `^2.4.0`으로 올렸고, joi(moderate,
+  GHSA-wr44-6hxh-3jwq)는 `pnpm update joi`로 `18.2.9`가 됐다. 현재 설정에서 실제로 닿는 건
+  없었다. proxy-addr 버그는 IPv4-mapped IPv6 표기에 짧은 prefix를 쓴 신뢰 서브넷에서만
+  생기는데, `backend/main.ts`는 권고문이 우회책으로 제시한 일반 IPv4 표기 `10.0.0.0/16`을
+  쓴다(2.0.7과 2.0.8을 직접 호출해 확인). multer 건은 `diskStorage` 전용이고 이 앱은
+  `memoryStorage`를 쓰며, joi 건은 공격자가 커스텀 메시지를 넣을 수 있어야 한다.
+  2026-09-10 작업(qs·brace-expansion override 추가, multer·js-yaml 하한 상향, joi 18.2.8,
+  안 쓰는 `aws-sdk` v2 제거)은 `docs/CHANGELOG.ko.md`에 있다. 개발 도구 쪽 간접 의존성
+  발견 사항은 계속 범위 밖이다. `--prod`를 뺀 일반 `pnpm audit`는 2026-10-08에 65건
+  (2026-09-10엔 58건)이고 critical 3건은 모두 `ts-jest`를 통한 `handlebars`다. 빌드·테스트
+  시점에만 관련되며 jest/@nestjs/cli/eslint 툴체인의 업스트림 릴리스를 기다리는 중이다
 - ~~`test/app.e2e-spec.ts`는 손대지 않은 Nest 템플릿이다: 이 앱에 존재하지
   않는 `GET /`를 대상으로 하고, AppModule을 부팅하려면 실제 DB가 필요하다
   — e2e 스위트는 무언가를 검증하기 전에 실제로 다시 작성되어야 한다~~ —

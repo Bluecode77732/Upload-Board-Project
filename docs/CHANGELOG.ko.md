@@ -398,6 +398,37 @@
   통과했다.
 
 ### 보안
+- **`pnpm audit --prod` 다시 0건: proxy-addr, brace-expansion, multer, joi (2026-10-08)** —
+  2026-09-10 이후 새로 나온 권고 6건을 override와 범위 안 업데이트 한 번으로 막았다. 새
+  의존성은 없다. `proxy-addr` 2.0.7 → 2.0.8(critical, GHSA-jqcg-44mw-7w3h,
+  `@nestjs/platform-express>express` 경유)은 `express` 5.2.1이 `^2.0.7`을 요구하므로
+  `"proxy-addr": "^2.0.8"` override를 새로 넣었다. `brace-expansion` 2.1.4 → 2.1.7(high 2건,
+  moderate 1건, `typeorm>glob>minimatch` 경유)은 override 하한을 `^2.1.7`로 올렸다.
+  `multer` 2.3.0 → 2.4.0(moderate, GHSA-3pph-fpjx-jg34)은 직접 의존성 범위와 override를
+  둘 다 `^2.4.0`으로 올렸다. `joi` 18.2.8 → 18.2.9(moderate, GHSA-wr44-6hxh-3jwq)는
+  `pnpm update joi`로 올렸고, 범위도 `^18.2.9`로 바뀌었다. multer 2.4.0이 `concat-stream`
+  의존성을 없애면서 잠금 파일에서 `concat-stream`과 `typedarray`도 빠졌다.
+  여섯 건 모두 현재 설정에서는 닿지 않았다. proxy-addr 버그는 신뢰 서브넷을 IPv4-mapped
+  IPv6 표기에 짧은 prefix로 적으면(`::ffff:10.0.0.0/8`) 모든 IPv4 피어와 일치해, 아무
+  클라이언트나 `X-Forwarded-For`로 `req.ip`를 정할 수 있던 문제다. `backend/main.ts`는 일반
+  IPv4 표기 `10.0.0.0/16`을 신뢰하는데, 이게 권고문이 직접 제시한 우회책이다. 두 버전을
+  직접 호출해 확인했다. `10.0.0.0/16`에서는 2.0.7과 2.0.8 모두 `::ffff:10.0.3.4` 피어는
+  신뢰하고, `::ffff:10.1.3.4`와 `::ffff:203.0.113.9`가 보낸 위조 헤더는 무시했다.
+  `::ffff:10.0.0.0/8`에서는 2.0.7이 모든 피어에 위조 주소를 돌려줬고 2.0.8은 어느 피어에도
+  돌려주지 않았다. 같은 설정의 실제 Express 5.2.1 서버를 `app.listen(PORT)`처럼 `::`에 띄우고
+  `X-Forwarded-For: 6.6.6.6, 10.0.5.5`를 붙여 루프백으로 요청하니 `req.ip`는
+  `::ffff:127.0.0.1`(IPv4 클라이언트)과 `::1`(IPv6 클라이언트)이었다. 헤더는 무시됐다.
+  multer 권고(업로드 중단 뒤 디스크에 남는 고아 파일)는 `diskStorage`에만 해당하고
+  `UploadModule`은 `memoryStorage`를 쓴다. joi 건은 공격자가 커스텀 메시지를 넣을 수 있어야
+  하는데, 여기서 joi는 부팅 때 env 검증에만 쓴다. multer 2.4.0 릴리스 노트
+  ([v2.4.0](https://github.com/expressjs/multer/releases/tag/v2.4.0))에는 이 앱의 업로드 경로를
+  바꾸는 항목이 없다. `memoryStorage`는 이제 청크를 직접 이어 붙이고, limits는 음이 아닌
+  정수여야 하며(`fileSize: 100000000`은 정수다), `fileFilter`가 `cb(null, false)`로 건너뛴
+  파일은 더 이상 `maxCount`를 쓰지 않는다. 우리 `fileFilter`는 에러로 거부한다. 확인:
+  `pnpm audit --prod` 6건 → 0건, lint 통과(CRLF 체크아웃이라 `endOfLine: auto`로 돌린
+  `eslint`), `pnpm test` 280/280, 로컬 Postgres·ClamAV 대상 `pnpm test:e2e` 76/76(업로드 포함).
+  일반 `pnpm audit`는 개발 전용 65건(2026-09-10엔 58건)이고 critical 3건은 모두 `ts-jest`를
+  통한 `handlebars`다. 이전처럼 범위 밖이다.
 - **`trust proxy`를 앱의 VPC CIDR로 설정 (2026-09-14, [ADR
   0054](ADR/0054-per-route-rate-limit-tuning.ko.md)의 2026-09-10 addendum 해결)** —
   리버스 프록시 뒤에서는 `ThrottlerGuard`가 키로 쓰는 `req.ip`가 프록시 자신의 주소로

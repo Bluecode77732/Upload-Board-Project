@@ -452,6 +452,36 @@ development line (package.json version).
   `pnpm test` (278/278) all pass.
 
 ### Security
+- **`pnpm audit --prod` clean again: proxy-addr, brace-expansion, multer, joi (2026-10-08)** —
+  six advisories published after the 2026-09-10 round, fixed with overrides and one in-range
+  update; no new dependency. `proxy-addr` 2.0.7 → 2.0.8 (critical, GHSA-jqcg-44mw-7w3h, via
+  `@nestjs/platform-express>express`) through a new `"proxy-addr": "^2.0.8"` override, since
+  `express` 5.2.1 asks for `^2.0.7`; `brace-expansion` 2.1.4 → 2.1.7 (two high, one moderate, via
+  `typeorm>glob>minimatch`) by raising its override to `^2.1.7`; `multer` 2.3.0 → 2.4.0 (moderate,
+  GHSA-3pph-fpjx-jg34) by raising both the direct range and the override to `^2.4.0`; `joi` 18.2.8
+  → 18.2.9 (moderate, GHSA-wr44-6hxh-3jwq) via `pnpm update joi`, which also moved the range to
+  `^18.2.9`. multer 2.4.0 drops its `concat-stream` dependency, so the lockfile also loses
+  `concat-stream` and `typedarray`.
+  None of the six was reachable as configured. The proxy-addr bug: a trust subnet written as an
+  IPv4-mapped IPv6 address with a short prefix (`::ffff:10.0.0.0/8`) matched every IPv4 peer, so
+  any client could set `req.ip` through `X-Forwarded-For`. `backend/main.ts` trusts the plain IPv4
+  `10.0.0.0/16`, which is the advisory's own workaround. Checked by calling both versions directly:
+  with `10.0.0.0/16`, 2.0.7 and 2.0.8 both trust a `::ffff:10.0.3.4` peer and ignore the forged
+  header from `::ffff:10.1.3.4` and `::ffff:203.0.113.9`; with `::ffff:10.0.0.0/8`, 2.0.7 returns the
+  forged address for every peer and 2.0.8 for none. A real Express 5.2.1 server with the same
+  setting, listening on `::` like `app.listen(PORT)`, answered a loopback request carrying
+  `X-Forwarded-For: 6.6.6.6, 10.0.5.5` with `req.ip` `::ffff:127.0.0.1` (IPv4 client) and `::1`
+  (IPv6 client): the header was ignored. The multer advisory (orphaned files after an aborted
+  upload) is `diskStorage`-only and `UploadModule` uses `memoryStorage`. The joi one needs custom
+  messages an attacker can supply; joi here only validates the env at boot. multer 2.4.0's release
+  notes ([v2.4.0](https://github.com/expressjs/multer/releases/tag/v2.4.0)) list nothing that
+  changes this app's upload path: `memoryStorage` now concatenates the chunks itself, limits must be
+  non-negative integers (`fileSize: 100000000` is), and a file a `fileFilter` skips with
+  `cb(null, false)` no longer uses up `maxCount`, while ours rejects with an error. Verified:
+  `pnpm audit --prod` 6 → 0, lint clean (`eslint` with `endOfLine: auto` for this CRLF checkout),
+  `pnpm test` 280/280, `pnpm test:e2e` 76/76 against a local Postgres and ClamAV, uploads included.
+  Plain `pnpm audit` reports 65 dev-only findings (58 on 2026-09-10), 3 critical, all `handlebars`
+  via `ts-jest`; out of scope as before.
 - **`trust proxy` set to the app's VPC CIDR (2026-09-14, resolves the [ADR
   0054](ADR/0054-per-route-rate-limit-tuning.md) 2026-09-10 addendum)** — behind a reverse
   proxy, `ThrottlerGuard`'s `req.ip` key resolved to the proxy's own address, collapsing the

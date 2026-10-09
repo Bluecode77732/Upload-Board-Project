@@ -1388,22 +1388,22 @@ still lands only as its own dedicated task with its own ADR — until then, the
 Architecture Decisions above remain operative.
 
 **Known gaps** (documented, not yet scheduled):
-- `pnpm audit --prod` is **clean as of 2026-09-10**: qs (DoS + array-limit
-  bypass, `>=6.16.0`) and brace-expansion (DoS, `>=2.1.4`, via
-  `typeorm>glob>minimatch`) pinned via two new `pnpm.overrides` entries; the
-  existing multer (`^2.3.0`) and `@nestjs/swagger>js-yaml` (`^4.3.2`) overrides
-  bumped past their prior floors to cover newly-disclosed DoS/CPU-exhaustion
-  advisories; joi moved to `18.2.8` (prototype-pollution fixes) inside its
-  existing `^18.2.3` range via `pnpm update joi` — no override needed. The
-  unused legacy `aws-sdk` v2 dependency (installed 2026-08-13, `git log`
-  confirms no `.ts` file ever imported it — the project had already settled on
-  `@aws-sdk/client-s3`/`s3-request-presigner` v3 that same evening, ADR 0036)
-  was removed outright rather than overridden, taking its bundled vulnerable
-  `uuid` and its own unpatched region-validation finding with it. Dev-transitive
-  findings stay out of scope — plain `pnpm audit` (not `--prod`) now reports 58
-  (a handful in 2026-07-24), including one critical (`handlebars` via
-  `ts-jest`) — still build/test-time only, waiting on upstream releases in the
-  jest/@nestjs/cli/eslint toolchains
+- `pnpm audit --prod` is **clean as of 2026-10-08**. It had been clean on 2026-09-10, then
+  six new advisories appeared and were fixed with overrides and one in-range update, no new
+  dependency: proxy-addr (critical, GHSA-jqcg-44mw-7w3h, via `express`) through a new
+  `"proxy-addr": "^2.0.8"` override; brace-expansion (2 high + 1 moderate, via
+  `typeorm>glob>minimatch`) by raising its override to `^2.1.7`; multer (moderate,
+  GHSA-3pph-fpjx-jg34) by raising both the direct range and the override to `^2.4.0`; joi
+  (moderate, GHSA-wr44-6hxh-3jwq) to `18.2.9` via `pnpm update joi`. None was reachable as
+  configured: the proxy-addr bug needs an IPv4-mapped IPv6 trust subnet with a short prefix,
+  and `backend/main.ts` uses the plain IPv4 `10.0.0.0/16` the advisory itself gives as the
+  workaround (checked against 2.0.7 and 2.0.8 directly); the multer one is `diskStorage`-only
+  and this app uses `memoryStorage`; the joi one needs attacker-supplied custom messages. The
+  2026-09-10 round (qs and brace-expansion overrides, multer/js-yaml floors raised, joi
+  18.2.8, the unused `aws-sdk` v2 removed) is in `docs/CHANGELOG.md`. Dev-transitive
+  findings stay out of scope: plain `pnpm audit` (not `--prod`) reports 65 on 2026-10-08
+  (58 on 2026-09-10), including 3 critical, all `handlebars` via `ts-jest` — build/test-time
+  only, waiting on upstream releases in the jest/@nestjs/cli/eslint toolchains
 - ~~`test/app.e2e-spec.ts` is the untouched Nest template: it targets `GET /`, which
   does not exist in this app, and booting AppModule needs a live DB — the e2e suite
   needs a real rewrite before it verifies anything~~ — **stale, corrected 2026-09-14**:
