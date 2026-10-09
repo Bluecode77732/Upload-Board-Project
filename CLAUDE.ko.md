@@ -1767,9 +1767,11 @@ lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 
 
 ## 프로젝트 개요
 
-인증된 비디오 파일 업로드와 관리를 위한 NestJS REST API다. JWT 인증
-(Passport), TypeORM을 통한 PostgreSQL, Multer 디스크 스토리지, Swagger
-문서화. 로컬/포트폴리오 프로젝트이며 배포 파이프라인은 없다. **이
+인증된 이미지/오디오/비디오 업로드와 관리를 위한 NestJS REST API다. JWT 인증
+(Passport), TypeORM을 통한 PostgreSQL, Multer 메모리 버퍼링(바이트는
+`FileStorage` 포트를 거쳐 로컬 디스크 또는 S3에 저장, ADR 0029), Swagger
+문서화. 포트폴리오 프로젝트다. CI는 이미지를 발행할 뿐 배포하지는 않으며,
+배포는 사람이 `helm upgrade`를 실행한다(CI/CD 절 참고). **이
 CLAUDE.md는 저장소 루트의 백엔드를 관장한다**(`backend/`, `docs/ADR/`,
 `test/`). React + Vite 프론트엔드가 2026-07-24에 `frontend/` 서브폴더로
 추가되었으며(ADR 0010) — 자체 범위의 `frontend/CLAUDE.md`와 툴체인을
@@ -1911,8 +1913,15 @@ gitignore), `fs.unlink`는 휴지통을 거치지 않아서 복구 경로 자체
 - `ServeStaticModule` — `file/temp`만 `/file/temp`로 서빙한다; `file/upload`는
   정적으로 서빙되지 않는다(granted 읽기는 `GET /file/:id/content`를 거친다,
   ADR 0025/0026)
+- `ThrottlerModule` — 전역 기본값 분당 100회, `APP_GUARD`로 등록된
+  `ThrottlerGuard`가 강제한다(ADR 0053/0054); `ScheduleModule` — cron 스윕을 호스팅한다
 - `FileModule`, `UserModule`, `PostModule`, `CommentModule`, `AuthModule`,
-  `UploadModule`
+  `UploadModule`, `AuditLogModule`, 그리고 운영용 `TempCleanupModule`,
+  `HealthModule`, `MetricsModule`(프로젝트 고유 원칙 > 모듈 책임 참고;
+  `StorageModule`은 여기서 import하지 않는다 — `UploadModule`, `FileModule`,
+  `UserModule`, `TempCleanupModule`이 각자 import한다)
+- 전역 provider: `AllExceptionsFilter`(`APP_FILTER`), `ThrottlerGuard`(`APP_GUARD`),
+  `ValidationPipe`(`APP_PIPE`)
 
 **AuthModule** (`backend/auth/`)
 - REST: `POST /auth/register`, `POST /auth/signin`(둘 다 Basic 토큰),
@@ -1993,22 +2002,33 @@ gitignore), `fs.unlink`는 휴지통을 거치지 않아서 복구 경로 자체
 - `FileService`를 export한다(계정 연쇄를 위해 `UserModule`이 소비한다)
 
 **UploadModule** (`backend/upload/`)
-- REST: `POST /upload/attach`(`JwtAuthGuard` 뒤에) — 멀티파트 필드 `video`,
-  `temp_{uuid}_{timestamp}.{ext}` 네이밍으로 `file/temp`에 Multer
-  diskStorage, 100MB 크기 제한; `{ filename }`을 반환한다
-- 컨트롤러만 있는 모듈: 서비스도 DB 접근도 없다
+- REST: `POST /upload/attach`(`JwtAuthGuard` 뒤에) — 멀티파트 필드 `image`
+  (jpg/jpeg/png/webp), `audio`(mp3), `video`(mp4/mov/webm) 중 정확히 하나,
+  필드마다 확장자 + mimetype 허용목록이 따로 있다(`FileFieldsInterceptor`,
+  필드당 `maxCount: 1`), 100MB 크기 제한, 분당 15회 throttle(ADR 0054);
+  `{ filename }`을 반환한다
+- `UploadService.stageTemp` — 메모리에 있는 Multer 버퍼를 `ScanService`(ClamAV,
+  fail-closed, ADR 0059)로 검사한 뒤, `temp_{uuid}_{timestamp}.{ext}` 이름을
+  만들어 `FileStorage` 포트로 쓴다(`storage.saveTemp`, ADR 0029 D4).
+  Multer가 `memoryStorage`를 쓰므로 스캔을 통과하기 전에는 디스크에 아무것도
+  닿지 않는다
+- DB 접근 없음: `StorageModule`을 import하고, provider는 `UploadService`와
+  `ScanService`다(`ScanService`는 이 모듈 전용이다, ADR 0059 D2)
 
 ### 파일 업로드의 데이터 흐름
-1. `POST /upload/attach`(멀티파트, 필드 `video`) → Multer가
-   `file/temp/temp_{uuid}_{ts}.{ext}`를 쓴다 → 생성된 파일 이름으로 응답한다
+1. `POST /upload/attach`(멀티파트, `image`/`audio`/`video` 중 한 필드) → Multer가
+   파일을 메모리에 버퍼링한다 → `UploadService.stageTemp`가 스캔한 뒤
+   `FileStorage.saveTemp`로 `temp_{uuid}_{ts}.{ext}`로 저장한다(`local`에서는
+   `file/temp/`) → 생성된 파일 이름으로 응답한다
 2. 클라이언트가 `{ title, filePath: <그 파일 이름> }`으로 `POST /file`을
    호출한다
 3. `FileService.uploadFile()`이 먼저 claim을 해석한다(ADR 0019) — 같은
    사용자가 이미 승격한 파일 이름은 replay되고(200), 다른 사용자라면
    409, 뒤에 temp 파일이 없다면 400 — 그다음, claim되지 않은 파일 이름에
    대해서만 QueryRunner 트랜잭션을 연다: `FileEntity`를 삽입하고
-   (`filePath`는 `file/upload/granted_...`로 다시 쓰인다), 물리 파일을
-   `file/temp`에서 `file/upload`로 옮기고, 커밋한다; 실패 시 롤백,
+   (`filePath`는 `file/upload/granted_...`로 다시 쓰인다), 저장된 객체를
+   `storage.promote()`로 temp 키에서 granted 키로 옮기고(`local`에서는
+   `file/temp`에서 `file/upload`로), 커밋한다; 실패 시 롤백,
    `finally`에서 `release()`
 4. 행은 기본값으로 `visibility: 'private'`이다. 그 바이트는 이제 오직
    `GET /file/:id/content`를 통해서만 닿을 수 있다(소유자가

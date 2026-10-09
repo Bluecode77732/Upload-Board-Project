@@ -1740,9 +1740,11 @@ paginated; `.env.example` documents `BASE_URL`; the "300MB" comment is fixed;
 
 ## Project Overview
 
-NestJS REST API for authenticated video-file upload and management. JWT auth
-(Passport), PostgreSQL via TypeORM, Multer disk storage, Swagger documentation.
-A local/portfolio project, no deployment pipeline. **This CLAUDE.md governs the
+NestJS REST API for authenticated image/audio/video upload and management. JWT auth
+(Passport), PostgreSQL via TypeORM, Multer in-memory buffering with the bytes stored
+through the `FileStorage` port (local disk or S3, ADR 0029), Swagger documentation.
+A portfolio project. CI publishes images but does not deploy — a human runs
+`helm upgrade` (see CI/CD). **This CLAUDE.md governs the
 backend at the repo root** (`backend/`, `docs/ADR/`, `test/`). A React + Vite frontend
 was added 2026-07-24 as the `frontend/` subfolder (ADR 0010) — it has its own
 scoped `frontend/CLAUDE.md` and tooling, and is not a pnpm-workspace monorepo:
@@ -1882,7 +1884,15 @@ substitute for this once the exercise actually calls the delete path.
   `AuditLogEntity`, `PostEntity`, `CommentEntity`
 - `ServeStaticModule` — serves only `file/temp` at `/file/temp`; `file/upload` is not
   statically served (granted reads go through `GET /file/:id/content`, ADR 0025/0026)
-- `FileModule`, `UserModule`, `PostModule`, `CommentModule`, `AuthModule`, `UploadModule`
+- `ThrottlerModule` — global default 100 requests/minute, enforced by the `APP_GUARD`
+  `ThrottlerGuard` (ADR 0053/0054); `ScheduleModule` — hosts the cron sweeps
+- `FileModule`, `UserModule`, `PostModule`, `CommentModule`, `AuthModule`, `UploadModule`,
+  `AuditLogModule`, plus the operational `TempCleanupModule`, `HealthModule` and
+  `MetricsModule` (see Project-Specific Principles > Module Responsibility;
+  `StorageModule` is not imported here — `UploadModule`, `FileModule`, `UserModule` and
+  `TempCleanupModule` each import it)
+- Global providers: `AllExceptionsFilter` (`APP_FILTER`), `ThrottlerGuard` (`APP_GUARD`),
+  `ValidationPipe` (`APP_PIPE`)
 
 **AuthModule** (`backend/auth/`)
 - REST: `POST /auth/register`, `POST /auth/signin` (both Basic token),
@@ -1956,21 +1966,30 @@ substitute for this once the exercise actually calls the delete path.
 - Exports `FileService` (consumed by `UserModule` for the account cascade)
 
 **UploadModule** (`backend/upload/`)
-- REST: `POST /upload/attach` (behind `JwtAuthGuard`) — multipart field `video`,
-  Multer diskStorage to `file/temp` with `temp_{uuid}_{timestamp}.{ext}` naming,
-  100MB size limit; returns `{ filename }`
-- Controller-only module: no service, no DB access
+- REST: `POST /upload/attach` (behind `JwtAuthGuard`) — exactly one of the multipart
+  fields `image` (jpg/jpeg/png/webp), `audio` (mp3), `video` (mp4/mov/webm), each with
+  its own extension + mimetype allowlist (`FileFieldsInterceptor`, `maxCount: 1` per
+  field), 100MB size limit, 15/minute throttle (ADR 0054); returns `{ filename }`
+- `UploadService.stageTemp` — scans the in-memory Multer buffer through `ScanService`
+  (ClamAV, fail-closed, ADR 0059), then generates the `temp_{uuid}_{timestamp}.{ext}`
+  name and writes it through the `FileStorage` port (`storage.saveTemp`, ADR 0029 D4).
+  Multer uses `memoryStorage`, so nothing reaches disk before the scan passes
+- No DB access: imports `StorageModule`; providers `UploadService` and `ScanService`
+  (`ScanService` is private to this module, ADR 0059 D2)
 
 ### Data Flow for Uploading a File
-1. `POST /upload/attach` (multipart, field `video`) → Multer writes
-   `file/temp/temp_{uuid}_{ts}.{ext}` → responds with the generated filename
+1. `POST /upload/attach` (multipart, one of the fields `image`/`audio`/`video`) → Multer
+   buffers the file in memory → `UploadService.stageTemp` scans it, then stores it as
+   `temp_{uuid}_{ts}.{ext}` through `FileStorage.saveTemp` (under `local`:
+   `file/temp/`) → responds with the generated filename
 2. Client calls `POST /file` with `{ title, filePath: <that filename> }`
 3. `FileService.uploadFile()` first resolves the claim (ADR 0019) — a filename already
    promoted by the same user replays (200), by another user 409s, and one with no temp
    file behind it 400s — then, only for an unclaimed filename, opens a QueryRunner
    transaction: inserts `FileEntity` (`filePath` rewritten to `file/upload/granted_...`),
-   renames the physical file from `file/temp` to `file/upload`, commits; rollback on
-   failure, `release()` in `finally`
+   moves the stored object from its temp key to the granted key with `storage.promote()`
+   (under `local`: `file/temp` to `file/upload`), commits; rollback on failure,
+   `release()` in `finally`
 4. The row defaults to `visibility: 'private'`. Its bytes are now reachable only through
    `GET /file/:id/content` (creator/admin only until the owner switches visibility to
    `public` or `unlisted` via `PATCH /file/:id`); API responses expose that endpoint's URL
