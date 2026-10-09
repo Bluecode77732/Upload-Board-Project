@@ -103,25 +103,25 @@ flowchart LR
 
 ## 기능
 
-- **인증** — HTTP Basic 토큰으로 등록/로그인; `type` 클레임을 가진 이중 시크릿
-  JWT 액세스/리프레시 쌍 ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.ko.md))
-- **2단계 업로드** — `temp_` → `granted_` 접두사 상태 머신; DB insert와 물리 파일
-  이동이 함께 커밋되거나 함께 롤백됨
+- **인증** — HTTP Basic 토큰으로 등록하고 로그인하며, `type` 클레임을 가진 이중 시크릿
+  JWT 액세스/리프레시 쌍을 발급합니다 ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.ko.md))
+- **2단계 업로드** — `temp_` → `granted_` 접두사 상태 머신으로 동작하며, DB insert와 물리 파일
+  이동이 함께 커밋되거나 함께 롤백됩니다
   ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md))
-- **RBAC + 감사 로그** — `user`/`admin`/`superadmin` 역할; 소유권 검사가 "본인
-  또는 admin"으로 확장되고, 역할 변경·삭제가 감사된다
-  ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md),
-  [ADR 0007](docs/ADR/0007-ownership-checks-without-rbac.ko.md) 위에 얹힘)
-- **경계 검증** — 전역 `ValidationPipe`(`whitelist` + `forbidNonWhitelisted`);
-  직렬화된 엔티티는 `password`를 유출하지 않음
-- **요청 횟수 제한** — 모든 라우트가 기본 분당 100회 제한을 받되 라우트별로 독립적으로
-  추적됨(앱 전체가 나눠 쓰는 풀 하나가 아님 — `@nestjs/throttler`가 컨트롤러+핸들러+
-  클라이언트 IP로 키잉); `POST /auth/register`/`signin`/`token/refresh`는 분당 5회로,
-  `POST /upload/attach`는 분당 15회로 강화됨; health/metrics 프로브는 예외라
-  오케스트레이터/Prometheus 트래픽이 남용으로
-  오인되지 않음([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md),
+- **RBAC + 감사 로그** — `user`/`admin`/`superadmin` 역할이 있고, 소유권 검사가 "본인
+  또는 admin"으로 확장되며, 역할 변경과 삭제가 감사됩니다
+  ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md)은
+  [ADR 0007](docs/ADR/0007-ownership-checks-without-rbac.ko.md) 위에 쌓았습니다)
+- **경계 검증** — 전역 `ValidationPipe`(`whitelist` + `forbidNonWhitelisted`)를 쓰고,
+  직렬화된 엔티티는 `password`를 유출하지 않습니다
+- **요청 횟수 제한** — 모든 라우트가 기본 분당 100회 제한을 받고, 한도는 라우트별로 따로
+  셉니다. 앱 전체가 나눠 쓰는 풀 하나가 아닙니다(`@nestjs/throttler`가 컨트롤러+핸들러+
+  클라이언트 IP를 키로 씁니다). `POST /auth/register`/`signin`/`token/refresh`는 분당 5회로,
+  `POST /upload/attach`는 분당 15회로 더 엄격합니다. health/metrics 프로브는 제외되어
+  오케스트레이터와 Prometheus 트래픽이 남용으로
+  오인되지 않습니다([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md),
   [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md))
-- **Swagger** — `/doc`에서 전체 API 문서 열람과 수동 테스트 가능
+- **Swagger** — `/doc`에서 전체 API 문서를 열람하고 수동으로 테스트할 수 있습니다
 - **업로드 악성코드 스캔** — 모든 업로드는 디스크에 쓰기 전에 메모리 상태에서 ClamAV로
   스캔됩니다. 감염이 확인되면 거절하고, 스캐너에 연결할 수 없을 때도 검사를 건너뛰지 않고
   fail-closed로 처리합니다([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md))
@@ -169,7 +169,7 @@ flowchart LR
 |---|---|
 | 백엔드 | NestJS 11(Express), TypeScript, PostgreSQL을 쓰는 TypeORM 0.3, 액세스·리프레시 시크릿을 따로 둔 Passport JWT, bcrypt, class-validator와 Joi, `@nestjs/throttler`, helmet, `prom-client`, `clamscan`, AWS SDK v3(S3와 presigned URL), Swagger |
 | 트랜잭션 | 파일 이동이 DB 쓰기와 함께 커밋되어야 할 때는 수동 QueryRunner, 순수 DB 쓰기에는 `dataSource.transaction()`([ADR 0004](docs/ADR/0004-transaction-pattern-selection.ko.md)). `synchronize: false`이며 스키마는 TypeORM 마이그레이션으로 관리([ADR 0006](docs/ADR/0006-schema-policy-and-migration-adoption.ko.md)) |
-| `frontend/` | React 19, Vite, React Router 7, TypeScript, CSS Modules, 평범한 `fetch` 래퍼 — 상태 관리나 데이터 패칭 라이브러리는 쓰지 않음 |
+| `frontend/` | React 19, Vite, React Router 7, TypeScript, CSS Modules, 평범한 `fetch` 래퍼 — 상태 관리나 데이터 패칭 라이브러리는 쓰지 않습니다 |
 | `admin/` | React 19, Vite, React Router 7, Zustand, axios, TypeScript |
 | 테스트 | 서비스를 대상으로 한 Jest 단위 테스트, 실제 PostgreSQL을 쓰는 백엔드 E2E, `frontend/`와 `admin/`의 Playwright E2E |
 | 컨테이너와 CI | 멀티 스테이지 Docker 이미지(`main`에서는 `linux/amd64`와 `linux/arm64`), Docker Compose, GitHub Actions |
@@ -204,7 +204,7 @@ pnpm run start:dev
 # 6. (선택) superadmin 계정 승격 — POST /auth/register로 먼저 계정을 만들고,
 #    .env의 SUPERADMIN_EMAIL을 그 주소로 설정한 뒤:
 #      pnpm promote-superadmin
-#    (ADR 0013/0052 — 자동이 아니라 의도적인 수동 단계다)
+#    (ADR 0013/0052 — 자동이 아니라 의도적인 수동 단계입니다)
 
 # 테스트
 pnpm test              # 단위 테스트
@@ -215,11 +215,11 @@ pnpm run test:cov      # 커버리지 (서비스만 측정)
 
 `docker compose`가 Postgres·ClamAV·API를 함께 띄웁니다
 ([ADR 0015](docs/ADR/0015-docker-and-compose.ko.md); ClamAV는
-[ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)에서 추가됨).
+[ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)에서 추가했습니다).
 호스트 포트 5435를 점유하는 레거시 `upload-board-pg` 컨테이너를 먼저 멈추세요.
 
 ```bash
-cp .env.example .env        # 시크릿 채우기; DB_*는 compose용으로 그대로 둬도 됨
+cp .env.example .env        # 시크릿을 채웁니다. DB_*는 compose용으로 그대로 둬도 됩니다
 docker compose up --build   # db(postgres:16) + clamav → migrate(one-shot) → api를 :3000에 기동
 ```
 
@@ -229,8 +229,8 @@ docker compose up --build   # db(postgres:16) + clamav → migrate(one-shot) →
 — `api`는 `migrate`가 0으로 종료될 때까지 기다립니다. 이미지는 non-root 사용자로
 실행됩니다([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.ko.md)) — 네이티브
 Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 실패하면 한 번
-`chown`하세요: `sudo chown -R 1001:1001 file/` (Windows/Mac Docker Desktop은 영향
-없음).
+`chown`하세요: `sudo chown -R 1001:1001 file/` (Windows/Mac Docker Desktop은 영향을
+받지 않습니다).
 
 `.env`는 건드리지 않고 이 머신에서만 값을 바꾸려면 — 예를 들어 `.env`가 S3를 가리키는데 버킷이
 없을 때 `STORAGE_DRIVER=local` — gitignore된 `.env.local`에 적으세요. `api`와 `migrate`가
@@ -246,10 +246,10 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 [k8s/infra/terraform/README.md](k8s/infra/terraform/README.ko.md)와
 [k8s/helm/README.md](k8s/helm/README.ko.md)에 있습니다.
 
-| 방법 | 명령 | 이럴 때 쓴다 |
+| 방법 | 명령 | 쓰는 경우 |
 |---|---|---|
-| 1. 스크립트 | `bash k8s/infra/terraform/deploy.sh all` (또는 `cluster` / `app-infra` / `addons` / `helm [브랜치]`를 하나씩) | 기본 경로. Terraform 세 state를 순서대로 적용한 뒤, 세 이미지에 같은 `:<git-sha>`를 넣어 `helm upgrade --install`을 실행한다([ADR 0046](docs/ADR/0046-deploy-sequence-automation.ko.md)) |
-| 2. 직접 실행 | `cluster/` → `app-infra/` → `addons/` 각 디렉터리에서 `terraform init -backend-config="bucket=<state-bucket>"`, `plan`, `apply`를 실행한 뒤 `k8s/helm`에서 `helm upgrade --install` | 스크립트를 쓰고 싶지 않을 때 — 스크립트가 감싸고 있는 순서 그대로다 |
+| 1. 스크립트 | `bash k8s/infra/terraform/deploy.sh all` (또는 `cluster` / `app-infra` / `addons` / `helm [브랜치]`를 하나씩) | 기본 경로. Terraform 세 state를 순서대로 적용한 뒤, 세 이미지에 같은 `:<git-sha>`를 넣어 `helm upgrade --install`을 실행합니다([ADR 0046](docs/ADR/0046-deploy-sequence-automation.ko.md)) |
+| 2. 직접 실행 | `cluster/` → `app-infra/` → `addons/` 각 디렉터리에서 `terraform init -backend-config="bucket=<state-bucket>"`, `plan`, `apply`를 실행한 뒤 `k8s/helm`에서 `helm upgrade --install` | 스크립트를 쓰고 싶지 않을 때 — 스크립트가 감싸고 있는 순서 그대로입니다 |
 | 3. Helm만 | `k8s/helm`에서 `helm upgrade --install sharenpo . -f values-prod.yaml --set image.tag=<sha> --set frontend.image.tag=<sha> --set admin.image.tag=<sha>` | 인프라가 이미 떠 있고 앱 Secret도 있어서, 재배포하거나 이전 sha로 롤백하기만 하면 될 때 |
 
 `deploy.sh`는 모든 `apply` 전에 명시적으로 `y`를 입력받아야 멈추지 않고 진행합니다 —
@@ -272,19 +272,19 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE`, `HASH_ROUNDS`,
 `ACCESS_TOKEN_SECRET`, `REFRESH_TOKEN_SECRET`, `ACCESS_TOKEN_SECRET_EXPIRES_IN`,
 `REFRESH_TOKEN_SECRET_EXPIRES_IN`. 2026-09-11부터 이 중 세 개는 존재 여부를 넘어선
-검증도 받는다: `HASH_ROUNDS`는 10 이상이어야 하고, `ACCESS_TOKEN_SECRET`/
+검증도 받습니다. `HASH_ROUNDS`는 10 이상이어야 하고, `ACCESS_TOKEN_SECRET`/
 `REFRESH_TOKEN_SECRET`은 각각 32자 이상이면서 대문자·소문자·숫자·기호를 모두
-포함해야 한다 — 기준에 못 미치면 부팅 시 해당 필드명이 명시된 Joi 에러로 막힌다.
+포함해야 합니다. 기준에 못 미치면 부팅 시 해당 필드명이 명시된 Joi 에러로 막힙니다.
 
-선택 (모두 Joi로 기본값이 검증되거나 각자의 조건으로 게이팅됨 — 예시를 포함한 전체
+선택 항목은 모두 Joi로 기본값을 검증하거나 각자의 조건에 따라 켜집니다(예시를 포함한 전체
 목록은 `.env.example` 참고): `BASE_URL`(기본 `http://localhost:3000`; 공개 파일 URL
 조합에 사용), `PORT`(기본 `3000`), `CORS_ORIGIN`(미설정 = CORS 비활성; 콤마 구분
 허용 목록 — [ADR 0008](docs/ADR/0008-opt-in-cors.ko.md); 배포된 `frontend/`는 이 값을
-설정하지 않는다 — API와 같은 ALB 뒤에서 same-origin으로 동작한다,
+설정하지 않습니다 — API와 같은 ALB 뒤에서 same-origin으로 동작하기 때문입니다,
 [ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.ko.md) — `admin/`의 개발 서버나
-다른 cross-origin 소비자는 여전히 필요하다), `SUPERADMIN_EMAIL`(미설정 =
+다른 cross-origin 소비자에게는 여전히 필요합니다), `SUPERADMIN_EMAIL`(미설정 =
 비활성; 수동 `pnpm promote-superadmin` 단계의 대상 계정일 뿐 부팅 시 자동으로
-승격되지 않음 —
+승격되지는 않습니다 —
 [ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md)/[ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.ko.md)), `TEMP_SWEEP_ENABLED` /
 `TEMP_SWEEP_CRON` / `TEMP_SWEEP_TTL_HOURS` / `TEMP_SWEEP_DRY_RUN`(고아 temp 파일
 정리 — [ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.ko.md)), `STORAGE_DRIVER`
@@ -319,13 +319,13 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 **사용자** — 사용자 생성은 `POST /auth/register`이며 `POST /user`는 없습니다.
 역할: `user` / `admin` / `superadmin` ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md))
 - `GET /user` — 사용자 목록 (admin만). `take`(1–100, 기본 20), `skip`(기본 0)로
-  페이지네이션합니다; `search`는 email에 대한 대소문자 구분 없는 부분일치입니다(와일드카드는
-  이스케이프됨). `sortBy`(`createdAt`|`email`|`id`, 기본 `createdAt`)와
+  페이지네이션하며, `search`는 email에 대한 대소문자 구분 없는 부분일치입니다(와일드카드는
+  이스케이프됩니다). `sortBy`(`createdAt`|`email`|`id`, 기본 `createdAt`)와
   `order`(`ASC`|`DESC`, 기본 `DESC`)로 정렬을 제어하며, `id`가 항상 tiebreaker로
   덧붙습니다 — `GET /file`이 이미 갖고 있는 것과 같은 검색/정렬 형태입니다
   ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.ko.md)). 선언되지 않은 쿼리
   파라미터는 조용히 무시되지 않고 400 `VALIDATION_FAILED`로 거부됩니다 — 전역
-  `ValidationPipe`의 `forbidNonWhitelisted`가 `?orderby=email`같은 오타를 오류로
+  `ValidationPipe`의 `forbidNonWhitelisted`가 `?orderby=email` 같은 오타를 오류로
   취급합니다. 응답은 `GET /file`과 동일한 `[users, totalCount]` 튜플입니다
 - `GET /user/lookup?email=` — 정확히 일치하는 이메일로 사용자를 조회합니다. 로그인한 사용자라면
   누구나 호출할 수 있고, 공개되는 정보 수준은 `GET /user/:id`와 같습니다. 그 이메일의 계정이
@@ -333,16 +333,16 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
   ([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.ko.md))
 - `GET /user/:id` — 사용자 조회
 - `PATCH /user/:id` — 사용자 수정 (본인, 또는 자신보다 낮은 role의 계정에 대해서만 동작하는
-  admin/superadmin — admin은 동급 admin이나 superadmin은 수정할 수 없다)
+  admin/superadmin — admin은 동급 admin이나 superadmin을 수정할 수 없습니다)
 - `PATCH /user/:id/role` — 역할 부여 (superadmin만; 마지막 superadmin은 강등 불가)
 - `DELETE /user/:id` — 사용자 삭제 (본인, 또는 위와 동일한 동급/상위 role 제한이 적용되는
   admin/superadmin). 파일을 보유한 계정은 409
   `USER_HAS_FILES`로 거절되며, `?deleteFiles=true`로 연쇄 삭제를 확인해야 계정과 파일을
-  함께 삭제한다 — 되돌릴 수 없다 ([ADR 0020](docs/ADR/0020-account-deletion-cascade.ko.md)).
-  해당 계정의 **게시글은 별도 확인 없이 항상 함께 삭제된다** — 이 플래그가 지키는 대상은
-  미디어 바이트뿐이기 때문이다 ([ADR 0023](docs/ADR/0023-board-domain-schema.ko.md)). 확인을
+  함께 삭제합니다 — 되돌릴 수 없습니다 ([ADR 0020](docs/ADR/0020-account-deletion-cascade.ko.md)).
+  해당 계정의 **게시글은 별도 확인 없이 항상 함께 삭제됩니다** — 이 플래그가 지키는 대상은
+  미디어 바이트뿐이기 때문입니다 ([ADR 0023](docs/ADR/0023-board-domain-schema.ko.md)). 확인을
   거쳤더라도 그 계정의 파일이 *다른 사용자의* 게시글에 걸려 있으면 409 `USER_FILES_IN_USE`로
-  거절된다 — 그 게시글을 먼저 지워야 한다
+  거절됩니다 — 그 게시글을 먼저 지워야 합니다
   ([ADR 0024](docs/ADR/0024-account-cascade-fk-refusal.ko.md))
 
 **파일**
@@ -354,10 +354,10 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
   D4/D5, [ADR 0027](docs/ADR/0027-media-type-expansion-implementation.ko.md)). temp
   저장소에 도달하기 전에 ClamAV(`clamd`)로 스캔되며, 감염이 확인되면 400
   `UPLOAD_MALWARE_DETECTED`, 스캐너에 연결할 수 없거나 타임아웃되면 검사를 건너뛰지
-  않고 503 `UPLOAD_SCAN_UNAVAILABLE`로 fail-closed
+  않고 503 `UPLOAD_SCAN_UNAVAILABLE`로 fail-closed 처리합니다
   ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md))
-- `GET /file` — 파일 목록. 모든 쿼리 파라미터는 선택적이며 함께 조합할 수 있다. 선언되지 않은
-  파라미터는 400 `VALIDATION_FAILED`로 거절된다
+- `GET /file` — 파일 목록. 모든 쿼리 파라미터는 선택적이며 함께 조합할 수 있습니다. 선언되지 않은
+  파라미터는 400 `VALIDATION_FAILED`로 거절됩니다
   ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.ko.md))
 
   | 파라미터 | 허용 값 | 기본값 |
@@ -371,86 +371,86 @@ Linux 호스트에서 바인드 마운트된 `./file` 디렉터리에 쓰기가 
 
   예: `GET /file?search=holiday&creatorId=3&sortBy=title&order=ASC&take=10`
 - `GET /file/:id` — 파일 메타데이터 조회. `private`/`unlisted` 파일은 작성자·admin 외에게는
-  404 `FILE_NOT_FOUND`로 답한다 — 존재 자체를 숨긴다
+  404 `FILE_NOT_FOUND`로 답하며, 존재 자체를 숨깁니다
   ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md),
   [ADR 0026](docs/ADR/0026-file-visibility-implementation.ko.md))
 - `GET /file/:id/content` — 저장된 파일 바이트를 스트리밍하며, `visibility`로 접근을
-  검사한다: `public`은 인증 불필요, `private`은 작성자·admin의 Bearer 토큰 필요(아니면 403
-  `FORBIDDEN_NOT_OWNER`), `unlisted`는 일치하는 `?share=<token>` 필요(로그인 불필요; 누락·오류·
-  만료 시 403 `FILE_SHARE_INVALID`). 영상/오디오 탐색을 위한 `Range` 요청을 지원한다.
-  granted 바이트를 서빙하는 **유일한** 경로다 — `ServeStaticModule`은 더 이상 `file/upload`를
-  노출하지 않는다
+  검사합니다. `public`은 인증이 필요 없고, `private`은 작성자·admin의 Bearer 토큰이 필요하며(아니면 403
+  `FORBIDDEN_NOT_OWNER`), `unlisted`는 일치하는 `?share=<token>`이 필요합니다(로그인은 필요 없고, 누락·오류·
+  만료 시 403 `FILE_SHARE_INVALID`). 영상/오디오 탐색을 위한 `Range` 요청을 지원합니다.
+  granted 바이트를 서빙하는 **유일한** 경로입니다 — `ServeStaticModule`은 더 이상 `file/upload`를
+  노출하지 않습니다
   ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md) D1/D2,
   [ADR 0026](docs/ADR/0026-file-visibility-implementation.ko.md)). `STORAGE_DRIVER=s3`에서는
   접근 검사를 통과하면 바이트를 직접 스트리밍하는 대신 수명이 짧은 presigned S3 URL로
-  `302` 리다이렉트한다 — 기본값인 `local` 드라이버에서는 동작이 그대로다
+  `302` 리다이렉트합니다 — 기본값인 `local` 드라이버에서는 동작이 그대로입니다
   ([ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.ko.md))
 - `POST /file` — 임시 파일을 영구 저장소로 승격 (트랜잭션), 기본 `visibility: private`로
-  시작한다. attach로 받은 파일명은 1회용 청구 토큰이라, 다시 제출하면 청구한 본인에게는 기존
+  시작합니다. attach로 받은 파일명은 1회용 청구 토큰이라, 다시 제출하면 청구한 본인에게는 기존
   파일을 200으로 돌려주고(멱등 재시도), 다른 사용자에게는 409 `FILE_ALREADY_CLAIMED`를
   반환합니다 ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.ko.md)). 응답의 `mediaType`
   (`image`/`audio`/`video`)은 파일 확장자로부터 서버가 판정하며, 클라이언트가 보내는 값이
-  아니다 ([ADR 0040](docs/ADR/0040-persisted-media-type-for-playback.ko.md))
-- `PATCH /file/:id` — 파일 메타데이터 수정 (작성자 또는 admin), `visibility` 토글 포함.
-  `unlisted`로 전환하면 `shareToken`이 발급되어 `shareUrl`로 반환된다(소유자·admin에게만);
-  `rotateShareToken: true`는 이를 재발급해 이전에 공유된 링크를 모두 무효화한다; 선택적
-  `shareExpiresAt`으로 만료 시각을 둘 수 있다(기본: 만료 없음)
+  아닙니다 ([ADR 0040](docs/ADR/0040-persisted-media-type-for-playback.ko.md))
+- `PATCH /file/:id` — 파일 메타데이터 수정 (작성자 또는 admin). `visibility` 토글도 여기서 합니다.
+  `unlisted`로 전환하면 `shareToken`이 발급되어 `shareUrl`로 반환됩니다(소유자·admin에게만).
+  `rotateShareToken: true`는 이를 재발급해 이전에 공유된 링크를 모두 무효화합니다. 선택적
+  `shareExpiresAt`으로 만료 시각을 둘 수 있습니다(기본: 만료 없음)
   ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md) D3)
 - `DELETE /file/:id` — 파일 메타데이터와 저장된 물리 파일 삭제 (작성자 또는 admin). 게시글이
-  참조 중인 파일은 409 `FILE_IN_USE`로 거절되므로 게시글을 먼저 지워야 한다
+  참조 중인 파일은 409 `FILE_IN_USE`로 거절되므로 게시글을 먼저 지워야 합니다
   ([ADR 0023](docs/ADR/0023-board-domain-schema.ko.md))
-- `POST /file/:id/transfer` — 파일을 다른 사용자에게 넘기자고 제안한다(`{ userId }`, 작성자 또는
-  admin). 이 시점에는 아무것도 옮겨지지 않는다. 대상이 이미 소유자면 400
+- `POST /file/:id/transfer` — 파일을 다른 사용자에게 넘기자고 제안합니다(`{ userId }`, 작성자 또는
+  admin). 이 시점에는 아무것도 옮겨지지 않습니다. 대상이 이미 소유자면 400
   `FILE_TRANSFER_INVALID_TARGET`, 없는 대상이면 404 `USER_NOT_FOUND`, 이미 대기 중인 제안이
   있으면 409 `FILE_TRANSFER_PENDING`
   ([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.ko.md))
-- `POST /file/:id/transfer/accept`, `POST /file/:id/transfer/reject` — 대기 중인 제안에 응답한다.
-  제안받은 사용자만 응답할 수 있고 admin도 대신할 수 없다(403
+- `POST /file/:id/transfer/accept`, `POST /file/:id/transfer/reject` — 대기 중인 제안에 응답합니다.
+  제안받은 사용자만 응답할 수 있고 admin도 대신할 수 없습니다(403
   `FORBIDDEN_NOT_TRANSFER_TARGET`). 수락하면 소유권이 호출자에게 옮겨지며, 대기 중인 제안이
   없으면 400 `FILE_NO_PENDING_TRANSFER`
-- `DELETE /file/:id/transfer` — 아직 응답이 없는 제안을 취소한다. 파일의 작성자만 취소할 수 있고,
-  admin도 남의 제안은 취소할 수 없다(403 `FORBIDDEN_NOT_OWNER`)
+- `DELETE /file/:id/transfer` — 아직 응답이 없는 제안을 취소합니다. 파일의 작성자만 취소할 수 있고,
+  admin도 남의 제안은 취소할 수 없습니다(403 `FORBIDDEN_NOT_OWNER`)
 
 **게시글** — 게시판 본체 ([ADR 0023](docs/ADR/0023-board-domain-schema.ko.md)). 게시글은 본문과 함께
-작성자 본인이 올린 파일 **하나**를 선택적으로 참조한다. 참조일 뿐 소유가 아니므로 게시글을 지워도
-파일은 그대로 남는다
-- `GET /post` — 게시글 목록. 쿼리 파라미터 규약은 위 `GET /file`과 동일하다
-  (`take` / `skip` / `search` / `sortBy` / `order` / `creatorId`, 기본값도 같음)
+작성자 본인이 올린 파일 **하나**를 선택적으로 참조합니다. 참조일 뿐 소유가 아니므로 게시글을 지워도
+파일은 그대로 남습니다
+- `GET /post` — 게시글 목록. 쿼리 파라미터 규약은 위 `GET /file`과 동일합니다
+  (`take` / `skip` / `search` / `sortBy` / `order` / `creatorId`, 기본값도 같습니다)
 - `GET /post/:id` — 작성자와 첨부 파일을 포함한 게시글 조회
 - `POST /post` — 게시글 작성 (`{ title, body, fileId? }`). `fileId`는 요청자 본인이 만든 파일이어야
   하고(아니면 403 `FORBIDDEN_NOT_OWNER`, 없는 id면 404 `FILE_NOT_FOUND`), 다른 게시글이 이미
-  점유하지 않은 것이어야 한다. 이 제약이 곧 멱등 키 역할을 한다 — **완전히 동일한** 본문으로 다시
-  제출하면 기존 게시글을 200으로 돌려주고, 같은 `fileId`에 본문이 다르면 409 `POST_FILE_TAKEN`이다.
-  `fileId` 없는 게시글은 자연 키가 없어 재제출 시 새 글이 만들어진다
+  점유하지 않은 것이어야 합니다. 이 제약이 곧 멱등 키 역할을 합니다 — **완전히 동일한** 본문으로 다시
+  제출하면 기존 게시글을 200으로 돌려주고, 같은 `fileId`에 본문이 다르면 409 `POST_FILE_TAKEN`입니다.
+  `fileId` 없는 게시글은 자연 키가 없어 재제출 시 새 글이 만들어집니다
 - `PATCH /post/:id` — `title` / `body` 수정 (작성자 또는 admin). 첨부는 작성 시점에 고정되므로,
-  영상을 떼려면 게시글을 삭제해야 한다
-- `DELETE /post/:id` — 게시글 삭제 (작성자 또는 admin), 되돌릴 수 없다. 그 글의 댓글은 FK 연쇄로
-  함께 사라지지만, 첨부 파일은 그대로 남는다
+  영상을 떼려면 게시글을 삭제해야 합니다
+- `DELETE /post/:id` — 게시글 삭제 (작성자 또는 admin), 되돌릴 수 없습니다. 그 글의 댓글은 FK 연쇄로
+  함께 사라지지만, 첨부 파일은 그대로 남습니다
 
 **댓글** — 게시글 아래 스레드 ([ADR 0023](docs/ADR/0023-board-domain-schema.ko.md)). 평면 구조이며
-대댓글은 없다
+대댓글은 없습니다
 - `GET /post/:postId/comment` — 한 게시글의 댓글 목록, **오래된 순**(최신순인 파일·게시글 목록과
-  반대다. 정렬은 고정이라 정렬 파라미터를 받지 않는다). `take` / `skip`으로 페이지네이션한다.
+  반대입니다. 정렬은 고정이라 정렬 파라미터를 받지 않습니다). `take` / `skip`으로 페이지네이션합니다.
   없는 글이면 404 `POST_NOT_FOUND`
 - `POST /post/:postId/comment` — 댓글 작성 (`{ body }`, 1,000자 이하). 글이 없으면 404
   `POST_NOT_FOUND`. 댓글에는 유니크한 컬럼이 없어 멱등 키도 없으므로, 동일한 내용을 다시 제출하면
-  **두 번째** 댓글이 만들어진다
+  **두 번째** 댓글이 만들어집니다
 - `PATCH /comment/:id` — `body` 수정 (작성자 또는 admin)
-- `DELETE /comment/:id` — 댓글 삭제 (작성자 또는 admin), 되돌릴 수 없다. 게시글은 그대로다
+- `DELETE /comment/:id` — 댓글 삭제 (작성자 또는 admin), 되돌릴 수 없습니다. 게시글은 그대로입니다
 
-게시글 작성자라고 해서 자기 글의 댓글에 **특별한 권한을 얻지는 않는다** — 수정과 삭제는 댓글
-작성자 본인이나 admin의 몫이며, 그 외 누구의 것도 아니다.
+게시글 작성자라고 해서 자기 글의 댓글에 **특별한 권한을 얻지는 않습니다** — 수정과 삭제는 댓글
+작성자 본인이나 admin의 몫이며, 그 외 누구의 것도 아닙니다.
 
 **감사 로그**
 - `GET /audit-log` — ROLE_CHANGE / USER_DELETE / FILE_DELETE / POST_DELETE / COMMENT_DELETE 기록 조회 (admin만; 페이지네이션, `?action` 필터). `?userId`는 해당 유저가 actor이거나, **유저를 대상으로 하는** action의 target인 기록만 반환합니다 — `targetId`는 다형이므로 대상이 파일·게시글·댓글인 기록은 actor 쪽으로만 매칭됩니다([ADR 0045](docs/ADR/0045-audit-log-target-type.ko.md)). 둘 다 주어지면 두 필터가 AND로 묶입니다
 
 **헬스 체크** (운영용 — 애플리케이션 소비자가 아니라 로드밸런서/오케스트레이터
-프로브를 위한 것이며, 설계상 인증 없음, [ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.ko.md))
-- `GET /health/live` — 프로세스가 살아 있는지만 확인; 의존성 체크 없음
-- `GET /health/ready` — 추가로 DB 연결을 확인; 연결 불가 시 503
+프로브를 위한 것이며, 설계상 인증이 없습니다, [ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.ko.md))
+- `GET /health/live` — 프로세스가 살아 있는지만 확인하고 의존성은 검사하지 않습니다
+- `GET /health/ready` — 추가로 DB 연결을 확인하며, 연결할 수 없으면 503입니다
 
 **메트릭** (운영용 — 애플리케이션 소비자가 아니라 Prometheus 스크레이프를
-위한 것이며, 설계상 인증 없음, [ADR 0047](docs/ADR/0047-observability-prometheus-grafana.ko.md))
+위한 것이며, 설계상 인증이 없습니다, [ADR 0047](docs/ADR/0047-observability-prometheus-grafana.ko.md))
 - `GET /metrics` — Prometheus exposition 포맷: 기본 프로세스 지표, 요청당
   지연(`http_request_duration_seconds`), 앱 카운터(`upload_claims_total`,
   `temp_cleanup_deleted_total`)
