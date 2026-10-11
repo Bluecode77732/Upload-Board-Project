@@ -86,6 +86,28 @@ describe('ScanService', () => {
       expect(scanStream).toHaveBeenCalledTimes(2);
     });
 
+    it('treats a null verdict (clamscan resolves instead of rejecting) as a failed attempt and retries', async () => {
+      await service.onModuleInit();
+      scanStream
+        .mockResolvedValueOnce({ isInfected: null, viruses: [] })
+        .mockResolvedValueOnce({ isInfected: false, viruses: [] });
+
+      const result = await service.scanBuffer(Buffer.from('clean'));
+
+      expect(result).toEqual({ isInfected: false, viruses: [] });
+      expect(scanStream).toHaveBeenCalledTimes(2);
+    });
+
+    it('fails closed with ScanUnavailableError when every attempt returns a null verdict (ADR 0059 D4)', async () => {
+      await service.onModuleInit();
+      scanStream.mockResolvedValue({ isInfected: null, viruses: [] });
+
+      await expect(service.scanBuffer(Buffer.from('x'))).rejects.toThrow(
+        ScanUnavailableError,
+      );
+      expect(scanStream).toHaveBeenCalledTimes(2);
+    });
+
     it('fails closed with ScanUnavailableError once every attempt fails (ADR 0059 D4)', async () => {
       await service.onModuleInit();
       scanStream.mockRejectedValue(new Error('ECONNREFUSED'));

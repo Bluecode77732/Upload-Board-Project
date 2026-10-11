@@ -1529,17 +1529,15 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   창에서는 대화상자가 열렸고, Chrome 시크릿 창 하나는 처음에 열리지 않다가 나중에 열렸다. 코드에서 바뀐
   것은 `906ce3c`의 stale input 수정뿐이다([CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-02). 다시 나타나면
   Chrome 버전, 그 창의 확장 프로그램, `chrome://policy`, 다른 사이트의 파일 선택창이 열리는지를 적어 둔다.
-- **악성코드 스캔 게이트가 `null` 판정을 통과시킨다** — **2026-10-03 발견, 같은 날 후속 과제로 결정,
-  시작하지 않음.** 2026-10-03 백엔드 의존성 점검에서, `clamd`가 연결을 정상적으로 닫았는데 응답이 비어 있거나
-  `COMMAND READ TIMED OUT`이거나 `OK`/`FOUND`/`ERROR` 어느 쪽도 아니면 `clamscan`의 `scanStream`이
-  `isInfected: null`("Unable to scan")로 resolve하고, `ScanService.scanBuffer`와 `UploadService.stageTemp`가 이
-  `null`을 깨끗한 파일로 읽어 스캔하지 않은 채 저장한다는 것을 찾았다. 근거, 그래도 fail-closed로 남는
-  경우, 심각도 평가(낮음~중간. 소스를 읽어 확인했고 실제 `clamd`로 재현하지는 않았다)는
-  [ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md)의 추가 기록(2026-10-03)에 있다. 착수할 때의
-  범위: `backend/upload/scan.service.ts`(재시도 `try` 안에서 `null`을 실패한 시도로 처리, 타입 좁히기, 함수 주석
-  블록 갱신), `scan.service.spec.ts`(`{ isInfected: null }` 케이스), 이어서 `pnpm lint`와
-  `pnpm test -- scan.service`. 스키마, 환경 변수, API 변경은 없다. 스택을 다시 적용하기 전에, 또는 명시적으로
-  요청받을 때 다시 본다. CLAUDE.md > Known Gaps에도 올려 두었다.
+- ~~**악성코드 스캔 게이트가 `null` 판정을 통과시킨다**~~ — **2026-10-03 발견, 2026-10-12 해결.**
+  `clamd`가 판정 없이 연결을 닫으면 `clamscan`의 `scanStream`이 `isInfected: null`("Unable to scan")로
+  resolve하고, `ScanService.scanBuffer`와 `UploadService.stageTemp`가 이 `null`을 깨끗한 파일로 읽어 스캔하지
+  않은 채 저장했다. 이제 `scanBuffer`는 재시도 `try` 안에서 boolean이 아닌 판정을 던지므로, 재시도한 뒤
+  `503 UPLOAD_SCAN_UNAVAILABLE`로 응답한다. 단위 테스트 두 개를 추가했고, `scan.service`와 `upload.service`
+  spec 12개가 통과하며 바꾼 두 파일에 대한 `eslint`도 깨끗하다. 실제 `clamd`로 재현했다. 스캔 도중
+  재시작, `SIGTERM`, `SIGKILL`에서 `null`이 나왔고, 수정 후에는 503이 나오며 `saveTemp`는 호출되지 않았다.
+  다시 돌리지 않은 것: HTTP 계층과 EKS. 자세한 내용은 [ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md)
+  추가 기록(2026-10-12)에 있다. 바로 옆에서 찾은 마감 시간 빈틈은 이 절 끝의 점검 항목에 있다.
 - **청구 전 업로드 파일명은 업로더에게 묶여 있지 않다** — **2026-10-06 발견, 같은 날 추후 보강으로 결정,
   시작하지 않음.** `POST /upload/attach`가 업로더를 남기지 않아서, attach와 첫 `POST /file` 사이에는 `temp_`
   파일명을 아는 인증된 사용자라면 누구든 청구할 수 있고, 원래 업로더는 409 `FILE_ALREADY_CLAIMED`를 받는다.
@@ -1558,7 +1556,57 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   [CHANGELOG.ko.md](CHANGELOG.ko.md) 2026-10-08에 있다. 착수할 때의 범위: (1)은 폰에서 로그인 화면과 인증된
   다섯 화면을 열어 본다. (2)는 `FileDetailPage.module.css`(`.visibilityLabel`, `.select`). 명시적으로
   요청받을 때 다시 본다.
+- **장애 복구·가용성 점검, 2026-10-12: 고치지 않고 남긴 항목** — **2026-10-12 기록, 일정 없음.**
+  Helm 차트, Terraform, 앱의 장애 경로를 읽고, 일회용 Postgres와 실제 `clamd`를 상대로 로컬에서 재현했다.
+  떠 있는 클러스터가 없어서(`aws eks list-clusters`가 빈 목록을 돌려줬다) 아래 항목은 어느 것도 EKS에서
+  관찰하지 못했다. 바로 고칠 가치가 있던 `null` 스캔 판정은 고쳤다(위 항목). 나머지는 지금 규모 — replica 하나,
+  사용자 없음, 실행 사이마다 내려가는 스택 — 에서는 낮은 수준이다. 항목마다 무엇인지, 왜 남겼는지, 언제 다시
+  볼지를 적었다.
+  - **스캔에 전체 마감 시간이 없다.** `clamd`를 pause하면(연결은 받고 응답은 하지 않는다) 스캔이 45초 뒤에도
+    끝나지 않았고, 연결을 닫지 않는 스텁은 120초를 넘겼다. 8초 `timeout`은 소켓 idle 타임아웃이지 마감
+    시간이 아니다. 멈춘 `clamd`는 liveness probe가 재시작시킬 때까지 업로드마다 버퍼(최대 100MB)와 요청을
+    붙잡는데, 차트 설정(30초 × 10회 실패)으로는 약 5분이 걸릴 것이다. 관찰하지는 못했다. 이번 작업이 `null`
+    판정이었고 마감 시간은 호출의 제어 흐름을 바꾸기 때문에 남겼다(`scanStream`을 `Promise.race`로 감싸는
+    방식이며, `clamscan`이 진행 중인 스트림을 중단할 수 있는지는 확인하지 않았다). `scan.service.ts`를 다음에
+    고칠 때, 또는 앱이 실제 업로드 트래픽을 받기 전에 다시 본다.
+  - **replica 하나, PodDisruptionBudget 없음, 리소스 설정 없음.** 네 Deployment 모두 `replicas: 1`로
+    렌더링되고(clamd는 템플릿에 고정), PDB·HPA·topology spread·anti-affinity는 렌더링되지 않으며,
+    `resources`는 비어 있다(BestEffort). 노드 드레인이나 축출이 일어나면 대체 Pod가 Ready가 될 때까지
+    공백이 생기고, 롤아웃마다 요청이 하나씩 떨어졌다
+    ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md) 추가 기록 2026-09-29). 주변에는 RDS
+    `multi_az = false`, NAT 게이트웨이 하나(`cluster/main.tf`), `emptyDir` 위의 clamd 시그니처 DB가 있다.
+    replica 하나가 포트폴리오 규모에서 정한 선택이고(`values.yaml`의 `replicaCount` 주석), replica를
+    늘리면 인스턴스별 throttle 카운터(다음 항목)와 비용이 따라오기 때문에 남겼다. 실제 사용자나 부하가
+    생길 때, 또는 가용성을 내세우기 전에 다시 본다.
+  - **인스턴스별 throttle 카운터와 조율되지 않는 스윕.** Redis 기반 `ThrottlerStorage`는 위에 이미 올라 있고,
+    replica가 둘 이상일 때만 의미가 있다. `backend/temp-cleanup`, `backend/file`, `backend/metrics`에는 두
+    cron 스윕을 replica 사이에서 조율하는 코드가 없다(락이나 리더 선출을 검색했지만 찾지 못했다). replica 둘이
+    동시에 돌리면 어떻게 되는지는 분석하지 않았다. replica 수와 함께 다시 본다.
+  - **데이터베이스 연결·쿼리 타임아웃이 없다.** `AppModule`의 TypeORM 옵션에 설정이 없고 `pg`는 무한정
+    기다린다. 데이터베이스 프로세스를 얼려 두면(`docker pause`) 요청이 재개될 때까지 21초를 기다렸다. 연결
+    거부는 바로 실패하고, 재시작 뒤에는 컨테이너가 뜬 지 0.3초 만에 `/health/ready`가 200으로 돌아왔다.
+    `app.module.ts`가 명시적 승인이 필요한 고영향 파일이고, 거부가 아니라 멈추는 데이터베이스는 더 좁은
+    경우라서 남겼다. 부하 테스트나 RDS 장애 조치 테스트 전에, 그 승인과 함께 다시 본다.
+  - **작은 항목들.** 어느 것도 지금 사용자에게 보이는 것을 바꾸지 않는다. `/health/ready`의 503은
+    `FALLBACK_CODES`에 503 항목이 없어서 `INTERNAL_ERROR` 코드를 단다(`health.controller.ts:53`. ADR 0011은
+    새로 던지는 곳마다 코드를 붙이라고 한다). 데이터베이스가 내려가 있는 동안 인증이 필요한 경로는 503이
+    아니라 500을 돌려주는데, `JwtStrategy`가 사용자를 거기서 읽기 때문이다. 데이터베이스 없이 시작하면 26초
+    뒤 코드 1로 종료하고(`@nestjs/typeorm`의 기본 재시도), 그러면 복구는 pod back-off를 기다린다. 관찰하지는
+    못했다. `UserService.remove`는 커밋 뒤에 감사 행을 쓰므로(`user.service.ts:339`) 그 사이에 연결이 끊기면
+    계정은 사라졌는데 감사 행은 없고 응답은 500이다. `storage.promote()`와 커밋 사이에 연결이 끊기면 행이
+    없는 `granted_` 객체가 남고, `GrantedCleanupService`는 이를 보고만 하고 지우지 않는다
+    ([ADR 0020](ADR/0020-account-deletion-cascade.ko.md), [ADR 0051](ADR/0051-orphaned-granted-file-reclaim.ko.md)).
+    clamd의 PVC가 꺼져 있으면 재시작마다 시그니처 DB를 다시 받아 업로드가 약 40초 동안 503이다
+    ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md) 추가 기록 2026-09-26). `deploy.sh`의
+    `helm upgrade`에는 `--wait`도 `--atomic`도 없고(`deploy.sh:542`), `IMAGE_TAG`로 롤백해도 마이그레이션은
+    되돌아가지 않는다. 각각 기록된 트레이드오프이거나 별도 설계가 필요하다. 일정은 없다.
+  - **낡은 주석 두 곳**이 VPC CNI 네트워크 정책 에이전트가 꺼져 있다고 적고 있다.
+    `k8s/helm/values.yaml`의 `networkPolicy` 블록 주석(307행 근처)과 `values-prod.yaml`의 `networkPolicy` 위
+    주석(143행 근처)이다. `cluster/main.tf`는 이를 켜 두었고
+    [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md)은 2026-09-26에 라이브 검증했다고 기록한다.
+    주석뿐이므로 차트를 다음에 만질 때 고친다.
 
+  CLAUDE.md > Known Gaps에도 올려 두었다.
 ## 8. Advisory 노트
 
 작업 일정에는 반영하지 않되 판단에 참고할 기준: 개인정보/컴플라이언스(삭제 정책,

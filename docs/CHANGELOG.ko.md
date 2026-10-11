@@ -398,6 +398,19 @@
   통과했다.
 
 ### 보안
+- **악성코드 스캔: `null` 판정이 파일을 통과시키지 않는다 (2026-10-12)** — `clamd`가
+  `OK`/`FOUND`/`ERROR` 없이 연결을 닫으면 `clamscan`의 `scanStream`이 `isInfected: null`("Unable to scan")로
+  resolve했고, 게이트가 이를 깨끗한 파일로 읽어 업로드가 스캔되지 않은 채 저장됐다. 이제
+  `ScanService.scanBuffer`가 재시도 `try` 안에서 boolean이 아닌 판정을 실패한 시도로 처리한다. 한 번 재시도하고,
+  그래도 안 되면 `503 UPLOAD_SCAN_UNAVAILABLE`이며 temp에는 아무것도 쓰지 않는다. `scan.service.spec.ts`에
+  케이스 두 개를 추가했다. 먼저 실제 `clamd`(`clamav/clamav:stable`, 90MB 버퍼)로 재현했다. 스캔 도중
+  `docker restart`, `SIGTERM`, `SIGKILL`로 멈추면 `null`로 resolve됐고, 수정 후에는 같은 세 경우 모두 503이며
+  `saveTemp`는 호출되지 않았다. 정상 파일과 EICAR(400 `UPLOAD_MALWARE_DETECTED`)는 전과 같았고, `clamd`가
+  돌아온 뒤 정상 업로드는 통과했다. `scan.service`와 `upload.service` spec 12개가 통과하고, 바꾼 두 파일에
+  대한 `eslint`는 깨끗하다. 다루지 않은 것: HTTP 계층과 EKS. 스키마, 환경 변수, API 변경은 없다. 이 과정에서
+  나온 인접한 빈틈(스캔 전체 마감 시간 없음, PDB 없는 단일 replica, 데이터베이스 연결·쿼리 타임아웃 없음,
+  작은 항목들)과 각각을 남긴 이유는 [ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md) 추가 기록
+  (2026-10-12)과 [ROADMAP.ko.md](ROADMAP.ko.md) §7에 있다.
 - **`pnpm audit --prod` 다시 0건: proxy-addr, brace-expansion, multer, joi (2026-10-08)** —
   2026-09-10 이후 새로 나온 권고 6건을 override와 범위 안 업데이트 한 번으로 막았다. 새
   의존성은 없다. `proxy-addr` 2.0.7 → 2.0.8(critical, GHSA-jqcg-44mw-7w3h,

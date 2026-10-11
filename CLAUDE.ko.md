@@ -1159,7 +1159,8 @@ Conflict Protocol을 따른다.
   ISP 방침("실제 두 번째 구현체가 생기기 전까지는 서비스-인터페이스 계층을
   도입하지 않는다")상 포트는 시기상조다. 스캐너 접속 불가 시
   fail-closed(`503 UPLOAD_SCAN_UNAVAILABLE`)이며 재시도 2회/8초 타임아웃으로
-  제한한다 — Reliability > Retry Limits/Timeout이 실제로 적용되는 첫 사례이며,
+  제한하며, boolean이 아닌 판정(`clamscan`의 `null`, 2026-10-12 수정)도 같은 경로로
+  fail-closed한다 — Reliability > Retry Limits/Timeout이 실제로 적용되는 첫 사례이며,
   실제 `clamd`로 100MB 버퍼 기준 약 5.97초로 라이브 검증됐다. `clamd`는
   `k8s/helm/`에서 사이드카가 아니라 별도 Deployment+Service로 뜬다(replica별
   시그니처 DB 복제를 피하려고, ADR 0059 D6) — 로컬에서는 `docker-compose.yml`
@@ -1734,18 +1735,14 @@ Architecture Decisions가 계속 유효하다.
   끝난 뒤 EN/KO의 제목·목록·표 행 수와 상대 링크를 확인했다. 그대로 둔 것:
   `docs/ADR/0022-admin-console-import-from-chat-project.ko.md`에는 single-flight를 "단일 비행"으로 옮긴
   곳이 세 군데 있다. 기록: `docs/CHANGELOG.ko.md` 2026-10-04, `docs/ROADMAP.ko.md` §7.
-- 악성코드 스캔 게이트가 `null` 판정을 통과시킨다(2026-10-03 백엔드 의존성 점검에서 발견;
-  **2026-10-03 결정: 후속 과제, 시작하지 않음**). `clamd`가 연결을 정상적으로 닫았는데 응답이 비어 있거나
-  `COMMAND READ TIMED OUT`이거나 `OK`/`FOUND`/`ERROR` 어느 쪽도 아니면 `clamscan`의 `scanStream`은 reject하지
-  않고 `isInfected: null`("Unable to scan")로 resolve한다(`node_modules/clamscan/index.js:765-781`).
-  `ScanService.scanBuffer`가 이를 그대로 돌려주고(`backend/upload/scan.service.ts:73-74`, `boolean`으로
-  선언됨) `UploadService.stageTemp`는 `if (scanResult.isInfected)`만 확인하므로(`upload.service.ts:54`) 파일이
-  스캔되지 않은 채 `storage.saveTemp()`로 내려간다. ADR 0059 D4의 fail-closed는 reject되는 경우(연결·소켓 오류,
-  중단된 스캔, `ERROR` 응답)와 스캐너에 닿지 못하는 경우에는 그대로 유지된다. 단위 테스트는 `true`/`false`만
-  모킹한다. 평가는 낮음~중간이고, 소스를 읽어 확인했으며 실제 `clamd`로 재현하지는 않았다. 계획한 수정:
-  `scanBuffer`의 `try` 안에서 `null`을 실패한 시도로 처리해 기존 재시도와 503 `UPLOAD_SCAN_UNAVAILABLE` 경로를
-  타게 하고, 단위 테스트 케이스를 추가한다. 자세한 내용: ADR 0059 추가 기록(2026-10-03), `docs/ROADMAP.ko.md`
-  §7. 새 스캔 소비자는 `if (result.isInfected)` 검사를 그대로 베끼지 않는다.
+- ~~악성코드 스캔 게이트가 `null` 판정을 통과시킨다~~ — **2026-10-03 발견, 2026-10-12 해결.**
+  `clamd`가 `OK`/`FOUND`/`ERROR` 없이 연결을 정상적으로 닫으면 `clamscan`의 `scanStream`은 reject하지 않고
+  `isInfected: null`("Unable to scan")로 resolve하며, 게이트는 이를 깨끗한 파일로 읽었다.
+  이제 `ScanService.scanBuffer`가 재시도 `try` 안에서 boolean이 아닌 판정을 던지므로, 재시도한 뒤
+  `503 UPLOAD_SCAN_UNAVAILABLE`로 응답한다. 실제 `clamd`로 재현하고 다시 확인했다. 스캔 도중 재시작,
+  `SIGTERM`, `SIGKILL`에서 수정 전에는 `null`이 나왔고, 수정 후에는 503이며 `saveTemp`는 호출되지 않는다.
+  자세한 내용: ADR 0059 추가 기록(2026-10-12), `docs/ROADMAP.ko.md` §7. `ScanService.scanBuffer`를 거치지
+  않고 `clamscan`을 직접 부르는 코드는 boolean이 아닌 `isInfected`를 여전히 실패로 다뤄야 한다.
 - 청구 전 업로드 파일명은 업로더에게 묶여 있지 않다(2026-10-06 발견; **2026-10-06 결정: 추후 보강, 시작하지
   않음**). `POST /upload/attach`는 업로더를 남기지 않고, `FileService.uploadFile`은 `findClaim`과
   `storage.existsTemp`만 보고 청구를 판정한다. 그래서 attach와 첫 `POST /file` 사이에는 `temp_` 파일명을 아는
@@ -1755,6 +1752,16 @@ Architecture Decisions가 계속 유효하다.
   닫으려면 파일명을 업로더에게 묶어야 하는데, `temp_` 이름 규칙과 `TEMP_FILENAME_PATTERN`을 건드리므로 별도
   결정이 필요하다. 자세한 내용: ADR 0019 추가 기록(2026-10-06), `docs/ROADMAP.ko.md` §7. 그때까지 attach
   파일명을 업로더만 청구할 수 있는 것처럼 설명하지 않는다.
+- 장애 복구·가용성 점검에서 고치지 않고 남긴 항목(2026-10-12; **일정 없음**). 차트, Terraform, 장애 경로를
+  읽고 일회용 Postgres와 실제 `clamd`로 로컬에서 재현했다. 떠 있는 클러스터가 없어서 아래 항목은 어느 것도
+  EKS에서 관찰하지 못했다. 남은 것: 스캔에 전체 마감 시간이 없다(pause한 `clamd`가 45초 동안 응답하지 않았고,
+  8초 `timeout`은 idle 타임아웃이다). Deployment마다 replica 하나이고 PodDisruptionBudget과 리소스 설정이
+  없으며, RDS는 단일 AZ이고 NAT는 하나다. TypeORM 옵션에 데이터베이스 연결·쿼리 타임아웃이 없다(`app.module.ts`,
+  수정하려면 승인이 필요하다). 그리고 작은 항목들이 있다(`/health/ready`의 503이 `INTERNAL_ERROR` 코드를
+  달고 있음, `UserService.remove`에서 커밋 뒤 실패하면 감사 행이 빠짐, `--wait` 없는 `helm upgrade`, values
+  파일의 낡은 `networkPolicy` 주석 두 곳). 각각 지금 규모(replica 하나, 사용자 없음, 실행 사이마다 내려가는
+  스택)에서는 낮다고 판단했고, 왜 남겼고 언제 다시 볼지는 `docs/ROADMAP.ko.md` §7에 있다. replica와
+  데이터베이스 항목을 처리하기 전에는 이 배포를 고가용성이라고 설명하지 않는다.
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은

@@ -1140,7 +1140,7 @@ Do not suggest alternatives to these decisions without explicit request.
   port — only one implementation and one consumer exist, so a port would be premature under
   this project's own ISP stance ("no service-interface layer until a real second
   implementation exists"). Fails closed on scanner unavailability (`503
-  UPLOAD_SCAN_UNAVAILABLE`) with a bounded 2-attempt/8s-timeout retry — the first real
+  UPLOAD_SCAN_UNAVAILABLE`) with a bounded 2-attempt/8s-timeout retry (a non-boolean verdict, `clamscan`'s `null`, takes the same path since 2026-10-12) — the first real
   application of Reliability > Retry Limits/Timeout, live-verified against a real `clamd`
   at ~5.97s for a 100MB buffer. `clamd` runs as its own Deployment+Service in
   `k8s/helm/` (not a sidecar — avoids per-replica signature-DB duplication, ADR 0059 D6)
@@ -1706,19 +1706,14 @@ Architecture Decisions above remain operative.
   heading, list and table-row counts and relative links were checked afterwards. Left as is:
   `docs/ADR/0022-admin-console-import-from-chat-project.ko.md` renders single-flight as "단일 비행"
   in three places. Record: `docs/CHANGELOG.md` 2026-10-04, `docs/ROADMAP.md` §7.
-- The malware scan gate passes a `null` verdict (found 2026-10-03 by the backend dependency audit;
-  **decided 2026-10-03: later task, not started**). `clamscan`'s `scanStream` resolves, it does not
-  reject, with `isInfected: null` ("Unable to scan") when `clamd` closes the connection normally and the
-  reply is empty, `COMMAND READ TIMED OUT`, or none of `OK`/`FOUND`/`ERROR`
-  (`node_modules/clamscan/index.js:765-781`). `ScanService.scanBuffer` returns it unchanged
-  (`backend/upload/scan.service.ts:73-74`, declared `boolean`) and `UploadService.stageTemp` tests only
-  `if (scanResult.isInfected)` (`upload.service.ts:54`), so the file goes on to `storage.saveTemp()`
-  unscanned. ADR 0059 D4's fail-closed still holds for the cases that reject (connection and socket
-  errors, aborted scans, `ERROR` replies) and for an unreachable scanner; the unit specs mock only
-  `true`/`false`. Assessed low to medium; read from source, not reproduced against a real `clamd`.
-  Planned fix: treat `null` as a failed attempt inside `scanBuffer`'s `try` so the existing retry and
-  503 `UPLOAD_SCAN_UNAVAILABLE` path apply, plus a unit case. Details: ADR 0059 Addendum (2026-10-03),
-  `docs/ROADMAP.md` §7. A new scan consumer must not copy the `if (result.isInfected)` check on its own.
+- ~~The malware scan gate passes a `null` verdict~~ — **found 2026-10-03, resolved 2026-10-12.**
+  `clamscan`'s `scanStream` resolves, it does not reject, with `isInfected: null` ("Unable to scan") when
+  `clamd` closes the connection normally without `OK`/`FOUND`/`ERROR`, and the gate read that as clean.
+  `ScanService.scanBuffer` now throws on a non-boolean verdict inside its retry `try`, so it is retried
+  and then answered `503 UPLOAD_SCAN_UNAVAILABLE`. Reproduced and re-checked against a real `clamd`: a
+  restart, `SIGTERM` or `SIGKILL` mid-scan gave `null` before, and 503 with no `saveTemp` after. Details:
+  ADR 0059 Addendum (2026-10-12), `docs/ROADMAP.md` §7. Code that calls `clamscan` directly instead of
+  `ScanService.scanBuffer` must still treat a non-boolean `isInfected` as a failure.
 - An unclaimed upload filename is not bound to its uploader (found 2026-10-06; **decided 2026-10-06:
   later hardening, not started**). `POST /upload/attach` records no uploader, and `FileService.uploadFile`
   decides a claim from `findClaim` and `storage.existsTemp` only, so between attach and the first
@@ -1729,6 +1724,18 @@ Architecture Decisions above remain operative.
   means binding the name to the uploader, which touches the `temp_` naming and `TEMP_FILENAME_PATTERN`
   and needs its own decision. Details: ADR 0019 Addendum (2026-10-06), `docs/ROADMAP.md` §7. Until then,
   do not describe the attach filename as something only its uploader can claim.
+- Failure-recovery and availability review, findings left open (2026-10-12; **none scheduled**). Read
+  from the chart, Terraform and the failure paths, with local reproductions against a throwaway Postgres
+  and a real `clamd`; no cluster was up, so nothing here was observed on EKS. Open: the scan has no
+  overall deadline (a paused `clamd` gave no answer for 45 s; the 8 s `timeout` is an idle timeout); one
+  replica per Deployment with no PodDisruptionBudget or resource settings, RDS single-AZ, one NAT; no
+  database connect/query timeout in the TypeORM options (`app.module.ts`, which needs approval to edit);
+  and some smaller items (`/health/ready`'s 503 coded `INTERNAL_ERROR`, a missing audit row on a
+  post-commit failure in `UserService.remove`, `helm upgrade` without `--wait`, two stale
+  `networkPolicy` comments in the values files). Each is judged low at today's scale (one replica, no
+  users, a stack torn down between runs); why each was left and when to look again is in
+  `docs/ROADMAP.md` §7. Do not describe the deployment as highly available until the replica and
+  database items are dealt with.
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for

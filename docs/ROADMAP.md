@@ -1617,18 +1617,16 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   window did not open it at first and opened it later. The only code change is `906ce3c`'s stale-input
   fix ([CHANGELOG.md](CHANGELOG.md) 2026-10-02). If it comes back, note the Chrome version, the
   extensions in that window, `chrome://policy`, and whether another site's file picker opens.
-- **Malware scan gate passes a `null` verdict** — **found 2026-10-03, decided the same day: later task,
-  not started.** The 2026-10-03 backend dependency audit found that `clamscan`'s `scanStream` resolves
-  with `isInfected: null` ("Unable to scan") when `clamd` closes the connection normally and the reply
-  is empty, `COMMAND READ TIMED OUT`, or none of `OK`/`FOUND`/`ERROR`, and that `ScanService.scanBuffer`
-  and `UploadService.stageTemp` read `null` as clean, so the file is stored unscanned. Evidence, the
-  cases that do stay fail-closed, and the severity assessment (low to medium; read from source, not
-  reproduced against a real `clamd`) are in the [ADR 0059](ADR/0059-upload-malware-scanning-clamav.md)
-  Addendum (2026-10-03). Scope when picked up: `backend/upload/scan.service.ts` (treat `null` as a failed
-  attempt inside the retry `try`, narrow the type, update the function comment block),
-  `scan.service.spec.ts` (a `{ isInfected: null }` case), then `pnpm lint` and
-  `pnpm test -- scan.service`; no schema, env var or API change. Revisit before the stack is next
-  applied, or when explicitly requested. Also listed in CLAUDE.md > Known Gaps.
+- ~~**Malware scan gate passes a `null` verdict**~~ — **found 2026-10-03, resolved 2026-10-12.**
+  `clamscan`'s `scanStream` resolves with `isInfected: null` ("Unable to scan") when `clamd` closes the
+  connection without a verdict, and `ScanService.scanBuffer` and `UploadService.stageTemp` read `null`
+  as clean, so the file was stored unscanned. `scanBuffer` now throws on any non-boolean verdict inside
+  its retry `try`, so it is retried and then answered `503 UPLOAD_SCAN_UNAVAILABLE`. Two unit cases
+  added; the `scan.service` and `upload.service` specs pass (12) and `eslint` on the two changed files
+  is clean. Reproduced against a real `clamd`: a restart, `SIGTERM` or `SIGKILL` during the scan gave
+  `null`; after the fix, 503 and no `saveTemp`. Not re-run: the HTTP layer, and EKS. Details:
+  [ADR 0059](ADR/0059-upload-malware-scanning-clamav.md) Addendum (2026-10-12). The deadline gap found
+  next to it is in the review entry at the end of this section.
 - **An unclaimed upload filename is not bound to its uploader** — **found 2026-10-06, decided the same
   day: later hardening, not started.** `POST /upload/attach` records no uploader, so between attach and
   the first `POST /file` any authenticated user who knows the `temp_` filename can claim it; the original
@@ -1648,7 +1646,63 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   cause was not looked into; cosmetic. Details: [CHANGELOG.md](CHANGELOG.md) 2026-10-08. Scope when
   picked up: for (1), open the sign-in screen and the five authenticated screens on a phone; for (2),
   `FileDetailPage.module.css` (`.visibilityLabel`, `.select`). Revisit when explicitly requested.
+- **Failure-recovery and availability review, 2026-10-12: findings left open** — **recorded 2026-10-12,
+  none scheduled.** A read of the Helm chart, the Terraform and the app's failure paths, plus local
+  reproductions against a throwaway Postgres and a real `clamd`. No cluster was up
+  (`aws eks list-clusters` returned an empty list), so nothing below was observed on EKS. The one finding
+  worth fixing at once, the `null` scan verdict, is fixed (the entry above). The rest is low at today's
+  scale — one replica, no users, a stack that is torn down between runs. Each item says what it is, why it
+  was left and when to look again.
+  - **The scan has no overall deadline.** With `clamd` paused (it accepts the connection and never
+    answers) a scan was still pending after 45 s, and a stub that never closes ran past 120 s. The 8 s
+    `timeout` is a socket idle timeout, not a deadline. A stalled `clamd` keeps each upload's buffer (up
+    to 100 MB) and request open until the liveness probe restarts it, which on the chart's settings (30 s
+    × 10 failures) should take about five minutes; not observed. Left because the task was the `null`
+    verdict and a deadline changes the call's control flow (a `Promise.race` around `scanStream`; whether
+    `clamscan` can abort a running stream was not checked). Look again on the next change to
+    `scan.service.ts`, or before the app takes real upload traffic.
+  - **One replica, no PodDisruptionBudget, no resource settings.** All four Deployments render
+    `replicas: 1` (clamd's is fixed in its template), nothing renders a PDB, HPA, topology spread or
+    anti-affinity, and `resources` is empty (BestEffort). A node drain or eviction leaves a gap until the
+    replacement is Ready, and each rollout dropped one request
+    ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md) Addendum 2026-09-29). Around it: RDS
+    `multi_az = false`, one NAT gateway (`cluster/main.tf`), and clamd's signature DB on `emptyDir`. Left
+    because one replica is the stated portfolio-scale choice (`values.yaml`, the `replicaCount` comment)
+    and more replicas bring the per-instance throttle counters (next item) and a cost. Look again when
+    there are real users or load, or before any availability claim is made.
+  - **Per-instance throttle counters and uncoordinated sweeps.** The Redis-backed `ThrottlerStorage` is
+    already listed above; it matters only at more than one replica. Nothing in `backend/temp-cleanup`,
+    `backend/file` or `backend/metrics` coordinates the two cron sweeps across replicas (a search for a
+    lock or leader election found none); what two replicas running them at once would do was not
+    analysed. Look again together with the replica count.
+  - **No database connect or query timeout.** `AppModule`'s TypeORM options set none, and `pg` waits
+    without bound. With the database process frozen (`docker pause`), requests waited 21 s until it
+    resumed; a refused connection fails at once, and after a restart `/health/ready` was back to 200 0.3 s
+    after the container started. Left because `app.module.ts` is a high-blast-radius file that needs
+    explicit approval, and a database that hangs rather than refuses is the narrower case. Look again
+    before load testing or an RDS failover test, with that approval.
+  - **Smaller items**, none of which changes what a user sees today. `/health/ready`'s 503 carries
+    `INTERNAL_ERROR` because `FALLBACK_CODES` has no 503 entry (`health.controller.ts:53`; ADR 0011 asks
+    for a code on every new throw). Authenticated routes answer 500, not 503, while the database is down,
+    since `JwtStrategy` reads the user from it. A start with no database exits with code 1 after 26 s
+    (the default retry of `@nestjs/typeorm`), so recovery then waits on pod back-off; not observed.
+    `UserService.remove` writes its audit row after the commit (`user.service.ts:339`), so a connection
+    lost in between leaves the account gone with no audit row and a 500. A connection lost between
+    `storage.promote()` and the commit leaves a `granted_` object without a row, which
+    `GrantedCleanupService` reports but does not delete ([ADR 0020](ADR/0020-account-deletion-cascade.md),
+    [ADR 0051](ADR/0051-orphaned-granted-file-reclaim.md)). With clamd's PVC off its signature DB is
+    downloaded again on every restart, about 40 s of 503 on uploads
+    ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.md) Addendum 2026-09-26). And `deploy.sh`'s
+    `helm upgrade` has no `--wait` or `--atomic` (`deploy.sh:542`), while a rollback by `IMAGE_TAG` does
+    not undo migrations. Each is either a recorded trade-off or needs a design of its own; none is
+    scheduled.
+  - **Two stale comments** say the VPC CNI network-policy agent is not enabled: the `networkPolicy`
+    block comment in `k8s/helm/values.yaml` (around line 307) and the one above `networkPolicy` in
+    `values-prod.yaml` (around line 143). `cluster/main.tf` turns it on and
+    [ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md) records it live-verified on 2026-09-26.
+    Comment-only; fix when the chart is next touched.
 
+  Also listed in CLAUDE.md > Known Gaps.
 ## 8. Advisory notes
 
 Recorded criteria that inform but do not schedule work: privacy/compliance

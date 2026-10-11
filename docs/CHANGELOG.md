@@ -452,6 +452,20 @@ development line (package.json version).
   `pnpm test` (278/278) all pass.
 
 ### Security
+- **Malware scan: a `null` verdict no longer lets a file through (2026-10-12)** — `clamscan`'s
+  `scanStream` resolves with `isInfected: null` ("Unable to scan") when `clamd` closes the connection
+  without `OK`/`FOUND`/`ERROR`, and the gate read that as clean, so the upload was stored unscanned.
+  `ScanService.scanBuffer` now treats any non-boolean verdict as a failed attempt inside its retry `try`:
+  one retry, then `503 UPLOAD_SCAN_UNAVAILABLE` and nothing written to temp. Two cases added to
+  `scan.service.spec.ts`. Reproduced first against a real `clamd` (`clamav/clamav:stable`, a 90 MB
+  buffer): stopping it with `docker restart`, `SIGTERM` or `SIGKILL` during the scan resolved `null`;
+  after the fix the same three gave 503 with `saveTemp` called 0 times. A clean file and EICAR (400
+  `UPLOAD_MALWARE_DETECTED`) behaved as before, and a clean upload went through once `clamd` was back.
+  The `scan.service` and `upload.service` specs pass (12); `eslint` on the two changed files is clean.
+  Not covered: the HTTP layer and EKS. No schema, env var or API change. The neighbouring gaps this
+  turned up (no overall scan deadline, one replica with no PDB, no database connect/query timeout, some
+  smaller items), each with why it was left: [ADR 0059](ADR/0059-upload-malware-scanning-clamav.md)
+  Addendum (2026-10-12) and [ROADMAP.md](ROADMAP.md) §7.
 - **`pnpm audit --prod` clean again: proxy-addr, brace-expansion, multer, joi (2026-10-08)** —
   six advisories published after the 2026-09-10 round, fixed with overrides and one in-range
   update; no new dependency. `proxy-addr` 2.0.7 → 2.0.8 (critical, GHSA-jqcg-44mw-7w3h, via
