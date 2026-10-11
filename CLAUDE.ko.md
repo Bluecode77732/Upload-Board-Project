@@ -1051,13 +1051,14 @@ Conflict Protocol을 따른다.
   `STORAGE_DRIVER`(`'local'` 기본값 | `'s3'`)로 부팅 시 선택되는 `FileStorage`
   인터페이스(`backend/storage/`)를 거친다. `LocalDiskStorage`는 ADR 0005의
   원래 디스크 메커니즘을 그대로 이식한다; `S3Storage`는 ISP가 요구하는 두
-  번째 구현체이며 유닛 테스트만 되어 있다(SDK mock) — 실제 버킷에 대해
-  실행된 적은 없다. `UploadModule`의 Multer는 `diskStorage`가 아니라
+  번째 구현체다. 처음 들어갈 때는 유닛 테스트(SDK mock)만 있었고, 2026-08-15부터는
+  프로젝트의 실제 버킷에서, 2026-09-29부터는 라이브 EKS 스택에서도 실행됐다(ADR 0036·ADR
+  0059 Addendum). `UploadModule`의 Multer는 `diskStorage`가 아니라
   `memoryStorage`를 쓰므로, temp 업로드의 첫 바이트부터 이미 포트를 거친다
   (`UploadService.stageTemp`) — 이는 `STORAGE_DRIVER=s3`가 ADR 0005가 기록한
   다중 인스턴스 격차를 승격된 파일 쪽 절반만이 아니라 실제로 모두
-  해결하기 위한 전제조건이다. `local`은 여전히 실제 기본값이며; 실제 배포를
-  `s3`로 전환하는 것은 Stage 4의 작업이다(ROADMAP.md). 승격(temp →
+  해결하기 위한 전제조건이다. `local`은 Joi 기본값이고, 배포된
+  스택은 `s3`로 돌아간다(`values-prod.yaml`). 승격(temp →
   `file/upload/granted_...`)은 `storage.promote()`를 거친다(`file.service.ts`의
   `uploadFile`)
 - **Presigned S3 리다이렉트(2026-08-13 도입, [ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.ko.md),
@@ -1182,10 +1183,10 @@ Conflict Protocol을 따른다.
   별개이며 아직 결정하지 않은 스키마 문제다(ADR 0065 D5).
 - **절대 제안 금지**: 스트리밍/청크 업로드, CDN — 명시적으로 요청받지 않는 한.
   S3는 더 이상 이 목록에 없다: 스토리지 포트-어댑터(위 ADR 0029)가
-  `S3Storage` 구현체와 `STORAGE_DRIVER` 스위치를 둘 다 이미 도입했지만,
-  `local`이 여전히 실제 기본값이다 — Stage 4의 전환이 실제 버킷에 대해
-  검증하기 전까지는 `S3Storage`를 실전 검증되지 않은 것으로 취급한다
-  (ROADMAP.md)
+  `S3Storage` 구현체와 `STORAGE_DRIVER` 스위치를 둘 다 도입했다. `local`은 Joi
+  기본값이고 배포된 스택은 `s3`로 돌아간다. `S3Storage`는 실제 버킷과 라이브 EKS
+  스택에서 실행됐다(ADR 0036·ADR 0059 Addendum). 그 실행들이 다루지 않은 것은 서명
+  URL의 TTL이 지난 뒤의 재생 위치 이동, Chromium이 아닌 브라우저, 오디오 재생이다
 
 ### API 레이어
 - REST만 사용하며 `/doc`에서 Swagger로 문서화한다(`persistAuthorization: true`가
@@ -1340,8 +1341,8 @@ Conflict Protocol을 따른다.
 - ~~스토리지 포트-어댑터(`FileStorage` 인터페이스)~~ — **2026-08-07 도입**
   ([ADR 0029](docs/ADR/0029-storage-port-adapter.ko.md)): Stage 4 클라우드
   네이티브 인프라 작업의 코드 우선 부분 — Architecture Decisions > File
-  Storage 참고. `local`이 여전히 실제 기본값이며, 실제 S3 전환은 아직
-  Stage 4의 작업이다
+  Storage 참고. `local`은 Joi 기본값으로 남아 있고, S3 전환은 그 뒤 라이브에서
+  관찰됐다(ADR 0036·ADR 0059 Addendum)
 - ~~컨테이너/배포 하드닝(non-root, 헬스 엔드포인트, 마이그레이션 배포 단계)~~
   — **2026-08-08 도입**([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.ko.md)–
   [ADR 0034](docs/ADR/0034-https-termination-stance.ko.md)): ADR 0015가 미룬 컨테이너/배포

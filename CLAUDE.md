@@ -1042,12 +1042,13 @@ Do not suggest alternatives to these decisions without explicit request.
   through a `FileStorage` interface (`backend/storage/`) selected at boot by
   `STORAGE_DRIVER` (`'local'` default | `'s3'`). `LocalDiskStorage` ports ADR 0005's
   original disk mechanics unchanged; `S3Storage` is the ISP-required second
-  implementation, unit-tested only (SDK mocked) — it has never run against a live
-  bucket. `UploadModule`'s Multer uses `memoryStorage`, not `diskStorage`, so the very
+  implementation. It had only unit tests (SDK mocked) when it landed; since 2026-08-15 it has run
+  against the project's real bucket and, since 2026-09-29, the live EKS stack (ADR 0036 and ADR
+  0059 addenda). `UploadModule`'s Multer uses `memoryStorage`, not `diskStorage`, so the very
   first byte of a temp upload also goes through the port (`UploadService.stageTemp`) —
   the precondition for `STORAGE_DRIVER=s3` to actually fix the multi-instance gap ADR
-  0005 recorded, not just the promoted-file half of it. `local` stays the operative
-  default; switching a real deployment to `s3` is Stage 4 work (ROADMAP.md). Promotion
+  0005 recorded, not just the promoted-file half of it. `local` stays the Joi
+  default; the deployed stack runs `s3` (`values-prod.yaml`). Promotion
   (temp → `file/upload/granted_...`) goes through `storage.promote()`
   (`file.service.ts` `uploadFile`)
 - **Presigned S3 redirect (landed 2026-08-13, [ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md),
@@ -1163,9 +1164,10 @@ Do not suggest alternatives to these decisions without explicit request.
   question (ADR 0065 D5).
 - **Never suggest**: streaming/chunked upload, CDN — unless explicitly requested. S3 is no
   longer in this list: the storage port-adapter (ADR 0029, above) landed both an
-  `S3Storage` implementation and the `STORAGE_DRIVER` switch, but `local` stays the
-  operative default — treat `S3Storage` as unverified-in-anger until Stage 4's cutover
-  exercises it against a live bucket (ROADMAP.md)
+  `S3Storage` implementation and the `STORAGE_DRIVER` switch. `local` is the Joi default and the
+  deployed stack runs `s3`; `S3Storage` has run against a real bucket and the live EKS stack
+  (ADR 0036 and ADR 0059 addenda). Not covered by those runs: a seek after the signed URL's TTL,
+  browsers other than Chromium, audio playback
 
 ### API Layer
 - REST only, documented via Swagger at `/doc` (`persistAuthorization: true` keeps the
@@ -1308,7 +1310,7 @@ these patterns in new code; fixing them is explicit-request work, not drive-by c
 - ~~Storage port-adapter (`FileStorage` interface)~~ — **landed 2026-08-07**
   ([ADR 0029](docs/ADR/0029-storage-port-adapter.md)): the code-first slice of the Stage 4
   cloud-native infrastructure task — see Architecture Decisions > File Storage. `local`
-  stays the operative default; the real S3 cutover is still Stage 4 work
+  stays the Joi default; the S3 cutover has since been observed live (ADR 0036 and ADR 0059 addenda)
 - ~~Container/deploy hardening (non-root, health endpoints, migration deploy step)~~ —
   **landed 2026-08-08** ([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.md)–
   [ADR 0034](docs/ADR/0034-https-termination-stance.md)): the container/deploy hardening ADR

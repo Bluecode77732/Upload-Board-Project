@@ -73,6 +73,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0063](0063-alb-dns-externaldns-and-delegation-set.ko.md) | ExternalDNS로 ALB DNS 레코드 생성, 재사용 위임 세트로 zone 네임서버 고정, 0043 amend, 0044·0047 확장 | 승인됨 — 코드 작성 완료, `terraform fmt -check`/`validate`·`bash -n` 검증. 2026-09-26 첫 라이브 실행: 레코드는 생성, 소유 TXT는 미생성(apex host) | 2026-09-25 |
 | [0064](0064-jwt-secret-generation-joi-strength-rule.ko.md) | Terraform이 만드는 JWT 시크릿은 앱의 Joi 강도 규칙을 만족해야 한다, 0043 D7 확장 | 승인됨 — 구현됨. 2026-09-26 라이브 검증: 다시 apply한 시크릿으로 백엔드가 부팅하고 로그인됨 | 2026-09-26 |
 | [0065](0065-multi-file-upload-client-sequential.ko.md) | 여러 파일 업로드는 클라이언트가 파일 하나짜리 요청을 반복한다. 백엔드는 요청당 파일 하나를 유지한다 | 승인됨 — `frontend/`에 구현됨, 2026-10-06 로컬 compose 스택에서 검증 | 2026-10-06 |
+| [0066](0066-stack-selection-rationale-retroactive.ko.md) | 스택 선택 근거, 소급 기록 — NestJS/TypeORM/PostgreSQL, AWS/EKS, 프론트엔드 상태 라이브러리 미사용, 요청 횟수 한도 수치 | 승인됨 — 소급 기록, 코드 변경 없음 | 2026-10-12 |
 
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고

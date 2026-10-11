@@ -191,3 +191,25 @@ listTemp(): Promise<{ key: string; mtimeMs: number }[]>
 - CLAUDE.md도 같은 변경 안에서 갱신한다: `UploadModule`의 Module Responsibility 항목(D4),
   "물리 업로드 변경"·"삭제 경로 변경" concern-to-entrypoint 표 행(이제 `UploadService`/스토리지
   포트를 가리킨다), 그리고 새 "스토리지 어댑터 변경" 표 행.
+
+### Addendum (2026-10-12) — `S3Storage`는 그 뒤 실제 버킷에서 돌았다
+
+위 결과의 "실제 버킷에 대해 실행된 적이 없다 … 실전 미검증" 항목은 2026-08-07 시점에는
+사실이었다. 본문은 그대로 두고, 그 뒤로 기록된 내용을 여기에 남긴다:
+
+- **2026-08-15/16** — 백엔드를 `STORAGE_DRIVER=s3`로 프로젝트의 실제 버킷에 붙여 돌렸다.
+  프론트엔드 e2e는 22건 중 21건이 통과했고, 실패한 1건이 버킷에 CORS 규칙이 없다는 사실을
+  드러냈다. 고친 뒤 `detail.spec.ts`는 두 드라이버 모두에서 5/5로 통과했고, 비공개 영상이
+  Chromium에서 끝까지 재생됐다([ADR 0036](0036-s3-presigned-content-redirect.ko.md),
+  2026-08-15·2026-08-16 Addendum).
+- **2026-09-29** — 라이브 ALB(`https://sharenpo.cloud`)에서 운영 CORS 규칙을 적용한 상태로
+  세 가지 공개 범위가 모두 presigned 리다이렉트를 거쳐 로드됐다(ADR 0036, 2026-09-29 Addendum).
+- **2026-09-30** — 다시 배포한 스택에서 `STORAGE_DRIVER=s3`로 `POST /upload/attach`와
+  `POST /file`이 각각 201을 반환했고, 플레이어의 재생 위치 이동은 S3로 직접 가서 `206`을
+  받았다([ADR 0059](0059-upload-malware-scanning-clamav.ko.md) 2026-09-30 Addendum, ADR 0036
+  2026-09-30 Addendum).
+
+위 기록이 다루지 않는 것: 서명 URL의 TTL이 지난 뒤의 재생 위치 이동, Chromium이 아닌
+브라우저, 오디오 재생, 그리고 temp 스윕과 granted 파일 리포트를 이 버킷에 대해 돌린
+경우다. 배포된 차트는 `STORAGE_DRIVER=s3`로 설정하며(`k8s/helm/values-prod.yaml`),
+Joi 기본값은 계속 `local`이다.

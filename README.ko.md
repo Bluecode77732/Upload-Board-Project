@@ -184,6 +184,11 @@ flowchart LR
 | 컨테이너와 CI | 멀티 스테이지 Docker 이미지(`main`에서는 `linux/amd64`와 `linux/arm64`), Docker Compose, GitHub Actions |
 | 배포 | Helm 차트, 세 개의 state(`cluster`, `app-infra`, `addons`)로 나눈 Terraform — VPC, EKS, RDS, S3, Secrets Manager, Route 53과 ACM, ALB Controller, External Secrets, ExternalDNS, kube-prometheus-stack |
 
+이 스택을 고른 이유는 나중에 적은 [ADR 0066](docs/ADR/0066-stack-selection-rationale-retroactive.ko.md)에
+있습니다. NestJS, TypeORM, PostgreSQL은 트래픽이 커지면 서비스 단위로 나눌 수 있다는 점을 염두에 두고
+골랐습니다. AWS/EKS는 배포 시장의 표준 도구를 익히는 것도 목적이었습니다. 프론트엔드는 화면이 적어서
+상태 라이브러리를 쓰지 않습니다. ECS와의 비교처럼 글로 따져 보지 않은 부분도 그 ADR에 적혀 있습니다.
+
 ## 빠른 시작
 
 사전 요건: Node.js 24([.nvmrc](.nvmrc) 참고)와 Corepack 기반 pnpm 10, 그리고
@@ -518,11 +523,6 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
 아직 열려 있는 항목이며, 각각 발견한 곳에 기록되어 있습니다. 전체 목록은
 [ROADMAP.ko.md](docs/ROADMAP.ko.md) §7과 CLAUDE.md > Known Gaps에 있습니다.
 
-- **"스캔 불가" 결과가 업로드 게이트를 통과합니다.** `clamd`가 빈 응답으로 연결을 닫거나 명령이
-  타임아웃되면 `clamscan`이 `isInfected: null`을 돌려줄 수 있는데, 게이트가 이를 정상으로 읽어
-  파일이 스캔 없이 저장됩니다. 연결 오류와 스캐너 불가는 여전히 fail-closed입니다. 소스를 읽어
-  확인한 것이고 실제 `clamd`로 재현하지는 않았으며, 고칠 범위는 작게 정해져 있습니다
-  ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md), 2026-10-03 Addendum).
 - **청구 전 업로드 파일명이 업로더에게 묶여 있지 않습니다.** `POST /upload/attach`와 첫
   `POST /file` 사이에는 `temp_` 파일명을 아는 로그인 사용자 누구나 그 파일을 청구할 수 있고,
   원래 업로더는 409 `FILE_ALREADY_CLAIMED`를 받습니다. 로컬에서 재현했습니다. 위험은 낮게
