@@ -29,6 +29,18 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: Korean wording pass on `CLAUDE.ko.md` and the ADR 0059 `.ko.md` (2026-10-12)** — Both files
+  were re-read in full, which neither had been (the 2026-10-04 pass covered `CHANGELOG.ko.md`,
+  `ROADMAP.ko.md`, `frontend/CLAUDE.ko.md` and `frontend/README.ko.md`). Found and fixed: a few literal
+  renderings and slips ("목" for mock, "창" for window, "주장할" for assert), one sentence in the file-header
+  rule that ran two clauses together, a bullet that dropped "out of scope for this file", English
+  "landed" and "Addendum" in otherwise Korean bullets and headings, "Hallucination Prevention 12번" where
+  the section is titled 환각 방지, and one link that pointed at an English sibling (ADR 0051 in
+  `CLAUDE.ko.md`). `CHANGELOG.ko.md` and `ROADMAP.ko.md` were **not** re-read in full again: only the lines
+  added since the 2026-10-04 pass (`d4cffbb`) were, which turned up two fixes. EN/KO heading, bullet,
+  sub-bullet, table-row, numbered-list and code-fence counts were compared for all four pairs and match;
+  no structure changed. Left as is: cross-references in `CLAUDE.ko.md` still use the English section
+  names ("Scope Discipline", "Result Review") while the headings are Korean ("범위 준수", "결과 검토").
 - **Frontend: forms no longer push past a phone's width on Linux — the cause of the failing dev CI
   (2026-10-08, `c08d9e0`; live check 2026-10-09)** — `frontend-e2e` failed three dev runs in a row
   (`5f2f9f0`, `310d72b`, `9d4c59a`) on `overflow.spec.ts` at 375 and 320px, and

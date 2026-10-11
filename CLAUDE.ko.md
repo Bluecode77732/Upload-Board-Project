@@ -166,7 +166,7 @@ Never Do, 아키텍처 결정이 요구하는 것을 건너뛰는 결과로 이�
 | **Medium** | 일반적인 기능 추가/수정 | Requirement → Research → Design → Implementation → Testing → Review → Regression |
 | **Large** | 아키텍처 변경, DB 마이그레이션, 핵심 흐름 재작성 | Requirement → Impact → Research → Design(해당 시 Security/Performance Review 포함) → Implementation → Testing → Review → Fix → Regression → Release → Production Verification → Retrospective → Knowledge Capture |
 
-Hallucination Prevention 12번(저장소에서 처음 쓰는 도구·API의 최소 금기 확인)은 특정
+환각 방지 12번(저장소에서 처음 쓰는 도구·API의 최소 금기 확인)은 특정
 규모에 속하는 단계가 아니다. Small을 포함한 모든 규모에서 구현에 들어가기 전에 수행한다.
 
 고위험 파일이나 스키마 변경을 건드리는 Large 작업은 이미 범위 준수에서 명시적 승인을
@@ -234,7 +234,7 @@ Implementation과 Review는 같은 패스여서는 안 된다: Review는 구현�
 - 배경: 왜 만들어졌고 어떤 문제를 해결하는가
 - 도입 목적: 이 맥락에서 구체적으로 어떤 목표에 기여하는가
 - 도입하지 않을 경우의 실질적 단점과 그 근본 원인
-- 최소 금기: 도입하는 도구에 대해 Hallucination Prevention 12번의 확인을 수행하고,
+- 최소 금기: 도입하는 도구에 대해 환각 방지 12번의 확인을 수행하고,
   그 결과를 이 분석에 포함해 보고한다.
 
 이 단계에서는 코드를 과도하게 작성하지 않는다 — 목표는 구현에 착수하기 전에
@@ -332,8 +332,8 @@ import ...
 파일이 아닌가"다.)
 
 세 줄, 필드당 한 줄을 지킨다 — "뻔한" 파일이라고 예외를 두지 않는다. 이는 파일이
-아무리 자명해 보여도 헤더 주석이 필수인 유일한 자리인데, "지금은 뻔함"은 시간이
-지나면 바랜다는 이유 때문이다 — 이 헤더는 *왜 이 파일이 만들어졌는지*와 왜 기존
+아무리 자명해 보여도 헤더 주석이 필수인 유일한 자리다. "지금은 뻔함"도 시간이
+지나면 바래기 때문이다. 이 헤더는 *왜 이 파일이 만들어졌는지*와 왜 기존
 파일이 이를 흡수할 수 없었는지를, 그 맥락을 더 이상 갖고 있지 않을 나중의 독자를
 위해 보존한다. 편집 중인 기존 파일에 이 헤더를 소급 추가하지 않는다.
 
@@ -714,7 +714,7 @@ cat .env; echo $ACCESS_TOKEN_SECRET; console.log(this.configService.getOrThrow('
 - 일관된 네이밍, 코딩 표준 — Code Style에서 다뤄진다
 - 자동화된 테스트 — Testing 관례에서 다뤄진다; CI는 push/PR마다 lint + unit +
   e2e를 실행한다(CI/CD 참고)
-- 코드 리뷰, 버전 관리 규율 — 커밋 메시지 언어(한국어)는 예외다 — CI/CD > 커밋
+- 코드 리뷰, 버전 관리 규율 — 커밋 메시지 언어(한국어)만 빼고 이 문서의 범위 밖이다 — CI/CD > 커밋
   메시지 참고
 - 코드로서의 문서화 — Swagger 데코레이터가 API 문서이며, Change Summary
   요구사항이 나머지를 다룬다. README의 엔드포인트 목록은 실제 라우트와
@@ -844,8 +844,8 @@ Conflict Protocol을 따른다.
   `file/temp`에만 루트를 두므로(ADR 0025/0026) `granted_` 파일의 바이트는 절대
   정적으로 접근할 수 없다; 유일한 읽기 경로는 `FileEntity.visibility`
   (`public`/`private`/`unlisted`, 기본값 `private`)로 게이트되는
-  `GET /file/:id/content`다. 접두사는 여전히 생명주기 상태를 표시하고;
-  visibility는 `granted_` 행 위에 별도로 게이트되는 직교적 관심사다.
+  `GET /file/:id/content`다. 접두사는 여전히 생명주기 상태를 나타내고,
+  visibility는 `granted_` 행 위에 겹쳐 따로 게이트되는 직교적 관심사다.
   `STORAGE_DRIVER=s3`에서는 `ServeStaticModule` 라우트가 아무것도 서빙하지
   않는다(temp 바이트가 로컬 디스크에 전혀 닿지 않는다) — 실제 흐름의 그 무엇도
   그 경로로 읽지 않으므로 이는 결함이 아니라 감수하기로 한 잔여 한계다(ADR 0029 D6).
@@ -1055,8 +1055,8 @@ Conflict Protocol을 따른다.
   실행된 적은 없다. `UploadModule`의 Multer는 `diskStorage`가 아니라
   `memoryStorage`를 쓰므로, temp 업로드의 첫 바이트부터 이미 포트를 거친다
   (`UploadService.stageTemp`) — 이는 `STORAGE_DRIVER=s3`가 ADR 0005가 기록한
-  다중 인스턴스 격차를 실제로 해결하기 위한 전제조건이지, 승격된 파일 쪽
-  절반만 고치는 게 아니다. `local`은 여전히 실제 기본값이며; 실제 배포를
+  다중 인스턴스 격차를 승격된 파일 쪽 절반만이 아니라 실제로 모두
+  해결하기 위한 전제조건이다. `local`은 여전히 실제 기본값이며; 실제 배포를
   `s3`로 전환하는 것은 Stage 4의 작업이다(ROADMAP.md). 승격(temp →
   `file/upload/granted_...`)은 `storage.promote()`를 거친다(`file.service.ts`의
   `uploadFile`)
@@ -1136,7 +1136,7 @@ Conflict Protocol을 따른다.
   `<img>`/`<audio controls>`/`<video controls>` 태그를 고른다 — 이전에는
   무조건 `<video>`만 렌더링해 업로드된 이미지나 mp3가 재생되지 않았다
 - **고아 granted 파일 회수(도입 2026-09-05 — [ADR
-  0051](docs/ADR/0051-orphaned-granted-file-reclaim.md))**: `FileStorage`에
+  0051](docs/ADR/0051-orphaned-granted-file-reclaim.ko.md))**: `FileStorage`에
   `listGranted()`가 추가된다(양쪽 어댑터 모두, `StorageTempEntry` 재사용).
   `FileModule`은 export하지 않는 `GrantedCleanupService` provider를 얻는다(별도
   모듈이 아니다 — 하는 일 전부가 `FileModule` 자신의 엔티티를 디스크와 대조하는
@@ -1158,9 +1158,9 @@ Conflict Protocol을 따른다.
   ADR 0059 D2) — 구현체와 소비자가 각각 하나뿐이라, 이 프로젝트 스스로의
   ISP 방침("실제 두 번째 구현체가 생기기 전까지는 서비스-인터페이스 계층을
   도입하지 않는다")상 포트는 시기상조다. 스캐너 접속 불가 시
-  fail-closed(`503 UPLOAD_SCAN_UNAVAILABLE`)이며 재시도 2회/8초 타임아웃으로
-  제한하며, boolean이 아닌 판정(`clamscan`의 `null`, 2026-10-12 수정)도 같은 경로로
-  fail-closed한다 — Reliability > Retry Limits/Timeout이 실제로 적용되는 첫 사례이며,
+  fail-closed(`503 UPLOAD_SCAN_UNAVAILABLE`)이고 재시도는 2회/8초 타임아웃으로
+  제한한다. boolean이 아닌 판정(`clamscan`의 `null`, 2026-10-12 수정)도 같은 경로로
+  fail-closed한다. 이는 Reliability > Retry Limits/Timeout이 실제로 적용되는 첫 사례이며,
   실제 `clamd`로 100MB 버퍼 기준 약 5.97초로 라이브 검증됐다. `clamd`는
   `k8s/helm/`에서 사이드카가 아니라 별도 Deployment+Service로 뜬다(replica별
   시그니처 DB 복제를 피하려고, ADR 0059 D6) — 로컬에서는 `docker-compose.yml`
@@ -1200,7 +1200,7 @@ Conflict Protocol을 따른다.
   throw 지점은 반드시 코드를 붙여야 한다 — 상태 코드 기반 폴백은 프레임워크가
   발생시키는 throw만을 위한 것이다. 코드의 이름 변경이나 제거는 breaking
   change이며, 추가는 자유롭다
-- **요청 횟수 제한(landed 2026-09-10, [ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md),
+- **요청 횟수 제한(도입 2026-09-10, [ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md),
   라우트별 세분화는 [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md))**:
   전역 `ThrottlerGuard`(`@nestjs/throttler`)가 `APP_GUARD`로 모든 라우트에서 돈다 —
   이 저장소 최초의 전역 가드다 — 우선 보수적인 기본값 분당 100회(`app.module.ts`의
@@ -1237,7 +1237,7 @@ Conflict Protocol을 따른다.
   유지하려면 Redis 기반 storage가 필요하다 — 이 앱이 실제로 replica 2개 이상으로
   돌기 전까지는
   범위 밖이다
-- **보안 응답 헤더(landed 2026-09-11, [ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md))**:
+- **보안 응답 헤더(도입 2026-09-11, [ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md))**:
   `main.ts`의 `bootstrap()`에서 `helmet()`을 적용한다 — CORS/`cookieParser()`보다
   먼저 등록되는 첫 번째 미들웨어라, 모든 라우트가 OWASP 권장
   헤더 집합(`Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`,
@@ -1250,7 +1250,7 @@ Conflict Protocol을 따른다.
   `/doc`이 정상 렌더링되고 Authorize 모달이 콘솔/CSP 에러 0건으로 열림을
   라이브 검증했다. `Strict-Transport-Security`는 이 앱이 아직 TLS 종단을 갖지
   않는데도(ADR 0034, 보류) 전송되지만 — 브라우저는 이미 HTTPS로 도착한 응답에서만
-  이 헤더를 준수하므로 그 전까지는 무해하다
+  이 헤더를 준수하므로 그 전까지는 아무 효과가 없다
 - **절대 제안 금지**: GraphQL, WebSocket, gRPC — 작은 요청/응답 CRUD 표면은
   이들 각각이 더할 스키마 레이어, 클라이언트 구현, 운영 오버헤드를 정당화하지
   못한다(전체 근거: ADR 0009)
@@ -1685,9 +1685,9 @@ Architecture Decisions가 계속 유효하다.
   허용 안 된 egress는 여전히 실제로 차단됨(거부가 아니라 timeout).
   기록해둘 방법론 하나: 처음엔 `clamav` 연결 확인에 `curl telnet://...`을
   썼는데, 정상 연결을 막힌 것처럼 오보고했다 — clamd는 먼저 말을 안 걸어서
-  curl telnet 모드가 응답을 기다리다 그냥 timeout난 것. TCP 핸드셰이크
-  성립 여부만 보는 `nc -zv`가 이런 포트 확인엔 맞는 도구였다. 진짜로 실
-  AWS가 있어야만 확인되는 잔여 항목은 딱 하나 — AWS 자신의 VPC CNI Network
+  curl telnet 모드가 응답을 기다리다 그냥 타임아웃된 것이다. TCP 핸드셰이크
+  성립 여부만 보는 `nc -zv`가 이런 포트 확인엔 맞는 도구였다. 실제
+  AWS가 있어야만 확인되는 잔여 항목은 딱 하나다 — AWS 자신의 VPC CNI Network
   Policy 강제 에이전트(Calico와 다른 엔진)가 똑같이 동작하는지뿐이고, 이건
   ADR 0056이 이미 안고 있던 것과 같은 공백이지 새로 생긴 게 아니다
   (ROADMAP.md §9)
@@ -1792,7 +1792,7 @@ CLAUDE.md는 저장소 루트의 백엔드를 관장한다**(`backend/`, `docs/A
 `admin/`(2026-07-30 추가, ADR 0022; 역할 관리 부분은 2026-08-06에 적응됨)은
 **다른 프로젝트에서 가져온 코드이지 처음부터 새로 만든 admin 클라이언트가
 아니다**. 작성자의 Chat Project admin 콘솔이며, 원래 통째로 복사되어
-수정 없이 *수정 기반*으로 커밋되었고, 두 가지 명시된 목적이 있다:
+원본 그대로, 이후 고쳐 쓸 *기반*으로 커밋되었고, 두 가지 명시된 목적이 있다:
 (1) ADR 0013이 도입했지만 운영자 화면 없이 남겨두었던 **RBAC 역할
 계층의 운영 화면**이 되는 것 — 역할 목록, superadmin 전용
 `PATCH /user/:id/role`을 통한 승격/강등, `ROLE_CHANGE` 감사 뷰어;
@@ -1985,7 +1985,7 @@ gitignore), `fs.unlink`는 휴지통을 거치지 않아서 복구 경로 자체
   `deleteCommentsOfCreator`는 `UserService`의 트랜잭션 안에서 계정 연쇄를
   담당한다
 - `PostModule`을 import한다(`assertPostExists` — 존재 여부는 PostModule의
-  판단이며 여기서 `post_entity`를 조회하지 않는다) `AuditLogModule`도
+  판단이며 여기서 `post_entity`를 조회하지 않는다); `AuditLogModule`도
   import한다(`COMMENT_DELETE`); `CommentService`를 export한다
 
 **FileModule** (`backend/file/`)
@@ -2085,7 +2085,7 @@ gitignore), `fs.unlink`는 휴지통을 거치지 않아서 복구 경로 자체
 - 테스트는 `*.spec.ts`로 소스 파일 옆에 둔다; Jest 설정은
   `package.json`에 내장되어 있다(`roots: ["backend"]`)
 - 커버리지는 `main.ts`, 모듈, DTO, 엔티티, 데코레이터, 전략, 가드,
-  컨트롤러를 제외한다 — 오직 서비스만 측정하는데, 주장할 가치가 있는
+  컨트롤러를 제외한다 — 오직 서비스만 측정하는데, 단언할 가치가 있는
   비즈니스 로직은 서비스에 있고 나머지는 유닛 커버리지가 아니라 e2e로
   검증하는 게 더 적합한 얇은 프레임워크 접착부이기 때문이다
 - `fs/promises`는 `jest.mock('fs/promises')`로 mock된다(FileService 테스트)
@@ -2161,7 +2161,7 @@ Swagger는 *곧* API 문서다(ADR 0009), 그러므로 이 데코레이터들은
 - 엔드포인트는 실제 서비스가 던질 수 있는 모든 상태 코드를 `@ApiResponse`로
   문서화한다 — 추측이 아니라 서비스 메서드의 실제 throw 지점을 확인한 값이다
   (환각 방지 #1); Basic 토큰 엔드포인트는 `@ApiBasicAuth`를 쓴다
-- `/doc`의 Swagger UI는 `persistAuthorization: true`
+- `/doc`의 Swagger UI는 `persistAuthorization: true`를 쓴다
 
 **이중 언어 표기 규약 (2026-09-16 결정)**: `@ApiTags`/`@ApiOperation`/
 `@ApiResponse`/`@ApiProperty`/`@ApiPropertyOptional` 텍스트는 한글 요약 뒤에 괄호로
@@ -2301,7 +2301,7 @@ Auto Mode는 기본적으로 "웬만하면 안 멈추고 진행"하는 성향이
 읽는 트랜스크립트에 기록되어 있다.
 
 셋 다 fail open이다(`2>/dev/null || true`) — 스크립트가 죽어도 실제 도구 호출을 막지
-않는다, 이 파일 자체의 규칙이 여전히 1차 안전장치이고 훅은 심층 방어(defense-in-depth)
+않는다 — 이 파일 자체의 규칙이 여전히 1차 안전장치이고 훅은 심층 방어(defense-in-depth)
 일 뿐 유일한 강제 수단이 아니기 때문이다. `migration:run`/`migration:revert`/
 `migration:show`는 `check-migration-generate.js`와 의도적으로 매치되지 않는다 — 사전
 설명 전제조건이 걸리는 건 `generate`뿐이다.
