@@ -1735,7 +1735,10 @@ Architecture Decisions above remain operative.
   `networkPolicy` comments in the values files). Each is judged low at today's scale (one replica, no
   users, a stack torn down between runs); why each was left and when to look again is in
   `docs/ROADMAP.md` §7. Do not describe the deployment as highly available until the replica and
-  database items are dealt with.
+  database items are dealt with. **Decided 2026-10-12:** replicas go up when users grow (no threshold
+  was set, the developer picks the moment), once a Redis-backed `ThrottlerStorage` and a
+  PodDisruptionBudget exist; the chart templates for the PDB and topology spread, gated off by default,
+  are a later task, not started (`docs/ROADMAP.md` §7).
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for

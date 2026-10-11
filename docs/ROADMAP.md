@@ -1668,8 +1668,12 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
     ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md) Addendum 2026-09-29). Around it: RDS
     `multi_az = false`, one NAT gateway (`cluster/main.tf`), and clamd's signature DB on `emptyDir`. Left
     because one replica is the stated portfolio-scale choice (`values.yaml`, the `replicaCount` comment)
-    and more replicas bring the per-instance throttle counters (next item) and a cost. Look again when
-    there are real users or load, or before any availability claim is made.
+    and more replicas bring the per-instance throttle counters (next item) and a cost. **Decided 2026-10-12: raise the replica count when users grow.** No threshold was set; the
+    moment is the developer's call. Raising it needs a Redis-backed `ThrottlerStorage` first (the
+    counters are per instance, so the 5/minute auth limit would multiply by the replica count) and a
+    PodDisruptionBudget, which is the chart follow-up below. Two things to check before: what two
+    replicas running the cron sweeps do (not analysed, the next item) and the empty `resources`
+    requests. Look again before any availability claim is made.
   - **Per-instance throttle counters and uncoordinated sweeps.** The Redis-backed `ThrottlerStorage` is
     already listed above; it matters only at more than one replica. Nothing in `backend/temp-cleanup`,
     `backend/file` or `backend/metrics` coordinates the two cron sweeps across replicas (a search for a
@@ -1703,6 +1707,18 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
     Comment-only; fix when the chart is next touched.
 
   Also listed in CLAUDE.md > Known Gaps.
+- **Helm chart: PodDisruptionBudget and topology spread templates, gated off** — **recorded
+  2026-10-12, decided the same day: later task, not started.** Part of the replica decision in the
+  review entry above: the chart renders neither today, and `replicaCount` stays 1. The task adds both
+  as templates behind values that default to off (the same shape as `ingress`, `networkPolicy` and
+  `metrics.serviceMonitor`), so raising the replica count later is a values change. A PDB with
+  `minAvailable: 1` on a single replica would block a node drain instead of protecting it, so the PDB
+  has to render only when `replicaCount` is above 1. Scope when picked up: `k8s/helm/templates/` (a new
+  PDB template, `topologySpreadConstraints` in `deployment.yml`), `values.yaml`, `helm lint` and
+  `helm template` under both values sets, then a drain on a live cluster, since a template that has only
+  been rendered has not been seen to work. No application code, schema or env var change. Revisit with
+  the replica decision, or when explicitly requested. Also listed in CLAUDE.md > Known Gaps.
+
 ## 8. Advisory notes
 
 Recorded criteria that inform but do not schedule work: privacy/compliance

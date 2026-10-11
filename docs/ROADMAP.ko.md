@@ -1576,8 +1576,11 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
     ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md) 추가 기록 2026-09-29). 주변에는 RDS
     `multi_az = false`, NAT 게이트웨이 하나(`cluster/main.tf`), `emptyDir` 위의 clamd 시그니처 DB가 있다.
     replica 하나가 포트폴리오 규모에서 정한 선택이고(`values.yaml`의 `replicaCount` 주석), replica를
-    늘리면 인스턴스별 throttle 카운터(다음 항목)와 비용이 따라오기 때문에 남겼다. 실제 사용자나 부하가
-    생길 때, 또는 가용성을 내세우기 전에 다시 본다.
+    늘리면 인스턴스별 throttle 카운터(다음 항목)와 비용이 따라오기 때문에 남겼다. **2026-10-12 결정: 사용자가 늘면 replica 수를 올린다.** 임계치는 정하지 않았고 시점은
+    개발자가 판단한다. 올리려면 먼저 Redis 기반 `ThrottlerStorage`(카운터가 인스턴스별이라 replica 수만큼
+    분당 5회 인증 한도가 배가된다)와 PodDisruptionBudget(아래 차트 후속 작업)이 필요하다. 그 전에 확인할 것은
+    replica 둘이 cron 스윕을 동시에 돌리면 어떻게 되는지(분석하지 않았다. 다음 항목)와 비어 있는 `resources`
+    requests이다. 가용성을 내세우기 전에도 다시 본다.
   - **인스턴스별 throttle 카운터와 조율되지 않는 스윕.** Redis 기반 `ThrottlerStorage`는 위에 이미 올라 있고,
     replica가 둘 이상일 때만 의미가 있다. `backend/temp-cleanup`, `backend/file`, `backend/metrics`에는 두
     cron 스윕을 replica 사이에서 조율하는 코드가 없다(락이나 리더 선출을 검색했지만 찾지 못했다). replica 둘이
@@ -1607,6 +1610,17 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
     주석뿐이므로 차트를 다음에 만질 때 고친다.
 
   CLAUDE.md > Known Gaps에도 올려 두었다.
+- **Helm 차트: PodDisruptionBudget과 topology spread 템플릿, 기본은 꺼 둠** — **2026-10-12 기록,
+  같은 날 후속 과제로 결정, 시작하지 않음.** 위 점검 항목의 replica 결정에 딸린 작업이다. 지금 차트는 둘 다
+  렌더링하지 않고 `replicaCount`는 1로 둔다. 이 작업은 두 가지를 기본값이 꺼진 values 뒤의 템플릿으로
+  추가한다(`ingress`, `networkPolicy`, `metrics.serviceMonitor`와 같은 형태). 그러면 나중에 replica를 올리는
+  일은 values 변경이 된다. replica 하나인 상태에서 `minAvailable: 1`인 PDB는 노드 드레인을 보호하는
+  것이 아니라 막게 되므로, PDB는 `replicaCount`가 1보다 클 때만 렌더링해야 한다. 착수할 때의 범위:
+  `k8s/helm/templates/`(새 PDB 템플릿, `deployment.yml`의 `topologySpreadConstraints`), `values.yaml`,
+  두 values 조합에서의 `helm lint`와 `helm template`, 이어서 라이브 클러스터에서의 드레인. 렌더링만 해 본
+  템플릿은 동작하는 것을 본 것이 아니기 때문이다. 애플리케이션 코드, 스키마, 환경 변수 변경은 없다. replica
+  결정과 함께, 또는 명시적으로 요청받을 때 다시 본다. CLAUDE.md > Known Gaps에도 올려 두었다.
+
 ## 8. Advisory 노트
 
 작업 일정에는 반영하지 않되 판단에 참고할 기준: 개인정보/컴플라이언스(삭제 정책,

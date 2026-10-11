@@ -1761,7 +1761,10 @@ Architecture Decisions가 계속 유효하다.
   달고 있음, `UserService.remove`에서 커밋 뒤 실패하면 감사 행이 빠짐, `--wait` 없는 `helm upgrade`, values
   파일의 낡은 `networkPolicy` 주석 두 곳). 각각 지금 규모(replica 하나, 사용자 없음, 실행 사이마다 내려가는
   스택)에서는 낮다고 판단했고, 왜 남겼고 언제 다시 볼지는 `docs/ROADMAP.ko.md` §7에 있다. replica와
-  데이터베이스 항목을 처리하기 전에는 이 배포를 고가용성이라고 설명하지 않는다.
+  데이터베이스 항목을 처리하기 전에는 이 배포를 고가용성이라고 설명하지 않는다. **2026-10-12 결정:**
+  사용자가 늘면 replica를 올린다(임계치는 정하지 않았고 시점은 개발자가 정한다). 그 전에 Redis 기반
+  `ThrottlerStorage`와 PodDisruptionBudget이 있어야 한다. PDB·topology spread 차트 템플릿(기본은 꺼 둠)은
+  후속 과제이며 시작하지 않았다(`docs/ROADMAP.ko.md` §7).
 
 **2026-07-22 해결됨**(맥락을 위해 잠시 남겨둠; 다음 문서 정리 때 정리할 것):
 lint는 깨끗하다(에러 0개 — unsafe-`any` 체인에 타입 부여, spec 파일은
