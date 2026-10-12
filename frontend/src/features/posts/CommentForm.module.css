@@ -16,7 +16,8 @@
   background: var(--surface);
   color: var(--text);
   font: inherit;
-  resize: vertical;
+  /* 높이는 rows가 정한다 — 사용자가 끌어서 바꾸지 못한다(Post 본문 박스와 같다). */
+  resize: none;
 }
 
 .textarea:focus-visible {

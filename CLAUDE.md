@@ -66,6 +66,17 @@ Before making any change:
     image/audio/video upload and management) to shape an efficient implementation approach:
     reuse the pattern that already fits this specific app (Project-Specific Principles,
     Architecture Decisions) rather than reaching for a generic default that ignores it.
+12. Before writing code that calls a tool or API, at any task scale, check whether this repo
+    already calls it. If every API this change calls is already used here, write "Minimum
+    do-nots: none new" in one line. For an API no code here calls yet — a new dependency, or
+    a new API of an existing one — look up what the tool's own docs, changelog, or advisories
+    mark as removed, deprecated, or unsafe. Read the official source in this session (Context7
+    MCP when connected), not from recall, and report it under a "Minimum do-nots" heading
+    with the source, version, and date checked for each item. If no source can be reached,
+    mark the item "unverified" and propose a verification step instead of filling the gap
+    from memory. A do-not that recurs is a candidate for Never Do. Rationale: recall of a
+    tool's API goes stale with no signal — the `@Transaction()` ban in the Transaction
+    Boundary table (removed in TypeORM 0.3) is the precedent.
 
 ## Scope Discipline (범위 준수)
 
@@ -158,6 +169,9 @@ down:
 | **Medium** | A typical feature add or change | Requirement → Research → Design → Implementation → Testing → Review → Regression |
 | **Large** | Architectural change, DB migration, a core-flow rewrite | Requirement → Impact → Research → Design (+ Security/Performance Review where relevant) → Implementation → Testing → Review → Fix → Regression → Release → Production Verification → Retrospective → Knowledge Capture |
 
+Hallucination Prevention #12 (minimum do-nots for a tool or API new to this repo) is not a
+stage of any one scale: it runs before Implementation at every scale, including Small.
+
 A Large task that touches a high-blast-radius file or a schema change already requires
 explicit approval under Scope Discipline — that approval gate applies regardless of which
 stage it falls under here.
@@ -228,6 +242,8 @@ When a new tool, library, or concept is being introduced, always cover the follo
 - Background: why it was created and what problem it solves
 - Implementation purpose: what specific goal it serves in this context
 - Practical disadvantages if not implemented, and the root causes of those disadvantages
+- Minimum do-nots: for the tool being introduced, run the check in Hallucination
+  Prevention #12 and report it in this analysis.
 
 Do not write excessive code during this phase — the goal is to decide *whether and how*
 to introduce the thing before committing to an implementation, and premature code biases
@@ -504,6 +520,18 @@ getFiles(): Promise<FileEntity[]>
 // ✅
 getFiles(query: GetFilesDto): Promise<[FileEntity[], number]>
 // (the current getFiles(query: GetFilesDto) follows this — new list endpoints must too)
+
+// ❌ Deprecated TypeORM API → findByIds is @deprecated in 0.3 and removed in 1.0 (breaks on upgrade)
+await this.fileRepository.findByIds(ids)
+// ✅
+await this.fileRepository.find({ where: { id: In(ids) }, relations: ['creator'] })
+
+// ❌ A where value that can be undefined/null → TypeORM 0.3 silently drops that condition, so the
+//    query can match every row (fail-open read; 1.0 throws instead). This project does not set
+//    invalidWhereValuesBehavior.
+await this.fileRepository.findOne({ where: { id, creator: { id: userId } } })  // userId undefined at runtime → creator condition ignored
+// ✅ Type the value as non-optional and validate it at the boundary (DTO / @UserId) before it
+//    reaches a where; never build a where from a value that may be undefined
 ```
 
 ### GROUP 3 — Security
@@ -1124,6 +1152,15 @@ Do not suggest alternatives to these decisions without explicit request.
   live-verified against a throwaway `kind`+Calico cluster (ADR 0056's recipe,
   `k8s/helm/README.md`) — only AWS's own VPC CNI enforcement agent stays
   AWS-only-verifiable, the same residual ADR 0056 already carries
+- **One file per attach request is a decision, not a leftover (2026-10-06, [ADR
+  0065](docs/ADR/0065-multi-file-upload-client-sequential.md))**: multi-file upload is the client
+  (`frontend/`'s `UploadForm.tsx`) repeating attach → promote per file, one at a time. The backend
+  keeps `maxCount: 1` per field and the "exactly one of `image`/`audio`/`video`" check. The reasons:
+  the server already handles one file per request so nothing there needs fixing, a failure ends on
+  its own file, and with `memoryStorage` a request never holds more than one file's bytes. Do not
+  propose having `POST /upload/attach` accept several files in one request; that alternative was
+  weighed and rejected in ADR 0065. Several files on one post is a separate, undecided schema
+  question (ADR 0065 D5).
 - **Never suggest**: streaming/chunked upload, CDN — unless explicitly requested. S3 is no
   longer in this list: the storage port-adapter (ADR 0029, above) landed both an
   `S3Storage` implementation and the `STORAGE_DRIVER` switch, but `local` stays the
@@ -1217,9 +1254,10 @@ Do not suggest alternatives to these decisions without explicit request.
   the global pipe's `enableImplicitConversion` truthiness-casts `"false"` to `true` before
   any custom `@Transform` (measured, pinned by `delete-user-query.dto.spec.ts`). Any future
   boolean-ish query flag on a destructive path follows the same shape
-- Physical deletion is **post-commit and best-effort** via
-  `unlinkStoredFiles` (`backend/common/`), which refuses paths outside `file/upload/` and
-  reports failures for the caller to log at `warn`. `file/upload` is no longer entirely
+- Physical deletion is **post-commit and best-effort** via `FileStorage.unlink(keys)` (ADR
+  0029 — the old `unlinkStoredFiles` helper in `backend/common/` was retired into the
+  adapters), which refuses keys outside the granted (`file/upload/`) and temp (`temp_`)
+  namespaces and returns failures for the caller to log at `warn`. `file/upload` is no longer entirely
   unwatched: `FileModule`'s `GrantedCleanupService` scans it against
   `file_entity.filePath` on a schedule (ADR 0051) — but it ships report-only
   (`GRANTED_SWEEP_DRY_RUN` defaults `true`), so an operator must explicitly opt in
@@ -1350,22 +1388,22 @@ still lands only as its own dedicated task with its own ADR — until then, the
 Architecture Decisions above remain operative.
 
 **Known gaps** (documented, not yet scheduled):
-- `pnpm audit --prod` is **clean as of 2026-09-10**: qs (DoS + array-limit
-  bypass, `>=6.16.0`) and brace-expansion (DoS, `>=2.1.4`, via
-  `typeorm>glob>minimatch`) pinned via two new `pnpm.overrides` entries; the
-  existing multer (`^2.3.0`) and `@nestjs/swagger>js-yaml` (`^4.3.2`) overrides
-  bumped past their prior floors to cover newly-disclosed DoS/CPU-exhaustion
-  advisories; joi moved to `18.2.8` (prototype-pollution fixes) inside its
-  existing `^18.2.3` range via `pnpm update joi` — no override needed. The
-  unused legacy `aws-sdk` v2 dependency (installed 2026-08-13, `git log`
-  confirms no `.ts` file ever imported it — the project had already settled on
-  `@aws-sdk/client-s3`/`s3-request-presigner` v3 that same evening, ADR 0036)
-  was removed outright rather than overridden, taking its bundled vulnerable
-  `uuid` and its own unpatched region-validation finding with it. Dev-transitive
-  findings stay out of scope — plain `pnpm audit` (not `--prod`) now reports 58
-  (a handful in 2026-07-24), including one critical (`handlebars` via
-  `ts-jest`) — still build/test-time only, waiting on upstream releases in the
-  jest/@nestjs/cli/eslint toolchains
+- `pnpm audit --prod` is **clean as of 2026-10-08**. It had been clean on 2026-09-10, then
+  six new advisories appeared and were fixed with overrides and one in-range update, no new
+  dependency: proxy-addr (critical, GHSA-jqcg-44mw-7w3h, via `express`) through a new
+  `"proxy-addr": "^2.0.8"` override; brace-expansion (2 high + 1 moderate, via
+  `typeorm>glob>minimatch`) by raising its override to `^2.1.7`; multer (moderate,
+  GHSA-3pph-fpjx-jg34) by raising both the direct range and the override to `^2.4.0`; joi
+  (moderate, GHSA-wr44-6hxh-3jwq) to `18.2.9` via `pnpm update joi`. None was reachable as
+  configured: the proxy-addr bug needs an IPv4-mapped IPv6 trust subnet with a short prefix,
+  and `backend/main.ts` uses the plain IPv4 `10.0.0.0/16` the advisory itself gives as the
+  workaround (checked against 2.0.7 and 2.0.8 directly); the multer one is `diskStorage`-only
+  and this app uses `memoryStorage`; the joi one needs attacker-supplied custom messages. The
+  2026-09-10 round (qs and brace-expansion overrides, multer/js-yaml floors raised, joi
+  18.2.8, the unused `aws-sdk` v2 removed) is in `docs/CHANGELOG.md`. Dev-transitive
+  findings stay out of scope: plain `pnpm audit` (not `--prod`) reports 65 on 2026-10-08
+  (58 on 2026-09-10), including 3 critical, all `handlebars` via `ts-jest` — build/test-time
+  only, waiting on upstream releases in the jest/@nestjs/cli/eslint toolchains
 - ~~`test/app.e2e-spec.ts` is the untouched Nest template: it targets `GET /`, which
   does not exist in this app, and booting AppModule needs a live DB — the e2e suite
   needs a real rewrite before it verifies anything~~ — **stale, corrected 2026-09-14**:
@@ -1659,14 +1697,38 @@ Architecture Decisions above remain operative.
   `S3Storage`'s `S3Client` — the same default `keepAlive` agent shape — exited just as fast
   with a socket left open on purpose, closing this for shutdown speed; a real `S3Client`
   instance is still untested, ADR 0061's second addendum)
-- Four `.ko.md` files were edited without the whole-file re-read the Documentation Convention asks
-  for (recorded 2026-10-02). The 2026-10-01/02 frontend session edited seven `.ko.md` files; three
-  were re-read in full (`docs/ADR/0060-…ko.md`, `frontend/docs/STYLE-PLAN.ko.md`,
-  `frontend/docs/API-CONTRACT.ko.md`) and four were not: `docs/CHANGELOG.ko.md` (about 2,850 lines),
-  `docs/ROADMAP.ko.md` (about 1,590), `frontend/CLAUDE.ko.md` and `frontend/README.ko.md`. Only the
-  passages added that session were written as natural Korean; the rest of those files was not
-  re-read. Not scheduled — the pass is explicit-request work and fluency only. Scope, method and
-  trigger: `docs/ROADMAP.md` §7.
+- ~~Four `.ko.md` files were edited without the whole-file re-read the Documentation Convention
+  asks for~~ (recorded 2026-10-02) — **resolved 2026-10-04**, on explicit request: `docs/CHANGELOG.ko.md`,
+  `docs/ROADMAP.ko.md`, `frontend/CLAUDE.ko.md` and `frontend/README.ko.md` were re-read in full and
+  fixed for Korean wording only. It found a run of 2026-08-12-era `CHANGELOG.ko.md` entries in the
+  polite `-습니다` register while the rest uses `-다` (unified), one stray duplicated sentence
+  fragment, a few literal translations, and 18 link targets that pointed at English siblings; EN/KO
+  heading, list and table-row counts and relative links were checked afterwards. Left as is:
+  `docs/ADR/0022-admin-console-import-from-chat-project.ko.md` renders single-flight as "단일 비행"
+  in three places. Record: `docs/CHANGELOG.md` 2026-10-04, `docs/ROADMAP.md` §7.
+- The malware scan gate passes a `null` verdict (found 2026-10-03 by the backend dependency audit;
+  **decided 2026-10-03: later task, not started**). `clamscan`'s `scanStream` resolves, it does not
+  reject, with `isInfected: null` ("Unable to scan") when `clamd` closes the connection normally and the
+  reply is empty, `COMMAND READ TIMED OUT`, or none of `OK`/`FOUND`/`ERROR`
+  (`node_modules/clamscan/index.js:765-781`). `ScanService.scanBuffer` returns it unchanged
+  (`backend/upload/scan.service.ts:73-74`, declared `boolean`) and `UploadService.stageTemp` tests only
+  `if (scanResult.isInfected)` (`upload.service.ts:54`), so the file goes on to `storage.saveTemp()`
+  unscanned. ADR 0059 D4's fail-closed still holds for the cases that reject (connection and socket
+  errors, aborted scans, `ERROR` replies) and for an unreachable scanner; the unit specs mock only
+  `true`/`false`. Assessed low to medium; read from source, not reproduced against a real `clamd`.
+  Planned fix: treat `null` as a failed attempt inside `scanBuffer`'s `try` so the existing retry and
+  503 `UPLOAD_SCAN_UNAVAILABLE` path apply, plus a unit case. Details: ADR 0059 Addendum (2026-10-03),
+  `docs/ROADMAP.md` §7. A new scan consumer must not copy the `if (result.isInfected)` check on its own.
+- An unclaimed upload filename is not bound to its uploader (found 2026-10-06; **decided 2026-10-06:
+  later hardening, not started**). `POST /upload/attach` records no uploader, and `FileService.uploadFile`
+  decides a claim from `findClaim` and `storage.existsTemp` only, so between attach and the first
+  `POST /file` any authenticated user who knows the `temp_` filename can claim it. The original uploader
+  then gets 409 `FILE_ALREADY_CLAIMED`. Reproduced on the local compose stack with two throwaway
+  accounts. Assessed low: the name carries a v4 UUID, travels only in request/response bodies, needs a
+  valid access token, and dies with the temp sweep (`TEMP_SWEEP_TTL_HOURS`, default 24h). Closing it
+  means binding the name to the uploader, which touches the `temp_` naming and `TEMP_FILENAME_PATTERN`
+  and needs its own decision. Details: ADR 0019 Addendum (2026-10-06), `docs/ROADMAP.md` §7. Until then,
+  do not describe the attach filename as something only its uploader can claim.
 
 **Resolved 2026-07-22** (kept briefly for context; prune on next doc pass):
 lint is clean (0 errors — unsafe-`any` chains typed, `unbound-method` disabled for
@@ -1678,9 +1740,11 @@ paginated; `.env.example` documents `BASE_URL`; the "300MB" comment is fixed;
 
 ## Project Overview
 
-NestJS REST API for authenticated video-file upload and management. JWT auth
-(Passport), PostgreSQL via TypeORM, Multer disk storage, Swagger documentation.
-A local/portfolio project, no deployment pipeline. **This CLAUDE.md governs the
+NestJS REST API for authenticated image/audio/video upload and management. JWT auth
+(Passport), PostgreSQL via TypeORM, Multer in-memory buffering with the bytes stored
+through the `FileStorage` port (local disk or S3, ADR 0029), Swagger documentation.
+A portfolio project. CI publishes images but does not deploy — a human runs
+`helm upgrade` (see CI/CD). **This CLAUDE.md governs the
 backend at the repo root** (`backend/`, `docs/ADR/`, `test/`). A React + Vite frontend
 was added 2026-07-24 as the `frontend/` subfolder (ADR 0010) — it has its own
 scoped `frontend/CLAUDE.md` and tooling, and is not a pnpm-workspace monorepo:
@@ -1820,7 +1884,15 @@ substitute for this once the exercise actually calls the delete path.
   `AuditLogEntity`, `PostEntity`, `CommentEntity`
 - `ServeStaticModule` — serves only `file/temp` at `/file/temp`; `file/upload` is not
   statically served (granted reads go through `GET /file/:id/content`, ADR 0025/0026)
-- `FileModule`, `UserModule`, `PostModule`, `CommentModule`, `AuthModule`, `UploadModule`
+- `ThrottlerModule` — global default 100 requests/minute, enforced by the `APP_GUARD`
+  `ThrottlerGuard` (ADR 0053/0054); `ScheduleModule` — hosts the cron sweeps
+- `FileModule`, `UserModule`, `PostModule`, `CommentModule`, `AuthModule`, `UploadModule`,
+  `AuditLogModule`, plus the operational `TempCleanupModule`, `HealthModule` and
+  `MetricsModule` (see Project-Specific Principles > Module Responsibility;
+  `StorageModule` is not imported here — `UploadModule`, `FileModule`, `UserModule` and
+  `TempCleanupModule` each import it)
+- Global providers: `AllExceptionsFilter` (`APP_FILTER`), `ThrottlerGuard` (`APP_GUARD`),
+  `ValidationPipe` (`APP_PIPE`)
 
 **AuthModule** (`backend/auth/`)
 - REST: `POST /auth/register`, `POST /auth/signin` (both Basic token),
@@ -1894,21 +1966,30 @@ substitute for this once the exercise actually calls the delete path.
 - Exports `FileService` (consumed by `UserModule` for the account cascade)
 
 **UploadModule** (`backend/upload/`)
-- REST: `POST /upload/attach` (behind `JwtAuthGuard`) — multipart field `video`,
-  Multer diskStorage to `file/temp` with `temp_{uuid}_{timestamp}.{ext}` naming,
-  100MB size limit; returns `{ filename }`
-- Controller-only module: no service, no DB access
+- REST: `POST /upload/attach` (behind `JwtAuthGuard`) — exactly one of the multipart
+  fields `image` (jpg/jpeg/png/webp), `audio` (mp3), `video` (mp4/mov/webm), each with
+  its own extension + mimetype allowlist (`FileFieldsInterceptor`, `maxCount: 1` per
+  field), 100MB size limit, 15/minute throttle (ADR 0054); returns `{ filename }`
+- `UploadService.stageTemp` — scans the in-memory Multer buffer through `ScanService`
+  (ClamAV, fail-closed, ADR 0059), then generates the `temp_{uuid}_{timestamp}.{ext}`
+  name and writes it through the `FileStorage` port (`storage.saveTemp`, ADR 0029 D4).
+  Multer uses `memoryStorage`, so nothing reaches disk before the scan passes
+- No DB access: imports `StorageModule`; providers `UploadService` and `ScanService`
+  (`ScanService` is private to this module, ADR 0059 D2)
 
 ### Data Flow for Uploading a File
-1. `POST /upload/attach` (multipart, field `video`) → Multer writes
-   `file/temp/temp_{uuid}_{ts}.{ext}` → responds with the generated filename
+1. `POST /upload/attach` (multipart, one of the fields `image`/`audio`/`video`) → Multer
+   buffers the file in memory → `UploadService.stageTemp` scans it, then stores it as
+   `temp_{uuid}_{ts}.{ext}` through `FileStorage.saveTemp` (under `local`:
+   `file/temp/`) → responds with the generated filename
 2. Client calls `POST /file` with `{ title, filePath: <that filename> }`
 3. `FileService.uploadFile()` first resolves the claim (ADR 0019) — a filename already
    promoted by the same user replays (200), by another user 409s, and one with no temp
    file behind it 400s — then, only for an unclaimed filename, opens a QueryRunner
    transaction: inserts `FileEntity` (`filePath` rewritten to `file/upload/granted_...`),
-   renames the physical file from `file/temp` to `file/upload`, commits; rollback on
-   failure, `release()` in `finally`
+   moves the stored object from its temp key to the granted key with `storage.promote()`
+   (under `local`: `file/temp` to `file/upload`), commits; rollback on failure,
+   `release()` in `finally`
 4. The row defaults to `visibility: 'private'`. Its bytes are now reachable only through
    `GET /file/:id/content` (creator/admin only until the owner switches visibility to
    `public` or `unlisted` via `PATCH /file/:id`); API responses expose that endpoint's URL

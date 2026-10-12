@@ -73,7 +73,8 @@ export async function registerAndSignIn(page: Page, email: string, password = TE
   await page.goto('/login')
   await page.getByRole('button', { name: 'Need an account? Register' }).click()
   await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Password').fill(password)
+  // exact: 비밀번호 표시 버튼의 aria-label("Show password")과 부분 일치하지 않게 한다.
+  await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Register & sign in' }).click()
 
   await expect(page).toHaveURL(/\/$/)
@@ -88,6 +89,26 @@ export async function goToFiles(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'File', exact: true }).click()
   await expect(page).toHaveURL(/\/files$/)
   await expect(page.getByRole('heading', { name: 'File', exact: true })).toBeVisible()
+}
+
+// 목적: 업로드 폼으로 파일 하나를 올리고 그 줄이 "Uploaded"가 될 때까지 기다린다.
+// 이유: 폼이 "파일을 고르면 줄이 생기고 줄마다 제목을 가진다"로 바뀌어(ADR 0065) 여러 spec이 같은 절차를
+//       반복한다. 한곳에 두면 절차가 다시 바뀌어도 여기만 고치면 된다.
+// 방법: 입력을 먼저 비운 뒤 파일을 넣고(같은 경로를 연달아 넣으면 change가 안 뜬다), 생긴 줄의 제목을
+//       채우고 Upload를 누른다. expectSuccess가 false면 결과 단언은 호출한 쪽이 한다.
+export async function uploadThroughForm(
+  page: Page,
+  title: string,
+  { filePath = VIDEO_FIXTURE_PATH, expectSuccess = true }: { filePath?: string; expectSuccess?: boolean } = {},
+): Promise<void> {
+  const fileInput = page.getByLabel(/^Files/)
+  await fileInput.setInputFiles([])
+  await fileInput.setInputFiles(filePath)
+  await page.getByLabel('Title', { exact: true }).fill(title)
+  await page.getByRole('button', { name: 'Upload', exact: true }).click()
+  if (expectSuccess) {
+    await expect(page.getByText('Uploaded', { exact: true })).toBeVisible({ timeout: 30_000 })
+  }
 }
 
 // 게시글 보드 홈("/")으로 돌아간다. URL만이 아니라 PostForm 자체의 heading도 기다린다 —

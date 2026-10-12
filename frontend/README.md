@@ -16,7 +16,8 @@ instead (backend ROADMAP.md > Stage 5).
 - **Noto Sans KR + Hahmlet** (`@fontsource-variable/*`, OFL-1.1, variable 100–900) — the UI
   fonts for Hangul and Latin alike, self-hosted into `/assets` (the nginx CSP is `font-src 'self'`)
 - **Playwright** (`@playwright/test`, chromium only) — browser-level E2E, `frontend/e2e/`
-  (`auth`/`upload`/`board`/`detail` specs cover register-signin-signout, the two-phase
+  (`auth`/`upload`/`board`/`detail` specs cover register-signin-signout (and a reload keeping the
+  session, with exactly one silent refresh per page load), the two-phase
   video upload, the file board's search/sort/pagination/visibility badges, and
   FileDetailPage's access-control branches; `navigation` covers the "/" ⇄ "/files"
   route split, the NavBar, the dev-proxy regex-anchor fix that split depends on, and a
@@ -27,8 +28,14 @@ instead (backend ROADMAP.md > Stage 5).
   its persistence across a reload, and its size and position next to the theme toggle;
   `layout` checks that every authenticated screen shares one `main` box and one 720px column;
   `fonts` checks that headings and body text are really drawn with the Hahmlet and Noto Sans
-  KR web fonts rather than a silent system fallback; those three stub the API, so they create no
-  account and need no backend — see `frontend/CLAUDE.md`)
+  KR web fonts rather than a silent system fallback; `empty-state` checks that an empty list says
+  "none yet" until a filter is set; `overflow` checks that no authenticated screen scrolls sideways at
+  320, 375, 667, 768 and 1366px with a long email, title or URL, nor do the forms with a text input
+  those screens do not open by themselves (sign-in, a chosen upload row, Post edit, ownership
+  transfer) at 320 and 375px; `post-body` checks that the Post body and comment
+  boxes cannot be resized; `touch-targets` checks that every tappable element is at least 40px tall
+  at 375px; those seven stub the API, so they create no account and need no backend — see
+  `frontend/CLAUDE.md`)
 - Plain `fetch` wrapper (`src/api/client.ts`) — no data-fetching or state library yet
   (plus an `XMLHttpRequest` path in the same file for upload-progress reporting,
   since `fetch` exposes no upload-progress event)
@@ -64,7 +71,8 @@ src/
 │                 Sign out, shown on every authenticated screen; page.module.css — the one
 │                 `<main>` box (and 720px column) every authenticated screen composes
 └── features/
-    ├── auth/     LoginPage (Basic signin/register)
+    ├── auth/     LoginPage (Basic signin/register; a half-transparent eye button at the
+    │             right end of the password box shows or hides what was typed)
     ├── posts/    PostBoard (protected, "/" — the app's home: PostForm + the post list —
     │             search/sort/creator filter/pagination mirroring FileBoard, attachment
     │             icon per row, ADR 0021/0023), PostForm (title/body + an optional
@@ -81,8 +89,8 @@ src/
     │             own author/admin, PATCH/DELETE /comment/:id), and CommentForm (POST
     │             /post/:id/comment, triggers a refetch on success — no realtime/polling
     │             infrastructure exists in this app)
-    ├── files/    DashboardPage (protected, "/files" — upload form (image/audio/video,
-                  with upload-progress bar) + file board: search/sort/
+    ├── files/    DashboardPage (protected, "/files" — upload form (several files at once,
+                  sent one by one with a progress bar per file) + file board: search/sort/
                   creator filter/pagination + visibility badges, FileBoard.tsx) and
                   FileDetailPage (protected, "/view/:id" — metadata + visibility-gated
                   playback: direct src for public/unlisted, an authenticated
@@ -124,3 +132,25 @@ pnpm preview    # serve the built app
 pnpm test:e2e   # Playwright E2E — needs the backend (+ its DB) reachable on :3000;
                 # starts/reuses the :5173 dev server itself (playwright.config.ts)
 ```
+
+`pnpm test:e2e` runs two kinds of specs (see
+[CLAUDE.md](CLAUDE.md#ui-only-specs-stub-the-api-frontende2e)). The UI-only ones stub the API and
+need only the dev server. `auth`, `upload`, `board`, `detail`, `posts` and `navigation` register
+real accounts, and `upload`, `board`, `detail` and `posts` also upload a file through the UI, so
+the backend on `:3000` has to be set up for that:
+
+- A reachable Postgres with the migrations applied. The accounts and files these specs create stay
+  in that database; nothing truncates it.
+- `STORAGE_DRIVER=local`. With `s3` and a bucket that no longer exists, `POST /upload/attach`
+  returns 500 (`NoSuchBucket`).
+- A reachable ClamAV (`CLAMD_HOST`/`CLAMD_PORT`; the compose `clamav` service locally). Every
+  upload is scanned, and an unreachable scanner answers 503 `UPLOAD_SCAN_UNAVAILABLE` (backend ADR
+  0059).
+- `THROTTLE_ENABLED=false`. Each spec registers and signs in again, which spends the 5/minute auth
+  limit (backend ADR 0054) and ends in 429 if the limit is on.
+- `BASE_URL` left at its default `http://localhost:3000`. `detail.spec.ts` calls the backend at
+  that origin (`BACKEND_BASE_URL`), and pointing `BASE_URL` at `:5173` made two of its tests fail.
+
+CI sets these in the `frontend-e2e` job of `.github/workflows/ci.yml`. For the compose `api`, put
+the per-machine values in a gitignored `.env.local`
+([ADR 0015](../docs/ADR/0015-docker-and-compose.md) Addendum).

@@ -66,3 +66,32 @@ was done first precisely so the image base tag has a single source.
 - Not yet production-grade: the container runs as root with no distroless base,
   health endpoint, or registry push. Those land with CI (Stage 1) and Stage 4,
   each with its own record.
+
+### Addendum (2026-10-03) — optional `.env.local` for per-machine overrides
+
+`api` and `migrate` now read `.env` and then an optional `.env.local` (`x-env-files` in
+`docker-compose.yml`, `required: false`, which needs Compose 2.24 or newer). Context: a
+developer's `.env` can point at S3 (`STORAGE_DRIVER=s3`); once the AWS stack is down the
+bucket is gone and every upload returns 500 (`NoSuchBucket`), and `.env` is the file that
+holds the real settings. The host-run backend already had a per-machine override —
+`backend/app.module.ts` reads `['.env.local', '.env']` and `.env.local` is gitignored — but
+compose did not, and `.dockerignore` keeps `.env.*` out of the image, so a `.env.local` never
+reached the container. Now one gitignored file changes local values for both ways of running.
+The commit that added the host-side override (`3bd5dfd`, 2026-09-09) recorded, as something it
+had checked live, that `.env.local` flows into neither the image nor the compose containers.
+This change reverses only the second half: the image still never contains it (`.dockerignore`),
+while the compose containers now receive it at run time, on the machine that has the file.
+
+Precedence runs opposite in the two tools (Nest: the first file wins; Compose: the later file
+wins), so the list order is `.env`, then `.env.local`. A throwaway test with dummy files
+confirmed that the later file overrides and that an absent `.env.local` is not an error;
+after the change, removing the temporary override file left the `api` container on
+`STORAGE_DRIVER=local`, and a real upload (ClamAV scan, stored file, authenticated playback)
+worked against it. `environment:` entries in the compose file (`DB_HOST`, `CLAMD_HOST`, ...)
+still win over both files.
+
+Rejected: a `docker-compose.override.yml` (compose loads it by name automatically and nothing
+in `.gitignore` covered it, so it could be committed by accident and then change everyone's
+defaults), and editing `.env` (it holds the real settings and is not read or written by the AI
+tooling here). Not changed: the Joi schema and the `STORAGE_DRIVER` default (`local`) —
+[ADR 0029](0029-storage-port-adapter.md) D3.

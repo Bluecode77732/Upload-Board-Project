@@ -40,6 +40,10 @@ function messageForError(error: unknown): Translatable {
   return 'common.networkError'
 }
 
+// 목적: 홈 화면의 게시글 폼과 검색/정렬/페이지네이션 목록을 그린다.
+// 이유: 목록이 비었을 때 필터를 건 적도 없는데 "조건에 맞는 게시글이 없다"고 말해, 없는 필터가 있는 것처럼 읽혔다.
+// 방법: 비었을 때 filtersActive(검색어·정렬·작성자 중 하나라도 기본값이 아님)면 "조건에 맞는 항목 없음",
+//       아니면 "아직 없음" 문구를 고른다.
 export function PostBoard() {
   const { t } = useLanguage()
   // 값 자체에는 의미가 없다 — 값을 올리면 아래의 현재 쿼리만 다시 트리거된다
@@ -169,7 +173,7 @@ export function PostBoard() {
         {!creatorIdValid && <p className={styles.error}>{t('board.err.creatorIdInvalid')}</p>}
         {error && <p className={styles.error}>{t(error)}</p>}
         {posts === null && !error && <p>{t('common.loading')}</p>}
-        {posts && posts.length === 0 && <p>{t('post.empty')}</p>}
+        {posts && posts.length === 0 && <p>{t(filtersActive ? 'post.empty' : 'post.noneYet')}</p>}
         {posts && posts.length > 0 && (
           <ul className={styles.list}>
             {posts.map((post) => {

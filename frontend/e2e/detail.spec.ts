@@ -9,21 +9,11 @@
 //   파일의 소유자만 도달할 수 있어 검증하기 가장 까다로운 경로다.
 
 import { test, expect, type APIRequestContext, type Page, type Response } from '@playwright/test'
-import { registerAndSignIn, goToFiles, uniqueEmail, uniqueTitle, VIDEO_FIXTURE_PATH, TEST_PASSWORD } from './helpers'
+import { registerAndSignIn, goToFiles, uniqueEmail, uniqueTitle, uploadThroughForm, TEST_PASSWORD } from './helpers'
 
 // Vite dev 프록시가 /file, /auth, /post를 전달하는 것과 동일한 origin(vite.config.ts) —
 // `request` fixture는 (`page`와 달리) 이 프록시를 거치지 않으므로 여기서는 백엔드를 직접 호출한다.
 const BACKEND_BASE_URL = 'http://localhost:3000'
-
-async function uploadVideo(page: Page, title: string): Promise<void> {
-  await page.getByLabel('Title', { exact: true }).fill(title)
-  await page.getByRole('radio', { name: 'Video' }).check()
-  const fileInput = page.getByLabel(/^Video file/)
-  await fileInput.setInputFiles([])
-  await fileInput.setInputFiles(VIDEO_FIXTURE_PATH)
-  await page.getByRole('button', { name: 'Upload', exact: true }).click()
-  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('', { timeout: 30_000 })
-}
 
 // `title`과 일치하는 보드 행의 /view/:id 페이지를 열고, 그 파일 id를 FileDetailPage가 마운트
 // 시 항상 발생시키는 콘텐츠 fetch의 응답과 함께 반환한다(새로 업로드한 파일은 기본값이
@@ -91,7 +81,7 @@ test('a private file plays for its owner via an authenticated blob fetch and rev
 
   await registerAndSignIn(page, uniqueEmail('detail-private'))
   await goToFiles(page)
-  await uploadVideo(page, title)
+  await uploadThroughForm(page, title)
   const { contentResponse } = await openDetailPage(page, title)
 
   // STORAGE_DRIVER=local이면 200(직접 스트림); STORAGE_DRIVER=s3면 302(ADR 0036 presigned
@@ -125,7 +115,7 @@ test('switching visibility to public serves the content endpoint directly, witho
 
   await registerAndSignIn(page, uniqueEmail('detail-public'))
   await goToFiles(page)
-  await uploadVideo(page, title)
+  await uploadThroughForm(page, title)
   const { id: fileId } = await openDetailPage(page, title)
 
   await page.getByLabel('Visibility').selectOption('public')
@@ -155,7 +145,7 @@ test('switching visibility to unlisted exposes a rotatable share link that plays
 
   await registerAndSignIn(page, uniqueEmail('detail-unlisted'))
   await goToFiles(page)
-  await uploadVideo(page, title)
+  await uploadThroughForm(page, title)
   const { id: fileId } = await openDetailPage(page, title)
 
   await page.getByLabel('Visibility').selectOption('unlisted')
@@ -193,7 +183,7 @@ test('a private file is hidden from a different signed-in user (404, existence h
 
   await registerAndSignIn(page, uniqueEmail('detail-owner'))
   await goToFiles(page)
-  await uploadVideo(page, title)
+  await uploadThroughForm(page, title)
   const { id: fileId } = await openDetailPage(page, title)
   await expect(page.getByText('Private', { exact: true })).toBeVisible()
 
@@ -227,7 +217,7 @@ test('a file referenced by a post cannot be deleted (409 FILE_IN_USE) until the 
 
   await registerAndSignIn(page, email)
   await goToFiles(page)
-  await uploadVideo(page, title)
+  await uploadThroughForm(page, title)
   const { id: fileId } = await openDetailPage(page, title)
 
   const postId = await attachFileToPost(request, email, TEST_PASSWORD, fileId)

@@ -6,7 +6,7 @@
 //   (board.spec.ts)을 이 앱에 그동안 없던 쓰기 경로로 보완한다.
 
 import { test, expect } from '@playwright/test'
-import { registerAndSignIn, goToFiles, goToHome, uniqueEmail, uniqueTitle, VIDEO_FIXTURE_PATH } from './helpers'
+import { registerAndSignIn, goToFiles, goToHome, uniqueEmail, uniqueTitle, uploadThroughForm } from './helpers'
 
 test('creating a text-only post appears on the board and links to its detail page', async ({ page }) => {
   test.setTimeout(60_000)
@@ -39,11 +39,7 @@ test('attaching one of my files shows the attachment icon on the post row', asyn
   await registerAndSignIn(page, uniqueEmail('post-attach'))
   await goToFiles(page)
 
-  await page.getByLabel('Title', { exact: true }).fill(fileTitle)
-  await page.getByRole('radio', { name: 'Video' }).check()
-  await page.getByLabel(/^Video file/).setInputFiles(VIDEO_FIXTURE_PATH)
-  await page.getByRole('button', { name: 'Upload', exact: true }).click()
-  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('', { timeout: 30_000 })
+  await uploadThroughForm(page, fileTitle)
 
   await goToHome(page)
 
@@ -70,11 +66,7 @@ test('submitting a post with a file already attached to another of my posts surf
   await registerAndSignIn(page, uniqueEmail('post-conflict'))
   await goToFiles(page)
 
-  await page.getByLabel('Title', { exact: true }).fill(fileTitle)
-  await page.getByRole('radio', { name: 'Video' }).check()
-  await page.getByLabel(/^Video file/).setInputFiles(VIDEO_FIXTURE_PATH)
-  await page.getByRole('button', { name: 'Upload', exact: true }).click()
-  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('', { timeout: 30_000 })
+  await uploadThroughForm(page, fileTitle)
 
   await goToHome(page)
 

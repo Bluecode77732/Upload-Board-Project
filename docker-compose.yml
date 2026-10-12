@@ -2,6 +2,17 @@
 # 만든 `upload-board-pg` 컨테이너를 대체한다 — `docker compose up` 전에 그 컨테이너부터
 # 먼저 멈춰야 한다(호스트 포트 5435를 물고 있다). DB 자격증명·포트·시크릿은 .env에서
 # 읽는다 — 앱이 쓰는 것과 같은 값이다.
+#
+# api/migrate는 .env 뒤에 선택 파일 .env.local도 읽는다(아래 x-env-files). 이 PC에서만
+# 값을 바꾸고 싶을 때(예: .env가 STORAGE_DRIVER=s3인데 버킷이 없을 때 STORAGE_DRIVER=local)
+# .env는 그대로 두고 .env.local에 그 줄만 적는다 — 호스트 실행(Nest ConfigModule)과 같은 파일이다.
+# 우선순위가 도구마다 반대다: Compose는 목록의 뒤 파일이 앞 파일을 덮어쓰고(그래서 .env →
+# .env.local 순서), Nest는 envFilePath의 앞 파일이 이긴다. `required: false`는 Compose 2.24
+# 이상이 필요하다. .env.local은 .gitignore에 있고 .dockerignore가 이미지에서도 뺀다.
+x-env-files: &env-files
+  - path: .env
+  - path: .env.local
+    required: false
 
 services:
   # 업로드 악성코드 스캔의 clamd 데몬(ADR 0059) — UploadService가 CLAMD_HOST=clamav로
@@ -59,7 +70,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    env_file: .env
+    env_file: *env-files
     environment:
       DB_HOST: db
       DB_PORT: 5432
@@ -76,7 +87,7 @@ services:
         condition: service_completed_successfully
       clamav:
         condition: service_healthy
-    env_file: .env
+    env_file: *env-files
     environment:
       # compose 네트워크 안에서 DB는 localhost:5435가 아니라 `db:5432`로 접근한다.
       DB_HOST: db

@@ -19,8 +19,11 @@
   border-radius: 10px;
 }
 
+/* 열의 최솟값이 0이다 — 검색·작성자 입력창의 고유 폭이 폰에서 패널 밖으로 나가지 않는다
+   (PostForm.module.css의 .form 주석). 넓은 화면에서는 라벨 폭이 전과 같다. */
 .field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   text-align: left;
   color: var(--text-muted);
@@ -79,11 +82,15 @@
   color: var(--danger);
 }
 
+/* grid의 열은 기본이 `auto`라 최솟값이 안의 min-content다. 행의 제목·이메일은 nowrap이라 긴 값이
+   들어오면 열이 칼럼(720px)을 넘어 1400px 이상으로 늘어났다(641px 이상, 말줄임도 안 걸렸다).
+   열의 최솟값을 0으로 낮춰 칼럼 폭 안에서 줄어들게 하고, 넘치는 글자는 말줄임으로 처리한다. */
 .list {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -176,6 +183,24 @@
 .pageButton:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* 터치 화면에서는 행의 제목 링크와 작성자 버튼(23px)이 손가락으로 누르기엔 낮다. padding-block이라
+   말줄임(text-overflow)과 줄바꿈은 그대로 두고 높이만 40px 이상이 된다. */
+@media (max-width: 640px), (pointer: coarse) {
+  .rowInfo a {
+    padding-block: 9px;
+  }
+
+  /* 작성자 버튼은 글자가 0.9rem이라 9px로는 39px다. */
+  .creatorButton {
+    padding-block: 10px;
+  }
+
+  /* 선택 상자는 padding 8px로 39px라 40px 기준에 1px 모자랐다. */
+  .select {
+    min-height: 40px;
+  }
 }
 
 /* 좁은 화면: 페이지 여백을 되찾고, 필터가 잘게 줄바꿈되는 대신 한 줄씩 차지하게 하고,

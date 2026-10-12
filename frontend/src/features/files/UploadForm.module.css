@@ -1,9 +1,13 @@
 /* 이 폼을 감싸는 페이지는 미리보기 그리드를 위해 1126px로 넓어졌다(DashboardPage.module.css).
    폼까지 그만큼 늘어나면 산만해 보이므로, 원래 너비를 유지하고 가운데 정렬한다. PostForm/
    SettingsPage의 카드와 같은 규격이다 — box-sizing: border-box여야 padding·border를 포함해
-   세 화면에서 정확히 같은 720px가 된다. */
+   세 화면에서 정확히 같은 720px가 된다.
+
+   .form·.field·.row 모두 열의 최솟값이 0이다 — 파일 줄의 Title 입력창 고유 폭이 폼을 밀어내지 않는다
+   (PostForm.module.css의 .form 주석). */
 .form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   box-sizing: border-box;
   max-width: 720px;
@@ -23,6 +27,7 @@
 
 .field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   text-align: left;
   color: var(--text-muted);
@@ -47,17 +52,111 @@
   color: var(--text-muted);
 }
 
-.radioGroup {
-  display: flex;
-  gap: 16px;
+/* 브라우저 기본 회색 버튼(21px)은 어두운 테마와 어울리지 않고 폰에서 누르기도 어려웠다 — 다른 버튼과
+   같은 모양으로 40px 이상이 되게 한다. font-family만 상속하는 이유는 index.css 규칙과 같다. */
+.fileInput::file-selector-button {
+  margin-right: 12px;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: var(--transition);
 }
 
-.radioLabel {
+.fileInput::file-selector-button:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+/* 고른 파일 목록 — 파일 하나가 한 줄이고, 줄마다 제목·진행률·결과를 따로 가진다. 위에서부터 차례로
+   올라가므로 ol이다. */
+.list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.rowHead {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+}
+
+/* 파일명은 사용자가 정한 긴 문자열일 수 있다 — 줄이 폼 밖으로 밀려나지 않게 끊는다. */
+.fileName {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--text);
   font-size: 0.95rem;
+}
+
+.kind {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.done {
+  color: var(--success);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.doneTitle {
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.remove {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.remove:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.remove:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.remove:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 터치 화면에서는 빼기 버튼도 40px 이상이어야 한다. */
+@media (max-width: 640px), (pointer: coarse) {
+  .remove {
+    min-height: 40px;
+  }
 }
 
 .progress {

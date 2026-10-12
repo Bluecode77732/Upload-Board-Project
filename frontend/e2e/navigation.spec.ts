@@ -33,7 +33,7 @@ test('NavBar "File" link reaches the file board at /files, not swallowed by the 
   await expect(page.getByRole('heading', { name: 'File', exact: true })).toBeVisible()
   // 프록시된 백엔드 404 본문이 아니라 SPA가 실제로 렌더링됐음(업로드 폼 존재)을 확인한다 —
   // 단순한 '/file' 프록시 접두사가 "/files"에 대해 정확히 이런 실패 방식을 만들어낸다.
-  await expect(page.getByLabel('Title', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Upload a file' })).toBeVisible()
 
   await page.getByRole('link', { name: 'Post', exact: true }).click()
   await expect(page).toHaveURL(/\/$/)
@@ -48,7 +48,7 @@ test('a direct load of /files renders the file board (regex-anchored proxy, not 
   await page.goto('/files')
 
   await expect(page.getByRole('heading', { name: 'File', exact: true })).toBeVisible()
-  await expect(page.getByLabel('Title', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Upload a file' })).toBeVisible()
 })
 
 test('a direct load of /posts/:id renders PostDetailPage (regex-anchored proxy, not a backend 404)', async ({

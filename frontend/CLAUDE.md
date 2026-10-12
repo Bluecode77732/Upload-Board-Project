@@ -21,6 +21,14 @@ Before any change:
    feature-folder layout) rather than introducing new abstractions.
 4. Run `pnpm build` (type-check) and `pnpm lint` before claiming success.
 5. Show the exact diff, state uncertainties explicitly.
+6. Before writing code that calls a library or API, at any task scale, check whether
+   `frontend/` already calls it. If every API is already used here, write "Minimum
+   do-nots: none new" in one line. For an API nothing here calls yet — a new dependency,
+   or a new API of an existing one (React, React Router, Vite, Playwright, ...) — read its
+   official docs, changelog, or advisories in this session, not from recall, for what is
+   removed, deprecated, or unsafe, and report it under a "Minimum do-nots" heading with the
+   source, version, and date checked for each item; mark anything unreachable
+   "unverified". Same rule as the root CLAUDE.md, Hallucination Prevention #12.
 
 ## Scope Discipline
 
@@ -50,6 +58,14 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   from the backend 2026-09-07 — it never had a live caller here.)
 - On refresh failure (including `AUTH_REFRESH_REUSED`), the session is over:
   clear the token and route to `/login`.
+- **Every refresh goes through `tryRefresh()`** (`client.ts`, single-flight). The backend keeps one
+  refresh anchor per account and has no grace window, so a second `POST /auth/token/refresh` that
+  carries the cookie the first one just rotated reads as a replay: 401 `AUTH_REFRESH_REUSED`, session
+  over. `AuthProvider`'s startup recovery and the 401-retry paths in `client.ts` therefore share one
+  in-flight call. Never call `refreshAccessToken()` from a component or an effect — React StrictMode
+  runs mount effects twice in `pnpm dev`, which is how a second reload while signed in used to end at
+  the login screen (fixed 2026-10-02). The guard is module memory, so it serializes calls within one
+  tab only; two tabs refreshing at the same instant are not covered (tried once, both got `201`).
 
 ## API & Error Handling
 
@@ -79,7 +95,9 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   with an entry in both dictionaries of `src/i18n/messages.ts` — `ko` is a
   `Record<MessageKey, string>`, so a missing translation fails `tsc`. English is the default and
   what the e2e specs assert, so keep an existing English sentence unchanged unless the spec that
-  asserts it changes with it. Use singular nouns in English text (Post, File, Setting). An
+  asserts it changes with it. Use singular nouns in English text (Post, File, Setting). An empty
+  list says "No post yet." / "No file yet." until a filter is set, and only then "No … matches the
+  current filter." (`PostBoard`/`FileBoard`, `e2e/empty-state.spec.ts`). An
   `ApiError` mapper (`messageForError`) returns a `Translatable` (a key, or `{ raw }` for server
   text shown as received) and the component stores that in state and calls `t()` at render, so a
   language switch re-renders an error that is already on screen. The URL paths `/posts/:id` and
@@ -90,8 +108,29 @@ High-blast-radius — require explicit approval: `src/api/client.ts`,
   only an element that composes `wide` from the same file (the File preview grid) is wider, and it
   must be a direct child of `main` (which is why `FileBoard` returns a fragment). A page that sets
   its own `margin: auto` inside the flex-column `#root` shrinks to its content, which is what once
-  made the header, main and forms differ per screen. `LoginPage` is the one deliberate exception (a
-  centered card). `e2e/layout.spec.ts` guards this.
+  made the header, main and forms differ per screen. `LoginPage` is the one deliberate exception: a
+  card at the exact center of the screen, which fills `#root` with `flex: 1` and turns off `#root`'s
+  side lines. `e2e/layout.spec.ts` guards this.
+- **Long text wraps**: any box that shows text a user typed (an email, a title, a pasted URL) must be
+  able to break an unbroken string — `overflow-wrap: anywhere`, plus `min-width: 0` on a flex child
+  that holds it. `white-space: pre-wrap` alone does not break a long URL, and the box then stretches
+  the whole page sideways. The nav bar wraps its controls onto a second row instead of clipping them
+  at 320px. A `display: grid` list needs `grid-template-columns: minmax(0, 1fr)`: the default `auto`
+  column takes its content's min-content, so `nowrap` titles and emails stretched the Post list past
+  1400px above 640px. A grid that holds a text `<input>` (a form, a label, an upload row) needs the
+  same rule on every level down to the input: an `<input>` has an intrinsic width (`size=20`) the
+  `auto` column cannot go below, and that width depends on the platform's font engine — 215px on
+  Windows, 350px on Linux for Noto Sans KR at 16px — so on Linux the New post form was 382px wide in
+  a 375px viewport. In a flex row, give the label and the control `min-width: 0` instead (the
+  transfer form in `FileDetailPage`). `e2e/overflow.spec.ts` checks every authenticated screen at
+  320, 375, 667, 768 and 1366px, and at 320 and 375px the forms those screens do not open by
+  themselves (login, an upload row, Post edit, ownership transfer).
+- **Tap targets**: at phone widths (`max-width: 640px`) or with a coarse pointer, every link, button,
+  select, input and radio label is at least 40px tall (the size of the 40×40 toggles). Text links
+  get `padding-block` rather than `min-height`/`display: flex`, so `text-overflow: ellipsis` and
+  wrapping keep working; the browser's grey Choose File button is replaced by a themed
+  `::file-selector-button`. Wide mouse layouts stay as they were. `e2e/touch-targets.spec.ts` checks
+  all five screens at 375px.
 - **Fonts**: `--sans` is Noto Sans KR and `--heading` is Hahmlet (variable, 100–900), for Hangul and
   Latin alike, from `@fontsource-variable/*` imported in `main.tsx` and emitted into `/assets`. Never
   link a CDN (Google Fonts etc.) — the nginx CSP is `font-src 'self'`. The families are named
@@ -131,11 +170,31 @@ that will resurface in any new spec unless avoided up front:
   a creator-filter button whose accessible name was `e2e-upload-...@example.com`). Pass
   `{ exact: true }` on any label/role query whose text is a short common word — the nav
   links and headings are now the single words "Post" and "File", which also substring-match
-  "New post", "Upload a file" and any post or file title containing them.
+  "New post", "Upload a file" and any post or file title containing them. `getByLabel` also reads
+  `aria-label`: the login form's show/hide button is named "Show password", so the password box is
+  `getByLabel('Password', { exact: true })`.
+- **A running Vite dev server can serve stale CSS-module copies.** When a file that other CSS Modules
+  `composes` (such as `src/shared/page.module.css`) changes, `pnpm dev` keeps old hashed copies, so a
+  rule added to it may not reach every page and a spec measures the old layout. Restart the dev server
+  (or stop it, so Playwright starts a fresh one) before trusting a CSS-only check.
+- **A layout spec can pass on Windows and fail on the Linux CI runner.** Same Chromium, same web font,
+  different font engine: form controls get different intrinsic widths (see "Long text wraps").
+  `overflow.spec.ts` failed three dev runs in a row this way (2026-10-05) while every local run
+  passed. Reproduce in the Playwright image whose tag matches the installed `@playwright/test`
+  version; it ships the same browser build CI downloads. Copy the sources into the container rather
+  than running in the mount, because the Windows `node_modules` holds Windows binaries:
+
+  ```powershell
+  # PowerShell, from frontend/ (Git Bash rewrites the /src path). The stub-based specs need no backend.
+  docker run -d --name pw --init --ipc=host -e CI=true -v "${PWD}:/src:ro" mcr.microsoft.com/playwright:v1.62.1-noble sleep infinity
+  docker exec pw bash -c 'mkdir /work && cd /src && cp -r src e2e public index.html package.json pnpm-lock.yaml playwright.config.ts vite.config.ts tsconfig*.json /work/ && cd /work && npm i -g pnpm@10.14.0 && pnpm install --frozen-lockfile && pnpm exec playwright test overflow'
+  docker rm -f pw
+  ```
 
 ### UI-only specs stub the API (`frontend/e2e/`)
 
-`layout`, `language` and `fonts` check how the UI looks and behaves, not what the backend does.
+`layout`, `language`, `fonts`, `empty-state`, `overflow`, `post-body`, `touch-targets` and `upload-select` check how the
+UI looks and behaves, not what the backend does.
 They call `stubAuthenticatedApi(page)` (`e2e/helpers.ts`) instead of `registerAndSignIn`: it answers
 the silent refresh with an unsigned token (the client only reads `sub`) and returns fixed data for
 the list, detail, comment and content requests. No account is created in the shared dev DB, none of
@@ -146,6 +205,10 @@ the 5/minute auth limit (backend ADR 0054) is spent, and the backend does not ha
   does). The client routes `/posts/:id` and `/files` share a prefix with the API's `/post` and
   `/file`, so a loose pattern such as `/\/post/` also matches the page navigations and would answer
   them with JSON.
+- **Upload a file in a spec through `uploadThroughForm(page, title)`** (`e2e/helpers.ts`), not by driving
+  the form by hand. The form takes several files and uploads them one by one (backend ADR 0065): a
+  chosen file becomes a row with its own Title box, and the row reads "Uploaded" when both steps are
+  done. The form's rows are an `<ol>`, so `ul li` still means the board's rows only.
 - **A stub says nothing about the backend contract.** Specs that depend on real responses (`auth`,
   `upload`, `board`, `detail`, `posts`, `navigation`) keep using real accounts. `auth.spec.ts`'s 429
   test stubs only the one response it needs, and its weak-password test hits the real backend.

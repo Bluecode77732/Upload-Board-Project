@@ -11,7 +11,7 @@
 변경 전에 항상:
 1. 실제 코드를 검사한다 — 파일을 읽고, 호출 체인을 추적하고, 심볼을 grep한다.
    확인하지 않은 컴포넌트·훅·prop·API 필드를 지어내지 않는다.
-2. 백엔드 계약은 권위 있고 **고정**되어 있다 — 라우트·에러 코드·토큰 동작을
+2. 백엔드 계약이 기준이며 **고정**돼 있다 — 라우트·에러 코드·토큰 동작을
    추측하지 않는다. [docs/API-CONTRACT.md](docs/API-CONTRACT.md)와 `src/api/`를
    읽는다; 거기 없으면 계약의 일부가 아니다. 백엔드는 저장소 루트(`../backend`,
    `../ADR/`)에 있지만 — 프론트엔드 작업에서 백엔드 파일을 편집하지 않는다; 그건
@@ -20,6 +20,14 @@
    새 추상화를 도입하지 않는다.
 4. 성공을 주장하기 전에 `pnpm build`(타입 체크)와 `pnpm lint`를 실행한다.
 5. 정확한 diff를 보여주고, 불확실한 점은 명시적으로 밝힌다.
+6. 라이브러리나 API를 호출하는 코드를 쓰기 전에, 작업 규모와 상관없이 `frontend/`가
+   이미 그것을 호출하고 있는지 확인한다. 호출할 API가 모두 이미 쓰는 것이면 "최소 금기:
+   새로 없음"이라고 한 줄만 적는다. 아직 아무 코드도 호출하지 않은 API(새 의존성이든,
+   기존 의존성(React, React Router, Vite, Playwright 등)의 새 API든)가 있으면, 기억에
+   의존하지 말고 이번 세션에서 공식 문서·changelog·advisory를 직접 읽어 제거됨·
+   deprecated·안전하지 않음으로 표시된 것을 찾고, "최소 금기(Minimum do-nots)" 제목 아래에
+   항목마다 출처, 버전, 확인한 날짜를 붙여 보고한다. 닿지 못한 것은 "미확인"으로
+   표시한다. 루트 `CLAUDE.md`의 Hallucination Prevention 12번과 같은 규칙이다.
 
 ## 범위 준수
 
@@ -48,6 +56,14 @@
   제거됐다 — 여기서 호출한 적이 애초에 없었다.)
 - 리프레시 실패 시(`AUTH_REFRESH_REUSED` 포함) 세션은 끝난 것이다: 토큰을
   지우고 `/login`으로 라우팅한다.
+- **리프레시는 모두 `tryRefresh()`를 거친다**(`client.ts`, single-flight). 백엔드는 계정당 리프레시
+  앵커를 하나만 두고 유예 구간도 없어서, 첫 번째 요청이 방금 회전시킨 쿠키를 실은 두 번째
+  `POST /auth/token/refresh`는 재사용으로 판정된다: 401 `AUTH_REFRESH_REUSED`, 세션 종료. 그래서
+  `AuthProvider`의 시작 시 세션 복구와 `client.ts`의 401 재시도 경로는 진행 중인 호출 하나를 함께
+  쓴다. 컴포넌트나 effect에서 `refreshAccessToken()`을 직접 부르지 않는다 — `pnpm dev`에서는 React
+  StrictMode가 마운트 effect를 두 번 실행하고, 그 때문에 로그인한 채 두 번째로 새로고침하면 로그인
+  화면이 됐다(2026-10-02에 고쳤다). 이 보호는 모듈 메모리에 있어서 한 탭 안의 호출만 직렬화한다.
+  두 탭이 같은 순간에 refresh하는 경우는 막지 못한다(한 번 시험했고 둘 다 `201`이었다).
 
 ## API 및 에러 처리
 
@@ -78,7 +94,9 @@
   있어야 한다 — `ko`가 `Record<MessageKey, string>`이라 번역이 빠지면 `tsc`가
   실패한다. 영어가 기본값이고 e2e spec이 단언하는 언어이므로, 기존 영어 문장은 그것을
   단언하는 spec을 함께 바꾸지 않는 한 그대로 둔다. 영어 문구의 명사는 단수로 쓴다(Post,
-  File, Setting). `ApiError`를 문구로 바꾸는 함수(`messageForError`)는 `Translatable`(키, 또는
+  File, Setting). 목록이 비었을 때는 필터를 걸기 전까지 "No post yet." / "No file yet."(아직 없음)이라고
+  하고, 필터가 걸린 뒤에만 "No … matches the current filter."라고 한다(`PostBoard`/`FileBoard`,
+  `e2e/empty-state.spec.ts`). `ApiError`를 문구로 바꾸는 함수(`messageForError`)는 `Translatable`(키, 또는
   서버가 준 문구를 그대로 보여줄 때의 `{ raw }`)을 돌려주고, 컴포넌트는 이를 state에 담아 두었다가
   렌더 시점에 `t()`를 부른다 — 그래서 에러가 이미 떠 있는 상태에서 언어를 바꿔도 새 언어로 다시
   그려진다. URL 경로 `/posts/:id`와 `/files`는 일부러 복수형으로 둔다(`/post`, `/file`은 API
@@ -89,7 +107,26 @@
   파일의 `wide`를 composes한 요소(File의 미리보기 그리드)만 그보다 넓다. 그 요소는 `main`의 직계
   자식이어야 한다(그래서 `FileBoard`가 프래그먼트를 돌려준다). flex column인 `#root` 안에서 화면이
   자기 `margin: auto`를 쓰면 폭이 내용물에 맞춰 줄어드는데, 이것이 헤더·main·폼이 화면마다 달랐던
-  원인이다. `LoginPage`는 의도적인 유일한 예외다(가운데 카드). `e2e/layout.spec.ts`가 이를 지킨다.
+  원인이다. `LoginPage`는 의도적인 유일한 예외다(`flex: 1`로 `#root`를
+  채우고 `#root`의 양옆 선을 끈, 화면 정중앙의 카드). `e2e/layout.spec.ts`가 이를 지킨다.
+- **긴 텍스트는 줄바꿈한다**: 사용자가 입력한 텍스트(이메일, 제목, 붙여 넣은 URL)를 보여 주는 박스는 공백 없는
+  긴 문자열도 끊을 수 있어야 한다 — `overflow-wrap: anywhere`를 쓰고, 그 텍스트를 담은 flex 자식에는
+  `min-width: 0`도 준다. `white-space: pre-wrap`만으로는 긴 URL이 줄바꿈되지 않아, 박스가 페이지 전체를
+  가로로 늘려 버린다. 내비게이션 바는 320px에서 컨트롤이 잘리지 않고 둘째 줄로 내려온다.
+  `display: grid` 목록에는 `grid-template-columns: minmax(0, 1fr)`가 필요하다: 기본값 `auto` 열은 안의
+  내용의 min-content를 최솟값으로 잡아서, `nowrap`인 제목과 이메일이 640px 넘는 화면에서 Post 목록을
+  1400px 이상으로 늘렸다. 텍스트 `<input>`을 담은 grid(폼, 라벨, 업로드 줄)도 입력창에 이르는 모든
+  단계에 같은 규칙이 필요하다: `<input>`에는 고유 폭(`size=20`)이 있어 `auto` 열이 그보다 좁아지지
+  못하는데, 이 폭은 플랫폼의 글꼴 엔진마다 다르다(Noto Sans KR 16px에서 Windows 215px, Linux 350px).
+  그래서 Linux에서는 New post 폼이 375px 화면에서 382px였다. flex 줄에서는 라벨과 컨트롤에
+  `min-width: 0`을 준다(`FileDetailPage`의 양도 폼). `e2e/overflow.spec.ts`가 인증된 모든 화면을 320,
+  375, 667, 768, 1366px에서 확인하고, 그 화면들이 저절로 열지 않는 폼(로그인, 업로드 줄, Post 수정,
+  소유권 양도)은 320px와 375px에서 확인한다.
+- **터치 영역**: 폰 폭(`max-width: 640px`)이거나 터치 포인터일 때, 모든 링크·버튼·select·입력창·라디오
+  라벨은 세로 40px 이상이다(40×40 토글과 같은 크기). 텍스트 링크에는 `min-height`나 `display: flex` 대신
+  `padding-block`을 줘서 `text-overflow: ellipsis`와 줄바꿈이 그대로 동작하게 하고, 브라우저 기본 회색
+  Choose File 버튼은 테마에 맞춘 `::file-selector-button`으로 바꾼다. 넓은 마우스 레이아웃은 그대로다.
+  `e2e/touch-targets.spec.ts`가 다섯 화면을 375px에서 확인한다.
 - **글꼴**: `--sans`는 Noto Sans KR, `--heading`은 Hahmlet(가변, 100–900)이며 한글과 영문에 똑같이
   적용된다. `main.tsx`에서 불러오는 `@fontsource-variable/*`가 `/assets`로 나간다. CDN(Google Fonts
   등)을 링크하지 않는다 — nginx CSP가 `font-src 'self'`다. 패밀리 이름은 `'Noto Sans KR Variable'`,
@@ -132,11 +169,30 @@
   `e2e-upload-...@example.com`인 creator-filter 버튼에 매칭됐다). 텍스트가
   짧고 흔한 단어인 라벨/role 쿼리에는 `{ exact: true }`를 준다 — 이제 내비 링크와 제목이
   "Post", "File"이라는 한 단어라서 "New post", "Upload a file", 그리고 그 단어가 들어간 모든
-  게시글·파일 제목에도 부분 일치한다.
+  게시글·파일 제목에도 부분 일치한다. `getByLabel`은 `aria-label`도 읽는다. 로그인 폼의 표시/숨김
+  버튼 이름이 "Show password"라서 비밀번호 입력창은 `getByLabel('Password', { exact: true })`로 찾는다.
+- **실행 중인 Vite dev 서버는 옛 CSS 모듈 복사본을 계속 내줄 수 있다.** 다른 CSS 모듈이 `composes`하는
+  파일(예: `src/shared/page.module.css`)을 고치면 `pnpm dev`가 해시가 다른 옛 복사본을 남겨 두어, 그
+  파일에 추가한 규칙이 일부 페이지에 닿지 않고 spec이 옛 레이아웃을 재게 된다. CSS만 바꾼 확인을 믿기 전에
+  dev 서버를 재시작한다(또는 서버를 내려 Playwright가 새 서버를 띄우게 한다).
+- **레이아웃 spec은 Windows에서 통과하고 Linux CI 러너에서 실패할 수 있다.** Chromium도 웹 폰트도 같지만
+  글꼴 엔진이 달라서 폼 컨트롤의 고유 폭이 다르게 나온다(「긴 텍스트는 줄바꿈한다」 참고).
+  `overflow.spec.ts`가 이렇게 dev에서 세 번 연속 실패했고(2026-10-05), 그동안 로컬 실행은 매번 통과했다.
+  설치된 `@playwright/test` 버전과 태그가 같은 Playwright 이미지에서 재현한다. CI가 내려받는 것과 같은
+  브라우저 빌드가 들어 있다. Windows의 `node_modules`에는 Windows용 바이너리가 있으므로, 마운트한
+  폴더에서 바로 돌리지 말고 소스를 컨테이너 안으로 복사한다:
+
+  ```powershell
+  # PowerShell, from frontend/ (Git Bash rewrites the /src path). The stub-based specs need no backend.
+  docker run -d --name pw --init --ipc=host -e CI=true -v "${PWD}:/src:ro" mcr.microsoft.com/playwright:v1.62.1-noble sleep infinity
+  docker exec pw bash -c 'mkdir /work && cd /src && cp -r src e2e public index.html package.json pnpm-lock.yaml playwright.config.ts vite.config.ts tsconfig*.json /work/ && cd /work && npm i -g pnpm@10.14.0 && pnpm install --frozen-lockfile && pnpm exec playwright test overflow'
+  docker rm -f pw
+  ```
 
 ### UI만 검증하는 spec은 API를 스텁한다 (`frontend/e2e/`)
 
-`layout`, `language`, `fonts`는 백엔드가 하는 일이 아니라 UI가 어떻게 보이고 동작하는지를 검증한다.
+`layout`, `language`, `fonts`, `empty-state`, `overflow`, `post-body`, `touch-targets`, `upload-select`는 백엔드가 하는
+일이 아니라 UI가 어떻게 보이고 동작하는지를 검증한다.
 이 spec들은 `registerAndSignIn` 대신 `stubAuthenticatedApi(page)`(`e2e/helpers.ts`)를 호출한다: silent
 refresh에는 서명 없는 토큰을 돌려주고(클라이언트는 `sub`만 읽는다) 목록·상세·댓글·콘텐츠 요청에는 고정
 데이터를 돌려준다. 공유 dev DB에 계정이 생기지 않고, 분당 5회 인증 제한(backend ADR 0054)도 쓰지
@@ -145,6 +201,10 @@ refresh에는 서명 없는 토큰을 돌려주고(클라이언트는 `sub`만 �
 - **스텁 경로는 모두 경로 끝까지 고정한 정규식으로 쓴다**(헬퍼처럼 `/\/post(\?.*)?$/`). 클라이언트
   라우트 `/posts/:id`, `/files`는 API의 `/post`, `/file`과 접두사를 공유하므로 `/\/post/` 같은 느슨한
   패턴은 페이지 이동 요청까지 잡아 JSON으로 응답해 버린다.
+- **spec에서 파일을 올릴 때는 `uploadThroughForm(page, title)`(`e2e/helpers.ts`)을 쓴다.** 폼을 직접
+  조작하지 않는다. 폼은 파일을 여러 개 받아 하나씩 올린다(backend ADR 0065). 고른 파일은 Title 칸을 가진
+  줄이 되고, 두 단계가 모두 끝나면 그 줄에 "Uploaded"가 뜬다. 폼의 줄은 `<ol>`이라서 `ul li`는 여전히
+  보드의 행만 가리킨다.
 - **스텁은 백엔드 계약에 대해 아무것도 말해 주지 않는다.** 실제 응답에 기대는 spec(`auth`, `upload`,
   `board`, `detail`, `posts`, `navigation`)은 계속 실제 계정을 쓴다. `auth.spec.ts`의 429 테스트는 필요한
   응답 하나만 스텁하고, 약한 비밀번호 테스트는 실제 백엔드를 호출한다.

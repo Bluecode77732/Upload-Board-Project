@@ -12,7 +12,209 @@ development line (package.json version).
 
 ## [Unreleased]
 
+### Added
+- **Frontend: several files can be chosen at once and are uploaded one by one (2026-10-06)** — the
+  upload form's file input is now `multiple`. Each chosen file gets its own row with a title (the
+  file name without its extension by default), a progress bar and its own result. The type radio is
+  gone; the `image`/`audio`/`video` field is picked per file from its extension, so one selection can
+  mix kinds. Files are sent one at a time, each as the same attach → promote pair as before. A row
+  that fails (a taken title, a rejected scan) does not stop the others; after a title edit, pressing
+  Upload again retries only the promote step without sending the file again. A selection over 15
+  files is refused (the attach limit is 15/minute), and a 429 mid-run stops the run and keeps the
+  remaining rows. No backend or API change. Decision and the rejected alternative (the backend
+  taking several files in one request): [ADR 0065](ADR/0065-multi-file-upload-client-sequential.md).
+  Verified against the local compose stack: `upload.spec.ts` (3), the new stub-based
+  `upload-select.spec.ts` (3), `board`/`detail`/`posts` (10) through a shared `uploadThroughForm`
+  helper, and the 16 stub-based UI tests; `pnpm build` and `pnpm lint` pass. The real-backend specs
+  were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
+
 ### Changed
+- **Frontend: forms no longer push past a phone's width on Linux — the cause of the failing dev CI
+  (2026-10-08, `c08d9e0`; live check 2026-10-09)** — `frontend-e2e` failed three dev runs in a row
+  (`5f2f9f0`, `310d72b`, `9d4c59a`) on `overflow.spec.ts` at 375 and 320px, and
+  `docker-publish-frontend` was skipped each time; every local Windows run passed. Reproduced in the
+  Playwright 1.62.1 Linux image: `/` was 382px wide at both widths. The cause is the text `<input>`.
+  It has an intrinsic width (`size=20`) that depends on the platform's font engine: with the same
+  Chromium 151 and the same Noto Sans KR at 16px it measured 215px on Windows and 350px on Linux. A
+  grid with no column definition (`auto`) cannot go below that width, so the New post form's column
+  was 348px on Linux and 219px on Windows, and only Linux overflowed. `<textarea>` is not affected:
+  the comment form, which holds only one, stayed inside its column on Linux. The spec was right; its
+  threshold and widths are unchanged. A sweep on Linux found the same cause in eight places: the New
+  post form and its file picker, the Post and File filter panels (29px past their label at 375px, past
+  the screen at 320px), the upload row that appears once a file is chosen (395px), the sign-in card
+  (384px), the Post edit form (386px) and the ownership-transfer form on File detail (434px). Fix:
+  `grid-template-columns: minmax(0, 1fr)` on every grid from the form down to the input, in seven CSS
+  modules, and `min-width: 0` on the label and control of the transfer form, which is a flex row.
+  `overflow.spec.ts` gained two tests (375 and 320px) for the four states the existing test never
+  opens: sign-in, a chosen upload row, Post edit, ownership transfer. They fail on the old CSS on
+  Linux; on Windows they pass either way. `frontend/CLAUDE.md` records the rule and the command that
+  reproduces a Linux-only layout failure locally. Verified on Linux (the Playwright image, with the
+  backend, Postgres 16 and ClamAV in throwaway containers and CI's env values): `overflow.spec.ts`
+  7/7, the whole frontend e2e 47/47, `pnpm lint` clean. Then on Actions, run 37754245494: all nine
+  jobs passed and `docker-publish-frontend` published the image. On Windows the position and size of
+  every element (1,674 over six widths × eight states) is the same before and after, except the
+  transfer form's email box at 320px (215px → 187px; its label 287.9px → 286px). On Linux above 640px
+  the only change is inputs that had been wider than their own label or card coming back inside it
+  (sign-in 381px → 360px, filter search 377px → 329px). Live check (2026-10-09): a visible Chromium on
+  Windows against a real backend from this commit in a throwaway Docker stack (a fresh Postgres 16
+  with all ten migrations, ClamAV; not the compose dev database). Signed up and signed in, posted with
+  a long title and an unbroken URL, uploaded `sample.mp4` through the form (real scan and promote),
+  saved an edit of the post, opened the file's detail as its owner, signed out. No sideways scroll and
+  no control outside its box at any step. The window was asked for 375, 320 and 1366px and, at the
+  display's 110% scaling, was 341, 291 and 1242px wide (the chosen upload row was measured at 341px
+  only). What this run shows is that nothing broke in real use on Windows; Windows does not show the
+  defect, so the fix itself rests on the Linux runs. Not done: no real Android phone was tried
+  (Android's Chrome uses the same family of font engine as Linux, so the overflow was probably there
+  too; not confirmed). Seen and left: the transfer form's email box is 58px tall at 320px, visibly
+  taller than the select above it, the same before and after ([ROADMAP.md](ROADMAP.md) §7).
+- **Docs: an unclaimed upload filename is not bound to its uploader — recorded as later hardening
+  (2026-10-06)** — documentation only, no code change. Between `POST /upload/attach` and the first
+  `POST /file`, any authenticated user who knows the `temp_` filename can claim it, because attach
+  records no uploader. Reproduced on the local compose stack with two throwaway accounts; assessed low.
+  Recorded in the [ADR 0019](ADR/0019-upload-claim-idempotency.md) Addendum (2026-10-06),
+  [ROADMAP.md](ROADMAP.md) §7 and CLAUDE.md > Known Gaps.
+- **Frontend: the sign-in card sits at the exact center of the screen, without the side lines
+  (2026-10-05)** — `LoginPage`'s `<main>` was a `min-height: 80vh` box, so the card was centered
+  inside 80vh and sat 10vh above the middle of the screen; it now takes `flex: 1` of `#root`
+  (a flex column, `min-height: 100svh`). The two vertical lines are `#root`'s `border-inline`,
+  the frame of the 1126px content on authenticated screens; around a 360px card they framed
+  nothing, so `LoginPage.module.css` turns them off for this screen only
+  (`:global(#root):has(> .page)` — the first `:has()` in this app; a browser without it just keeps
+  the lines). Measured in a real browser at eight sizes from 2560×1440 to 375×667, sign-in and
+  register: the card's left/right and top/bottom gaps differ by 0.5px or less, also with an error
+  message showing; when the screen is shorter than the card it starts 16px from the top and
+  scrolls. Authenticated screens keep their lines. `pnpm build`, `pnpm lint` and the 16 stub-based
+  UI e2e tests pass; the real-backend e2e specs were not re-run for this CSS-only change.
+- **Docs: the single-flight refresh rule, e2e prerequisites, three open UI notes, and the Korean
+  fluency pass (2026-10-04)** — documentation only. `frontend/CLAUDE.md` > Auth Invariants and
+  `frontend/docs/API-CONTRACT.md` > Rotation & reuse now say that every refresh goes through
+  `tryRefresh()`, why (the backend has no grace window, so a second refresh with the same cookie
+  reads as a replay), and that the guard covers one tab only; [ADR 0012](ADR/0012-refresh-cookie-rotation.md)
+  got a matching Addendum. `frontend/README.md` lists what the real-backend e2e specs need from the
+  backend (a migrated Postgres, `STORAGE_DRIVER=local`, ClamAV, `THROTTLE_ENABLED=false`, `BASE_URL`
+  at its default) and points at the compose `.env.local`. `frontend/docs/STYLE-PLAN.md` item 8
+  records the 2026-10-02 tap-target and text-wrap fix. ROADMAP §7 gained three rows: two layout
+  leftovers (a long creator email shortens the Post list title; File detail narrower than 360px),
+  the single-flight refresh covering one tab, and the Chrome Incognito Choose File dialog that
+  opened late once. The "Why Base64" section of `frontend/docs/API-CONTRACT.md`, which the English
+  file had carried in Korean since 2026-07-24, is now in English; the Korean sibling is unchanged.
+  The fluency pass over `docs/CHANGELOG.ko.md`, `docs/ROADMAP.ko.md`, `frontend/CLAUDE.ko.md` and
+  `frontend/README.ko.md` is done: all four re-read in full, Korean wording only. It found a run of
+  2026-08-12-era `CHANGELOG.ko.md` entries (about 140 lines) in the polite `-습니다` register while
+  the rest uses `-다`, now unified; one stray duplicated sentence fragment in the SIGTERM entry,
+  removed; a few literal translations (단일 비행 무음 갱신 for single-flight silent refresh,
+  "landing", 복붙, particles after `px`); and 18 link targets in `CHANGELOG.ko.md` and
+  `ROADMAP.ko.md` that pointed at English siblings although a `.ko.md` existed. Checked afterwards:
+  for every pair touched, EN and KO have the same number of headings, list items and table rows,
+  and every relative link resolves (anchors were checked only for the two the README uses). Not
+  done: `docs/ADR/0022-admin-console-import-from-chat-project.ko.md` also renders single-flight as
+  "단일 비행" in three places; it is outside those four files and was left as is.
+- **Compose: `api` and `migrate` read an optional `.env.local` after `.env` (2026-10-03,
+  [ADR 0015](ADR/0015-docker-and-compose.md) Addendum)** — a developer's `.env` can point at S3, and
+  once the AWS stack is down the bucket is gone, so every upload through the local compose `api`
+  returned 500 (`NoSuchBucket`). The host-run backend already read a gitignored `.env.local` before
+  `.env` (`backend/app.module.ts`), but compose read only `.env` and `.dockerignore` keeps `.env.*` out
+  of the image, so that file never reached the container. `docker-compose.yml` now defines `x-env-files`
+  (`.env`, then `.env.local` with `required: false`, Compose 2.24+) for both services; the order is
+  fixed because Compose lets the later file win while Nest lets the first win. `.env.example` explains
+  the shared override. It replaces a local `docker-compose.override.yml` I had added as a workaround:
+  that file is loaded by name, nothing in `.gitignore` covered it, and `git add -n .` listed it, so it
+  could have been committed by accident. Verified: a throwaway test with dummy files (the later file
+  overrides, an absent file is not an error); then, with the override deleted, `docker compose up -d`
+  left `migrate` at exit 0 and `api` healthy on `STORAGE_DRIVER=local` with the cleanup sweep still
+  report-only and the rate limit still on; and in a visible browser a real upload went through the
+  ClamAV scan, was stored, appeared as a Private tile and played in the detail view over the
+  authenticated fetch (10.6s, no error). The verification account and its file were deleted afterwards.
+  Not run: the full frontend e2e suite again (it needs `THROTTLE_ENABLED=false` in `.env.local` and
+  back, and no app code changed). While getting here the local DB role password had drifted from the
+  one the app uses (`28P01` from `migrate`), and was set to the app's value from inside the DB
+  container (`ALTER USER`, nothing printed).
+- **Frontend: reloading while signed in no longer ends the session in dev; select boxes are at least
+  40px on phones (2026-10-02)** — the two items the entry below left open, done with explicit approval.
+  `AuthProvider`'s startup refresh called `refreshAccessToken()` directly, so React StrictMode in `pnpm
+  dev` sent two requests per page load; the second replayed the cookie the first had just rotated (401
+  `AUTH_REFRESH_REUSED`) and the server dropped the session, so a second reload while signed in ended at
+  the login screen. It now goes through the existing single-flight `tryRefresh()`, so the two effect runs
+  share one request. A new real-backend `auth` test reloads three times and expects exactly one `201`
+  refresh per load and a signed-in page each time; it fails on the old code. In a visible Chrome, four
+  loads in a row stayed signed in with one refresh each, and two tabs opened at the same moment both
+  refreshed with `201` (one try; other timings were not tested). The select boxes (Sort by, Order,
+  Visibility) measured 39px in a visible Windows Chrome and 41px in headless, so a height check in
+  headless e2e cannot see them; they now declare `min-height: 40px` at phone widths and for touch
+  pointers, and the `touch-targets` spec (now run with mobile touch emulation) checks that declaration —
+  reverting any one of the three CSS files fails it. In the visible Chrome, 21 loads over seven phone
+  widths (320–640px) had every select at 40px, nothing under 40px and no sideways scroll. The whole
+  frontend e2e suite, 41 tests, passes against the real backend; lint and `pnpm build` pass. Minimum
+  do-nots for the four Playwright APIs new to `frontend/` (`isMobile`, `hasTouch`, `test.use()`,
+  `page.off()`; `document.fonts.ready`, the `Response` type and `tryRefresh` were already used here;
+  installed 1.62.1; playwright.dev `emulation`, `class-testoptions` and `events` read 2026-10-02, the
+  fetched pages show no docs version): `isMobile` is not supported in Firefox (this project runs
+  Chromium only) and `viewport: null` is discouraged; `hasTouch` has no caveats; `test.use()` overrides
+  options for one file; `page.off()` is documented and not deprecated. `AuthProvider.tsx` is a high-blast-radius file and was edited only after the explicit
+  approval.
+- **Frontend: the Post list no longer stretches past its column on tablets and laptops (2026-10-02)** —
+  found by running the real backend's data through 15 viewport sizes (phones 320–430px, landscape
+  phones, tablets, laptops 1280–1536px, 1920px; light/dark × English/Korean at five of them; 405 page
+  loads). Everything else passed; the Post list (`/`) at 641px and wider did not: a row with a long title
+  and a long creator email (an 89-character one) was 1416–1584px wide, the page scrolled sideways and the
+  email was cut off. `.list` is `display: grid`, whose default `auto` column takes its content's
+  min-content, and the title and email are `nowrap`, so the column grew to their combined width and the
+  ellipsis never applied. `grid-template-columns: minmax(0, 1fr)` on `.list` fixes it. The `overflow`
+  spec now also runs at 667, 768 and 1366px (its stubbed Post list already had a long title and email,
+  but it never ran above 375px); the three new widths fail on the old CSS and pass now. Verified with the
+  real data in a visible browser: 16 widths from 320 to 1920px × light/dark × English/Korean, 64 loads,
+  none scrolls sideways; up to 640px the rows stack as before, from 641px each row is as wide as the
+  720px column and the title and email end in `…`. Not done: with a very long creator email the email
+  still takes most of the row, so the title is cut shorter than it needs to be ("Post with audio …" at
+  1366px). Found in the same run and not fixed: the select boxes are 39px on phones (one pixel under the
+  40px floor), and in `pnpm dev` React StrictMode runs `AuthProvider`'s startup refresh twice, so the
+  second call replays the rotated cookie (401 `AUTH_REFRESH_REUSED`) and a second reload while signed in
+  ends at the login screen — the production build runs it once. The fix would send the startup call
+  through the existing single-flight `tryRefresh`; `AuthProvider.tsx` needs explicit approval first.
+- **Frontend: fixed-size comment boxes, 40px tap targets on phones, a themed file button (2026-10-02)**
+  — follow-up to the entry below. The new-comment and comment-edit boxes were `resize: vertical`; both
+  are `none` now, so no text box in the app can be resized. At a phone width (`max-width: 640px`) or
+  with a coarse pointer, tappable elements measured under 40px: nav links 23px, Sign out 39px, the
+  radio labels of the upload form and the file picker 23px, the links and creator buttons in the Post
+  and File lists 23px (39px for the Post row's creator button), the "Back to …" link 23px, and the
+  browser's own Choose File button 21px. All are at least 40px now (the size of the 40×40 toggles; WCAG
+  2.2 AA asks for 24px, Apple's guidance is 44px): `padding-block` on the links and buttons, so text
+  ellipsis and wrapping keep working, `min-height` on the radio labels, and an always-on
+  `::file-selector-button` style that replaces the grey native button with the app's button look (on
+  desktop too). Mouse layouts wider than 640px are otherwise unchanged. [frontend/CLAUDE.md](../frontend/CLAUDE.md)
+  records the rule, and a gotcha found on the way: a running Vite dev server keeps stale copies of a
+  CSS Module that other modules `composes`, so a rule added to `page.module.css` reached only some
+  pages until the server was restarted. Verified: the new `touch-targets` spec (five screens at 375px)
+  and the extended `post-body` spec fail when any one of the eight CSS files is reverted and pass now;
+  the stub-based specs, lint and `pnpm build` pass; the whole frontend e2e suite, 37 tests, passes against
+  the real backend. That needed the compose `api` to use local storage: `.env` said `s3`, the bucket
+  no longer exists, and every upload returned 500 (the entry below). A local, untracked
+  `docker-compose.override.yml` now sets `STORAGE_DRIVER=local`, keeps the granted-file sweep
+  report-only and turns on the e2e rate-limit bypass (`THROTTLE_ENABLED=false`, backend ADR 0054 D2);
+  deleting that file returns to the `.env` values. Not done: the 40px floor was not applied to wide
+  mouse layouts.
+- **Frontend: "none yet" empty-list wording, fixed-size Post body boxes, no sideways scroll on a phone
+  (2026-10-02)** — four fixes from a hands-on pass over the screens. An empty Post or File list said "No
+  post matches the current filter." even when no filter was set (a new account); it now says "No post
+  yet." / "No file yet." until the search, sort or creator ID leaves its default, and only then the old
+  sentence (the `board` and `detail` specs assert that one with a search term typed, so they are
+  unaffected). The new-post form and the post edit form had `resize: vertical` on the Body box; both are
+  `none` now (the comment boxes are unchanged). Measured with long text, at 375px a comment holding a long
+  URL stretched Post detail to 897px, a long creator email pushed File detail past the edge, and at 320px
+  the nav bar clipped Sign out by 7px. `overflow-wrap: anywhere` on the comment body, post body and meta
+  lines, `min-width: 0` on the comment author, and `flex-wrap` on the nav bar (Sign out stays on one line)
+  fix them; [frontend/CLAUDE.md](../frontend/CLAUDE.md) records the rule. Verified: the new stub-based
+  specs `empty-state`, `overflow` (375px and 320px) and `post-body` fail on the old code and pass now —
+  each of the four overflow CSS changes was also reverted one at a time and each reversal fails
+  `overflow` — and the existing `layout`, `language` and `fonts` specs still pass; lint and `pnpm build`
+  pass; the File empty state and its switch to the filtered sentence, in both languages, were also checked
+  in a browser against the real backend. Not done: a Choose File that "cannot be pressed" was not
+  reproduced (it works in Chromium, Edge and Chrome; one Chrome Incognito window did not open the dialog
+  at first and worked later, cause unknown), so `906ce3c`'s stale-input fix is the only change there; touch
+  targets under 32px (nav links 23px, radios 13px, the native file button 21px) were measured and left
+  as they are. The `board` and `detail` specs, which upload through the UI, could not run against the
+  local compose stack: its `api` container uses the S3 storage driver, the bucket no longer exists, and
+  `POST /upload/attach` returns 500 (`NoSuchBucket`).
 - **Docs: records for the 2026-10-01/02 frontend session (2026-10-02)** — documentation only, plus one
   comment block in `frontend/nginx.conf` (`94c8373`; the CSP value is unchanged). Beyond what the
   entries below already cite: `frontend/docs/STYLE-PLAN.md` closes its "Korean/English UI-text split"
@@ -250,6 +452,36 @@ development line (package.json version).
   `pnpm test` (278/278) all pass.
 
 ### Security
+- **`pnpm audit --prod` clean again: proxy-addr, brace-expansion, multer, joi (2026-10-08)** —
+  six advisories published after the 2026-09-10 round, fixed with overrides and one in-range
+  update; no new dependency. `proxy-addr` 2.0.7 → 2.0.8 (critical, GHSA-jqcg-44mw-7w3h, via
+  `@nestjs/platform-express>express`) through a new `"proxy-addr": "^2.0.8"` override, since
+  `express` 5.2.1 asks for `^2.0.7`; `brace-expansion` 2.1.4 → 2.1.7 (two high, one moderate, via
+  `typeorm>glob>minimatch`) by raising its override to `^2.1.7`; `multer` 2.3.0 → 2.4.0 (moderate,
+  GHSA-3pph-fpjx-jg34) by raising both the direct range and the override to `^2.4.0`; `joi` 18.2.8
+  → 18.2.9 (moderate, GHSA-wr44-6hxh-3jwq) via `pnpm update joi`, which also moved the range to
+  `^18.2.9`. multer 2.4.0 drops its `concat-stream` dependency, so the lockfile also loses
+  `concat-stream` and `typedarray`.
+  None of the six was reachable as configured. The proxy-addr bug: a trust subnet written as an
+  IPv4-mapped IPv6 address with a short prefix (`::ffff:10.0.0.0/8`) matched every IPv4 peer, so
+  any client could set `req.ip` through `X-Forwarded-For`. `backend/main.ts` trusts the plain IPv4
+  `10.0.0.0/16`, which is the advisory's own workaround. Checked by calling both versions directly:
+  with `10.0.0.0/16`, 2.0.7 and 2.0.8 both trust a `::ffff:10.0.3.4` peer and ignore the forged
+  header from `::ffff:10.1.3.4` and `::ffff:203.0.113.9`; with `::ffff:10.0.0.0/8`, 2.0.7 returns the
+  forged address for every peer and 2.0.8 for none. A real Express 5.2.1 server with the same
+  setting, listening on `::` like `app.listen(PORT)`, answered a loopback request carrying
+  `X-Forwarded-For: 6.6.6.6, 10.0.5.5` with `req.ip` `::ffff:127.0.0.1` (IPv4 client) and `::1`
+  (IPv6 client): the header was ignored. The multer advisory (orphaned files after an aborted
+  upload) is `diskStorage`-only and `UploadModule` uses `memoryStorage`. The joi one needs custom
+  messages an attacker can supply; joi here only validates the env at boot. multer 2.4.0's release
+  notes ([v2.4.0](https://github.com/expressjs/multer/releases/tag/v2.4.0)) list nothing that
+  changes this app's upload path: `memoryStorage` now concatenates the chunks itself, limits must be
+  non-negative integers (`fileSize: 100000000` is), and a file a `fileFilter` skips with
+  `cb(null, false)` no longer uses up `maxCount`, while ours rejects with an error. Verified:
+  `pnpm audit --prod` 6 → 0, lint clean (`eslint` with `endOfLine: auto` for this CRLF checkout),
+  `pnpm test` 280/280, `pnpm test:e2e` 76/76 against a local Postgres and ClamAV, uploads included.
+  Plain `pnpm audit` reports 65 dev-only findings (58 on 2026-09-10), 3 critical, all `handlebars`
+  via `ts-jest`; out of scope as before.
 - **`trust proxy` set to the app's VPC CIDR (2026-09-14, resolves the [ADR
   0054](ADR/0054-per-route-rate-limit-tuning.md) 2026-09-10 addendum)** — behind a reverse
   proxy, `ThrottlerGuard`'s `req.ip` key resolved to the proxy's own address, collapsing the
@@ -488,6 +720,26 @@ development line (package.json version).
   the §7 entries just never caught up with §6. No code change — pure documentation.
 
 ### Added
+- **Frontend: a show/hide button in the password box of the sign-in and register form
+  (2026-10-05)** — registration demands 10 characters with all four character classes, and there
+  was no way to check what had been typed. `LoginPage.tsx` now has a half-transparent eye button
+  (opacity 0.55, full on hover or keyboard focus) at the right end of the password box; it switches
+  the input between `password` and `text` and its name between "Show password" and "Hide password"
+  (`login.showPassword`/`login.hidePassword`, en/ko). The value and the submit flow are untouched.
+  The button sits outside the `<label>` (the field is tied with `htmlFor` instead) so its name does
+  not leak into the input's accessible name, it fills the input's height (48px desktop, 45px phone)
+  so the 40px tap-target rule holds, and Edge's own reveal icon is turned off with `::-ms-reveal`
+  (not checked in Edge). Because `getByLabel` also reads `aria-label`, the five
+  `getByLabel('Password')` calls in `e2e/helpers.ts` and `e2e/auth.spec.ts` gained `exact: true`;
+  `frontend/CLAUDE.md` > Playwright E2E gotchas records why. Verified: `pnpm build` and `pnpm lint`
+  pass; in a real browser at 1920, 1366 and 375px the toggle works by mouse and by Tab + Enter, a
+  long password does not run under the button, and the register mode has it too. All 41 e2e tests
+  passed, though not in one run: the backend that was up had throttling on, so 18 stopped at "Too
+  many attempts" and were re-run in batches a minute apart. One of them
+  (`auth.spec.ts`'s reload test) failed once more with two refresh calls per reload, then passed
+  both with and without this change; the cause was not pinned down (another session edited
+  `main.tsx` under the running dev server at about that time). No backend, contract or dependency
+  change.
 - **ALB DNS record via ExternalDNS, and a reusable delegation set that pins the zone's name
   servers (2026-09-25, [ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.md))** —
   nothing created the record that points the domain at the ALB, and a new Route53 zone gets four

@@ -92,3 +92,27 @@ domain: 'sharenpo.cloud' }`, matching this ADR's spec exactly. A full page
 reload kept the signed-in view (the app's own silent-refresh-on-load call
 succeeded), confirming the cookie round-trips correctly, not just that it was
 set. The test account and its one uploaded file were deleted afterward.
+
+### Addendum (2026-10-02) — one refresh at a time: the client must serialize its calls
+
+The rotation above has no grace window, and that puts a rule on clients the
+Consequences did not state: two `POST /auth/token/refresh` calls carrying the same
+cookie cannot both succeed. The second arrives with the cookie the first just
+rotated, so `rotateRefreshToken` finds a hash mismatch, clears the anchor and
+answers 401 `AUTH_REFRESH_REUSED` — the session ends. It surfaced in `pnpm dev`:
+React StrictMode runs the mount effect twice, `AuthProvider`'s startup refresh
+called `refreshAccessToken()` directly, and a second reload while signed in ended
+at the login screen (the production build runs the effect once, so it never showed
+there). `frontend/` already had a single-flight `tryRefresh()` for its 401 retries;
+the startup call goes through it now, so both effect runs share one request. A
+real-backend e2e test reloads three times and expects exactly one `201` refresh per
+load ([CHANGELOG.md](../CHANGELOG.md) 2026-10-02).
+
+This ADR's contract is unchanged; what is new is that the rule is written down for
+clients: a refresh consumer serializes its calls per cookie jar. The guard lives in
+module memory, so it covers one tab. Two tabs refreshing at the same instant with the
+same cookie are not covered, and the backend has no grace window to absorb them. One
+try in a visible Chrome with two tabs opened at the same moment gave `201` for both;
+other timings were not tested ([ROADMAP.md](../ROADMAP.md) §7). See
+`frontend/CLAUDE.md` > Auth Invariants and `frontend/docs/API-CONTRACT.md` > Rotation
+& reuse.
