@@ -29,6 +29,18 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: Korean wording pass on `CLAUDE.ko.md` and the ADR 0059 `.ko.md` (2026-10-12)** — Both files
+  were re-read in full, which neither had been (the 2026-10-04 pass covered `CHANGELOG.ko.md`,
+  `ROADMAP.ko.md`, `frontend/CLAUDE.ko.md` and `frontend/README.ko.md`). Found and fixed: a few literal
+  renderings and slips ("목" for mock, "창" for window, "주장할" for assert), one sentence in the file-header
+  rule that ran two clauses together, a bullet that dropped "out of scope for this file", English
+  "landed" and "Addendum" in otherwise Korean bullets and headings, "Hallucination Prevention 12번" where
+  the section is titled 환각 방지, and one link that pointed at an English sibling (ADR 0051 in
+  `CLAUDE.ko.md`). `CHANGELOG.ko.md` and `ROADMAP.ko.md` were **not** re-read in full again: only the lines
+  added since the 2026-10-04 pass (`d4cffbb`) were, which turned up two fixes. EN/KO heading, bullet,
+  sub-bullet, table-row, numbered-list and code-fence counts were compared for all four pairs and match;
+  no structure changed. Left as is: cross-references in `CLAUDE.ko.md` still use the English section
+  names ("Scope Discipline", "Result Review") while the headings are Korean ("범위 준수", "결과 검토").
 - **Frontend: forms no longer push past a phone's width on Linux — the cause of the failing dev CI
   (2026-10-08, `c08d9e0`; live check 2026-10-09)** — `frontend-e2e` failed three dev runs in a row
   (`5f2f9f0`, `310d72b`, `9d4c59a`) on `overflow.spec.ts` at 375 and 320px, and
@@ -452,6 +464,20 @@ development line (package.json version).
   `pnpm test` (278/278) all pass.
 
 ### Security
+- **Malware scan: a `null` verdict no longer lets a file through (2026-10-12)** — `clamscan`'s
+  `scanStream` resolves with `isInfected: null` ("Unable to scan") when `clamd` closes the connection
+  without `OK`/`FOUND`/`ERROR`, and the gate read that as clean, so the upload was stored unscanned.
+  `ScanService.scanBuffer` now treats any non-boolean verdict as a failed attempt inside its retry `try`:
+  one retry, then `503 UPLOAD_SCAN_UNAVAILABLE` and nothing written to temp. Two cases added to
+  `scan.service.spec.ts`. Reproduced first against a real `clamd` (`clamav/clamav:stable`, a 90 MB
+  buffer): stopping it with `docker restart`, `SIGTERM` or `SIGKILL` during the scan resolved `null`;
+  after the fix the same three gave 503 with `saveTemp` called 0 times. A clean file and EICAR (400
+  `UPLOAD_MALWARE_DETECTED`) behaved as before, and a clean upload went through once `clamd` was back.
+  The `scan.service` and `upload.service` specs pass (12); `eslint` on the two changed files is clean.
+  Not covered: the HTTP layer and EKS. No schema, env var or API change. The neighbouring gaps this
+  turned up (no overall scan deadline, one replica with no PDB, no database connect/query timeout, some
+  smaller items), each with why it was left: [ADR 0059](ADR/0059-upload-malware-scanning-clamav.md)
+  Addendum (2026-10-12) and [ROADMAP.md](ROADMAP.md) §7.
 - **`pnpm audit --prod` clean again: proxy-addr, brace-expansion, multer, joi (2026-10-08)** —
   six advisories published after the 2026-09-10 round, fixed with overrides and one in-range
   update; no new dependency. `proxy-addr` 2.0.7 → 2.0.8 (critical, GHSA-jqcg-44mw-7w3h, via

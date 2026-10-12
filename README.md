@@ -188,6 +188,12 @@ plus operational modules — **Storage** (the `FileStorage` port with local-disk
 | Containers and CI | Multi-stage Docker images (`linux/amd64` and `linux/arm64` from `main`), Docker Compose, GitHub Actions |
 | Deployment | Helm chart, Terraform in three states (`cluster`, `app-infra`, `addons`) — VPC, EKS, RDS, S3, Secrets Manager, Route 53 and ACM, ALB Controller, External Secrets, ExternalDNS, kube-prometheus-stack |
 
+Why these were chosen is in [ADR 0066](docs/ADR/0066-stack-selection-rationale-retroactive.md),
+written after the fact. NestJS, TypeORM and PostgreSQL were picked with a later move toward
+services in mind. AWS/EKS was also a way to learn the deployment market's standard tools. The
+frontend has no state library because it has few screens. The ADR also says what was never
+weighed in writing, such as a comparison with ECS.
+
 ## Quick Start
 
 Prerequisites: Node.js 24 (see [.nvmrc](.nvmrc)) and pnpm 10 via Corepack, plus
@@ -528,12 +534,6 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full request and data flow.
 Open items, each recorded where it was found. The full list is in
 [ROADMAP.md](docs/ROADMAP.md) §7 and CLAUDE.md > Known Gaps.
 
-- **A scan result of "unable to scan" passes the upload gate.** `clamscan` can answer
-  `isInfected: null` when `clamd` closes the connection with an empty reply or a command times
-  out, and the gate reads that as clean, so the file is stored unscanned. Connection errors and
-  an unreachable scanner still fail closed. Read from source, not reproduced against a real
-  `clamd`; the planned fix is small and scoped
-  ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md), addendum 2026-10-03).
 - **An unclaimed upload filename is not bound to its uploader.** Between `POST /upload/attach`
   and the first `POST /file`, any signed-in user who knows the `temp_` filename can claim it,
   and the uploader then gets 409 `FILE_ALREADY_CLAIMED`. Reproduced locally. Assessed low: the

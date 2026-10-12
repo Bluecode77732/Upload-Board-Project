@@ -11,8 +11,10 @@ JWT 인증(Passport), TypeORM 기반 PostgreSQL, Prometheus 지표, Swagger 문�
 아니라 각자 자기 `package.json`과 툴체인을 갖고 따로 빌드·테스트됩니다. 아래 내용은 이
 둘과 무관합니다.
 
-설계 결정과 그 이유는 [ADR/](ADR/)에 있습니다. 이 문서는 *현재* 구조를 설명하며, 예정된
-작업은 [ROADMAP.ko.md](ROADMAP.ko.md)에 있습니다.
+설계 결정과 그 이유는 [ADR/](ADR/)에 있습니다. 스택 자체(NestJS, TypeORM, PostgreSQL,
+AWS/EKS)를 고른 이유는 [ADR 0066](ADR/0066-stack-selection-rationale-retroactive.ko.md)에 소급해서
+적어 두었습니다. 이 문서는 *현재* 구조를 설명하며, 예정된 작업은
+[ROADMAP.ko.md](ROADMAP.ko.md)에 있습니다.
 
 ## 모듈 구성
 
@@ -207,8 +209,9 @@ URL 접두사가 둘이라 컨트롤러도 둘입니다 — 스레드는 게시�
   `createReadStream`, `unlink`, `listTemp`, `getSignedReadUrl`. 소비하는 쪽은 모두
   `FILE_STORAGE` 토큰으로 주입받고, `fs/promises`를 직접 호출하지 않습니다.
 - 어댑터는 둘입니다. `STORAGE_DRIVER`로 고릅니다(`local` 기본 | `s3`): `LocalDiskStorage`
-  (원래 있던 디스크 방식)와 `S3Storage`(SDK를 모킹한 단위 테스트만 있고, 실제 버킷에는
-  아직 붙여본 적 없음). `getSignedReadUrl`만 어댑터마다 실제로 다르게 동작합니다 —
+  (원래 있던 디스크 방식)와 `S3Storage`(처음에는 SDK를 모킹한 단위 테스트만 있었고,
+  2026-08-15부터 실제 버킷과 라이브 EKS 스택에서도 돌려 봤습니다. 배포된 차트는
+  `STORAGE_DRIVER=s3`로 설정합니다). `getSignedReadUrl`만 어댑터마다 실제로 다르게 동작합니다 —
   로컬은 그런 개념이 없어서 `null`, S3는 짧게 유효한 서명 URL을 돌려줍니다
   ([ADR 0029](ADR/0029-storage-port-adapter.ko.md), [ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md)).
 

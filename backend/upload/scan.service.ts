@@ -61,6 +61,10 @@ export class ScanService implements OnModuleInit {
   //       지연(SCAN_RETRY_DELAY_MS)을 두고 최대 SCAN_MAX_ATTEMPTS번 재시도하고, 그래도
   //       실패하면 ScanUnavailableError를 던져 호출자가 fail-closed로 매핑하게 한다
   //       (D4) — 반면 감염 탐지는 정상 응답이므로 재시도 대상이 아니라 그대로 반환한다.
+  //       clamscan은 빈 응답/해석 불가 응답/COMMAND READ TIMED OUT이면 reject하지 않고
+  //       isInfected:null을 resolve하는데 타입 선언은 boolean이라 컴파일러가 못 잡는다 —
+  //       boolean이 아닌 판정은 "확인된 게 없다"는 뜻이므로 실패 시도로 던져 같은
+  //       재시도·fail-closed 경로를 태운다.
   async scanBuffer(buffer: Buffer): Promise<ScanResult> {
     if (!this.clam) {
       throw new ScanUnavailableError('Scanner not initialized.');
@@ -71,6 +75,9 @@ export class ScanService implements OnModuleInit {
     for (let attempt = 1; attempt <= SCAN_MAX_ATTEMPTS; attempt++) {
       try {
         const result = await clam.scanStream(Readable.from(buffer));
+        if (typeof result.isInfected !== 'boolean') {
+          throw new Error('Scanner returned no verdict.');
+        }
         return { isInfected: result.isInfected, viruses: result.viruses };
       } catch (error) {
         lastError = error;

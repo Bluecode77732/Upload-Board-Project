@@ -27,6 +27,17 @@
   spec은 1분 간격의 묶음으로 나눠 돌렸다.
 
 ### 변경
+- **문서: `CLAUDE.ko.md`와 ADR 0059 `.ko.md` 한국어 점검 (2026-10-12)** — 두 파일을 처음으로 전체
+  다시 읽었다(2026-10-04 점검은 `CHANGELOG.ko.md`, `ROADMAP.ko.md`, `frontend/CLAUDE.ko.md`,
+  `frontend/README.ko.md`가 대상이었다). 찾아서 고친 것: 직역투와 오기 몇 곳("mock"을 "목"으로,
+  "window"를 "창"으로, "assert"를 "주장"으로 옮긴 것), 파일 헤더 규칙에서 두 절이 뭉쳐 있던 문장 하나,
+  "이 문서의 범위 밖"이라는 말이 빠져 있던 항목 하나, 한국어 문장 안에 남은 영어 "landed"·"Addendum"
+  제목과 항목, 섹션 이름이 "환각 방지"인데 "Hallucination Prevention 12번"으로 쓴 곳, 영문판을 가리키던
+  링크 하나(`CLAUDE.ko.md`의 ADR 0051). `CHANGELOG.ko.md`와 `ROADMAP.ko.md`는 이번에 **전체를 다시 읽지
+  않았다**. 2026-10-04 점검(`d4cffbb`) 이후 추가된 줄만 읽었고 두 곳을 고쳤다. 네 쌍 모두 EN/KO의
+  제목·목록·하위 목록·표 행·번호 목록·코드 펜스 개수가 같음을 비교해 확인했고 구조는 바뀌지 않았다. 그대로
+  둔 것: `CLAUDE.ko.md`의 상호 참조는 제목이 한국어("범위 준수", "결과 검토")인데도 여전히 영어 섹션
+  이름("Scope Discipline", "Result Review")을 쓴다.
 - **프론트엔드: Linux에서 폼이 폰 폭 밖으로 밀려나던 문제 — dev CI가 실패하던 원인 (2026-10-08,
   `c08d9e0`; 라이브 확인 2026-10-09)** — `frontend-e2e`가 dev에서 세 번 연속(`5f2f9f0`, `310d72b`,
   `9d4c59a`) `overflow.spec.ts`의 375px·320px에서 실패했고, 그때마다 `docker-publish-frontend`가
@@ -35,7 +46,7 @@
   플랫폼의 글꼴 엔진마다 다르다. 같은 Chromium 151, 같은 Noto Sans KR 16px에서 Windows는 215px, Linux는
   350px로 쟀다. 열을 정하지 않은 grid(`auto`)는 그 폭보다 좁아지지 못해서, New post 폼의 열이 Linux에서는
   348px, Windows에서는 219px였고 Linux에서만 넘쳤다. `<textarea>`는 해당하지 않는다. `<textarea>` 하나만
-  든 댓글 폼은 Linux에서도 칼럼 안에 있었다. spec은 옳았고, 임계값과 폭 목록은 그대로다. Linux에서 전
+  든 댓글 폼은 Linux에서도 열 안에 있었다. spec은 옳았고, 임계값과 폭 목록은 그대로다. Linux에서 전
   화면을 훑어 같은 원인을 여덟 곳에서 찾았다: New post 폼과 그 안의 파일 선택기, Post·File 필터
   패널(375px에서 라벨 밖으로 29px, 320px에서는 화면 밖), 파일을 고르면 생기는 업로드 줄(395px), 로그인
   카드(384px), Post 수정 폼(386px), File 상세의 소유권 양도 폼(434px). 수정: CSS 모듈 일곱 개에서 폼부터
@@ -398,6 +409,19 @@
   통과했다.
 
 ### 보안
+- **악성코드 스캔: `null` 판정이 파일을 통과시키지 않는다 (2026-10-12)** — `clamd`가
+  `OK`/`FOUND`/`ERROR` 없이 연결을 닫으면 `clamscan`의 `scanStream`이 `isInfected: null`("Unable to scan")로
+  resolve했고, 게이트가 이를 깨끗한 파일로 읽어 업로드가 스캔되지 않은 채 저장됐다. 이제
+  `ScanService.scanBuffer`가 재시도 `try` 안에서 boolean이 아닌 판정을 실패한 시도로 처리한다. 한 번 재시도하고,
+  그래도 안 되면 `503 UPLOAD_SCAN_UNAVAILABLE`이며 temp에는 아무것도 쓰지 않는다. `scan.service.spec.ts`에
+  케이스 두 개를 추가했다. 먼저 실제 `clamd`(`clamav/clamav:stable`, 90MB 버퍼)로 재현했다. 스캔 도중
+  `docker restart`, `SIGTERM`, `SIGKILL`로 멈추면 `null`로 resolve됐고, 수정 후에는 같은 세 경우 모두 503이며
+  `saveTemp`는 호출되지 않았다. 정상 파일과 EICAR(400 `UPLOAD_MALWARE_DETECTED`)는 전과 같았고, `clamd`가
+  돌아온 뒤 정상 업로드는 통과했다. `scan.service`와 `upload.service` spec 12개가 통과하고, 바꾼 두 파일에
+  대한 `eslint`는 깨끗하다. 다루지 않은 것: HTTP 계층과 EKS. 스키마, 환경 변수, API 변경은 없다. 이 과정에서
+  나온 인접한 빈틈(스캔 전체 마감 시간 없음, PDB 없는 단일 replica, 데이터베이스 연결·쿼리 타임아웃 없음,
+  작은 항목들)과 각각을 남긴 이유는 [ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md) 추가 기록
+  (2026-10-12)과 [ROADMAP.ko.md](ROADMAP.ko.md) §7에 있다.
 - **`pnpm audit --prod` 다시 0건: proxy-addr, brace-expansion, multer, joi (2026-10-08)** —
   2026-09-10 이후 새로 나온 권고 6건을 override와 범위 안 업데이트 한 번으로 막았다. 새
   의존성은 없다. `proxy-addr` 2.0.7 → 2.0.8(critical, GHSA-jqcg-44mw-7w3h,

@@ -225,3 +225,26 @@ directly as the object key.
   `UploadModule` (D4 above), the "Physical upload change" and "Deletion path
   change" concern-to-entrypoint map rows (now point through `UploadService` /
   the storage port), and a new "Storage adapter change" map row.
+
+### Addendum (2026-10-12) — `S3Storage` has since run against a real bucket
+
+The Consequences bullet above ("never run against a live bucket … unverified-in-anger") was
+true on 2026-08-07. It is left as written; this is what has been recorded since:
+
+- **2026-08-15/16** — the backend ran with `STORAGE_DRIVER=s3` against the project's real
+  bucket. The frontend e2e run passed 21 of 22 and the one failure exposed a bucket with no CORS
+  rule; after the fix, `detail.spec.ts` passed 5/5 under both drivers and a private video played
+  end to end in Chromium ([ADR 0036](0036-s3-presigned-content-redirect.md), addenda 2026-08-15
+  and 2026-08-16).
+- **2026-09-29** — on the live ALB (`https://sharenpo.cloud`) all three visibility tiers loaded
+  through the presigned redirect, with the production CORS rule applied (ADR 0036, addendum
+  2026-09-29).
+- **2026-09-30** — on the redeployed stack, `POST /upload/attach` then `POST /file` answered 201
+  and 201 under `STORAGE_DRIVER=s3`, and a seek in the player went straight to S3 and got `206`
+  ([ADR 0059](0059-upload-malware-scanning-clamav.md), addenda 2026-09-30; ADR 0036, addendum
+  2026-09-30).
+
+Not covered by those records: a seek after the signed URL's TTL, browsers other than Chromium,
+audio playback, and the temp-sweep and granted-file report running against the bucket. The
+deployed chart sets `STORAGE_DRIVER=s3` (`k8s/helm/values-prod.yaml`); the Joi default stays
+`local`.

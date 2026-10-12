@@ -11,7 +11,9 @@ same git repository but are not part of it: a React + Vite frontend in `frontend
 each has its own `package.json`, its own tooling, and is built and tested on its own. Nothing
 below is affected by either.
 
-Design decisions and their reasoning live in [ADR/](ADR/). This document describes the
+Design decisions and their reasoning live in [ADR/](ADR/). Why the stack itself was chosen
+(NestJS, TypeORM, PostgreSQL, AWS/EKS) is recorded retroactively in
+[ADR 0066](ADR/0066-stack-selection-rationale-retroactive.md). This document describes the
 *current* structure; planned work lives in [ROADMAP.md](ROADMAP.md).
 
 ## Module Map
@@ -204,8 +206,9 @@ Not a domain module — an operational one that every physical-file-touching mod
   `createReadStream`, `unlink`, `listTemp`, and `getSignedReadUrl`. Every consumer injects the
   `FILE_STORAGE` token and never calls `fs/promises` directly.
 - Two adapters sit behind it, picked by `STORAGE_DRIVER` (`local` default | `s3`):
-  `LocalDiskStorage` (the original disk mechanics) and `S3Storage` (unit-tested with the SDK
-  mocked, never yet run against a live bucket). `getSignedReadUrl` is the one method with
+  `LocalDiskStorage` (the original disk mechanics) and `S3Storage` (it started with SDK-mocked
+  unit tests only, and since 2026-08-15 it has also run against a real bucket and the live EKS
+  stack; the deployed chart sets `STORAGE_DRIVER=s3`). `getSignedReadUrl` is the one method with
   genuinely different behavior — local returns `null` (no such concept), S3 returns a
   short-lived presigned URL ([ADR 0029](ADR/0029-storage-port-adapter.md), [ADR 0036](ADR/0036-s3-presigned-content-redirect.md)).
 
