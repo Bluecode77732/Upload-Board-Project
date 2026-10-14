@@ -99,6 +99,26 @@ export class FileService {
     );
   }
 
+  // 목적: id로 파일 행을 읽고, 없으면 404 FILE_NOT_FOUND를 던진다.
+  // 이유: "읽고, 없으면 404" 블록이 쓰기 후 재조회까지 포함해 메서드마다 그대로 반복돼 있었다.
+  // 방법: 호출부가 필요한 relation만 넘기고, 트랜잭션 안의 읽기는 queryRunner.manager를 쓰므로 여기에 넣지 않는다.
+  private async findFileOrThrow(
+    id: number,
+    relations: string[],
+  ): Promise<FileEntity> {
+    const file = await this.fileRepository.findOne({
+      where: { id },
+      relations,
+    });
+    if (!file) {
+      throw new NotFoundException({
+        code: ErrorCode.FILE_NOT_FOUND,
+        message: 'No file found.',
+      });
+    }
+    return file;
+  }
+
   // 목적: unlisted 파일의 공유 토큰으로 쓸 서버 발급 랜덤 opaque 문자열을 만든다.
   // 이유: 추측 가능한 id는 링크 공유의 보안 전제를 깨고(ADR 0025 D3), 회전이 곧 무효화 수단이 되려면
   //       매번 예측 불가능한 새 값이어야 한다.
@@ -371,21 +391,9 @@ export class FileService {
 
   // 목적: temp 업로드를 소유 파일로 승격하고, 같은 요청의 재제출을 멱등하게 처리한다.
   // 이유: DB 저장과 물리 승격이 따로 실패하면 행이 없는 파일을 가리키고, 재시도는 모호한 400이나 500을 받는다.
-  //       post-commit 재조회에 relations: ['creator']가 빠지면 신규 생성(201) 응답만 creator가 없어
-  //       updateFile의 응답 모양과 달라진다. mediaType이 비면 상세 페이지가 재생 태그를 고를 수 없다(ADR 0040).
-  //       visibility를 업로드 확정과 동시에 받을 수 있어야 별도 PATCH 왕복 없이 공개범위를 정할 수 있다
-  //       (2026-09-06 결정 — rotateShareToken/shareExpiresAt은 이번 스코프에서 의도적으로 제외).
-  // 방법: 서버 발급 파일명을 1회용 청구 토큰으로 삼아 선청구 여부를 먼저 판정(replay/409)하고, 미청구일 때만
-  //       QueryRunner 트랜잭션 하나로 insert(확장자로 판정한 mediaType 포함) → FileStorage 포트 promote → commit;
-  //       실패 시 rollback, release()는 finally. 물리 이동은 어댑터(LocalDiskStorage/S3Storage)에 위임한다
-  //       (ADR 0029). visibility는 값이 주어졌을 때만 insert values에 포함해 생략 시 DB 컬럼 기본값
-  //       (private)이 그대로 적용되도록 하고, 'unlisted'로 들어오면 updateFile과 동일하게
-  //       generateShareToken()으로 shareToken을 함께 insert한다. 재조회는 updateFile과 동일하게
-  //       relations: ['creator']를 포함해 두 쓰기 경로의 응답 모양을 통일한다. toResponse에는
-  //       { id: userId, role: user } requester를 넘겨 isManager를 참으로 만든다 — 그래야 방금 만든
-  //       unlisted 파일의 shareUrl이 이 응답에 바로 실린다(라이브 검증 중 발견한 갭 — 없으면 생성 직후
-  //       GET /file/:id를 한 번 더 불러야 했다). 신규 승격 성공 시 uploadClaimsTotal{outcome=fresh}를
-  //       올린다(ADR 0047).
+  // 방법: 파일명을 1회용 청구 토큰으로 보고 선청구 여부부터 판정(replay/409)한다. 미청구일 때만 한 트랜잭션에서
+  //       insert → storage.promote → commit 하고, 실패하면 rollback, release()는 finally에서 한다(ADR 0019, 0029).
+  //       visibility는 값이 있을 때만 insert에 넣어 DB 기본값(private)을 살리고, unlisted면 shareToken도 같이 넣는다.
   async uploadFile(
     uploadFileDto: UploadFileDto,
     userId: number,
@@ -492,16 +500,7 @@ export class FileService {
     // 커밋 후 재조회는 try 밖에 둔다: 여기서 읽기가 실패해도 이미 커밋된 트랜잭션을
     // 롤백하려 들면 안 된다. relations: ['creator']는 updateFile의 재조회와 맞춰서
     // 두 쓰기 경로가 같은 응답 모양을 돌려주게 한다.
-    const saved = await this.fileRepository.findOne({
-      where: { id: fileId },
-      relations: ['creator'],
-    });
-    if (!saved) {
-      throw new NotFoundException({
-        code: ErrorCode.FILE_NOT_FOUND,
-        message: 'No file found.',
-      });
-    }
+    const saved = await this.findFileOrThrow(fileId, ['creator']);
     this.metricsService.uploadClaimsTotal.inc({ outcome: 'fresh' });
     return {
       replayed: false,
@@ -510,19 +509,11 @@ export class FileService {
   }
 
   // 목적: 파일 메타데이터(제목/경로/가시성)를 갱신한다.
-  // 이유: 가시성 토글(ADR 0025 D1)이 새 엔드포인트가 아니라 기존 소유자-가드 쓰기 경로를 재사용하도록
-  //       결정됐으므로, 공유 토큰 발급/회전/폐기도 같은 트랜잭션에 들어가야 한다. 소유권 이전은
-  //       더 이상 여기 없다 — 동의 없는 즉시 강제 이전이었던 옛 userId 필드는 제거됐고, 대신
-  //       proposeTransfer/acceptTransfer/rejectTransfer/cancelTransfer가 그 자리를 대신한다(ADR 0050).
-  //       title 사전 체크(459-468행)는
-  //       잠금 없는 읽기라 동시에 같은 title로 PATCH하는 요청 둘이 모두 통과할 수 있고, uploadFile과 달리
-  //       catch에서 이를 걸러내지 않으면 UNIQUE 위반이 타입 없는 500으로 새어 나간다(AllExceptionsFilter는
-  //       HttpException이 아닌 에러를 전부 INTERNAL_ERROR로 뭉갠다).
-  // 방법: 단일 QueryRunner 트랜잭션(기존 패턴 유지) 안에서 필드를 갱신 — visibility가 'unlisted'로
-  //       진입할 때만(또는 rotateShareToken 명시 시) 새 토큰을 발급하고, 벗어나면 토큰/만료를 비운다.
-  //       catch에서 isPgErrorCode(error, UNIQUE_VIOLATION)만 가로채 400 FILE_TITLE_TAKEN으로 번역한다 —
-  //       PATCH의 title은 uploadFile의 filePath 같은 1회용 청구 토큰이 아니라 임의 필드 갱신이므로
-  //       승자를 재조회해 replay 판정을 하지 않고, 다른 모든 에러는 기존처럼 그대로 rethrow한다.
+  // 이유: 가시성 토글(ADR 0025 D1)이 기존 소유자 가드 쓰기 경로를 쓰므로 공유 토큰 발급/회전/폐기도
+  //       같은 트랜잭션에 들어가야 한다. 소유권 이전은 이 메서드가 아니라 proposeTransfer 계열이 맡는다(ADR 0050).
+  // 방법: 한 트랜잭션 안에서 필드를 갱신한다. unlisted로 들어갈 때(또는 rotateShareToken일 때)만 새 토큰을
+  //       발급하고, unlisted를 벗어나면 토큰과 만료를 비운다. title 사전 체크는 잠금 없는 읽기라서 동시
+  //       PATCH가 둘 다 통과할 수 있으므로, catch에서 UNIQUE 위반만 400 FILE_TITLE_TAKEN으로 번역한다.
   async updateFile(
     id: number,
     updateFileDto: UpdateFileDto,
@@ -640,16 +631,7 @@ export class FileService {
 
     // 커밋 후 재조회는 try 밖에 둔다: 여기서 읽기가 실패해도 이미 커밋된 트랜잭션을
     // 롤백하려 들면 안 된다.
-    const updated = await this.fileRepository.findOne({
-      where: { id },
-      relations: ['creator'],
-    });
-    if (!updated) {
-      throw new NotFoundException({
-        code: ErrorCode.FILE_NOT_FOUND,
-        message: 'No file found.',
-      });
-    }
+    const updated = await this.findFileOrThrow(id, ['creator']);
     return this.toResponse(updated, requester);
   }
 
@@ -666,17 +648,10 @@ export class FileService {
     targetUserId: number,
     requester: Requester,
   ): Promise<FileResponseDto> {
-    const file = await this.fileRepository.findOne({
-      where: { id },
-      relations: ['creator', 'pendingTransferTo'],
-    });
-
-    if (!file) {
-      throw new NotFoundException({
-        code: ErrorCode.FILE_NOT_FOUND,
-        message: 'No file found.',
-      });
-    }
+    const file = await this.findFileOrThrow(id, [
+      'creator',
+      'pendingTransferTo',
+    ]);
 
     if (!this.canManage(file.creator.id, requester)) {
       throw new ForbiddenException({
@@ -716,16 +691,10 @@ export class FileService {
       .where('id = :id', { id })
       .execute();
 
-    const updated = await this.fileRepository.findOne({
-      where: { id },
-      relations: ['creator', 'pendingTransferTo'],
-    });
-    if (!updated) {
-      throw new NotFoundException({
-        code: ErrorCode.FILE_NOT_FOUND,
-        message: 'No file found.',
-      });
-    }
+    const updated = await this.findFileOrThrow(id, [
+      'creator',
+      'pendingTransferTo',
+    ]);
     return this.toResponse(updated, requester);
   }
 
@@ -741,17 +710,10 @@ export class FileService {
     id: number,
     requester: Requester,
   ): Promise<FileResponseDto> {
-    const file = await this.fileRepository.findOne({
-      where: { id },
-      relations: ['creator', 'pendingTransferTo'],
-    });
-
-    if (!file) {
-      throw new NotFoundException({
-        code: ErrorCode.FILE_NOT_FOUND,
-        message: 'No file found.',
-      });
-    }
+    const file = await this.findFileOrThrow(id, [
+      'creator',
+      'pendingTransferTo',
+    ]);
 
     if (!file.pendingTransferTo) {
       throw new BadRequestException({
@@ -783,16 +745,10 @@ export class FileService {
       `from=${file.creator.id} to=${newOwner.id}`,
     );
 
-    const updated = await this.fileRepository.findOne({
-      where: { id },
-      relations: ['creator', 'pendingTransferTo'],
-    });
-    if (!updated) {
-      throw new NotFoundException({
-        code: ErrorCode.FILE_NOT_FOUND,
-        message: 'No file found.',
-      });
-    }
+    const updated = await this.findFileOrThrow(id, [
+      'creator',
+      'pendingTransferTo',
+    ]);
     return this.toResponse(updated, requester);
   }
 
@@ -805,17 +761,10 @@ export class FileService {
     id: number,
     requester: Requester,
   ): Promise<FileResponseDto> {
-    const file = await this.fileRepository.findOne({
-      where: { id },
-      relations: ['creator', 'pendingTransferTo'],
-    });
-
-    if (!file) {
-      throw new NotFoundException({
-        code: ErrorCode.FILE_NOT_FOUND,
-        message: 'No file found.',
-      });
-    }
+    const file = await this.findFileOrThrow(id, [
+      'creator',
+      'pendingTransferTo',
+    ]);
 
     if (!file.pendingTransferTo) {
       throw new BadRequestException({
@@ -838,44 +787,25 @@ export class FileService {
       .where('id = :id', { id })
       .execute();
 
-    const updated = await this.fileRepository.findOne({
-      where: { id },
-      relations: ['creator', 'pendingTransferTo'],
-    });
-    if (!updated) {
-      throw new NotFoundException({
-        code: ErrorCode.FILE_NOT_FOUND,
-        message: 'No file found.',
-      });
-    }
+    const updated = await this.findFileOrThrow(id, [
+      'creator',
+      'pendingTransferTo',
+    ]);
     return this.toResponse(updated, requester);
   }
 
   // 목적: 제안자 본인이 아직 응답 없는 제안을 취소한다 — 소유권은 바뀌지 않는다.
-  // 이유: A가 대상을 잘못 지정했거나 마음이 바뀌었을 때, B의 거절을 기다리지 않고 스스로 거둘 수
-  //       있어야 한다(ADR 0050 D1) — D3의 "새로 제안하려면 먼저 취소" 규칙이 실제로 쓰이는 경로다.
-  //       admin은 제외한다 — canManage()는 "내 리소스를 내가 관리"를 전제한 모더레이션 게이트인데,
-  //       제안은 A·B 두 당사자 간의 합의 절차라 제3자(admin)가 개입할 근거가 없다. 이전엔 propose와
-  //       같은 canManage 검사를 그대로 재사용해 admin이 남의 제안을 임의로 취소할 수 있었는데, 이건
-  //       설계된 적 없는 상속이었다(옛 `PATCH /file/:id { userId }`가 근거 없이 존재했던 것과 같은
-  //       종류의 결함). admin이 정말 막아야 하면 그 파일을 `DELETE /file/:id`로 지우면 된다 —
-  //       propose(D4)는 admin도 여전히 가능, cancel만 creator 전용으로 좁힌다.
-  // 방법: creator 본인 여부만 확인(admin 우회 없음) → 대기중이 아니면 400 → pendingTransferToUserId만 null로.
+  // 이유: 대상의 거절을 기다리지 않고 거둘 수 있어야 한다(ADR 0050 D1). admin은 일부러 제외한다 —
+  //       제안은 두 당사자 사이의 합의 절차라 제3자가 취소할 근거가 없다. 막고 싶으면 파일을 삭제하면 된다.
+  // 방법: creator 본인인지 확인(admin 우회 없음) → 대기중이 아니면 400 → pendingTransferTo만 null로.
   async cancelTransfer(
     id: number,
     requester: Requester,
   ): Promise<FileResponseDto> {
-    const file = await this.fileRepository.findOne({
-      where: { id },
-      relations: ['creator', 'pendingTransferTo'],
-    });
-
-    if (!file) {
-      throw new NotFoundException({
-        code: ErrorCode.FILE_NOT_FOUND,
-        message: 'No file found.',
-      });
-    }
+    const file = await this.findFileOrThrow(id, [
+      'creator',
+      'pendingTransferTo',
+    ]);
 
     if (file.creator.id !== requester.id) {
       throw new ForbiddenException({
@@ -898,16 +828,10 @@ export class FileService {
       .where('id = :id', { id })
       .execute();
 
-    const updated = await this.fileRepository.findOne({
-      where: { id },
-      relations: ['creator', 'pendingTransferTo'],
-    });
-    if (!updated) {
-      throw new NotFoundException({
-        code: ErrorCode.FILE_NOT_FOUND,
-        message: 'No file found.',
-      });
-    }
+    const updated = await this.findFileOrThrow(id, [
+      'creator',
+      'pendingTransferTo',
+    ]);
     return this.toResponse(updated, requester);
   }
 
