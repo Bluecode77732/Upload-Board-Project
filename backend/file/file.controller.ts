@@ -16,6 +16,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileService } from './file.service';
+import { FileTransferService } from './file-transfer.service';
 import { UploadFileDto } from './dto/create-uploadFile.dto';
 import { UpdateFileDto } from './dto/update-uploadFile.dto';
 import { GetFilesDto } from './dto/get-files.dto';
@@ -37,7 +38,10 @@ import type { Response } from 'express';
 @ApiBearerAuth()
 @UseInterceptors(ClassSerializerInterceptor)
 export class FileController {
-  constructor(private readonly fileService: FileService) {}
+  constructor(
+    private readonly fileService: FileService,
+    private readonly fileTransferService: FileTransferService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -264,7 +268,7 @@ export class FileController {
     @Body() proposeFileTransferDto: ProposeFileTransferDto,
     @AuthUser() actor: AuthUser,
   ) {
-    return this.fileService.proposeTransfer(
+    return this.fileTransferService.proposeTransfer(
       id,
       proposeFileTransferDto.userId,
       actor,
@@ -307,7 +311,7 @@ export class FileController {
     @Param('id', ParseIntPipe) id: number,
     @AuthUser() actor: AuthUser,
   ) {
-    return this.fileService.acceptTransfer(id, actor);
+    return this.fileTransferService.acceptTransfer(id, actor);
   }
 
   @Post(':id/transfer/reject')
@@ -345,7 +349,7 @@ export class FileController {
     @Param('id', ParseIntPipe) id: number,
     @AuthUser() actor: AuthUser,
   ) {
-    return this.fileService.rejectTransfer(id, actor);
+    return this.fileTransferService.rejectTransfer(id, actor);
   }
 
   @Delete(':id/transfer')
@@ -368,10 +372,10 @@ export class FileController {
     status: 403,
     description:
       'FORBIDDEN_NOT_OWNER — 파일 소유자만 취소할 수 있다(admin은 남의 제안을 취소할 ' +
-      '수 없다 — propose의 소유자-또는-admin보다 좁은 규칙이다, file.service.ts의 ' +
+      '수 없다 — propose의 소유자-또는-admin보다 좁은 규칙이다, file-transfer.service.ts의 ' +
       'cancelTransfer 참고). (FORBIDDEN_NOT_OWNER — only the file creator may cancel ' +
       "(admin cannot cancel another user's proposal — a narrower rule than propose's " +
-      'creator-or-admin, see file.service.ts cancelTransfer).)',
+      'creator-or-admin, see file-transfer.service.ts cancelTransfer).)',
   })
   @ApiResponse({
     status: 404,
@@ -385,6 +389,6 @@ export class FileController {
     @Param('id', ParseIntPipe) id: number,
     @AuthUser() actor: AuthUser,
   ) {
-    return this.fileService.cancelTransfer(id, actor);
+    return this.fileTransferService.cancelTransfer(id, actor);
   }
 }

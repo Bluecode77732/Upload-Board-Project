@@ -17,7 +17,6 @@ import {
   QueryFailedError,
   Repository,
 } from 'typeorm';
-import { UserEntity } from 'backend/user/entity/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FileEntity } from './entity/file.entity';
 import { FileVisibility } from './entity/file-visibility.enum';
@@ -79,9 +78,6 @@ export class FileService {
 
     @InjectRepository(FileEntity)
     private readonly fileRepository: Repository<FileEntity>,
-
-    @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>,
 
     private readonly auditLogService: AuditLogService,
 
@@ -510,7 +506,7 @@ export class FileService {
 
   // 목적: 파일 메타데이터(제목/경로/가시성)를 갱신한다.
   // 이유: 가시성 토글(ADR 0025 D1)이 기존 소유자 가드 쓰기 경로를 쓰므로 공유 토큰 발급/회전/폐기도
-  //       같은 트랜잭션에 들어가야 한다. 소유권 이전은 이 메서드가 아니라 proposeTransfer 계열이 맡는다(ADR 0050).
+  //       같은 트랜잭션에 들어가야 한다. 소유권 이전은 이 메서드가 아니라 FileTransferService가 맡는다(ADR 0050).
   // 방법: 한 트랜잭션 안에서 필드를 갱신한다. unlisted로 들어갈 때(또는 rotateShareToken일 때)만 새 토큰을
   //       발급하고, unlisted를 벗어나면 토큰과 만료를 비운다. title 사전 체크는 잠금 없는 읽기라서 동시
   //       PATCH가 둘 다 통과할 수 있으므로, catch에서 UNIQUE 위반만 400 FILE_TITLE_TAKEN으로 번역한다.
@@ -537,7 +533,7 @@ export class FileService {
       }
 
       // creator 또는 admin만 수정할 수 있다. 소유권 자체는 더 이상 이 메서드로 옮겨지지 않는다 —
-      // proposeTransfer/acceptTransfer 참고(ADR 0050).
+      // FileTransferService 참고(ADR 0050, 0067).
       if (!this.canManage(file.creator.id, requester)) {
         throw new ForbiddenException({
           code: ErrorCode.FORBIDDEN_NOT_OWNER,
@@ -632,206 +628,6 @@ export class FileService {
     // 커밋 후 재조회는 try 밖에 둔다: 여기서 읽기가 실패해도 이미 커밋된 트랜잭션을
     // 롤백하려 들면 안 된다.
     const updated = await this.findFileOrThrow(id, ['creator']);
-    return this.toResponse(updated, requester);
-  }
-
-  // 목적: creator/admin이 파일 소유권을 특정 대상에게 이전하자고 제안한다 — 소유권은 이 시점에
-  //       바뀌지 않는다.
-  // 이유: 옛 즉시-강제 이전(UpdateFileDto.userId)은 수신자 동의 없이 소유권을 바꿔서, 그 결과가
-  //       ADR 0024가 흡수해야 했던 invariant 붕괴의 유일한 원인이었다. 제안 단계를 분리해 동의
-  //       없는 이전 자체를 구조적으로 불가능하게 만든다(ADR 0050 D1).
-  // 방법: canManage로 권한 확인 → 자기 자신을 대상으로 지정하면 거부 → 대상 유저 존재 확인 →
-  //       이미 대기중이면 409(D3 — 자동 덮어쓰기 없음, 먼저 취소해야 함) → pendingTransferToUserId만
-  //       갱신, creator는 그대로.
-  async proposeTransfer(
-    id: number,
-    targetUserId: number,
-    requester: Requester,
-  ): Promise<FileResponseDto> {
-    const file = await this.findFileOrThrow(id, [
-      'creator',
-      'pendingTransferTo',
-    ]);
-
-    if (!this.canManage(file.creator.id, requester)) {
-      throw new ForbiddenException({
-        code: ErrorCode.FORBIDDEN_NOT_OWNER,
-        message: 'Only the file creator or an admin can propose a transfer.',
-      });
-    }
-
-    if (targetUserId === file.creator.id) {
-      throw new BadRequestException({
-        code: ErrorCode.FILE_TRANSFER_INVALID_TARGET,
-        message: 'Cannot propose a transfer to the current owner.',
-      });
-    }
-
-    if (file.pendingTransferTo) {
-      throw new ConflictException({
-        code: ErrorCode.FILE_TRANSFER_PENDING,
-        message: `A transfer to user ${file.pendingTransferTo.id} is already pending. Cancel it before proposing a new target.`,
-      });
-    }
-
-    const target = await this.userRepository.findOne({
-      where: { id: targetUserId },
-    });
-    if (!target) {
-      throw new NotFoundException({
-        code: ErrorCode.USER_NOT_FOUND,
-        message: 'No user found.',
-      });
-    }
-
-    await this.fileRepository
-      .createQueryBuilder()
-      .update(FileEntity)
-      .set({ pendingTransferTo: target })
-      .where('id = :id', { id })
-      .execute();
-
-    const updated = await this.findFileOrThrow(id, [
-      'creator',
-      'pendingTransferTo',
-    ]);
-    return this.toResponse(updated, requester);
-  }
-
-  // 목적: 대기중인 이전 제안을 대상 유저 본인이 수락해 실제로 소유권을 넘긴다 — 이 시점에만
-  //       creator가 실제로 바뀐다.
-  // 이유: 동의 없는 강제 이전을 막는 것이 ADR 0050의 핵심이다 — admin을 포함해 오직 대상 본인만
-  //       수락할 수 있다(D4). 감사 로그도 제안이 아니라 이 실제 상태 변화 시점에만 남긴다(D6) —
-  //       이전 소유자의 계정이 나중에 삭제되면 이 로그가 원래 소유자를 알 수 있는 유일한 곳이다.
-  // 방법: 대기중인 제안이 없으면 400 → 요청자가 대상이 아니면 403(제3자는 파일이 대기중이라는
-  //       사실조차 알면 안 되므로 존재 확인보다 먼저 대상 일치부터 본다) → creator를 대상으로,
-  //       pendingTransferToUserId를 null로 같은 쓰기에서 갱신 → 커밋 후 FILE_TRANSFER 감사 로그.
-  async acceptTransfer(
-    id: number,
-    requester: Requester,
-  ): Promise<FileResponseDto> {
-    const file = await this.findFileOrThrow(id, [
-      'creator',
-      'pendingTransferTo',
-    ]);
-
-    if (!file.pendingTransferTo) {
-      throw new BadRequestException({
-        code: ErrorCode.FILE_NO_PENDING_TRANSFER,
-        message: 'This file has no pending transfer.',
-      });
-    }
-
-    if (file.pendingTransferTo.id !== requester.id) {
-      throw new ForbiddenException({
-        code: ErrorCode.FORBIDDEN_NOT_TRANSFER_TARGET,
-        message: 'Only the proposed recipient can accept this transfer.',
-      });
-    }
-
-    const newOwner = file.pendingTransferTo;
-    await this.fileRepository
-      .createQueryBuilder()
-      .update(FileEntity)
-      .set({ creator: newOwner, pendingTransferTo: null })
-      .where('id = :id', { id })
-      .execute();
-
-    await this.auditLogService.log(
-      requester.id,
-      id,
-      AuditTargetType.file,
-      'FILE_TRANSFER',
-      `from=${file.creator.id} to=${newOwner.id}`,
-    );
-
-    const updated = await this.findFileOrThrow(id, [
-      'creator',
-      'pendingTransferTo',
-    ]);
-    return this.toResponse(updated, requester);
-  }
-
-  // 목적: 대기중인 이전 제안을 대상 유저 본인이 거절한다 — 소유권은 바뀌지 않는다.
-  // 이유: acceptTransfer와 대칭인 경로. 거절도 동의 절차의 일부이므로 오직 대상 본인만 할 수
-  //       있다(ADR 0050 D1).
-  // 방법: acceptTransfer와 같은 대기 상태·권한 검사 → pendingTransferToUserId만 null로 되돌림,
-  //       creator는 손대지 않음. 감사 로그 없음(D6 — 실제 소유권 변화가 없으므로).
-  async rejectTransfer(
-    id: number,
-    requester: Requester,
-  ): Promise<FileResponseDto> {
-    const file = await this.findFileOrThrow(id, [
-      'creator',
-      'pendingTransferTo',
-    ]);
-
-    if (!file.pendingTransferTo) {
-      throw new BadRequestException({
-        code: ErrorCode.FILE_NO_PENDING_TRANSFER,
-        message: 'This file has no pending transfer.',
-      });
-    }
-
-    if (file.pendingTransferTo.id !== requester.id) {
-      throw new ForbiddenException({
-        code: ErrorCode.FORBIDDEN_NOT_TRANSFER_TARGET,
-        message: 'Only the proposed recipient can reject this transfer.',
-      });
-    }
-
-    await this.fileRepository
-      .createQueryBuilder()
-      .update(FileEntity)
-      .set({ pendingTransferTo: null })
-      .where('id = :id', { id })
-      .execute();
-
-    const updated = await this.findFileOrThrow(id, [
-      'creator',
-      'pendingTransferTo',
-    ]);
-    return this.toResponse(updated, requester);
-  }
-
-  // 목적: 제안자 본인이 아직 응답 없는 제안을 취소한다 — 소유권은 바뀌지 않는다.
-  // 이유: 대상의 거절을 기다리지 않고 거둘 수 있어야 한다(ADR 0050 D1). admin은 일부러 제외한다 —
-  //       제안은 두 당사자 사이의 합의 절차라 제3자가 취소할 근거가 없다. 막고 싶으면 파일을 삭제하면 된다.
-  // 방법: creator 본인인지 확인(admin 우회 없음) → 대기중이 아니면 400 → pendingTransferTo만 null로.
-  async cancelTransfer(
-    id: number,
-    requester: Requester,
-  ): Promise<FileResponseDto> {
-    const file = await this.findFileOrThrow(id, [
-      'creator',
-      'pendingTransferTo',
-    ]);
-
-    if (file.creator.id !== requester.id) {
-      throw new ForbiddenException({
-        code: ErrorCode.FORBIDDEN_NOT_OWNER,
-        message: 'Only the file creator can cancel a transfer.',
-      });
-    }
-
-    if (!file.pendingTransferTo) {
-      throw new BadRequestException({
-        code: ErrorCode.FILE_NO_PENDING_TRANSFER,
-        message: 'This file has no pending transfer.',
-      });
-    }
-
-    await this.fileRepository
-      .createQueryBuilder()
-      .update(FileEntity)
-      .set({ pendingTransferTo: null })
-      .where('id = :id', { id })
-      .execute();
-
-    const updated = await this.findFileOrThrow(id, [
-      'creator',
-      'pendingTransferTo',
-    ]);
     return this.toResponse(updated, requester);
   }
 

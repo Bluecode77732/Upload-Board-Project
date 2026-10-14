@@ -265,6 +265,7 @@ Implementation과 Review는 같은 패스여서는 안 된다: Review는 구현�
   서비스 레벨 영향:
   - `FileService` 변경 → `file.service.spec.ts`를 확인한다(QueryRunner mock, `jest.mock('fs/promises')`)
   - `AuthService` 변경 → `auth.service.spec.ts`를 확인한다; Basic 파싱, access/refresh `type` 검사(`verifyToken`), 회전 해시-앵커 불변식(`issueTokenPair`/`rotateRefreshToken`)이 여전히 성립하는지 검증한다
+  - `FileTransferService` 변경 → `file-transfer.service.spec.ts`를 확인한다(실제 `FileService`와 같은 mock 위에서 돈다)
   - `UserService` 변경 → `user.service.spec.ts`를 확인한다; `JwtStrategy.validate`는 `userService.findOne`에 의존한다 — 시그니처 변경은 토큰 검증을 깨뜨린다
 
 ### 결과 검토
@@ -786,6 +787,10 @@ Conflict Protocol을 따른다.
   필요한 것(`Repository<FileEntity>`, `StorageModule`, `MetricsModule`)은 이미
   여기 다 배선돼 있다. `GRANTED_SWEEP_DRY_RUN`은 기본값 `true`로 출시된다 —
   운영자가 명시적으로 삭제를 켜기 전까지는 리포트만 한다.
+  소유권 이전의 쓰기 쪽(제안/수락/거절/취소, ADR 0050)은 이 모듈의 **export하지 않는**
+  `FileTransferService`가 맡는다(ADR 0067). `FileService`에는 `toResponse`만 묻고,
+  `FileService`는 이 서비스를 모른다. 읽기 쪽(`toResponse`, `getFileById`)은
+  `FileService`에 남는다.
 - **PostModule**은 게시판 게시글 콘텐츠만 소유한다: `PostEntity` 행, 파일에
   대한 선택적 1:1 참조, 게시글 CRUD. `file.creator`를 절대 읽지 않는다 —
   첨부 가능 여부는 FileModule의 판단이다. 계정 연쇄 삭제를 위해, 그리고
@@ -1993,7 +1998,9 @@ gitignore), `fs.unlink`는 휴지통을 거치지 않아서 복구 경로 자체
 - REST — 두 컨트롤러(ADR 0026, `CommentModule`의 분리를 반영하지만 여기서는
   접두사가 아니라 인증 요구사항이 이유다): `FileController`(`JwtAuthGuard`
   뒤에): `GET /file`, `GET /file/:id`, `POST /file`, `PATCH /file/:id`,
-  `DELETE /file/:id`; `FileContentController`(`OptionalJwtAuthGuard` 뒤에):
+  `DELETE /file/:id`와 이전 라우트 4개 `POST /file/:id/transfer`,
+  `POST /file/:id/transfer/accept`, `POST /file/:id/transfer/reject`,
+  `DELETE /file/:id/transfer`; `FileContentController`(`OptionalJwtAuthGuard` 뒤에):
   `GET /file/:id/content`, granted 바이트를 서빙하는 유일한 경로
 - `FileService` — 메타데이터 CRUD; `uploadFile`/`updateFile`은 수동
   QueryRunner 트랜잭션 패턴을 쓴다; `toResponse()`는 `BASE_URL`로
@@ -2010,6 +2017,9 @@ gitignore), `fs.unlink`는 휴지통을 거치지 않아서 복구 경로 자체
   ADR 0026 D8). `deleteFile`은 행이 사라진 뒤 저장된 파일도 unlink한다;
   `findStoredPathsOfCreator` / `deleteFilesOfCreator`는 `UserService`의
   트랜잭션 안에서 계정 연쇄를 담당한다(ADR 0020)
+- `FileTransferService` — 소유권 이전 쓰기 4개(ADR 0050). ADR 0067로 `FileService`에서
+  분리됐다. private `canManage`와 404 로더를 자체로 가져 `FileService`의 공개 표면이
+  넓어지지 않았고, 호출자는 `FileController` 하나뿐이다
 - `FileService`를 export한다(계정 연쇄를 위해 `UserModule`이 소비한다)
 
 **UploadModule** (`backend/upload/`)
