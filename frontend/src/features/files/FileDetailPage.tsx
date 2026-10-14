@@ -193,15 +193,14 @@ export function FileDetailPage() {
   const isPendingTarget =
     currentUserId !== null && file?.pendingTransferTo?.id === currentUserId
 
-  // 목적: 소유자가 visibility를 전환한다(예: private → public/unlisted).
-  // 이유: 백엔드는 별도 엔드포인트 없이 PATCH /file/:id 하나로 토글을 처리한다(ADR 0026).
-  // 방법: PATCH 응답(갱신된 FileResponseDto)으로 로컬 file 상태를 그대로 교체 — shareUrl 유무도 응답이 결정.
-  function handleVisibilityChange(next: FileVisibility) {
+  // 목적: 가시성/공유 토큰 변경을 PATCH로 보내고, 응답으로 file 상태를 교체한다.
+  // 이유: 가시성 전환과 토큰 회전이 busy/에러 처리까지 똑같은 코드를 따로 갖고 있었다.
+  // 방법: 호출부는 body만 넘긴다. 실패는 actionError로 보이고, busy는 finally에서 푼다.
+  function patchFile(body: UpdateFileVisibilityRequest) {
     if (!file) return
     setActionError(null)
     setCopyFeedback(null)
     setBusy(true)
-    const body: UpdateFileVisibilityRequest = { visibility: next }
     api
       .patch<FileResponse>(`/file/${file.id}`, body)
       .then((updated) => setFile(updated))
@@ -209,20 +208,37 @@ export function FileDetailPage() {
       .finally(() => setBusy(false))
   }
 
+  // 목적: 소유권 이전 요청을 보내고, 응답으로 file 상태를 교체한다.
+  // 이유: 제안/취소/수락/거절 네 핸들러가 busy·에러 처리까지 같은 모양으로 반복돼 있었다.
+  // 방법: 호출부는 요청 Promise와 동작 이름만 넘긴다. 성공 뒤에 할 일이 있으면 onDone으로 받는다.
+  function runTransfer(
+    request: Promise<FileResponse>,
+    action: TransferAction,
+    onDone?: () => void,
+  ) {
+    setTransferError(null)
+    setTransferBusy(true)
+    request
+      .then((updated) => {
+        setFile(updated)
+        onDone?.()
+      })
+      .catch((err: unknown) => setTransferError(messageForTransferError(err, action)))
+      .finally(() => setTransferBusy(false))
+  }
+
+  // 목적: 소유자가 visibility를 전환한다(예: private → public/unlisted).
+  // 이유: 백엔드는 별도 엔드포인트 없이 PATCH /file/:id 하나로 토글을 처리한다(ADR 0026).
+  // 방법: PATCH 응답(갱신된 FileResponseDto)으로 로컬 file 상태를 그대로 교체 — shareUrl 유무도 응답이 결정.
+  function handleVisibilityChange(next: FileVisibility) {
+    patchFile({ visibility: next })
+  }
+
   // 목적: unlisted 파일의 공유 토큰을 회전해 이전에 공유된 링크를 전부 무효화한다.
   // 이유: 링크가 유출됐다고 의심될 때 소유자가 즉시 무효화할 수단이 필요하다(ADR 0025 D3).
   // 방법: rotateShareToken:true와 함께 visibility:'unlisted'를 보내 새 토큰을 발급받는다.
   function handleRotateShareToken() {
-    if (!file) return
-    setActionError(null)
-    setCopyFeedback(null)
-    setBusy(true)
-    const body: UpdateFileVisibilityRequest = { visibility: 'unlisted', rotateShareToken: true }
-    api
-      .patch<FileResponse>(`/file/${file.id}`, body)
-      .then((updated) => setFile(updated))
-      .catch((err: unknown) => setActionError(messageForManageError(err)))
-      .finally(() => setBusy(false))
+    patchFile({ visibility: 'unlisted', rotateShareToken: true })
   }
 
   function handleCopyShareLink() {
@@ -262,20 +278,13 @@ export function FileDetailPage() {
     if (!file) return
     const email = transferEmail.trim()
     if (!email) return
-    setTransferError(null)
-    setTransferBusy(true)
-    api
+    const request = api
       .get<User>(`/user/lookup?email=${encodeURIComponent(email)}`)
       .then((target) => {
         const body: ProposeFileTransferRequest = { userId: target.id }
         return api.post<FileResponse>(`/file/${file.id}/transfer`, body)
       })
-      .then((updated) => {
-        setFile(updated)
-        setTransferEmail('')
-      })
-      .catch((err: unknown) => setTransferError(messageForTransferError(err, 'propose')))
-      .finally(() => setTransferBusy(false))
+    runTransfer(request, 'propose', () => setTransferEmail(''))
   }
 
   // 목적: 아직 응답 없는 이전 제안을 제안자가 스스로 취소한다.
@@ -284,13 +293,7 @@ export function FileDetailPage() {
   //       FileResponseDto를 JSON으로 반환한다(순수 텍스트 200이 아님, cancelTransfer가 toResponse를 호출).
   function handleCancelTransfer() {
     if (!file) return
-    setTransferError(null)
-    setTransferBusy(true)
-    api
-      .delete<FileResponse>(`/file/${file.id}/transfer`)
-      .then((updated) => setFile(updated))
-      .catch((err: unknown) => setTransferError(messageForTransferError(err, 'cancel')))
-      .finally(() => setTransferBusy(false))
+    runTransfer(api.delete<FileResponse>(`/file/${file.id}/transfer`), 'cancel')
   }
 
   // 목적: 제안받은 이전을 대상 본인이 수락해 소유권을 옮긴다.
@@ -298,13 +301,7 @@ export function FileDetailPage() {
   // 방법: POST /file/:id/transfer/accept, 응답으로 file 상태 교체.
   function handleAcceptTransfer() {
     if (!file) return
-    setTransferError(null)
-    setTransferBusy(true)
-    api
-      .post<FileResponse>(`/file/${file.id}/transfer/accept`)
-      .then((updated) => setFile(updated))
-      .catch((err: unknown) => setTransferError(messageForTransferError(err, 'accept')))
-      .finally(() => setTransferBusy(false))
+    runTransfer(api.post<FileResponse>(`/file/${file.id}/transfer/accept`), 'accept')
   }
 
   // 목적: 제안받은 이전을 대상 본인이 거절한다(소유권 불변).
@@ -312,13 +309,7 @@ export function FileDetailPage() {
   // 방법: POST /file/:id/transfer/reject, 응답으로 file 상태 교체.
   function handleRejectTransfer() {
     if (!file) return
-    setTransferError(null)
-    setTransferBusy(true)
-    api
-      .post<FileResponse>(`/file/${file.id}/transfer/reject`)
-      .then((updated) => setFile(updated))
-      .catch((err: unknown) => setTransferError(messageForTransferError(err, 'reject')))
-      .finally(() => setTransferBusy(false))
+    runTransfer(api.post<FileResponse>(`/file/${file.id}/transfer/reject`), 'reject')
   }
 
   if (metaError) {
