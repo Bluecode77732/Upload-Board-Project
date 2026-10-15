@@ -27,7 +27,7 @@ AppModule
 ├── ThrottlerModule      — global rate limiting, 100 req/min default (5/min auth, 15/min upload); THROTTLE_ENABLED bypasses it for e2e (ADR 0053/0054)
 ├── AuthModule           — tokens + RBAC: Basic parsing, JWT issue/verify, Passport strategies, role guard (ADR 0013)
 ├── UserModule           — user CRUD, role assignment
-├── FileModule           — file metadata: rows, visibility, media type, the promote-from-temp transaction
+├── FileModule           — file metadata: rows, visibility, media type, the promote-from-temp transaction, ownership transfer
 ├── PostModule           — a board post's text plus its optional attached file (ADR 0023)
 ├── CommentModule        — comment text hanging off a post (ADR 0023)
 ├── UploadModule         — receives the physical bytes and stages them as a temp object
@@ -112,8 +112,11 @@ Two controllers, split by auth requirement rather than by prefix ([ADR 0026](ADR
 | `GET /file` | Paginated list, with title search and creator/sort filters (ADR 0021). A non-owner/non-admin never sees a `private`/`unlisted` row |
 | `GET /file/:id` | Metadata + creator. Hidden from a non-owner/non-admin as 404, not 403 — existence itself stays private |
 | `POST /file` | Promotes an attached temp file: one DB insert plus the physical move, together. The temp filename is a one-shot claim token — resubmitting it replays (200) for whoever claimed it first, and 409s (`FILE_ALREADY_CLAIMED`) for anyone else (ADR 0019) |
-| `PATCH /file/:id` | Creator or admin. Title, `granted_` filePath, ownership reassignment, and the visibility toggle all go through this one endpoint — there's no separate visibility-only route |
+| `PATCH /file/:id` | Creator or admin. Title, `granted_` filePath, and the visibility toggle all go through this one endpoint — there's no separate visibility-only route |
 | `DELETE /file/:id` | Creator or admin, hard delete. The row goes first, then the stored file is unlinked (ADR 0020) |
+| `POST /file/:id/transfer` | Creator or admin proposes a transfer to another user; ownership does not change yet (ADR 0050) |
+| `POST /file/:id/transfer/accept`, `/reject` | Only the proposed recipient — an admin cannot accept for them |
+| `DELETE /file/:id/transfer` | The creator withdraws a pending proposal |
 
 **FileContentController** — behind `OptionalJwtAuthGuard` (works with or without a bearer token):
 
@@ -138,6 +141,9 @@ Two controllers, split by auth requirement rather than by prefix ([ADR 0026](ADR
   place a non-DB side effect needs that ([ADR 0004](ADR/0004-transaction-pattern-selection.md)).
   Deletion is the opposite: the row is dropped first and the physical unlink only runs after
   commit, because unlink can't be rolled back.
+- The four transfer routes are written by `FileTransferService`, a provider of this module that is
+  not exported. It asks `FileService` only for `toResponse()`, and keeps its own copy of the
+  creator-or-admin check ([ADR 0067](ADR/0067-file-transfer-service-split.md)).
 - Responses are shaped by `FileService.toResponse()` into `FileResponseDto`. `fileUrl` points
   at the content endpoint, never a static path; `shareUrl` only appears for a manager of an
   `unlisted` file.

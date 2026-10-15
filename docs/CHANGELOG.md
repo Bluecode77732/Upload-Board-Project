@@ -29,6 +29,16 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Backend: ownership transfer moves out of `FileService` into `FileTransferService` (2026-10-14)** —
+  `proposeTransfer`, `acceptTransfer`, `rejectTransfer` and `cancelTransfer` moved with their bodies
+  unchanged to `backend/file/file-transfer.service.ts`, a non-exported provider of `FileModule`.
+  `FileService` goes from 1,024 to 820 lines and no longer injects `userRepository`; its public
+  surface did not widen (`toResponse` was already public). `FileController` keeps all routes,
+  guards and Swagger text; two descriptions now name the new file. The transfer tests moved to
+  `file-transfer.service.spec.ts` (17); with `file.service.spec.ts` (74) the count is the 91 it
+  was before. Unit 282/282 and backend e2e 76/76 pass; the real-server Playwright run was not done
+  (port 3000 was held by another project's process). Decision and the rejected alternatives (a
+  separate module, widening `FileService`): [ADR 0067](ADR/0067-file-transfer-service-split.md).
 - **Docs: Korean wording pass on `CLAUDE.ko.md` and the ADR 0059 `.ko.md` (2026-10-12)** — Both files
   were re-read in full, which neither had been (the 2026-10-04 pass covered `CHANGELOG.ko.md`,
   `ROADMAP.ko.md`, `frontend/CLAUDE.ko.md` and `frontend/README.ko.md`). Found and fixed: a few literal

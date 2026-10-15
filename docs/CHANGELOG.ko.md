@@ -27,6 +27,16 @@
   spec은 1분 간격의 묶음으로 나눠 돌렸다.
 
 ### 변경
+- **백엔드: 소유권 이전을 `FileService`에서 `FileTransferService`로 분리 (2026-10-14)** —
+  `proposeTransfer`, `acceptTransfer`, `rejectTransfer`, `cancelTransfer`를 본문 변경 없이
+  `backend/file/file-transfer.service.ts`로 옮겼다. `FileModule`의 export하지 않는 provider다.
+  `FileService`는 1,024줄에서 820줄이 됐고 `userRepository`를 더 이상 주입받지 않는다. 공개
+  표면은 넓어지지 않았다(`toResponse`가 이미 public이었다). `FileController`의 라우트·가드·
+  Swagger 문구는 그대로이고, 설명 두 곳이 새 파일 이름을 가리킨다. 이전 테스트는
+  `file-transfer.service.spec.ts`(17개)로 옮겼고 `file.service.spec.ts`(74개)와 합치면
+  분리 전과 같은 91개다. 단위 282/282, 백엔드 e2e 76/76 통과. 실서버 Playwright는 돌리지
+  못했다(3000 포트를 다른 프로젝트 프로세스가 쥐고 있었다). 결정과 기각한 대안(별도 모듈,
+  `FileService` 공개 확장): [ADR 0067](ADR/0067-file-transfer-service-split.ko.md).
 - **문서: `CLAUDE.ko.md`와 ADR 0059 `.ko.md` 한국어 점검 (2026-10-12)** — 두 파일을 처음으로 전체
   다시 읽었다(2026-10-04 점검은 `CHANGELOG.ko.md`, `ROADMAP.ko.md`, `frontend/CLAUDE.ko.md`,
   `frontend/README.ko.md`가 대상이었다). 찾아서 고친 것: 직역투와 오기 몇 곳("mock"을 "목"으로,
