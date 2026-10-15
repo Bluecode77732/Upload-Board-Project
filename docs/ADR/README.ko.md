@@ -76,6 +76,10 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0066](0066-stack-selection-rationale-retroactive.ko.md) | 스택 선택 근거, 소급 기록 — NestJS/TypeORM/PostgreSQL, AWS/EKS, 프론트엔드 상태 라이브러리 미사용, 요청 횟수 한도 수치 | 승인됨 — 소급 기록, 코드 변경 없음 | 2026-10-12 |
 | [0067](0067-file-transfer-service-split.ko.md) | 소유권 이전을 `FileService`에서 `FileTransferService`로 분리 | 승인됨 — 구현 완료, 동작 변경 없음 | 2026-10-14 |
 
+**결정일** 열은 그 결정이 저장소에 처음 나타난 날짜입니다. ADR 0001~0005와 0009는 첫 커밋(2025-12-17)에
+이미 들어 있던 선택을 다루지만, 문서 자체는 2026-07-22에 작성했습니다. 이 사실은 각 문서의 `기록` 줄에
+적어 두었습니다.
+
 관례: 새 ADR은 다음 번호를 사용하며 `NNNN-short-kebab-title.md`, 한국어 파일은
 `NNNN-short-kebab-title.ko.md`입니다. ADR을 대체할 때는 원본을 수정하지 않고
 상태를 `NNNN에 의해 대체됨`으로 바꿉니다.

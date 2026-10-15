@@ -29,6 +29,15 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: how the project was built, and when the oldest ADRs were written (2026-10-16)** — documentation
+  only. `README.md` gained a "How this was built" section: the AI tooling, the written contract and
+  hooks, where decisions and their alternatives are recorded, what was checked against real
+  systems, and that failures are written down; it ends by saying one developer reviews it all. ADRs
+  0001–0005 and 0009 carry `Date: 2025-12-17`, the first commit, but were written on 2026-07-22
+  (`git log --follow` shows `09d04a8`); each now has a `Recorded` line, and `docs/ADR/README.md`
+  explains the **Decided** column. The README's factual errors that an earlier review listed
+  ("Multer disk storage", "no deploy pipeline", "6 weeks") had already been fixed by the 2026-10-09
+  and 2026-10-12 README passes, so nothing was changed for them.
 - **Backend: ownership transfer moves out of `FileService` into `FileTransferService` (2026-10-14)** —
   `proposeTransfer`, `acceptTransfer`, `rejectTransfer` and `cancelTransfer` moved with their bodies
   unchanged to `backend/file/file-transfer.service.ts`, a non-exported provider of `FileModule`.

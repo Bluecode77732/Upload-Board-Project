@@ -77,6 +77,10 @@ each ADR records the *why* behind those rules.
 | [0066](0066-stack-selection-rationale-retroactive.md) | Stack selection rationale, recorded retroactively — NestJS/TypeORM/PostgreSQL, AWS/EKS, no frontend state library, rate-limit values | Accepted — retroactive record, no code change | 2026-10-12 |
 | [0067](0067-file-transfer-service-split.md) | Ownership transfer moves out of `FileService` into `FileTransferService` | Accepted — implemented, no behavior change | 2026-10-14 |
 
+The **Decided** column is the date the decision first shows in the repository. ADRs 0001–0005
+and 0009 describe choices that were already in the first commit (2025-12-17); they were written
+on 2026-07-22, and each carries a `Recorded` line saying so.
+
 Convention: new ADRs take the next number, `NNNN-short-kebab-title.md`, with a
 Korean sibling `NNNN-short-kebab-title.ko.md`. Superseding an ADR flips its status
 to `Superseded by NNNN` rather than editing the original decision.
