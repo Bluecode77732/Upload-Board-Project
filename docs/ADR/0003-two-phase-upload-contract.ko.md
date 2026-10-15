@@ -2,6 +2,7 @@
 
 - 상태: 승인됨
 - 날짜: 2025-12-17
+- 기록: 2026-07-22. 첫 커밋(2025-12-17)의 코드를 보고 나중에 쓴 문서이며, 위 날짜는 이 결정이 저장소에 처음 나타난 날이다
 - English: [0003-two-phase-upload-contract.md](0003-two-phase-upload-contract.md)
 
 ## 맥락

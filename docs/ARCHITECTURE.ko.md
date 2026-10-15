@@ -27,7 +27,7 @@ AppModule
 ├── ThrottlerModule      — 전역 요청 횟수 제한, 기본값 분당 100회(auth 분당 5회, upload 분당 15회); THROTTLE_ENABLED가 e2e에서만 우회(ADR 0053/0054)
 ├── AuthModule           — 토큰 + RBAC: Basic 파싱, JWT 발급/검증, Passport 전략, 역할 가드(ADR 0013)
 ├── UserModule           — 사용자 CRUD, 역할 부여
-├── FileModule           — 파일 메타데이터: 행, 가시성, 매체 종류, temp 승격 트랜잭션
+├── FileModule           — 파일 메타데이터: 행, 가시성, 매체 종류, temp 승격 트랜잭션, 소유권 이전
 ├── PostModule           — 게시글 본문과 그에 딸린 선택적 첨부 파일(ADR 0023)
 ├── CommentModule        — 게시글에 매달린 댓글(ADR 0023)
 ├── UploadModule         — 물리 바이트를 받아 temp 객체로 임시 저장
@@ -112,8 +112,11 @@ Responsibility 참조). "물리 파일"과 "파일 메타데이터"에 걸친 �
 | `GET /file` | 페이지네이션 목록, 제목 검색·작성자·정렬 필터(ADR 0021). 소유자도 admin도 아닌 요청자에게는 `private`/`unlisted` 행이 아예 보이지 않습니다 |
 | `GET /file/:id` | 메타데이터 + 작성자. 소유자도 admin도 아니면 403이 아니라 404로 숨깁니다 — 존재 여부 자체를 드러내지 않기 위해서입니다 |
 | `POST /file` | 첨부된 temp 파일을 승격합니다: DB insert와 물리 이동을 한 번에 함께 처리합니다. temp 파일명은 1회용 청구 토큰이라, 재제출하면 먼저 청구한 사람에게는 replay(200), 다른 사람에게는 409 `FILE_ALREADY_CLAIMED`가 됩니다(ADR 0019) |
-| `PATCH /file/:id` | 작성자 또는 admin. 제목, `granted_` filePath, 소유권 재할당, 가시성 전환까지 전부 이 엔드포인트 하나로 처리합니다 — 가시성만 따로 바꾸는 엔드포인트는 없습니다 |
+| `PATCH /file/:id` | 작성자 또는 admin. 제목, `granted_` filePath, 가시성 전환까지 전부 이 엔드포인트 하나로 처리합니다 — 가시성만 따로 바꾸는 엔드포인트는 없습니다 |
 | `DELETE /file/:id` | 작성자 또는 admin, 하드 삭제. 행을 먼저 지우고 나서 저장된 파일을 unlink합니다(ADR 0020) |
+| `POST /file/:id/transfer` | 작성자 또는 admin이 다른 사용자에게 이전을 제안합니다. 아직 소유권은 바뀌지 않습니다(ADR 0050) |
+| `POST /file/:id/transfer/accept`, `/reject` | 제안받은 본인만 할 수 있습니다 — admin도 대신 수락할 수 없습니다 |
+| `DELETE /file/:id/transfer` | 작성자가 대기 중인 제안을 거둡니다 |
 
 **FileContentController** — `OptionalJwtAuthGuard` 뒤(토큰이 있어도 없어도 동작합니다):
 
@@ -140,6 +143,9 @@ Responsibility 참조). "물리 파일"과 "파일 메타데이터"에 걸친 �
   ([ADR 0004](ADR/0004-transaction-pattern-selection.ko.md)). 삭제는 반대입니다: 행을
   먼저 지우고 커밋된 뒤에만 물리 unlink를 실행합니다. unlink는 되돌릴 수 없기
   때문입니다.
+- 이전 라우트 4개의 쓰기는 이 모듈의 provider인 `FileTransferService`가 맡고, export하지 않습니다.
+  `FileService`에는 `toResponse()`만 묻고, 작성자-또는-admin 판정은 자체 사본을 씁니다
+  ([ADR 0067](ADR/0067-file-transfer-service-split.ko.md)).
 - 응답은 `FileService.toResponse()`가 `FileResponseDto`로 만듭니다. `fileUrl`은 정적
   경로가 아니라 콘텐츠 엔드포인트를 가리키고, `shareUrl`은 `unlisted` 파일을 관리할 수
   있는 사람에게만 보입니다.

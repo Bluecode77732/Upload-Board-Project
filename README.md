@@ -52,6 +52,32 @@ in a browser that relaxed one local-only header; see [Known limitations](#known-
 </tr>
 </table>
 
+## How this was built
+
+Most of the code was written with Claude Code, and the history says so: more than nine in ten
+commits carry a `Co-Authored-By: Claude` trailer. What keeps that from meaning "the AI decided"
+is the process around it, and all of it is in this repository.
+
+- **A written contract.** [CLAUDE.md](CLAUDE.md) says what may change without asking, what must
+  never appear (`any`, unvalidated env vars, files served by a client-supplied path) and what
+  has to be run before a change is called done. Hooks in `.claude/hooks/` ask for confirmation
+  before an edit to the highest-blast-radius files or a `migration:generate`.
+- **Choices are the developer's, with the alternatives written down.** Where a real choice
+  existed, the options went to the developer as a comparison table and the outcome became an
+  ADR. Examples the repository records: the password policy and its error code, confirmed before
+  any code; keeping `AUTH_EMAIL_TAKEN` visible after three options were weighed (both in
+  [CLAUDE.md](CLAUDE.md) > Known gaps); serving the frontend from the same ALB instead of an
+  external host ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md)).
+- **Checked against the real thing.** Unit tests, an end-to-end suite on a real PostgreSQL,
+  Playwright against a running backend, and dated live runs on AWS
+  ([ROADMAP.md](docs/ROADMAP.md) §9).
+- **Failures are recorded, not hidden.** A live check once deleted 44 real files; the rule that
+  came out of it is in [CLAUDE.md](CLAUDE.md) under "Live-testing a sweep/reclaim service".
+  [ADR 0066](docs/ADR/0066-stack-selection-rationale-retroactive.md) says which choices were
+  never weighed in writing, and the oldest ADRs say they were written afterwards.
+
+One developer reviews all of it; there is no second reviewer.
+
 ## Documentation
 
 | Document | Purpose |

@@ -29,6 +29,25 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: how the project was built, and when the oldest ADRs were written (2026-10-16)** — documentation
+  only. `README.md` gained a "How this was built" section: the AI tooling, the written contract and
+  hooks, where decisions and their alternatives are recorded, what was checked against real
+  systems, and that failures are written down; it ends by saying one developer reviews it all. ADRs
+  0001–0005 and 0009 carry `Date: 2025-12-17`, the first commit, but were written on 2026-07-22
+  (`git log --follow` shows `09d04a8`); each now has a `Recorded` line, and `docs/ADR/README.md`
+  explains the **Decided** column. The README's factual errors that an earlier review listed
+  ("Multer disk storage", "no deploy pipeline", "6 weeks") had already been fixed by the 2026-10-09
+  and 2026-10-12 README passes, so nothing was changed for them.
+- **Backend: ownership transfer moves out of `FileService` into `FileTransferService` (2026-10-14)** —
+  `proposeTransfer`, `acceptTransfer`, `rejectTransfer` and `cancelTransfer` moved with their bodies
+  unchanged to `backend/file/file-transfer.service.ts`, a non-exported provider of `FileModule`.
+  `FileService` goes from 1,024 to 820 lines and no longer injects `userRepository`; its public
+  surface did not widen (`toResponse` was already public). `FileController` keeps all routes,
+  guards and Swagger text; two descriptions now name the new file. The transfer tests moved to
+  `file-transfer.service.spec.ts` (17); with `file.service.spec.ts` (74) the count is the 91 it
+  was before. Unit 282/282 and backend e2e 76/76 pass; the real-server Playwright run was not done
+  (port 3000 was held by another project's process). Decision and the rejected alternatives (a
+  separate module, widening `FileService`): [ADR 0067](ADR/0067-file-transfer-service-split.md).
 - **Docs: Korean wording pass on `CLAUDE.ko.md` and the ADR 0059 `.ko.md` (2026-10-12)** — Both files
   were re-read in full, which neither had been (the 2026-10-04 pass covered `CHANGELOG.ko.md`,
   `ROADMAP.ko.md`, `frontend/CLAUDE.ko.md` and `frontend/README.ko.md`). Found and fixed: a few literal

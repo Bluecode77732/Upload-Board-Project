@@ -27,6 +27,24 @@
   spec은 1분 간격의 묶음으로 나눠 돌렸다.
 
 ### 변경
+- **문서: 프로젝트를 만든 방식 설명 추가, 오래된 ADR의 작성 시점 표기 (2026-10-16)** — 문서만 바꿨다.
+  `README.md`에 "만든 방식" 절을 추가했다. AI 도구, 문서로 정한 규약과 훅, 결정과 대안을 기록한 곳,
+  실제 환경에서 확인한 것, 실패도 기록한다는 점을 적었고, 마지막에 개발자 한 명이 전부 검토한다고
+  밝힌다. ADR 0001~0005와 0009는 첫 커밋 날짜인 `Date: 2025-12-17`로 적혀 있지만 실제 작성은
+  2026-07-22이다(`git log --follow`로 `09d04a8` 확인). 각 문서에 `기록` 줄을 넣었고,
+  `docs/ADR/README.md`에 **결정일** 열의 뜻을 설명했다. 앞선 검토가 짚은 README 사실 오류
+  ("Multer disk storage", "no deploy pipeline", "6 weeks")는 2026-10-09와 2026-10-12의 README
+  정리에서 이미 고쳐져 있어 따로 바꾸지 않았다.
+- **백엔드: 소유권 이전을 `FileService`에서 `FileTransferService`로 분리 (2026-10-14)** —
+  `proposeTransfer`, `acceptTransfer`, `rejectTransfer`, `cancelTransfer`를 본문 변경 없이
+  `backend/file/file-transfer.service.ts`로 옮겼다. `FileModule`의 export하지 않는 provider다.
+  `FileService`는 1,024줄에서 820줄이 됐고 `userRepository`를 더 이상 주입받지 않는다. 공개
+  표면은 넓어지지 않았다(`toResponse`가 이미 public이었다). `FileController`의 라우트·가드·
+  Swagger 문구는 그대로이고, 설명 두 곳이 새 파일 이름을 가리킨다. 이전 테스트는
+  `file-transfer.service.spec.ts`(17개)로 옮겼고 `file.service.spec.ts`(74개)와 합치면
+  분리 전과 같은 91개다. 단위 282/282, 백엔드 e2e 76/76 통과. 실서버 Playwright는 돌리지
+  못했다(3000 포트를 다른 프로젝트 프로세스가 쥐고 있었다). 결정과 기각한 대안(별도 모듈,
+  `FileService` 공개 확장): [ADR 0067](ADR/0067-file-transfer-service-split.ko.md).
 - **문서: `CLAUDE.ko.md`와 ADR 0059 `.ko.md` 한국어 점검 (2026-10-12)** — 두 파일을 처음으로 전체
   다시 읽었다(2026-10-04 점검은 `CHANGELOG.ko.md`, `ROADMAP.ko.md`, `frontend/CLAUDE.ko.md`,
   `frontend/README.ko.md`가 대상이었다). 찾아서 고친 것: 직역투와 오기 몇 곳("mock"을 "목"으로,

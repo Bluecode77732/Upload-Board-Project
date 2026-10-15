@@ -273,6 +273,7 @@ For each change being made, explicitly state:
   Service-level impact:
   - `FileService` change → check `file.service.spec.ts` (QueryRunner mock, `jest.mock('fs/promises')`)
   - `AuthService` change → check `auth.service.spec.ts`; verify Basic parsing, the access/refresh `type` check (`verifyToken`), and the rotation hash-anchor invariants (`issueTokenPair`/`rotateRefreshToken`) still hold
+  - `FileTransferService` change → check `file-transfer.service.spec.ts` (runs against the real `FileService`, same mocks)
   - `UserService` change → check `user.service.spec.ts`; `JwtStrategy.validate` depends on `userService.findOne` — a signature change breaks token validation
 
 ### Result Review (결과 검토)
@@ -790,6 +791,10 @@ one of these is violated, follow Principle Conflict Protocol.
   `StorageModule`, `MetricsModule`) is already wired in here. Ships with
   `GRANTED_SWEEP_DRY_RUN` defaulting `true` — report-only until an operator explicitly
   opts into deletion.
+  Ownership transfer's write side (propose/accept/reject/cancel, ADR 0050) lives in an
+  **unexported** `FileTransferService` in this module (ADR 0067): it asks `FileService`
+  only for `toResponse`, and `FileService` knows nothing of it. The read side
+  (`toResponse`, `getFileById`) stays in `FileService`.
 - **PostModule** owns board post content only: the `PostEntity` row, its optional 1:1
   reference to a file, and post CRUD. It never reads `file.creator` — attachability is
   FileModule's judgment to make. It exports `PostService` for the account cascade and for
@@ -1961,7 +1966,9 @@ substitute for this once the exercise actually calls the delete path.
 - REST — two controllers (ADR 0026, mirroring `CommentModule`'s split, here for an
   auth-requirement reason rather than a prefix one): `FileController` (behind
   `JwtAuthGuard`): `GET /file`, `GET /file/:id`, `POST /file`, `PATCH /file/:id`,
-  `DELETE /file/:id`; `FileContentController` (behind `OptionalJwtAuthGuard`):
+  `DELETE /file/:id`, and the four transfer routes `POST /file/:id/transfer`,
+  `POST /file/:id/transfer/accept`, `POST /file/:id/transfer/reject`,
+  `DELETE /file/:id/transfer`; `FileContentController` (behind `OptionalJwtAuthGuard`):
   `GET /file/:id/content`, the sole path serving granted bytes
 - `FileService` — metadata CRUD; `uploadFile`/`updateFile` use the manual QueryRunner
   transaction pattern; `toResponse()` shapes `FileResponseDto` with `BASE_URL`, composing
@@ -1975,6 +1982,9 @@ substitute for this once the exercise actually calls the delete path.
   also unlinks the stored file after the row is gone; `findStoredPathsOfCreator` /
   `deleteFilesOfCreator` serve the account cascade inside `UserService`'s transaction
   (ADR 0020)
+- `FileTransferService` — the four transfer writes (ADR 0050), moved out of `FileService` by
+  ADR 0067. Keeps its own private `canManage` and 404 loader so `FileService`'s public
+  surface did not widen; `FileController` is its only caller
 - Exports `FileService` (consumed by `UserModule` for the account cascade)
 
 **UploadModule** (`backend/upload/`)

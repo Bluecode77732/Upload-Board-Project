@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { FileService } from './file.service';
+import { FileTransferService } from './file-transfer.service';
 import { GrantedCleanupService } from './granted-cleanup.service';
 import { FileController } from './file.controller';
 import { FileContentController } from './file-content.controller';
@@ -22,7 +23,9 @@ import { MetricsModule } from 'backend/metrics/metrics.module';
   // FileModule 자신의 내부 유지보수 관심사일 뿐, 다른 모듈에 대한 공개 계약이 아니다
   // — TempCleanupModule과 달리 별도 모듈일 필요가 없다, 필요한 것(FileEntity
   // 리포지토리, StorageModule, MetricsModule)이 이미 여기 다 배선돼 있기 때문이다.
-  providers: [FileService, GrantedCleanupService],
+  // FileTransferService도 export하지 않는다: 소유권 이전(ADR 0050)을 부르는 곳은 FileController
+  // 하나뿐이고, 다른 모듈에 약속한 계약이 없다(ADR 0067).
+  providers: [FileService, FileTransferService, GrantedCleanupService],
   // UserModule을 위해 export한다: 계정 삭제가 파일 행까지 연쇄되는데, 그 행들은
   // 여전히 FileModule의 책임으로 남는다(모듈 경계, ADR 0020).
   exports: [FileService],

@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2025-12-17
+- Recorded: 2026-07-22, written afterwards from the code of the first commit (2025-12-17); the date above is when the decision first shows in the repository
 - 한국어: [0002-dual-secret-token-pair.ko.md](0002-dual-secret-token-pair.ko.md)
 
 ## Context
