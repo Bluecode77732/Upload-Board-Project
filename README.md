@@ -62,7 +62,7 @@ principles up front. When one happens anyway, the date and the event are recorde
 the relevant document. This does not claim the rules prevent mistakes: where a rule existed and
 the same kind of mistake happened again, that is recorded in the same place.
 
-### How the work runs
+### How the AI is operated
 
 - **A written contract.** [CLAUDE.md](CLAUDE.md) says what may change without asking, what must
   never appear (`any`, unvalidated env vars, files served by a client-supplied path) and what
