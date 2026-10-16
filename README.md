@@ -80,10 +80,15 @@ the same kind of mistake happened again, that is recorded in the same place.
 
 ### Example 1. Directing the AI: malware scanning for uploads
 
-The developer told the AI what to cover: what `clamd` is, how the packages that were used in the
-past differ from the ones in use now, each package's safety and dependencies, where to implement
-it, the implementation, and where it is used. The judgments that ended up in
-[ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md):
+The developer told the AI what to cover:
+
+- what `clamd` is
+- how the earlier predecessor package (`clamdjs`) differs from the one in use now
+  (`clamscan`), and researching both
+- each package's safety and dependencies
+- where to implement it, the implementation, and where it is used
+
+The judgments that ended up in [ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md):
 
 - `clamscan` over `clamdjs`, whose last release was in 2019 and which has about 4% of the downloads.
 - Version 2.4.0, where the known vulnerability (`CVE-2020-7613`) is fixed, with the vulnerable
