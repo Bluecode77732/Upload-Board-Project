@@ -55,8 +55,14 @@ in a browser that relaxed one local-only header; see [Known limitations](#known-
 ## How this was built
 
 Most of the code was written with Claude Code, and the history says so: more than nine in ten
-commits carry a `Co-Authored-By: Claude` trailer. What keeps that from meaning "the AI decided"
-is the process around it, and all of it is in this repository.
+commits carry a `Co-Authored-By: Claude` trailer.
+
+The serious ways the AI can go wrong while it acts are written into [CLAUDE.md](CLAUDE.md) as
+principles up front. When one happens anyway, the date and the event are recorded as a lesson in
+the relevant document. This does not claim the rules prevent mistakes: where a rule existed and
+the same kind of mistake happened again, that is recorded in the same place.
+
+### How the work runs
 
 - **A written contract.** [CLAUDE.md](CLAUDE.md) says what may change without asking, what must
   never appear (`any`, unvalidated env vars, files served by a client-supplied path) and what
@@ -71,10 +77,48 @@ is the process around it, and all of it is in this repository.
 - **Checked against the real thing.** Unit tests, an end-to-end suite on a real PostgreSQL,
   Playwright against a running backend, and dated live runs on AWS
   ([ROADMAP.md](docs/ROADMAP.md) §9).
-- **Failures are recorded, not hidden.** A live check once deleted 44 real files; the rule that
-  came out of it is in [CLAUDE.md](CLAUDE.md) under "Live-testing a sweep/reclaim service".
-  [ADR 0066](docs/ADR/0066-stack-selection-rationale-retroactive.md) says which choices were
-  never weighed in writing, and the oldest ADRs say they were written afterwards.
+
+### Example 1. Directing the AI: malware scanning for uploads
+
+The developer told the AI what to cover: what `clamd` is, how the packages that were used in the
+past differ from the ones in use now, each package's safety and dependencies, where to implement
+it, the implementation, and where it is used. The judgments that ended up in
+[ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md):
+
+- `clamscan` over `clamdjs`, whose last release was in 2019 and which has about 4% of the downloads.
+- Version 2.4.0, where the known vulnerability (`CVE-2020-7613`) is fixed, with the vulnerable
+  code path left switched off.
+- The scan runs on the in-memory buffer before anything is stored, and an unreachable scanner
+  means the upload is refused, not passed.
+
+A later dependency audit found a hole: when the scanner could not give a verdict (`null`), the
+file was treated as clean. It was reproduced against a real `clamd` and fixed, and the steps are in
+the same ADR's addenda.
+
+### Example 2. Correcting the AI
+
+- **Node group design** ([ADR 0043](docs/ADR/0043-terraform-project-adaptation.md)): the AI put
+  forward a wrong premise from memory, and the developer's first answer rested on it. The AI
+  noticed the error while reading another document. After the premise was corrected, the AI asked
+  the same question again, and the developer asked why it was being asked twice, then asked what
+  to choose so that both could be implemented. That led to a design with both an x64 and an ARM
+  node group. The AI's three errors are written in the ADR's process note.
+- **Corrupted alert descriptions** ([ADR 0047](docs/ADR/0047-observability-prometheus-grafana.md)):
+  the developer reported that some alert rule descriptions showed characters that were neither
+  Korean nor English. The AI inspected the stored values byte by byte, found the replacement
+  character (`U+FFFD`), and explained the cause as the client shell's encoding. The original text
+  was unrecoverable, so the rewritten text was applied after the developer confirmed it.
+
+### Breaking an existing rule is recorded too
+
+- **44 files deleted (2026-09-05).** [ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md)
+  had already written down that with no DB history every file reads as an orphan, yet a delete-mode
+  run was pointed at the real directory. That the deleted files were disposable test data was
+  luck, and the ADR 0051 addendum and [CLAUDE.md](CLAUDE.md) say so; later live checks ran in
+  isolated environments. The rule was later widened to destructive actions in general: check the
+  target, the count and the recovery path before running.
+- **Ranking work from stale evidence (2026-10-14..16).** A rule that evidence expires already
+  existed and was broken, so the case was added to that same rule.
 
 One developer reviews all of it; there is no second reviewer.
 

@@ -58,6 +58,14 @@ Before making any change:
     file the claim is about if anything (a commit, an edit, another session) may have touched
     it since the evidence was gathered. `git status`/`git log` only say *that* something
     changed, never *what* the content now says — they are not a substitute for re-reading.
+    This covers numbers and priorities too: a size, a count or a "most urgent" in a
+    recommendation or design doc comes from a measurement or re-read taken after the last
+    edit, and a defect is not named before the explanation that would make it not one has been
+    checked. Incidents (2026-10-14..16): a design estimate of "~300 lines" for a block that
+    measured ~200 once an earlier dedupe had landed; a survey that ranked README factual
+    errors "most urgent" after another session had already fixed them; ADR dates called
+    misleading before the first commit's code was checked — it did contain each decision, so
+    only a "recorded" line was missing.
 11. Before implementing anything non-trivial, confirm what this project actually is and what
     it builds by reading the real files — `README.md`, `package.json`, this file's Project
     Overview section — rather than assuming it from memory of a prior session or from the task
@@ -116,6 +124,7 @@ Before implementing anything non-trivial, ask the one question that applies:
 | New DTO field                            | The global pipe runs `whitelist + forbidNonWhitelisted` — is the field declared on the DTO, or will the request be rejected/stripped? |
 | New write endpoint                       | What happens when the identical request arrives twice (network retry, double-click)? Name the natural idempotency key (a server-issued token, a unique column) and the typed outcome of a repeat — replay, or which `ErrorCode` (ADR 0019). |
 | Architecturally significant decision (schema change, new module, an alternative weighed and rejected) | Describe the alternatives and the trade-off in plain text first, and confirm whether this needs its own ADR — do not settle the decision in code before it is written down. |
+| A request that names a symptom or an audience reaction ("looks like AI", "an interviewer will filter this") | State the goal behind it in one line before ranking work, and confirm when two readings would change what you do. Reading it as symptom removal can delete the evidence the owner wanted to keep (2026-10-15: the work was ranked as "reduce AI-looking traces" when the goal was showing effective AI use — the comment blocks and ADR citations that reading would have removed are that evidence). |
 
 Ask one focused question rather than a list. Do not proceed on assumptions when intent is ambiguous.
 
@@ -224,7 +233,7 @@ One line each — what the role does, not how:
 Most of what a workflow like this would state — investigate before implementing, verify
 assumptions instead of guessing, run tests, keep changes minimal, summarize on completion —
 is already this file's baseline (Hallucination Prevention, Scope Discipline, Change
-Summary). Two things worth stating that aren't covered elsewhere:
+Summary). Four things worth stating that aren't covered elsewhere:
 
 - **Root cause before fix**: when a test or a report surfaces a problem, identify why it
   happens before changing code — a fix aimed at the symptom tends to leave the actual cause
@@ -234,6 +243,23 @@ Summary). Two things worth stating that aren't covered elsewhere:
   implementer's stated reasoning for why it's correct — restated here because it is the one
   place in this workflow where reusing another session's conclusion defeats the point of
   doing it separately.
+- **Name the branch before the first commit**: run `git branch --show-current` and say which
+  branch the work lands on and which one the user named. The branch seen at session start
+  goes stale (Hallucination Prevention #10). If they differ, ask — do not settle it by
+  creating a branch or by pushing the default branch. `dev` normally takes direct pushes and
+  `main` only a PR from `dev` (CI/CD); after a merge, bring `dev` level with
+  `git merge --ff-only origin/main`. (2026-10-14: the session began on `dev` but the work sat
+  on `main`; an unrequested branch was created, then the commit was pushed to `main`, which
+  published `:latest` and needed a separate back-merge PR.)
+- **Another project's processes and containers are not this task's to stop**: real-server
+  Playwright needs `localhost:3000`, which the Chat Project's container or a host `node` of
+  that project can hold, and the specs hardcode it (`frontend/e2e/detail.spec.ts`,
+  `admin/e2e/helpers.ts`, `frontend/vite.config.ts`). Check `netstat -ano | grep :3000` and
+  identify the holder first; do not stop it. If it must be stopped, the user says so, and the
+  restore path — including who can take the port in the meantime — is checked before the stop,
+  not after. (2026-10-14/15: `chatproject-chat-1` was stopped, a host process of that project
+  then took the port, `docker start` failed, and the container was no longer listed in
+  `docker ps -a` afterwards.)
 
 ## Analysis Protocol (분석)
 
@@ -1890,6 +1916,17 @@ must run against an isolated sandbox directory (`process.chdir()` into a scratch
 against this repo's real `file/temp`/`file/upload`, regardless of how empty or disposable
 that directory currently looks. Dry-run mode and a pure-selector unit test are not a
 substitute for this once the exercise actually calls the delete path.
+
+**The same shape applies to any destructive action** (widened 2026-10-17: the sweep service was
+one instance; stopping another project's container on 2026-10-14/15 was another). Before a
+delete, truncate, drop, overwrite or stop of anything this task did not create:
+
+1. Name the target and say whether it is real data, a sandbox, or another project's resource. If
+   that cannot be said, treat it as real.
+2. Compare the count you expect with what the action will actually touch, and stop when they
+   disagree (here: zero rows in the database against 44 files on disk).
+3. State the recovery path before running — a backup or snapshot, or that none exists — not
+   afterwards.
 
 ## Architecture
 

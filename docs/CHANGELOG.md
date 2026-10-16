@@ -29,6 +29,23 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: the README says how the AI was directed and corrected; the destructive-action rule is widened (2026-10-17)** —
+  documentation only. The README's "How this was built" section was rewritten around a stated
+  principle (the serious ways the AI can go wrong are written into `CLAUDE.md` up front, and when one
+  happens anyway it is recorded with its date) and two kinds of example: directing the AI (the
+  malware-scan package choice, ADR 0059) and correcting it (the node group design, ADR 0043, and the
+  corrupted alert descriptions, ADR 0047). It also records cases where an existing rule was broken (44
+  files deleted, stale evidence) and says the rules are not claimed to prevent mistakes. Who did what
+  is stated only as far as the ADRs record it. `CLAUDE.md` > "Live-testing a sweep/reclaim service" now
+  also covers any destructive action: name the target, compare the expected and actual counts, state the
+  recovery path before running. `CLAUDE.ko.md` and `README.ko.md` mirror both.
+- **Docs: the lessons of the 2026-10-14..16 session are written into `CLAUDE.md` (2026-10-16)** — documentation
+  only. Four rules: Hallucination Prevention #10 now covers numbers and priorities and lists the three
+  stale-evidence incidents; the Clarification Protocol table gains a row for a request that names a
+  symptom or an audience reaction, to state the goal first; Additional Working Principles gains
+  "name the branch before the first commit" (the unrequested branch and the direct push to `main`)
+  and "another project's processes and containers are not this task's to stop" (the Chat Project
+  container stopped for a verification that needs port 3000). `CLAUDE.ko.md` mirrors all four.
 - **Docs: how the project was built, and when the oldest ADRs were written (2026-10-16)** — documentation
   only. `README.md` gained a "How this was built" section: the AI tooling, the written contract and
   hooks, where decisions and their alternatives are recorded, what was checked against real
