@@ -25,7 +25,7 @@ Grafana.
 
 ## Screenshots
 
-Local stack with throwaway demo data, English UI, light theme. The UI also runs in Korean and
+Local stack with throwaway demo data, English UI and sample content, light theme. The UI also runs in Korean and
 in a dark theme. Every picture is the same 900 × 1000 frame, scrolled to the part that matters.
 File URLs point at the client's own origin, as they do behind the ALB, and the share-link token
 is masked; see [Known limitations](#known-limitations).

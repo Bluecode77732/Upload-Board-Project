@@ -36,7 +36,8 @@ development line (package.json version).
   share links that the client has no control for, and a real share token was readable in the
   unlisted-file picture. All twenty were shot again on an isolated stack (its own database, the API
   on :3100, the client and admin on :5273/:5274) with one seeded data set, in one 900 × 1000 frame;
-  the admin picture is shared by both languages because that UI is English only. The table now
+  the admin picture is shared by both languages because that UI is English only. The Korean set uses
+  Korean file titles, posts and comments (a second seed run), not English text under a Korean UI. The table now
   follows the file numbers (01–10), each caption says only what is visible, and the token is masked.
   The API's `BASE_URL` was set to the client's own origin so media loads through the dev proxy; the
   old pictures needed a relaxed `Cross-Origin-Resource-Policy` header in the capture browser, and the
