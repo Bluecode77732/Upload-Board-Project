@@ -101,7 +101,7 @@ A later dependency audit found a hole: when the scanner could not give a verdict
 file was treated as clean. It was reproduced against a real `clamd` and fixed, and the steps are in
 the same ADR's addenda.
 
-### Example 2. Correcting the AI
+### Example 2. Correcting the AI's mistakes
 
 - **Node group design** ([ADR 0043](docs/ADR/0043-terraform-project-adaptation.md)): the AI put
   forward a wrong premise from memory, and the developer's first answer rested on it. The AI
@@ -115,7 +115,7 @@ the same ADR's addenda.
   character (`U+FFFD`), and explained the cause as the client shell's encoding. The original text
   was unrecoverable, so the rewritten text was applied after the developer confirmed it.
 
-### Breaking an existing rule is recorded too
+### Cases where an existing rule was broken
 
 - **44 files deleted (2026-09-05).** [ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md)
   had already written down that with no DB history every file reads as an orphan, yet a delete-mode
