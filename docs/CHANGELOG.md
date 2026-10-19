@@ -13,6 +13,17 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- **Docs: four short GIFs of flows a still picture cannot show (2026-10-20)** — documentation only.
+  The README's Screenshots section now has an "In motion" part with multi-file upload (three files of
+  different kinds, titled, uploaded one by one with progress), the share link (private → unlisted, copy,
+  rotate), ownership transfer (the owner proposes, the recipient accepts from their own account) and a
+  weak-password registration (the specific rule message, then a valid password). Each exists in English
+  and Korean (eight files, 0.14–0.41 MB each, 640 × 498); the Korean ones use Korean sample content.
+  Recorded on the same isolated stack as the screenshots. Frames come from the DevTools screencast
+  (lossless PNG) and are encoded to GIF outside the repository, because the `ffmpeg` that Playwright
+  ships cannot write GIFs; no dependency was added to any `package.json`. Sign-in uses a fresh
+  session per scene, because the refresh token is single-use (ADR 0012) and a reused one ends the
+  session. The share token is shortened to its first four characters.
 - **Frontend: several files can be chosen at once and are uploaded one by one (2026-10-06)** — the
   upload form's file input is now `multiple`. Each chosen file gets its own row with a title (the
   file name without its extension by default), a progress bar and its own result. The type radio is

@@ -53,6 +53,22 @@ is masked; see [Known limitations](#known-limitations).
 </tr>
 </table>
 
+### In motion
+
+Four short recordings of flows a still picture cannot show (640 × 498, under 0.5 MB each). Same
+local stack and sample data as above.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/en/11-multi-upload.gif" alt="Upload form with three chosen files, each with a title and progress bar, then the new files on the board"><br><sub><b>Multi-file upload</b> — three files of different kinds are chosen at once, titled, and uploaded one by one with per-file progress</sub></td>
+<td width="50%"><img src="docs/images/en/12-share-link.gif" alt="A private file switched to unlisted, its share link copied and then rotated"><br><sub><b>Share link</b> — private → unlisted creates a share link; copy it, then rotate it to get a new token (token shortened)</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/en/13-ownership-transfer.gif" alt="The owner proposes a transfer by email and the recipient accepts it from their own account"><br><sub><b>Ownership transfer</b> — the owner proposes by email; ownership moves only after the recipient accepts from their own account</sub></td>
+<td width="50%"><img src="docs/images/en/14-weak-password.gif" alt="Registering with a weak password shows the rule, then a valid password signs the new account in"><br><sub><b>Weak password</b> — registering with "password" shows the specific rule; a valid one registers and signs in</sub></td>
+</tr>
+</table>
+
 ## How this was built
 
 Most of the code was written with Claude Code, and the history says so: more than nine in ten
