@@ -29,6 +29,19 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: README screenshots re-shot at one size, captions corrected (2026-10-19)** — documentation
+  only. The twenty images (ten per language) differed in height (900 to 1,601 px), mixed viewport
+  and full-page crops, and disagreed with each other: different creator IDs, an admin dashboard with
+  36 users and 30 files next to app pictures showing a handful. One caption described an expiry on
+  share links that the client has no control for, and a real share token was readable in the
+  unlisted-file picture. All twenty were shot again on an isolated stack (its own database, the API
+  on :3100, the client and admin on :5273/:5274) with one seeded data set, in one 900 × 1000 frame;
+  the admin picture is shared by both languages because that UI is English only. The table now
+  follows the file numbers (01–10), each caption says only what is visible, and the token is masked.
+  The API's `BASE_URL` was set to the client's own origin so media loads through the dev proxy; the
+  old pictures needed a relaxed `Cross-Origin-Resource-Policy` header in the capture browser, and the
+  README no longer says they did. The "public and unlisted media does not render locally" limitation
+  itself still holds for the default setup.
 - **Docs: the README says how the AI was directed and corrected; the destructive-action rule is widened (2026-10-17)** —
   documentation only. The README's "How this was built" section was rewritten around a stated
   principle (the serious ways the AI can go wrong are written into `CLAUDE.md` up front, and when one

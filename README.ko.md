@@ -26,29 +26,30 @@
 ## 스크린샷
 
 임시 데모 데이터를 넣은 로컬 스택, 한국어 UI, 라이트 테마로 찍었습니다. UI는 영어와 다크
-테마도 지원합니다. 마지막 네 장(공개·링크 공유 파일, 영상, 오디오)은 로컬 전용 헤더 하나를
-완화한 브라우저로 찍었습니다. [알려진 한계](#알려진-한계)를 참고하세요.
+테마도 지원합니다. 모든 그림은 같은 900 × 1000 프레임에서 필요한 부분이 보이도록 스크롤해
+찍었습니다. 파일 URL은 ALB 뒤에서처럼 클라이언트와 같은 출처를 가리키고, 링크 공유 토큰은
+가렸습니다. [알려진 한계](#알려진-한계)를 참고하세요.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/ko/03-file-board.png" alt="파일 보드: 공개 범위 배지가 달린 미리보기 그리드와 검색·정렬·작성자 필터"><br><sub><b>파일 보드</b> — 미리보기 그리드, 공개 범위 배지, 검색·정렬·작성자 필터</sub></td>
-<td width="50%"><img src="docs/images/ko/04-file-detail.png" alt="파일 상세: 소유자에게 보이는 이미지, 공개 범위 설정, 소유권 이전 폼"><br><sub><b>파일 상세</b> — 접근 검사를 거친 재생, 공개 범위 설정, 소유권 이전</sub></td>
+<td width="50%"><img src="docs/images/ko/01-login.png" alt="비밀번호가 가려져 있고 표시/숨김 버튼이 있는 로그인 카드"><br><sub><b>로그인</b> — Basic 토큰 로그인, 회원가입 전환, 비밀번호 표시/숨김</sub></td>
+<td width="50%"><img src="docs/images/ko/02-post-board.png" alt="게시판: 파일을 붙일 수 있는 새 글 폼, 검색·정렬, 게시글 목록"><br><sub><b>게시판</b> — 파일을 붙일 수 있는 새 글 폼, 검색·정렬, 페이지네이션</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/ko/02-post-board.png" alt="게시판: 파일을 선택해 붙일 수 있는 새 글 폼과 게시글 목록"><br><sub><b>게시판</b> — 파일을 붙일 수 있는 새 글 폼, 검색과 페이지네이션</sub></td>
-<td width="50%"><img src="docs/images/ko/05-post-detail.png" alt="게시글 상세: 첨부 이미지와 오래된 순으로 정렬된 평면 댓글 스레드"><br><sub><b>게시글 상세</b> — 첨부 미디어와 오래된 순의 평면 댓글 스레드</sub></td>
+<td width="50%"><img src="docs/images/ko/03-post-detail.png" alt="게시글 상세: 첨부 이미지와 오래된 순으로 정렬된 평면 댓글 스레드"><br><sub><b>게시글 상세</b> — 첨부 이미지와 오래된 순의 평면 댓글 스레드</sub></td>
+<td width="50%"><img src="docs/images/ko/04-file-board.png" alt="파일 보드: 업로드 폼, 검색·정렬·작성자 필터, 그 아래에서 시작하는 미리보기 그리드"><br><sub><b>파일 보드</b> — 업로드 폼, 검색·정렬·작성자 필터, 그 아래의 미리보기 그리드</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/ko/06-admin-dashboard.png" alt="관리자 대시보드: 총계와 최근 감사 로그"><br><sub><b>관리자 콘솔</b> — 총계와 최근 감사 로그(관리자 UI는 영어만 지원)</sub></td>
-<td width="50%"><img src="docs/images/ko/01-login.png" alt="로그인 카드"><br><sub><b>로그인</b> — Basic 토큰 로그인, 회원가입 전환, 비밀번호 표시/숨김</sub></td>
+<td width="50%"><img src="docs/images/ko/05-file-board-media.png" alt="이미지·오디오·영상 타일과 공개·링크 공유·비공개 배지가 보이는 파일 보드"><br><sub><b>여러 미디어</b> — 이미지·오디오·영상 타일과 공개·링크 공유·비공개 배지</sub></td>
+<td width="50%"><img src="docs/images/ko/06-file-detail.png" alt="파일 상세: 소유자에게 보이는 이미지, 공개 범위 설정, 소유권 이전 폼"><br><sub><b>파일 상세</b> — 이미지, 공개 범위 설정, 소유권 이전</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/ko/07-file-board-media.png" alt="이미지·영상·오디오 타일과 공개·링크 공유·비공개 배지가 보이는 파일 보드"><br><sub><b>여러 미디어</b> — 이미지·영상·오디오 타일과 공개·링크 공유·비공개 배지</sub></td>
-<td width="50%"><img src="docs/images/ko/08-unlisted-share.png" alt="공유 링크, 링크 재발급 버튼, 공개 범위 설정이 보이는 링크 공유 파일"><br><sub><b>링크 공유 파일</b> — 공유 링크로 열며, 링크의 토큰은 재발급하거나 만료 시각을 둘 수 있습니다</sub></td>
+<td width="50%"><img src="docs/images/ko/07-unlisted-share.png" alt="공유 링크(토큰은 가림), 링크 재발급 버튼, 공개 범위 설정이 보이는 링크 공유 파일"><br><sub><b>링크 공유 파일</b> — 공유 링크(토큰은 가림), 링크 재발급 버튼, 공개 범위 설정</sub></td>
+<td width="50%"><img src="docs/images/ko/08-video-player.png" alt="브라우저 기본 컨트롤이 보이는 공개 영상"><br><sub><b>영상</b> — 브라우저 기본 플레이어로 재생하고 탐색은 Range 요청으로 처리하는 공개 영상</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/ko/09-video-player.png" alt="브라우저 기본 컨트롤이 보이는 공개 영상"><br><sub><b>영상</b> — 탐색을 위해 Range 요청을 지원하는 공개 영상</sub></td>
-<td width="50%"><img src="docs/images/ko/10-audio-player.png" alt="브라우저 기본 플레이어가 보이는 공개 오디오"><br><sub><b>오디오</b> — 브라우저 기본 플레이어로 재생하는 공개 오디오</sub></td>
+<td width="50%"><img src="docs/images/ko/09-audio-player.png" alt="브라우저 기본 플레이어가 보이는 공개 오디오"><br><sub><b>오디오</b> — 브라우저 기본 플레이어로 재생하는 공개 오디오</sub></td>
+<td width="50%"><img src="docs/images/ko/10-admin-dashboard.png" alt="관리자 대시보드: 총계와 최근 감사 로그"><br><sub><b>관리자 콘솔</b> — 총계와 최근 감사 로그(관리자 UI는 영어만 지원)</sub></td>
 </tr>
 </table>
 
@@ -614,7 +615,8 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
   `:5173`, API가 `:3000`에서 돌고 파일 URL은 `:3000`을 가리키는데, API의 helmet 기본값이
   `Cross-Origin-Resource-Policy: same-origin`을 보내므로 브라우저가 그 파일을 직접 삽입하지
   못하게 막습니다. 비공개 파일은 클라이언트가 개발 프록시를 거쳐 가져오기 때문에 그대로
-  보입니다. 위 스크린샷은 촬영용 브라우저에서 이 헤더 하나를 완화해 찍었습니다. 하나의 ALB 뒤에서는
+  보입니다. 위 스크린샷은 API의 `BASE_URL`을 클라이언트와 같은 출처로 맞춰 이 문제를 피했습니다. 그러면
+  파일 URL이 ALB 뒤에서처럼 개발 프록시를 거칩니다. 하나의 ALB 뒤에서는
   클라이언트와 API가 같은 출처를 쓰므로([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.ko.md))
   그곳에서는 생기지 않으리라 보지만, 배포된 스택의 브라우저에서 확인하지는 않았습니다.
 - **전달은 이미지 발행에서 멈춥니다.** 배포는 사람이 실행합니다. 서비스 메시(Istio)는 일부러

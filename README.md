@@ -26,29 +26,30 @@ Grafana.
 ## Screenshots
 
 Local stack with throwaway demo data, English UI, light theme. The UI also runs in Korean and
-in a dark theme. The last four pictures (public and unlisted files, video and audio) were taken
-in a browser that relaxed one local-only header; see [Known limitations](#known-limitations).
+in a dark theme. Every picture is the same 900 × 1000 frame, scrolled to the part that matters.
+File URLs point at the client's own origin, as they do behind the ALB, and the share-link token
+is masked; see [Known limitations](#known-limitations).
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/en/03-file-board.png" alt="File board: preview grid with visibility badges, search, sort and creator filter"><br><sub><b>File board</b> — preview grid, visibility badges, search, sort and creator filter</sub></td>
-<td width="50%"><img src="docs/images/en/04-file-detail.png" alt="File detail: image shown to its owner, visibility control and ownership transfer form"><br><sub><b>File detail</b> — access-checked playback, visibility control, ownership transfer</sub></td>
+<td width="50%"><img src="docs/images/en/01-login.png" alt="Sign-in card with the password hidden and a show/hide toggle"><br><sub><b>Sign in</b> — Basic-token sign-in, register toggle, show/hide password</sub></td>
+<td width="50%"><img src="docs/images/en/02-post-board.png" alt="Post board: new post form with an optional attached file, search and sort, and the post list"><br><sub><b>Post board</b> — new post with an optional attached file, search, sort and pagination</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/en/02-post-board.png" alt="Post board: new post form with an optional attached file, and the post list"><br><sub><b>Post board</b> — new post with an optional attached file, search and pagination</sub></td>
-<td width="50%"><img src="docs/images/en/05-post-detail.png" alt="Post detail: attached image and a flat, oldest-first comment thread"><br><sub><b>Post detail</b> — attached media and a flat, oldest-first comment thread</sub></td>
+<td width="50%"><img src="docs/images/en/03-post-detail.png" alt="Post detail: attached image and a flat, oldest-first comment thread"><br><sub><b>Post detail</b> — attached image and a flat, oldest-first comment thread</sub></td>
+<td width="50%"><img src="docs/images/en/04-file-board.png" alt="File board: upload form, search, sort and creator filter, with the preview grid starting below"><br><sub><b>File board</b> — upload form, search, sort and creator filter, with the preview grid below</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/en/06-admin-dashboard.png" alt="Admin dashboard: totals and recent audit logs"><br><sub><b>Admin console</b> — totals and recent audit logs (the admin UI is English only)</sub></td>
-<td width="50%"><img src="docs/images/en/01-login.png" alt="Sign-in card"><br><sub><b>Sign in</b> — Basic-token sign-in, register toggle, show/hide password</sub></td>
+<td width="50%"><img src="docs/images/en/05-file-board-media.png" alt="File board with image, audio and video tiles and Public, Unlisted and Private badges"><br><sub><b>Mixed media</b> — image, audio and video tiles with Public, Unlisted and Private badges</sub></td>
+<td width="50%"><img src="docs/images/en/06-file-detail.png" alt="File detail: image shown to its owner, visibility control and ownership transfer form"><br><sub><b>File detail</b> — image, visibility control and ownership transfer</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/en/07-file-board-media.png" alt="File board with image, video and audio tiles and Public, Unlisted and Private badges"><br><sub><b>Mixed media</b> — image, video and audio tiles with Public, Unlisted and Private badges</sub></td>
-<td width="50%"><img src="docs/images/en/08-unlisted-share.png" alt="Unlisted file with its share link, a rotate button and the visibility control"><br><sub><b>Unlisted file</b> — opened by a share link whose token can be rotated or given an expiry</sub></td>
+<td width="50%"><img src="docs/images/en/07-unlisted-share.png" alt="Unlisted file with its share link (token masked), a rotate button and the visibility control"><br><sub><b>Unlisted file</b> — share link (token masked), rotate button and visibility control</sub></td>
+<td width="50%"><img src="docs/images/en/08-video-player.png" alt="A public video with the browser's player controls"><br><sub><b>Video</b> — a public video in the browser's own player, served with Range support for seeking</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/en/09-video-player.png" alt="A public video with the browser's player controls"><br><sub><b>Video</b> — a public video, served with Range support for seeking</sub></td>
-<td width="50%"><img src="docs/images/en/10-audio-player.png" alt="A public audio file with the browser's audio player"><br><sub><b>Audio</b> — a public audio file in the browser's own player</sub></td>
+<td width="50%"><img src="docs/images/en/09-audio-player.png" alt="A public audio file with the browser's audio player"><br><sub><b>Audio</b> — a public audio file in the browser's own player</sub></td>
+<td width="50%"><img src="docs/images/en/10-admin-dashboard.png" alt="Admin dashboard: totals and recent audit logs"><br><sub><b>Admin console</b> — totals and recent audit logs (the admin UI is English only)</sub></td>
 </tr>
 </table>
 
@@ -632,7 +633,8 @@ Open items, each recorded where it was found. The full list is in
   on `:5173` and the API on `:3000`, file URLs point at `:3000`, and the API's helmet default
   sends `Cross-Origin-Resource-Policy: same-origin`, so the browser refuses to embed those files
   directly. Private files still show, because the client fetches them through the dev proxy.
-  The screenshots above were taken with that one header relaxed in the capture browser. Behind
+  The screenshots above avoid it by setting the API's `BASE_URL` to the client's own origin, so
+  file URLs go through the dev proxy as they would behind the ALB. Behind
   one ALB the client and the API share an origin ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md)),
   so the problem is not expected there, but it has not been observed in a browser on the
   deployed stack.
