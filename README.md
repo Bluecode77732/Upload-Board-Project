@@ -654,6 +654,15 @@ Open items, each recorded where it was found. The full list is in
   one ALB the client and the API share an origin ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md)),
   so the problem is not expected there, but it has not been observed in a browser on the
   deployed stack.
+- **A shared link opens the file, not the app.** Checked on 2026-10-20 against the local stack, from a
+  logged-out browser and a crawler. The file URLs open directly and support seeking (`/file/:id/content` for a
+  public file, `?share=<token>` for an unlisted one; image, video and audio). The app pages `/posts/:id` and
+  `/view/:id` send a logged-out visitor to `/login`, and after sign-in to `/` instead of back to the link. A
+  crawler gets the same empty `<title>Sharenpo</title>` page for every URL, with no preview tags,
+  `robots.txt` or `sitemap.xml`. Another site cannot embed these files in `<img>`, `<video>` or `<audio>`,
+  because the API sends `Cross-Origin-Resource-Policy: same-origin`
+  ([ADR 0055](docs/ADR/0055-helmet-security-headers.md) Addendum). Not decided, and only checked on the local
+  stack, not on the deployed one or through the S3 redirect ([ROADMAP.md](docs/ROADMAP.md) §7).
 - **Delivery stops at images.** A person runs the deploy, and a service mesh (Istio) was
   deliberately left out because this project has one backend workload and no east-west
   traffic for it to manage.

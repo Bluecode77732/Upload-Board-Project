@@ -40,6 +40,14 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: shared-link behavior recorded after checking it (2026-10-20)** — documentation only; no code
+  changed and nothing was decided. Public and unlisted file links, opened as a logged-out visitor and as a
+  crawler on a local stack, behave like this: the file URLs open (image, video and audio, with seeking), the app
+  pages `/posts/:id` and `/view/:id` go to `/login` and not back after sign-in, a crawler sees one empty page for
+  every URL, another site cannot embed the files (`Cross-Origin-Resource-Policy: same-origin`), and a past
+  `shareExpiresAt` is accepted. Recorded as an Addendum to [ADR 0055](ADR/0055-helmet-security-headers.md), an
+  entry in ROADMAP §7 and a README "Known limitations" item. Not checked: the S3 redirect and the deployed
+  stack.
 - **Docs: README screenshots re-shot at one size, captions corrected (2026-10-19)** — documentation
   only. The twenty images (ten per language) differed in height (900 to 1,601 px), mixed viewport
   and full-page crops, and disagreed with each other: different creator IDs, an admin dashboard with

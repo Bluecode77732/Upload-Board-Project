@@ -127,3 +127,26 @@ developer before editing a file outside this task's stated scope (Scope Discipli
 they chose the one-line fix. `PW` is now `'Pw1234567!'` — all 76 e2e cases pass. This is
 a pre-existing test/implementation drift unrelated to `helmet`, not a defect this ADR's
 own change introduced.
+
+### Addendum (2026-10-20) — what the default `Cross-Origin-Resource-Policy` does to shared file links
+
+A verification record; no decision was made and no code changed. Checked on a local stack
+(`STORAGE_DRIVER=local`, a throwaway database) by opening file links the way another website or a
+search engine would hand them on.
+
+- `GET /file/:id/content` carries `Cross-Origin-Resource-Policy: same-origin` like every route (D1), public
+  files included.
+- A page served from another origin (`localhost:8099`) with an `<img>` on a public image, an `<img>` on an
+  unlisted image with its token, a `<video>` on a public video and an `<audio>` on a public audio file: all four
+  requests were blocked by the browser (`net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`) and none rendered.
+- The same URLs opened as a top-level page in a logged-out browser work: the public image, video and audio
+  play (10.4 s and 132.7 s long) and an unlisted file opens with its token. Range requests answer 206 with
+  `Content-Range` and 416 when out of range.
+- So a link to a public file works when it is clicked or pasted into an address bar, and cannot be hotlinked
+  from another site. The same header is behind the local-development limitation in README.md > Known
+  limitations (client on `:5173`, API on `:3000`).
+- **Not decided.** Setting `cross-origin` for the content route only would be a design decision of its own: that
+  route also serves unlisted files whose token travels in the URL, so the change would reach them too.
+- **Not checked:** `STORAGE_DRIVER=s3` (the route then answers `302` to a presigned URL and the S3 response
+  decides) and the deployed stack. The other findings from the same check (login wall, no link preview, a past
+  `shareExpiresAt` accepted) are in [ROADMAP.md](../ROADMAP.md) §7.

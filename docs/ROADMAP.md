@@ -1718,6 +1718,26 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `helm template` under both values sets, then a drain on a live cluster, since a template that has only
   been rendered has not been seen to work. No application code, schema or env var change. Revisit with
   the replica decision, or when explicitly requested. Also listed in CLAUDE.md > Known Gaps.
+- **Shared links: the app pages need a login, there is no link preview, and other sites cannot embed the
+  files** — **recorded 2026-10-20; nothing decided or scheduled.** Checked by opening the links as a
+  logged-out visitor and as a crawler (no JavaScript) against a local stack with `STORAGE_DRIVER=local`; not
+  on the deployed stack and not through the S3 redirect. What works: the file URLs themselves —
+  `/file/:id/content` for a public file and `?share=<token>` for an unlisted one — open directly in a new
+  browser for images, video and audio, with seeking (206, and 416 out of range). A private file, an unlisted
+  file with no or a wrong token, a rotated-out token and an expired one all answer 403. What does not:
+  (1) `/posts/:id` and `/view/:id` send a logged-out visitor to `/login` (`RequireAuth` passes no return
+  location), and after sign-in `LoginPage` goes to `/` rather than back to the link; the API answers 401 for
+  `/post/:id` and `/file/:id` without a token, so those pages have nothing to show a visitor who is not signed
+  in. (2) A crawler gets the same shell for every URL — `<title>Sharenpo</title>`, no description or Open
+  Graph tags — and `/robots.txt` and `/sitemap.xml` answer with the app's HTML, so there is no preview and
+  nothing to index. (3) An `<img>`, `<video>` or `<audio>` on another origin that points at a public file is
+  blocked with `ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`, because the API sends
+  `Cross-Origin-Resource-Policy: same-origin` ([ADR 0055](ADR/0055-helmet-security-headers.md) Addendum
+  2026-10-20). (4) `shareExpiresAt` is checked as an ISO 8601 string only (`@IsISO8601()`), so a date in the
+  past is accepted (200) and the link is dead at once. Each item is a design decision of its own: opening a
+  post or a public file page to visitors changes the default that every non-auth endpoint sits behind
+  `JwtAuthGuard`, and relaxing the header for the content route would also cover unlisted files whose token
+  travels in the URL. Revisit when explicitly requested. Also listed in README.md > Known limitations.
 
 ## 8. Advisory notes
 

@@ -636,6 +636,15 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
   파일 URL이 ALB 뒤에서처럼 개발 프록시를 거칩니다. 하나의 ALB 뒤에서는
   클라이언트와 API가 같은 출처를 쓰므로([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.ko.md))
   그곳에서는 생기지 않으리라 보지만, 배포된 스택의 브라우저에서 확인하지는 않았습니다.
+- **공유 링크는 앱이 아니라 파일을 엽니다.** 2026-10-20에 로컬 스택에서, 로그아웃된 브라우저와
+  크롤러로 확인했습니다. 파일 URL은 바로 열리고 탐색도 됩니다(공개 파일은 `/file/:id/content`, 링크 공유
+  파일은 `?share=<token>`이며, 이미지·영상·오디오 모두). 앱 화면인 `/posts/:id`와 `/view/:id`는
+  로그아웃된 방문자를 `/login`으로 보내고, 로그인하면 원래 링크가 아니라 `/`로 갑니다. 크롤러는 모든
+  URL에서 미리보기 태그도 `robots.txt`도 `sitemap.xml`도 없는 같은 빈 `<title>Sharenpo</title>` 페이지를
+  받습니다. 다른 사이트는 이 파일을 `<img>`·`<video>`·`<audio>`로 끼워 넣을 수 없습니다. API가
+  `Cross-Origin-Resource-Policy: same-origin`을 보내기 때문입니다
+  ([ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md) Addendum). 결정하지 않았고, 배포된 스택이나
+  S3 리다이렉트가 아니라 로컬 스택에서만 확인했습니다([ROADMAP.ko.md](docs/ROADMAP.ko.md) §7).
 - **전달은 이미지 발행에서 멈춥니다.** 배포는 사람이 실행합니다. 서비스 메시(Istio)는 일부러
   넣지 않았습니다. 이 프로젝트는 백엔드 워크로드가 하나뿐이라 메시가 관리할 서비스 간 트래픽이
   없기 때문입니다.
