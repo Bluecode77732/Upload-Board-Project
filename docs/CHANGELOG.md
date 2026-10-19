@@ -14,7 +14,7 @@ development line (package.json version).
 
 ### Added
 - **Docs: four short GIFs of flows a still picture cannot show (2026-10-20)** — documentation only.
-  The README's Screenshots section now has an "In motion" part with multi-file upload (three files of
+  The README's Screenshots section now has a "GIF" part with multi-file upload (three files of
   different kinds, titled, uploaded one by one with progress), the share link (private → unlisted, copy,
   rotate), ownership transfer (the owner proposes, the recipient accepts from their own account) and a
   weak-password registration (the specific rule message, then a valid password). Each exists in English

@@ -53,7 +53,7 @@ is masked; see [Known limitations](#known-limitations).
 </tr>
 </table>
 
-### In motion
+### GIF
 
 Four short recordings of flows a still picture cannot show (640 × 498, under 0.5 MB each). Same
 local stack and sample data as above.
