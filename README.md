@@ -205,10 +205,16 @@ plus operational modules — **Storage** (the `FileStorage` port with local-disk
 ## Features
 
 - **Authentication** — register/sign-in via HTTP Basic token; dual-secret JWT
-  access/refresh pair with a `type` claim ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md))
+  access/refresh pair with a `type` claim ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md)).
+  The refresh token travels only as an httpOnly cookie and the server keeps just its SHA-256
+  hash. Every refresh rotates it, and a rotated-out token that shows up again ends the session
+  with `AUTH_REFRESH_REUSED` ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md))
 - **Two-phase upload** — `temp_` → `granted_` prefix state machine; the DB insert and
   the physical file move commit or roll back together
-  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md))
+  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md)). The filename returned by the attach
+  step is a one-shot claim token: the same user resubmitting it gets the existing file back
+  (200), and anyone else gets 409 `FILE_ALREADY_CLAIMED`
+  ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md))
 - **RBAC + audit log** — `user`/`admin`/`superadmin` roles; ownership checks
   extend to "self or admin"; role changes and deletes are audited
   ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.md), layered on

@@ -199,10 +199,16 @@ flowchart LR
 ## 기능
 
 - **인증** — HTTP Basic 토큰으로 가입·로그인하고, 서로 다른 시크릿으로 서명하며 `type` 클레임을
-  가진 JWT 액세스·리프레시 토큰 쌍을 발급합니다 ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.ko.md))
+  가진 JWT 액세스·리프레시 토큰 쌍을 발급합니다 ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.ko.md)).
+  리프레시 토큰은 httpOnly 쿠키로만 오가고 서버에는 SHA-256 해시만 남깁니다. 갱신할 때마다
+  토큰이 교체되며, 이미 교체된 토큰이 다시 들어오면 세션을 끝내고 `AUTH_REFRESH_REUSED`로
+  응답합니다 ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.ko.md))
 - **2단계 업로드** — `temp_` → `granted_` 접두사 상태 머신으로 동작하며, DB insert와 물리 파일
   이동이 함께 커밋되거나 함께 롤백됩니다
-  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md))
+  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md)). attach 단계가 돌려준 파일명은
+  한 번만 쓸 수 있는 claim 토큰입니다. 같은 사용자가 다시 보내면 기존 파일을 그대로 돌려주고(200),
+  다른 사용자는 409 `FILE_ALREADY_CLAIMED`를 받습니다
+  ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.ko.md))
 - **RBAC + 감사 로그** — `user`/`admin`/`superadmin` 역할이 있고, 소유권 검사가 "본인
   또는 admin"으로 확장되며, 역할 변경과 삭제가 감사됩니다
   ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md)은
