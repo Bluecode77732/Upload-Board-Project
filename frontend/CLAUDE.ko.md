@@ -241,7 +241,7 @@ docker run --rm -p 8080:8080 sharenpo-frontend:local
   버린다. `/posts`와 `/files`는 괜찮다 — 매칭은 경로 세그먼트 단위다.
 - `pnpm`은 `frontend/package.json`(`packageManager`)과 `Dockerfile` 안에서 각각 고정한다 —
   Node 이미지의 corepack이 최신 pnpm을 실행하지 못한다. 바꾸기 전에 ADR 0060의 구현
-  addendum을 읽을 것.
+  추가 기록을 읽을 것.
 
 **Windows에서는 백그라운드로 띄운 `pnpm dev`/`pnpm preview`를 멈춰도 포트가
 풀리지 않는다.** `pnpm`이 vite를 자식 프로세스로 실행하고 Windows에는 POSIX

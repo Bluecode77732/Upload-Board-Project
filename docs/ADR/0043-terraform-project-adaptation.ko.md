@@ -1,7 +1,7 @@
 # ADR 0043: Terraform 프로젝트 적응 — 이 프로젝트의 실제 AWS 리소스, 실제 apply로 검증
 
 - 상태: 승인됨 — 구현됨(`main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`/
-  `README.md`를 이 설계에 맞춰 재작성함 — 아래 Addendum 참고). 실제 AWS에
+  `README.md`를 이 설계에 맞춰 재작성함 — 아래 추가 기록 참고). 실제 AWS에
   apply는 아직 안 함
 - 날짜: 2026-08-18
 - 개정: [ADR 0038](0038-terraform-iac-scaffold.md) ("재작성 유예" 결정을 해제 —
@@ -46,7 +46,7 @@ AWS 계정이 없었고 ADR 0033/0034가 정한 목표 형태 자체도 아직 �
 개발자는 처음엔 이 작업을 구조만 맞추는 범위(라이브 `plan`/`apply` 없음)로
 한정했다가, 선례를 보여주자 실제 `terraform apply`까지 검증하는 쪽으로 명시적으로
 재결정했다. 선례는 [ADR 0041](0041-helm-chart-project-adaptation.md)의
-addendum이다 — 임시 `kind` 클러스터에 `helm install --wait`을 돌렸더니
+추가 기록이다 — 임시 `kind` 클러스터에 `helm install --wait`을 돌렸더니
 `helm lint --strict`/`helm template`로는 절대 못 잡았을 실제 버그 두 개(`pre-install`
 hook 순서 문제, 빈 문자열 optional env var 문제)가 나왔다. 리소스가 실제로
 API 서버에 맞춰 조정될 때만 보이는 오류였다. 여기도 같은 종류의 공백이 있다:
@@ -70,7 +70,7 @@ AWS 비용(EKS 컨트롤 플레인, RDS 인스턴스, NAT Gateway, ALB)을 발�
 관리형 `aws_db_instance`(Postgres 엔진, `DB_TYPE=postgres`와 일치)를 8개 필수
 env var 중 `DB_HOST`/`DB_PORT`/`DB_DATABASE`의 대상으로 삼는다. 기각한 대안:
 클러스터 내부 self-hosted Postgres(`StatefulSet` + `PVC`) — 이 프로젝트는 이미
-Helm `kind` 클러스터 스모크 테스트(ADR 0041 addendum)에서 정확히 이 형태를
+Helm `kind` 클러스터 스모크 테스트(ADR 0041 추가 기록)에서 정확히 이 형태를
 일회성으로 써봤고, 그때도 명백히 throwaway였다. 이걸 영구 대상으로 쓴다는 건
 Postgres 백업·failover·패치를 이 프로젝트가 직접 떠안는다는 뜻인데, 이 규모에서
 RDS 대비 얻는 이득이 없다 — 포트폴리오 규모 AWS 배포가 정확히 이 역할을 위해
@@ -326,7 +326,7 @@ ACM 인증서를 가리킴)으로 켤 수 있게 된다 — [ADR
   이 ADR의 초안 작성 중에 세 번 반복된 사례다 — 매 답변을 그대로 받아들이지
   않고 계속 "왜?"를 물은 개발자 덕분에 잡혔다.
 
-### Addendum (2026-08-18) — Terraform 코드 구현 완료, 검증 통과, 아직 미적용
+### 추가 기록 (2026-08-18) — Terraform 코드 구현 완료, 검증 통과, 아직 미적용
 
 이 ADR 자신의 상태에 처음 있던 "이 ADR 자체는 Terraform 코드를 바꾸지
 않음"이라는 문장은 더 이상 `k8s/infra/terraform/`을 정확히 설명하지 않는다.
@@ -371,7 +371,7 @@ D7 본문이 열어뒀던 두 가지는 구현 과정에서 해소되거나 결�
 남으며, D9가 차트의 `Ingress` 활성화를 이미 후속 작업으로 남긴 것과 같은
 모양이다.
 
-이 addendum은 이 ADR의 결과 섹션(위)이 후속 작업으로 예고했던 문서
+이 추가 기록은 이 ADR의 결과 섹션(위)이 후속 작업으로 예고했던 문서
 갱신의 계기이기도 하다: `docs/ROADMAP.md`의 Terraform, Secrets delivery,
-HTTPS termination 행과 `docs/ADR/README.md`의 이 ADR 행을 이 addendum과
+HTTPS termination 행과 `docs/ADR/README.md`의 이 ADR 행을 이 추가 기록과
 같은 변경에서 갱신했다.

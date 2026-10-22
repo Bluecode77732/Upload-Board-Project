@@ -64,7 +64,7 @@ Stage 1 작업](../ROADMAP.ko.md))가 이제 살아있는 Postgres를 요구하�
   엔드포인트·레지스트리 푸시가 없다. 이는 CI(Stage 1)와 Stage 4에서 각자의 기록과 함께
   도입된다.
 
-### Addendum (2026-10-03) — 머신별 덮어쓰기용 선택 파일 `.env.local`
+### 추가 기록 (2026-10-03) — 머신별 덮어쓰기용 선택 파일 `.env.local`
 
 이제 `api`와 `migrate`는 `.env`를 읽은 뒤 선택 파일 `.env.local`도 읽는다
 (`docker-compose.yml`의 `x-env-files`, `required: false`이며 Compose 2.24 이상이 필요하다).

@@ -25,7 +25,7 @@
    - 스토리지 어댑터 변경  → `backend/storage/file-storage.interface.ts`(`FileStorage` 포트 + `FILE_STORAGE` 토큰), `local-disk.storage.ts` / `s3.storage.ts`(두 구현체), `storage.module.ts`(`STORAGE_DRIVER` 기반 팩토리, ADR 0029)를 읽는다
    - 컨테이너/배포 변경    → `Dockerfile`(non-root `USER`, `HEALTHCHECK`, `CMD`에서 마이그레이션 제거 — ADR 0030/0032)과 `docker-compose.yml`(원샷 `migrate` 서비스)을 `backend/health/`(`GET /health/live`/`GET /health/ready` — ADR 0031)와 함께 읽는다
    - Helm/K8s 배포 변경    → `k8s/helm/`(`Chart.yaml`, `values.yaml`, `templates/` — Deployment/Service/ConfigMap/migration Job/명시적 경로 allow-list를 가진 기본 비활성 Ingress(ADR 0058, 백엔드 Service에는 `/` catch-all 없음 — ADR 0060(2026-09-21 구현)이 같은 Ingress에 별도 프론트엔드 Deployment+Service(`frontend.enabled`, 기본 false, `values-prod.yaml`에서 켬)로 범위를 좁힌 `/` 규칙(`service: frontend`) 하나를 추가하고, ADR 0062(2026-09-23)가 같은 방식으로 별도 admin Deployment+Service(`admin.enabled`, 기본 false, `values-prod.yaml`에서 켬)로 범위를 좁힌 `/admin` 규칙(`service: admin`) 하나를 더하며(nginx `alias`로 `/admin/` 아래에서 서빙), 백엔드 Service는 계속 allow-list)/기본 비활성 NetworkPolicy, ADR 0056)과 그 `README.md`(Secret 생성 절차, `existingSecret` 전용 소비 방식)를 읽는다. `k8s/`엔 이 차트 밖의 매니페스트가 없다 — 예전 `k8s/pod/`/`k8s/deployment/`/`k8s/cluster/`에 있던 독립 raw 매니페스트는 삭제됐다(ADR 0042); 차트 옆에 정적 매니페스트를 다시 추가하지 않는다(ADR 0037/0041/0042)
-   - Terraform/인프라 변경 → `k8s/infra/terraform/`은 하나가 아니라 독립된 3개의 root module이다 — `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM — zone이 Terraform 밖에서 만든 재사용 위임 세트를 선택적으로 받아 네임서버를 고정함, ADR 0063. `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — ALB Controller+ESO+ExternalDNS, 마지막 것은 `Ingress` host로 ALB의 DNS 레코드를 만든다, ADR 0063. 다른 두 state를 **모두** 읽는 유일한 state). 각 디렉토리는 `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`와 자신만의 state 파일을 가지는데, 그 state는 Terraform 기본값인 로컬 파일이 아니라 네이티브 락 + SSE-S3 암호화를 쓰는 S3에 저장된다(ADR 0057, ADR 0044 D3 amends — 2026-09-12 코드 완료. 2026-09-26 라이브 apply·destroy에서 처음 사용, Addendum 참고) — 변경이 실제로 건드리는 디렉토리만 읽는다. `README.md`(`cluster` → `app-infra` → `addons` 3단계 apply 순서와 그 역순 destroy, `SecretStore`/`ExternalSecret`을 한 번만 수동으로 `kubectl apply`하는 단계, 그리고 앱 전용 ServiceAccount IRSA 배선을 다루는 "Known gap" 절 — `app-infra/main.tf`의 trust policy, `k8s/helm/`의 `serviceaccount.yaml`+`values-prod.yaml`, `deploy.sh`의 `HELM_RELEASE` 기본값이 2026-09-03부로 모두 `sharenpo`라는 같은 이름으로 고정돼 있음. 코드는 완성되고 검증됐지만 실제 AWS엔 한 번도 적용된 적 없음 — 이걸로 대체된 예전 `default` ServiceAccount IRSA annotate 방식은 그 trust policy가 적용되는 순간 더 이상 동작하지 않음)를 읽는다. 설계 기록: ADR 0038(업스트림 스캐폴딩, 재작성 유예) → ADR 0043(프로젝트 적응 — 2026-08-18 구현됨) → ADR 0044(3-state 분리 — 2026-08-20 구현됨, 세 디렉토리 모두 `terraform validate`/`fmt -check` 통과) → ADR 0057(state 백엔드 — S3 네이티브 락 + SSE-S3, DynamoDB·KMS 없이, ADR 0044 D3 amends — 2026-09-12 코드 완료. 2026-09-26에 처음 사용) → ADR 0063(`addons/`의 ExternalDNS로 ALB DNS 레코드를 만들고, 재사용 위임 세트로 zone의 네임서버를 고정 — ADR 0043 D5 amends, 0044·0047 확장 — 2026-09-25 코드 완료, `app-infra/`와 `addons/`에서 `terraform validate`/`fmt -check` 통과. 2026-09-26 첫 라이브 실행(ADR의 추가 기록): alias `A`·`AAAA` 레코드는 만들어졌지만 apex host의 소유 TXT 레코드는 만들어지지 않아 zone의 `force_destroy`가 그 레코드를 지운다. `addons/`를 `cluster/`보다 먼저 destroy한다 — 건너뛰면 IAM 역할·정책, CloudFormation 스택, 낡은 state가 남으니 `README.md`의 Destroy 참고). **두 ADR의 Addendum은 이 설정을 실제 AWS에 `apply`한 적이 없다고 말하는데, 그건 작성 시점엔 사실이었고 그 뒤 라이브 실행 때마다 거짓이 됐다.** 이 파일은 스택이 지금 apply돼 있는지를 적지 않는다: 그 내용은 누군가 `apply`나 `destroy`를 실행하는 날 낡는다. AWS를 직접 읽거나(`aws eks list-clusters --region ap-northeast-2`, `aws rds describe-db-instances`) 세 디렉터리 각각에서 `terraform plan`을 돌려 확인할 것. ROADMAP.md 9절이 무엇을 했는지 날짜별로 남긴 기록이다(apply 2026-08-25~27, 2026-08-29/30, 2026-09-26. 철거 2026-08-28, 2026-08-31, 2026-09-26). ADR의 Addendum은 작성 시점의 사실을 기록한 것이므로 일부러 그대로 두었고, 정정은 여기와 ROADMAP.md 7절에 있다
+   - Terraform/인프라 변경 → `k8s/infra/terraform/`은 하나가 아니라 독립된 3개의 root module이다 — `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM — zone이 Terraform 밖에서 만든 재사용 위임 세트를 선택적으로 받아 네임서버를 고정함, ADR 0063. `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — ALB Controller+ESO+ExternalDNS, 마지막 것은 `Ingress` host로 ALB의 DNS 레코드를 만든다, ADR 0063. 다른 두 state를 **모두** 읽는 유일한 state). 각 디렉토리는 `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`와 자신만의 state 파일을 가지는데, 그 state는 Terraform 기본값인 로컬 파일이 아니라 네이티브 락 + SSE-S3 암호화를 쓰는 S3에 저장된다(ADR 0057, ADR 0044 D3 amends — 2026-09-12 코드 완료. 2026-09-26 라이브 apply·destroy에서 처음 사용, 추가 기록 참고) — 변경이 실제로 건드리는 디렉토리만 읽는다. `README.md`(`cluster` → `app-infra` → `addons` 3단계 apply 순서와 그 역순 destroy, `SecretStore`/`ExternalSecret`을 한 번만 수동으로 `kubectl apply`하는 단계, 그리고 앱 전용 ServiceAccount IRSA 배선을 다루는 "Known gap" 절 — `app-infra/main.tf`의 trust policy, `k8s/helm/`의 `serviceaccount.yaml`+`values-prod.yaml`, `deploy.sh`의 `HELM_RELEASE` 기본값이 2026-09-03부로 모두 `sharenpo`라는 같은 이름으로 고정돼 있음. 코드는 완성되고 검증됐지만 실제 AWS엔 한 번도 적용된 적 없음 — 이걸로 대체된 예전 `default` ServiceAccount IRSA annotate 방식은 그 trust policy가 적용되는 순간 더 이상 동작하지 않음)를 읽는다. 설계 기록: ADR 0038(업스트림 스캐폴딩, 재작성 유예) → ADR 0043(프로젝트 적응 — 2026-08-18 구현됨) → ADR 0044(3-state 분리 — 2026-08-20 구현됨, 세 디렉토리 모두 `terraform validate`/`fmt -check` 통과) → ADR 0057(state 백엔드 — S3 네이티브 락 + SSE-S3, DynamoDB·KMS 없이, ADR 0044 D3 amends — 2026-09-12 코드 완료. 2026-09-26에 처음 사용) → ADR 0063(`addons/`의 ExternalDNS로 ALB DNS 레코드를 만들고, 재사용 위임 세트로 zone의 네임서버를 고정 — ADR 0043 D5 amends, 0044·0047 확장 — 2026-09-25 코드 완료, `app-infra/`와 `addons/`에서 `terraform validate`/`fmt -check` 통과. 2026-09-26 첫 라이브 실행(ADR의 추가 기록): alias `A`·`AAAA` 레코드는 만들어졌지만 apex host의 소유 TXT 레코드는 만들어지지 않아 zone의 `force_destroy`가 그 레코드를 지운다. `addons/`를 `cluster/`보다 먼저 destroy한다 — 건너뛰면 IAM 역할·정책, CloudFormation 스택, 낡은 state가 남으니 `README.md`의 Destroy 참고). **두 ADR의 추가 기록은 이 설정을 실제 AWS에 `apply`한 적이 없다고 말하는데, 그건 작성 시점엔 사실이었고 그 뒤 라이브 실행 때마다 거짓이 됐다.** 이 파일은 스택이 지금 apply돼 있는지를 적지 않는다: 그 내용은 누군가 `apply`나 `destroy`를 실행하는 날 낡는다. AWS를 직접 읽거나(`aws eks list-clusters --region ap-northeast-2`, `aws rds describe-db-instances`) 세 디렉터리 각각에서 `terraform plan`을 돌려 확인할 것. ROADMAP.md 9절이 무엇을 했는지 날짜별로 남긴 기록이다(apply 2026-08-25~27, 2026-08-29/30, 2026-09-26. 철거 2026-08-28, 2026-08-31, 2026-09-26). ADR의 추가 기록은 작성 시점의 사실을 기록한 것이므로 일부러 그대로 두었고, 정정은 여기와 ROADMAP.md 7절에 있다
    - 삭제 경로 변경        → `backend/user/user.service.ts`(`remove` — 확인된 연쇄 삭제), `backend/file/file.service.ts`(`deleteFile`, `findStoredPathsOfCreator`, `deleteFilesOfCreator`), `backend/post/post.service.ts`(`deletePost`, `deletePostsOfCreator`), `LocalDiskStorage.unlink`/`S3Storage.unlink`(`FileStorage` 포트를 통한 커밋 후 unlink, ADR 0020/0023/0029)를 읽는다
    - 게시글/게시판 변경    → `backend/post/post.service.ts`(`fileId`에 대한 claim 해석, `canManage`, ADR 0021 읽기 레이어 재사용)를 `FileService.assertAttachableBy` / `toResponse` — PostModule이 FileModule에 묻는 두 가지 질문 — 와 함께 읽는다(ADR 0023)
    - 댓글/스레드 변경      → `backend/comment/comment.service.ts`(고정된 `createdAt ASC` 정렬, `canManage`, `deleteCommentsOfCreator`)와 `PostService.assertPostExists` — CommentModule이 PostModule에 묻는 유일한 질문 — 를 읽는다. 라우트는 **두** 컨트롤러에 나뉘어 있다(`/post/:postId/comment`용 `post-comment.controller.ts`, `/comment/:id`용 `comment.controller.ts`); 게시글 삭제는 서비스가 아니라 FK를 통해 댓글을 제거한다(ADR 0023 D3)
@@ -1083,7 +1083,7 @@ Conflict Protocol을 따른다.
   원래 디스크 메커니즘을 그대로 이식한다; `S3Storage`는 ISP가 요구하는 두
   번째 구현체다. 처음 들어갈 때는 유닛 테스트(SDK mock)만 있었고, 2026-08-15부터는
   프로젝트의 실제 버킷에서, 2026-09-29부터는 라이브 EKS 스택에서도 실행됐다(ADR 0036·ADR
-  0059 Addendum). `UploadModule`의 Multer는 `diskStorage`가 아니라
+  0059 추가 기록). `UploadModule`의 Multer는 `diskStorage`가 아니라
   `memoryStorage`를 쓰므로, temp 업로드의 첫 바이트부터 이미 포트를 거친다
   (`UploadService.stageTemp`) — 이는 `STORAGE_DRIVER=s3`가 ADR 0005가 기록한
   다중 인스턴스 격차를 승격된 파일 쪽 절반만이 아니라 실제로 모두
@@ -1215,7 +1215,7 @@ Conflict Protocol을 따른다.
   S3는 더 이상 이 목록에 없다: 스토리지 포트-어댑터(위 ADR 0029)가
   `S3Storage` 구현체와 `STORAGE_DRIVER` 스위치를 둘 다 도입했다. `local`은 Joi
   기본값이고 배포된 스택은 `s3`로 돌아간다. `S3Storage`는 실제 버킷과 라이브 EKS
-  스택에서 실행됐다(ADR 0036·ADR 0059 Addendum). 그 실행들이 다루지 않은 것은 서명
+  스택에서 실행됐다(ADR 0036·ADR 0059 추가 기록). 그 실행들이 다루지 않은 것은 서명
   URL의 TTL이 지난 뒤의 재생 위치 이동, Chromium이 아닌 브라우저, 오디오 재생이다
 
 ### API 레이어
@@ -1372,7 +1372,7 @@ Conflict Protocol을 따른다.
   ([ADR 0029](docs/ADR/0029-storage-port-adapter.ko.md)): Stage 4 클라우드
   네이티브 인프라 작업의 코드 우선 부분 — Architecture Decisions > File
   Storage 참고. `local`은 Joi 기본값으로 남아 있고, S3 전환은 그 뒤 라이브에서
-  관찰됐다(ADR 0036·ADR 0059 Addendum)
+  관찰됐다(ADR 0036·ADR 0059 추가 기록)
 - ~~컨테이너/배포 하드닝(non-root, 헬스 엔드포인트, 마이그레이션 배포 단계)~~
   — **2026-08-08 도입**([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.ko.md)–
   [ADR 0034](docs/ADR/0034-https-termination-stance.ko.md)): ADR 0015가 미룬 컨테이너/배포
@@ -1550,11 +1550,11 @@ Architecture Decisions가 계속 유효하다.
   선택 항목, 새 env var 없음). 이메일 인증과 "0명 게이트"는 둘 다 검토 후 지금은
   기각됐다 — 이유는 ADR 0052의 Context 참고. **2026-09-10 실제 검증**: 격리된 일회용
   DB(`sharenpo_promote_verify`, 검증 후 drop)에서 승격/재실행 no-op/미존재 이메일
-  에러/env var 미설정 에러 네 가지가 모두 설계대로 동작함을 확인 — ADR 0052 addendum
+  에러/env var 미설정 에러 네 가지가 모두 설계대로 동작함을 확인 — ADR 0052 추가 기록
   참고
 - ~~요청 횟수 제한이 `req.ip`로 키잉되는데 `trust proxy`가 미설정~~ — **2026-09-14 해결**
-  ([ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md) 2026-09-10 addendum에서
-  발견, 2026-09-14 addendum에서 해결): `ThrottlerGuard`의 기본 tracker는 앞단에 리버스
+  ([ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md) 2026-09-10 추가 기록에서
+  발견, 2026-09-14 추가 기록에서 해결): `ThrottlerGuard`의 기본 tracker는 앞단에 리버스
   프록시가 있으면 실제 방문자가 아니라 Express 자신의 클라이언트-소켓 해석 결과를 읽는다
   — `backend/main.ts`에 `app.set('trust proxy', ...)` 호출이 없었음을 확인했었다.
   `app.set('trust proxy', '10.0.0.0/16')`로 고쳤다 — 이 CIDR은 이 프로젝트 자신의 VPC
@@ -1731,10 +1731,10 @@ Architecture Decisions가 계속 유효하다.
   `pnpm-10.14.0.tgz`를 받았다). (2) 운영 Ingress annotation 템플릿에 이제 `target-type: ip`가
   들어 있다(컨트롤러 기본값 `instance`는 `NodePort`/`LoadBalancer` Service가 필요한데 이 차트의
   Service는 `ClusterIP`다). ALB용 NetworkPolicy 인바운드 규칙도 함께 들어갔다
-  ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) addendum) — 코드와
+  ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록) — 코드와
   렌더링까지 했고, **2026-09-26 첫 라이브 ALB에서 관찰했다**: `ip`가 동작했고(타깃이 파드 IP였다)
   ALB의 헬스체크가 그 NetworkPolicy 규칙을 거쳐 백엔드 파드에 닿았다(ADR 0056과
-  [ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.ko.md) Addendum). (3) `docker-tag-cleanup.yml`이 이제
+  [ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.ko.md) 추가 기록). (3) `docker-tag-cleanup.yml`이 이제
   `sharenpo-frontend`(`3238f06`)와 `sharenpo-admin`(`3ed7e8b`, ADR 0062 D6)도 정리한다. ADR
   0060이 열어 둔 `admin/` 호스팅은 [ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.ko.md)
   (2026-09-23)로 반영됐다.
@@ -1753,11 +1753,11 @@ Architecture Decisions가 계속 유효하다.
   자기 자신에게 다시 보내 끝내는데 PID 1은 그 시그널을 버리므로, plain 호출은 이벤트 루프를
   붙잡는 것이 없을 때에만 끝난다 — ref된 타이머 하나가 남자 plain은 Docker에서 10.4초/137,
   파드에서 30.6초로 돌아갔고, 옵션을 쓰면 둘 다 0.4초였다. 그 대가(핸들이 누수돼도 더는
-  느린 종료로 드러나지 않는다)는 ADR의 Addendum에 있다. `OnModuleDestroy`는 어디에도
+  느린 종료로 드러나지 않는다)는 ADR의 추가 기록에 있다. `OnModuleDestroy`는 어디에도
   추가하지 않았다(누수를 보여주는 것이 없었다. `S3Storage`의 `S3Client`를 대신한 Docker
   전용 시험 — 같은 기본 `keepAlive` agent 모양 — 도 소켓을 일부러 열어 둔 채로 똑같이 빨리
   종료해 종료 속도 면에서는 닫혔다. 실제 `S3Client` 인스턴스는 여전히 시험하지 않았다,
-  ADR 0061 두 번째 Addendum)
+  ADR 0061 두 번째 추가 기록)
 - ~~`.ko.md` 네 개를 문서 규약이 요구하는 파일 전체 재독 없이 수정했다~~(2026-10-02 기록) —
   **2026-10-04 해결**, 명시적 요청으로: `docs/CHANGELOG.ko.md`, `docs/ROADMAP.ko.md`,
   `frontend/CLAUDE.ko.md`, `frontend/README.ko.md`를 전체 다시 읽고 한국어 표현만 고쳤다. 찾은 것:

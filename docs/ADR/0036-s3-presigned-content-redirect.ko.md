@@ -118,11 +118,11 @@ ADR은 "누가 서명-또는-스트리밍 분기까지 도달할 수 있는가"�
 - **리다이렉트를 거친 뒤 `frontend/`·`admin/`의 미디어 소비자 쪽 Range 요청 동작.**
   S3는 presigned `GetObject` URL에 대해서도 `Range` 헤더를 처리하며,
   `<video>`/`<audio>` 요소는 302를 따라간 뒤 서명 URL에 대해 자체적으로 Range
-  요청을 다시 보낼 것으로 예상된다. 두 프런트엔드가 돌아가는 모든
-  브라우저/OS 조합이 리다이렉트 경계를 넘나드는 Range 탐색 재생 미디어 요소를
-  동일하게 처리하는지(특히 탐색할 때마다 원래의 `GET /file/:id/content` URL을
-  다시 요청하는 방식이 과거 일부 플레이어/리다이렉트 조합에서 일관되지 않았던
-  전례가 있다)는 **미검증**이다 — 이 ADR은 설계와 위험을 기록할 뿐 검증하지는
+  요청을 다시 보낼 것으로 예상된다. 두 프론트엔드가 돌아가는 모든
+  브라우저/OS 조합의 미디어 요소가 리다이렉트 경계를 넘나드는 Range 탐색 재생을
+  동일하게 처리하는지는 **미검증**이다(특히 탐색할 때마다 원래의
+  `GET /file/:id/content` URL을 다시 요청하는 방식이 과거 일부 플레이어/리다이렉트
+  조합에서 일관되지 않았던 전례가 있다) — 이 ADR은 설계와 위험을 기록할 뿐 검증하지는
   않는다. 검증과 필요시 소비자 쪽 대응은 `frontend/`/`admin/`에서 별도로 명시
   요청되어야 하는 작업이며, 이 백엔드 작업의 범위 밖이다.
 - **`STORAGE_DRIVER=local` 동작.** 완전히 그대로다 — `getSignedReadUrl`은 항상
@@ -164,8 +164,8 @@ ADR은 "누가 서명-또는-스트리밍 분기까지 도달할 수 있는가"�
   잔여 사항일 뿐 막는 요소는 아니다 — ADR 0029 이후 `S3Storage`의 다른
   메서드들과 같은 상태다.
 - ROADMAP.md의 S3 컴포넌트 상태 행, `ADR/README.md`, `README.md`의
-  `GET /file/:id/content` 설명 모두 같은 변경에서 이 ADR을 인용하고 반영된
-  리다이렉트를 반영하도록 갱신했다(EN+KO).
+  `GET /file/:id/content` 설명 모두 같은 변경에서 이 ADR을 인용하고 리다이렉트를
+  반영하도록 갱신했다(EN+KO).
 - 신규 런타임 의존성 추가: `@aws-sdk/s3-request-presigner@^3.1109.0`
   (Apache-2.0, `pnpm audit --prod` 결과 새로운 취약점 없음 — 기존 5건 전부
   `aws-sdk`/`@nestjs/swagger`/`typeorm` 경로이며 이 패키지를 거치지 않음).
@@ -239,7 +239,7 @@ authenticated blob fetch…")다 — `expect(contentResponse.status()).toBe(200)
 }
 ```
 
-두 origin은 이 백엔드 자체의 `CORS_ORIGIN`(`.env`)과 정확히 같다 — 프런트엔드와
+두 origin은 이 백엔드 자체의 `CORS_ORIGIN`(`.env`)과 정확히 같다 — 프론트엔드와
 admin 개발 서버뿐, 그 이상으로 넓히지 않았다. `GET`만 허용한 이유는, presigned
 `GetObject` 응답을 읽는 것이 이 프로젝트의 어떤 소비자든 만드는 유일한 교차 출처
 읽기이기 때문이다. 아직 프로덕션 origin은 없다 — 배포는 여전히 ROADMAP.md의
@@ -309,12 +309,12 @@ origin은 생기지 않는다.
 
 ### 추가 기록 (2026-09-29) — 운영 CORS 규칙이 적용됐고, 세 가시성 등급 모두 실제 브라우저에서 뜬다
 
-2026-09-22 addendum은 `aws_s3_bucket_cors_configuration.app`을 코드
+2026-09-22 추가 기록은 `aws_s3_bucket_cors_configuration.app`을 코드
 완성만 시키고 apply하지 않은 채로 남겼다. 라이브 버킷
 (`sharenpo-<AWS_ACCOUNT_ID>`)에 `aws s3api get-bucket-cors`를 돌려보니 정확히
 그 규칙이 있다 — `AllowedOrigins: ["https://sharenpo.cloud"]`,
 `AllowedMethods: ["GET"]` — 그 외엔 아무것도 없다. 2026-08-16에 손으로 돌린
-스크립트의 localhost 개발 origin 두 개는 그 addendum이 예측한 대로 병합이
+스크립트의 localhost 개발 origin 두 개는 그 추가 기록이 예측한 대로 병합이
 아니라 통째로 교체되어 사라졌다.
 
 실제 Chromium 세션(Playwright)으로 `https://sharenpo.cloud`를 상대로
@@ -333,7 +333,7 @@ URL → `200`, objectURL로 변환); 같은 파일을 `public`으로 바꾸고 �
 (`{bucket}.s3.{region}.amazonaws.com`)이고, CSP 와일드카드가 이를 매치한다.
 테스트 파일과 그 일회용 계정은 확인 후 삭제했다.
 
-### Addendum (2026-09-30) — D6의 Range/seek 항목, `frontend/` 플레이어에서 확인
+### 추가 기록 (2026-09-30) — D6의 Range/seek 항목, `frontend/` 플레이어에서 확인
 
 D6은 "리다이렉트를 거친 Range 요청 동작"을 미검증으로 남겼다. 재배포한 스택(`STORAGE_DRIVER=s3`)에서
 `frontend/` 게시글 페이지의 `<video>`를 seek하자 `Range: bytes=1212416-`가 presigned S3 URL로 바로 갔고

@@ -41,7 +41,7 @@
   파일 URL은 열리고(이미지·영상·오디오, 탐색 포함), 앱 화면 `/posts/:id`와 `/view/:id`는 `/login`으로 가며
   로그인한 뒤에도 원래 링크로 돌아가지 않는다. 크롤러는 모든 URL에서 같은 빈 페이지를 보고, 다른 사이트는
   파일을 끼워 넣을 수 없으며(`Cross-Origin-Resource-Policy: same-origin`), 과거의 `shareExpiresAt`도
-  받아들여진다. [ADR 0055](ADR/0055-helmet-security-headers.ko.md)의 Addendum, ROADMAP §7 항목, README
+  받아들여진다. [ADR 0055](ADR/0055-helmet-security-headers.ko.md)의 추가 기록, ROADMAP §7 항목, README
   "알려진 한계" 항목으로 기록했다. 확인하지 않은 것은 S3 리다이렉트와 배포된 스택이다.
 - **문서: README 스크린샷을 같은 크기로 다시 찍고 설명을 바로잡음 (2026-10-19)** — 문서만 바꿨다.
   그림 스무 장(언어별 열 장)은 높이가 900~1,601px로 제각각이었고, 화면에 보이는 부분만 찍은 것과 페이지
@@ -93,7 +93,7 @@
   다시 읽었다(2026-10-04 점검은 `CHANGELOG.ko.md`, `ROADMAP.ko.md`, `frontend/CLAUDE.ko.md`,
   `frontend/README.ko.md`가 대상이었다). 찾아서 고친 것: 직역투와 오기 몇 곳("mock"을 "목"으로,
   "window"를 "창"으로, "assert"를 "주장"으로 옮긴 것), 파일 헤더 규칙에서 두 절이 뭉쳐 있던 문장 하나,
-  "이 문서의 범위 밖"이라는 말이 빠져 있던 항목 하나, 한국어 문장 안에 남은 영어 "landed"·"Addendum"
+  "이 문서의 범위 밖"이라는 말이 빠져 있던 항목 하나, 한국어 문장 안에 남은 영어 "landed"·"추가 기록"
   제목과 항목, 섹션 이름이 "환각 방지"인데 "Hallucination Prevention 12번"으로 쓴 곳, 영문판을 가리키던
   링크 하나(`CLAUDE.ko.md`의 ADR 0051). `CHANGELOG.ko.md`와 `ROADMAP.ko.md`는 이번에 **전체를 다시 읽지
   않았다**. 2026-10-04 점검(`d4cffbb`) 이후 추가된 줄만 읽었고 두 곳을 고쳤다. 네 쌍 모두 EN/KO의
@@ -153,7 +153,7 @@
   `frontend/docs/API-CONTRACT.md` > 회전과 재사용에 "리프레시는 모두 `tryRefresh()`를 거친다"는 규칙과
   그 이유(백엔드에 유예 구간이 없어서 같은 쿠키로 두 번째 리프레시를 보내면 재사용으로 판정된다), 그리고 이
   보호가 한 탭에만 적용된다는 점을 적었고, [ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md)에 같은 내용의
-  Addendum을 더했다. `frontend/README.md`는 실제 백엔드를 쓰는 e2e spec이 백엔드에 요구하는 것(마이그레이션이
+  추가 기록을 더했다. `frontend/README.md`는 실제 백엔드를 쓰는 e2e spec이 백엔드에 요구하는 것(마이그레이션이
   적용된 Postgres, `STORAGE_DRIVER=local`, ClamAV, `THROTTLE_ENABLED=false`, 기본값 그대로의 `BASE_URL`)을
   나열하고 compose의 `.env.local`을 가리킨다. `frontend/docs/STYLE-PLAN.md` 8번 항목이 2026-10-02의 터치
   영역·줄바꿈 수정을 기록한다. ROADMAP §7에는 세 행이 생겼다: 레이아웃 두 건(작성자 이메일이 길면 Post 목록
@@ -169,7 +169,7 @@
   `docs/ADR/0022-admin-console-import-from-chat-project.ko.md`에도 single-flight를 "단일 비행"으로 옮긴 곳이
   세 군데 있지만 이번 네 파일 밖이라 그대로 뒀다.
 - **Compose: `api`와 `migrate`가 `.env` 뒤에 선택 파일 `.env.local`도 읽는다 (2026-10-03,
-  [ADR 0015](ADR/0015-docker-and-compose.ko.md) Addendum)** — 개발자의 `.env`는 S3를 가리킬 수 있고,
+  [ADR 0015](ADR/0015-docker-and-compose.ko.md) 추가 기록)** — 개발자의 `.env`는 S3를 가리킬 수 있고,
   AWS 스택을 내리면 버킷이 사라져 로컬 compose `api`를 거치는 모든 업로드가 500(`NoSuchBucket`)이었다.
   호스트에서 돌리는 백엔드는 이미 gitignore된 `.env.local`을 `.env`보다 먼저 읽었지만
   (`backend/app.module.ts`), compose는 `.env`만 읽고 `.dockerignore`가 `.env.*`를 이미지에서 빼므로 그
@@ -181,7 +181,7 @@
   없어도 오류가 아님), 그리고 오버라이드를 지운 상태에서 `docker compose up -d`가 `migrate`를 exit 0으로
   끝내고 `api`가 `STORAGE_DRIVER=local`로 healthy하게 떴으며 정리 서비스는 report-only, 요청 제한은 그대로 켜져
   있었다. 눈에 보이는 브라우저에서 실제 업로드가 ClamAV 검사를 지나 저장되고 Private 타일로 보였으며 상세에서
-  인증된 fetch로 재생됐다(10.6초, 오류 없음). 검증 계정과 그 파일은 끝난 뒤 지웠다. 하지 않은 것: 프런트엔드 e2e
+  인증된 fetch로 재생됐다(10.6초, 오류 없음). 검증 계정과 그 파일은 끝난 뒤 지웠다. 하지 않은 것: 프론트엔드 e2e
   전체 재실행(`.env.local`에 `THROTTLE_ENABLED=false`를 넣었다 빼야 하고 앱 코드는 바뀐 게 없다). 이 과정에서
   로컬 DB 계정 비밀번호가 앱이 쓰는 값과 어긋나 있었고(`migrate`의 `28P01`), DB 컨테이너 안에서 앱의 값으로 맞췄다
   (`ALTER USER`, 값은 출력하지 않음).
@@ -197,7 +197,7 @@
   41px로 측정돼 headless e2e의 높이 검사로는 보이지 않는다. 이제 폰 폭과 터치 포인터에서 `min-height: 40px`을 선언하고,
   `touch-targets` spec(이제 모바일 터치 에뮬레이션으로 돈다)이 그 선언을 확인한다 — CSS 세 파일 중 하나라도 되돌리면
   실패한다. 눈에 보이는 Chrome에서 폰 폭 7개(320–640px) 21번 로드는 모든 선택 상자가 40px, 40px 미만 요소 없음,
-  가로 스크롤 없음이었다. 프런트엔드 e2e 전체 41개가 실제 백엔드에서 통과하고 lint와 `pnpm build`도 통과한다.
+  가로 스크롤 없음이었다. 프론트엔드 e2e 전체 41개가 실제 백엔드에서 통과하고 lint와 `pnpm build`도 통과한다.
   `frontend/`에서 처음 쓰는 Playwright API 네 개(`isMobile`, `hasTouch`, `test.use()`, `page.off()`;
   `document.fonts.ready`, `Response` 타입, `tryRefresh`는 이미 쓰고 있었다)의 최소 금기(설치된 버전 1.62.1;
   playwright.dev의 `emulation`, `class-testoptions`, `events`를 2026-10-02에 읽었고 가져온 페이지에는 문서 버전이
@@ -262,7 +262,7 @@
   주석 한 블록을 더했다(`94c8373`, CSP 값은 그대로다). 아래 항목들이 이미 가리키는 것 외에:
   `frontend/docs/STYLE-PLAN.md`가 "한글/영어 UI 텍스트 혼용" 항목과 확인 필요 사항 2번, 6번(File 헤더는
   720px 칼럼에 둔다), 7번(라이선스 고지 파일은 두지 않는다)을 닫았다. [ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md)에는
-  CSP 아래의 글꼴에 대한 2026-10-01 추가 기록이 생겼고, 한국어판에서 번역되지 않았던 첫 Addendum 제목을
+  CSP 아래의 글꼴에 대한 2026-10-01 추가 기록이 생겼고, 한국어판에서 번역되지 않았던 첫 추가 기록 제목을
   고쳤다. ROADMAP §7에는 `admin/` axios 항목(패치함)과 `.ko.md` 한국어 점검 항목이 생겼고, 2026-09-07
   서체 행에는 "변경" 문장을 덧붙였으며(여전히 "시스템 세리프, 신규 의존성 0건"이라고 적혀 있었다),
   2026-09-16 크기 행에는 새 수치(`frontend/` production 패키지 5개, `dist` 약 6.3MB)를 적었다. CLAUDE.md >
@@ -516,7 +516,7 @@
   일반 `pnpm audit`는 개발 전용 65건(2026-09-10엔 58건)이고 critical 3건은 모두 `ts-jest`를
   통한 `handlebars`다. 이전처럼 범위 밖이다.
 - **`trust proxy`를 앱의 VPC CIDR로 설정 (2026-09-14, [ADR
-  0054](ADR/0054-per-route-rate-limit-tuning.ko.md)의 2026-09-10 addendum 해결)** —
+  0054](ADR/0054-per-route-rate-limit-tuning.ko.md)의 2026-09-10 추가 기록 해결)** —
   리버스 프록시 뒤에서는 `ThrottlerGuard`가 키로 쓰는 `req.ip`가 프록시 자신의 주소로
   해석돼, 클라이언트당 분당 5회(`auth`)·15회(`upload`) 제한이 방문자 전원이 나눠 쓰는
   버킷 하나로 무너지는 문제가 있었다. `backend/main.ts`의 `bootstrap()`이 이제
@@ -734,7 +734,7 @@
   점검은 `k8s/helm/README.md`에 있다). 옵션을 둔 이유는 PID 1이 Nest가 자기 자신에게 다시 보내는 시그널을 버리기 때문이다:
   옵션이 없으면 핸들 하나가 남는 순간 유예 시간 전체가 되살아난다(Docker에서 10.4초, 파드에서
   30.6초). trade-off와 측정값은 ADR에 기록했다. 2026-09-16의 Known Gaps 항목을 닫는다(그
-  항목의 "프로세스가 그냥 죽는다"는 문장은 틀렸다). **2026-09-22 addendum**: 아직 열려
+  항목의 "프로세스가 그냥 죽는다"는 문장은 틀렸다). **2026-09-22 추가 기록**: 아직 열려
   있던 항목 중 두 가지는 라이브 클러스터 없이도 시험할 수 있는 것으로 드러났다.
   `S3Storage`의 `S3Client`를 대신한 Docker 전용 시험(같은 기본 `keepAlive` agent —
   `@smithy/node-http-handler` 소스로 확인)이 소켓을 일부러 열어 둔 채로도 똑같이 빨리
@@ -1132,7 +1132,7 @@
 - **S3 IRSA용 전용 Helm `ServiceAccount` — `default` ServiceAccount 범위 갭 해소
   (2026-09-03, [ROADMAP.md](ROADMAP.ko.md) §7)** — `app-infra/`의 S3 IRSA 역할이
   네임스페이스의 `default` ServiceAccount에 annotate돼 있어서(2026-08-28부터 알려진 갭 —
-  ADR 0043의 Addendum과 `k8s/infra/terraform/README.md`에 기록), 그걸 쓰는 네임스페이스의
+  ADR 0043의 추가 기록과 `k8s/infra/terraform/README.md`에 기록), 그걸 쓰는 네임스페이스의
   모든 pod에 S3 접근 권한이 열려 있었다 — 이 앱의 pod만이 아니라. 새
   `k8s/helm/templates/serviceaccount.yaml`(`ingress.yaml`의 기본-비활성 패턴을 그대로
   본뜸) + `values.yaml`의 `serviceAccount.create`/`.name`/`.annotations` 블록 +
@@ -1157,7 +1157,7 @@
   설치된다.
 - **`deploy.sh plan`/`apply` 서브커맨드 — cluster/app-infra/addons의 plan 계산과
   승인을 분리 (2026-09-02,
-  [ADR 0046 Addendum](ADR/0046-deploy-sequence-automation.ko.md#addendum-2026-09-02--clusterapp-infraaddons-planapply-분리))**
+  [ADR 0046 추가 기록](ADR/0046-deploy-sequence-automation.ko.md#추가-기록-2026-09-02--clusterapp-infraaddons-planapply-분리))**
   — 실 AWS 대상에 검증 목적으로 반복 apply할 때 매번 겪던 낭비가 있었다: plan이
   끝난 직후 개발자가 터미널 앞에 없으면, 다음 실행에서 plan 계산부터 통째로 다시
   해야 했다. `-auto-approve`와 완전한 CD 파이프라인을 먼저 검토했다가 기각했다(둘
@@ -1192,7 +1192,7 @@
   절대 상한을 요구하는 측정 근거가 없었다. 새 `perf/` 도구(seed/explain/load-test
   스크립트)는 이 기준선을 나중에 재측정할 때 재사용 가능하며, CI에는 연결하지 않는다.
 - **`docker-tag-cleanup.yml` — `docker-publish`의 새 `dev`-push 물량에 대한 매일
-  Docker Hub 태그 보존 정책 (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md#addendum-2026-08-31--다음-날-발견해결한-설계-갭-4가지))**
+  Docker Hub 태그 보존 정책 (2026-08-31, [ADR 0048 추가 기록](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md#추가-기록-2026-08-31--다음-날-발견해결한-설계-갭-5가지))**
   — 최신 30개 태그를 남기고, 40자 16진수 git SHA 형태(`^[0-9a-f]{40}$`)에 매칭하는
   태그만 삭제 대상으로 삼는다 — 구조적으로 `:latest`나 수동 생성 태그는 선택될 수
   없다. `workflow_dispatch`는 기본이 드라이런, 예약된 cron 실행은 실제로 삭제한다.
@@ -1203,7 +1203,7 @@
   실행하든 양쪽 sha 태그 모두 정리 대상이다. 아직 실제 실행은 안 함 — Docker
   Hub 삭제 API 대상으로 검증되지 않았다.
 - **`CoreMetrics` Grafana 알림 폴더 표본 점검, 6개 규칙 전부 검증 완료
-  (2026-08-31, [ADR 0047 Addendum](ADR/0047-observability-prometheus-grafana.ko.md#addendum-2026-08-31--alerting-표본-점검-6개-규칙-전부-검증-완료))**
+  (2026-08-31, [ADR 0047 추가 기록](ADR/0047-observability-prometheus-grafana.ko.md#추가-기록-2026-08-31--alerting-표본-점검-6개-규칙-전부-검증-완료))**
   — 이 ADR의 Decision은 Alerting을 다룬 적이 없다. 개발자가 이미 만들어 둔
   `AppTargetDown`과 나란히, `/api/v1/provisioning/alert-rules`로 `CoreMetrics`
   폴더(5개 규칙 — `PodMemoryHigh`, `PodCrashLooping`, `NodeNotReady`,
@@ -1227,7 +1227,7 @@
   남는다. `bool` 수식어(`>= bool 0`)로 고쳐 Prometheus가 `1`(0이 아님)을
   반환하게 만들어 세 규칙 모두 실제 값이 이미 `0`인 상태에서도 발동시켰다.
 - **`AppTargetDown` 폴더를 `CoreMetrics`로 통합
-  (2026-08-31, [ADR 0047 Addendum](ADR/0047-observability-prometheus-grafana.ko.md#addendum-2026-08-31--alerting-표본-점검-6개-규칙-전부-검증-완료))**
+  (2026-08-31, [ADR 0047 추가 기록](ADR/0047-observability-prometheus-grafana.ko.md#추가-기록-2026-08-31--alerting-표본-점검-6개-규칙-전부-검증-완료))**
   — 둘은 기능적 이유가 아니라 출처 차이(수동 생성 규칙 vs. 이 ADR이 프로비저닝한
   세트)로 처음부터 별개의 Grafana 폴더로 시작했는데, 둘 다 같은 앱/클러스터를
   다룬다. 개발자가 이 분리가 필요한지 물었고 같은 날 정리됐다: 프로비저닝
@@ -1246,7 +1246,7 @@
   건너뛰므로, 그룹 이름을 같게 하는 것만으로는 공유 주기가 강제되지 않는다.
   폴더 하나, 그룹 하나, 규칙 여섯 개, 각자 원래 주기 그대로.
 - **`CoreMetrics` 규칙 5개의 `description` 어노테이션 손상 발견·수정
-  (2026-08-31, [ADR 0047 Addendum](ADR/0047-observability-prometheus-grafana.ko.md#addendum-2026-08-31--alerting-표본-점검-6개-규칙-전부-검증-완료))**
+  (2026-08-31, [ADR 0047 추가 기록](ADR/0047-observability-prometheus-grafana.ko.md#추가-기록-2026-08-31--alerting-표본-점검-6개-규칙-전부-검증-완료))**
   — 개발자가 몇몇 규칙의 Describe 텍스트가 한글도 영어도 아니라고 지적했다.
   저장된 `description` 필드를 원시 hex로 까보니 `PodMemoryHigh`,
   `PodCrashLooping`, `NodeNotReady`, `PodNetworkReceiveErrors`,
@@ -1297,7 +1297,7 @@
   도중 `prom-client`의 npm 등록 정보가 Prometheus 공식 조직이 새로 편입한
   `@prometheus-io/client`로 대체됨(deprecated)이 드러났으나, 주간 다운로드
   수(920만 vs 7천)와 NestJS 생태계의 마이그레이션 사례가 아직 0건임을 확인한
-  뒤 `prom-client`를 유지 — 명시적 재검토 트리거와 함께 ADR 0047 Addendum으로
+  뒤 `prom-client`를 유지 — 명시적 재검토 트리거와 함께 ADR 0047 추가 기록으로
   기록했다.
 - **2026-08-28 철거 이후 재배포로 다시 안정 상태에 도달함 (2026-08-29/30)** — 3-state
   Terraform(`cluster` → `app-infra` → `addons`) apply와 Helm 앱 설치를 처음부터
@@ -1409,7 +1409,7 @@
   차트 옆 README는 그 말을 **상태** 항목에 그대로 반복하고 있었다. 두 문서 모두 이제 리소스가
   실재하며 과금 중임을 밝히고, `apply` 전에 `terraform plan`을 돌려 읽으라고 지시한다 — RDS가
   `skip_final_snapshot = true`, `deletion_protection = false`라 교체하는 순간 데이터가 스냅샷
-  없이 사라지기 때문이다. ADR 0043·0044의 Addendum에는 옛 서술이 **일부러** 남아 있다. ADR은
+  없이 사라지기 때문이다. ADR 0043·0044의 추가 기록에는 옛 서술이 **일부러** 남아 있다. ADR은
   작성 시점의 사실을 기록하므로, 정정의 기준은 [ROADMAP.ko.md](ROADMAP.ko.md) 7절이다.
   **`frontend/README.md`(+ko)가 관리자 화면이 그 앱 안에 `/admin` 라우트로 있다고 적고
   있었다.** 소스로 확인한 결과 거짓이다: `App.tsx`에 `/admin` 라우트가 없고
@@ -1676,7 +1676,7 @@
   자체는 애초에 진단하려던 Node 런타임 불일치의 올바른 수정이므로 그대로
   유지했다.
 - **위 `docker-publish`/스모크 테스트 작업의 설계 갭 3가지, 다음 날 발견해서
-  해결 (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md#addendum-2026-08-31--다음-날-발견해결한-설계-갭-4가지))**
+  해결 (2026-08-31, [ADR 0048 추가 기록](ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md#추가-기록-2026-08-31--다음-날-발견해결한-설계-갭-5가지))**
   — `docker-publish`의 `needs`를 6개 잡 전부에서 `[lint-and-unit, e2e]`로
   좁혔다: 루트 Dockerfile은 `backend/`만 빌드하므로 `frontend-lint`/
   `frontend-e2e`/`admin-lint-and-unit`/`admin-e2e` 결과는 backend 이미지가
@@ -1932,13 +1932,13 @@
   실제 성공의 진짜 증거는 이미 있던 `video[src^="blob:"]` 단언(타임아웃 15초로 강화)과
   "Network error" 메시지가 없다는 새 단언이 대신 맡도록 했다. `STORAGE_DRIVER=local`과
   `STORAGE_DRIVER=s3` **양쪽 모두**에서 5/5 통과를 확인했다(각 확인마다 `.env`
-  오버라이드를 전환하고 백엔드를 재기동한 뒤, 원래 값으로 복원). 프런트엔드
+  오버라이드를 전환하고 백엔드를 재기동한 뒤, 원래 값으로 복원). 프론트엔드
   `pnpm build`/`pnpm lint` 클린.
   [ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md) > 추가 기록 (2026-08-16)
 - **ADR 0040의 mediaType 태그 선택 로직을 실제 브라우저에서 시각적으로 검증
   완료.** 아래 항목은 원래 "렌더링된 태그를 실제 브라우저에서 시각적으로
   확인하지는 못했다(이 세션에는 브라우저 도구가 없음)"고 적혀 있었다. 앱을
-  기동해(백엔드+프런트엔드+DB) 실제 Playwright/Chromium 세션으로 확인한 결과:
+  기동해(백엔드+프론트엔드+DB) 실제 Playwright/Chromium 세션으로 확인한 결과:
   새로 올린 이미지는 `<img>`로 렌더링되고(로드 완료, `naturalWidth`/`naturalHeight`
   정상), 새로 올린 mp3는 `<audio controls>`로 렌더링되며 — 둘 다 `<video>`로
   떨어지지 않았고 — API 응답의 `mediaType`도 두 경우 모두 정확했다. 검증만
@@ -1965,7 +1965,7 @@
   실제 AWS S3 버킷을 가리키고 있어 거기에 테스트 객체를 쓰지 않으려 피했다): 실제
   jpg/mp3/mp4를 attach→승격 전체 흐름으로 업로드해 `mediaType`이 각각 `image`/
   `audio`/`video`로 정확히 돌아오는 것을 확인했고, 백엔드 `pnpm lint`/`pnpm test`
-  (216/216), 프런트엔드 `pnpm build`/`pnpm lint` 모두 클린이다. 다만 렌더링된 태그를
+  (216/216), 프론트엔드 `pnpm build`/`pnpm lint` 모두 클린이다. 다만 렌더링된 태그를
   실제 브라우저에서 시각적으로 확인하지는 못했다(이 세션에는 브라우저 도구가 없음).
   [ADR 0040](ADR/0040-persisted-media-type-for-playback.ko.md)
 - **게시글/댓글/게시글 작성 폼 UI의 한국어 하드코딩 문구를 영어로 교체** — 위 "알려진
@@ -2227,7 +2227,7 @@
   (`GET /file`/`GET /post`를 `take: 1`로 호출해 튜플의 개수만 읽음). `admin/README.md`와
   그 `.ko.md`가 이전에 제거했던 기능이 돌아온 것을 반영하도록 갱신됐다. 백엔드
   파일은 건드리지 않았고, 새 ADR도 없다 — 위 항목이 이미 도입한 DTO를 admin
-  프런트엔드가 소비하는 것뿐이다.
+  프론트엔드가 소비하는 것뿐이다.
 
 - **Docker 이미지 arm64 지원 — `bcrypt`는 이미 잘 동작하고, 컴파일이 필요 없음**
   ([ADR 0035](ADR/0035-arm64-bcrypt-source-rebuild.ko.md), [ADR 0030](ADR/0030-container-non-root-and-arch-stance.ko.md)의

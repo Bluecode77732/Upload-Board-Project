@@ -3,44 +3,44 @@
 > English: [README.md](README.md)
 
 이 저장소의 백엔드(`Dockerfile`, Docker Hub의 `bluecode1775/sharenpo`)를
-Kubernetes용으로 패키징합니다. 이 차트가 별도 `helm/` 폴더가 아니라 `k8s/`
+Kubernetes용으로 패키징한다. 이 차트가 별도 `helm/` 폴더가 아니라 `k8s/`
 아래에 있는 이유는
 [ADR 0042](../../docs/ADR/0042-k8s-helm-directory-consolidation.ko.md)를,
 차트가 왜 이런 모양인지는
 [ADR 0041](../../docs/ADR/0041-helm-chart-project-adaptation.ko.md)을,
 스캐폴딩 이력은 [ADR 0037](../../docs/ADR/0037-helm-chart-scaffold.ko.md)을
-참고하세요.
+참고한다.
 
 **상태**: 로컬 임시 `kind` 클러스터에 대해 `helm install --wait`로 종단 간 검증
-완료(2026-08-17) — Docker Hub의 `bluecode1775/sharenpo:latest`(ADR 0039의 SSL
-수정 이전 이미지)가 아니라 현재 소스로 새로 빌드한 이미지, 임시
-`postgres:16`, 그리고 `/health/live`/`/health/ready`/`/doc` 모두 Service를
-통해 `200`을 응답했습니다. 이 실행에서 실제 버그 2개를 발견해 고쳤습니다(hook
+완료(2026-08-17). Docker Hub의 `bluecode1775/sharenpo:latest`(ADR 0039의 SSL
+수정 이전 이미지)가 아니라 현재 소스로 새로 빌드한 이미지와 임시
+`postgres:16`을 썼고, `/health/live`/`/health/ready`/`/doc` 모두 Service를
+통해 `200`을 응답했다. 이 실행에서 실제 버그 2개를 발견해 고쳤다(hook
 순서, 빈 문자열 env var — 커밋 `0326199`).
 2026-09-24에는 `frontend`·`admin` 워크로드를 켠 상태로 Docker Desktop Kubernetes에서
-다시 검증했습니다(ADR 0062) — 이 문서 끝의 "Docker Desktop Kubernetes에서 검증하기"를
-참고하세요.
+다시 검증했다(ADR 0062) — 이 문서 끝의 "Docker Desktop Kubernetes에서 검증하기"를
+참고한다.
 **2026-08-17에 실제 배포 시작 → 2026-08-27에 안정화 → 2026-08-28에 철거(2026-08-29/30
 재적용, 2026-08-31에 다시 철거, 2026-09-26에 `frontend`·`admin`·ClamAV 워크로드와 함께
 한 번 더 apply하고 철거)**: 릴리스
 `upload-board`가 `k8s/infra/terraform/cluster/`가 만든 실제 AWS/EKS 클러스터에서
-동작했습니다(revision 5, `STATUS: deployed`) — 전체 경위는
+동작했다(revision 5, `STATUS: deployed`) — 전체 경위는
 [ROADMAP.md](../../docs/ROADMAP.md) §9(2026-08-27 항목) 참고, RDS 인스턴스의
-`rds.force_ssl`이 요구해서 필요했던 `DB_SSL`/`DB_SSL_CA` 수정도 포함됩니다(ADR
-0039). 클러스터 내부에서만 접근 가능한 채로 유지됐습니다(`ingress.enabled:
+`rds.force_ssl`이 요구해서 필요했던 `DB_SSL`/`DB_SSL_CA` 수정도 포함된다(ADR
+0039). 클러스터 내부에서만 접근 가능한 채로 유지됐다(`ingress.enabled:
 false` — 끝까지 켠 적 없음). 배포가 end-to-end로 검증된 뒤, 과금을 멈추려고
-밑단 AWS 인프라를 전부 destroy했습니다(ROADMAP.md §9, 2026-08-28 항목). 지금 무언가
-돌고 있는지는 여기에 적지 않습니다. 클러스터를 직접 확인하고(`kubectl config get-contexts`,
+밑단 AWS 인프라를 전부 destroy했다(ROADMAP.md §9, 2026-08-28 항목). 지금 무언가
+돌고 있는지는 여기에 적지 않는다. 클러스터를 직접 확인하고(`kubectl config get-contexts`,
 이어서 `helm list -A --kube-context <컨텍스트>`) `k8s/infra/terraform/README.md`의 Status를
-보세요. 어느 쪽이든 이 차트 자체 내용은 영향이 없고,
+본다. 어느 쪽이든 이 차트 자체 내용은 영향이 없고,
 `bash k8s/infra/terraform/deploy.sh all`(ADR 0046)로 처음부터 다시 같은 배포를
-재현할 수 있습니다.
+재현할 수 있다.
 
 ## 설치 전: Secret 먼저 만들기
 
 이 차트는 `Secret` 리소스를 직접 만들지 않고, 비밀값을 `values.yaml`
-리터럴로도 받지 않습니다(ADR 0041, ADR 0033의 목표 형태). 먼저 직접
-만들어야 합니다:
+리터럴로도 받지 않는다(ADR 0041, ADR 0033의 목표 형태). 먼저 직접
+만들어야 한다:
 
 ```bash
 kubectl create secret generic sharenpo-secrets \
@@ -51,9 +51,9 @@ kubectl create secret generic sharenpo-secrets \
 ```
 
 값을 나중에 갱신하려면 `--dry-run=client -o yaml | kubectl apply -f -`로 다시
-실행하세요.
+실행한다.
 
-그다음 차트가 그 이름을 참조하도록 지정합니다:
+그다음 차트가 그 이름을 참조하도록 지정한다:
 
 ```bash
 helm install sharenpo . \
@@ -65,41 +65,41 @@ helm install sharenpo . \
 
 `secrets.existingSecret`은 `required`로 지정돼 있어, 설정하지 않으면 pod가
 env var 누락으로 crash-loop에 빠지는 대신 설치 자체가 명확한 에러로 즉시
-실패합니다.
+실패한다.
 
 실제 AWS 배포용으로는 `values-prod.yaml`이 반복되는 `--set env.X=Y` 나열을
-정리해둔 파일입니다(2026-08-27, 첫 실제 배포로 어떤 값이 실제로 필요한지
-확인된 뒤 추가 — ROADMAP.md §9 참고). 릴리스 이름은 `sharenpo`입니다
+정리해둔 파일이다(2026-08-27, 첫 실제 배포로 어떤 값이 실제로 필요한지
+확인된 뒤 추가 — ROADMAP.md §9 참고). 릴리스 이름은 `sharenpo`이다
 (2026-09-03 확정, ROADMAP.md §7 — `deploy.sh`의 `HELM_RELEASE` 기본값,
 `values-prod.yaml`의 `serviceAccount.create: true`, `app-infra/main.tf`의
-IRSA trust policy 넷 다 같은 이름으로 고정돼 있습니다; 이전 이름으로
-실제 배포됐던 라이브 릴리스는 `upload-board`였습니다 — 위 "상태" 참고).
-**맨 `helm upgrade`가 아니라 `deploy.sh`를 쓰세요**:
+IRSA trust policy 넷 다 같은 이름으로 고정돼 있다; 이전 이름으로
+실제 배포됐던 라이브 릴리스는 `upload-board`였다 — 위 "상태" 참고).
+**맨 `helm upgrade`가 아니라 `deploy.sh`를 쓴다**:
 
 ```bash
 bash k8s/infra/terraform/deploy.sh helm
 ```
 
 `values-prod.yaml`은 더 이상 그 자체로 신뢰할 수 있는 `image.tag`를 고정해두지
-않습니다(2026-09-04, [ROADMAP.md](../../docs/ROADMAP.md) §7) — `deploy.sh helm`이
+않는다(2026-09-04, [ROADMAP.md](../../docs/ROADMAP.md) §7) — `deploy.sh helm`이
 해당 브랜치의 현재 발행된 이미지를 직접 조회해서(기본값 `dev`, `main`을 배포하려면
-`deploy.sh helm main`) 이 파일 위에 `--set image.tag=...`로 얹어줍니다.
+`deploy.sh helm main`) 이 파일 위에 `--set image.tag=...`로 얹어준다.
 `helm upgrade sharenpo . -f values-prod.yaml`을 직접 실행하면 이 조회를 건너뛰고
 `values-prod.yaml`에 그때 적혀 있던 태그를 조용히 그대로 배포하는데, 이게 바로 그
-항목이 막으려는 낡은 태그 문제입니다 — 특정 이미지를 의도적으로 고정하고 싶을
-때만 아래처럼 `--set image.tag=<태그>`를 직접 넘기며 맨 명령을 쓰세요:
+항목이 막으려는 낡은 태그 문제이다 — 특정 이미지를 의도적으로 고정하고 싶을
+때만 아래처럼 `--set image.tag=<태그>`를 직접 넘기며 맨 명령을 쓴다:
 
 ```bash
 helm upgrade sharenpo . -f values-prod.yaml --set image.tag=<태그>
 ```
 
-비밀값은 여기 없습니다 — `secrets.existingSecret`은 위에서 만든 Secret의
-이름만 가리킬 뿐, Secret 자체는 이 파일과 무관합니다.
+비밀값은 여기 없다 — `secrets.existingSecret`은 위에서 만든 Secret의
+이름만 가리킬 뿐, Secret 자체는 이 파일과 무관하다.
 
 오브젝트 이름은 차트 이름이 아니라 **릴리스 이름**(위 예시의 `sharenpo`)에서
-옵니다 — `_helpers.tpl`의 `fullname` 헬퍼가 `.Release.Name`이기 때문입니다.
+온다 — `_helpers.tpl`의 `fullname` 헬퍼가 `.Release.Name`이기 때문이다.
 다른 릴리스 이름으로 설치하면 모든 오브젝트 이름이 그에 맞춰 바뀌며,
-`Chart.yaml`을 따르는 건 `app.kubernetes.io/name` 라벨과 `helm.sh/chart`뿐입니다.
+`Chart.yaml`을 따르는 건 `app.kubernetes.io/name` 라벨과 `helm.sh/chart`뿐이다.
 
 ## 각 템플릿이 하는 일
 
@@ -120,29 +120,29 @@ helm upgrade sharenpo . -f values-prod.yaml --set image.tag=<태그>
 | `admin-deployment.yaml` | Deployment | admin 콘솔을 `/admin/`에서 `alias`로 서빙하는 정적 파일 nginx(`admin/Dockerfile`) — 앱·frontend와 별도 파드이며, 자기만의 셀렉터 라벨을 쓴다. 기본 비활성(`admin.enabled: false`), `values-prod.yaml`이 켠다(ADR 0062) |
 | `admin-service.yaml` | Service | `ClusterIP`, 포트 80. `frontend-service.yaml`과 같은 Prometheus 스크레이프 이유로 포트 이름이 `web`이다. Ingress의 `/admin` 규칙이 가리키는 대상 |
 
-`values.yaml`엔 실제로 템플릿이 읽는 키만 남아 있습니다 — 어떤 템플릿도 소비하지
+`values.yaml`엔 실제로 템플릿이 읽는 키만 남아 있다 — 어떤 템플릿도 소비하지
 않던 `autoscaling`/`httpRoute`/`nameOverride`/`fullnameOverride` 스캐폴딩
-잔재는 제거했습니다. `serviceAccount`도 원래 같은 목록에서 제거됐었지만,
+잔재는 제거했다. `serviceAccount`도 원래 같은 목록에서 제거됐었지만,
 구체적인 필요가 생기면서(아래 참고) `ingress.yaml`과 같은 기본-비활성 패턴으로
-자기 템플릿을 다시 갖게 됐습니다. HPA나 Gateway API `HTTPRoute`를 나중에
+자기 템플릿을 다시 갖게 됐다. HPA나 Gateway API `HTTPRoute`를 나중에
 추가하려면 여전히 새 템플릿과 `values.yaml` 블록을 함께 다시 넣어야지, 값만
-되살려선 안 됩니다.
+되살려선 안 된다.
 
 ## IRSA용 전용 ServiceAccount
 
 `app-infra/`의 `aws_iam_role.app`은 `STORAGE_DRIVER=s3`일 때 S3 접근을
-허용하는 IRSA 역할입니다(ADR 0029, ADR 0043 D8). `serviceAccount.create:
+허용하는 IRSA 역할이다(ADR 0029, ADR 0043 D8). `serviceAccount.create:
 true`로 켜면 이 차트가 자체 `ServiceAccount`(`serviceaccount.yaml`)를 만들어
-Deployment에 네임스페이스의 `default` 대신 그것을 붙입니다 — 이게 없으면
+Deployment에 네임스페이스의 `default` 대신 그것을 붙인다 — 이게 없으면
 `default`를 쓰는 네임스페이스의 모든 pod가 거기 annotate된 역할을 이 앱
-파드뿐 아니라 다 같이 나눠 쓰게 됩니다.
+파드뿐 아니라 다 같이 나눠 쓰게 된다.
 
-`values-prod.yaml`은 이미 이걸 켜뒀습니다(`serviceAccount.create: true` +
+`values-prod.yaml`은 이미 이걸 켜뒀다(`serviceAccount.create: true` +
 이 역할의 ARN을 `annotations`에 — 2026-09-03 추가), 그래서 위 실제 배포
-명령엔 더 얹을 게 없습니다. 이름은 릴리스 이름인 `sharenpo`로 떨어지는데
+명령엔 더 얹을 게 없다. 이름은 릴리스 이름인 `sharenpo`로 떨어지는데
 (ROADMAP.md §7), 이건 `app-infra/main.tf`의 `aws_iam_role.app` trust
-policy와 `deploy.sh`의 `HELM_RELEASE` 기본값이 가리키는 이름과도 같습니다
-— 셋 다 이름이 맞아야 IRSA가 실제로 인증됩니다.
+policy와 `deploy.sh`의 `HELM_RELEASE` 기본값이 가리키는 이름과도 같다
+— 셋 다 이름이 맞아야 IRSA가 실제로 인증된다.
 
 `values-prod.yaml` 없이 단독으로 켜려면:
 
@@ -153,13 +153,13 @@ helm upgrade sharenpo . \
   --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(terraform -chdir=../infra/terraform/app-infra output -raw app_iam_role_arn)
 ```
 
-이 중 아무것도 아직 실제 AWS에 적용되지 않았습니다 — 현재 상태와, 예전
+이 중 아무것도 아직 실제 AWS에 적용되지 않았다 — 현재 상태와, 예전
 수동 `kubectl annotate serviceaccount default ...` 우회법이 `app-infra/`의
 trust policy 적용 이후 왜 더 이상 안 통하는지는
 `k8s/infra/terraform/README.md`의 "Known gap" 참고. migration Job은
-`serviceAccount.create`가 켜져 있어도 일부러 계속 `default`로 돕니다 — DB
+`serviceAccount.create`가 켜져 있어도 일부러 계속 `default`로 돈다 — DB
 자격증명만 Secret에서 읽을 뿐 S3를 건드리지 않으므로, 앱의 IRSA 신원을
-붙이면 이유 없이 권한만 넓어집니다.
+붙이면 이유 없이 권한만 넓어진다.
 
 ## NetworkPolicy
 
@@ -168,7 +168,7 @@ trust policy 적용 이후 왜 더 이상 안 통하는지는
 같은 이유(DNS/인증서 메커니즘 없음, CRD 없음)는 아니고,
 `k8s/infra/terraform/cluster/main.tf`의 `vpc-cni` 애드온이 아직 VPC CNI
 Network Policy 강제 에이전트를 켜지 않았기 때문이다 — 지금
-`networkPolicy.enabled`을 켜도 리소스는 생성되지만 실제 클러스터엔 강제되지
+`networkPolicy.enabled`를 켜도 리소스는 생성되지만 실제 클러스터엔 강제되지
 않는다. `values-prod.yaml`은 이미 켜둬서, Terraform 쪽 강제가 켜지는 순간
 차트를 더 건드릴 필요 없이 바로 유효해진다.
 
@@ -272,7 +272,7 @@ kubectl run curl-clamav --image=busybox:1.36 --restart=Never --rm -i \
 **문제 해결**:
 - 이전 시도가 중간에 끊기거나 실패한 뒤(정리 없이) `helm install` 단계를
   다시 실행하면 `release name check failed: cannot reuse a name that is
-  still in use` 에러가 납니다 — 예전 `netpol-test` 릴리스가 여전히 등록돼
+  still in use` 에러가 난다 — 예전 `netpol-test` 릴리스가 여전히 등록돼
   있는 것. 해결: `helm uninstall netpol-test`(상태가 `pending-install`처럼
   어정쩡해 보이면 `helm list -A`로 먼저 확인), 제거됐는지 확인한 뒤
   `helm install`을 다시 시도.
@@ -280,7 +280,7 @@ kubectl run curl-clamav --image=busybox:1.36 --restart=Never --rm -i \
   jsonpath='{.status.podIP}')`를 `--set ...=$(...)/32` 인자 안에 바로 넣지
   말 것. pod가 아직 IP를 못 받았으면 이 치환이 조용히 빈 문자열이 되고,
   앞의 `/32`가 MSYS2의 경로 변환에 걸려 `C:/Program Files/Git/32` 같은
-  값으로 둔갑해 쿠버네티스 CIDR 검증에서 알아보기 힘든 에러를 냅니다.
+  값으로 둔갑해 쿠버네티스 CIDR 검증에서 알아보기 힘든 에러를 낸다.
   변수에 먼저 담아 출력해서 확인할 것:
   `PG_IP=$(kubectl get pod postgres -o jsonpath='{.status.podIP}'); echo
   "PG_IP=$PG_IP"` — 진짜 IP인지 눈으로 확인한 뒤에 사용.
@@ -381,7 +381,7 @@ helm template . --set secrets.existingSecret=placeholder --set ingress.enabled=t
   -s templates/ingress.yaml
 ```
 
-같은 플래그가 `networkpolicy.yaml`의 ALB 인바운드 허용 규칙(ADR 0056 addendum)도 함께
+같은 플래그가 `networkpolicy.yaml`의 ALB 인바운드 허용 규칙(ADR 0056 추가 기록)도 함께
 렌더링한다 — `--set networkPolicy.enabled=true -s templates/networkpolicy.yaml`을 더하면
 두 규칙(`podSelector: {}`와 새 `ipBlock`)을 한 번에 볼 수 있다.
 
@@ -484,7 +484,7 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   `healthy`였다.
 - `networkPolicy.enabled: true`(`values-prod.yaml`이 설정하는 값)와 Ingress가 함께 켜지면
   `networkpolicy.yaml`이 VPC CIDR을 앱 포트에 허용하는 인바운드 규칙을 하나 더
-  렌더링한다(ADR 0056 addendum, 위 `target-type` 수정과 같은 시점에 추가 — ALB의 ENI는
+  렌더링한다(ADR 0056 추가 기록, 위 `target-type` 수정과 같은 시점에 추가 — ALB의 ENI는
   파드가 아니라서 기존의 같은-네임스페이스 전용 규칙으로는 애초에 통과할 수 없었다).
   위 항목과 같은 방식으로 ALB 타깃 그룹이 healthy인지 확인하고, ADR 0056 D2가 이미
   남긴 단서대로 이게 실제로 AWS 자신의 VPC CNI Network Policy 에이전트로 강제되는지(단순
@@ -507,7 +507,7 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
 - 실제 HTTPS 연결로 로그인한 뒤 페이지를 새로고침해도 세션이 유지되는지. refresh 쿠키가
   `HttpOnly; Secure; SameSite=Strict; Path=/auth/token`으로 내려오고 `POST /auth/token/refresh`에
   다시 실려 가야 한다 — `Secure` 쿠키는 브라우저 연결이 HTTPS일 때만 동작하므로 다른 곳에서는
-  볼 수 없다(ADR 0012, ADR 0034). Observed 2026-09-29(Playwright, 일회용 가입 계정):
+  볼 수 없다(ADR 0012, ADR 0034). 2026-09-29 관찰(Playwright, 일회용 가입 계정):
   `context.cookies()`에서 `refreshToken`이 정확히 `httpOnly: true, secure: true,
   sameSite: 'Strict', path: '/auth/token', domain: 'sharenpo.cloud'`로 나왔고, 전체 페이지
   새로고침 후에도 로그인 상태 화면이 유지됐다. 계정과 그 계정이 올린 파일 1개는 확인 후 삭제했다.
@@ -515,20 +515,20 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   `fetch()` → API의 302 → presigned S3 URL)와 공개/unlisted 파일의 `<img>`/`<video>`가 모두
   브라우저 콘솔에 CSP·CORS 에러 없이 로드되는지. 버킷에 운영 origin에 대한 CORS 규칙이
   있어야 한다. `app-infra/main.tf`에 이제 그 리소스가 있다
-  (`aws_s3_bucket_cors_configuration.app`, 2026-09-22 추가, ADR 0036 addendum) — 코드는
+  (`aws_s3_bucket_cors_configuration.app`, 2026-09-22 추가, ADR 0036 추가 기록) — 코드는
   완성됐지만 아직 apply하지 않았고, apply하면 지금 버킷에 있는 규칙(2026-08-16에 손으로
   돌린 스크립트의 localhost 개발 origin 두 개뿐, 운영 origin 없음)을 운영 origin 하나로
   **교체**한다. apply 이후에도 실제 버킷을 상대로 한 로컬 `STORAGE_DRIVER=s3` 테스트가
   필요하면 개발 origin을 다시 손으로 넣어야 한다. 별개로 `frontend/nginx.conf`의 CSP가
   `https://*.amazonaws.com`을 허용해야 한다(ADR 0060 — 브라우저로 확인하기 전까지는 CSP
-  의미론에서 추정한 값이다). Observed 2026-09-29: `sharenpo-<AWS_ACCOUNT_ID>`에 `aws s3api
+  의미론에서 추정한 값이다). 2026-09-29 관찰: `sharenpo-<AWS_ACCOUNT_ID>`에 `aws s3api
   get-bucket-cors`를 돌려보니 운영 origin 전용 규칙이 적용돼 있었다(개발 origin은 예측대로
   병합이 아니라 통째로 사라짐). 실제 브라우저에서: `private`은 blob fetch로 로드됐고(`302` →
   presigned `https://sharenpo-<AWS_ACCOUNT_ID>.s3.ap-northeast-2.amazonaws.com/granted/...` →
   `200`); `public`과 `unlisted`는 둘 다 `<img src="https://sharenpo.cloud/file/:id/content">`가
   그대로 그 리다이렉트를 따라가는 방식으로 로드됐다. 세 경우 모두 실제 테스트 이미지가
   렌더링됐고(`naturalWidth: 4`, 깨진 이미지 아님) 콘솔 에러는 없었다 — CSP 와일드카드가
-  버킷의 실제 virtual-hosted-style 호스트를 정말로 매치한다(ADR 0036 addendum).
+  버킷의 실제 virtual-hosted-style 호스트를 정말로 매치한다(ADR 0036 추가 기록).
   2026-09-30 관찰(재배포한 스택, 개발자가 배포하고 Playwright로 확인): 게시글에 첨부한 `unlisted`
   비디오가 소유자에게 렌더링됐고, 콘텐츠 요청은 share 토큰을 달고 갔다(`302` → presigned S3 URL).
   `frontend/` 플레이어에서 seek하면 `Range: bytes=1212416-`가 S3로 가서 `Content-Range`가 일치하는
@@ -536,26 +536,26 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   두 번째 추가 기록). `admin/`에는 미디어 플레이어가 없어 확인하지 않았다. 확인하지 못한 것: URL의
   TTL 이후 seek, 다른 브라우저, 오디오.
 - 실제 클라이언트 IP가 rate limiter에 도달하는지(`trust proxy` = `10.0.0.0/16`, ADR 0054
-  addendum): 한 클라이언트에서 1분 안에 `POST /auth/signin`을 여섯 번째로 호출하면 429가 나오고,
+  추가 기록): 한 클라이언트에서 1분 안에 `POST /auth/signin`을 여섯 번째로 호출하면 429가 나오고,
   다른 IP의 두 번째 클라이언트는 전혀 제한되지 않아야 한다. 모든 방문자가 하나의 버킷을
-  공유한다면 앱이 보는 peer가 그 CIDR 안에 있지 않다는 뜻이다. Observed 2026-09-29(단일
+  공유한다면 앱이 보는 peer가 그 CIDR 안에 있지 않다는 뜻이다. 2026-09-29 관찰(단일
   클라이언트만 — 이 세션에 두 번째 네트워크가 없었다): 존재하지 않는 계정으로
   `POST /auth/signin`을 반복하니 `429`와 `Retry-After: 33`이 떴다; 스로틀된 상태에서 같은
   IP의 `POST /auth/register`(다른 핸들러)는 여전히 `400`을, 인증되지 않은 `GET /file`은
   여전히 `401`을 답해 버킷이 라우트별이지 앱 전체 공유가 아님을 확인했다(ADR 0054
-  addendum). ~~아직 열려 있는 것: 정말로 다른 IP의 두 번째 클라이언트가 첫 번째의 `429`에
-  영향받지 않는지 — 실제 두 번째 네트워크(예: 휴대폰 핫스팟)가 필요하다.~~ Observed
-  2026-09-29(개발자, 노트북을 평소 와이파이에서 휴대폰 핫스팟으로 전환 — 같은 네트워크의
+  추가 기록). ~~아직 열려 있는 것: 정말로 다른 IP의 두 번째 클라이언트가 첫 번째의 `429`에
+  영향받지 않는지 — 실제 두 번째 네트워크(예: 휴대폰 핫스팟)가 필요하다.~~
+  2026-09-29 관찰(개발자, 노트북을 평소 와이파이에서 휴대폰 핫스팟으로 전환 — 같은 네트워크의
   다른 기기가 아니라 실제로 다른 공인 IP): 평소 네트워크에서는 여섯 번째
   `POST /auth/signin`에서 `429`가 떴다(`400` 다섯 번 뒤 `429`, 분당 5회 한도와 정확히
   일치); 핫스팟 IP에서 같은 요청은 `429`가 아니라 `400` — 두 IP가 서로 다른 버킷으로
   잡혔다. 원래 네트워크로 돌아가 한 번 더 시도했을 때도 여전히 기대했던 `429`가 아니라
   `400`이 나왔는데, 네트워크 전환 도중 60초 윈도가 이미 지났을 가능성이 거의 확실하고
-  결함은 아니다(ADR 0054 addendum).
+  결함은 아니다(ADR 0054 추가 기록).
 - 롤아웃과 스크레이프: 세 Deployment 모두 `kubectl rollout status`가 성공하고, 프론트엔드와
   admin Service 각각에는 ready 엔드포인트가 있으며 백엔드 Service에는 그 파드들이 하나도
   없고, Prometheus에는 백엔드 타깃만 있고 프론트엔드·admin 타깃은 없어야 한다(`web` 포트
-  이름, ADR 0060, ADR 0062). Observed 2026-09-29(`Ingress` 켠 상태 — 이번 세션의 평상시
+  이름, ADR 0060, ADR 0062). 2026-09-29 관찰(`Ingress` 켠 상태 — 이번 세션의 평상시
   상태): `job=sharenpo`(endpoint `http`)는 `up`이었고, `sharenpo-frontend`/`sharenpo-admin`
   job은 아예 나타나지 않았다 — `down`이 아니라 처음부터 없는 것인데, 둘 다 `ServiceMonitor`가
   없기 때문이다([ADR 0056](../../docs/ADR/0056-networkpolicy-east-west-restriction.ko.md) 추가 기록).
@@ -582,9 +582,9 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   못했다는 뜻이니, 종료 훅에 도달하지 못하는 종료 경로를 찾아야 한다. 측정은 로컬 `kind`
   클러스터에서만 했다: 0.4초, 타이머를 남겨 둔 경우 옵션이 없으면 30.6초였다. `S3Client`
   자체는 이미 닫힌 질문이다 — 그 기본 `keepAlive` request agent를 대신한 Docker 전용 시험
-  (같은 핸들 모양, ADR 0061 두 번째 Addendum)이 소켓을 일부러 열어 둔 채로도 똑같이 빨리
+  (같은 핸들 모양, ADR 0061 두 번째 추가 기록)이 소켓을 일부러 열어 둔 채로도 똑같이 빨리
   종료했다 — 그러니 이 점검은 그 핸들이 아니라 실제 파드에만 있는 다른 무언가가 있는지를
-  보는 것에 가깝다. Observed 2026-09-29, 라이브 EKS, 롤아웃 두 회차: 옛 파드의 `Killing`과
+  보는 것에 가깝다. 2026-09-29 관찰, 라이브 EKS, 롤아웃 두 회차: 옛 파드의 `Killing`과
   `SuccessfulDelete` 이벤트가 두 회차 모두 같은 초에 찍혔고, 몇 초 뒤엔 이미 `NotFound`였다 —
   Kubernetes 이벤트는 초 단위까지만 찍혀서 `kind`의 정확한 `0.4초`를 그대로 재현하진 못했지만,
   30초 유예 근처까지 가는 것과는 확실히 거리가 멀었다(ADR 0061의 2026-09-29 추가 기록).
@@ -598,14 +598,14 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   백엔드가 답한 것이다(429는 자체 rate limit이므로 분당 100건 미만을 유지한다). 통과 기준: 셋 다
   없음. 나타나면 앱 컨테이너에 `preStop` sleep을 두고 `terminationGracePeriodSeconds`를 적어도
   그만큼 늘린다. 그 *메커니즘* 자체는 일회용 `kind` Deployment에서 검증했다(차트에는 커밋하지
-  않음, ADR 0061 두 번째 Addendum): 유예가 sleep을 다 덮으면 파드가 예상대로 5.7초 만에
+  않음, ADR 0061 두 번째 추가 기록): 유예가 sleep을 다 덮으면 파드가 예상대로 5.7초 만에
   사라졌고, 유예를 일부러 sleep보다 짧게 두어도 kubelet은 막힌 hook을 포기하는 순간 여전히
   SIGTERM을 보냈고 앱은 깔끔하게 종료했다 — 다만 파드가 유예 시간 전체(36.4초)를 다 썼을
   뿐이다. 그러니 여기서 유예가 부족하면 앱이 그대로 SIGKILL당하는 게 아니라 롤아웃 시간이
   드는 것이다 — 적어도 이 `kind`/containerd 버전에서는 그렇다; EKS에서는 확인하지 않았다.
   이 중 무엇도 sleep을 얼마로 둬야 하는지는 말해 주지 않는다 — 그건 아직 측정하지 못한 실제
   ALB의 드레인 지연 숫자가 있어야 정할 수 있으므로, 차트에는 둘 다 지금 없고 여전히 정하지
-  않았다. Observed 2026-09-29, 라이브 EKS, 롤아웃 두 회차, `/file`에 초당 1회 curl을 걸면서
+  않았다. 2026-09-29 관찰, 라이브 EKS, 롤아웃 두 회차, `/file`에 초당 1회 curl을 걸면서
   백엔드 타깃 그룹을 `aws elbv2 describe-target-health`로 함께 조회: **회차마다 정확히 한 번씩
   실패했다**, 다만 `502`/`503`/`504`가 아니라 curl `000`(HTTP 응답 자체가 없음 — 거부/리셋)
   이었고, 옛 파드의 `Killing` 이벤트로부터 약 1초 안, 그리고 타깃 헬스 API가 `draining`을
@@ -622,10 +622,10 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
 ## Env var
 
 `values.yaml`의 `env:` 블록 아래 모든 키는 `backend/app.module.ts`의 Joi
-스키마와 일치해야 합니다 — 어떤 var가 필수이고 어떤 게 선택인지의 근거는
-그쪽입니다. `env` 블록의 값들은 ConfigMap으로 들어가고, `DB_USERNAME`/
+스키마와 일치해야 한다 — 어떤 var가 필수이고 어떤 게 선택인지의 근거는
+그쪽이다. `env` 블록의 값들은 ConfigMap으로 들어가고, `DB_USERNAME`/
 `DB_PASSWORD`/`ACCESS_TOKEN_SECRET`/`REFRESH_TOKEN_SECRET`은 대신
-`secrets.existingSecret`에서 오며 `values.yaml`에는 반복해서 적지 않습니다.
+`secrets.existingSecret`에서 오며 `values.yaml`에는 반복해서 적지 않는다.
 
 ## 클러스터 없이 검증하기
 
@@ -672,11 +672,11 @@ docker run --rm -p 8080:8080 sharenpo-admin:local
 
 ## Docker Desktop Kubernetes에서 검증하기
 
-2026-09-24에 검증했습니다(ADR 0062). `frontend`와 `admin`은 켜고 Ingress와 NetworkPolicy는
-껐습니다 — Docker Desktop에는 ALB Controller가 없고, 기본 CNI는 `NetworkPolicy`를 강제하지
-않습니다. kubeconfig에 실제 EKS 컨텍스트가 함께 있을 수 있어서 모든 명령에
-`--context docker-desktop` / `--kube-context docker-desktop`을 명시합니다. Git Bash 기준이고,
-`cd`가 따로 없으면 저장소 루트에서 실행합니다.
+2026-09-24에 검증했다(ADR 0062). `frontend`와 `admin`은 켜고 Ingress와 NetworkPolicy는
+껐다 — Docker Desktop에는 ALB Controller가 없고, 기본 CNI는 `NetworkPolicy`를 강제하지
+않는다. kubeconfig에 실제 EKS 컨텍스트가 함께 있을 수 있어서 모든 명령에
+`--context docker-desktop` / `--kube-context docker-desktop`을 명시한다. Git Bash 기준이고,
+`cd`가 따로 없으면 저장소 루트에서 실행한다.
 
 ```bash
 # 1. 일회용 네임스페이스, RDS 자리를 대신할 Postgres, Secret(CI가 이미 커밋해 둔 공개 더미 값)
@@ -709,20 +709,20 @@ kubectl --context docker-desktop delete namespace c13-verify
 `c13-frontend`, `c13-admin`이 각각 엔드포인트 주소 하나씩이고 모두 서로 다름; 이어서 `/admin` 301,
 `/admin/` 200, `/admin/dashboard` 200, `/admin/assets/nope.js` 404, `c13-admin/` 404, frontend `/`
 200, `/posts/1` 200, `/assets/nope.js` 404, `c13:3000/health/ready` 200. 2026-09-24 실행은 이틀
-전에 빌드한 `sharenpo-frontend:local`을 그대로 썼고 위 값이 모두 일치했습니다.
+전에 빌드한 `sharenpo-frontend:local`을 그대로 썼고 위 값이 모두 일치했다.
 
 **Kubernetes가 "Starting"에서 벗어나지 않을 때**(Docker Desktop 4.48.0, WSL 커널 `6.18.33.2`,
 2026-09-24에 확인): Docker Desktop 로그(`%LOCALAPPDATA%\Docker\log\host\com.docker.backend.exe.log`)에
 `kubelet`이 시작 몇 초 뒤 `cgroup ["kubepods"] has some missing controllers: cpuset`으로 종료되는
-기록이 남습니다. `docker-desktop` WSL 배포판 안에서 `cpuset`은 `cgroup.controllers`에는 있었지만
-`cgroup.subtree_control`에는 없었습니다. 효과가 있었던 방법:
+기록이 남는다. `docker-desktop` WSL 배포판 안에서 `cpuset`은 `cgroup.controllers`에는 있었지만
+`cgroup.subtree_control`에는 없었다. 효과가 있었던 방법:
 
 ```bash
 wsl -d docker-desktop -e sh -c 'echo +cpuset > /sys/fs/cgroup/cgroup.subtree_control'
 ```
 
 그런 다음 Settings > Kubernetes에서 "Enable Kubernetes"는 체크한 채로 **Reset Kubernetes Cluster**를
-누릅니다(체크를 껐다가 Apply & Restart를 누르는 방법은 클러스터가 "Starting"인 동안 비활성화됩니다).
-클러스터는 reset 뒤 약 26초 만에 `Ready`가 됐습니다. 이 설정은 유지되지 않습니다 — Docker Desktop
-VM이 재시작되면(`wsl --shutdown`, Docker Desktop 종료) 사라지므로 다시 해야 합니다. `cpuset`이 기본으로
-위임되지 않는 이유는 확인하지 못했습니다.
+누른다(체크를 껐다가 Apply & Restart를 누르는 방법은 클러스터가 "Starting"인 동안 비활성화된다).
+클러스터는 reset 뒤 약 26초 만에 `Ready`가 됐다. 이 설정은 유지되지 않는다 — Docker Desktop
+VM이 재시작되면(`wsl --shutdown`, Docker Desktop 종료) 사라지므로 다시 해야 한다. `cpuset`이 기본으로
+위임되지 않는 이유는 확인하지 못했다.

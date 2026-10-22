@@ -30,7 +30,7 @@ ap-northeast-2`와 과금되는 나머지 리소스 — RDS(`aws rds describe-db
 읽을 것, 그리고 `destroy`는 함부로 하지 말 것입니다 — RDS 인스턴스가
 `skip_final_snapshot = true`, `deletion_protection = false` 상태라 이를 교체하거나 파괴하는
 작업은 데이터를 함께 지우고 최종 스냅샷도 남기지 않습니다(그래서 지금까지의 철거는 모두 확인을 거쳐
-결정한 것입니다). ADR 0043과 0044의 Addendum은 여전히 apply한 적 없다고 적고
+결정한 것입니다). ADR 0043과 0044의 추가 기록은 여전히 apply한 적 없다고 적고
 있는데, ADR은 작성 시점의 사실을 기록하므로 그대로 두었습니다 — 더 자세한
 경위와 보류된 식별자 개명 건은
 [ROADMAP.ko.md 7절](../../../docs/ROADMAP.ko.md#7-미일정--미결-사항)을 보세요
@@ -283,7 +283,7 @@ bash deploy.sh helm         # 이제 인자 없이도 main을 배포
 파드가 이미지를 받지 못합니다 — 그런 롤백은 helm을 직접 실행하세요.
 
 **테스트 배포와 실제 배포**([ADR 0048](../../../docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)
-Addendum, 2026-09-26): `dev` 이미지는 `amd64`뿐이고 실제로 도는 노드는 `arm64`(Graviton)뿐이라,
+추가 기록, 2026-09-26): `dev` 이미지는 `amd64`뿐이고 실제로 도는 노드는 `arm64`(Graviton)뿐이라,
 `dev`를 이 클러스터에 배포하면 태그 확인은 통과하고 파드가 뜰 때 실패합니다 — 위의 인자 없는
 `bash deploy.sh helm` 기본값은 테스트용이지 이 클러스터용이 아닙니다. `dev`는 테스트(로컬,
 `kind`, Docker Desktop)에 쓰고, 실제 배포는 `arm64`도 담은 `main` 이미지로 합니다: `dev`를
@@ -307,7 +307,7 @@ External Secrets, 모니터링 스택과 함께 도는 첫 배포입니다. clam
 대상이자, 각 단계가 실제로 무엇을 하는지 보는 참고 자료로 남겨둡니다. 이 순서는
 최초 배포든, 전체 `terraform destroy`(아래) 이후의 완전 재배포든 똑같이 적용됩니다:
 
-**plan/apply 분리** (ADR 0046 addendum, 2026-09-02): `cluster`/`app-infra`/`addons`에
+**plan/apply 분리** (ADR 0046 추가 기록, 2026-09-02): `cluster`/`app-infra`/`addons`에
 한해 `bash deploy.sh plan <state>`는 plan을 계산해 고정된 gitignore 경로에 저장만
 하고 종료합니다 — apply는 하지 않습니다. `bash deploy.sh apply <state>`는 저장된
 plan을 다시 보여주고 여전히 명시적 `y` 확인을 받은 뒤에만 적용합니다. plan 계산과
@@ -653,7 +653,7 @@ cd addons && terraform state rm module.eks_blueprints_addons
 state 버킷은 어느 state에도 속하지 않아서 어떤 destroy도 지우지 않고, 모든 state의 이전 버전이
 그대로 남는다(버저닝이 켜져 있고 만료시키는 규칙이 없다). 그 버전들에는 생성된 비밀번호가 평문으로
 들어 있다([ADR 0057](../../../docs/ADR/0057-terraform-state-backend-s3-native-lock.ko.md) Context와
-Addendum). 위 정리 뒤에 `addons/` state 객체에는 삭제 마커가 찍혔고(2026-09-26), 이전 버전들은
+추가 기록). 위 정리 뒤에 `addons/` state 객체에는 삭제 마커가 찍혔고(2026-09-26), 이전 버전들은
 남아 있다.
 
 `app-infra/`의 `s3_bucket_name`/`domain_name`은 기본값이 없어서(전역적으로

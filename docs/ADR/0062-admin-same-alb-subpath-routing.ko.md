@@ -139,7 +139,7 @@ URI를 매칭하지 못하므로 전용 리다이렉트를 하나 더 둔다: `l
 fallback, 없는 `/admin/assets/*`의 404, CSP 헤더 확인). `deploy.sh`는 기존 백엔드·프론트
 태그 옆에 세 번째로 `--set admin.image.tag=`를 조회해 전달한다. `docker-tag-cleanup.yml`의
 매트릭스에는 `sharenpo-admin`이 세 번째 항목으로 들어간다 — `sharenpo-frontend`를 추가할 때
-ADR 0060 addendum이 이미 기록한 것과 같은 이유다.
+ADR 0060 추가 기록이 이미 기록한 것과 같은 이유다.
 
 ## Consequences
 
@@ -173,7 +173,7 @@ ADR 0060 addendum이 이미 기록한 것과 같은 이유다.
    Docker Hub에 `bluecode1775/sharenpo-admin`을 만든다(아직 본 적 없음, `-frontend`가
    겪었던 것과 같은 이력).
 
-## Addendum (2026-09-24): 로컬 클러스터 검증
+## 추가 기록 (2026-09-24): 로컬 클러스터 검증
 
 후속 작업 1을 좁힌다: 로컬 클러스터 쪽은 끝났고, 남은 것은 라이브 ALB가 필요한 부분뿐이다.
 
@@ -205,7 +205,7 @@ admin 파드가 Ready라는 것은 probe(`GET /admin/`)가 `alias` 설정을 거
 `k8s/helm/README.md`); GitHub Actions에서의 `docker-publish-admin`; 실제 Docker Hub 이미지를
 대상으로 한 `deploy.sh`의 admin 태그 확인; 세 이미지로 하는 `helm upgrade`와 롤백.
 
-## Addendum (2026-09-25): 운영 이미지 브라우저 확인
+## 추가 기록 (2026-09-25): 운영 이미지 브라우저 확인
 
 제가 Playwright로 실제 `sharenpo-admin:local` 이미지(nginx, CSP 헤더 켜짐)를 로컬 포트에 띄워
 확인했고, 컨테이너 뒤에 백엔드는 없었다. 그래서 `/auth/*` 요청은 nginx 자신의 404로 응답하고,
@@ -219,7 +219,7 @@ admin 파드가 Ready라는 것은 probe(`GET /admin/`)가 `alias` 설정을 거
 
 확인하지 않은 것: 컨테이너 뒤에 백엔드가 없었으므로 로그인 흐름과 그 뒤의 페이지들.
 
-## Addendum (2026-09-25): CI 첫 실행
+## 추가 기록 (2026-09-25): CI 첫 실행
 
 후속 작업 2를 해소한다. `c0b309d`를 `dev`에 push하자(개발자가 직접 push) CI 워크플로가
 돌았고(run `36065808388`) 9개 잡이 모두 통과했다. 실행 기록과 Docker Hub에서 읽은 결과:
@@ -237,7 +237,7 @@ admin 파드가 Ready라는 것은 probe(`GET /admin/`)가 `alias` 설정을 거
 항목; 이제 존재하는 이미지를 대상으로 한 `deploy.sh`의 admin 태그 확인; 그리고 라이브 ALB가 필요한
 모든 것.
 
-## Addendum (2026-09-26): 라이브 ALB — 헬스체크에는 Service별 경로가 필요하다
+## 추가 기록 (2026-09-26): 라이브 ALB — 헬스체크에는 Service별 경로가 필요하다
 
 개발자가 라이브 클러스터에서 Ingress를 켰다. 세션은 AWS와 클러스터를 읽기 전용으로 조회하고
 `curl`로 공개 사이트를 요청했다. 시각은 UTC다.
@@ -363,7 +363,7 @@ healthy로 받아들이게 됨)과 기존 상태를 그대로 두는 것.
 변경(승격, 그리고 두 번째 계정의 `user → admin`)은 설계대로 `/admin/logs`에 영구히
 남아 있다(ADR 0013의 감사 로그는 append-only다).
 
-## Addendum (2026-09-30, 이어서) — `main`에서 재배포: unlisted 첨부 수정이 라이브에 반영됨
+## 추가 기록 (2026-09-30, 이어서) — `main`에서 재배포: unlisted 첨부 수정이 라이브에 반영됨
 
 같은 날 스택을 다시 배포했다(개발자가 `deploy.sh helm main`을 실행했고, `cluster/`, `app-infra/`, 애드온
 4개는 이미 떠 있었다). 세션은 클러스터와 AWS를 읽기 전용으로 조회하고 Playwright로 frontend를 조작했다.

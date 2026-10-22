@@ -1,6 +1,6 @@
 # ADR 0048: CI 트리거 복원과 `docker-publish` 브랜치별 설계
 
-- 상태: 승인됨 — 구현됨 (Addendum 참고)
+- 상태: 승인됨 — 구현됨 (추가 기록 참고)
 - 날짜: 2026-08-30
 - 개정 대상: [ADR 0016](0016-github-actions-ci.ko.md) (GitHub Actions 기반 지속적 통합)
 - English: [0048-ci-trigger-restoration-and-docker-publish-design.md](0048-ci-trigger-restoration-and-docker-publish-design.md)
@@ -115,7 +115,7 @@ header"로 즉시 실패하기 시작했다. 이는 Docker Hub 자격증명 문�
   빌드가 이제 GitHub Actions 캐시(`type=gha`)를 쓰므로 이후 push 빌드가 그
   레이어를 재사용한다. 이 잡에 생긴 첫 캐싱이다.
 
-### Addendum (2026-08-31) — 다음 날 발견·해결한 설계 갭 5가지
+### 추가 기록 (2026-08-31) — 다음 날 발견·해결한 설계 갭 5가지
 
 다음 날 재검토에서 이 ADR 자체의 설계 갭 5가지가 드러났다(별도 언급 없는 한
 전부 이 ADR이 만든 것이지 기존부터 있던 게 아니다) — 같은 작업에서 전부
@@ -181,7 +181,7 @@ header"로 즉시 실패하기 시작했다. 이는 Docker Hub 자격증명 문�
   Dockerfile 자체 상수에서 다시 유도: 18회 × `sleep 5` = 90초로, 두
   번의 전체 체크 주기(~t=0초, ~t=30초)와 여유분을 넉넉히 포함하게 했다.
 - **스모크 테스트가 마이그레이션을 한 번도 실행한 적이 없어, 깨진
-  마이그레이션을 못 잡았다.** (같은 Addendum에서 위에 추가한)
+  마이그레이션을 못 잡았다.** (같은 추가 기록에서 위에 추가한)
   `GET /health/ready`는 그냥 `SELECT 1`(`HealthService.checkDatabase`)로
   DB를 핑할 뿐이라 — 어떤 테이블도 쿼리하지 않으므로 완전히 마이그레이션된
   DB든 텅 빈 미마이그레이션 DB든 똑같이 성공한다. 원래 스모크 테스트도,
@@ -198,7 +198,7 @@ header"로 즉시 실패하기 시작했다. 이는 Docker Hub 자격증명 문�
   자체의 검증 내용을 바꾸는 게 아니라, 그보다 한 단계 앞선 별개의 갭을
   닫는 것이다 — 두 체크가 돌기도 전에 깨진 마이그레이션을 미리 잡는다.
 
-### Addendum (2026-09-26) — `dev` 이미지는 테스트용이고, 실제 배포는 `main`을 쓴다
+### 추가 기록 (2026-09-26) — `dev` 이미지는 테스트용이고, 실제 배포는 `main`을 쓴다
 
 D2는 `dev`를 `amd64`로만 빌드하게 했다. 그런데 그 이미지가 배포될 클러스터는 `arm64`만 돈다.
 `cluster/main.tf`의 `graviton` 그룹(`AL2023_ARM_64_STANDARD`, `t4g.medium`)만 노드가 있고,

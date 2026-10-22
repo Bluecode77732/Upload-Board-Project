@@ -1,6 +1,6 @@
 # ADR 0047: 관측 가능성 스택 — Prometheus와 Grafana
 
-- Status: Accepted — 구현됨, 라이브 검증 완료(Addendum 참고)
+- Status: Accepted — 구현됨, 라이브 검증 완료(추가 기록 참고)
 - Date: 2026-08-28
 - Extends: [ADR 0017](0017-logging-conventions.ko.md)
 - English: [0047-observability-prometheus-grafana.md](0047-observability-prometheus-grafana.md)
@@ -35,7 +35,7 @@ Terraform 모듈을 호출해 AWS Load Balancer Controller와 External Secrets O
 선택한 동기는 구체적인 실무적 요인들에 있다 — 격차를 메운다는 이유 하나만은 아니다:
 - **Prometheus**: 낮은 도입 비용(자체호스팅 가능, 라이선스 비용 없음), 얕은 학습
   곡선과 단순한 구현, 가벼운 실행 비용(런타임 부담), 타 도구 대비 압도적으로 높은
-  점유율(D1 Addendum의 다운로드 수 비교로 직접 확인됨), 그리고 사실상의 업계
+  점유율(D1 추가 기록의 다운로드 수 비교로 직접 확인됨), 그리고 사실상의 업계
   표준 메트릭 도구라는 위상.
 - **Grafana**: 범용 시각화 표준으로 자리매김했다는 위상이 주된 이유였고, 타 도구
   대비 동일하게 높은 점유율, 마찬가지로 얕은 학습 곡선과 가벼운 구현 비용, 그리고
@@ -137,7 +137,7 @@ ADR은 스크레이프 대상·리텐션·수집 메커니즘 중 어느 것도 
   Terraform 플래그 자체, 그리고 라이브 재기동 + 검증(D4) — 이 ADR은 결정을
   기록할 뿐이고, 후속 구현 태스크가 실제로 수행한다.
 
-### Addendum (2026-08-29) — 지금은 `prom-client` 유지, 향후 재검토 트리거 기록
+### 추가 기록 (2026-08-29) — 지금은 `prom-client` 유지, 향후 재검토 트리거 기록
 
 구현 도중 `pnpm add prom-client` 설치 로그에 npm deprecated 경고가 떴다. 추측하지
 않고 직접 검증했다: `github.com/siimon/prom-client`는
@@ -145,7 +145,7 @@ ADR은 스크레이프 대상·리텐션·수집 메커니즘 중 어느 것도 
 Discussion([prometheus/client_js#755](https://github.com/prometheus/client_js/discussions/755),
 2026-07-01)에서 원저자(`siimon`)가 프로젝트를 Prometheus Project에 실제로
 기증했음을 확인했다 — 별개 fork나 무관한 패키지가 아니다. 개명된 패키지
-`@prometheus-io/client`는 이 Addendum 작성 닷새 전인 2026-08-24에 `0.16.0`으로
+`@prometheus-io/client`는 이 추가 기록 작성 닷새 전인 2026-08-24에 `0.16.0`으로
 첫 배포됐고, 그 Discussion의 메인테이너 코멘트를 보면 2026-08-19까지도 npm 배포
 파이프라인을 직접 디버깅하고 있었다.
 
@@ -173,9 +173,9 @@ Node ≥24 고정, [ADR 0014](0014-node-pnpm-version-pinning.ko.md)라 무관), 
 프로젝트가 실제로 고려할 만한 NestJS Prometheus 통합 패키지(D1에서 기각한
 `@willsoto/nestjs-prometheus` 선례, 혹은 그에 준하는 패키지)가 자신의
 의존성을 `@prometheus-io/client`로 옮기는 경우. 둘 중 하나라도 일어나면 이
-Addendum을 쓴 시점의 "배포된 지 며칠 안 된" 상태를 벗어났다는 신호다.
+추가 기록을 쓴 시점의 "배포된 지 며칠 안 된" 상태를 벗어났다는 신호다.
 
-### Addendum (2026-08-29/30) — D4 라이브 검증: 막혔다가 완료됨
+### 추가 기록 (2026-08-29/30) — D4 라이브 검증: 막혔다가 완료됨
 
 재프로비저닝 자체는 끝까지 성공했다: `cluster`/`app-infra`/`addons` 전부 적용됨(NS
 위임을 바로잡은 뒤 ACM도 검증 완료), `kube-prometheus-stack`은 `deployed`로 모든
@@ -225,7 +225,7 @@ Explore 탭에서 즉석 PromQL 쿼리로만 볼 수 있다. 이를 위한 대�
 애초에 이 ADR의 범위가 아니었다(Consequences에 이미 "커스텀 대시보드는 아직
 없다"고 명시돼 있었다).
 
-### Addendum (2026-08-31) — Alerting 표본 점검; 6개 규칙 전부 검증 완료
+### 추가 기록 (2026-08-31) — Alerting 표본 점검; 6개 규칙 전부 검증 완료
 
 이 ADR의 Decision은 Alerting을 별도로 다룬 적이 없다. `kube-prometheus-stack`이
 Alertmanager를 함께 가져오고(D2), Grafana 자체 unified alerting 엔진도 Grafana
@@ -301,7 +301,7 @@ Prometheus 알림 시맨틱을 가정한 것. 실측 결과 이 가정은 틀렸
 `ef bf bd`(U+FFFD, 유니코드 대체 문자의 UTF-8 인코딩) 바이트열이 그대로 박혀
 있었다 — `AppTargetDown`의 description은 멀쩡히 정상이었다. 원인: U+FFFD는 잘못된
 바이트열을 디코딩할 때 나오는 손실성 대체 문자이므로, 이 다섯 규칙이 처음
-프로비저닝됐을 때(2026-08-30, 이 addendum의 검증 작업보다 이전) 이미 원본 한글
+프로비저닝됐을 때(2026-08-30, 이 추가 기록의 검증 작업보다 이전) 이미 원본 한글
 바이트가 사라진 상태였다는 뜻이다 — 원래 `POST`를 보낸 클라이언트가 UTF-8이
 아닌 셸/코드페이지 환경이었을 가능성이 가장 높고, Grafana는 받은 그대로
 저장했을 뿐이다. 바이트 단위 복구는 불가능해서, 각 규칙의 제목과 PromQL

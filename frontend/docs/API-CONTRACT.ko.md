@@ -125,7 +125,7 @@
 | `POST` | `/file/:id/transfer` | `{ userId }`; creator/admin이 이전을 제안한다 — 대상이 수락하기 전까지 소유권은 옮겨가지 않는다 (ADR 0050) |
 | `POST` | `/file/:id/transfer/accept` | 대상 본인만; 소유권 이전 |
 | `POST` | `/file/:id/transfer/reject` | 대상 본인만; 거절, 소유권 불변 |
-| `DELETE` | `/file/:id/transfer` | creator **전용**(propose와 달리 admin은 남의 제안을 취소 못 함, 2026-09-05 addendum); 아직 응답 없는 제안을 취소 |
+| `DELETE` | `/file/:id/transfer` | creator **전용**(propose와 달리 admin은 남의 제안을 취소 못 함, 2026-09-05 추가 기록); 아직 응답 없는 제안을 취소 |
 | `POST` | `/upload/attach` | multipart — `image`/`audio`/`video` 중 정확히 하나, 100MB (ADR 0027) |
 | `GET` | `/user`, `/user/:id` | `/user`(목록)는 **admin 전용**; `/user/:id`는 인증된 유저 누구나 |
 | `GET` | `/user/lookup?email=` | 인증된 유저 누구나; 이메일 정확 일치, 없으면 `404 USER_NOT_FOUND` — `POST /file/:id/transfer`가 필요로 하는 숫자 id를 이메일로부터 구한다 (ADR 0050) |
@@ -174,7 +174,7 @@ attach하지 않고 이미 받은 `filename`으로 재시도한다.
 제안할 수 있지만(이 API의 일반적인 creator-or-admin 쓰기 패턴과 동일), 오직 그 파일의
 **creator**만 제안을 취소할 수 있다 — admin은 자신이 당사자가 아닌 두 유저 간 협상에
 모더레이션 이해관계가 없으므로, 같은 권한 검사를 무검토로 상속하는 대신 이 분기를 좁혔다
-(2026-09-05 addendum). admin이 원치 않는 대기중인 이전을 막아야 한다면 여전히
+(2026-09-05 추가 기록). admin이 원치 않는 대기중인 이전을 막아야 한다면 여전히
 `DELETE /file/:id`로 가능하다(파일 자체를, 대기 상태와 함께 삭제) — 다만 그 협상만
 겨냥한 비파괴적 취소는 더 이상 안 된다.
 

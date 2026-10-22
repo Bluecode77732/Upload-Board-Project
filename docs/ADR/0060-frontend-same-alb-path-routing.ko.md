@@ -1,6 +1,6 @@
 # ADR 0060: 프론트엔드 호스팅 — 같은 Helm 릴리스의 별도 nginx 워크로드를 하나의 ALB에서 경로로 분기
 
-- Status: Accepted — 구현 완료 (`helm lint`/`helm template`, 로컬 이미지 빌드, 브라우저 CSP 확인, Docker Desktop Kubernetes에서의 `helm install --wait`([ADR 0062](0062-admin-same-alb-subpath-routing.ko.md) addendum, 2026-09-24), `docker-publish-frontend` CI 잡(2026-09-25)까지 검증. 첫 라이브 ALB(2026-09-26)에서 API prefix가 `/`보다 먼저 적용됐고 frontend 타깃 그룹이 healthy였다 — 나머지 라이브 확인은 보지 못했다, 마지막 추가 기록 참고)
+- Status: Accepted — 구현 완료 (`helm lint`/`helm template`, 로컬 이미지 빌드, 브라우저 CSP 확인, Docker Desktop Kubernetes에서의 `helm install --wait`([ADR 0062](0062-admin-same-alb-subpath-routing.ko.md) 추가 기록, 2026-09-24), `docker-publish-frontend` CI 잡(2026-09-25)까지 검증. 첫 라이브 ALB(2026-09-26)에서 API prefix가 `/`보다 먼저 적용됐고 frontend 타깃 그룹이 healthy였다 — 나머지 라이브 확인은 보지 못했다, 마지막 추가 기록 참고)
 - Date: 2026-09-21
 - Amends: [ADR 0058](0058-ingress-path-allowlist.ko.md) (D1의 "catch-all 없음"은 이제 백엔드 Service에만 적용되고, D2의 3·4번 근거는 합쳐진 Ingress에서는 더 이상 성립하지 않는다), [ADR 0010](0010-frontend-split-and-api-surface-freeze.ko.md) ("prod: `CORS_ORIGIN`" 절만)
 - Extends: [ADR 0041](0041-helm-chart-project-adaptation.ko.md)
@@ -21,7 +21,7 @@
   도메인 간 쿠키 문제를 "Stage 4 배포 ADR"로 미뤘다.
 - [ADR 0034](0034-https-termination-stance.ko.md)는 TLS 종단을 ALB/Ingress에
   두기로 했다. [ADR 0054](0054-per-route-rate-limit-tuning.ko.md)의 2026-09-14
-  addendum은 목표 형태를 "CDN이나 두 번째 리버스 프록시 계층 없이 인터넷에 열린
+  추가 기록은 목표 형태를 "CDN이나 두 번째 리버스 프록시 계층 없이 인터넷에 열린
   ALB 하나"로 기록했고, 이것이 `trust proxy` = `10.0.0.0/16`의 전제다.
 - [ADR 0058](0058-ingress-path-allowlist.ko.md)은 Ingress를 백엔드 컨트롤러
   prefix 일곱 개의 명시적 allow-list로 만들어, `/health`·`/metrics`·`/doc`이
@@ -265,7 +265,7 @@ replica 수, nginx 보안 헤더의 정확한 구성, 캐시 정책.
   공백이 드러났다: `ip` 모드 ALB는 파드 IP로 직접 트래픽을 보내는데,
   [ADR 0056](0056-networkpolicy-east-west-restriction.ko.md)의 NetworkPolicy(같은 네임스페이스
   파드만 인바운드 허용)는 그걸 애초에 허용하지 않았다. 여기가 아니라 그 ADR 자신의 2026-09-22
-  addendum(`ingress.enabled`로 게이팅한 새 `ipBlock` 규칙)에서 함께 닫았다 — 둘 다 라이브에서만
+  추가 기록(`ingress.enabled`로 게이팅한 새 `ipBlock` 규칙)에서 함께 닫았다 — 둘 다 라이브에서만
   검증 가능하며 `k8s/helm/README.md`의 미해결 점검 목록에 있다.
 - **발견했지만 고치지 않은 것.** `docker-tag-cleanup.yml`은 `bluecode1775/sharenpo`만
   정리하므로 프론트엔드 저장소의 sha 태그는 쌓인다.
@@ -331,10 +331,10 @@ API prefix와도 SPA 라우트와도 겹치지 않고, "Residual, unverified"의
   나머지), 브라우저가 S3 presigned 리다이렉트를 따라가도록 CSP가 허용하는지(위의
   `https://*.amazonaws.com` 추정), 그리고 `/admin`의 순서다. `/admin`은 `200`으로는 확인할 수
   없다. 이 Service의 폴백도 그 경로에 `200`을 돌려주기 때문이다([ADR
-  0062](0062-admin-same-alb-subpath-routing.ko.md) Addendum).
+  0062](0062-admin-same-alb-subpath-routing.ko.md) 추가 기록).
 
 여기서 정한 것은 바뀌지 않는다. 나머지 두 Service는 각자의 헬스체크 경로가 필요했고, 그것은 ADR 0062의
-Addendum에 기록했다.
+추가 기록에 기록했다.
 
 ### 추가 기록 (2026-09-29) — 두 번째 라이브 ALB: 상태 코드가 아니라 본문으로 확인
 

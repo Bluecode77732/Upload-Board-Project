@@ -2,7 +2,7 @@
 
 - Status: Accepted — 구현됨(`cluster/`/`app-infra/`/`addons/` 분리, 폐기된 루트
   `main.tf`/`variables.tf`/`outputs.tf`/`versions.tf`, 3단계 apply 순서로 다시 쓴
-  `README.md`/`README.ko.md` — 아래 Addendum 참고); 실제 AWS에는 아직 apply하지 않음
+  `README.md`/`README.ko.md` — 아래 추가 기록 참고); 실제 AWS에는 아직 apply하지 않음
 - Date: 2026-08-19
 - Amends: [ADR 0043](0043-terraform-project-adaptation.md) (무엇을 프로비저닝하고 왜인지를
   정한 D1~D10 리소스 결정은 그대로 유지 — 그 ADR이 구현한 단일 root module 패키징만
@@ -109,7 +109,7 @@ k8s/infra/terraform/
 기존 `k8s/infra/terraform/` 경로 아래에 중첩시키는 방식(`k8s/infra/{cluster,addons,app-infra}/`로
 평탄화하지 않는 방식)을 택한 이유는, 이 디렉토리를 인용하는 기존 경로(CLAUDE.md의
 Terraform/infra 진입점, ADR 0038/0043, 이 저장소 README의 상호 링크)가 `k8s/infra/terraform/`
-접두사에서 그대로 유효하게 유지되고, `terraform/` 세그먼트가 ADR 0042 Addendum이 이미
+접두사에서 그대로 유효하게 유지되고, `terraform/` 세그먼트가 ADR 0042 추가 기록이 이미
 `k8s/helm/`에 대해 정립한 것과 같은 역할(프로젝트 이름을 반복하는 대신 툴 이름으로
 명확히 구분)을 계속 수행하기 때문이다.
 
@@ -145,7 +145,7 @@ Terraform/infra 진입점, ADR 0038/0043, 이 저장소 README의 상호 링크)
 ## Consequences
 
 - 이전 단일 root module이던 `k8s/infra/terraform/main.tf`/`variables.tf`/`outputs.tf`/
-  `versions.tf`는 D4의 3개 하위 디렉토리로 대체된다 — **완료, 아래 Addendum 참고**.
+  `versions.tf`는 D4의 3개 하위 디렉토리로 대체된다 — **완료, 아래 추가 기록 참고**.
 - apply/destroy 순서가 문서 관례가 아니라 데이터 의존성으로 강제된다: `cluster`가
   먼저, `app-infra`가 다음, `addons`가 마지막(D2). `cluster`만 destroy해서 RDS 데이터와
   Route53/ACM/Secrets Manager 설정은 그대로 둔 채 EKS/노드 그룹 비용만 끊는 것이 처음으로
@@ -157,12 +157,12 @@ Terraform/infra 진입점, ADR 0038/0043, 이 저장소 README의 상호 링크)
   의도였다면 그쪽으로 흡수하는 등) 별도 처리가 필요하다 — 아래 구현에서도 의도적으로
   건드리지 않았다.
 - CLAUDE.md의 Terraform/infra 진입점(concern-to-entrypoint map)은 이제 ADR 0038/0043과
-  나란히 이 ADR을 "구현됨"으로 인용한다 — 아래 Addendum 참고.
+  나란히 이 ADR을 "구현됨"으로 인용한다 — 아래 추가 기록 참고.
 - 스키마, 엔티티, API 표면 변경 없음. 이 ADR의 구현 작업이 건드린 코드는 `docs/ADR/`,
   `k8s/infra/terraform/`, CLAUDE.md/`.ko.md`의 Terraform 진입점 줄,
   `docs/ADR/README.md`/`.ko.md`의 색인 표뿐이다.
 
-### Addendum (2026-08-20) — 3-state 분리 구현 완료, apply는 아직
+### 추가 기록 (2026-08-20) — 3-state 분리 구현 완료, apply는 아직
 
 위 설계가 이제 `k8s/infra/terraform/`의 실제 레이아웃이다. 후속 구현 작업(선행 두
 작업으로 `cluster/`, `app-infra/`를 먼저 만들고 이번이 세 번째)이 다음을 만들었다:

@@ -1,6 +1,6 @@
 # ADR 0061: 우아한 종료 — `enableShutdownHooks()`와 PID 1로 뜬 Node
 
-- Status: Accepted — implemented, 로컬 Linux 컨테이너와 로컬 `kind` 클러스터, 그리고(2026-09-29) 라이브 EKS에서 검증; D3는 Addendum으로 뒤집힘
+- Status: Accepted — implemented, 로컬 Linux 컨테이너와 로컬 `kind` 클러스터, 그리고(2026-09-29) 라이브 EKS에서 검증; D3는 추가 기록으로 뒤집힘
 - Date: 2026-09-21
 - Extends: [ADR 0030](0030-container-non-root-and-arch-stance.ko.md) — 이번 측정의 대상이 된 컨테이너 구성(non-root, `CMD ["node", "dist/main"]`). 그쪽은 바뀌는 것이 없다
 - English: [0061-shutdown-hooks-and-pid1-sigterm.md](0061-shutdown-hooks-and-pid1-sigterm.md)
@@ -80,7 +80,7 @@ ref된 `setInterval` 하나를 추가한 프로브 변형(정리 후에도 남�
 지금과 같은 10초/30초 뒤 SIGKILL일 뿐 더 나빠지지 않는다. 그런 일이 생기면 그때 옵션을
 추가한다.
 
-*같은 날 나중에 뒤집었다 — 맨 끝의 Addendum을 볼 것. 옵션을 측정해 보고 채택했다.*
+*같은 날 나중에 뒤집었다 — 맨 끝의 추가 기록을 볼 것. 옵션을 측정해 보고 채택했다.*
 
 ## Consequences
 
@@ -111,7 +111,7 @@ ref된 `setInterval` 하나를 추가한 프로브 변형(정리 후에도 남�
 - CLAUDE.md의 2026-09-16 Known Gaps 항목은 닫았고, "프로세스가 그냥 죽는다"는 문장은
   바로잡았다.
 
-### Addendum (2026-09-21, 같은 날 나중에) — `useProcessExit: true` 채택, 로컬 `kind` 클러스터에서 검증
+### 추가 기록 (2026-09-21, 같은 날 나중에) — `useProcessExit: true` 채택, 로컬 `kind` 클러스터에서 검증
 
 D3는 `useProcessExit: true`를 측정하지 않은 대안으로 남겨 뒀다. 측정해 보니 결론이 났고,
 그래서 호출은 이제 `app.enableShutdownHooks([], { useProcessExit: true })`다. 이것이 D3의
@@ -156,10 +156,10 @@ Docker 행은 `--stop-timeout 10`을 준 `docker stop`이다. `kind` 행은 `kub
 "Enabling HTTPS (Ingress)" 아래 미해결 점검 목록에 통과 기준과 함께 있다. 실패할 가능성이 높은
 쪽은 두 번째다: 이번 변경 전에는 파드가 SIGTERM을 무시하고 SIGKILL까지 계속 돌았는데, 이것이
 (추론일 뿐 측정한 것은 아니지만) 우연히 ALB의 등록 해제 지연보다 길었을 것이다. 이제는 1초 안에
-종료하므로 그 지연 동안 라우팅된 요청이 거절될 수 있다. 아래 Addendum이 `S3Storage`는 닫았고
+종료하므로 그 지연 동안 라우팅된 요청이 거절될 수 있다. 아래 추가 기록이 `S3Storage`는 닫았고
 `preStop` 처방의 메커니즘도 시험했지만, 실제 ALB로는 아니다.
 
-### Addendum (2026-09-22) — `S3Storage`와 `preStop` 메커니즘을 따로 떼어 시험
+### 추가 기록 (2026-09-22) — `S3Storage`와 `preStop` 메커니즘을 따로 떼어 시험
 
 위 "여전히 측정하지 않은 것" 중 두 가지는 라이브 클러스터나 실제 AWS 접근 없이도 바로
 시험할 수 있는 것으로 드러났다.
@@ -170,7 +170,7 @@ Docker 행은 `--stop-timeout 10`을 준 `docker stop`이다. `kind` 행은 `kub
 ref된 채로 남겨 두는데, 이게 정확히 D2가 미확인으로 남겨 둔 핸들의 모양이다. Docker만 쓴
 프로브로 이 메커니즘을 평범한 `http.Agent({ keepAlive: true })`와 로컬 서버로 재현했다(TLS도
 AWS 네트워크도 자격 증명도 없다) — 소켓은 일부러 닫지 않고 열어 뒀다: `docker stop`은 여전히
-386 ms, 종료 코드 0, `pg.Pool.end()`와 `exit` 이벤트 모두 예상대로 찍혔다. 첫 Addendum의
+386 ms, 종료 코드 0, `pg.Pool.end()`와 `exit` 이벤트 모두 예상대로 찍혔다. 첫 추가 기록의
 ref된 타이머 결과를 `S3Client`가 실제로 쓰는 구체적인 핸들 모양으로 일반화한 셈이다 — D2의
 "`STORAGE_DRIVER=s3`를 실제로 켤 때 다시 확인"은 종료 속도 면에서는 닫혔다. 시험하지 않은 것:
 실제 `S3Client` 인스턴스나 S3로의 진짜 요청.
@@ -201,7 +201,7 @@ ref된 타이머 결과를 `S3Client`가 실제로 쓰는 구체적인 핸들 �
 SIGKILL 방식에는 `preStop`에 대응하는 게 없어서, 이 두 시나리오는 `kind`에서만 돌려볼 수
 있었다.
 
-### Addendum (2026-09-29) — 라이브 EKS: 파드 종료 속도는 빠름을 확인, ALB 레이스는 두 번 재현 — `preStop` sleep을 제안만 하고 채택은 안 함
+### 추가 기록 (2026-09-29) — 라이브 EKS: 파드 종료 속도는 빠름을 확인, ALB 레이스는 두 번 재현 — `preStop` sleep을 제안만 하고 채택은 안 함
 
 라이브 클러스터에서 `kubectl rollout restart deployment/sharenpo`를 두 번 돌렸다(차트 `0.5.1`,
 레플리카 1개, `maxSurge: 25%`/`maxUnavailable: 25%` → surge 우선: 새 파드가 먼저 뜬 뒤에야 옛

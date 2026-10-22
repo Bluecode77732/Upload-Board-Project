@@ -142,7 +142,7 @@ ADR 0025가 이미 이 옵션의 근거로 남긴 이유 그대로 선택했다.
 ## 알려진 한계 (후속 작업, 2026-08-01 기록)
 
 구현 후 검토에서 콘텐츠 엔드포인트
-([file-content.controller.ts](../backend/file/file-content.controller.ts))의 미결 항목을
+([file-content.controller.ts](../../backend/file/file-content.controller.ts))의 미결 항목을
 심각도 순으로 짚었다. 코드 항목은 [ROADMAP.ko.md](../ROADMAP.ko.md) > 미일정에서 추적한다:
 
 1. **[중간] 스트림 에러 미처리.** 200·206 두 경로의 `createReadStream(...).pipe(res)`에
@@ -157,7 +157,7 @@ ADR 0025가 이미 이 옵션의 근거로 남긴 이유 그대로 선택했다.
 레벨 응답); 다중 필드 첨부 거부 시 남는 temp orphan은 [ADR 0018](0018-orphan-temp-file-cleanup.ko.md)
 스윕이 회수; `file/temp`는 여전히 정적 서빙(기존 동작·추측 불가 uuid — 가시성 범위 밖).
 
-### 추가 기록 (Addendum, 2026-09-07) — 1·2번 항목 완료
+### 추가 기록 (2026-09-07) — 1·2번 항목 완료
 
 위 코드 항목 둘 다 고쳐졌다. `FileContentController`는 이제 200·206 두 `pipe(res)` 호출
 모두 private `pipeContentStream()` 헬퍼를 거치며, 여기서 `stream.on('error', …)`를 걸어

@@ -199,7 +199,7 @@ dry-run을 포함해 매 실행마다 `inc({ outcome: 'candidate' }, orphaned.le
 - **기본 동작은 삭제 관점에서 무해하게 출시된다**: 운영자가 명시적으로
   `GRANTED_SWEEP_DRY_RUN=false`로 바꾸기 전까지, 이 ADR은 관측만 추가할 뿐 새 삭제
   경로를 추가하지 않는다 — 그 플래그를 실제로 뒤집었을 때 이 ADR의 라이브 검증
-  과정에서 무슨 일이 있었는지는 아래 Addendum 참고.
+  과정에서 무슨 일이 있었는지는 아래 추가 기록 참고.
 - 같은 변경에서 CLAUDE.md도 갱신한다: 새 모듈 항목이 아니라 `FileModule` 아래에 붙는
   Module Responsibility 노트, 새 concern-to-entrypoint map 행, Architecture Decisions >
   File Storage 노트. ROADMAP.md의 "고아 `granted_` 파일 회수" 항목은 해결됨으로 표시하고
@@ -220,7 +220,7 @@ dry-run을 포함해 매 실행마다 `inc({ outcome: 'candidate' }, orphaned.le
   이미 커버된다; 이 ADR의 배경이나 ROADMAP의 원래 두 가지 목록 어디에도 이름 붙여진
   적이 없어서 여기 기록해둔다.
 
-### 추가 기록 (Addendum) — 이 ADR을 라이브 검증하다가 실제 파일 44개를 지웠다
+### 추가 기록 — 이 ADR을 라이브 검증하다가 실제 파일 44개를 지웠다
 
 `GrantedCleanupService.sweep()`을 실제 DB·실제 디스크로, `GRANTED_SWEEP_DRY_RUN=false`로
 끝까지 손으로 검증하는 작업을 이 저장소의 실제 `file/upload/`에 대해 돌렸다 — 이 ADR의
