@@ -279,7 +279,7 @@ flowchart LR
 
 이 스택을 고른 이유는 나중에 적은 [ADR 0066](docs/ADR/0066-stack-selection-rationale-retroactive.ko.md)에
 있습니다. NestJS, TypeORM, PostgreSQL은 트래픽이 커지면 서비스 단위로 나눌 수 있다는 점을 염두에 두고
-골랐습니다. AWS/EKS는 배포 시장의 표준 도구를 익히는 것도 목적이었습니다. 프런트엔드는 화면이 적어서
+골랐습니다. AWS/EKS는 배포 시장의 표준 도구를 익히는 것도 목적이었습니다. 프론트엔드는 화면이 적어서
 상태 라이브러리를 쓰지 않습니다. ECS와의 비교처럼 글로 따져 보지 않은 부분도 그 ADR에 적혀 있습니다.
 
 ## 프로젝트 구조
@@ -345,7 +345,7 @@ cd admin && pnpm install && pnpm dev      # http://localhost:5174 — 백엔드 
   한 번 실행하세요.
 - `.env`는 건드리지 않고 이 머신에서만 값을 바꾸려면 gitignore된 `.env.local`에 적으세요. `api`와
   `migrate`가 `.env` 뒤에 이 파일을 읽습니다
-  ([ADR 0015](docs/ADR/0015-docker-and-compose.ko.md) 2026-10-03 Addendum).
+  ([ADR 0015](docs/ADR/0015-docker-and-compose.ko.md) 2026-10-03 추가 기록).
 
 ### Docker 없이 실행
 
@@ -527,7 +527,7 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
   비교표로 정리해 개발자에게 물었고, 결과는 ADR로 남겼습니다. 저장소에서 확인할 수 있는 예는 다음과
   같습니다. 코드를 쓰기 전에 확정한 비밀번호 정책과 에러 코드, 세 가지 방안을 따져 본 뒤
   `AUTH_EMAIL_TAKEN` 노출을 유지한 결정([CLAUDE.ko.md](CLAUDE.ko.md) > 알려진 미해결 지점),
-  프런트엔드를 외부 호스팅 대신 같은 ALB에서 서빙하기로 한 결정
+  프론트엔드를 외부 호스팅 대신 같은 ALB에서 서빙하기로 한 결정
   ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.ko.md)).
 - **실제 환경에서 확인합니다.** 단위 테스트, 실제 PostgreSQL을 쓰는 E2E, 실행 중인 백엔드를 상대로 돌리는
   Playwright, 날짜와 함께 기록한 AWS 라이브 실행([ROADMAP.ko.md](docs/ROADMAP.ko.md) §9)이
@@ -601,7 +601,7 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
 
 - **청구되기 전의 업로드 파일명이 업로더에게 묶여 있지 않습니다.** 첫 `POST /file` 전까지는
   `temp_` 파일명을 아는 로그인 사용자 누구나 청구할 수 있습니다. 위험은 낮게 평가했습니다(v4 UUID, 24시간
-  뒤 만료)([ADR 0019](docs/ADR/0019-upload-claim-idempotency.ko.md), 2026-10-06 Addendum).
+  뒤 만료)([ADR 0019](docs/ADR/0019-upload-claim-idempotency.ko.md), 2026-10-06 추가 기록).
 - **브라우저 탭 사이에서 리프레시가 경합할 수 있습니다.** 계정당 앵커가 하나이고 유예 시간이 없습니다.
   한 번 시도했을 때는 재현되지 않았습니다.
 - **끊긴 업로드는 처음부터 다시 보내야 합니다.** 이어 올리기나 청크 업로드는 없으며 설계도 하지
@@ -622,7 +622,7 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
   주소는 바로 열리고 재생 위치도 옮길 수 있지만, 앱 화면은 로그인하지 않은 방문자를 로그인 화면으로
   보내고, 크롤러에게는 빈 페이지로 보이며, 다른 사이트는 이 파일을 끼워 넣을 수 없습니다. 아직 결정한
   것은 없고, 배포된 스택과 S3 리다이렉트는 확인하지 않았습니다
-  ([ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md) Addendum, [ROADMAP.ko.md](docs/ROADMAP.ko.md) §7).
+  ([ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md) 추가 기록, [ROADMAP.ko.md](docs/ROADMAP.ko.md) §7).
 - **자동화는 이미지 발행까지입니다.** 배포는 사람이 실행합니다. 서비스 메시(Istio)는 일부러
   넣지 않았습니다. 이 프로젝트는 백엔드 워크로드가 하나뿐이라 메시가 관리할 서비스 간 트래픽이
   없기 때문입니다.

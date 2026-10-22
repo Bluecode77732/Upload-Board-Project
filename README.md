@@ -45,8 +45,8 @@ now. To see the project work:
   refresh token ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md)).
 - **Fail-closed malware scan** on every upload, before anything is stored
   ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md)).
-- **Checked:** 282 backend unit tests (run 2026-10-21) and 76 backend E2E tests on a real
-  PostgreSQL (run 2026-10-22) all pass, Playwright E2E for both clients, 67 ADRs recording the
+- **Checked:** all 282 backend unit tests (run 2026-10-21) and all 76 backend E2E tests on a real
+  PostgreSQL (run 2026-10-22) pass. Both clients also have Playwright E2E, and 67 ADRs record the
   decisions.
 - **Built with AI, under written rules.** Most of the code was written with Claude Code. The
   developer sets the rules in [CLAUDE.md](CLAUDE.md), chooses between alternatives and records them
@@ -319,8 +319,8 @@ the API ([ADR 0015](docs/ADR/0015-docker-and-compose.md),
    #   REFRESH_TOKEN_SECRET  the same rule, a different value
    ```
 
-   These three are left empty or invalid on purpose, so the app refuses to boot until you set them
-   instead of running with values anyone can read in this public repo.
+   These three are left empty or invalid on purpose: the app refuses to boot until you set them,
+   rather than running with values anyone can read in this public repo.
 
 2. Start the stack:
 
@@ -331,7 +331,7 @@ the API ([ADR 0015](docs/ADR/0015-docker-and-compose.md),
    The first start downloads ClamAV's signature database, so `api` can take a few minutes to
    become healthy. Then open `http://localhost:3000/doc` ([Try the API](#try-the-api-swagger)).
 
-The API alone has no UI. To run the clients, in separate terminals:
+These steps start only the API, which has no UI. To run the clients, use separate terminals:
 
 ```bash
 cd frontend && pnpm install && pnpm dev   # http://localhost:5173 (proxies to the backend on :3000)
@@ -389,7 +389,7 @@ Optional, each with a default (all documented in `.env.example`):
 | `BASE_URL` | Public base URL used to build file URLs (default `http://localhost:3000`) |
 | `CORS_ORIGIN` | Comma-separated browser origins; unset = CORS off ([ADR 0008](docs/ADR/0008-opt-in-cors.md)). The deployed clients are same-origin behind the ALB and do not need it |
 | `STORAGE_DRIVER` | `local` (default) or `s3`; `s3` also needs `S3_BUCKET` and `AWS_REGION` ([ADR 0029](docs/ADR/0029-storage-port-adapter.md)) |
-| `CLAMD_HOST`, `CLAMD_PORT` | Where the malware scanner listens |
+| `CLAMD_HOST`, `CLAMD_PORT` | Host and port of the malware scanner |
 | `SUPERADMIN_EMAIL` | The account `pnpm promote-superadmin` promotes; nothing is promoted on boot |
 | `TEMP_SWEEP_*`, `GRANTED_SWEEP_*` | Orphan-file sweeps; the granted sweep only reports until `GRANTED_SWEEP_DRY_RUN=false` |
 | `THROTTLE_ENABLED` | Leave `true`; it exists only so the E2E suites can bypass rate limits |
@@ -436,18 +436,18 @@ the backend yourself — with the [Docker quick start](#fastest-docker) it is
 3. Run `POST /auth/register` with **Try it out**; it uses those credentials as the Basic token and
    answers 201. Then run `POST /auth/signin` and copy `accessToken` from the response.
 4. Paste that token under `bearer`, apply it, and call anything else, for example `GET /file`.
-   Without a token the same call answers 401.
+   Without a token the same call is rejected with 401.
 
 `persistAuthorization` is on, so the entered values survive a page reload.
 `POST /upload/attach` is a multipart upload: pick one file in exactly one of the `image`, `audio` or
 `video` fields, then send the returned `temp_…` name to `POST /file` as `filePath`.
 
-Checked on 2026-10-21 against the Docker stack above: `/doc` served and rendered with no console
-errors; register answered 201, sign-in returned a token, `GET /file` answered 401 without it and 200
-with it; a 1×1 PNG went through `attach` (201, through the ClamAV scan) and `POST /file` (201, `private`),
-sending `POST /file` again answered 200, and its content answered 403 without a token and 200 for
-the owner. The Authorize dialog was opened in a browser; typing into it and pressing the buttons
-was not driven.
+Checked on 2026-10-21 against the Docker stack above. `/doc` was served and rendered with no console
+errors. Register answered 201, sign-in returned a token, and `GET /file` answered 401 without it and
+200 with it. A 1×1 PNG went through `attach` (201, through the ClamAV scan) and `POST /file` (201,
+`private`); sending `POST /file` again answered 200. The file's content answered 403 without a token
+and 200 for the owner. The Authorize dialog was opened in a browser, but typing into it and pressing
+its buttons was not tried.
 
 ## Core API
 
@@ -482,7 +482,7 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
 
 ### Error responses
 
-Every error follows a frozen machine-readable shape
+Every error follows a fixed, machine-readable shape
 ([ADR 0011](docs/ADR/0011-error-code-contract.md)):
 
 ```json
@@ -501,8 +501,8 @@ with a `message` array; when `ENV=dev` a `stack` field is included.
 
 ## Troubleshooting and decisions
 
-Problems that were measured or reproduced, with where the full record is. Why one fix was chosen
-over the alternatives is in each ADR.
+Problems that were measured or reproduced, and where each is recorded in full. Why one fix was
+chosen over the alternatives is in each ADR.
 
 | Problem | Cause | Fix | Result |
 |---|---|---|---|
@@ -635,7 +635,7 @@ Open items, each recorded where it was found; the full list is in
   to the login page, a crawler sees an empty page, and other sites cannot embed the files. None of
   this is decided, and it was not checked on the deployed stack or through the S3 redirect
   ([ADR 0055](docs/ADR/0055-helmet-security-headers.md) Addendum, [ROADMAP.md](docs/ROADMAP.md) §7).
-- **Delivery stops at images.** A person runs the deploy. A service mesh (Istio) was left out
+- **Automation stops at publishing images.** A person runs the deploy. A service mesh (Istio) was left out
   because there is one backend workload and no east-west traffic for it to manage.
 - **The deploy settings keep the AWS account number and the database address.** They are plain
   values in `k8s/helm/values-prod.yaml`, because `deploy.sh` passes that file straight to
