@@ -45,8 +45,9 @@ now. To see the project work:
   refresh token ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md)).
 - **Fail-closed malware scan** on every upload, before anything is stored
   ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md)).
-- **Checked:** 282 backend unit tests passing (run 2026-10-21), a backend E2E suite on a real
-  PostgreSQL, Playwright E2E for both clients, 67 ADRs recording the decisions.
+- **Checked:** 282 backend unit tests (run 2026-10-21) and 76 backend E2E tests on a real
+  PostgreSQL (run 2026-10-22) all pass, Playwright E2E for both clients, 67 ADRs recording the
+  decisions.
 - **Built with AI, under written rules.** Most of the code was written with Claude Code. The
   developer sets the rules in [CLAUDE.md](CLAUDE.md), chooses between alternatives and records them
   as ADRs; where the AI broke a rule, that is written down too ([How this was built](#how-this-was-built)).
@@ -561,7 +562,7 @@ One developer reviews all of it; there is no second reviewer.
   and 282 tests passed on 2026-10-21.
 - **Backend E2E** — `pnpm test:e2e` runs the real app against a real PostgreSQL. It builds a
   throwaway `sharenpo_e2e` database from the real migrations, truncates it between tests and
-  drops it afterwards; the dev database is never touched.
+  drops it afterwards; the dev database is never touched. 76 tests passed on 2026-10-22.
 - **Client E2E** — Playwright in `frontend/` and `admin/` (see each folder's README).
 - **GitHub Actions** ([ADR 0016](docs/ADR/0016-github-actions-ci.md),
   [ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.md)) — lint and unit

@@ -45,8 +45,9 @@
   ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.ko.md)).
 - **모든 업로드에 fail-closed 악성코드 스캔**을 저장 전에 적용합니다
   ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)).
-- **확인한 것:** 백엔드 단위 테스트 282건 통과(2026-10-21 실행), 실제 PostgreSQL을 쓰는 백엔드 E2E,
-  두 클라이언트의 Playwright E2E, 결정을 기록한 ADR 67개.
+- **확인한 것:** 백엔드 단위 테스트 282건(2026-10-21 실행)과 실제 PostgreSQL을 쓰는 백엔드 E2E
+  76건(2026-10-22 실행)이 모두 통과했고, 두 클라이언트의 Playwright E2E와 결정을 기록한 ADR 67개가
+  있습니다.
 - **AI와 함께, 문서로 정한 규칙 아래에서 만들었습니다.** 코드의 대부분은 Claude Code로 작성했습니다.
   개발자가 [CLAUDE.ko.md](CLAUDE.ko.md)에 규칙을 정하고, 대안 중에서 선택하고, 그 내용을 ADR로
   남깁니다. AI가 규칙을 어긴 일도 함께 적어 두었습니다([만든 방식](#만든-방식)).
@@ -549,7 +550,7 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
   282건이 통과했습니다.
 - **백엔드 E2E** — `pnpm test:e2e`는 실제 앱을 실제 PostgreSQL에 붙여 실행합니다. 실제
   마이그레이션으로 일회용 `sharenpo_e2e` 데이터베이스를 만들고, 테스트 사이에 비우고, 끝나면
-  삭제합니다. 개발용 데이터베이스는 건드리지 않습니다.
+  삭제합니다. 개발용 데이터베이스는 건드리지 않습니다. 2026-10-22에 76건이 통과했습니다.
 - **클라이언트 E2E** — `frontend/`와 `admin/`의 Playwright(각 폴더의 README 참고).
 - **GitHub Actions**([ADR 0016](docs/ADR/0016-github-actions-ci.ko.md),
   [ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)) — lint와 단위
