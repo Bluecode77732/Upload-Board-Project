@@ -311,7 +311,7 @@ origin은 생기지 않는다.
 
 2026-09-22 addendum은 `aws_s3_bucket_cors_configuration.app`을 코드
 완성만 시키고 apply하지 않은 채로 남겼다. 라이브 버킷
-(`sharenpo-074416822640`)에 `aws s3api get-bucket-cors`를 돌려보니 정확히
+(`sharenpo-<AWS_ACCOUNT_ID>`)에 `aws s3api get-bucket-cors`를 돌려보니 정확히
 그 규칙이 있다 — `AllowedOrigins: ["https://sharenpo.cloud"]`,
 `AllowedMethods: ["GET"]` — 그 외엔 아무것도 없다. 2026-08-16에 손으로 돌린
 스크립트의 localhost 개발 origin 두 개는 그 addendum이 예측한 대로 병합이
@@ -320,7 +320,7 @@ origin은 생기지 않는다.
 실제 Chromium 세션(Playwright)으로 `https://sharenpo.cloud`를 상대로
 라이브 검증했다 — 일회용 가입 계정과 작은 PNG 업로드 사용: `private`은
 프론트엔드의 blob-fetch 경로로 뜬다(`fetch()` → `GET /file/:id/content` →
-`302` → presigned `https://sharenpo-074416822640.s3.ap-northeast-2.amazonaws.com/granted/...`
+`302` → presigned `https://sharenpo-<AWS_ACCOUNT_ID>.s3.ap-northeast-2.amazonaws.com/granted/...`
 URL → `200`, objectURL로 변환); 같은 파일을 `public`으로 바꾸고 새로고침하니
 `<img>`가 `https://sharenpo.cloud/file/:id/content`를 직접 가리켰고
 브라우저가 별도 JS fetch 없이 그 `302`를 그대로 따라갔다; `unlisted`도

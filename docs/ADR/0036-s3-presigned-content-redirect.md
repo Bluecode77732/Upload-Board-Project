@@ -319,7 +319,7 @@ This is listed as a live-only pending check in `k8s/helm/README.md`
 
 The 2026-09-22 addendum left `aws_s3_bucket_cors_configuration.app`
 code-complete but not applied. `aws s3api get-bucket-cors` on the live bucket
-(`sharenpo-074416822640`) now shows exactly that rule —
+(`sharenpo-<AWS_ACCOUNT_ID>`) now shows exactly that rule —
 `AllowedOrigins: ["https://sharenpo.cloud"]`, `AllowedMethods: ["GET"]` — and
 nothing else; the 2026-08-16 hand-run script's two `localhost` dev origins are
 gone, replaced outright as that addendum predicted, not merged.
@@ -328,7 +328,7 @@ Live-verified in a real Chromium session (Playwright) against
 `https://sharenpo.cloud`, with a throwaway registered account and a small
 uploaded PNG: `private` loads through the frontend's blob-fetch path
 (`fetch()` → `GET /file/:id/content` → `302` → the presigned
-`https://sharenpo-074416822640.s3.ap-northeast-2.amazonaws.com/granted/...`
+`https://sharenpo-<AWS_ACCOUNT_ID>.s3.ap-northeast-2.amazonaws.com/granted/...`
 URL → `200`, turned into an objectURL); switching the same file to `public`
 and reloading, the `<img>` pointed directly at
 `https://sharenpo.cloud/file/:id/content` and the browser followed the `302`

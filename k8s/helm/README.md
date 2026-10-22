@@ -367,14 +367,14 @@ Verifying without a live cluster (none exists right now):
 ```bash
 helm lint --strict . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
   --set ingress.className=alb --set frontend.enabled=true --set admin.enabled=true \
-  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:<AWS_ACCOUNT_ID>:certificate/placeholder \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
   --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"},{"path":"/admin","pathType":"Prefix","service":"admin"}]}]'
 helm template . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
   --set ingress.className=alb --set frontend.enabled=true --set admin.enabled=true \
-  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:<AWS_ACCOUNT_ID>:certificate/placeholder \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
@@ -531,10 +531,10 @@ pass observed; an item with no "observed" note is still open:
   again if local `STORAGE_DRIVER=s3` testing against the real bucket is still wanted
   after that apply. Separately, `frontend/nginx.conf`'s CSP must allow
   `https://*.amazonaws.com` (ADR 0060 — a guess from CSP semantics until seen in a
-  browser). Observed 2026-09-29: `aws s3api get-bucket-cors` on `sharenpo-074416822640` shows
+  browser). Observed 2026-09-29: `aws s3api get-bucket-cors` on `sharenpo-<AWS_ACCOUNT_ID>` shows
   the production-only rule applied (the dev origins are gone, replaced not merged, as
   predicted). In a real browser: `private` loaded via blob fetch (`302` → presigned
-  `https://sharenpo-074416822640.s3.ap-northeast-2.amazonaws.com/granted/...` → `200`);
+  `https://sharenpo-<AWS_ACCOUNT_ID>.s3.ap-northeast-2.amazonaws.com/granted/...` → `200`);
   `public` and `unlisted` both loaded via a plain `<img src="https://sharenpo.cloud/file/:id/content">`
   that the browser followed through the same redirect natively. All three rendered the real
   test image (`naturalWidth: 4`, not a broken-image placeholder) with zero console errors —

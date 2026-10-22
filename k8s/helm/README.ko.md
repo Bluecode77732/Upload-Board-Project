@@ -366,14 +366,14 @@ allow-list다([ADR 0058](../../docs/ADR/0058-ingress-path-allowlist.ko.md)). 다
 ```bash
 helm lint --strict . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
   --set ingress.className=alb --set frontend.enabled=true --set admin.enabled=true \
-  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:<AWS_ACCOUNT_ID>:certificate/placeholder \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
   --set-json 'ingress.hosts=[{"host":"sharenpo.cloud","paths":[{"path":"/auth","pathType":"Prefix"},{"path":"/user","pathType":"Prefix"},{"path":"/post","pathType":"Prefix"},{"path":"/comment","pathType":"Prefix"},{"path":"/file","pathType":"Prefix"},{"path":"/upload","pathType":"Prefix"},{"path":"/audit-log","pathType":"Prefix"},{"path":"/","pathType":"Prefix","service":"frontend"},{"path":"/admin","pathType":"Prefix","service":"admin"}]}]'
 helm template . --set secrets.existingSecret=placeholder --set ingress.enabled=true \
   --set ingress.className=alb --set frontend.enabled=true --set admin.enabled=true \
-  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:074416822640:certificate/placeholder \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"=arn:aws:acm:ap-northeast-2:<AWS_ACCOUNT_ID>:certificate/placeholder \
   --set ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"=ip \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"='[{"HTTP": 80}\, {"HTTPS": 443}]' \
   --set-string ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"=443 \
@@ -521,10 +521,10 @@ install --wait` 검증은 Terraform을 다시 apply하기 전까지는 범위 �
   **교체**한다. apply 이후에도 실제 버킷을 상대로 한 로컬 `STORAGE_DRIVER=s3` 테스트가
   필요하면 개발 origin을 다시 손으로 넣어야 한다. 별개로 `frontend/nginx.conf`의 CSP가
   `https://*.amazonaws.com`을 허용해야 한다(ADR 0060 — 브라우저로 확인하기 전까지는 CSP
-  의미론에서 추정한 값이다). Observed 2026-09-29: `sharenpo-074416822640`에 `aws s3api
+  의미론에서 추정한 값이다). Observed 2026-09-29: `sharenpo-<AWS_ACCOUNT_ID>`에 `aws s3api
   get-bucket-cors`를 돌려보니 운영 origin 전용 규칙이 적용돼 있었다(개발 origin은 예측대로
   병합이 아니라 통째로 사라짐). 실제 브라우저에서: `private`은 blob fetch로 로드됐고(`302` →
-  presigned `https://sharenpo-074416822640.s3.ap-northeast-2.amazonaws.com/granted/...` →
+  presigned `https://sharenpo-<AWS_ACCOUNT_ID>.s3.ap-northeast-2.amazonaws.com/granted/...` →
   `200`); `public`과 `unlisted`는 둘 다 `<img src="https://sharenpo.cloud/file/:id/content">`가
   그대로 그 리다이렉트를 따라가는 방식으로 로드됐다. 세 경우 모두 실제 테스트 이미지가
   렌더링됐고(`naturalWidth: 4`, 깨진 이미지 아님) 콘솔 에러는 없었다 — CSP 와일드카드가

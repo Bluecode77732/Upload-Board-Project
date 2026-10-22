@@ -96,7 +96,7 @@ plan은 성공하면서 리소스 이름/태그만 조용히 어긋난다. 실�
   `addons`, `helm`, `all`). `.tf` 파일은 하나도 바뀌지 않았다 — `cluster/`,
   `app-infra/`, `addons/` 모두에서 `terraform fmt -check`와 `terraform validate`가
   변경 전과 동일하게 통과한다.
-- 실제 AWS 계정(`074416822640`, `ap-northeast-2`)을 대상으로 실측 검증했다:
+- 실제 AWS 계정(`<AWS_ACCOUNT_ID>`, `ap-northeast-2`)을 대상으로 실측 검증했다:
   `deploy.sh cluster`가 실제 `terraform plan`을 실행했고("No changes. Your
   infrastructure matches the configuration." 확인), 대화형 확인 입력이 없을 때는
   실제로 아무것도 적용하지 않고 중단했다 — 기본 거부 경로가 읽어본 것이 아니라
