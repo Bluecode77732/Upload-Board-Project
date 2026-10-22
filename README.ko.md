@@ -219,6 +219,37 @@ erDiagram
 게시글은 파일을 참조할 뿐이라 게시글을 지워도 파일은 남습니다. `comment.postId`는 이 스키마에서
 유일한 데이터베이스 수준 연쇄 삭제입니다([ADR 0023](docs/ADR/0023-board-domain-schema.ko.md)).
 
+AWS 쪽을 리소스를 만드는 Terraform state별로 묶어 그렸습니다. 점선 상자는 Terraform이 아니라 Ingress와
+Helm이 만드는 것입니다([ADR 0044](docs/ADR/0044-terraform-three-state-split.ko.md)).
+
+```mermaid
+flowchart LR
+  subgraph C["cluster/: VPC, EKS 노드"]
+    NODES["EKS 1.34 노드<br/>Graviton t4g.medium, x64 m5.large (0)"]
+  end
+  subgraph A["app-infra/: 앱이 쓰는 자원"]
+    RDS[("RDS PostgreSQL 16<br/>프라이빗, 단일 AZ")]
+    S3[("S3 버킷<br/>퍼블릭 접근 차단")]
+    SM["Secrets Manager"]
+    DNS["Route 53 호스티드 존 + ACM 인증서"]
+  end
+  subgraph D["addons/: 클러스터 애드온"]
+    LBC["ALB Controller"]
+    ESO["External Secrets"]
+    EDNS["ExternalDNS"]
+  end
+  ALB["ALB<br/>Ingress가 생성"]:::rt
+  APP["backend, frontend,<br/>admin, clamav"]:::rt
+  LBC --> ALB --> APP
+  APP -. "실행 위치" .-> NODES
+  APP -- "5432, 노드 보안 그룹에서만" --> RDS
+  APP -- "IAM 역할(IRSA)" --> S3
+  SM --> ESO -- "Kubernetes Secret" --> APP
+  EDNS -- "ALB 레코드" --> DNS
+  DNS -. "인증서" .-> ALB
+  classDef rt stroke-dasharray:4 3
+```
+
 백엔드 모듈은 단일 책임 기준으로 나뉩니다. **Auth**(토큰), **User**, **File**(메타데이터와 공개
 범위 검사), **Post**, **Comment**, **Upload**(임시 저장), **AuditLog**가 있고, 운영용 모듈로
 **Storage**(로컬 디스크와 S3 어댑터를 가진 `FileStorage` 포트), **TempCleanup**(고아 파일
@@ -551,7 +582,8 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
 - **백엔드 E2E** — `pnpm test:e2e`는 실제 앱을 실제 PostgreSQL에 붙여 실행합니다. 실제
   마이그레이션으로 일회용 `sharenpo_e2e` 데이터베이스를 만들고, 테스트 사이에 비우고, 끝나면
   삭제합니다. 개발용 데이터베이스는 건드리지 않습니다. 2026-10-22에 76건이 통과했습니다.
-- **클라이언트 E2E** — `frontend/`와 `admin/`의 Playwright(각 폴더의 README 참고).
+- **클라이언트 E2E** — `frontend/`와 `admin/`의 Playwright(각 폴더의 README 참고). 두 잡 모두
+  2026-10-22 CI에서 통과했습니다.
 - **GitHub Actions**([ADR 0016](docs/ADR/0016-github-actions-ci.ko.md),
   [ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)) — lint와 단위
   테스트, PostgreSQL·ClamAV 서비스 컨테이너를 붙인 백엔드 E2E, 클라이언트별 lint와 E2E를 거친 뒤

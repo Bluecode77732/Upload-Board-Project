@@ -224,6 +224,38 @@ A post only references a file; deleting the post leaves the file. `comment.postI
 schema's only database-level cascade
 ([ADR 0023](docs/ADR/0023-board-domain-schema.md)).
 
+The AWS side, grouped by the Terraform state that creates each resource. Dashed boxes are not
+Terraform's: the Ingress and Helm create them
+([ADR 0044](docs/ADR/0044-terraform-three-state-split.md)):
+
+```mermaid
+flowchart LR
+  subgraph C["cluster/: VPC, EKS nodes"]
+    NODES["EKS 1.34 nodes<br/>Graviton t4g.medium, x64 m5.large (0)"]
+  end
+  subgraph A["app-infra/: what the app needs"]
+    RDS[("RDS PostgreSQL 16<br/>private, single AZ")]
+    S3[("S3 bucket<br/>public access blocked")]
+    SM["Secrets Manager"]
+    DNS["Route 53 zone + ACM certificate"]
+  end
+  subgraph D["addons/: cluster add-ons"]
+    LBC["ALB Controller"]
+    ESO["External Secrets"]
+    EDNS["ExternalDNS"]
+  end
+  ALB["ALB<br/>from the Ingress"]:::rt
+  APP["backend, frontend,<br/>admin, clamav"]:::rt
+  LBC --> ALB --> APP
+  APP -. "runs on" .-> NODES
+  APP -- "5432, node security group only" --> RDS
+  APP -- "IAM role (IRSA)" --> S3
+  SM --> ESO -- "Kubernetes Secret" --> APP
+  EDNS -- "ALB record" --> DNS
+  DNS -. "certificate" .-> ALB
+  classDef rt stroke-dasharray:4 3
+```
+
 Backend modules, split by single responsibility: **Auth** (tokens), **User**, **File**
 (metadata and the visibility gate), **Post**, **Comment**, **Upload** (staging), **AuditLog**,
 plus operational modules — **Storage** (the `FileStorage` port with local-disk and S3 adapters),
@@ -563,7 +595,8 @@ One developer reviews all of it; there is no second reviewer.
 - **Backend E2E** — `pnpm test:e2e` runs the real app against a real PostgreSQL. It builds a
   throwaway `sharenpo_e2e` database from the real migrations, truncates it between tests and
   drops it afterwards; the dev database is never touched. 76 tests passed on 2026-10-22.
-- **Client E2E** — Playwright in `frontend/` and `admin/` (see each folder's README).
+- **Client E2E** — Playwright in `frontend/` and `admin/` (see each folder's README). Both jobs
+  passed in CI on 2026-10-22.
 - **GitHub Actions** ([ADR 0016](docs/ADR/0016-github-actions-ci.md),
   [ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.md)) — lint and unit
   tests, backend E2E against a PostgreSQL service and a ClamAV service, lint and E2E for each
