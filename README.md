@@ -20,6 +20,12 @@ Grafana.
 - Timeline: first commit 2025-12-17, still in progress
 - Scope: one developer, AI-assisted under the contract in [CLAUDE.md](CLAUDE.md) — backend,
   `frontend/`, `admin/`, containers, CI, Helm and Terraform
+- Role: the developer decided the password policy and its error code, serving the frontend from
+  the same ALB instead of an external host, and fixing Terraform's secret generator instead of
+  loosening the app's secret rule. Before any code is written, the AI lays out the options in a
+  comparison table and the developer picks one; only that one is built. The developer reads and
+  approves every change, and results are checked with tests, CI and reproductions in real
+  environments (AWS/EKS, a real ClamAV)
 - This README covers the whole repository. The backend sits at the repo root; the clients have
   their own READMEs ([frontend/](frontend/README.md), [admin/](admin/README.md))
 
@@ -501,16 +507,16 @@ with a `message` array; when `ENV=dev` a `stack` field is included.
 
 ## Troubleshooting and decisions
 
-Problems that were measured or reproduced, and where each is recorded in full. Why one fix was
-chosen over the alternatives is in each ADR.
+Problems that were measured or reproduced, and where each is recorded in full. The "Why this fix"
+column gives the recorded reason for the first two; for the rest, it is in the ADR.
 
-| Problem | Cause | Fix | Result |
-|---|---|---|---|
-| `docker stop` took 10.4 s and the container exited 137 | `node` is PID 1 and ignored SIGTERM, so the DB pool was never closed | `app.enableShutdownHooks([], { useProcessExit: true })` in [backend/main.ts](backend/main.ts) | About 0.4 s and exit 0 in a local container and a pod on a local `kind` cluster; not measured on EKS ([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.md)) |
-| An upload passed the malware scan when the scanner gave no verdict | `clamscan` resolves with `isInfected: null` ("unable to scan") instead of rejecting, and the code read that as clean | A non-boolean verdict now counts as a failed attempt: retried once, then 503 `UPLOAD_SCAN_UNAVAILABLE` | Reproduced against a real `clamd`, and re-checked after the fix ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md) addenda 2026-10-03 and 2026-10-12) |
-| The backend crash-looped on the first AWS deploy after the secret-strength rule | Terraform generated the JWT secrets as 48 alphanumeric characters; the app's Joi rule requires a symbol | The generator now guarantees one of each character class | After a re-apply the backend booted and signed in ([ADR 0064](docs/ADR/0064-jwt-secret-generation-joi-strength-rule.md)) |
-| `GET /file` paged non-deterministically | The query had no `ORDER BY`, so offset paging could repeat or skip rows | Default `createdAt DESC` with `id` as a tiebreaker; sort fields map through a fixed table, so a client string never becomes a column name | One list contract shared by files and posts ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md)) |
-| Whether the list queries needed indexes | No measurement | Measured at 10,000 rows each in `file_entity` and `post_entity` before adopting them | Six indexes, about 2.16 MB in total ([ADR 0049](docs/ADR/0049-performance-capacity-criteria.md)) |
+| Problem | Cause | Fix | Why this fix | Result |
+|---|---|---|---|---|
+| `docker stop` took 10.4 s and the container exited 137 | `node` is PID 1 and ignored SIGTERM, so the DB pool was never closed | `app.enableShutdownHooks([], { useProcessExit: true })` in [backend/main.ts](backend/main.ts) | The plain call only exits when nothing keeps the event loop alive; with a leftover timer it still took 10.4 s, the option 0.4 s. The option stops a future leaked handle (likely `S3Storage`) from silently bringing the slow shutdown back | About 0.4 s and exit 0 in a local container and a pod on a local `kind` cluster; not measured on EKS ([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.md)) |
+| An upload passed the malware scan when the scanner gave no verdict | `clamscan` resolves with `isInfected: null` ("unable to scan") instead of rejecting, and the code read that as clean | A non-boolean verdict now counts as a failed attempt: retried once, then 503 `UPLOAD_SCAN_UNAVAILABLE` | No verdict is not a clean verdict, so it follows the same fail-closed rule as an unreachable scanner and reuses the existing retry and 503 path. Reproduced against a real `clamd` first: a restart or crash mid-scan is enough to trigger it | Reproduced against a real `clamd`, and re-checked after the fix ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md) addenda 2026-10-03 and 2026-10-12) |
+| The backend crash-looped on the first AWS deploy after the secret-strength rule | Terraform generated the JWT secrets as 48 alphanumeric characters; the app's Joi rule requires a symbol | The generator now guarantees one of each character class | See the ADR | After a re-apply the backend booted and signed in ([ADR 0064](docs/ADR/0064-jwt-secret-generation-joi-strength-rule.md)) |
+| `GET /file` paged non-deterministically | The query had no `ORDER BY`, so offset paging could repeat or skip rows | Default `createdAt DESC` with `id` as a tiebreaker; sort fields map through a fixed table, so a client string never becomes a column name | See the ADR | One list contract shared by files and posts ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md)) |
+| Whether the list queries needed indexes | No measurement | Measured at 10,000 rows each in `file_entity` and `post_entity` before adopting them | See the ADR | Six indexes, about 2.16 MB in total ([ADR 0049](docs/ADR/0049-performance-capacity-criteria.md)) |
 
 ## How this was built
 

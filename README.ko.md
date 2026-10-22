@@ -20,6 +20,11 @@
 - 기간: 첫 커밋 2025-12-17, 현재 진행 중
 - 범위: 개발자 1인, [CLAUDE.ko.md](CLAUDE.ko.md)의 규약 아래 AI의 도움을 받아 진행 — 백엔드,
   `frontend/`, `admin/`, 컨테이너, CI, Helm, Terraform
+- 역할: 비밀번호 정책과 에러 코드, 프론트엔드를 외부 호스팅 대신 같은 ALB에서 서빙하는 것, 앱의
+  시크릿 규칙을 완화하는 대신 Terraform 생성기를 고치는 것은 개발자가 결정했습니다. 코드를 쓰기
+  전에 AI가 선택지를 비교표로 보여 주면 개발자가 하나를 고르고, 그것만 구현합니다. 개발자가 모든
+  변경을 읽고 승인하며, 결과는 테스트와 CI, 그리고 실제 환경(AWS/EKS, 실제 ClamAV)에서의 재현으로
+  확인합니다
 - 이 README는 저장소 전체를 다룹니다. 백엔드는 저장소 루트에 있고, 클라이언트에는 각자의
   README가 있습니다([frontend/](frontend/README.ko.md), [admin/](admin/README.ko.md))
 
@@ -496,16 +501,16 @@ POST /file            (Bearer, { title, filePath: "temp_..." })
 
 ## 트러블슈팅과 결정
 
-측정하거나 재현한 문제와, 그 전체 기록이 있는 위치입니다. 여러 해결책 중 왜 하나를 골랐는지는 각 ADR에
-있습니다.
+측정하거나 재현한 문제와, 그 전체 기록이 있는 위치입니다. "선택 이유" 열에는 앞의 두 항목에 기록된
+이유를 적었고, 나머지는 ADR에 있습니다.
 
-| 문제 | 원인 | 해결 | 결과 |
-|---|---|---|---|
-| `docker stop`이 10.4초 걸리고 컨테이너가 종료 코드 137로 끝남 | `node`가 PID 1이라 SIGTERM을 무시했고, 그래서 DB 풀이 닫히지 않았음 | [backend/main.ts](backend/main.ts)에 `app.enableShutdownHooks([], { useProcessExit: true })` 추가 | 로컬 컨테이너와 로컬 `kind` 클러스터의 파드에서 약 0.4초, 종료 코드 0. EKS에서는 측정하지 않음([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md)) |
-| 스캐너가 판정을 내리지 못했는데도 업로드가 악성코드 스캔을 통과함 | `clamscan`이 reject하지 않고 `isInfected: null`("스캔 불가")로 resolve하는데, 코드가 이를 정상으로 읽었음 | boolean이 아닌 판정을 실패한 시도로 처리: 한 번 재시도한 뒤 503 `UPLOAD_SCAN_UNAVAILABLE` | 실제 `clamd`로 재현했고 수정 뒤에도 다시 확인함([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md) 2026-10-03, 2026-10-12 추가 기록) |
-| 시크릿 강도 규칙이 생긴 뒤 첫 AWS 배포에서 백엔드가 crash-loop | Terraform이 JWT 시크릿을 영숫자 48자로 만들었는데, 앱의 Joi 규칙은 기호를 요구함 | 생성기가 문자 종류를 하나씩 반드시 포함하도록 수정 | 다시 apply한 뒤 백엔드가 부팅하고 로그인까지 됨([ADR 0064](docs/ADR/0064-jwt-secret-generation-joi-strength-rule.ko.md)) |
-| `GET /file`의 페이지 순서가 일정하지 않음 | 쿼리에 `ORDER BY`가 없어서 offset 페이지네이션이 행을 중복하거나 건너뛸 수 있었음 | 기본 `createdAt DESC`에 `id`를 tiebreaker로 추가. 정렬 필드는 고정된 표를 거쳐 매핑하므로 클라이언트 문자열이 컬럼명이 되지 않음 | 파일과 게시글이 하나의 목록 규약을 공유함([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.ko.md)) |
-| 목록 쿼리에 인덱스가 필요한지 | 측정한 근거가 없었음 | `file_entity`와 `post_entity`에 각각 10,000행을 넣고 측정한 뒤 채택 | 인덱스 6개, 합계 약 2.16 MB([ADR 0049](docs/ADR/0049-performance-capacity-criteria.ko.md)) |
+| 문제 | 원인 | 해결 | 선택 이유 | 결과 |
+|---|---|---|---|---|
+| `docker stop`이 10.4초 걸리고 컨테이너가 종료 코드 137로 끝남 | `node`가 PID 1이라 SIGTERM을 무시했고, 그래서 DB 풀이 닫히지 않았음 | [backend/main.ts](backend/main.ts)에 `app.enableShutdownHooks([], { useProcessExit: true })` 추가 | 일반 호출은 이벤트 루프를 붙잡는 것이 하나라도 남으면 종료되지 않음. 타이머를 남겨 두면 10.4초, 옵션을 쓰면 0.4초. 이후 핸들이 새도(유력 후보는 `S3Storage`) 느린 종료가 조용히 돌아오지 않게 함 | 로컬 컨테이너와 로컬 `kind` 클러스터의 파드에서 약 0.4초, 종료 코드 0. EKS에서는 측정하지 않음([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md)) |
+| 스캐너가 판정을 내리지 못했는데도 업로드가 악성코드 스캔을 통과함 | `clamscan`이 reject하지 않고 `isInfected: null`("스캔 불가")로 resolve하는데, 코드가 이를 정상으로 읽었음 | boolean이 아닌 판정을 실패한 시도로 처리: 한 번 재시도한 뒤 503 `UPLOAD_SCAN_UNAVAILABLE` | 판정 불가는 정상이 아니므로 스캐너 불가와 같은 fail-closed 규칙을 쓰고 기존 재시도·503 경로를 재사용함. 실제 `clamd`로 먼저 재현했고, 스캔 중 재시작·종료만으로 발생함 | 실제 `clamd`로 재현했고 수정 뒤에도 다시 확인함([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md) 2026-10-03, 2026-10-12 추가 기록) |
+| 시크릿 강도 규칙이 생긴 뒤 첫 AWS 배포에서 백엔드가 crash-loop | Terraform이 JWT 시크릿을 영숫자 48자로 만들었는데, 앱의 Joi 규칙은 기호를 요구함 | 생성기가 문자 종류를 하나씩 반드시 포함하도록 수정 | ADR 참고 | 다시 apply한 뒤 백엔드가 부팅하고 로그인까지 됨([ADR 0064](docs/ADR/0064-jwt-secret-generation-joi-strength-rule.ko.md)) |
+| `GET /file`의 페이지 순서가 일정하지 않음 | 쿼리에 `ORDER BY`가 없어서 offset 페이지네이션이 행을 중복하거나 건너뛸 수 있었음 | 기본 `createdAt DESC`에 `id`를 tiebreaker로 추가. 정렬 필드는 고정된 표를 거쳐 매핑하므로 클라이언트 문자열이 컬럼명이 되지 않음 | ADR 참고 | 파일과 게시글이 하나의 목록 규약을 공유함([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.ko.md)) |
+| 목록 쿼리에 인덱스가 필요한지 | 측정한 근거가 없었음 | `file_entity`와 `post_entity`에 각각 10,000행을 넣고 측정한 뒤 채택 | ADR 참고 | 인덱스 6개, 합계 약 2.16 MB([ADR 0049](docs/ADR/0049-performance-capacity-criteria.ko.md)) |
 
 ## 만든 방식
 
