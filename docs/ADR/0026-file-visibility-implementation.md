@@ -153,7 +153,7 @@ are untouched.
 ## Known limitations (follow-ups, recorded 2026-08-01)
 
 A post-implementation review flagged open items in the content endpoint
-([file-content.controller.ts](../backend/file/file-content.controller.ts)),
+([file-content.controller.ts](../../backend/file/file-content.controller.ts)),
 severity-ordered; the code items are tracked in [ROADMAP.md](../ROADMAP.md) > Unscheduled:
 
 1. **[medium] No stream error handling.** `createReadStream(...).pipe(res)` on both the

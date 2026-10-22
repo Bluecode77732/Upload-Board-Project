@@ -1264,7 +1264,7 @@ development line (package.json version).
   measurement argued for one. New `perf/` tooling (seed/explain/load-test scripts) is reusable
   for re-measuring this baseline later; never wired into CI.
 - **`docker-tag-cleanup.yml` — daily Docker Hub tag retention for `docker-publish`'s
-  new `dev`-push volume (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md#addendum-2026-08-31--four-design-gaps-found-and-closed-the-next-day))**
+  new `dev`-push volume (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md#addendum-2026-08-31--five-design-gaps-found-and-closed-the-next-day))**
   — keeps the newest 30 tags, deleting only tags shaped like a 40-hex-char git SHA
   (`^[0-9a-f]{40}$`) so `:latest` and any manually-created tag can never be selected by
   construction. `workflow_dispatch` defaults to a dry run; the scheduled cron run deletes
@@ -1745,7 +1745,7 @@ development line (package.json version).
   character in the secret values from a web-UI paste, but the `v3`→`v4` bump was kept anyway
   as the correct fix for the Node-runtime mismatch it was diagnosing.
 - **Three design gaps in the `docker-publish`/smoke-test work above, found and closed the
-  next day (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md#addendum-2026-08-31--four-design-gaps-found-and-closed-the-next-day))**
+  next day (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md#addendum-2026-08-31--five-design-gaps-found-and-closed-the-next-day))**
   — `docker-publish`'s `needs` narrowed from all 6 jobs to `[lint-and-unit, e2e]`: the root
   Dockerfile builds `backend/` only, so `frontend-lint`/`frontend-e2e`/`admin-lint-and-unit`/
   `admin-e2e` results said nothing about whether the backend image was safe to publish, yet
