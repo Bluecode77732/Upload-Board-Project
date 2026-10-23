@@ -341,9 +341,13 @@ These steps start only the API, which has no UI. To run the clients, use separat
 
 ```bash
 cd frontend && pnpm install && pnpm dev   # http://localhost:5173 (proxies to the backend on :3000)
-cd admin && pnpm install && pnpm dev      # http://localhost:5174 — needs CORS_ORIGIN=http://localhost:5174
-                                          # in the backend's .env; see admin/README.md
+
+cd admin && cp .env.example .env          # sets VITE_API_URL=http://localhost:3000
+pnpm install && pnpm dev                  # http://localhost:5174
 ```
+
+`admin` calls the backend from another origin, so add `CORS_ORIGIN=http://localhost:5174` to the
+backend's `.env` and restart the backend (see admin/README.md).
 
 Notes:
 
@@ -365,7 +369,8 @@ reachable `clamd` — set `CLAMD_HOST`/`CLAMD_PORT` (default `clamav`/`3310`). W
 
 ```bash
 pnpm install
-cp .env.example .env              # fill in the three values as above (DB_HOST is already localhost)
+cp .env.example .env              # fill in the three values as above; DB_HOST is already localhost,
+                                  # and DB_PORT=5435 is the compose db's port: set your own (often 5432)
 # then create the database named in DB_DATABASE
 pnpm migration:run                # applies the schema (ADR 0006)
 pnpm run start:dev                # port 3000, Swagger at http://localhost:3000/doc

@@ -334,9 +334,13 @@ Compose 2.24 이상이 포함된 Docker가 필요합니다. PostgreSQL, ClamAV, 
 
 ```bash
 cd frontend && pnpm install && pnpm dev   # http://localhost:5173 (백엔드 :3000으로 프록시)
-cd admin && pnpm install && pnpm dev      # http://localhost:5174 — 백엔드 .env에 CORS_ORIGIN=http://localhost:5174 필요,
-                                          # admin/README.ko.md 참고
+
+cd admin && cp .env.example .env          # VITE_API_URL=http://localhost:3000 설정
+pnpm install && pnpm dev                  # http://localhost:5174
 ```
+
+`admin`은 백엔드를 다른 출처로 호출하므로, 백엔드의 `.env`에 `CORS_ORIGIN=http://localhost:5174`를
+넣고 백엔드를 다시 시작하세요(`admin/README.ko.md` 참고).
 
 참고:
 
@@ -360,7 +364,8 @@ cd admin && pnpm install && pnpm dev      # http://localhost:5174 — 백엔드 
 
 ```bash
 pnpm install
-cp .env.example .env              # 위의 세 값을 채웁니다 (DB_HOST는 이미 localhost)
+cp .env.example .env              # 위의 세 값을 채웁니다. DB_HOST는 이미 localhost이고,
+                                  # DB_PORT=5435는 compose의 db 포트이니 본인의 포트(보통 5432)로 바꿉니다
 # 그다음 DB_DATABASE에 지정한 데이터베이스를 만듭니다
 pnpm migration:run                # 스키마 적용 (ADR 0006)
 pnpm run start:dev                # 포트 3000, Swagger는 http://localhost:3000/doc
