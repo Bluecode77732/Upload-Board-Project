@@ -372,9 +372,6 @@ pnpm test                         # 단위 테스트
 pnpm run test:cov                 # 커버리지 (서비스만 측정)
 ```
 
-마이그레이션 도입 이전의 스키마를 이미 가진 데이터베이스라면 `pnpm migration:run -- --fake`로
-베이스라인을 적용 완료로 한 번 표시하세요.
-
 ### 환경변수
 
 필수 항목은 부팅 시 Joi가 검증하며, 빠지면 즉시 실패합니다. `ENV`, `DB_TYPE`(반드시 `postgres`),

@@ -377,9 +377,6 @@ pnpm test                         # unit tests
 pnpm run test:cov                 # coverage (only services are measured)
 ```
 
-If your database already carries the schema from before migrations were adopted, mark the baseline
-applied once with `pnpm migration:run -- --fake`.
-
 ### Environment variables
 
 Required, validated by Joi at boot (a missing value fails fast): `ENV`, `DB_TYPE` (must be
