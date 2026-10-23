@@ -41,10 +41,13 @@ now. To see the project work:
 
 ## In two minutes
 
-- **Two-phase upload.** A file is staged as `temp_…` and then promoted to `granted_…` in one
-  transaction, so the DB row and the stored file commit or roll back together
-  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md)). Submitting the same upload twice
-  replays the result instead of failing ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md)).
+- **Two-phase upload.** A file is staged as `temp_…`, then promoted to `granted_…` inside one DB
+  transaction: if the move fails, the insert rolls back
+  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md)). The one unprotected window is a commit
+  that fails after a successful move; it leaves an orphaned `granted_` file that a scheduled sweep
+  reports ([ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md)). Submitting the same upload
+  twice replays the result instead of failing
+  ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md)).
 - **No static file serving.** Stored bytes are only reachable through `GET /file/:id/content`,
   which checks the file's visibility first ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md)).
 - **Refresh-token rotation with reuse detection.** The server keeps only a hash of the current
@@ -109,79 +112,53 @@ local stack and sample data as above.
 
 ## Features
 
-- **Authentication** — register/sign-in via HTTP Basic token; dual-secret JWT
-  access/refresh pair with a `type` claim ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md)).
-  The refresh token travels only as an httpOnly cookie and the server keeps just its SHA-256
-  hash. Every refresh rotates it, and a rotated-out token that shows up again ends the session
-  with `AUTH_REFRESH_REUSED` ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md))
-- **Two-phase upload** — `temp_` → `granted_` prefix state machine; the DB insert and
-  the physical file move commit or roll back together
-  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md)). The filename returned by the attach
-  step is a one-shot claim token: the same user resubmitting it gets the existing file back
-  (200), and anyone else gets 409 `FILE_ALREADY_CLAIMED`
+- **Authentication** — Basic-token register/sign-in and a dual-secret JWT access/refresh pair with a
+  `type` claim ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md)). The refresh token travels only as an httpOnly cookie, is stored as a
+  SHA-256 hash and rotates on every refresh; a rotated-out token that shows up again ends the
+  session with `AUTH_REFRESH_REUSED` ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md))
+- **Two-phase upload** — `temp_` → `granted_` state machine; the file move runs inside the DB
+  transaction ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md)). A commit that fails after a successful move can leave an orphan, which
+  the sweep reports ([ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md)). The attach filename is a one-shot claim token: the same user
+  resubmitting gets the file back (200), anyone else gets 409 `FILE_ALREADY_CLAIMED`
   ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md))
-- **RBAC + audit log** — `user`/`admin`/`superadmin` roles; ownership checks
-  extend to "self or admin"; role changes and deletes are audited
-  ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.md), layered on
-  [ADR 0007](docs/ADR/0007-ownership-checks-without-rbac.md))
-- **Boundary validation** — global `ValidationPipe` (`whitelist` +
-  `forbidNonWhitelisted`); serialized entities never leak `password`
-- **Rate limiting** — every route defaults to 100 requests/minute, tracked
-  independently per route (not one pool shared app-wide — `@nestjs/throttler`
-  keys on controller + handler + client IP); `POST /auth/register`/`signin`/
-  `token/refresh` are tightened to 5/minute and `POST /upload/attach` to
-  15/minute; health/metrics probes are exempt so orchestrator/Prometheus
-  traffic is never mistaken for abuse
-  ([ADR 0053](docs/ADR/0053-global-rate-limiting.md),
-  [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
-- **Swagger** — full API documentation and manual test bench at `/doc`
-- **Upload malware scanning** — every upload is scanned by ClamAV in memory before anything
-  is written. A match is refused, and an unreachable scanner fails closed instead of skipping
-  the check ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md))
-- **File visibility** — every file is `public`, `private` (default) or `unlisted`. Unlisted
-  files are opened with a share link whose token can be rotated or given an expiry. Bytes are
-  served only through the access-checked `GET /file/:id/content`, never from a static folder
-  ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md),
-  [ADR 0026](docs/ADR/0026-file-visibility-implementation.md))
-- **Storage port** — file operations go through a `FileStorage` interface with a local-disk
-  and an S3 adapter, chosen by `STORAGE_DRIVER`. Under S3 a passing access check redirects to a
-  short-lived presigned URL, so the app server leaves the byte-serving path
-  ([ADR 0029](docs/ADR/0029-storage-port-adapter.md),
+- **RBAC + audit log** — `user`/`admin`/`superadmin` roles, ownership checks that extend to "self or
+  admin", role changes and deletes written to an audit log ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.md), layered on [ADR 0007](docs/ADR/0007-ownership-checks-without-rbac.md))
+- **Boundary validation** — global `ValidationPipe` (`whitelist` + `forbidNonWhitelisted`);
+  serialized entities never leak `password`
+- **Rate limiting** — 100 requests/minute per route (keyed on controller + handler + client IP),
+  5/minute on `POST /auth/register`, `signin` and `token/refresh`, 15/minute on
+  `POST /upload/attach`; health and metrics probes are exempt ([ADR 0053](docs/ADR/0053-global-rate-limiting.md), [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
+- **Swagger** — API documentation and manual test bench at `/doc`
+- **Upload malware scanning** — a ClamAV scan in memory before anything is written; a match is
+  refused and an unreachable scanner fails closed ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md))
+- **File visibility** — `public`, `private` (default) or `unlisted` (a share link whose token can be
+  rotated or expire); bytes are served only through the access-checked `GET /file/:id/content`
+  ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md), [ADR 0026](docs/ADR/0026-file-visibility-implementation.md))
+- **Storage port** — a `FileStorage` interface with local-disk and S3 adapters (`STORAGE_DRIVER`);
+  under S3 a passing access check redirects to a short-lived presigned URL ([ADR 0029](docs/ADR/0029-storage-port-adapter.md),
   [ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md))
-- **Board** — posts with an optional attached file, and flat comment threads. Lists share one
-  search, filter, sort and pagination contract
-  ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md),
-  [ADR 0023](docs/ADR/0023-board-domain-schema.md))
-- **Account and file lifecycle** — account deletion cascades only on an explicit
-  confirmation, and every delete is irreversible by design
-  ([ADR 0020](docs/ADR/0020-account-deletion-cascade.md)). Moving a file to another owner needs
-  the recipient's consent: propose, accept, reject or cancel
-  ([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.md))
-- **Hardening** — security response headers
-  ([ADR 0055](docs/ADR/0055-helmet-security-headers.md)), a strength check on token secrets
-  and passwords, a non-root container image
-  ([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.md)), a default-deny
-  NetworkPolicy ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.md)) and the
+- **Board** — posts with an optional attached file, flat comments, and one search, filter, sort and
+  pagination contract ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md), [ADR 0023](docs/ADR/0023-board-domain-schema.md))
+- **Account and file lifecycle** — account deletion cascades only on explicit confirmation and is
+  irreversible by design ([ADR 0020](docs/ADR/0020-account-deletion-cascade.md)); moving a file to another owner needs the recipient's
+  consent: propose, accept, reject or cancel ([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.md))
+- **Hardening** — security response headers ([ADR 0055](docs/ADR/0055-helmet-security-headers.md)), a strength check on token secrets and
+  passwords, a non-root image ([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.md)), a default-deny NetworkPolicy ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.md)) and the
   Ingress path allow-list below
-- **Operations** — liveness/readiness endpoints
-  ([ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.md)), Prometheus metrics with
-  Grafana ([ADR 0047](docs/ADR/0047-observability-prometheus-grafana.md)), and scheduled
-  sweeps for orphaned `temp_` files ([ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.md))
-  and orphaned `granted_` files, which only reports until an operator turns deletion on
-  ([ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md))
-- **React client (`frontend/`)** — sign-in and register, the post board with comments, the file
-  board as a preview grid, playback by media type, visibility and share-link management,
-  ownership-transfer actions and account deletion. The upload form takes up to 15 files at
-  once and sends them one by one with a progress bar per file
-  ([ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.md)). The UI is English or
-  Korean and has a light and a dark theme
-- **Admin console (`admin/`)** — login, a dashboard with totals and recent audit logs, the
-  user list with role management, and the audit-log viewer. It is served under `/admin` on the
-  same ALB ([ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.md))
+- **Operations** — liveness/readiness endpoints ([ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.md)), Prometheus metrics with Grafana
+  ([ADR 0047](docs/ADR/0047-observability-prometheus-grafana.md)), and scheduled sweeps for orphaned `temp_` files ([ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.md)) and orphaned
+  `granted_` files, which only reports until deletion is turned on ([ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md))
+- **React client (`frontend/`)** — sign-in and register, the post board with comments, a preview-grid
+  file board, playback by media type, visibility and share-link management, ownership transfer and
+  account deletion. The upload form sends up to 15 files one by one with a progress bar per file
+  ([ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.md)); the UI is English or Korean, light or dark
+- **Admin console (`admin/`)** — login, a dashboard with totals and recent audit logs, the user list
+  with role management, and the audit-log viewer, served under `/admin` on the same ALB ([ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.md))
 
 ## Architecture
 
-One Helm release runs three workloads behind one ALB. The Ingress is an explicit path
+One Helm release runs the backend, `frontend/` and `admin/` behind one ALB, plus ClamAV as its own
+Deployment. The Ingress is an explicit path
 allow-list: `/health`, `/metrics` and `/doc` are not routed to it
 ([ADR 0058](docs/ADR/0058-ingress-path-allowlist.md)).
 
@@ -230,9 +207,9 @@ A post only references a file; deleting the post leaves the file. `comment.postI
 schema's only database-level cascade
 ([ADR 0023](docs/ADR/0023-board-domain-schema.md)).
 
-The AWS side, grouped by the Terraform state that creates each resource. Dashed boxes are not
-Terraform's: the Ingress and Helm create them
-([ADR 0044](docs/ADR/0044-terraform-three-state-split.md)):
+The AWS side, grouped by the Terraform state that creates each resource. It is drawn from the
+Terraform code and was not checked against a live state. Dashed boxes are not Terraform's: the
+Ingress and Helm create them ([ADR 0044](docs/ADR/0044-terraform-three-state-split.md)):
 
 ```mermaid
 flowchart LR
@@ -252,11 +229,12 @@ flowchart LR
   end
   ALB["ALB<br/>from the Ingress"]:::rt
   APP["backend, frontend,<br/>admin, clamav"]:::rt
-  LBC --> ALB --> APP
+  LBC -. "creates" .-> ALB
+  ALB --> APP
   APP -. "runs on" .-> NODES
   APP -- "5432, node security group only" --> RDS
   APP -- "IAM role (IRSA)" --> S3
-  SM --> ESO -- "Kubernetes Secret" --> APP
+  SM --> ESO -- "Kubernetes Secret, after one manual apply" --> APP
   EDNS -- "ALB record" --> DNS
   DNS -. "certificate" .-> ALB
   classDef rt stroke-dasharray:4 3
@@ -286,7 +264,7 @@ plus operational modules — **Storage** (the `FileStorage` port with local-disk
 | React 19, Zustand, axios | `admin/`: role management and audit-log viewer | [admin/src/](admin/src/) |
 | Jest, Playwright | Service unit tests; backend E2E on a real PostgreSQL; client E2E | `backend/**/*.spec.ts`, [test/](test/), [frontend/e2e/](frontend/e2e/), [admin/e2e/](admin/e2e/) |
 | Docker, Compose, GitHub Actions | Multi-stage image (`linux/amd64` and `linux/arm64` from `main`), local stack, CI that publishes images | [Dockerfile](Dockerfile), [docker-compose.yml](docker-compose.yml), [.github/workflows/ci.yml](.github/workflows/ci.yml) |
-| Helm, Terraform | One release for three workloads; VPC, EKS, RDS, S3, Route 53 and ACM in three state files, plus ALB Controller, External Secrets, ExternalDNS, kube-prometheus-stack | [k8s/helm/](k8s/helm/), [k8s/infra/terraform/](k8s/infra/terraform/) |
+| Helm, Terraform | One release for the backend, `frontend/`, `admin/` and ClamAV; VPC, EKS, RDS, S3, Route 53 and ACM in three state files, plus ALB Controller, External Secrets, ExternalDNS, kube-prometheus-stack | [k8s/helm/](k8s/helm/), [k8s/infra/terraform/](k8s/infra/terraform/) |
 
 Why these were chosen is in [ADR 0066](docs/ADR/0066-stack-selection-rationale-retroactive.md),
 written after the fact. NestJS, TypeORM and PostgreSQL were picked with a later move toward
@@ -390,45 +368,31 @@ Required, validated by Joi at boot (a missing value fails fast): `ENV`, `DB_TYPE
 uppercase letter, a digit and a symbol), `ACCESS_TOKEN_SECRET_EXPIRES_IN`,
 `REFRESH_TOKEN_SECRET_EXPIRES_IN` (numbers).
 
-Optional, each with a default (all documented in `.env.example`):
-
-| Variable | Purpose |
-|---|---|
-| `BASE_URL` | Public base URL used to build file URLs (default `http://localhost:3000`) |
-| `CORS_ORIGIN` | Comma-separated browser origins; unset = CORS off ([ADR 0008](docs/ADR/0008-opt-in-cors.md)). The deployed clients are same-origin behind the ALB and do not need it |
-| `STORAGE_DRIVER` | `local` (default) or `s3`; `s3` also needs `S3_BUCKET` and `AWS_REGION` ([ADR 0029](docs/ADR/0029-storage-port-adapter.md)) |
-| `CLAMD_HOST`, `CLAMD_PORT` | Host and port of the malware scanner |
-| `SUPERADMIN_EMAIL` | The account `pnpm promote-superadmin` promotes; nothing is promoted on boot |
-| `TEMP_SWEEP_*`, `GRANTED_SWEEP_*` | Orphan-file sweeps; the granted sweep only reports until `GRANTED_SWEEP_DRY_RUN=false` |
-| `THROTTLE_ENABLED` | Leave `true`; it exists only so the E2E suites can bypass rate limits |
+Everything else is optional and has a default. The settings you are most likely to touch are
+`BASE_URL`, `CORS_ORIGIN` ([ADR 0008](docs/ADR/0008-opt-in-cors.md)), `STORAGE_DRIVER` (`local` or
+`s3`; [ADR 0029](docs/ADR/0029-storage-port-adapter.md)) and `CLAMD_HOST`/`CLAMD_PORT`, all
+documented in `.env.example`. Leave `THROTTLE_ENABLED` at `true`; it exists only so the E2E
+suites can bypass rate limits.
 
 ### Deploying to AWS / Kubernetes
 
-The backend, `frontend/`, and `admin/` ship as one Helm release behind one ALB
-([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md),
-[ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.md)). There are three ways to
-run it; exact flags and prerequisites live in
+The backend, `frontend/` and `admin/` ship as one Helm release behind one ALB, with ClamAV as its
+own Deployment ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md),
+[ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.md)). The normal path is
+`bash k8s/infra/terraform/deploy.sh all`: it runs the three Terraform states in order, then
+`helm upgrade --install` with one `:<git-sha>` for all three images
+([ADR 0046](docs/ADR/0046-deploy-sequence-automation.md)), and stops for an explicit `y` before
+every `apply`. The by-hand and Helm-only variants, flags and prerequisites are in
 [k8s/infra/terraform/README.md](k8s/infra/terraform/README.md) and
-[k8s/helm/README.md](k8s/helm/README.md).
-
-| Way | Command | Use it when |
-|---|---|---|
-| 1. Scripted | `bash k8s/infra/terraform/deploy.sh all` (or `cluster` / `app-infra` / `addons` / `helm [branch]` one at a time) | The normal path. Runs the three Terraform states in order, then `helm upgrade --install` with the same `:<git-sha>` for all three images ([ADR 0046](docs/ADR/0046-deploy-sequence-automation.md)) |
-| 2. By hand | `terraform init -backend-config="bucket=<state-bucket>"`, `plan`, `apply` inside `cluster/`, then `app-infra/`, then `addons/`; then `helm upgrade --install` from `k8s/helm` | You don't want the script — this is exactly the sequence it wraps |
-| 3. Helm only | `helm upgrade --install sharenpo . -f values-prod.yaml --set image.tag=<sha> --set frontend.image.tag=<sha> --set admin.image.tag=<sha>` from `k8s/helm` | The infra is already up and the app Secret exists; you only need to redeploy or roll back to an older sha |
-
-`deploy.sh` stops for an explicit `y` before every `apply` — there is no `-auto-approve`.
-None of the three covers domain purchase / NS delegation, the one-time External Secrets
-sync, or turning `ingress.enabled` on; those stay manual (see the Terraform README).
+[k8s/helm/README.md](k8s/helm/README.md). Domain purchase / NS delegation, the one-time External
+Secrets sync and turning `ingress.enabled` on stay manual.
 
 **CI does not deploy.** GitHub Actions only publishes the three images
 (`bluecode1775/sharenpo`, `-frontend`, `-admin`) to Docker Hub
-([ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.md)); nothing in
-this repository runs `terraform apply` or `helm upgrade` automatically.
-
-This stack has been applied to real AWS and verified there more than once. The live state is
-read from AWS, not from this README, because it goes stale the day someone runs `apply` or
-`destroy`.
+([ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.md)); nothing in this
+repository runs `terraform apply` or `helm upgrade` automatically. This stack has been applied to
+real AWS and verified there more than once. The live state is read from AWS, not from this README,
+because it goes stale the day someone runs `apply` or `destroy`.
 
 ## Try the API (Swagger)
 
@@ -476,18 +440,6 @@ operational `/health/*` and `/metrics`, and `GET /file/:id/content` needs a Bear
 | `POST /post` | Bearer | Creates a post with an optional `fileId`, which doubles as its idempotency key | 409 `POST_FILE_TAKEN`, 403 `FORBIDDEN_NOT_OWNER` ([ADR 0023](docs/ADR/0023-board-domain-schema.md)) |
 | `POST /post/:postId/comment` | Bearer | Adds a comment (≤ 1,000 characters); the thread is oldest-first | 404 `POST_NOT_FOUND` |
 
-Typical flow:
-
-```
-POST /auth/register   (Basic)          → user created
-POST /auth/signin     (Basic)          → { accessToken } + Set-Cookie: refreshToken (httpOnly)
-POST /upload/attach   (Bearer, one of image/audio/video) → { filename: "temp_..." }
-POST /file            (Bearer, { title, filePath: "temp_..." })
-                                       → promoted (visibility: private); served at
-                                         {BASE_URL}/file/:id/content (Bearer required until
-                                         PATCH /file/:id sets visibility to public/unlisted)
-```
-
 ### Error responses
 
 Every error follows a fixed, machine-readable shape
@@ -510,15 +462,16 @@ with a `message` array; when `ENV=dev` a `stack` field is included.
 ## Troubleshooting and decisions
 
 Problems that were measured or reproduced, and where each is recorded in full. The "Why this fix"
-column gives the recorded reason for the first two; for the rest, it is in the ADR.
+column quotes the recorded reason where it fits in one line; for the others, see the ADR in the
+last column.
 
 | Problem | Cause | Fix | Why this fix | Result |
 |---|---|---|---|---|
 | `docker stop` took 10.4 s and the container exited 137 | `node` is PID 1 and ignored SIGTERM, so the DB pool was never closed | `app.enableShutdownHooks([], { useProcessExit: true })` in [backend/main.ts](backend/main.ts) | The plain call only exits when nothing keeps the event loop alive; with a leftover timer it still took 10.4 s, the option 0.4 s. The option stops a future leaked handle (likely `S3Storage`) from silently bringing the slow shutdown back | About 0.4 s and exit 0 in a local container and a pod on a local `kind` cluster; not measured on EKS ([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.md)) |
 | An upload passed the malware scan when the scanner gave no verdict | `clamscan` resolves with `isInfected: null` ("unable to scan") instead of rejecting, and the code read that as clean | A non-boolean verdict now counts as a failed attempt: retried once, then 503 `UPLOAD_SCAN_UNAVAILABLE` | No verdict is not a clean verdict, so it follows the same fail-closed rule as an unreachable scanner and reuses the existing retry and 503 path. Reproduced against a real `clamd` first: a restart or crash mid-scan is enough to trigger it | Reproduced against a real `clamd`, and re-checked after the fix ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md) addenda 2026-10-03 and 2026-10-12) |
-| The backend crash-looped on the first AWS deploy after the secret-strength rule | Terraform generated the JWT secrets as 48 alphanumeric characters; the app's Joi rule requires a symbol | The generator now guarantees one of each character class | See the ADR | After a re-apply the backend booted and signed in ([ADR 0064](docs/ADR/0064-jwt-secret-generation-joi-strength-rule.md)) |
-| `GET /file` paged non-deterministically | The query had no `ORDER BY`, so offset paging could repeat or skip rows | Default `createdAt DESC` with `id` as a tiebreaker; sort fields map through a fixed table, so a client string never becomes a column name | See the ADR | One list contract shared by files and posts ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md)) |
-| Whether the list queries needed indexes | No measurement | Measured at 10,000 rows each in `file_entity` and `post_entity` before adopting them | See the ADR | Six indexes, about 2.16 MB in total ([ADR 0049](docs/ADR/0049-performance-capacity-criteria.md)) |
+| The backend crash-looped on the first AWS deploy after the secret-strength rule | Terraform generated the JWT secrets as 48 alphanumeric characters; the app's Joi rule requires a symbol | The generator now guarantees one of each character class | — | After a re-apply the backend booted and signed in ([ADR 0064](docs/ADR/0064-jwt-secret-generation-joi-strength-rule.md)) |
+| `GET /file` paged non-deterministically | The query had no `ORDER BY`, so offset paging could repeat or skip rows | Default `createdAt DESC` with `id` as a tiebreaker; sort fields map through a fixed table, so a client string never becomes a column name | — | One list contract shared by files and posts ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md)) |
+| The list-query indexes ADR 0021 had deferred | ADR 0021 deferred them until the tables reached 10,000 rows, with nothing measured yet | Measured at 10,000 rows each in `file_entity` and `post_entity`, then adopted all of them | The response-time targets already passed, but the queries got 1.6–70× faster for about 2.16 MB of indexes | Six indexes in place ([ADR 0049](docs/ADR/0049-performance-capacity-criteria.md)) |
 
 ## How this was built
 
@@ -633,23 +586,20 @@ Open items, each recorded where it was found; the full list is in
   the deployment is not highly available. More replicas need shared counter storage
   ([ADR 0053](docs/ADR/0053-global-rate-limiting.md)).
 - **Public and unlisted media does not render in the local dev setup.** The client (`:5173`) and
-  the API (`:3000`) are different origins, and the API's `Cross-Origin-Resource-Policy:
-  same-origin` makes the browser refuse to embed the files. The screenshots set `BASE_URL` to the
-  client's origin to avoid it. Behind one ALB the origin is shared
-  ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md)), but this was not observed in a
-  browser on the deployed stack.
-- **A shared link opens the file itself, not an app page.** Checked on 2026-10-20 on the local
-  stack: file URLs open directly and support seeking, but the app pages send a signed-out visitor
-  to the login page, a crawler sees an empty page, and other sites cannot embed the files. None of
-  this is decided, and it was not checked on the deployed stack or through the S3 redirect
-  ([ADR 0055](docs/ADR/0055-helmet-security-headers.md) Addendum, [ROADMAP.md](docs/ROADMAP.md) §7).
+  the API (`:3000`) are different origins, and the API's `Cross-Origin-Resource-Policy: same-origin`
+  blocks embedding; the screenshots set `BASE_URL` to the client's origin. Behind one ALB the origin
+  is shared ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md)), but this was not observed
+  on the deployed stack.
+- **A shared link opens the file itself, not an app page.** Signed-out visitors to the app pages are
+  sent to the login page and a crawler sees an empty page. Checked on 2026-10-20 on the local
+  stack only; undecided ([ADR 0055](docs/ADR/0055-helmet-security-headers.md) Addendum,
+  [ROADMAP.md](docs/ROADMAP.md) §7).
 - **Automation stops at publishing images.** A person runs the deploy. A service mesh (Istio) was left out
   because there is one backend workload and no east-west traffic for it to manage.
-- **The deploy settings keep the AWS account number and the database address.** They are plain
-  values in `k8s/helm/values-prod.yaml`, because `deploy.sh` passes that file straight to
-  `helm upgrade`. Both are identifiers, not credentials, and they are already in the git history;
-  the documents were masked and the deploy file was left alone on purpose. A full git-history scan
-  with gitleaks (2026-10-22) found no real secret.
+- **`k8s/helm/values-prod.yaml` keeps the AWS account number and the database address as plain
+  values,** because `deploy.sh` passes the file straight to `helm upgrade`. They are identifiers,
+  not credentials, and are already in the git history; a gitleaks scan of the full history
+  (2026-10-22) found no real secret.
 - **Dependencies.** `pnpm audit --prod` found no known vulnerabilities on 2026-10-09; plain
   `pnpm audit` reported 65 (3 critical), all in build and test tooling.
 
