@@ -1651,7 +1651,9 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   실행해 통과했다. (5) 한 번 보였고 재현하지 않음: `docker compose up --build`가 첫 빌드에서
   `image "…/sharenpo-api:local": already exists`로 실패했다(`migrate`와 `api`가 같은 태그를 빌드한다).
   빌드 없이 다시 실행하면 동작했다. `up` 전에 `docker compose build api`를 먼저 실행하면 피할 수 있을지도 모르지만 시험하지 않았다.
-  (6) `STYLE-PLAN.ko.md`에 `-합니다`와 `-다`가 섞여 있다. 명시적으로 요청받을 때 다시 본다.
+  (6) `STYLE-PLAN.ko.md`에 `-합니다`와 `-다`가 섞여 있다. (7) 개발자가 지우도록 남긴 것: 2026-10-26 검증에서 만든
+  Docker 볼륨 `sharenpo-verify3_db-data`, `sharenpo-verify3_clamav-data`와 이미지 `sharenpo-api:local`.
+  명시적으로 요청받을 때 다시 본다.
 
 ## 8. Advisory 노트
 

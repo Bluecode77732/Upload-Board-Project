@@ -78,6 +78,17 @@ development line (package.json version).
   `helm template` with both files matches the output from the old file (607 lines, no diff); `deploy.sh helm`
   stops with an error when the overlay is missing and, with it present, at the prompt when answered `n`. No
   cluster was involved; the history was not rewritten. The Helm README gives the two-`-f` command.
+  Numbers and method: the README went from 686 to 643 lines (Korean 667 to 635); Features from 74 to 45 lines
+  with all 26 ADR links kept; Core API is 10 routes checked against the controllers; the troubleshooting table
+  has 5 rows from ADR and ROADMAP entries, its "why this fix" column filled where the developer confirmed it
+  (shutdown hooks, the null verdict), written as a decision from ADR 0049 for the index row and "—" for the
+  other two. The role statement comes from the developer's own answers. Every run above used a scratch copy of
+  `HEAD` and throwaway databases, never the dev database or `file/`. Seen during the runs, none of it a
+  repository defect: containers of another project and a VS Code Live Preview server took `127.0.0.1:3000`
+  mid-run and answered in place of the backend (requests to `[::1]:3000` reached the right server, and those
+  processes were left alone); Windows Defender deletes an EICAR file written to disk; and the permission mode
+  refused deleting compose volumes and images, so the volumes `sharenpo-verify3_db-data` and
+  `sharenpo-verify3_clamav-data` and the image `sharenpo-api:local` are left for the developer to remove.
 - **Docs: shared-link behavior recorded after checking it (2026-10-20)** — documentation only; no code
   changed and nothing was decided. Public and unlisted file links, opened as a logged-out visitor and as a
   crawler on a local stack, behave like this: the file URLs open (image, video and audio, with seeking), the app

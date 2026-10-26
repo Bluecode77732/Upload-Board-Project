@@ -1750,7 +1750,9 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   passed. (5) Seen once, not reproduced: `docker compose up --build` failed on its first build with
   `image "…/sharenpo-api:local": already exists` (`migrate` and `api` build the same tag); a retry without
   building worked. A prior `docker compose build api` might avoid it; untested. (6) `STYLE-PLAN.ko.md`
-  mixes `-합니다` and `-다`. Revisit when explicitly requested.
+  mixes `-합니다` and `-다`. (7) Left for the developer to remove: Docker volumes `sharenpo-verify3_db-data` and
+  `sharenpo-verify3_clamav-data` and the image `sharenpo-api:local`, from the 2026-10-26 verification run.
+  Revisit when explicitly requested.
 
 ## 8. Advisory notes
 
