@@ -44,7 +44,8 @@ item below lands as its own dedicated, designed change
 > rather than left undone: **Istio (service mesh) was pulled from the DevOps stack and
 > deferred** on 2026-08-31 (§7) — this project runs a single backend workload with no
 > east-west traffic for a mesh to manage, so introducing one now would solve a problem this
-> project does not have; revisit only if the architecture grows multiple in-cluster services.
+> project does not have; revisit only if the architecture grows multiple in-cluster services
+> (true on 2026-08-31; the chart has four workloads since, see the 2026-10-27 addendum in §7).
 > What remains is not a build task: it is an **operating decision** (keep the AWS stack applied
 > and paying, or torn down until next needed) and routine doc upkeep — not a new
 > feature or a scheduled ADR. The narrative below is kept as the historical record of how each
@@ -1090,6 +1091,16 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   survived that cut. Revisit only if the architecture actually grows multiple in-cluster
   services that need traffic management, mTLS, or canary routing between them — a
   scenario not on this project's roadmap today.
+  **Addendum 2026-10-27 — the premise above has since changed.** The chart now deploys four
+  workloads: the backend, `frontend/` and `admin/` (static nginx), and ClamAV
+  ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.md),
+  [ADR 0060](ADR/0060-frontend-same-alb-path-routing.md),
+  [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md)). "Exactly one workload" no longer holds,
+  and "multiple in-cluster services", the revisit condition stated above, is met in letter. What is
+  actually east-west is narrow: backend to ClamAV (`clamd`, TCP 3310) and Prometheus to the
+  backend's `/metrics`. The two SPA containers serve static files and make no in-cluster call to
+  the backend (browsers reach it through the ALB). The decision itself was not re-evaluated and is
+  not changed here; the text above is kept as written.
 - ADR 0026 content-endpoint follow-ups (recorded 2026-08-01, from a post-implementation
   review of `GET /file/:id/content`,
   [file-content.controller.ts](../backend/file/file-content.controller.ts)), severity-ordered:

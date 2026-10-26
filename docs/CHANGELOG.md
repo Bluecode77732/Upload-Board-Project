@@ -45,8 +45,8 @@ development line (package.json version).
   tests were counted (76) but not run, and the 68 ADRs, rate limits, error codes, stack versions, 14 screenshots and
   GIFs per language, 164 local links per language and the EN/KO structure all held. Corrected: the Istio sentence said
   the chart has one backend workload and no east-west traffic, which stopped being true when ADR 0059, 0060 and 0062
-  added ClamAV, `frontend/` and `admin/` (the 2026-08-31 decision is unchanged; ROADMAP §7 still carries the old
-  premise and was not edited); the AWS diagram now shows kube-prometheus-stack in `addons/`, says `1.34` is the
+  added ClamAV, `frontend/` and `admin/` (the 2026-08-31 decision is unchanged; ROADMAP's header note and §7 keep
+  their text and gained a dated addendum saying the premise changed and what is actually east-west); the AWS diagram now shows kube-prometheus-stack in `addons/`, says `1.34` is the
   cluster and the x64 group's default is 0, and draws the one-way `terraform_remote_state` reads between the three
   states; the Core API intro no longer exempts all of `/auth/*` from the Bearer token (`signout` needs it).
   Trimmed: 646 to 634 lines (Korean 638 to 630). Features no longer repeats the refresh, orphan and scan detail that
