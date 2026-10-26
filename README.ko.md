@@ -604,12 +604,9 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
   ([ADR 0068](docs/ADR/0068-deploy-identifiers-gitignored-overlay.ko.md)). 둘 다 자격 증명이 아니라
   식별자이고, 이력은 다시 쓰지 않았으며, gitleaks로 이력 전체를 검사한 결과(2026-10-22) 실제 비밀은
   나오지 않았습니다.
-- **의존성.** 2026-10-26에 `pnpm audit --prod`는 high 등급 advisory 두 건을 보고하며, 둘 다
-  2026-10-23에 공개됐고 아직 고치지 않았습니다. `multer`는 비동기 `fileFilter`가 있어야 하는데 이 앱의
-  것은 동기식이라 현재 설정으로는 닿지 않습니다. `body-parser`는 기본 옵션에 해당하며 Nest의 기본
-  파서가 그 옵션을 씁니다(압축된 본문 뒤에 여분의 바이트가 붙은 요청 하나로 프로세스가 죽을 수
-  있으며, 여기서 재현하지는 않았습니다). 고치는 방법은 `package.json` overrides의 버전을 올리는 것입니다.
-  일반 `pnpm audit`는 69건(심각 3건)이며, 이 두 건을 뺀 나머지는 모두 빌드·테스트 도구에 있습니다.
+- **의존성.** 2026-10-27에 `pnpm audit --prod`는 알려진 취약점을 찾지 못했습니다. 2026-10-23에 공개된
+  high 등급 advisory 두 건(`body-parser`, `multer`)은 `package.json` overrides의 버전을 올려 해결했습니다.
+  일반 `pnpm audit`는 67건(심각 3건)이며 모두 빌드·테스트 도구에 있습니다.
 
 아직 만들지 않은 것은 로드맵에 적힌 순서대로 다음과 같습니다. 레플리카를 둘 이상으로 늘리면서
 Redis 기반 요청 횟수 제한 저장소와 PodDisruptionBudget을 함께 두는 것(결정, 시작 전), 청구되기 전의

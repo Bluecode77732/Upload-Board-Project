@@ -36,6 +36,14 @@
   spec은 1분 간격의 묶음으로 나눠 돌렸다.
 
 ### 변경
+- **의존성: `body-parser` 2.4.0과 `multer` 2.5.0으로 올려 high advisory 두 건 해소 (2026-10-27)** — 2026-10-23에
+  공개됐고 둘 다 서비스 거부다(CVSS 7.5). `package.json`의 `overrides` 항목과 직접 의존성 `multer`의 범위를
+  올리고 `pnpm install`로 lockfile을 다시 썼으며, 바뀐 것은 이 두 패키지와 `content-type` 2.1.0뿐이다.
+  `pnpm audit --prod`는 다시 깨끗하고(전체 `pnpm audit`는 69건에서 67건), `pnpm build`와 린트가 통과하며,
+  단위 테스트 282건과 일회용 PostgreSQL·`clamd`를 쓴 E2E 76건이 통과했다. 코드로 본 도달 가능성: `multer`
+  쪽은 비동기 `fileFilter`가 있어야 하는데 앱의 것은 동기식이고, `body-parser` 쪽은 기본 옵션에 해당하며
+  `main.ts`가 그 옵션을 바꾸지 않는다. 둘 다 재현하지는 않았다. 확인하지 않은 것: compose나 배포된 이미지,
+  브라우저 클라이언트를 통한 업로드. ROADMAP §7과 CLAUDE.ko.md > 알려진 미해결 지점에 적었다.
 - **문서: README를 다시 쓰고 코드와 대조해 검증, 저장소의 식별 정보 마스킹 (2026-10-21 ~ 2026-10-26)** —
   문서와 `.env.example`만 바꿨다. 애플리케이션 코드, 스키마, API는 바뀌지 않았다.
   README: 구성을 새로 잡았다(현재 상태, "2분 요약", Terraform 코드를 보고 그린 AWS 구조도를 포함한 Mermaid

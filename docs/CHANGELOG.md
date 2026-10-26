@@ -40,6 +40,15 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Dependencies: `body-parser` 2.4.0 and `multer` 2.5.0, clearing two high advisories (2026-10-27)** — published
+  2026-10-23, both denial of service (CVSS 7.5). The `overrides` entries and the direct `multer` range in
+  `package.json` were raised and `pnpm install` rewrote the lockfile; only those two packages and `content-type`
+  2.1.0 changed. `pnpm audit --prod` is clean again (plain `pnpm audit` 69 to 67), `pnpm build` and lint pass,
+  282 unit tests pass, and 76 E2E tests pass against a throwaway PostgreSQL and `clamd`. Reachability, from the
+  code: the `multer` one needs an asynchronous `fileFilter` and the app's is synchronous; the `body-parser` one
+  applies to the default options, which `main.ts` leaves alone. Neither was reproduced. Not checked: the
+  compose or deployed image, and uploads through the browser clients. Recorded in ROADMAP §7 and CLAUDE.md >
+  Known Gaps.
 - **Docs: README rewritten and checked against the code, repository identifiers masked (2026-10-21 – 2026-10-26)** —
   documentation and `.env.example` only; no application code, schema or API changed.
   README: restructured (status, "in two minutes", Mermaid diagrams including an AWS one drawn from the

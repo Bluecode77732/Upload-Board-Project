@@ -611,12 +611,9 @@ Open items, each recorded where it was found; the full list is in
   ([ADR 0068](docs/ADR/0068-deploy-identifiers-gitignored-overlay.md)). They are identifiers, not
   credentials; history was not rewritten, and a gitleaks scan of the full history (2026-10-22) found
   no real secret.
-- **Dependencies.** On 2026-10-26 `pnpm audit --prod` reports two high advisories, both published
-  2026-10-23 and not fixed yet: `multer` needs an asynchronous `fileFilter` and this app's is
-  synchronous, so it is not reachable as configured; `body-parser` applies to its default options,
-  which Nest's default parser uses (a request with a compressed body and trailing bytes can crash
-  the process; not reproduced here). The fix is a version bump in the `package.json` overrides. Plain
-  `pnpm audit` reports 69 (3 critical); apart from those two, all are in build and test tooling.
+- **Dependencies.** `pnpm audit --prod` found no known vulnerabilities on 2026-10-27, after two high
+  advisories published 2026-10-23 (`body-parser`, `multer`) were fixed by raising their `package.json`
+  overrides. Plain `pnpm audit` reports 67 (3 critical), all in build and test tooling.
 
 Not built yet, in the order the roadmap records them: more than one replica together with
 Redis-backed rate-limit storage and a PodDisruptionBudget (decided, not started); binding an
