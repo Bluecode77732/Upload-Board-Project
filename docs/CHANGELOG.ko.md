@@ -51,8 +51,10 @@
   줄였고(나머지는 Swagger에 있다), 배포 문단과 두 사례 설명을 줄였고, 한계 항목 두 쌍을 합쳤으며, 식별자 항목은
   gitleaks 결과를 "11건, 모두 오탐"으로 적은 짧은 문단 하나로 줄였다. 바꾸지 않은 것: ROADMAP §9에는
   2026-09-29/30 재적용 항목이 없어서 README가 "§9와 ADR의 추가 기록"을 가리키게 했고, `main`의 README는
-  `dev`를 병합하기 전까지 옛 602줄 버전이다. 확인하지 못한 것: 새로 넣은 점선 state 읽기 화살표를 GitHub가
-  어떻게 렌더링하는지(Mermaid를 로컬에서 렌더링하지 않았다).
+  `dev`를 병합하기 전까지 옛 602줄 버전이다. AWS 도식은 위에서 아래로(`flowchart TB`) 그렸다. 왼쪽에서 오른쪽으로 그리면 state 읽기 화살표
+  세 개가 그림 전체를 가로질렀다. Mermaid 확인(2026-10-27): 두 README의 블록 네 개가 모두 Chromium
+  (Playwright)에서 mermaid 11.4.0으로 파싱되고 렌더링됐고, AWS 도식은 두 언어 모두 눈으로 봤다. 확인하지
+  못한 것: GitHub 자체의 렌더러(Mermaid 버전이 다를 수 있다)는 `dev`를 푸시하기 전까지 확인하지 못했다.
 - **의존성: `body-parser` 2.4.0과 `multer` 2.5.0으로 올려 high advisory 두 건 해소 (2026-10-27)** — 2026-10-23에
   공개됐고 둘 다 서비스 거부다(CVSS 7.5). `package.json`의 `overrides` 항목과 직접 의존성 `multer`의 범위를
   올리고 `pnpm install`로 lockfile을 다시 썼으며, 바뀐 것은 이 두 패키지와 `content-type` 2.1.0뿐이다.

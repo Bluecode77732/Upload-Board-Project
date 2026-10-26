@@ -54,8 +54,11 @@ development line (package.json version).
   6 (Swagger has the rest), the deploy paragraph and both worked examples are shorter, two limitation bullets were
   merged, and the identifier bullet is one short paragraph that states the gitleaks result as 11 findings, all false
   positives. Not changed: ROADMAP §9 has no entry for the 2026-09-29/30 re-applies, so the README now points to "§9
-  and the ADR addenda"; the README on `main` is still the older 602-line version until `dev` is merged. Not
-  verified: how GitHub renders the new dotted state-read arrows (Mermaid was not rendered locally).
+  and the ADR addenda"; the README on `main` is still the older 602-line version until `dev` is merged. The
+  AWS diagram runs top to bottom (`flowchart TB`): left to right, the three state-read arrows crossed the rest of
+  the picture. Mermaid check, 2026-10-27: all four blocks in both READMEs parse and render with mermaid 11.4.0 in
+  Chromium (Playwright), the AWS diagram in both languages was looked at. Not verified: GitHub's own renderer, which
+  can be a different Mermaid version, until `dev` is pushed.
 - **Dependencies: `body-parser` 2.4.0 and `multer` 2.5.0, clearing two high advisories (2026-10-27)** — published
   2026-10-23, both denial of service (CVSS 7.5). The `overrides` entries and the direct `multer` range in
   `package.json` were raised and `pnpm install` rewrote the lockfile; only those two packages and `content-type`

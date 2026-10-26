@@ -210,7 +210,7 @@ AWS 쪽은 리소스를 만드는 Terraform state별로 묶어 그렸습니다. 
 `cluster/`는 나머지 둘을 읽지 않습니다([ADR 0044](docs/ADR/0044-terraform-three-state-split.ko.md)).
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph C["cluster/: VPC, EKS"]
     NODES["EKS 1.34 노드<br/>Graviton t4g.medium,<br/>x64 m5.large (기본 0대)"]
   end

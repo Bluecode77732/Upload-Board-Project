@@ -211,7 +211,7 @@ Ingress and Helm create them. Dotted arrows between the three state boxes are
 ([ADR 0044](docs/ADR/0044-terraform-three-state-split.md)):
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph C["cluster/: VPC, EKS"]
     NODES["EKS 1.34 nodes<br/>Graviton t4g.medium,<br/>x64 m5.large (0 by default)"]
   end
