@@ -204,43 +204,29 @@ erDiagram
 게시글은 파일을 참조할 뿐이라서 지워도 파일은 남습니다. `comment.postId`는 이 스키마에서
 유일한 데이터베이스 수준 연쇄 삭제입니다([ADR 0023](docs/ADR/0023-board-domain-schema.ko.md)).
 
-AWS 쪽은 리소스를 만드는 Terraform state별로 묶어 그렸습니다. Terraform 코드를 기준으로 그렸고
-실제 state와는 대조하지 못했습니다. 점선 상자는 Terraform이 아니라 Ingress와 Helm이 만드는
-것입니다. 세 state 상자 사이의 점선 화살표는 `terraform_remote_state` 읽기이며 한 방향뿐입니다.
+AWS 쪽은 Terraform state 세 개이며, 각각 독립된 루트 모듈입니다. Terraform 코드를 기준으로 그렸고
+실제 state와는 대조하지 못했습니다. 화살표는 `terraform_remote_state` 읽기이며 한 방향뿐입니다.
 `cluster/`는 나머지 둘을 읽지 않습니다([ADR 0044](docs/ADR/0044-terraform-three-state-split.ko.md)).
 
 ```mermaid
-flowchart TB
-  subgraph C["cluster/: VPC, EKS"]
-    NODES["EKS 1.34 노드<br/>Graviton t4g.medium,<br/>x64 m5.large (기본 0대)"]
-  end
-  subgraph A["app-infra/: 앱이 쓰는 자원"]
-    RDS[("RDS PostgreSQL 16<br/>프라이빗, 단일 AZ")]
-    S3[("S3 버킷<br/>퍼블릭 접근 차단")]
-    SM["Secrets Manager"]
-    DNS["Route 53 호스티드 존 + ACM 인증서"]
-  end
-  subgraph D["addons/: 클러스터 애드온"]
-    LBC["ALB Controller"]
-    ESO["External Secrets"]
-    EDNS["ExternalDNS"]
-    PROM["kube-prometheus-stack"]
-  end
-  A -. "state 읽기" .-> C
-  D -. "state 읽기" .-> C
-  D -. "state 읽기" .-> A
-  ALB["ALB<br/>Ingress가 생성"]:::rt
-  APP["backend, frontend,<br/>admin, clamav"]:::rt
-  LBC -. "생성" .-> ALB
-  ALB --> APP
-  APP -. "실행 위치" .-> NODES
-  APP -- "5432, 노드 보안 그룹에서만" --> RDS
-  APP -- "IAM 역할(IRSA)" --> S3
-  SM --> ESO -- "Kubernetes Secret, 수동 1회 apply 후" --> APP
-  EDNS -- "ALB 레코드" --> DNS
-  DNS -. "인증서" .-> ALB
-  classDef rt stroke-dasharray:4 3
+flowchart LR
+  D["<b>addons/</b><br/>ALB Controller<br/>External Secrets<br/>ExternalDNS<br/>kube-prometheus-stack"]
+  A["<b>app-infra/</b><br/>RDS PostgreSQL 16, 단일 AZ<br/>S3 버킷 + IRSA 역할<br/>Secrets Manager<br/>Route 53 존 + ACM 인증서"]
+  C["<b>cluster/</b><br/>VPC, EKS 1.34<br/>Graviton t4g.medium 노드<br/>x64 m5.large (기본 0대)"]
+  D -- "state 읽기" --> A
+  D -- "state 읽기" --> C
+  A -- "state 읽기" --> C
 ```
+
+도식에 넣지 않은, 런타임에서 이 자원들이 만나는 방식은 다음과 같습니다.
+
+- RDS는 프라이빗이고 노드 보안 그룹에서 오는 5432 포트만 받습니다. S3 버킷은 퍼블릭 접근을
+  막아 두었고, 앱은 IAM 역할(IRSA)로 접근합니다.
+- Secrets Manager의 값을 External Secrets가 가져와 Kubernetes Secret을 만듭니다. 수동으로
+  `kubectl apply`를 한 번 한 뒤에 동작합니다.
+- ExternalDNS가 ALB의 DNS 레코드를 Route 53 호스티드 존에 쓰고, Ingress가 ACM 인증서를 ALB에
+  붙입니다.
+- ALB와 워크로드 네 개는 Terraform이 만들지 않습니다. Ingress와 Helm이 만듭니다.
 
 백엔드 모듈은 단일 책임 기준으로 나뉩니다. **Auth**(토큰), **User**, **File**(메타데이터와 공개
 범위 검사), **Post**, **Comment**, **Upload**(임시 저장), **AuditLog**가 있고, 운영용 모듈로

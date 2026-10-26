@@ -46,19 +46,24 @@ development line (package.json version).
   GIFs per language, 164 local links per language and the EN/KO structure all held. Corrected: the Istio sentence said
   the chart has one backend workload and no east-west traffic, which stopped being true when ADR 0059, 0060 and 0062
   added ClamAV, `frontend/` and `admin/` (the 2026-08-31 decision is unchanged; ROADMAP's header note and §7 keep
-  their text and gained a dated addendum saying the premise changed and what is actually east-west); the AWS diagram now shows kube-prometheus-stack in `addons/`, says `1.34` is the
-  cluster and the x64 group's default is 0, and draws the one-way `terraform_remote_state` reads between the three
-  states; the Core API intro no longer exempts all of `/auth/*` from the Bearer token (`signout` needs it).
-  Trimmed: 646 to 634 lines (Korean 638 to 630). Features no longer repeats the refresh, orphan and scan detail that
+  their text and gained a dated addendum saying the premise changed and what is actually east-west); the AWS diagram lacked kube-prometheus-stack in `addons/`, the one-way
+  `terraform_remote_state` reads between the three states and what `1.34` and the x64 group's `0` meant (redrawn
+  again below); the Core API intro no longer exempts all of `/auth/*` from the Bearer token (`signout` needs it).
+  Trimmed: 646 to 620 lines (Korean 638 to 616). Features no longer repeats the refresh, orphan and scan detail that
   "In two minutes" and the ADRs carry, the test counts live only under Testing and CI, Core API went from 10 routes to
   6 (Swagger has the rest), the deploy paragraph and both worked examples are shorter, two limitation bullets were
   merged, and the identifier bullet is one short paragraph that states the gitleaks result as 11 findings, all false
   positives. Not changed: ROADMAP §9 has no entry for the 2026-09-29/30 re-applies, so the README now points to "§9
   and the ADR addenda"; the README on `main` is still the older 602-line version until `dev` is merged. The
-  AWS diagram runs top to bottom (`flowchart TB`): left to right, the three state-read arrows crossed the rest of
-  the picture. Mermaid check, 2026-10-27: all four blocks in both READMEs parse and render with mermaid 11.4.0 in
-  Chromium (Playwright), the AWS diagram in both languages was looked at. Not verified: GitHub's own renderer, which
-  can be a different Mermaid version, until `dev` is pushed.
+  AWS diagram was redrawn for readability. The first version drew every resource and arrow and rendered without
+  errors, but on GitHub the state-read arrows looped around the boxes and crossed the other lines (top to bottom
+  helped locally, not there). It is now three boxes, one per state, with the resources listed inside and the three
+  `terraform_remote_state` reads as the only arrows; the runtime links (port 5432 from the node security group,
+  the IRSA role, External Secrets, ExternalDNS and the ACM certificate, the Ingress and Helm) are four bullets
+  under it. Mermaid check, 2026-10-27: all eight blocks of both READMEs parse and render with mermaid 11.4.0 and
+  11.12.0 in Chromium (Playwright), and the redrawn diagram was looked at in both languages. GitHub rendered the
+  four English blocks of `dev` without errors before the redraw. Not verified: GitHub's rendering of the redrawn
+  diagram until it is pushed, and the Korean README on GitHub, which was not opened.
 - **Dependencies: `body-parser` 2.4.0 and `multer` 2.5.0, clearing two high advisories (2026-10-27)** — published
   2026-10-23, both denial of service (CVSS 7.5). The `overrides` entries and the direct `multer` range in
   `package.json` were raised and `pnpm install` rewrote the lockfile; only those two packages and `content-type`

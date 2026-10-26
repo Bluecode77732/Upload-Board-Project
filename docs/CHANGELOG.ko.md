@@ -43,18 +43,23 @@
   트래픽이 없다고 적었는데, ADR 0059·0060·0062가 ClamAV, `frontend/`, `admin/`을 더하면서 이미 사실이 아니게
   됐다(2026-08-31의 결정 자체는 그대로이고, ROADMAP의 머리말 주석과 §7은 본문을 그대로 두고 전제가
   바뀌었다는 점과 실제 east-west 트래픽이 무엇인지를 적은 날짜 붙은 추가 기록만 얹었다). AWS 도식에는
-  `addons/`의 kube-prometheus-stack을 넣고, `1.34`가 클러스터 버전이며 x64 그룹의 기본값이 0이라는 점을
-  밝혔으며, 세 state 사이의 한 방향 `terraform_remote_state` 읽기를 그렸다. 핵심 API 도입부는 `/auth/*` 전체를
+  `addons/`의 kube-prometheus-stack, 세 state 사이의 한 방향 `terraform_remote_state` 읽기, `1.34`와 x64
+  그룹의 `0`이 무엇인지가 빠져 있었다(아래에서 다시 그렸다). 핵심 API 도입부는 `/auth/*` 전체를
   Bearer 토큰 예외로 적던 것을 고쳤다(`signout`은 Bearer가 필요하다).
-  줄인 것: 646줄에서 634줄로(한국어 638줄에서 630줄). 기능 목록은 "2분 요약"과 ADR이 담고 있는 리프레시·고아
+  줄인 것: 646줄에서 620줄로(한국어 638줄에서 616줄). 기능 목록은 "2분 요약"과 ADR이 담고 있는 리프레시·고아
   파일·스캔 설명을 되풀이하지 않고, 테스트 건수는 테스트와 CI에만 두며, 핵심 API는 라우트 10개에서 6개로
   줄였고(나머지는 Swagger에 있다), 배포 문단과 두 사례 설명을 줄였고, 한계 항목 두 쌍을 합쳤으며, 식별자 항목은
   gitleaks 결과를 "11건, 모두 오탐"으로 적은 짧은 문단 하나로 줄였다. 바꾸지 않은 것: ROADMAP §9에는
   2026-09-29/30 재적용 항목이 없어서 README가 "§9와 ADR의 추가 기록"을 가리키게 했고, `main`의 README는
-  `dev`를 병합하기 전까지 옛 602줄 버전이다. AWS 도식은 위에서 아래로(`flowchart TB`) 그렸다. 왼쪽에서 오른쪽으로 그리면 state 읽기 화살표
-  세 개가 그림 전체를 가로질렀다. Mermaid 확인(2026-10-27): 두 README의 블록 네 개가 모두 Chromium
-  (Playwright)에서 mermaid 11.4.0으로 파싱되고 렌더링됐고, AWS 도식은 두 언어 모두 눈으로 봤다. 확인하지
-  못한 것: GitHub 자체의 렌더러(Mermaid 버전이 다를 수 있다)는 `dev`를 푸시하기 전까지 확인하지 못했다.
+  `dev`를 병합하기 전까지 옛 602줄 버전이다. AWS 도식은 가독성을 위해 다시 그렸다. 첫 버전은 모든
+  자원과 화살표를 그렸고 오류 없이 렌더링됐지만, GitHub에서는 state 읽기 화살표가 상자 바깥으로 돌아
+  나가 다른 선과 교차했다(위에서 아래로 그리면 로컬에서는 나아졌지만 GitHub에서는 아니었다). 지금은 state마다
+  상자 하나에 자원을 적고, 화살표는 `terraform_remote_state` 읽기 세 개뿐이다. 런타임 연결(노드 보안 그룹에서
+  오는 5432 포트, IRSA 역할, External Secrets, ExternalDNS와 ACM 인증서, Ingress와 Helm)은 도식 아래
+  목록 네 개로 옮겼다. Mermaid 확인(2026-10-27): 두 README의 블록 여덟 개가 모두 Chromium(Playwright)에서
+  mermaid 11.4.0과 11.12.0으로 파싱되고 렌더링됐고, 다시 그린 도식은 두 언어 모두 눈으로 봤다. GitHub는
+  다시 그리기 전의 `dev` 영어 블록 네 개를 오류 없이 렌더링했다. 확인하지 못한 것: 다시 그린 도식을
+  GitHub가 어떻게 그리는지(푸시 전까지), 그리고 열어 보지 않은 GitHub의 한국어 README.
 - **의존성: `body-parser` 2.4.0과 `multer` 2.5.0으로 올려 high advisory 두 건 해소 (2026-10-27)** — 2026-10-23에
   공개됐고 둘 다 서비스 거부다(CVSS 7.5). `package.json`의 `overrides` 항목과 직접 의존성 `multer`의 범위를
   올리고 `pnpm install`로 lockfile을 다시 썼으며, 바뀐 것은 이 두 패키지와 `content-type` 2.1.0뿐이다.

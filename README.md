@@ -204,44 +204,30 @@ A post only references a file; deleting the post leaves the file. `comment.postI
 schema's only database-level cascade
 ([ADR 0023](docs/ADR/0023-board-domain-schema.md)).
 
-The AWS side, grouped by the Terraform state that creates each resource. It is drawn from the
-Terraform code and was not checked against a live state. Dashed boxes are not Terraform's: the
-Ingress and Helm create them. Dotted arrows between the three state boxes are
-`terraform_remote_state` reads, one way only: `cluster/` reads neither of the others
-([ADR 0044](docs/ADR/0044-terraform-three-state-split.md)):
+The AWS side is three Terraform states, each its own root module. It is drawn from the Terraform
+code and was not checked against a live state. Arrows are `terraform_remote_state` reads, one way
+only: `cluster/` reads neither of the others
+([ADR 0044](docs/ADR/0044-terraform-three-state-split.md)).
 
 ```mermaid
-flowchart TB
-  subgraph C["cluster/: VPC, EKS"]
-    NODES["EKS 1.34 nodes<br/>Graviton t4g.medium,<br/>x64 m5.large (0 by default)"]
-  end
-  subgraph A["app-infra/: what the app needs"]
-    RDS[("RDS PostgreSQL 16<br/>private, single AZ")]
-    S3[("S3 bucket<br/>public access blocked")]
-    SM["Secrets Manager"]
-    DNS["Route 53 zone + ACM certificate"]
-  end
-  subgraph D["addons/: cluster add-ons"]
-    LBC["ALB Controller"]
-    ESO["External Secrets"]
-    EDNS["ExternalDNS"]
-    PROM["kube-prometheus-stack"]
-  end
-  A -. "reads state" .-> C
-  D -. "reads state" .-> C
-  D -. "reads state" .-> A
-  ALB["ALB<br/>from the Ingress"]:::rt
-  APP["backend, frontend,<br/>admin, clamav"]:::rt
-  LBC -. "creates" .-> ALB
-  ALB --> APP
-  APP -. "runs on" .-> NODES
-  APP -- "5432, node security group only" --> RDS
-  APP -- "IAM role (IRSA)" --> S3
-  SM --> ESO -- "Kubernetes Secret, after one manual apply" --> APP
-  EDNS -- "ALB record" --> DNS
-  DNS -. "certificate" .-> ALB
-  classDef rt stroke-dasharray:4 3
+flowchart LR
+  D["<b>addons/</b><br/>ALB Controller<br/>External Secrets<br/>ExternalDNS<br/>kube-prometheus-stack"]
+  A["<b>app-infra/</b><br/>RDS PostgreSQL 16, single AZ<br/>S3 bucket + IRSA role<br/>Secrets Manager<br/>Route 53 zone + ACM certificate"]
+  C["<b>cluster/</b><br/>VPC, EKS 1.34<br/>Graviton t4g.medium nodes<br/>x64 m5.large nodes (0 by default)"]
+  D -- "reads state" --> A
+  D -- "reads state" --> C
+  A -- "reads state" --> C
 ```
+
+How the pieces meet at runtime, which the diagram leaves out:
+
+- RDS is private and accepts port 5432 only from the node security group. The S3 bucket blocks
+  public access, and the app reaches it through an IAM role (IRSA).
+- Secrets Manager feeds External Secrets, which creates a Kubernetes Secret, after one manual
+  `kubectl apply`.
+- ExternalDNS writes the ALB's DNS record into the Route 53 zone, and the Ingress attaches the ACM
+  certificate to the ALB.
+- The ALB and the four workloads are not Terraform's: the Ingress and Helm create them.
 
 Backend modules, split by single responsibility: **Auth** (tokens), **User**, **File**
 (metadata and the visibility gate), **Post**, **Comment**, **Upload** (staging), **AuditLog**,
