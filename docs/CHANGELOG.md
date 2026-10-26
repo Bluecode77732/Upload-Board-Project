@@ -40,7 +40,7 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
-- **Docs: README rewritten and checked against the code, repository identifiers masked (2026-10-21 – 2026-10-24)** —
+- **Docs: README rewritten and checked against the code, repository identifiers masked (2026-10-21 – 2026-10-26)** —
   documentation and `.env.example` only; no application code, schema or API changed.
   README: restructured (status, "in two minutes", Mermaid diagrams including an AWS one drawn from the
   Terraform code, project structure, a 10-route Core API table with Swagger for the rest, a
@@ -62,10 +62,13 @@ development line (package.json version).
   Verified: the Docker Quick Start on a scratch copy of `HEAD`; on 2026-10-24 the non-Docker path and
   `admin/` against a throwaway Postgres (migrations, `start:dev`, `/doc` 200, register 201, sign-in,
   `GET /file` 200, upload 503 `UPLOAD_SCAN_UNAVAILABLE` with no `clamd`, `pnpm promote-superadmin`, admin
-  sign-in to `/dashboard`, CORS preflight from `:5174`). CI on `dev` for `7ce72f7`: all nine jobs passed. A
+  sign-in to `/dashboard`, CORS preflight from `:5174`). On 2026-10-26 the non-Docker upload with a real `clamd`: a clean
+  PNG attached (201), claimed with `POST /file` (201) and read back from `GET /file/1/content` (200, byte-identical);
+  the EICAR test string, sent through a pipe because Windows Defender deletes the file, answered 400
+  `UPLOAD_MALWARE_DETECTED` and left nothing in `file/temp`. README English and Korean were compared section by
+  section for code spans, link targets and numbers: no link differences, the rest only wording. CI on `dev` for `7ce72f7`: all nine jobs passed. A
   first admin run failed only because the scratch path passed Windows' 260-character limit (vite); a short
-  path worked. Not verified: creating an admin account on the Docker path, an upload with ClamAV on the
-  non-Docker path, sentence-by-sentence English/Korean parity of the README, and how GitHub renders the
+  path worked. Not verified: creating an admin account on the Docker path, sentence-by-sentence English/Korean parity of the README, and how GitHub renders the
   dotted ALB edge. GitHub Secret scanning and push protection were disabled when checked (2026-10-21).
   Left as is: `pnpm migration:run -- --fake` in `CLAUDE.md`, `CONTRIBUTING` (both languages), ADR 0006 and
   older entries here — pnpm 10 passes the literal `--` on, so `--fake` does not reach the command as an

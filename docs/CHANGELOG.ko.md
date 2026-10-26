@@ -36,7 +36,7 @@
   spec은 1분 간격의 묶음으로 나눠 돌렸다.
 
 ### 변경
-- **문서: README를 다시 쓰고 코드와 대조해 검증, 저장소의 식별 정보 마스킹 (2026-10-21 ~ 2026-10-24)** —
+- **문서: README를 다시 쓰고 코드와 대조해 검증, 저장소의 식별 정보 마스킹 (2026-10-21 ~ 2026-10-26)** —
   문서와 `.env.example`만 바꿨다. 애플리케이션 코드, 스키마, API는 바뀌지 않았다.
   README: 구성을 새로 잡았다(현재 상태, "2분 요약", Terraform 코드를 보고 그린 AWS 구조도를 포함한 Mermaid
   다이어그램, 프로젝트 구조, 라우트 10개의 핵심 API 표와 나머지는 Swagger, 트러블슈팅·결정 표, 역할 설명).
@@ -56,9 +56,13 @@
   검증한 것: `HEAD`의 임시 사본에서 Docker Quick Start, 2026-10-24에 일회용 Postgres로 비도커 경로와
   `admin/`(마이그레이션, `start:dev`, `/doc` 200, 가입 201, 로그인, `GET /file` 200, `clamd` 없이 업로드하면
   503 `UPLOAD_SCAN_UNAVAILABLE`, `pnpm promote-superadmin`, admin 로그인 후 `/dashboard`, `:5174`의 CORS
-  preflight). `7ce72f7`의 `dev` CI는 9개 job이 모두 통과했다. admin 첫 실행은 임시 경로가 Windows의
+  preflight). 2026-10-26에는 실제 `clamd`를 붙인 비도커 업로드를 확인했다. 정상 PNG의 attach(201), `POST /file`
+  (201), `GET /file/1/content`(200, 바이트 동일)가 통과했고, EICAR 테스트 문자열은 Windows Defender가 파일을
+  지우기 때문에 파이프로 보내 400 `UPLOAD_MALWARE_DETECTED`를 받았으며 `file/temp`에는 아무것도 남지 않았다.
+  README 영어·한국어판은 섹션별로 코드 스팬, 링크 대상, 숫자를 비교했고 링크는 차이가 없었으며 나머지는 표현
+  차이뿐이었다. `7ce72f7`의 `dev` CI는 9개 job이 모두 통과했다. admin 첫 실행은 임시 경로가 Windows의
   260자 제한을 넘어(vite) 실패했을 뿐이고, 짧은 경로에서는 동작했다. 검증하지 못한 것: Docker 경로에서
-  admin 계정을 만드는 방법, 비도커 경로에서 ClamAV를 붙인 업로드, README 영어·한국어판의 문장 단위 대응,
+  admin 계정을 만드는 방법, README 영어·한국어판의 문장 단위 대응,
   점선 ALB 간선이 GitHub에서 그려지는 모습. GitHub Secret scanning과 push protection은 확인한 시점
   (2026-10-21)에 꺼져 있었다.
   그대로 둔 것: `CLAUDE.md`, `CONTRIBUTING`(두 언어), ADR 0006, 이 파일의 옛 항목에 있는
