@@ -1057,9 +1057,7 @@ Conflict Protocol을 따른다.
   `backend/data-source.ts`는 CLI DataSource이며, 환경 변수를 직접 읽는 것이
   허가된 유일한 곳이다(Nest DI 컨테이너 밖에서 동작하므로 ConfigService가 없다;
   그 파일 헤더 주석 참고). 베이스라인: `backend/migrations/1784678400000-InitialSchema.ts`가
-  이전의 수동 스키마를 담아낸다 — 새 DB라면: `pnpm migration:run`; 이미 수동으로
-  만들어진 DB라면: `pnpm migration:run -- --fake`를 한 번 실행해 적용된 것으로
-  표시한다. 엔티티 변경 요청은 먼저 평문으로 설명하고(Scope Discipline),
+  이전의 수동 스키마를 담아낸다 — 새 DB라면: `pnpm migration:run`. 엔티티 변경 요청은 먼저 평문으로 설명하고(Scope Discipline),
   `migration:generate` 출력은 실행 전에 항상 한 줄씩 검토한다
 - 엔티티는 **한 목록에 이름으로 명시적으로만** 등록한다: `backend/entities.ts`가
   `ENTITIES`를 export하며, `app.module.ts`(`autoLoadEntities: true`와 함께)와

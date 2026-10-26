@@ -46,8 +46,9 @@
   바꿨다. 손대지 않은 파일은 `DB_PASSWORD`/`REFRESH_TOKEN_SECRET`에서 일부러 Joi 검증이 실패하고, 세 값을
   채우면 통과한다(이미지를 부팅해 확인).
   식별 정보: AWS 계정 번호를 문서 10개(ADR 0036·0046·0057, ROADMAP, `k8s/helm/README`, 각각 두 언어)에서
-  `<AWS_ACCOUNT_ID>`로 가렸다. `k8s/helm/values-prod.yaml`에는 계정 번호(4번)와 RDS 주소(1번)가 그대로
-  있다. `deploy.sh`가 이 파일을 `helm upgrade`에 넘기기 때문이며, 둘 다 자격 증명이 아니라 식별자다. 이력:
+  `<AWS_ACCOUNT_ID>`로 가렸다. `k8s/helm/values-prod.yaml`에는 계정 번호(4번)와 RDS 주소(1번)가
+  있었다. `deploy.sh`가 이 파일을 `helm upgrade`에 넘기기 때문이며, 둘 다 자격 증명이 아니라 식별자이고
+  2026-10-26에 옮겼다(아래). 이력:
   AWS 액세스 키 패턴, 개인키, `.env`, tfstate 파일은 없었고, gitleaks로 이력 전체를 검사한 결과(2026-10-22)
   11건이 나왔으나 전부 검토해 오탐으로 판정했다. 이력은 다시 쓰지 않았다.
   한국어 문서: `프런트엔드` → `프론트엔드`(13개 파일), `Addendum` → `추가 기록`(제목 41개, 앵커 링크 24개
@@ -61,13 +62,17 @@
   지우기 때문에 파이프로 보내 400 `UPLOAD_MALWARE_DETECTED`를 받았으며 `file/temp`에는 아무것도 남지 않았다.
   README 영어·한국어판은 섹션별로 코드 스팬, 링크 대상, 숫자를 비교했고 링크는 차이가 없었으며 나머지는 표현
   차이뿐이었다. `7ce72f7`의 `dev` CI는 9개 job이 모두 통과했다. admin 첫 실행은 임시 경로가 Windows의
-  260자 제한을 넘어(vite) 실패했을 뿐이고, 짧은 경로에서는 동작했다. 검증하지 못한 것: Docker 경로에서
-  admin 계정을 만드는 방법, README 영어·한국어판의 문장 단위 대응,
+  260자 제한을 넘어(vite) 실패했을 뿐이고, 짧은 경로에서는 동작했다. 2026-10-26에 Docker 경로에서 등록한 계정을 `docker compose exec api node dist/scripts/promote-superadmin.js`로 승격했고(두 번째 실행은 "already superadmin", 새 액세스 토큰의 `role`은 `superadmin`), `.env`의 `SUPERADMIN_EMAIL`을 바꾼 뒤 `docker compose up -d`로 `api`가 다시 만들어지면 새 값이 반영됐다. README에 이 절차를 적었다. 한 번 보였고 재현하지 않은 것: 그 실행의 첫 `docker compose up --build`가 `image "…/sharenpo-api:local": already exists`로 실패했고(`migrate`와 `api`가 같은 태그를 빌드한다), 빌드 없이 다시 `up -d`를 하자 동작했다. 재시도를 위한 재빌드는 하지 않았다. 검증하지 못한 것: README 영어·한국어판의 문장 단위 대응,
   점선 ALB 간선이 GitHub에서 그려지는 모습. GitHub Secret scanning과 push protection은 확인한 시점
   (2026-10-21)에 꺼져 있었다.
-  2026-10-26에 지운 것: 독자가 따라 하는 `CONTRIBUTING`(두 언어)의 `--fake` 구절. 그대로 둔 것:
-  `CLAUDE.md`(두 언어), ADR 0006, 이 파일의 옛 항목에 있는 `pnpm migration:run -- --fake` — pnpm 10은 `--`를 그대로 넘기므로 `--fake`가 옵션으로 전달되지 않는다.
-  README의 해당 문장은 지웠다.
+  2026-10-26에 지운 것: `CONTRIBUTING`과 `CLAUDE.md`(두 언어)의 `--fake` 구절 — pnpm 10은 `--`를 그대로 넘기므로 `--fake`가 옵션으로 전달되지 않는다.
+  README의 해당 문장은 앞서 지웠다. 옛 기록(ADR 0006, 이 파일의 항목)에는 그대로 남아 있다.
+  같은 날 계정 번호, RDS 주소, role ARN, 인증서 ARN을 `values-prod.yaml`에서 gitignore된
+  `k8s/helm/values-prod.local.yaml`로 옮겼고 `deploy.sh`가 이제 이 파일을 요구한다. 형식은 추적되는
+  `values-prod.local.example.yaml`에 있다([ADR 0068](ADR/0068-deploy-identifiers-gitignored-overlay.ko.md)).
+  두 파일을 함께 쓴 `helm template`은 옛 파일의 출력과 같고(607줄, diff 없음), 오버레이가 없으면
+  `deploy.sh helm`이 에러로 멈추고 있으면 `n`으로 답한 질문에서 멈춘다. 클러스터는 쓰지 않았고 이력은 다시
+  쓰지 않았다. Helm README에 `-f`가 두 개인 명령을 적었다.
 - **문서: 공유 링크의 동작을 확인한 뒤 기록 (2026-10-20)** — 문서만 바꿨다. 코드는 바꾸지 않았고 결정한 것도
   없다. 공개·링크 공유 파일의 링크를 로컬 스택에서 로그아웃된 방문자와 크롤러로 열어 보니 이렇게 동작한다.
   파일 URL은 열리고(이미지·영상·오디오, 탐색 포함), 앱 화면 `/posts/:id`와 `/view/:id`는 `/login`으로 가며

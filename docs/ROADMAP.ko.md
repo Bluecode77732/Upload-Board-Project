@@ -1640,14 +1640,18 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   토큰이 URL에 실리는 링크 공유 파일까지 함께 풀린다. 명시적으로 요청받을 때 다시 본다.
   README.ko.md > 알려진 한계에도 올려 두었다.
 
-- **README 후속 항목과 저장소 위생** — **2026-10-24 기록, 예정된 작업 없음.** README 점검 뒤에 남은 것
-  (자세한 내용은 CHANGELOG의 Unreleased): (1) GitHub Secret scanning과 push protection은 확인한 시점
-  (2026-10-21)에 꺼져 있었다. 개발자가 저장소 설정에서 직접 켠다. (2) `k8s/helm/values-prod.yaml`에
-  AWS 계정 번호와 RDS 주소가 있다. gitignore 처리한 오버레이로 옮기려면 `deploy.sh`를 건드려야 해서 그대로
-  두었다. (3) `pnpm migration:run -- --fake`가 `CLAUDE.md`와 옛 기록에 남아 있다. 이 플래그는
-  명령에 전달되지 않는다(`CONTRIBUTING`에서는 2026-10-26에 지웠다). (4) 실행하지 않은 것: Docker 경로에서
-  admin 계정 만들기(비도커 경로의 ClamAV 업로드는 2026-10-26에 실행해 통과했다). (5) `STYLE-PLAN.ko.md`에 `-합니다`와 `-다`가
-  섞여 있다. 명시적으로 요청받을 때 다시 본다.
+- **README 후속 항목과 저장소 위생** — **2026-10-24 기록, 2026-10-26 갱신, 예정된 작업 없음.**
+  README 점검 뒤의 상태(자세한 내용은 CHANGELOG의 Unreleased): (1) GitHub Secret scanning과 push
+  protection은 확인한 시점(2026-10-21)에 꺼져 있었다. 개발자가 저장소 설정에서 직접 켠다. (2) 2026-10-26에
+  완료: AWS 계정 번호, RDS 주소, role ARN, 인증서 ARN을 `k8s/helm/values-prod.yaml`에서 gitignore된
+  `values-prod.local.yaml`로 옮겼고 `deploy.sh`가 이 파일을 요구한다
+  ([ADR 0068](ADR/0068-deploy-identifiers-gitignored-overlay.ko.md)). 값은 git 이력에 남아 있다. (3)
+  2026-10-26에 완료: `CONTRIBUTING`과 `CLAUDE.md`에서 `pnpm migration:run -- --fake`를 지웠다. 옛 기록에는
+  남아 있다. (4) 2026-10-26에 완료: Docker 경로의 admin 계정 만들기와 ClamAV를 붙인 비도커 업로드를
+  실행해 통과했다. (5) 한 번 보였고 재현하지 않음: `docker compose up --build`가 첫 빌드에서
+  `image "…/sharenpo-api:local": already exists`로 실패했다(`migrate`와 `api`가 같은 태그를 빌드한다).
+  빌드 없이 다시 실행하면 동작했다. `up` 전에 `docker compose build api`를 먼저 실행하면 피할 수 있을지도 모르지만 시험하지 않았다.
+  (6) `STYLE-PLAN.ko.md`에 `-합니다`와 `-다`가 섞여 있다. 명시적으로 요청받을 때 다시 본다.
 
 ## 8. Advisory 노트
 

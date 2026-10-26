@@ -1739,13 +1739,18 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `JwtAuthGuard`, and relaxing the header for the content route would also cover unlisted files whose token
   travels in the URL. Revisit when explicitly requested. Also listed in README.md > Known limitations.
 
-- **README follow-ups and repository hygiene** — **recorded 2026-10-24; nothing scheduled.** Open after the
-  README review (details: CHANGELOG, Unreleased): (1) GitHub Secret scanning and push protection were
-  disabled when checked (2026-10-21); the developer enables them in the repository settings. (2)
-  `k8s/helm/values-prod.yaml` keeps the AWS account number and the RDS address; moving them to a gitignored
-  overlay would touch `deploy.sh` and was left. (3) `pnpm migration:run -- --fake` is still in `CLAUDE.md` and older
-  records, though the flag does not reach the command (removed from `CONTRIBUTING` on 2026-10-26). (4) Not run: creating an admin account on the Docker path (the non-Docker upload with ClamAV was run on
-  2026-10-26 and passed). (5) `STYLE-PLAN.ko.md` mixes `-합니다` and `-다`. Revisit when explicitly requested.
+- **README follow-ups and repository hygiene** — **recorded 2026-10-24, updated 2026-10-26; nothing scheduled.**
+  Status after the README review (details: CHANGELOG, Unreleased): (1) GitHub Secret scanning and push
+  protection were disabled when checked (2026-10-21); the developer enables them in the repository settings.
+  (2) Done 2026-10-26: the AWS account number, RDS address, role ARN and certificate ARN left
+  `k8s/helm/values-prod.yaml` for a gitignored `values-prod.local.yaml` that `deploy.sh` requires
+  ([ADR 0068](ADR/0068-deploy-identifiers-gitignored-overlay.md)); they stay in git history. (3) Done
+  2026-10-26: `pnpm migration:run -- --fake` removed from `CONTRIBUTING` and `CLAUDE.md`; older records keep
+  it. (4) Done 2026-10-26: the Docker-path admin account and the non-Docker upload with ClamAV were run and
+  passed. (5) Seen once, not reproduced: `docker compose up --build` failed on its first build with
+  `image "…/sharenpo-api:local": already exists` (`migrate` and `api` build the same tag); a retry without
+  building worked. A prior `docker compose build api` might avoid it; untested. (6) `STYLE-PLAN.ko.md`
+  mixes `-합니다` and `-다`. Revisit when explicitly requested.
 
 ## 8. Advisory notes
 

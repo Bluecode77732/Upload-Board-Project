@@ -327,6 +327,15 @@ pnpm install && pnpm dev                  # http://localhost:5174
 `admin` calls the backend from another origin, so add `CORS_ORIGIN=http://localhost:5174` to the
 backend's `.env` and restart the backend (see admin/README.md).
 
+Signing in to `admin` needs a superadmin account. Register an account first (`POST /auth/register`
+works from Swagger), put its email in `.env` as `SUPERADMIN_EMAIL`, run `docker compose up -d` so `api`
+is recreated with the new value, then promote the account by hand
+([ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.md)):
+
+```bash
+docker compose exec api node dist/scripts/promote-superadmin.js
+```
+
 Notes:
 
 - `db` publishes `${DB_PORT}` (5435), so host-run `pnpm test:e2e` and `pnpm migration:*` reach the
@@ -596,10 +605,12 @@ Open items, each recorded where it was found; the full list is in
   [ROADMAP.md](docs/ROADMAP.md) §7).
 - **Automation stops at publishing images.** A person runs the deploy. A service mesh (Istio) was left out
   because there is one backend workload and no east-west traffic for it to manage.
-- **`k8s/helm/values-prod.yaml` keeps the AWS account number and the database address as plain
-  values,** because `deploy.sh` passes the file straight to `helm upgrade`. They are identifiers,
-  not credentials, and are already in the git history; a gitleaks scan of the full history
-  (2026-10-22) found no real secret.
+- **The AWS account number and the database address are still in the git history.** Since
+  2026-10-26 `k8s/helm/values-prod.yaml` holds placeholders and the real values sit in a gitignored
+  `values-prod.local.yaml` that `deploy.sh` requires
+  ([ADR 0068](docs/ADR/0068-deploy-identifiers-gitignored-overlay.md)). They are identifiers, not
+  credentials; history was not rewritten, and a gitleaks scan of the full history (2026-10-22) found
+  no real secret.
 - **Dependencies.** `pnpm audit --prod` found no known vulnerabilities on 2026-10-09; plain
   `pnpm audit` reported 65 (3 critical), all in build and test tooling.
 

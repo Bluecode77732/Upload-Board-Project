@@ -51,9 +51,9 @@ development line (package.json version).
   fails Joi on `DB_PASSWORD`/`REFRESH_TOKEN_SECRET` on purpose, and with the three values filled in
   validation passes (checked by booting the image).
   Identifiers: the AWS account number is masked as `<AWS_ACCOUNT_ID>` in ten docs (ADR 0036, 0046, 0057,
-  ROADMAP, `k8s/helm/README`, each in both languages). `k8s/helm/values-prod.yaml` still holds the account
-  number (4 times) and the RDS address (once), because `deploy.sh` passes the file to `helm upgrade`; they
-  are identifiers, not credentials. History: no AWS access-key pattern, private key, `.env` or tfstate file;
+  ROADMAP, `k8s/helm/README`, each in both languages). `k8s/helm/values-prod.yaml` held the account
+  number (4 times) and the RDS address (once) because `deploy.sh` passes the file to `helm upgrade`; they
+  are identifiers, not credentials, and on 2026-10-26 they moved (below). History: no AWS access-key pattern, private key, `.env` or tfstate file;
   a gitleaks scan of the full history (2026-10-22) gave 11 findings, all reviewed as false positives. No
   history was rewritten.
   Korean docs: `프런트엔드` → `프론트엔드` (13 files), `Addendum` → `추가 기록` (41 headings, 24 anchor links
@@ -68,11 +68,16 @@ development line (package.json version).
   `UPLOAD_MALWARE_DETECTED` and left nothing in `file/temp`. README English and Korean were compared section by
   section for code spans, link targets and numbers: no link differences, the rest only wording. CI on `dev` for `7ce72f7`: all nine jobs passed. A
   first admin run failed only because the scratch path passed Windows' 260-character limit (vite); a short
-  path worked. Not verified: creating an admin account on the Docker path, sentence-by-sentence English/Korean parity of the README, and how GitHub renders the
+  path worked. On 2026-10-26 on the Docker path: a registered account promoted with `docker compose exec api node dist/scripts/promote-superadmin.js` (then "already superadmin" on a second run, and `role: superadmin` in the new access token), and a changed `SUPERADMIN_EMAIL` picked up after `docker compose up -d` recreated `api`; the README now says so. Seen once and not reproduced: the first `docker compose up --build` on that run failed with `image "…/sharenpo-api:local": already exists` (`migrate` and `api` build the same tag), and a second `up -d` without building worked; a rebuild to retry it was not run. Not verified: sentence-by-sentence English/Korean parity of the README, and how GitHub renders the
   dotted ALB edge. GitHub Secret scanning and push protection were disabled when checked (2026-10-21).
-  Removed on 2026-10-26: the `--fake` clause in `CONTRIBUTING` (both languages), which a reader follows. Left as is:
-  `pnpm migration:run -- --fake` in `CLAUDE.md` (both languages), ADR 0006 and older entries here — pnpm 10 passes the literal `--` on, so `--fake` does not reach the command as an
-  option; the README sentence was removed.
+  Removed on 2026-10-26: the `--fake` clause in `CONTRIBUTING` and `CLAUDE.md` (both languages) — pnpm 10 passes the literal `--` on, so `--fake` does not reach the command as an
+  option; the README sentence was removed earlier. Older records (ADR 0006, entries here) keep it.
+  Also on 2026-10-26: the account number, RDS address, role ARN and certificate ARN left `values-prod.yaml`
+  for a gitignored `k8s/helm/values-prod.local.yaml` that `deploy.sh` now requires, with a tracked
+  `values-prod.local.example.yaml` ([ADR 0068](ADR/0068-deploy-identifiers-gitignored-overlay.md)).
+  `helm template` with both files matches the output from the old file (607 lines, no diff); `deploy.sh helm`
+  stops with an error when the overlay is missing and, with it present, at the prompt when answered `n`. No
+  cluster was involved; the history was not rewritten. The Helm README gives the two-`-f` command.
 - **Docs: shared-link behavior recorded after checking it (2026-10-20)** — documentation only; no code
   changed and nothing was decided. Public and unlisted file links, opened as a logged-out visitor and as a
   crawler on a local stack, behave like this: the file URLs open (image, video and audio, with seeking), the app

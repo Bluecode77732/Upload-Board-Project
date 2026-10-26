@@ -325,6 +325,15 @@ pnpm install && pnpm dev                  # http://localhost:5174
 `admin`은 백엔드를 다른 출처로 호출하므로, 백엔드의 `.env`에 `CORS_ORIGIN=http://localhost:5174`를
 넣고 백엔드를 다시 시작하세요(`admin/README.ko.md` 참고).
 
+`admin`에 로그인하려면 superadmin 계정이 필요합니다. 먼저 계정을 등록하고(`POST /auth/register`는
+Swagger에서 호출할 수 있습니다), 그 이메일을 `.env`의 `SUPERADMIN_EMAIL`에 넣은 뒤
+`docker compose up -d`로 `api`를 새 값으로 다시 만들고, 계정을 직접 승격합니다
+([ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.ko.md)).
+
+```bash
+docker compose exec api node dist/scripts/promote-superadmin.js
+```
+
 참고:
 
 - `db` 서비스가 `${DB_PORT}`(5435)를 노출하므로, 호스트에서 돌리는 `pnpm test:e2e`와
@@ -589,9 +598,11 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
 - **자동화는 이미지 발행까지입니다.** 배포는 사람이 실행합니다. 서비스 메시(Istio)는 일부러
   넣지 않았습니다. 이 프로젝트는 백엔드 워크로드가 하나뿐이라 메시가 관리할 서비스 간 트래픽이
   없기 때문입니다.
-- **`k8s/helm/values-prod.yaml`에 AWS 계정 번호와 데이터베이스 주소가 평문 값으로 있습니다.**
-  `deploy.sh`가 이 파일을 그대로 `helm upgrade`에 넘기기 때문입니다. 둘 다 자격 증명이 아니라
-  식별자이고 git 이력에도 이미 있으며, gitleaks로 이력 전체를 검사한 결과(2026-10-22) 실제 비밀은
+- **AWS 계정 번호와 데이터베이스 주소가 git 이력에는 남아 있습니다.** 2026-10-26부터
+  `k8s/helm/values-prod.yaml`에는 자리표시자만 있고, 실제 값은 gitignore된 `values-prod.local.yaml`에
+  있으며 `deploy.sh`가 이 파일을 요구합니다
+  ([ADR 0068](docs/ADR/0068-deploy-identifiers-gitignored-overlay.ko.md)). 둘 다 자격 증명이 아니라
+  식별자이고, 이력은 다시 쓰지 않았으며, gitleaks로 이력 전체를 검사한 결과(2026-10-22) 실제 비밀은
   나오지 않았습니다.
 - **의존성.** 2026-10-09에 `pnpm audit --prod`는 알려진 취약점을 찾지 못했습니다. 같은 날 일반
   `pnpm audit`는 65건(심각 3건)을 보고했고, 모두 빌드·테스트 도구에 있습니다.

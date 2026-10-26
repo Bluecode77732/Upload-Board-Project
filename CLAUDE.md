@@ -1050,8 +1050,7 @@ Do not suggest alternatives to these decisions without explicit request.
   the CLI DataSource — the one sanctioned place env vars are read directly (outside
   the Nest DI container, so no ConfigService; see its header comment).
   Baseline: `backend/migrations/1784678400000-InitialSchema.ts` captures the previously
-  manual schema — fresh DB: `pnpm migration:run`; a pre-existing manually-created DB:
-  `pnpm migration:run -- --fake` once to mark it applied. Entity change requests are
+  manual schema — fresh DB: `pnpm migration:run`. Entity change requests are
   described in plain text first (Scope Discipline), and `migration:generate` output is
   always reviewed line-by-line before running
 - Entities are registered **explicitly by name, in one list**: `backend/entities.ts`
