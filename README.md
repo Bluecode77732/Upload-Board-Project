@@ -205,9 +205,9 @@ only: `cluster/` reads neither of the others
 
 ```mermaid
 flowchart LR
-  D["<b>addons/</b><br/>ALB Controller<br/>External Secrets<br/>ExternalDNS<br/>kube-prometheus-stack"]
-  A["<b>app-infra/</b><br/>RDS PostgreSQL 16, single AZ<br/>S3 bucket + IRSA role<br/>Secrets Manager<br/>Route 53 zone + ACM certificate"]
-  C["<b>cluster/</b><br/>VPC, EKS 1.34<br/>Graviton t4g.medium nodes<br/>x64 m5.large nodes (0 by default)"]
+  D["<b>addons/</b><br/>ALB Controller<br/>External Secrets<br/>ExternalDNS<br/>kube-prometheus-<br/>stack"]
+  A["<b>app-infra/</b><br/>RDS PostgreSQL<br/>16, single AZ<br/>S3 bucket<br/>+ IRSA role<br/>Secrets Manager<br/>Route 53 zone<br/>ACM certificate"]
+  C["<b>cluster/</b><br/>VPC, EKS 1.34<br/>Graviton nodes<br/>(t4g.medium)<br/>x64 nodes<br/>(m5.large)<br/>0 by default"]
   D -- "reads state" --> A
   D -- "reads state" --> C
   A -- "reads state" --> C

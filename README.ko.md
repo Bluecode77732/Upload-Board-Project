@@ -204,9 +204,9 @@ AWS 쪽은 Terraform state 세 개이며, 각각 독립된 루트 모듈입니�
 
 ```mermaid
 flowchart LR
-  D["<b>addons/</b><br/>ALB Controller<br/>External Secrets<br/>ExternalDNS<br/>kube-prometheus-stack"]
-  A["<b>app-infra/</b><br/>RDS PostgreSQL 16, 단일 AZ<br/>S3 버킷 + IRSA 역할<br/>Secrets Manager<br/>Route 53 존 + ACM 인증서"]
-  C["<b>cluster/</b><br/>VPC, EKS 1.34<br/>Graviton t4g.medium 노드<br/>x64 m5.large (기본 0대)"]
+  D["<b>addons/</b><br/>ALB Controller<br/>External Secrets<br/>ExternalDNS<br/>kube-prometheus-<br/>stack"]
+  A["<b>app-infra/</b><br/>RDS PostgreSQL<br/>16, 단일 AZ<br/>S3 버킷<br/>+ IRSA 역할<br/>Secrets Manager<br/>Route 53 존<br/>ACM 인증서"]
+  C["<b>cluster/</b><br/>VPC, EKS 1.34<br/>Graviton 노드<br/>(t4g.medium)<br/>x64 노드<br/>(m5.large)<br/>기본 0대"]
   D -- "state 읽기" --> A
   D -- "state 읽기" --> C
   A -- "state 읽기" --> C

@@ -54,9 +54,13 @@ development line (package.json version).
   replaced by a fixed 350 px placeholder and the folds closed: 18,350 px to 16,255 px (-11%), without counting the
   AWS diagram, which is now about 300 px instead of about 930. By section: Quick Start 2,314 to 1,463 px, How this
   was built 1,278 to 839, Troubleshooting 1,358 to 1,025, Known limitations 869 to 471, Features 868 to 819.
-  Not measured or not checked: the Korean README was not rendered or measured, only compared by structure and
-  numbers; GitHub's own renderer was not used for the folds (markdown-it follows CommonMark, which GitHub does
-  too, but the page was not opened after this change). The screenshots section, 3,800 px, is unchanged.
+  Checked on GitHub after the push (`dev`, both languages, 2026-10-27): the eight folds are closed with their
+  summaries, the four Mermaid blocks render without errors, the English AWS diagram is 381 px tall (it was about
+  930 px), and all 18 screenshots and GIFs load. The Korean AWS diagram broke words inside its boxes ("IRSA
+  역/할", "노/드"), because GitHub draws narrower boxes than the local renderer; the English one wrapped too. The
+  lines inside the three boxes are now split by hand so no renderer has to wrap them; that change was not looked
+  at on GitHub yet. Not measured: the Korean README's scroll length (only structure and numbers were compared).
+  The screenshots section, 3,800 px, is unchanged.
 - **Docs: README trimmed and corrected after a claim-by-claim check (2026-10-27)** — documentation only; no code,
   schema or API changed. Checked against the code and CI: the unit tests were rerun (20 suites, 282 tests), the E2E
   tests were counted (76) but not run, and the 68 ADRs, rate limits, error codes, stack versions, 14 screenshots and
