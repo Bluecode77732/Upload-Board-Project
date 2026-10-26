@@ -40,6 +40,22 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: README trimmed and corrected after a claim-by-claim check (2026-10-27)** — documentation only; no code,
+  schema or API changed. Checked against the code and CI: the unit tests were rerun (20 suites, 282 tests), the E2E
+  tests were counted (76) but not run, and the 68 ADRs, rate limits, error codes, stack versions, 14 screenshots and
+  GIFs per language, 164 local links per language and the EN/KO structure all held. Corrected: the Istio sentence said
+  the chart has one backend workload and no east-west traffic, which stopped being true when ADR 0059, 0060 and 0062
+  added ClamAV, `frontend/` and `admin/` (the 2026-08-31 decision is unchanged; ROADMAP §7 still carries the old
+  premise and was not edited); the AWS diagram now shows kube-prometheus-stack in `addons/`, says `1.34` is the
+  cluster and the x64 group's default is 0, and draws the one-way `terraform_remote_state` reads between the three
+  states; the Core API intro no longer exempts all of `/auth/*` from the Bearer token (`signout` needs it).
+  Trimmed: 646 to 634 lines (Korean 638 to 630). Features no longer repeats the refresh, orphan and scan detail that
+  "In two minutes" and the ADRs carry, the test counts live only under Testing and CI, Core API went from 10 routes to
+  6 (Swagger has the rest), the deploy paragraph and both worked examples are shorter, two limitation bullets were
+  merged, and the identifier bullet is one short paragraph that states the gitleaks result as 11 findings, all false
+  positives. Not changed: ROADMAP §9 has no entry for the 2026-09-29/30 re-applies, so the README now points to "§9
+  and the ADR addenda"; the README on `main` is still the older 602-line version until `dev` is merged. Not
+  verified: how GitHub renders the new dotted state-read arrows (Mermaid was not rendered locally).
 - **Dependencies: `body-parser` 2.4.0 and `multer` 2.5.0, clearing two high advisories (2026-10-27)** — published
   2026-10-23, both denial of service (CVSS 7.5). The `overrides` entries and the direct `multer` range in
   `package.json` were raised and `pnpm install` rewrote the lockfile; only those two packages and `content-type`

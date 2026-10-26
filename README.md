@@ -32,8 +32,8 @@ Grafana.
 ## Status
 
 There is no always-on demo. The stack has been applied to AWS/EKS and torn down between runs
-(dated log: [ROADMAP.md](docs/ROADMAP.md) §9); this README does not say whether it is up right
-now. To see the project work:
+(dated runs: [ROADMAP.md](docs/ROADMAP.md) §9 and the ADR addenda); this README does not say
+whether it is up right now. To see the project work:
 
 - Look at the [screenshots and GIFs](#screenshots) below
 - Run it yourself with Docker: [Quick Start](#quick-start)
@@ -54,9 +54,9 @@ now. To see the project work:
   refresh token ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md)).
 - **Fail-closed malware scan** on every upload, before anything is stored
   ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md)).
-- **Checked:** all 282 backend unit tests (run 2026-10-26) and all 76 backend E2E tests on a real
-  PostgreSQL (run 2026-10-22) pass. Both clients also have Playwright E2E, and 68 ADRs record the
-  decisions.
+- **Checked:** the backend unit tests, a backend E2E suite on a real PostgreSQL and the Playwright
+  E2E of both clients pass (counts and dates in [Testing and CI](#testing-and-ci)). 68 ADRs record
+  the decisions.
 - **Built with AI, under written rules.** Most of the code was written with Claude Code. The
   developer sets the rules in [CLAUDE.md](CLAUDE.md), chooses between alternatives and records them
   as ADRs; where the AI broke a rule, that is written down too ([How this was built](#how-this-was-built)).
@@ -113,12 +113,10 @@ local stack and sample data as above.
 ## Features
 
 - **Authentication** — Basic-token register/sign-in and a dual-secret JWT access/refresh pair with a
-  `type` claim ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md)). The refresh token travels only as an httpOnly cookie, is stored as a
-  SHA-256 hash and rotates on every refresh; a rotated-out token that shows up again ends the
-  session with `AUTH_REFRESH_REUSED` ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md))
-- **Two-phase upload** — `temp_` → `granted_` state machine; the file move runs inside the DB
-  transaction ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md)). A commit that fails after a successful move can leave an orphan, which
-  the sweep reports ([ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md)). The attach filename is a one-shot claim token: the same user
+  `type` claim ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md)); the refresh token is an httpOnly cookie that rotates on every
+  refresh, with reuse detection ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md))
+- **Two-phase upload** — `temp_` → `granted_` state machine with the file move inside the DB
+  transaction ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md)). The attach filename is a one-shot claim token: the same user
   resubmitting gets the file back (200), anyone else gets 409 `FILE_ALREADY_CLAIMED`
   ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md))
 - **RBAC + audit log** — `user`/`admin`/`superadmin` roles, ownership checks that extend to "self or
@@ -129,8 +127,7 @@ local stack and sample data as above.
   5/minute on `POST /auth/register`, `signin` and `token/refresh`, 15/minute on
   `POST /upload/attach`; health and metrics probes are exempt ([ADR 0053](docs/ADR/0053-global-rate-limiting.md), [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
 - **Swagger** — API documentation and manual test bench at `/doc`
-- **Upload malware scanning** — a ClamAV scan in memory before anything is written; a match is
-  refused and an unreachable scanner fails closed ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md))
+- **Upload malware scanning** — ClamAV, fail-closed, before anything is stored ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md))
 - **File visibility** — `public`, `private` (default) or `unlisted` (a share link whose token can be
   rotated or expire); bytes are served only through the access-checked `GET /file/:id/content`
   ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md), [ADR 0026](docs/ADR/0026-file-visibility-implementation.md))
@@ -209,12 +206,14 @@ schema's only database-level cascade
 
 The AWS side, grouped by the Terraform state that creates each resource. It is drawn from the
 Terraform code and was not checked against a live state. Dashed boxes are not Terraform's: the
-Ingress and Helm create them ([ADR 0044](docs/ADR/0044-terraform-three-state-split.md)):
+Ingress and Helm create them. Dotted arrows between the three state boxes are
+`terraform_remote_state` reads, one way only: `cluster/` reads neither of the others
+([ADR 0044](docs/ADR/0044-terraform-three-state-split.md)):
 
 ```mermaid
 flowchart LR
-  subgraph C["cluster/: VPC, EKS nodes"]
-    NODES["EKS 1.34 nodes<br/>Graviton t4g.medium, x64 m5.large (0)"]
+  subgraph C["cluster/: VPC, EKS"]
+    NODES["EKS 1.34 nodes<br/>Graviton t4g.medium,<br/>x64 m5.large (0 by default)"]
   end
   subgraph A["app-infra/: what the app needs"]
     RDS[("RDS PostgreSQL 16<br/>private, single AZ")]
@@ -226,7 +225,11 @@ flowchart LR
     LBC["ALB Controller"]
     ESO["External Secrets"]
     EDNS["ExternalDNS"]
+    PROM["kube-prometheus-stack"]
   end
+  A -. "reads state" .-> C
+  D -. "reads state" .-> C
+  D -. "reads state" .-> A
   ALB["ALB<br/>from the Ingress"]:::rt
   APP["backend, frontend,<br/>admin, clamav"]:::rt
   LBC -. "creates" .-> ALB
@@ -281,7 +284,7 @@ weighed in writing, such as a comparison with ECS.
 | `admin/` | The admin console, with its own README and tests |
 | `test/` | Backend E2E suite (real PostgreSQL, throwaway database) |
 | `k8s/helm/`, `k8s/infra/terraform/` | The Helm chart and the three Terraform states (`cluster`, `app-infra`, `addons`) |
-| `docs/` | `ADR/` (decision records), `ROADMAP.md`, `ARCHITECTURE.md`, `CHANGELOG.md`, screenshots |
+| `docs/` | Decision records, roadmap, architecture notes, changelog and the screenshots (see [Documentation](#documentation)) |
 | `perf/` | Load-test and `EXPLAIN` scripts behind [ADR 0049](docs/ADR/0049-performance-capacity-criteria.md) |
 
 ## Quick Start
@@ -388,20 +391,20 @@ suites can bypass rate limits.
 The backend, `frontend/` and `admin/` ship as one Helm release behind one ALB, with ClamAV as its
 own Deployment ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md),
 [ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.md)). The normal path is
-`bash k8s/infra/terraform/deploy.sh all`: it runs the three Terraform states in order, then
+`bash k8s/infra/terraform/deploy.sh all`: the three Terraform states in order, then
 `helm upgrade --install` with one `:<git-sha>` for all three images
-([ADR 0046](docs/ADR/0046-deploy-sequence-automation.md)), and stops for an explicit `y` before
-every `apply`. The by-hand and Helm-only variants, flags and prerequisites are in
+([ADR 0046](docs/ADR/0046-deploy-sequence-automation.md)), stopping for an explicit `y` before
+every `apply`. Flags, prerequisites and the manual steps (domain and NS delegation, the one-time
+External Secrets sync, turning `ingress.enabled` on) are in
 [k8s/infra/terraform/README.md](k8s/infra/terraform/README.md) and
-[k8s/helm/README.md](k8s/helm/README.md). Domain purchase / NS delegation, the one-time External
-Secrets sync and turning `ingress.enabled` on stay manual.
+[k8s/helm/README.md](k8s/helm/README.md).
 
 **CI does not deploy.** GitHub Actions only publishes the three images
 (`bluecode1775/sharenpo`, `-frontend`, `-admin`) to Docker Hub
-([ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.md)); nothing in this
-repository runs `terraform apply` or `helm upgrade` automatically. This stack has been applied to
-real AWS and verified there more than once. The live state is read from AWS, not from this README,
-because it goes stale the day someone runs `apply` or `destroy`.
+([ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.md)); a person runs
+`terraform apply` and `helm upgrade`. The stack has been applied to real AWS and checked there more
+than once. The live state is read from AWS, not from this README, because it goes stale the day
+someone runs `apply` or `destroy`.
 
 ## Try the API (Swagger)
 
@@ -432,22 +435,20 @@ its buttons was not tried.
 
 ## Core API
 
-Ten routes carry the main flow. Swagger at `/doc` lists every route (users, ownership transfer,
-audit log, health, metrics) with its parameters and error codes. Every route except `/auth/*`, the
-operational `/health/*` and `/metrics`, and `GET /file/:id/content` needs a Bearer access token.
+Six routes carry the main flow. Swagger at `/doc` lists every route (users, ownership transfer,
+audit log, health, metrics, and the rest of files, posts and comments) with its parameters and error
+codes. Every route needs a Bearer access token except `POST /auth/register` and `POST /auth/signin`
+(Basic token), `POST /auth/token/refresh` (refresh cookie), the operational `/health/*` and
+`/metrics`, and `GET /file/:id/content` (Bearer optional).
 
 | Route | Auth | What it does | Notable errors, ADR |
 |---|---|---|---|
-| `POST /auth/register` | Basic | Creates an account from `base64(email:password)`; the password must be ≥ 10 characters with all four character classes | 400 `AUTH_WEAK_PASSWORD`, 400 `AUTH_EMAIL_TAKEN`; 5/min |
-| `POST /auth/signin` | Basic | Returns `{ accessToken }` and sets the httpOnly refresh cookie | 5/min ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md)) |
-| `POST /auth/token/refresh` | refresh cookie | Rotates the refresh cookie and returns a new access token | 401 `AUTH_REFRESH_REUSED`; 5/min ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md)) |
-| `POST /upload/attach` | Bearer | Scans, then stages one file (`image`, `audio` or `video` field, 100 MB) as `temp_…` and returns its name | 400 `UPLOAD_MALWARE_DETECTED`, 400 `UPLOAD_INVALID_TYPE`, 503 `UPLOAD_SCAN_UNAVAILABLE`; 15/min ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md)) |
+| `POST /auth/register`, `POST /auth/signin` | Basic | Creates an account from `base64(email:password)` (the password must be ≥ 10 characters with all four character classes); sign-in returns `{ accessToken }` and sets the httpOnly refresh cookie | 400 `AUTH_WEAK_PASSWORD`, 400 `AUTH_EMAIL_TAKEN` ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md)) |
+| `POST /auth/token/refresh` | refresh cookie | Rotates the refresh cookie and returns a new access token | 401 `AUTH_REFRESH_REUSED` ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md)) |
+| `POST /upload/attach` | Bearer | Scans, then stages one file (`image`, `audio` or `video` field, 100 MB) as `temp_…` and returns its name | 400 `UPLOAD_MALWARE_DETECTED`, 400 `UPLOAD_INVALID_TYPE`, 503 `UPLOAD_SCAN_UNAVAILABLE` ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md)) |
 | `POST /file` | Bearer | Promotes the staged file to an owned, `private` file in one transaction; a repeat by the same user replays (200) | 409 `FILE_ALREADY_CLAIMED` ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md)) |
-| `GET /file` | Bearer | Lists files: `take`, `skip`, `search`, `sortBy`, `order`, `creatorId` | 400 `VALIDATION_FAILED` for an undeclared parameter ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md)) |
 | `GET /file/:id/content` | optional Bearer | Streams the bytes after the visibility check, with `Range`; under S3 it answers a `302` to a presigned URL | 403 `FORBIDDEN_NOT_OWNER`, 403 `FILE_SHARE_INVALID` ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md)) |
-| `PATCH /file/:id` | Bearer | Edits metadata, switches `visibility`, rotates the share token, sets its expiry | 403 for non-owners ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md)) |
 | `POST /post` | Bearer | Creates a post with an optional `fileId`, which doubles as its idempotency key | 409 `POST_FILE_TAKEN`, 403 `FORBIDDEN_NOT_OWNER` ([ADR 0023](docs/ADR/0023-board-domain-schema.md)) |
-| `POST /post/:postId/comment` | Bearer | Adds a comment (≤ 1,000 characters); the thread is oldest-first | 404 `POST_NOT_FOUND` |
 
 ### Error responses
 
@@ -510,39 +511,28 @@ the same kind of mistake happened again, that is recorded in the same place.
 
 ### Example 1. Directing the AI: malware scanning for uploads
 
-The developer told the AI what to cover:
-
-- what `clamd` is
-- how the earlier predecessor package (`clamdjs`) differs from the one in use now
-  (`clamscan`), and researching both
-- each package's safety and dependencies
-- where to implement it, the implementation, and where it is used
-
-The judgments that ended up in [ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md):
-
-- `clamscan` over `clamdjs`, whose last release was in 2019 and which has about 4% of the downloads.
-- Version 2.4.0, where the known vulnerability (`CVE-2020-7613`) is fixed, with the vulnerable
-  code path left switched off.
-- The scan runs on the in-memory buffer before anything is stored, and an unreachable scanner
-  means the upload is refused, not passed.
-
-A later dependency audit found a hole: when the scanner could not give a verdict (`null`), the
-file was treated as clean. It was reproduced against a real `clamd` and fixed, and the steps are in
-the same ADR's addenda.
+The developer told the AI what to cover: what `clamd` is, how the earlier predecessor package
+(`clamdjs`) differs from the one in use now (`clamscan`) with both researched, each package's safety
+and dependencies, and where to implement it and where it is used. The judgments that ended up in
+[ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md): `clamscan` over `clamdjs` (last release
+2019, about 4% of the downloads); version 2.4.0, where `CVE-2020-7613` is fixed, with the vulnerable
+code path left switched off; the scan runs on the in-memory buffer before anything is stored, and an
+unreachable scanner means the upload is refused, not passed. A later dependency audit found a hole:
+when the scanner gave no verdict (`null`), the file was treated as clean. It was reproduced against a
+real `clamd` and fixed, and the steps are in the same ADR's addenda.
 
 ### Example 2. Correcting the AI's mistakes
 
 - **Node group design** ([ADR 0043](docs/ADR/0043-terraform-project-adaptation.md)): the AI put
-  forward a wrong premise from memory, and the developer's first answer rested on it. The AI
-  noticed the error while reading another document. After the premise was corrected, the AI asked
-  the same question again, and the developer asked why it was being asked twice, then asked what
-  to choose so that both could be implemented. That led to a design with both an x64 and an ARM
-  node group. The AI's three errors are written in the ADR's process note.
+  forward a wrong premise from memory, and the developer's first answer rested on it. The AI noticed
+  the error while reading another document. After the correction the developer asked what to choose so
+  that both could be implemented, which led to a design with both an x64 and an ARM node group. The
+  AI's three errors are written in the ADR's process note.
 - **Corrupted alert descriptions** ([ADR 0047](docs/ADR/0047-observability-prometheus-grafana.md)):
-  the developer reported that some alert rule descriptions showed characters that were neither
-  Korean nor English. The AI inspected the stored values byte by byte, found the replacement
-  character (`U+FFFD`), and explained the cause as the client shell's encoding. The original text
-  was unrecoverable, so the rewritten text was applied after the developer confirmed it.
+  the developer reported that some alert rule descriptions showed characters that were neither Korean
+  nor English. The AI inspected the stored values byte by byte, found the replacement character
+  (`U+FFFD`) and attributed it to the client shell's encoding. The original text was unrecoverable, so
+  rewritten text was applied after the developer confirmed it.
 
 ### Cases where an existing rule was broken
 
@@ -585,15 +575,13 @@ Open items, each recorded where it was found; the full list is in
   ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md), addendum 2026-10-06).
 - **A refresh can race across browser tabs.** One anchor per account and no grace window; one
   attempt did not reproduce it.
-- **An interrupted upload restarts from zero.** There is no resumable or chunked upload, and none
-  is designed.
-- **A post references at most one file.** Several files per post is an undecided schema change
-  ([ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.md) D5).
+- **Narrow upload scope.** An interrupted upload restarts from zero (there is no resumable or chunked
+  upload, and none is designed), and a post references at most one file (several files per post is an
+  undecided schema change, [ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.md) D5).
 - **Registration reveals that an email is taken** (`AUTH_EMAIL_TAKEN`). Weighed and accepted; the
   5/minute limit is the only mitigation ([ROADMAP.md](docs/ROADMAP.md) §7).
-- **Rate-limit counters live in each instance's memory,** and each workload runs one replica, so
-  the deployment is not highly available. More replicas need shared counter storage
-  ([ADR 0053](docs/ADR/0053-global-rate-limiting.md)).
+- **One replica per workload, so not highly available.** Rate-limit counters live in each instance's
+  memory; more replicas need shared counter storage ([ADR 0053](docs/ADR/0053-global-rate-limiting.md)).
 - **Public and unlisted media does not render in the local dev setup.** The client (`:5173`) and
   the API (`:3000`) are different origins, and the API's `Cross-Origin-Resource-Policy: same-origin`
   blocks embedding; the screenshots set `BASE_URL` to the client's origin. Behind one ALB the origin
@@ -603,14 +591,14 @@ Open items, each recorded where it was found; the full list is in
   sent to the login page and a crawler sees an empty page. Checked on 2026-10-20 on the local
   stack only; undecided ([ADR 0055](docs/ADR/0055-helmet-security-headers.md) Addendum,
   [ROADMAP.md](docs/ROADMAP.md) §7).
-- **Automation stops at publishing images.** A person runs the deploy. A service mesh (Istio) was left out
-  because there is one backend workload and no east-west traffic for it to manage.
-- **The AWS account number and the database address are still in the git history.** Since
-  2026-10-26 `k8s/helm/values-prod.yaml` holds placeholders and the real values sit in a gitignored
-  `values-prod.local.yaml` that `deploy.sh` requires
+- **Deploys are manual, and there is no service mesh.** A person runs the deploy. Istio was dropped
+  on 2026-08-31, when the chart deployed one workload; it now deploys four (backend, `frontend/`,
+  `admin/`, ClamAV), and that decision has not been re-evaluated ([ROADMAP.md](docs/ROADMAP.md) §7).
+- **The AWS account number and the database address are still in the git history.** The current tree
+  holds placeholders and the real values sit in a gitignored overlay
   ([ADR 0068](docs/ADR/0068-deploy-identifiers-gitignored-overlay.md)). They are identifiers, not
-  credentials; history was not rewritten, and a gitleaks scan of the full history (2026-10-22) found
-  no real secret.
+  credentials, and history was not rewritten. A gitleaks scan of the full history (2026-10-22) gave 11
+  findings, all reviewed as false positives.
 - **Dependencies.** `pnpm audit --prod` found no known vulnerabilities on 2026-10-27, after two high
   advisories published 2026-10-23 (`body-parser`, `multer`) were fixed by raising their `package.json`
   overrides. Plain `pnpm audit` reports 67 (3 critical), all in build and test tooling.

@@ -31,8 +31,8 @@
 ## 상태
 
 상시 운영 중인 데모는 없습니다. 이 스택은 AWS/EKS에 적용했다가 실행 사이사이에 내렸습니다
-(날짜별 기록: [ROADMAP.ko.md](docs/ROADMAP.ko.md) §9). 지금 떠 있는지는 이 README에 적지
-않습니다. 프로젝트를 확인하는 방법은 다음과 같습니다.
+(날짜별 실행 기록: [ROADMAP.ko.md](docs/ROADMAP.ko.md) §9와 ADR의 추가 기록). 지금 떠 있는지는
+이 README에 적지 않습니다. 프로젝트를 확인하는 방법은 다음과 같습니다.
 
 - 아래의 [스크린샷과 GIF](#스크린샷)를 봅니다
 - Docker로 직접 실행합니다: [빠른 시작](#빠른-시작)
@@ -53,9 +53,9 @@
   ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.ko.md)).
 - **저장 전 fail-closed 악성코드 스캔.** 모든 업로드에 적용합니다
   ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)).
-- **확인한 것:** 백엔드 단위 테스트 282건(2026-10-26 실행)과 실제 PostgreSQL을 쓰는 백엔드 E2E
-  76건(2026-10-22 실행)이 모두 통과했습니다. 두 클라이언트에는 Playwright E2E가 있고, 결정을
-  기록한 ADR은 68개입니다.
+- **확인한 것:** 백엔드 단위 테스트, 실제 PostgreSQL을 쓰는 백엔드 E2E, 두 클라이언트의
+  Playwright E2E가 모두 통과합니다(건수와 날짜는 [테스트와 CI](#테스트와-ci)). 결정을 기록한
+  ADR은 68개입니다.
 - **AI와 함께, 문서로 정한 규칙 아래에서 만들었습니다.** 코드의 대부분은 Claude Code로 작성했습니다.
   개발자가 [CLAUDE.ko.md](CLAUDE.ko.md)에 규칙을 정하고, 대안 중에서 선택하고, 그 내용을 ADR로
   남깁니다. AI가 규칙을 어긴 일도 함께 적어 두었습니다([만든 방식](#만든-방식)).
@@ -112,12 +112,10 @@
 ## 기능
 
 - **인증** — HTTP Basic 토큰으로 가입·로그인하고, `type` 클레임이 있는 JWT 액세스·리프레시 토큰
-  쌍을 서로 다른 시크릿으로 서명해 발급합니다([ADR 0002](docs/ADR/0002-dual-secret-token-pair.ko.md)). 리프레시 토큰은 httpOnly 쿠키로만
-  오가고 SHA-256 해시로 저장되며 갱신할 때마다 교체됩니다. 이미 교체된 토큰이 다시 들어오면
-  세션을 끝내고 `AUTH_REFRESH_REUSED`로 응답합니다([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.ko.md))
+  쌍을 서로 다른 시크릿으로 서명해 발급합니다([ADR 0002](docs/ADR/0002-dual-secret-token-pair.ko.md)). 리프레시 토큰은 httpOnly 쿠키로
+  오가며 갱신할 때마다 교체되고, 재사용을 감지합니다([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.ko.md))
 - **2단계 업로드** — `temp_` → `granted_` 상태 머신. 파일 이동이 DB 트랜잭션 안에서 실행됩니다
-  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md)). 이동에 성공한 뒤 커밋이 실패하면 고아 파일이 남을 수 있고 정리 작업이 이를
-  보고합니다([ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.ko.md)). attach 단계가 돌려준 파일명은 한 번만 쓸 수 있는 청구(claim)
+  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md)). attach 단계가 돌려준 파일명은 한 번만 쓸 수 있는 청구(claim)
   토큰입니다. 같은 사용자가 다시 보내면 기존 파일을 돌려주고(200), 다른 사용자는 409
   `FILE_ALREADY_CLAIMED`를 받습니다([ADR 0019](docs/ADR/0019-upload-claim-idempotency.ko.md))
 - **RBAC + 감사 로그** — `user`/`admin`/`superadmin` 역할, "본인 또는 admin"으로 확장된 소유권 검사,
@@ -129,8 +127,8 @@
   `POST /upload/attach`는 분당 15회이며 health/metrics 프로브는 제외됩니다([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md),
   [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md))
 - **Swagger** — `/doc`의 API 문서이자 수동 테스트 도구
-- **업로드 악성코드 스캔** — 디스크에 쓰기 전에 메모리에서 ClamAV로 검사합니다. 감염이면 거절하고,
-  스캐너에 연결할 수 없을 때도 검사를 건너뛰지 않고 막는 fail-closed로 동작합니다([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md))
+- **업로드 악성코드 스캔** — ClamAV로 저장하기 전에 검사하고, 스캐너를 쓸 수 없으면 막는
+  fail-closed로 동작합니다([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md))
 - **파일 공개 범위** — `public`, `private`(기본값), `unlisted`(토큰을 재발급하거나 만료를 둘 수 있는
   공유 링크). 바이트는 접근 검사를 거치는 `GET /file/:id/content`로만 서빙됩니다([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md),
   [ADR 0026](docs/ADR/0026-file-visibility-implementation.ko.md))
@@ -208,12 +206,13 @@ erDiagram
 
 AWS 쪽은 리소스를 만드는 Terraform state별로 묶어 그렸습니다. Terraform 코드를 기준으로 그렸고
 실제 state와는 대조하지 못했습니다. 점선 상자는 Terraform이 아니라 Ingress와 Helm이 만드는
-것입니다([ADR 0044](docs/ADR/0044-terraform-three-state-split.ko.md)).
+것입니다. 세 state 상자 사이의 점선 화살표는 `terraform_remote_state` 읽기이며 한 방향뿐입니다.
+`cluster/`는 나머지 둘을 읽지 않습니다([ADR 0044](docs/ADR/0044-terraform-three-state-split.ko.md)).
 
 ```mermaid
 flowchart LR
-  subgraph C["cluster/: VPC, EKS 노드"]
-    NODES["EKS 1.34 노드<br/>Graviton t4g.medium, x64 m5.large (0)"]
+  subgraph C["cluster/: VPC, EKS"]
+    NODES["EKS 1.34 노드<br/>Graviton t4g.medium,<br/>x64 m5.large (기본 0대)"]
   end
   subgraph A["app-infra/: 앱이 쓰는 자원"]
     RDS[("RDS PostgreSQL 16<br/>프라이빗, 단일 AZ")]
@@ -225,7 +224,11 @@ flowchart LR
     LBC["ALB Controller"]
     ESO["External Secrets"]
     EDNS["ExternalDNS"]
+    PROM["kube-prometheus-stack"]
   end
+  A -. "state 읽기" .-> C
+  D -. "state 읽기" .-> C
+  D -. "state 읽기" .-> A
   ALB["ALB<br/>Ingress가 생성"]:::rt
   APP["backend, frontend,<br/>admin, clamav"]:::rt
   LBC -. "생성" .-> ALB
@@ -279,7 +282,7 @@ flowchart LR
 | `admin/` | 관리자 콘솔. 자체 README와 테스트가 있습니다 |
 | `test/` | 백엔드 E2E 스위트(실제 PostgreSQL, 일회용 데이터베이스) |
 | `k8s/helm/`, `k8s/infra/terraform/` | Helm 차트와 세 개의 Terraform state(`cluster`, `app-infra`, `addons`) |
-| `docs/` | `ADR/`(결정 기록), `ROADMAP.md`, `ARCHITECTURE.md`, `CHANGELOG.md`, 스크린샷 |
+| `docs/` | 결정 기록, 로드맵, 아키텍처 설명, 변경 이력, 스크린샷([문서](#문서) 참고) |
 | `perf/` | [ADR 0049](docs/ADR/0049-performance-capacity-criteria.ko.md)의 근거가 된 부하 테스트와 `EXPLAIN` 스크립트 |
 
 ## 빠른 시작
@@ -390,16 +393,16 @@ Deployment로 함께 배포됩니다([ADR 0060](docs/ADR/0060-frontend-same-alb-
 `bash k8s/infra/terraform/deploy.sh all`입니다. Terraform 세 state를 순서대로 적용한 뒤 세 이미지에
 같은 `:<git-sha>`를 넣어 `helm upgrade --install`을 실행하며
 ([ADR 0046](docs/ADR/0046-deploy-sequence-automation.ko.md)), 모든 `apply` 전에 `y`를 직접 입력해야
-진행합니다. 직접 실행하는 방법과 Helm만 쓰는 방법, 플래그와 선행 조건은
+진행합니다. 플래그와 선행 조건, 수동 단계(도메인 구매·NS 위임, 1회성 External Secrets 동기화,
+`ingress.enabled` 켜기)는
 [k8s/infra/terraform/README.md](k8s/infra/terraform/README.ko.md)와
-[k8s/helm/README.md](k8s/helm/README.ko.md)에 있습니다. 도메인 구매/NS 위임, 1회성 External Secrets
-동기화, `ingress.enabled` 켜기는 계속 수동입니다.
+[k8s/helm/README.md](k8s/helm/README.ko.md)에 있습니다.
 
 **CI는 배포하지 않습니다.** GitHub Actions는 세 이미지(`bluecode1775/sharenpo`,
 `-frontend`, `-admin`)를 Docker Hub에 발행할 뿐이고
-([ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)), 이 저장소에서
-`terraform apply`나 `helm upgrade`를 자동으로 실행하는 것은 없습니다. 이 스택은 실제 AWS에 적용해
-여러 번 검증했습니다. 지금의 실제 상태는 이 README가 아니라 AWS에서 직접 확인합니다. `apply`나
+([ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)),
+`terraform apply`와 `helm upgrade`는 사람이 실행합니다. 이 스택은 실제 AWS에 적용해 여러 번
+확인했습니다. 지금의 실제 상태는 이 README가 아니라 AWS에서 직접 확인합니다. `apply`나
 `destroy`를 실행하는 순간 이 문서의 내용은 낡아 버리기 때문입니다.
 
 ## API 써 보기 (Swagger)
@@ -430,22 +433,20 @@ Authorize 창이 열리는 것까지는 브라우저로 확인했지만, 그 안
 
 ## 핵심 API
 
-주요 흐름을 이루는 라우트 열 개입니다. 사용자, 소유권 이전, 감사 로그, health, metrics를 포함한
-전체 라우트와 파라미터, 에러 코드는 `/doc`의 Swagger에 있습니다. `/auth/*`, 운영용 `/health/*`와
-`/metrics`, `GET /file/:id/content`를 제외한 모든 라우트는 Bearer 액세스 토큰이 필요합니다.
+주요 흐름을 이루는 라우트 여섯 개입니다. 사용자, 소유권 이전, 감사 로그, health, metrics와 나머지
+파일·게시글·댓글 라우트를 포함한 전체 라우트와 파라미터, 에러 코드는 `/doc`의 Swagger에 있습니다.
+`POST /auth/register`·`POST /auth/signin`(Basic 토큰), `POST /auth/token/refresh`(리프레시 쿠키),
+운영용 `/health/*`와 `/metrics`, `GET /file/:id/content`(Bearer 선택)를 제외한 모든 라우트는 Bearer
+액세스 토큰이 필요합니다.
 
 | 라우트 | 인증 | 하는 일 | 주요 에러, ADR |
 |---|---|---|---|
-| `POST /auth/register` | Basic | `base64(email:password)`로 계정을 만듭니다. 비밀번호는 10자 이상이고 네 가지 문자 종류를 모두 포함해야 합니다 | 400 `AUTH_WEAK_PASSWORD`, 400 `AUTH_EMAIL_TAKEN`, 분당 5회 |
-| `POST /auth/signin` | Basic | `{ accessToken }`을 돌려주고 httpOnly 리프레시 쿠키를 설정합니다 | 분당 5회([ADR 0002](docs/ADR/0002-dual-secret-token-pair.ko.md)) |
-| `POST /auth/token/refresh` | 리프레시 쿠키 | 리프레시 쿠키를 교체하고 새 액세스 토큰을 돌려줍니다 | 401 `AUTH_REFRESH_REUSED`, 분당 5회([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.ko.md)) |
-| `POST /upload/attach` | Bearer | 스캔한 뒤 파일 하나(`image`, `audio`, `video` 필드, 100 MB)를 `temp_…`로 임시 저장하고 그 이름을 돌려줍니다 | 400 `UPLOAD_MALWARE_DETECTED`, 400 `UPLOAD_INVALID_TYPE`, 503 `UPLOAD_SCAN_UNAVAILABLE`, 분당 15회([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)) |
+| `POST /auth/register`, `POST /auth/signin` | Basic | `base64(email:password)`로 계정을 만듭니다(비밀번호는 10자 이상이고 네 가지 문자 종류를 모두 포함해야 합니다). 로그인은 `{ accessToken }`을 돌려주고 httpOnly 리프레시 쿠키를 설정합니다 | 400 `AUTH_WEAK_PASSWORD`, 400 `AUTH_EMAIL_TAKEN`([ADR 0002](docs/ADR/0002-dual-secret-token-pair.ko.md)) |
+| `POST /auth/token/refresh` | 리프레시 쿠키 | 리프레시 쿠키를 교체하고 새 액세스 토큰을 돌려줍니다 | 401 `AUTH_REFRESH_REUSED`([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.ko.md)) |
+| `POST /upload/attach` | Bearer | 스캔한 뒤 파일 하나(`image`, `audio`, `video` 필드, 100 MB)를 `temp_…`로 임시 저장하고 그 이름을 돌려줍니다 | 400 `UPLOAD_MALWARE_DETECTED`, 400 `UPLOAD_INVALID_TYPE`, 503 `UPLOAD_SCAN_UNAVAILABLE`([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)) |
 | `POST /file` | Bearer | 임시 저장한 파일을 하나의 트랜잭션으로 소유자가 있는 `private` 파일로 승격합니다. 같은 사용자가 다시 보내면 기존 결과를 돌려줍니다(200) | 409 `FILE_ALREADY_CLAIMED`([ADR 0019](docs/ADR/0019-upload-claim-idempotency.ko.md)) |
-| `GET /file` | Bearer | 파일 목록: `take`, `skip`, `search`, `sortBy`, `order`, `creatorId` | 선언되지 않은 파라미터는 400 `VALIDATION_FAILED`([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.ko.md)) |
 | `GET /file/:id/content` | 선택적 Bearer | 공개 범위를 검사한 뒤 바이트를 `Range`와 함께 스트리밍합니다. S3에서는 presigned URL로 `302` 리다이렉트합니다 | 403 `FORBIDDEN_NOT_OWNER`, 403 `FILE_SHARE_INVALID`([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md)) |
-| `PATCH /file/:id` | Bearer | 메타데이터를 수정하고, `visibility`를 바꾸고, 공유 토큰을 재발급하고, 만료 시각을 정합니다 | 소유자가 아니면 403([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md)) |
 | `POST /post` | Bearer | 선택적 `fileId`와 함께 게시글을 만듭니다. `fileId`가 멱등 키 역할도 합니다 | 409 `POST_FILE_TAKEN`, 403 `FORBIDDEN_NOT_OWNER`([ADR 0023](docs/ADR/0023-board-domain-schema.ko.md)) |
-| `POST /post/:postId/comment` | Bearer | 댓글을 답니다(1,000자 이하). 스레드는 오래된 순입니다 | 404 `POST_NOT_FOUND` |
 
 ### 에러 응답
 
@@ -508,30 +509,23 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
 
 ### 예시 1. AI를 지휘한 경우: 업로드 악성코드 스캔
 
-개발자가 AI에게 지시한 범위는 다음과 같습니다.
-
-- `clamd`가 무엇인지
-- 예전에 쓰이던 전신 패키지(`clamdjs`)와 지금 쓰이는 패키지(`clamscan`)의 구분과 조사
-- 두 패키지의 안전성과 의존성
-- 구현 위치, 구현 코드, 사용처
-
-그 결과 [ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)에 남은 판단은 다음과 같습니다.
-
-- 마지막 릴리스가 2019년이고 다운로드 수가 `clamscan`의 약 4%에 그치는 `clamdjs` 대신 `clamscan`을 선택했습니다.
-- `clamscan`의 알려진 취약점(`CVE-2020-7613`)이 수정된 2.4.0을 쓰고, 취약한 경로는 켜지 않습니다.
-- 저장하기 전에 메모리 버퍼에서 검사하고, 스캐너에 연결하지 못하면 통과시키지 않고 거부합니다.
-
-이후 의존성 점검에서 스캐너가 판정을 내리지 못한 경우(`null`)를 정상으로 통과시키는 허점이 발견됐습니다.
-실제 `clamd`로 재현한 뒤 고쳤고, 그 과정이 같은 ADR의 추가 기록에 남아 있습니다.
+개발자가 AI에게 지시한 범위는 `clamd`가 무엇인지, 예전에 쓰이던 전신 패키지(`clamdjs`)와 지금
+쓰이는 패키지(`clamscan`)의 구분과 두 패키지에 대한 조사, 두 패키지의 안전성과 의존성, 구현 위치와
+구현 코드, 사용처입니다. 그 결과 [ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)에 남은
+판단은 다음과 같습니다. 마지막 릴리스가 2019년이고 다운로드 수가 `clamscan`의 약 4%에 그치는
+`clamdjs` 대신 `clamscan`을 선택했습니다. `clamscan`의 알려진 취약점(`CVE-2020-7613`)이 수정된
+2.4.0을 쓰고, 취약한 경로는 켜지 않습니다. 저장하기 전에 메모리 버퍼에서 검사하고, 스캐너에 연결하지
+못하면 통과시키지 않고 거부합니다. 이후 의존성 점검에서 스캐너가 판정을 내리지 못한 경우(`null`)를
+정상으로 통과시키는 허점이 발견됐습니다. 실제 `clamd`로 재현한 뒤 고쳤고, 그 과정이 같은 ADR의 추가
+기록에 남아 있습니다.
 
 ### 예시 2. AI의 허점을 바로잡은 경우
 
 - **노드 구성 설계**([ADR 0043](docs/ADR/0043-terraform-project-adaptation.ko.md)): AI가 기억에 의존해
   틀린 전제를 내세웠고, 개발자의 첫 판단도 그 잘못된 정보를 바탕으로 나왔습니다. 이 오류는 AI가 다른
-  문서를 읽다가 알아챘습니다. 전제를 정정한 뒤에도 AI가 같은 질문을 다시 하자 개발자가 왜 또
-  묻느냐고 되물었고, 이어서 둘 다 구현하려면 무엇을 골라야 하는지 물었습니다. 그 결과 x64와 ARM
-  노드 그룹을 모두 두는 설계로 정리됐습니다. AI의 오류 세 가지는 ADR의 과정 메모에 그대로 적혀
-  있습니다.
+  문서를 읽다가 알아챘습니다. 전제를 정정한 뒤 개발자가 둘 다 구현하려면 무엇을 골라야 하는지 물었고,
+  그 결과 x64와 ARM 노드 그룹을 모두 두는 설계로 정리됐습니다. AI의 오류 세 가지는 ADR의 과정 메모에
+  그대로 적혀 있습니다.
 - **알림 설명이 깨진 문제**([ADR 0047](docs/ADR/0047-observability-prometheus-grafana.ko.md)): 개발자가
   알림 규칙의 설명이 한국어도 영어도 아닌 글자로 보인다고 알렸습니다. AI가 저장된 값을 바이트 단위로
   확인해 깨진 문자(`U+FFFD`)가 들어 있음을 찾았고, 원인을 클라이언트 셸의 인코딩으로 추정해 설명했습니다.
@@ -577,14 +571,13 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
   뒤 만료)([ADR 0019](docs/ADR/0019-upload-claim-idempotency.ko.md), 2026-10-06 추가 기록).
 - **브라우저 탭 사이에서 리프레시가 경합할 수 있습니다.** 계정당 앵커가 하나이고 유예 시간이 없습니다.
   한 번 시도했을 때는 재현되지 않았습니다.
-- **끊긴 업로드는 처음부터 다시 보내야 합니다.** 이어 올리기나 청크 업로드는 없으며 설계도 하지
-  않았습니다.
-- **게시글 하나는 파일을 최대 하나만 참조합니다.** 한 게시글에 파일 여러 개를 붙이는 것은 아직
-  결정하지 않은 스키마 변경입니다([ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.ko.md) D5).
+- **업로드 범위가 좁습니다.** 끊긴 업로드는 처음부터 다시 보내야 하고(이어 올리기나 청크 업로드는
+  없으며 설계도 하지 않았습니다), 게시글 하나는 파일을 최대 하나만 참조합니다. 한 게시글에 파일 여러
+  개를 붙이는 것은 아직 결정하지 않은 스키마 변경입니다([ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.ko.md) D5).
 - **회원가입은 이미 쓰는 이메일임을 알려 줍니다**(`AUTH_EMAIL_TAKEN`). 저울질한 끝에 그대로 두기로
   했고, 분당 5회 제한이 유일한 완화책입니다([ROADMAP.ko.md](docs/ROADMAP.ko.md) §7).
-- **요청 횟수 카운터는 인스턴스 메모리에 있습니다.** 워크로드마다 레플리카가 하나라 이 배포는
-  고가용성이 아니며, 레플리카를 늘리려면 공유 카운터 저장소가 필요합니다
+- **워크로드마다 레플리카가 하나라 고가용성이 아닙니다.** 요청 횟수 카운터가 인스턴스 메모리에
+  있으므로, 레플리카를 늘리려면 공유 카운터 저장소가 필요합니다
   ([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md)).
 - **로컬 개발 환경에서는 공개·링크 공유 미디어가 렌더링되지 않습니다.** 클라이언트(`:5173`)와
   API(`:3000`)의 출처가 달라서 API의 `Cross-Origin-Resource-Policy: same-origin`이 삽입을 막습니다.
@@ -595,15 +588,14 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
   화면으로 가고, 크롤러에게는 빈 페이지로 보입니다. 2026-10-20에 로컬 스택에서만 확인했고 결정한
   것은 없습니다([ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md) 추가 기록,
   [ROADMAP.ko.md](docs/ROADMAP.ko.md) §7).
-- **자동화는 이미지 발행까지입니다.** 배포는 사람이 실행합니다. 서비스 메시(Istio)는 일부러
-  넣지 않았습니다. 이 프로젝트는 백엔드 워크로드가 하나뿐이라 메시가 관리할 서비스 간 트래픽이
-  없기 때문입니다.
-- **AWS 계정 번호와 데이터베이스 주소가 git 이력에는 남아 있습니다.** 2026-10-26부터
-  `k8s/helm/values-prod.yaml`에는 자리표시자만 있고, 실제 값은 gitignore된 `values-prod.local.yaml`에
-  있으며 `deploy.sh`가 이 파일을 요구합니다
+- **배포는 수동이고 서비스 메시는 없습니다.** 배포는 사람이 실행합니다. Istio는 차트가 워크로드
+  하나를 배포하던 2026-08-31에 계획에서 뺐습니다. 지금은 워크로드가 네 개(백엔드, `frontend/`,
+  `admin/`, ClamAV)로 늘었지만 그 결정은 다시 평가하지 않았습니다([ROADMAP.ko.md](docs/ROADMAP.ko.md) §7).
+- **AWS 계정 번호와 데이터베이스 주소가 git 이력에는 남아 있습니다.** 현재 트리에는 자리표시자만
+  있고 실제 값은 gitignore된 오버레이 파일에 있습니다
   ([ADR 0068](docs/ADR/0068-deploy-identifiers-gitignored-overlay.ko.md)). 둘 다 자격 증명이 아니라
-  식별자이고, 이력은 다시 쓰지 않았으며, gitleaks로 이력 전체를 검사한 결과(2026-10-22) 실제 비밀은
-  나오지 않았습니다.
+  식별자이고, 이력은 다시 쓰지 않았습니다. gitleaks로 이력 전체를 검사한 결과(2026-10-22) 11건이
+  나왔고 모두 오탐으로 확인했습니다.
 - **의존성.** 2026-10-27에 `pnpm audit --prod`는 알려진 취약점을 찾지 못했습니다. 2026-10-23에 공개된
   high 등급 advisory 두 건(`body-parser`, `multer`)은 `package.json` overrides의 버전을 올려 해결했습니다.
   일반 `pnpm audit`는 67건(심각 3건)이며 모두 빌드·테스트 도구에 있습니다.
