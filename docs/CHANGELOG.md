@@ -70,8 +70,8 @@ development line (package.json version).
   first admin run failed only because the scratch path passed Windows' 260-character limit (vite); a short
   path worked. Not verified: creating an admin account on the Docker path, sentence-by-sentence English/Korean parity of the README, and how GitHub renders the
   dotted ALB edge. GitHub Secret scanning and push protection were disabled when checked (2026-10-21).
-  Left as is: `pnpm migration:run -- --fake` in `CLAUDE.md`, `CONTRIBUTING` (both languages), ADR 0006 and
-  older entries here — pnpm 10 passes the literal `--` on, so `--fake` does not reach the command as an
+  Removed on 2026-10-26: the `--fake` clause in `CONTRIBUTING` (both languages), which a reader follows. Left as is:
+  `pnpm migration:run -- --fake` in `CLAUDE.md` (both languages), ADR 0006 and older entries here — pnpm 10 passes the literal `--` on, so `--fake` does not reach the command as an
   option; the README sentence was removed.
 - **Docs: shared-link behavior recorded after checking it (2026-10-20)** — documentation only; no code
   changed and nothing was decided. Public and unlisted file links, opened as a logged-out visitor and as a

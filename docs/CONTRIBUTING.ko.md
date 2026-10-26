@@ -26,9 +26,7 @@
 
 [README.ko.md](../README.ko.md) > 빠른 시작 참조. 요약: `pnpm install`,
 `.env.example` → `.env` 복사, `file/temp/`와 `file/upload/` 존재 확인,
-데이터베이스 생성 후 `pnpm migration:run`으로 스키마 적용(수동 생성된 기존
-DB라면 `pnpm migration:run -- --fake` 1회 —
-[ADR 0006](ADR/0006-schema-policy-and-migration-adoption.ko.md)),
+데이터베이스 생성 후 `pnpm migration:run`으로 스키마 적용,
 `pnpm run start:dev`. 또는 `docker compose up --build`로 Postgres → one-shot
 `migrate` 단계 → API 순서로 뜬다([ADR 0015](ADR/0015-docker-and-compose.ko.md),
 마이그레이션 단계 분리는 [ADR 0032](ADR/0032-migration-as-separate-deploy-step.ko.md)).

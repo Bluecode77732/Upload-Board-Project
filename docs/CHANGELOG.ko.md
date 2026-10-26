@@ -65,8 +65,8 @@
   admin 계정을 만드는 방법, README 영어·한국어판의 문장 단위 대응,
   점선 ALB 간선이 GitHub에서 그려지는 모습. GitHub Secret scanning과 push protection은 확인한 시점
   (2026-10-21)에 꺼져 있었다.
-  그대로 둔 것: `CLAUDE.md`, `CONTRIBUTING`(두 언어), ADR 0006, 이 파일의 옛 항목에 있는
-  `pnpm migration:run -- --fake` — pnpm 10은 `--`를 그대로 넘기므로 `--fake`가 옵션으로 전달되지 않는다.
+  2026-10-26에 지운 것: 독자가 따라 하는 `CONTRIBUTING`(두 언어)의 `--fake` 구절. 그대로 둔 것:
+  `CLAUDE.md`(두 언어), ADR 0006, 이 파일의 옛 항목에 있는 `pnpm migration:run -- --fake` — pnpm 10은 `--`를 그대로 넘기므로 `--fake`가 옵션으로 전달되지 않는다.
   README의 해당 문장은 지웠다.
 - **문서: 공유 링크의 동작을 확인한 뒤 기록 (2026-10-20)** — 문서만 바꿨다. 코드는 바꾸지 않았고 결정한 것도
   없다. 공개·링크 공유 파일의 링크를 로컬 스택에서 로그아웃된 방문자와 크롤러로 열어 보니 이렇게 동작한다.
