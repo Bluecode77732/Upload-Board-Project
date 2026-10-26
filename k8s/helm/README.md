@@ -87,11 +87,19 @@ bare command below if you're deliberately pinning a specific image and supply
 `--set image.tag=<tag>` yourself:
 
 ```bash
-helm upgrade sharenpo . -f values-prod.yaml --set image.tag=<tag>
+helm upgrade sharenpo . -f values-prod.yaml -f values-prod.local.yaml --set image.tag=<tag>
 ```
 
 It carries no secret values — `secrets.existingSecret` still just names the
 Secret created above; the Secret itself is unaffected by this file.
+
+The identifiers that point at one specific deployment — the DB host, the bucket name,
+the IRSA role ARN and the certificate ARN — are placeholders in `values-prod.yaml`.
+Their real values live in the gitignored `values-prod.local.yaml`, which `deploy.sh`
+layers on top and refuses to run without
+([ADR 0068](../../docs/ADR/0068-deploy-identifiers-gitignored-overlay.md)). Copy
+`values-prod.local.example.yaml` and fill it from `terraform output`; the bare
+command above needs the second `-f` too.
 
 Object names come from the **release name** (`sharenpo` above), not from the
 chart name — `_helpers.tpl`'s `fullname` helper is `.Release.Name`. Installing

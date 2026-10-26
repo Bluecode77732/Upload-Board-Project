@@ -1,5 +1,5 @@
 # 실제 AWS 배포용 오버레이 — values.yaml의 기본값 위에 이 파일을 얹어 쓴다:
-#   helm upgrade sharenpo . -f values-prod.yaml
+#   helm upgrade sharenpo . -f values-prod.yaml -f values-prod.local.yaml
 # 반복되는 `helm upgrade ... --set env.DB_SSL=true --set env.STORAGE_DRIVER=s3 ...`
 # 나열을 정리한 것으로, 2026-08-27 첫 실제 배포(`helm get values upload-board -n
 # default`)에서 실제로 쓰인 값을 그대로 옮겼다(docs/ROADMAP.md §9, 2026-08-27
@@ -12,6 +12,11 @@
 # existingSecret/role-arn)은 새 이름으로 미리 갱신해 뒀고, DB_HOST는 2026-09-26 apply의
 # `terraform output -raw db_host`(app-infra/) 값으로 채웠다. apply를 다시 하면 이 값이
 # 그대로인지 대조한다.
+#
+# 환경을 특정하는 식별자 4개(env.DB_HOST, env.S3_BUCKET, serviceAccount의 role-arn, ingress의
+# certificate-arn)는 이 파일에 실제 값이 없고 자리표시자다. 실제 값은 gitignore된
+# values-prod.local.yaml에 두고 이 파일 뒤에 얹는다(형식: values-prod.local.example.yaml,
+# 결정: ADR 0068). 자리표시자 그대로 배포하면 안 된다 — deploy.sh는 그 파일이 없으면 멈춘다.
 
 image:
   tag: 2cd73b9
@@ -19,10 +24,10 @@ image:
 env:
   AWS_REGION: ap-northeast-2
   BASE_URL: https://sharenpo.cloud
-  # RDS 호스트 중간의 랜덤 서브도메인("chygueeqyek9")은 2026-09-26 apply에서 구 인스턴스와
+  # RDS 호스트 중간의 랜덤 서브도메인은 2026-09-26 apply에서 구 인스턴스와
   # 같았다 — 계정·리전 단위로 고정되는 값으로 보이나 AWS 문서로 확인하지는 않았다. 2026-09-07
   # 리네이밍으로 바뀐 건 identifier 접두사("sharenpo-db")뿐이다.
-  DB_HOST: sharenpo-db.chygueeqyek9.ap-northeast-2.rds.amazonaws.com
+  DB_HOST: "<RDS_HOST - set in values-prod.local.yaml>"
   DB_DATABASE: sharenpo
   # app-infra의 RDS는 rds.force_ssl 파라미터로 TLS를 강제한다 — 이 값이 없으면
   # 마이그레이션 Job이 "no pg_hba.conf entry ... no encryption"로 실패한다.
@@ -111,8 +116,8 @@ env:
   STORAGE_DRIVER: s3
   # s3_bucket_name은 Terraform 변수가 아니라 apply 시점에 -var로 직접 넘기는 값이다
   # (버킷 이름은 전역 유일해야 해서 안전한 기본값이 없음, ADR 0043 D8) — 다음 apply 때
-  # -var="s3_bucket_name=sharenpo-074416822640"로 이 값을 실제로 만들어야 아래가 맞다.
-  S3_BUCKET: sharenpo-074416822640
+  # -var="s3_bucket_name=sharenpo-<AWS_ACCOUNT_ID>"로 이 값을 실제로 만들어야 아래가 맞다.
+  S3_BUCKET: sharenpo-<AWS_ACCOUNT_ID>
 
 secrets:
   existingSecret: sharenpo-app-secrets
@@ -124,14 +129,14 @@ secrets:
 # trust policy와 자동으로 일치한다 — serviceAccount.name을 따로 줄 필요 없음.
 # role-arn은 이 role의 name이 "${cluster_name}-app"(app-infra/main.tf)이라
 # CLUSTER_NAME 기본값(2026-09-07부로 sharenpo, docs/ROADMAP.md §7)에서 고정으로
-# 정해지므로, DB_HOST/S3_BUCKET처럼 이 파일에 그대로 박아뒀다 — CLUSTER_NAME이나
-# AWS 계정을 바꾸면 이 값도 함께 갱신해야 한다. 이걸 안 켜면(또는 릴리스를 다른
+# 정해지므로, DB_HOST/S3_BUCKET처럼 values-prod.local.yaml에 둔다 — CLUSTER_NAME이나
+# AWS 계정을 바꾸면 그쪽 값도 함께 갱신해야 한다. 이걸 안 켜면(또는 릴리스를 다른
 # 이름으로 설치하면) S3 IRSA 인증이 실패한다 — STORAGE_DRIVER: s3인 이 오버레이에서는
 # 곧바로 업로드가 막히는 회귀다.
 serviceAccount:
   create: true
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::074416822640:role/sharenpo-app
+    eks.amazonaws.com/role-arn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/sharenpo-app
 
 # ADR 0047 D2/D4 — 라이브 클러스터에는 addons 상태가 kube-prometheus-stack을 설치하므로
 # 여기서만 ServiceMonitor를 켠다(로컬 kind 클러스터에는 그 CRD가 없어 기본은 비활성).
@@ -193,7 +198,7 @@ service:
 #
 # 필요한 두 가지 선행 조건 — addons/ apply(ALB Controller), app-infra/ apply(ACM
 # 인증서 ISSUED) — 는 2026-09-29 재적용으로 충족됐다. certificate-arn은 그 apply의
-# `terraform output -raw acm_certificate_arn` 값을 그대로 채운 것.
+# `terraform output -raw acm_certificate_arn` 값이고 values-prod.local.yaml에 있다.
 #
 # paths는 values.yaml과 동일하게 전체를 다시 선언해야 한다 — Helm은 배열을 병합하지
 # 않는다(ADR 0058). tls: 블록은 없다 — ALB Ingress Controller는 spec.tls를 쓰지 않고
@@ -205,7 +210,7 @@ ingress:
   annotations:
     kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:074416822640:certificate/5a935ea3-4af9-45dc-90be-e163543ce427
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:<AWS_ACCOUNT_ID>:certificate/<CERTIFICATE_ID>
     # 이 차트의 세 Service(app, frontend, admin)는 전부 ClusterIP다 — 컨트롤러 기본값인
     # target-type: instance는 NodePort/LoadBalancer Service가 필요해서 이 조합에
     # 맞지 않는다(2026-09-21, ADR 0060 구현 중 발견). ip 모드는 Service 타입과

@@ -76,6 +76,7 @@ each ADR records the *why* behind those rules.
 | [0065](0065-multi-file-upload-client-sequential.md) | Multi-file upload is the client repeating the one-file request; the backend keeps one file per request | Accepted — implemented in `frontend/`; verified 2026-10-06 against the local compose stack | 2026-10-06 |
 | [0066](0066-stack-selection-rationale-retroactive.md) | Stack selection rationale, recorded retroactively — NestJS/TypeORM/PostgreSQL, AWS/EKS, no frontend state library, rate-limit values | Accepted — retroactive record, no code change | 2026-10-12 |
 | [0067](0067-file-transfer-service-split.md) | Ownership transfer moves out of `FileService` into `FileTransferService` | Accepted — implemented, no behavior change | 2026-10-14 |
+| [0068](0068-deploy-identifiers-gitignored-overlay.md) | Deploy identifiers move out of `values-prod.yaml` into a gitignored overlay | Accepted — implemented, rendered chart unchanged | 2026-10-26 |
 
 The **Decided** column is the date the decision first shows in the repository. ADRs 0001–0005
 and 0009 describe choices that were already in the first commit (2025-12-17); they were written

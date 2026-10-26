@@ -90,11 +90,18 @@ bash k8s/infra/terraform/deploy.sh helm
 때만 아래처럼 `--set image.tag=<태그>`를 직접 넘기며 맨 명령을 쓴다:
 
 ```bash
-helm upgrade sharenpo . -f values-prod.yaml --set image.tag=<태그>
+helm upgrade sharenpo . -f values-prod.yaml -f values-prod.local.yaml --set image.tag=<태그>
 ```
 
 비밀값은 여기 없다 — `secrets.existingSecret`은 위에서 만든 Secret의
 이름만 가리킬 뿐, Secret 자체는 이 파일과 무관하다.
+
+특정 배포 하나를 가리키는 식별자(DB 호스트, 버킷 이름, IRSA role ARN, 인증서 ARN)는
+`values-prod.yaml`에서 자리표시자다. 실제 값은 gitignore된 `values-prod.local.yaml`에 있고,
+`deploy.sh`가 이 파일을 위에 얹으며 없으면 실행을 거부한다
+([ADR 0068](../../docs/ADR/0068-deploy-identifiers-gitignored-overlay.ko.md)).
+`values-prod.local.example.yaml`을 복사해 `terraform output` 값으로 채운다. 위의 맨
+명령에도 두 번째 `-f`가 필요하다.
 
 오브젝트 이름은 차트 이름이 아니라 **릴리스 이름**(위 예시의 `sharenpo`)에서
 온다 — `_helpers.tpl`의 `fullname` 헬퍼가 `.Release.Name`이기 때문이다.
