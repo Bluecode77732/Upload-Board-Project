@@ -78,7 +78,7 @@ development line (package.json version).
   `helm template` with both files matches the output from the old file (607 lines, no diff); `deploy.sh helm`
   stops with an error when the overlay is missing and, with it present, at the prompt when answered `n`. No
   cluster was involved; the history was not rewritten. The Helm README gives the two-`-f` command.
-  Numbers and method: the README went from 686 to 643 lines (Korean 667 to 635); Features from 74 to 45 lines
+  Numbers and method: the README went from 686 to 645 lines (Korean 667 to 637); Features from 74 to 45 lines
   with all 26 ADR links kept; Core API is 10 routes checked against the controllers; the troubleshooting table
   has 5 rows from ADR and ROADMAP entries, its "why this fix" column filled where the developer confirmed it
   (shutdown hooks, the null verdict), written as a decision from ADR 0049 for the index row and "—" for the
@@ -89,6 +89,26 @@ development line (package.json version).
   processes were left alone); Windows Defender deletes an EICAR file written to disk; and the permission mode
   refused deleting compose volumes and images, so the volumes `sharenpo-verify3_db-data` and
   `sharenpo-verify3_clamav-data` and the image `sharenpo-api:local` are left for the developer to remove.
+  Re-check, 2026-10-26, against the goals the README was meant to meet. The developer had enabled Secret
+  scanning and push protection and removed the image: both are on with 0 alerts, and the two `sharenpo-verify3_*`
+  volumes were still there. On GitHub (`dev`) all six in-page anchors resolve, the four Mermaid blocks and 23
+  images are present, and the CI badge reads `main`, whose last run passed (so did the last three on `dev`). All
+  eight Mermaid diagrams (four per language) render in Mermaid 11.4.0 without errors, with three dotted edges in
+  each AWS diagram; in the AWS one the Secrets Manager → External Secrets line passes behind the ALB node, and
+  reordering the edges did not change that (cosmetic, left as is; GitHub's own renderer was not seen). Numbers:
+  the 282 unit tests passed again, the 76 E2E tests match by count with `backend/` and `test/` unchanged since
+  the 2026-10-22 run, there are 68 ADRs (the README said 67 until ADR 0068), 91.6 % of 561 commits carry the
+  Claude trailer, and the versions in the tech-stack table match the `package.json` files and the Terraform.
+  The README top (intro, role, status) reads in about 1.1 minutes in English and 1.6 in Korean, about 2 and 3
+  with "In two minutes"; that measures length, not whether a reader understands it. English and Korean were read
+  side by side for the opening, Features, Architecture, Tech stack, Core API, Troubleshooting, Try the API,
+  How this was built, Testing and the limitations: no difference in meaning, only wording. The screenshot and GIF
+  captions and the Quick Start commands were compared by structure and counts, not line by line. Found while
+  checking: `pnpm audit --prod` now reports two high advisories published 2026-10-23, `body-parser` below 2.4.0
+  and `multer` below 2.5.0 (installed 2.3.0 and 2.4.0). The `multer` one needs an asynchronous `fileFilter`, and
+  this app's is synchronous; the `body-parser` one applies to the default options, which `main.ts` does not
+  change, and was not reproduced. The README, CLAUDE.md and ROADMAP §7 now say so; the override bump touches
+  `package.json` and the lockfile and waits for the developer's decision.
 - **Docs: shared-link behavior recorded after checking it (2026-10-20)** — documentation only; no code
   changed and nothing was decided. Public and unlisted file links, opened as a logged-out visitor and as a
   crawler on a local stack, behave like this: the file URLs open (image, video and audio, with seeking), the app
