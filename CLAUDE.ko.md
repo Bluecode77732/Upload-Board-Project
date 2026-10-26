@@ -1448,7 +1448,7 @@ GitHub Actions · Prometheus · Grafana · Terraform · Istio[Terraform 이후 �
 Architecture Decisions가 계속 유효하다.
 
 **알려진 격차**(문서화되었으나 아직 일정에 없음):
-- `pnpm audit --prod`는 **2026-10-08 기준 깨끗하다**. 2026-09-10에 한 번 0건이 됐다가
+- `pnpm audit --prod`는 **2026-10-08에 깨끗했다**. **2026-10-26에는 새 high advisory 두 건(body-parser, multer, 둘 다 2026-10-23 공개)이 보이며 아직 고치지 않았다 — docs/ROADMAP.ko.md §7 참고**. 2026-09-10에 한 번 0건이 됐다가
   새 권고 6건이 나왔고, 새 의존성 없이 override와 범위 안 업데이트만으로 막았다.
   proxy-addr(critical, GHSA-jqcg-44mw-7w3h, `express` 경유)는 `"proxy-addr": "^2.0.8"`
   override를 새로 넣었고, brace-expansion(high 2건 + moderate 1건, `typeorm>glob>minimatch`

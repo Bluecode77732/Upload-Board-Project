@@ -1420,7 +1420,7 @@ still lands only as its own dedicated task with its own ADR — until then, the
 Architecture Decisions above remain operative.
 
 **Known gaps** (documented, not yet scheduled):
-- `pnpm audit --prod` is **clean as of 2026-10-08**. It had been clean on 2026-09-10, then
+- `pnpm audit --prod` was **clean on 2026-10-08**; **by 2026-10-26 two new high advisories (body-parser, multer, both published 2026-10-23) appear and are not fixed yet — see docs/ROADMAP.md §7**. It had been clean on 2026-09-10, then
   six new advisories appeared and were fixed with overrides and one in-range update, no new
   dependency: proxy-addr (critical, GHSA-jqcg-44mw-7w3h, via `express`) through a new
   `"proxy-addr": "^2.0.8"` override; brace-expansion (2 high + 1 moderate, via

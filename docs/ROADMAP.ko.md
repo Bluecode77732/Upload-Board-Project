@@ -1654,6 +1654,16 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   (6) `STYLE-PLAN.ko.md`에 `-합니다`와 `-다`가 섞여 있다. (7) 개발자가 지우도록 남긴 것: 2026-10-26 검증에서 만든
   Docker 볼륨 `sharenpo-verify3_db-data`, `sharenpo-verify3_clamav-data`와 이미지 `sharenpo-api:local`.
   명시적으로 요청받을 때 다시 본다.
+- **`pnpm audit --prod`의 새 high advisory 두 건: `body-parser`와 `multer`** — **2026-10-26 기록, 고치지
+  않았고 개발자의 결정을 기다린다.** 둘 다 2026-10-23에 공개됐고(CVSS 7.5, 서비스 거부), `--prod`를 깨끗하게
+  만든 2026-10-08 작업 뒤에 나왔다. `body-parser`는 2.4.0 미만(설치된 것은 2.3.0, `express` 경유),
+  `multer`는 2.5.0 미만(설치된 것은 2.4.0)이 취약하다. `multer` 쪽은 비동기 `fileFilter`가 있어야 하는데
+  `backend/upload/upload.controller.ts`의 것은 `cb`를 동기로 호출하므로 현재 설정으로는 닿지 않는다.
+  `body-parser` 쪽은 기본 옵션에 해당하고 `backend/main.ts`의 `NestFactory.create(AppModule)`은 그 옵션을
+  바꾸지 않으므로, 압축된 본문 뒤에 여분의 바이트가 붙은 요청 하나로 프로세스가 죽을 것으로 예상하지만
+  재현하지는 않았다. 앞선 작업은 `overrides` 항목(`"body-parser": "^2.3.0"`, `"multer": "^2.4.0"`)을 올리고
+  `pnpm update`를 실행했다. 같은 두 항목을 `^2.4.0`과 `^2.5.0`으로 올리면 둘 다 해소되며, `package.json`과
+  lockfile을 건드린다. CLAUDE.ko.md > 알려진 미해결 지점에도 적어 두었다.
 
 ## 8. Advisory 노트
 

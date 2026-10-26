@@ -1753,6 +1753,16 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   mixes `-합니다` and `-다`. (7) Left for the developer to remove: Docker volumes `sharenpo-verify3_db-data` and
   `sharenpo-verify3_clamav-data` and the image `sharenpo-api:local`, from the 2026-10-26 verification run.
   Revisit when explicitly requested.
+- **Two new high advisories in `pnpm audit --prod`: `body-parser` and `multer`** — **recorded 2026-10-26;
+  not fixed, awaiting the developer's decision.** Both were published 2026-10-23 (CVSS 7.5, denial of
+  service), after the 2026-10-08 round that had left `--prod` clean. `body-parser` is vulnerable below 2.4.0
+  (installed 2.3.0, via `express`) and `multer` below 2.5.0 (installed 2.4.0). `multer`'s needs an asynchronous
+  `fileFilter`; the one in `backend/upload/upload.controller.ts` calls `cb` synchronously, so it is not
+  reachable as configured. `body-parser`'s applies to its default options, and `NestFactory.create(AppModule)`
+  in `backend/main.ts` does not change them, so a request with a compressed body and trailing bytes is
+  expected to crash the process; it was not reproduced. The earlier rounds raised the `overrides` entries
+  (`"body-parser": "^2.3.0"`, `"multer": "^2.4.0"`) and ran `pnpm update`; the same two bumps (to `^2.4.0` and
+  `^2.5.0`) would clear both, and touch `package.json` and the lockfile. Also listed in CLAUDE.md > Known Gaps.
 
 ## 8. Advisory notes
 
