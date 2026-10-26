@@ -22,10 +22,10 @@ Grafana.
   `frontend/`, `admin/`, containers, CI, Helm and Terraform
 - Role: the developer decided the password policy and its error code, serving the frontend from
   the same ALB instead of an external host, and fixing Terraform's secret generator instead of
-  loosening the app's secret rule. Before any code is written, the AI lays out the options in a
-  comparison table and the developer picks one; only that one is built. The developer reads and
-  approves every change, and results are checked with tests, CI and reproductions in real
-  environments (AWS/EKS, a real ClamAV)
+  loosening the app's secret rule. The AI lays out the options in a comparison table before any code
+  is written; the developer picks one, only that one is built, and the developer reads and approves
+  every change. Results are checked with tests, CI and reproductions in real environments (AWS/EKS,
+  a real ClamAV)
 - This README covers the whole repository. The backend sits at the repo root; the clients have
   their own READMEs ([frontend/](frontend/README.md), [admin/](admin/README.md))
 
@@ -42,18 +42,15 @@ whether it is up right now. To see the project work:
 ## In two minutes
 
 - **Two-phase upload.** A file is staged as `temp_…`, then promoted to `granted_…` inside one DB
-  transaction: if the move fails, the insert rolls back
-  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md)). The one unprotected window is a commit
-  that fails after a successful move; it leaves an orphaned `granted_` file that a scheduled sweep
-  reports ([ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md)). Submitting the same upload
-  twice replays the result instead of failing
-  ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md)).
-- **No static file serving.** Stored bytes are only reachable through `GET /file/:id/content`,
-  which checks the file's visibility first ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md)).
+  transaction, so a failed move rolls the insert back. The only unprotected window is a commit that
+  fails after a successful move: it leaves an orphaned `granted_` file that a scheduled sweep
+  reports. Submitting the same upload twice replays the result instead of failing
+  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md), [0019](docs/ADR/0019-upload-claim-idempotency.md), [0051](docs/ADR/0051-orphaned-granted-file-reclaim.md)).
+- **No static file serving.** Stored bytes are reachable only through `GET /file/:id/content`, which
+  checks the file's visibility first ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md)).
 - **Refresh-token rotation with reuse detection.** The server keeps only a hash of the current
   refresh token ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md)).
-- **Fail-closed malware scan** on every upload, before anything is stored
-  ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md)).
+- **Fail-closed malware scan** on every upload, before anything is stored ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md)).
 - **Checked:** the backend unit tests, a backend E2E suite on a real PostgreSQL and the Playwright
   E2E of both clients pass (counts and dates in [Testing and CI](#testing-and-ci)). 68 ADRs record
   the decisions.
@@ -113,38 +110,35 @@ local stack and sample data as above.
 ## Features
 
 - **Authentication** — Basic-token register/sign-in and a dual-secret JWT access/refresh pair with a
-  `type` claim ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md)); the refresh token is an httpOnly cookie that rotates on every
-  refresh, with reuse detection ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md))
-- **Two-phase upload** — `temp_` → `granted_` state machine with the file move inside the DB
-  transaction ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md)). The attach filename is a one-shot claim token: the same user
-  resubmitting gets the file back (200), anyone else gets 409 `FILE_ALREADY_CLAIMED`
-  ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md))
-- **RBAC + audit log** — `user`/`admin`/`superadmin` roles, ownership checks that extend to "self or
-  admin", role changes and deletes written to an audit log ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.md), layered on [ADR 0007](docs/ADR/0007-ownership-checks-without-rbac.md))
-- **Boundary validation** — global `ValidationPipe` (`whitelist` + `forbidNonWhitelisted`);
-  serialized entities never leak `password`
-- **Rate limiting** — 100 requests/minute per route (keyed on controller + handler + client IP),
-  5/minute on `POST /auth/register`, `signin` and `token/refresh`, 15/minute on
-  `POST /upload/attach`; health and metrics probes are exempt ([ADR 0053](docs/ADR/0053-global-rate-limiting.md), [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
-- **Swagger** — API documentation and manual test bench at `/doc`
-- **Upload malware scanning** — ClamAV, fail-closed, before anything is stored ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md))
+  `type` claim; the refresh token is an httpOnly cookie that rotates on every refresh, with reuse
+  detection ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md), [0012](docs/ADR/0012-refresh-cookie-rotation.md))
+- **Two-phase upload** — `temp_` → `granted_` with the file move inside the DB transaction. The
+  attach filename is a one-shot claim token: the same user resubmitting gets the file back (200),
+  anyone else gets 409 `FILE_ALREADY_CLAIMED` ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md), [0019](docs/ADR/0019-upload-claim-idempotency.md))
+- **Malware scanning** — ClamAV, fail-closed, before anything is stored ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md))
 - **File visibility** — `public`, `private` (default) or `unlisted` (a share link whose token can be
   rotated or expire); bytes are served only through the access-checked `GET /file/:id/content`
-  ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md), [ADR 0026](docs/ADR/0026-file-visibility-implementation.md))
+  ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md), [0026](docs/ADR/0026-file-visibility-implementation.md))
 - **Storage port** — a `FileStorage` interface with local-disk and S3 adapters (`STORAGE_DRIVER`);
-  under S3 a passing access check redirects to a short-lived presigned URL ([ADR 0029](docs/ADR/0029-storage-port-adapter.md),
-  [ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.md))
+  under S3 a passing access check redirects to a short-lived presigned URL ([ADR 0029](docs/ADR/0029-storage-port-adapter.md), [0036](docs/ADR/0036-s3-presigned-content-redirect.md))
 - **Board** — posts with an optional attached file, flat comments, and one search, filter, sort and
-  pagination contract ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md), [ADR 0023](docs/ADR/0023-board-domain-schema.md))
+  pagination contract ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md), [0023](docs/ADR/0023-board-domain-schema.md))
+- **RBAC + audit log** — `user`/`admin`/`superadmin` roles, ownership checks that extend to "self or
+  admin", role changes and deletes written to an audit log ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.md), layered on [0007](docs/ADR/0007-ownership-checks-without-rbac.md))
 - **Account and file lifecycle** — account deletion cascades only on explicit confirmation and is
-  irreversible by design ([ADR 0020](docs/ADR/0020-account-deletion-cascade.md)); moving a file to another owner needs the recipient's
-  consent: propose, accept, reject or cancel ([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.md))
-- **Hardening** — security response headers ([ADR 0055](docs/ADR/0055-helmet-security-headers.md)), a strength check on token secrets and
-  passwords, a non-root image ([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.md)), a default-deny NetworkPolicy ([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.md)) and the
-  Ingress path allow-list below
-- **Operations** — liveness/readiness endpoints ([ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.md)), Prometheus metrics with Grafana
-  ([ADR 0047](docs/ADR/0047-observability-prometheus-grafana.md)), and scheduled sweeps for orphaned `temp_` files ([ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.md)) and orphaned
-  `granted_` files, which only reports until deletion is turned on ([ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md))
+  irreversible by design ([ADR 0020](docs/ADR/0020-account-deletion-cascade.md)); moving a file to another owner needs the recipient's consent:
+  propose, accept, reject or cancel ([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.md))
+- **Hardening** — global `ValidationPipe` (`whitelist` + `forbidNonWhitelisted`), no `password` in
+  serialized entities, strength checks on token secrets and passwords, security response headers,
+  a non-root image, a default-deny NetworkPolicy and the Ingress path allow-list below
+  ([ADR 0055](docs/ADR/0055-helmet-security-headers.md), [0030](docs/ADR/0030-container-non-root-and-arch-stance.md), [0056](docs/ADR/0056-networkpolicy-east-west-restriction.md), [0058](docs/ADR/0058-ingress-path-allowlist.md))
+- **Rate limiting** — 100 requests/minute per route (keyed on controller + handler + client IP),
+  5/minute on `POST /auth/register`, `signin` and `token/refresh`, 15/minute on
+  `POST /upload/attach`; health and metrics probes are exempt ([ADR 0053](docs/ADR/0053-global-rate-limiting.md), [0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
+- **Operations** — liveness/readiness endpoints, Prometheus metrics with Grafana, and scheduled
+  sweeps for orphaned `temp_` and `granted_` files; the latter only reports until deletion is turned
+  on ([ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.md), [0047](docs/ADR/0047-observability-prometheus-grafana.md), [0018](docs/ADR/0018-orphan-temp-file-cleanup.md), [0051](docs/ADR/0051-orphaned-granted-file-reclaim.md))
+- **Swagger** — API documentation and manual test bench at `/doc`
 - **React client (`frontend/`)** — sign-in and register, the post board with comments, a preview-grid
   file board, playback by media type, visibility and share-link management, ownership transfer and
   account deletion. The upload form sends up to 15 files one by one with a progress bar per file
@@ -229,11 +223,9 @@ How the pieces meet at runtime, which the diagram leaves out:
   certificate to the ALB.
 - The ALB and the four workloads are not Terraform's: the Ingress and Helm create them.
 
-Backend modules, split by single responsibility: **Auth** (tokens), **User**, **File**
-(metadata and the visibility gate), **Post**, **Comment**, **Upload** (staging), **AuditLog**,
-plus operational modules — **Storage** (the `FileStorage` port with local-disk and S3 adapters),
-**TempCleanup** (orphan sweep), **Health** and **Metrics**. See
-[ARCHITECTURE.md](docs/ARCHITECTURE.md) for the request and data flow.
+The backend is one NestJS module per concern (auth, user, file, post, comment, upload, storage, audit
+log) plus operational modules for the sweeps, health and metrics. The module map and the request and
+data flow are in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Tech stack
 
@@ -325,7 +317,8 @@ is recreated with the new value, then promote the account by hand
 docker compose exec api node dist/scripts/promote-superadmin.js
 ```
 
-Notes:
+<details>
+<summary>Notes: ports, migrations, <code>.env.local</code></summary>
 
 - `db` publishes `${DB_PORT}` (5435), so host-run `pnpm test:e2e` and `pnpm migration:*` reach the
   same database. Stop any legacy `upload-board-pg` container first — it holds that port.
@@ -337,7 +330,12 @@ Notes:
   `.env.local`: `api` and `migrate` read it after `.env`
   ([ADR 0015](docs/ADR/0015-docker-and-compose.md) Addendum 2026-10-03).
 
+</details>
+
 ### Without Docker
+
+<details>
+<summary>Prerequisites and commands</summary>
 
 Prerequisites: Node.js 24 (see [.nvmrc](.nvmrc)), pnpm 10 via Corepack, PostgreSQL 16, and a
 reachable `clamd` — set `CLAMD_HOST`/`CLAMD_PORT` (default `clamav`/`3310`). Without a scanner,
@@ -358,7 +356,12 @@ pnpm test                         # unit tests
 pnpm run test:cov                 # coverage (only services are measured)
 ```
 
+</details>
+
 ### Environment variables
+
+<details>
+<summary>Required and common variables</summary>
 
 Required, validated by Joi at boot (a missing value fails fast): `ENV`, `DB_TYPE` (must be
 `postgres`), `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE`, `HASH_ROUNDS` (≥ 10),
@@ -372,7 +375,12 @@ Everything else is optional and has a default. The settings you are most likely 
 documented in `.env.example`. Leave `THROTTLE_ENABLED` at `true`; it exists only so the E2E
 suites can bypass rate limits.
 
+</details>
+
 ### Deploying to AWS / Kubernetes
+
+<details>
+<summary>How a deploy runs</summary>
 
 The backend, `frontend/` and `admin/` ship as one Helm release behind one ALB, with ClamAV as its
 own Deployment ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md),
@@ -384,6 +392,8 @@ every `apply`. Flags, prerequisites and the manual steps (domain and NS delegati
 External Secrets sync, turning `ingress.enabled` on) are in
 [k8s/infra/terraform/README.md](k8s/infra/terraform/README.md) and
 [k8s/helm/README.md](k8s/helm/README.md).
+
+</details>
 
 **CI does not deploy.** GitHub Actions only publishes the three images
 (`bluecode1775/sharenpo`, `-frontend`, `-admin`) to Docker Hub
@@ -457,17 +467,56 @@ with a `message` array; when `ENV=dev` a `stack` field is included.
 
 ## Troubleshooting and decisions
 
-Problems that were measured or reproduced, and where each is recorded in full. The "Why this fix"
-column quotes the recorded reason where it fits in one line; for the others, see the ADR in the
-last column.
+Problems that were measured or reproduced, and where each is recorded in full. A reason for the fix
+is given only where the record states one.
 
-| Problem | Cause | Fix | Why this fix | Result |
-|---|---|---|---|---|
-| `docker stop` took 10.4 s and the container exited 137 | `node` is PID 1 and ignored SIGTERM, so the DB pool was never closed | `app.enableShutdownHooks([], { useProcessExit: true })` in [backend/main.ts](backend/main.ts) | The plain call only exits when nothing keeps the event loop alive; with a leftover timer it still took 10.4 s, the option 0.4 s. The option stops a future leaked handle (likely `S3Storage`) from silently bringing the slow shutdown back | About 0.4 s and exit 0 in a local container and a pod on a local `kind` cluster; not measured on EKS ([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.md)) |
-| An upload passed the malware scan when the scanner gave no verdict | `clamscan` resolves with `isInfected: null` ("unable to scan") instead of rejecting, and the code read that as clean | A non-boolean verdict now counts as a failed attempt: retried once, then 503 `UPLOAD_SCAN_UNAVAILABLE` | No verdict is not a clean verdict, so it follows the same fail-closed rule as an unreachable scanner and reuses the existing retry and 503 path. Reproduced against a real `clamd` first: a restart or crash mid-scan is enough to trigger it | Reproduced against a real `clamd`, and re-checked after the fix ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md) addenda 2026-10-03 and 2026-10-12) |
-| The backend crash-looped on the first AWS deploy after the secret-strength rule | Terraform generated the JWT secrets as 48 alphanumeric characters; the app's Joi rule requires a symbol | The generator now guarantees one of each character class | — | After a re-apply the backend booted and signed in ([ADR 0064](docs/ADR/0064-jwt-secret-generation-joi-strength-rule.md)) |
-| `GET /file` paged non-deterministically | The query had no `ORDER BY`, so offset paging could repeat or skip rows | Default `createdAt DESC` with `id` as a tiebreaker; sort fields map through a fixed table, so a client string never becomes a column name | — | One list contract shared by files and posts ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md)) |
-| The list-query indexes ADR 0021 had deferred | ADR 0021 deferred them until the tables reached 10,000 rows, with nothing measured yet | Measured at 10,000 rows each in `file_entity` and `post_entity`, then adopted all of them | The response-time targets already passed, but the queries got 1.6–70× faster for about 2.16 MB of indexes | Six indexes in place ([ADR 0049](docs/ADR/0049-performance-capacity-criteria.md)) |
+**`docker stop` took 10.4 s and the container exited 137**
+([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.md))
+
+- **Cause:** `node` is PID 1 and ignored SIGTERM, so the DB pool was never closed.
+- **Fix:** `app.enableShutdownHooks([], { useProcessExit: true })` in [backend/main.ts](backend/main.ts).
+- **Why this fix:** the plain call only exits when nothing keeps the event loop alive; with a leftover
+  timer it still took 10.4 s, the option 0.4 s. The option also stops a future leaked handle (likely
+  `S3Storage`) from silently bringing the slow shutdown back.
+- **Result:** about 0.4 s and exit 0 in a local container and a pod on a local `kind` cluster; not
+  measured on EKS.
+
+**An upload passed the malware scan when the scanner gave no verdict**
+([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md) addenda 2026-10-03 and 2026-10-12)
+
+- **Cause:** `clamscan` resolves with `isInfected: null` ("unable to scan") instead of rejecting, and
+  the code read that as clean.
+- **Fix:** a non-boolean verdict now counts as a failed attempt: retried once, then 503
+  `UPLOAD_SCAN_UNAVAILABLE`.
+- **Why this fix:** no verdict is not a clean verdict, so it follows the same fail-closed rule as an
+  unreachable scanner and reuses the existing retry and 503 path. It was reproduced against a real
+  `clamd` first: a restart or crash mid-scan is enough to trigger it.
+- **Result:** reproduced against a real `clamd`, and re-checked after the fix.
+
+**The backend crash-looped on the first AWS deploy after the secret-strength rule**
+([ADR 0064](docs/ADR/0064-jwt-secret-generation-joi-strength-rule.md))
+
+- **Cause:** Terraform generated the JWT secrets as 48 alphanumeric characters; the app's Joi rule
+  requires a symbol.
+- **Fix:** the generator now guarantees one of each character class.
+- **Result:** after a re-apply the backend booted and signed in.
+
+**`GET /file` paged non-deterministically**
+([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md))
+
+- **Cause:** the query had no `ORDER BY`, so offset paging could repeat or skip rows.
+- **Fix:** default `createdAt DESC` with `id` as a tiebreaker; sort fields map through a fixed table, so
+  a client string never becomes a column name.
+- **Result:** one list contract shared by files and posts.
+
+**The list-query indexes ADR 0021 had deferred**
+([ADR 0049](docs/ADR/0049-performance-capacity-criteria.md))
+
+- **Cause:** ADR 0021 deferred them until the tables reached 10,000 rows, with nothing measured yet.
+- **Fix:** measured at 10,000 rows each in `file_entity` and `post_entity`, then adopted all of them.
+- **Why this fix:** the response-time targets already passed, but the queries got 1.6–70× faster for
+  about 2.16 MB of indexes.
+- **Result:** six indexes in place.
 
 ## How this was built
 
@@ -497,6 +546,9 @@ the same kind of mistake happened again, that is recorded in the same place.
 
 ### Example 1. Directing the AI: malware scanning for uploads
 
+<details>
+<summary>The brief, the judgments recorded in ADR 0059, and the hole found later</summary>
+
 The developer told the AI what to cover: what `clamd` is, how the earlier predecessor package
 (`clamdjs`) differs from the one in use now (`clamscan`) with both researched, each package's safety
 and dependencies, and where to implement it and where it is used. The judgments that ended up in
@@ -507,7 +559,12 @@ unreachable scanner means the upload is refused, not passed. A later dependency 
 when the scanner gave no verdict (`null`), the file was treated as clean. It was reproduced against a
 real `clamd` and fixed, and the steps are in the same ADR's addenda.
 
+</details>
+
 ### Example 2. Correcting the AI's mistakes
+
+<details>
+<summary>Two cases where the AI's premise or diagnosis was wrong</summary>
 
 - **Node group design** ([ADR 0043](docs/ADR/0043-terraform-project-adaptation.md)): the AI put
   forward a wrong premise from memory, and the developer's first answer rested on it. The AI noticed
@@ -520,7 +577,12 @@ real `clamd` and fixed, and the steps are in the same ADR's addenda.
   (`U+FFFD`) and attributed it to the client shell's encoding. The original text was unrecoverable, so
   rewritten text was applied after the developer confirmed it.
 
+</details>
+
 ### Cases where an existing rule was broken
+
+<details>
+<summary>The 44-file deletion and the ranking made from stale evidence</summary>
 
 - **44 files deleted (2026-09-05).** [ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md)
   had already written down that with no DB history every file reads as an orphan, yet a delete-mode
@@ -530,6 +592,8 @@ real `clamd` and fixed, and the steps are in the same ADR's addenda.
   target, the count and the recovery path before running.
 - **Ranking work from stale evidence (2026-10-14..16).** A rule that evidence expires already
   existed and was broken, so the case was added to that same rule.
+
+</details>
 
 One developer reviews all of it; there is no second reviewer.
 
@@ -566,6 +630,9 @@ Open items, each recorded where it was found; the full list is in
   undecided schema change, [ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.md) D5).
 - **Registration reveals that an email is taken** (`AUTH_EMAIL_TAKEN`). Weighed and accepted; the
   5/minute limit is the only mitigation ([ROADMAP.md](docs/ROADMAP.md) §7).
+<details>
+<summary>Other open items</summary>
+
 - **One replica per workload, so not highly available.** Rate-limit counters live in each instance's
   memory; more replicas need shared counter storage ([ADR 0053](docs/ADR/0053-global-rate-limiting.md)).
 - **Public and unlisted media does not render in the local dev setup.** The client (`:5173`) and
@@ -588,6 +655,8 @@ Open items, each recorded where it was found; the full list is in
 - **Dependencies.** `pnpm audit --prod` found no known vulnerabilities on 2026-10-27, after two high
   advisories published 2026-10-23 (`body-parser`, `multer`) were fixed by raising their `package.json`
   overrides. Plain `pnpm audit` reports 67 (3 critical), all in build and test tooling.
+
+</details>
 
 Not built yet, in the order the roadmap records them: more than one replica together with
 Redis-backed rate-limit storage and a PodDisruptionBudget (decided, not started); binding an

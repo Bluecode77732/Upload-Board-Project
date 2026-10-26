@@ -22,8 +22,8 @@
   `frontend/`, `admin/`, 컨테이너, CI, Helm, Terraform
 - 역할: 비밀번호 정책과 에러 코드, 프론트엔드를 외부 호스팅 대신 같은 ALB에서 서빙하는 것, 앱의
   시크릿 규칙을 완화하는 대신 Terraform 생성기를 고치는 것은 개발자가 결정했습니다. 코드를 쓰기
-  전에 AI가 선택지를 비교표로 보여 주면 개발자가 하나를 고르고, 그것만 구현합니다. 개발자가 모든
-  변경을 읽고 승인하며, 결과는 테스트와 CI, 그리고 실제 환경(AWS/EKS, 실제 ClamAV)에서의 재현으로
+  전에 AI가 선택지를 비교표로 보여 주면 개발자가 하나를 고르고, 그것만 구현합니다. 개발자는 모든
+  변경을 읽고 승인합니다. 결과는 테스트, CI, 실제 환경(AWS/EKS, 실제 ClamAV)에서의 재현으로
   확인합니다
 - 이 README는 저장소 전체를 다룹니다. 백엔드는 저장소 루트에 있고, 클라이언트에는 각자의
   README가 있습니다([frontend/](frontend/README.ko.md), [admin/](admin/README.ko.md))
@@ -41,18 +41,15 @@
 ## 2분 요약
 
 - **2단계 업로드.** 파일을 `temp_…`로 임시 저장한 뒤 하나의 DB 트랜잭션 안에서 `granted_…`로
-  승격하므로, 이동이 실패하면 insert가 롤백됩니다
-  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md)). 보호되지 않는 틈은 이동에 성공한 뒤
-  커밋이 실패하는 경우 하나뿐이며, 이때 고아 `granted_` 파일이 남고 주기적 정리 작업이 이를
-  보고합니다([ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.ko.md)). 같은 업로드를 두 번
-  제출하면 실패하지 않고 앞선 결과를 그대로 돌려줍니다
-  ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.ko.md)).
+  승격하므로, 이동이 실패하면 insert가 롤백됩니다. 보호되지 않는 틈은 이동에 성공한 뒤 커밋이
+  실패하는 경우 하나뿐이며, 이때 고아 `granted_` 파일이 남고 주기적 정리 작업이 이를 보고합니다.
+  같은 업로드를 두 번 제출하면 실패하지 않고 앞선 결과를 그대로 돌려줍니다
+  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md), [0019](docs/ADR/0019-upload-claim-idempotency.ko.md), [0051](docs/ADR/0051-orphaned-granted-file-reclaim.ko.md)).
 - **정적 파일 서빙 없음.** 저장된 바이트는 공개 범위를 먼저 검사하는 `GET /file/:id/content`로만
   나갑니다([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md)).
 - **재사용을 감지하는 리프레시 토큰 교체.** 서버는 현재 리프레시 토큰의 해시만 보관합니다
   ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.ko.md)).
-- **저장 전 fail-closed 악성코드 스캔.** 모든 업로드에 적용합니다
-  ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)).
+- **저장 전 fail-closed 악성코드 스캔.** 모든 업로드에 적용합니다([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)).
 - **확인한 것:** 백엔드 단위 테스트, 실제 PostgreSQL을 쓰는 백엔드 E2E, 두 클라이언트의
   Playwright E2E가 모두 통과합니다(건수와 날짜는 [테스트와 CI](#테스트와-ci)). 결정을 기록한
   ADR은 68개입니다.
@@ -112,40 +109,37 @@
 ## 기능
 
 - **인증** — HTTP Basic 토큰으로 가입·로그인하고, `type` 클레임이 있는 JWT 액세스·리프레시 토큰
-  쌍을 서로 다른 시크릿으로 서명해 발급합니다([ADR 0002](docs/ADR/0002-dual-secret-token-pair.ko.md)). 리프레시 토큰은 httpOnly 쿠키로
-  오가며 갱신할 때마다 교체되고, 재사용을 감지합니다([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.ko.md))
-- **2단계 업로드** — `temp_` → `granted_` 상태 머신. 파일 이동이 DB 트랜잭션 안에서 실행됩니다
-  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md)). attach 단계가 돌려준 파일명은 한 번만 쓸 수 있는 청구(claim)
-  토큰입니다. 같은 사용자가 다시 보내면 기존 파일을 돌려주고(200), 다른 사용자는 409
-  `FILE_ALREADY_CLAIMED`를 받습니다([ADR 0019](docs/ADR/0019-upload-claim-idempotency.ko.md))
-- **RBAC + 감사 로그** — `user`/`admin`/`superadmin` 역할, "본인 또는 admin"으로 확장된 소유권 검사,
-  감사 로그에 남는 역할 변경과 삭제([ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md)은 [ADR 0007](docs/ADR/0007-ownership-checks-without-rbac.ko.md)을 바탕으로 합니다)
-- **경계 검증** — 전역 `ValidationPipe`(`whitelist` + `forbidNonWhitelisted`), 직렬화된 엔티티에는
-  `password`가 들어가지 않습니다
-- **요청 횟수 제한** — 라우트마다 따로 기본 분당 100회(`@nestjs/throttler`가 컨트롤러+핸들러+클라이언트
-  IP를 키로 씁니다), `POST /auth/register`·`signin`·`token/refresh`는 분당 5회,
-  `POST /upload/attach`는 분당 15회이며 health/metrics 프로브는 제외됩니다([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md),
-  [ADR 0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md))
-- **Swagger** — `/doc`의 API 문서이자 수동 테스트 도구
-- **업로드 악성코드 스캔** — ClamAV로 저장하기 전에 검사하고, 스캐너를 쓸 수 없으면 막는
-  fail-closed로 동작합니다([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md))
+  쌍을 서로 다른 시크릿으로 서명해 발급합니다. 리프레시 토큰은 httpOnly 쿠키로 오가며 갱신할
+  때마다 교체되고 재사용을 감지합니다([ADR 0002](docs/ADR/0002-dual-secret-token-pair.ko.md), [0012](docs/ADR/0012-refresh-cookie-rotation.ko.md))
+- **2단계 업로드** — `temp_` → `granted_` 상태 머신. 파일 이동이 DB 트랜잭션 안에서 실행됩니다.
+  attach 단계가 돌려준 파일명은 한 번만 쓸 수 있는 청구(claim) 토큰입니다. 같은 사용자가 다시
+  보내면 기존 파일을 돌려주고(200), 다른 사용자는 409 `FILE_ALREADY_CLAIMED`를 받습니다
+  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md), [0019](docs/ADR/0019-upload-claim-idempotency.ko.md))
+- **악성코드 스캔** — ClamAV로 저장하기 전에 검사하고, 스캐너를 쓸 수 없으면 막는 fail-closed로
+  동작합니다([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md))
 - **파일 공개 범위** — `public`, `private`(기본값), `unlisted`(토큰을 재발급하거나 만료를 둘 수 있는
-  공유 링크). 바이트는 접근 검사를 거치는 `GET /file/:id/content`로만 서빙됩니다([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md),
-  [ADR 0026](docs/ADR/0026-file-visibility-implementation.ko.md))
+  공유 링크). 바이트는 접근 검사를 거치는 `GET /file/:id/content`로만 서빙됩니다
+  ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md), [0026](docs/ADR/0026-file-visibility-implementation.ko.md))
 - **스토리지 포트** — `FileStorage` 인터페이스와 로컬 디스크·S3 어댑터(`STORAGE_DRIVER`). S3에서는
-  접근 검사를 통과하면 수명이 짧은 presigned URL로 리다이렉트합니다([ADR 0029](docs/ADR/0029-storage-port-adapter.ko.md),
-  [ADR 0036](docs/ADR/0036-s3-presigned-content-redirect.ko.md))
+  접근 검사를 통과하면 수명이 짧은 presigned URL로 리다이렉트합니다([ADR 0029](docs/ADR/0029-storage-port-adapter.ko.md), [0036](docs/ADR/0036-s3-presigned-content-redirect.ko.md))
 - **게시판** — 파일을 선택적으로 첨부하는 게시글, 평면 댓글, 하나의 검색·필터·정렬·페이지네이션
-  규약([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.ko.md), [ADR 0023](docs/ADR/0023-board-domain-schema.ko.md))
+  규약([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.ko.md), [0023](docs/ADR/0023-board-domain-schema.ko.md))
+- **RBAC + 감사 로그** — `user`/`admin`/`superadmin` 역할, "본인 또는 admin"으로 확장된 소유권 검사,
+  감사 로그에 남는 역할 변경과 삭제([ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md)은 [0007](docs/ADR/0007-ownership-checks-without-rbac.ko.md)을 바탕으로 합니다)
 - **계정과 파일의 수명 주기** — 계정 삭제는 명시적으로 확인했을 때만 연쇄 삭제되고 설계상 되돌릴
   수 없습니다([ADR 0020](docs/ADR/0020-account-deletion-cascade.ko.md)). 파일의 소유자를 바꾸려면 받는 사람의 동의가 필요합니다 — 제안, 수락,
   거절, 취소([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.ko.md))
-- **보안 강화** — 보안 응답 헤더([ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md)), 토큰 시크릿과 비밀번호의 강도 검사, non-root
-  이미지([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.ko.md)), 기본 거부(default-deny) 방식의 NetworkPolicy([ADR 0056](docs/ADR/0056-networkpolicy-east-west-restriction.ko.md)), 아래에 설명한
-  Ingress 경로 허용 목록
-- **운영** — liveness/readiness 엔드포인트([ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.ko.md)), Grafana를 곁들인 Prometheus 메트릭
-  ([ADR 0047](docs/ADR/0047-observability-prometheus-grafana.ko.md)), 고아 `temp_` 파일([ADR 0018](docs/ADR/0018-orphan-temp-file-cleanup.ko.md))과 고아 `granted_` 파일의 주기적 정리 — 후자는
-  운영자가 삭제를 켜기 전까지 보고만 합니다([ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.ko.md))
+- **보안 강화** — 전역 `ValidationPipe`(`whitelist` + `forbidNonWhitelisted`), 직렬화된 엔티티에
+  `password` 미포함, 토큰 시크릿과 비밀번호의 강도 검사, 보안 응답 헤더, non-root 이미지,
+  기본 거부(default-deny) 방식의 NetworkPolicy, 아래에 설명한 Ingress 경로 허용 목록
+  ([ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md), [0030](docs/ADR/0030-container-non-root-and-arch-stance.ko.md), [0056](docs/ADR/0056-networkpolicy-east-west-restriction.ko.md), [0058](docs/ADR/0058-ingress-path-allowlist.ko.md))
+- **요청 횟수 제한** — 라우트마다 따로 기본 분당 100회(`@nestjs/throttler`가 컨트롤러+핸들러+클라이언트
+  IP를 키로 씁니다), `POST /auth/register`·`signin`·`token/refresh`는 분당 5회,
+  `POST /upload/attach`는 분당 15회이며 health/metrics 프로브는 제외됩니다([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md), [0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md))
+- **운영** — liveness/readiness 엔드포인트, Grafana를 곁들인 Prometheus 메트릭, 고아 `temp_` 파일과
+  고아 `granted_` 파일의 주기적 정리 — 후자는 운영자가 삭제를 켜기 전까지 보고만 합니다
+  ([ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.ko.md), [0047](docs/ADR/0047-observability-prometheus-grafana.ko.md), [0018](docs/ADR/0018-orphan-temp-file-cleanup.ko.md), [0051](docs/ADR/0051-orphaned-granted-file-reclaim.ko.md))
+- **Swagger** — `/doc`의 API 문서이자 수동 테스트 도구
 - **React 클라이언트(`frontend/`)** — 로그인과 가입, 댓글이 있는 게시판, 미리보기 그리드 파일 보드,
   미디어 종류별 재생, 공개 범위와 공유 링크 관리, 소유권 이전, 계정 삭제. 업로드 폼은 파일을 최대
   15개까지 파일별 진행률과 함께 하나씩 보냅니다([ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.ko.md)). UI는 영어·한국어, 라이트·다크
@@ -228,10 +222,8 @@ flowchart LR
   붙입니다.
 - ALB와 워크로드 네 개는 Terraform이 만들지 않습니다. Ingress와 Helm이 만듭니다.
 
-백엔드 모듈은 단일 책임 기준으로 나뉩니다. **Auth**(토큰), **User**, **File**(메타데이터와 공개
-범위 검사), **Post**, **Comment**, **Upload**(임시 저장), **AuditLog**가 있고, 운영용 모듈로
-**Storage**(로컬 디스크와 S3 어댑터를 가진 `FileStorage` 포트), **TempCleanup**(고아 파일
-정리), **Health**, **Metrics**가 있습니다. 요청과 데이터 흐름은
+백엔드는 관심사마다 NestJS 모듈 하나(auth, user, file, post, comment, upload, storage, audit log)와
+정리 작업, health, metrics를 위한 운영용 모듈로 이루어집니다. 모듈 구성과 요청·데이터 흐름은
 [ARCHITECTURE.ko.md](docs/ARCHITECTURE.ko.md)를 참고하세요.
 
 ## 기술 스택
@@ -323,7 +315,8 @@ Swagger에서 호출할 수 있습니다), 그 이메일을 `.env`의 `SUPERADMI
 docker compose exec api node dist/scripts/promote-superadmin.js
 ```
 
-참고:
+<details>
+<summary>참고: 포트, 마이그레이션, <code>.env.local</code></summary>
 
 - `db` 서비스가 `${DB_PORT}`(5435)를 노출하므로, 호스트에서 돌리는 `pnpm test:e2e`와
   `pnpm migration:*`도 같은 데이터베이스에 접속합니다. 그 포트를 쓰는 레거시 `upload-board-pg`
@@ -337,7 +330,12 @@ docker compose exec api node dist/scripts/promote-superadmin.js
   `migrate`가 `.env` 뒤에 이 파일을 읽습니다
   ([ADR 0015](docs/ADR/0015-docker-and-compose.ko.md) 2026-10-03 추가 기록).
 
+</details>
+
 ### Docker 없이 실행
+
+<details>
+<summary>사전 요건과 명령</summary>
 
 사전 요건: Node.js 24([.nvmrc](.nvmrc) 참고), Corepack 기반 pnpm 10, PostgreSQL 16, 그리고 접속할 수
 있는 `clamd` — `CLAMD_HOST`/`CLAMD_PORT`(기본 `clamav`/`3310`)로 지정합니다. 스캐너가 없으면
@@ -358,7 +356,12 @@ pnpm test                         # 단위 테스트
 pnpm run test:cov                 # 커버리지 (서비스만 측정)
 ```
 
+</details>
+
 ### 환경변수
+
+<details>
+<summary>필수 변수와 자주 바꾸는 변수</summary>
 
 필수 항목은 부팅 시 Joi가 검증하며, 빠지면 즉시 실패합니다. `ENV`, `DB_TYPE`(반드시 `postgres`),
 `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE`, `HASH_ROUNDS`(10 이상),
@@ -371,7 +374,12 @@ pnpm run test:cov                 # 커버리지 (서비스만 측정)
 `.env.example`에 설명되어 있습니다. `THROTTLE_ENABLED`는 `true`로 두세요. E2E 스위트가 요청 횟수
 제한을 우회할 때만 쓰는 값입니다.
 
+</details>
+
 ### AWS / Kubernetes 배포
+
+<details>
+<summary>배포는 이렇게 진행합니다</summary>
 
 백엔드·`frontend/`·`admin/`은 하나의 ALB 뒤에서 하나의 Helm 릴리스로 배포되고, ClamAV는 별도
 Deployment로 함께 배포됩니다([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.ko.md),
@@ -383,6 +391,8 @@ Deployment로 함께 배포됩니다([ADR 0060](docs/ADR/0060-frontend-same-alb-
 `ingress.enabled` 켜기)는
 [k8s/infra/terraform/README.md](k8s/infra/terraform/README.ko.md)와
 [k8s/helm/README.md](k8s/helm/README.ko.md)에 있습니다.
+
+</details>
 
 **CI는 배포하지 않습니다.** GitHub Actions는 세 이미지(`bluecode1775/sharenpo`,
 `-frontend`, `-admin`)를 Docker Hub에 발행할 뿐이고
@@ -456,16 +466,50 @@ Authorize 창이 열리는 것까지는 브라우저로 확인했지만, 그 안
 
 ## 트러블슈팅과 결정
 
-측정하거나 재현한 문제와, 그 전체 기록이 있는 위치입니다. "선택 이유" 열에는 기록된 이유 중 한 줄로
-옮길 수 있는 것을 적었고, 비어 있는 칸은 마지막 열의 ADR을 보세요.
+측정하거나 재현한 문제와, 그 전체 기록이 있는 위치입니다. 선택 이유는 기록에 적힌 것만 적었습니다.
 
-| 문제 | 원인 | 해결 | 선택 이유 | 결과 |
-|---|---|---|---|---|
-| `docker stop`이 10.4초 걸리고 컨테이너가 종료 코드 137로 끝남 | `node`가 PID 1이라 SIGTERM을 무시했고, 그래서 DB 풀이 닫히지 않았음 | [backend/main.ts](backend/main.ts)에 `app.enableShutdownHooks([], { useProcessExit: true })` 추가 | 일반 호출은 이벤트 루프를 붙잡는 것이 하나라도 남으면 종료되지 않음. 타이머를 남겨 두면 10.4초, 옵션을 쓰면 0.4초. 이후 핸들이 새도(유력 후보는 `S3Storage`) 느린 종료가 조용히 돌아오지 않게 함 | 로컬 컨테이너와 로컬 `kind` 클러스터의 파드에서 약 0.4초, 종료 코드 0. EKS에서는 측정하지 않음([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md)) |
-| 스캐너가 판정을 내리지 못했는데도 업로드가 악성코드 스캔을 통과함 | `clamscan`이 reject하지 않고 `isInfected: null`("스캔 불가")로 resolve하는데, 코드가 이를 정상으로 읽었음 | boolean이 아닌 판정을 실패한 시도로 처리: 한 번 재시도한 뒤 503 `UPLOAD_SCAN_UNAVAILABLE` | 판정 불가는 정상이 아니므로 스캐너 불가와 같은 fail-closed 규칙을 쓰고 기존 재시도·503 경로를 재사용함. 실제 `clamd`로 먼저 재현했고, 스캔 중 재시작·종료만으로 발생함 | 실제 `clamd`로 재현했고 수정 뒤에도 다시 확인함([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md) 2026-10-03, 2026-10-12 추가 기록) |
-| 시크릿 강도 규칙이 생긴 뒤 첫 AWS 배포에서 백엔드가 crash-loop | Terraform이 JWT 시크릿을 영숫자 48자로 만들었는데, 앱의 Joi 규칙은 기호를 요구함 | 생성기가 문자 종류를 하나씩 반드시 포함하도록 수정 | — | 다시 apply한 뒤 백엔드가 부팅하고 로그인까지 됨([ADR 0064](docs/ADR/0064-jwt-secret-generation-joi-strength-rule.ko.md)) |
-| `GET /file`의 페이지 순서가 일정하지 않음 | 쿼리에 `ORDER BY`가 없어서 offset 페이지네이션이 행을 중복하거나 건너뛸 수 있었음 | 기본 `createdAt DESC`에 `id`를 tiebreaker로 추가. 정렬 필드는 고정된 표를 거쳐 매핑하므로 클라이언트 문자열이 컬럼명이 되지 않음 | — | 파일과 게시글이 하나의 목록 규약을 공유함([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.ko.md)) |
-| ADR 0021이 미뤄 둔 목록 쿼리 인덱스 | ADR 0021이 테이블이 10,000행에 이를 때까지 미뤄 두었고 측정한 값은 아직 없었음 | `file_entity`와 `post_entity`에 각각 10,000행을 넣고 측정한 뒤 전부 채택 | 응답시간 목표는 이미 통과였지만 쿼리가 1.6~70배 빨라지고 인덱스 비용은 합계 약 2.16 MB | 인덱스 6개 적용([ADR 0049](docs/ADR/0049-performance-capacity-criteria.ko.md)) |
+**`docker stop`이 10.4초 걸리고 컨테이너가 종료 코드 137로 끝남**
+([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md))
+
+- **원인:** `node`가 PID 1이라 SIGTERM을 무시했고, 그래서 DB 풀이 닫히지 않았음.
+- **해결:** [backend/main.ts](backend/main.ts)에 `app.enableShutdownHooks([], { useProcessExit: true })` 추가.
+- **선택 이유:** 일반 호출은 이벤트 루프를 붙잡는 것이 하나라도 남으면 종료되지 않음. 타이머를 남겨 두면
+  10.4초, 옵션을 쓰면 0.4초. 이후 핸들이 새도(유력 후보는 `S3Storage`) 느린 종료가 조용히 돌아오지
+  않게 함.
+- **결과:** 로컬 컨테이너와 로컬 `kind` 클러스터의 파드에서 약 0.4초, 종료 코드 0. EKS에서는 측정하지 않음.
+
+**스캐너가 판정을 내리지 못했는데도 업로드가 악성코드 스캔을 통과함**
+([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md) 2026-10-03, 2026-10-12 추가 기록)
+
+- **원인:** `clamscan`이 reject하지 않고 `isInfected: null`("스캔 불가")로 resolve하는데, 코드가 이를
+  정상으로 읽었음.
+- **해결:** boolean이 아닌 판정을 실패한 시도로 처리: 한 번 재시도한 뒤 503 `UPLOAD_SCAN_UNAVAILABLE`.
+- **선택 이유:** 판정 불가는 정상이 아니므로 스캐너 불가와 같은 fail-closed 규칙을 쓰고 기존 재시도·503
+  경로를 재사용함. 실제 `clamd`로 먼저 재현했고, 스캔 중 재시작·종료만으로 발생함.
+- **결과:** 실제 `clamd`로 재현했고 수정 뒤에도 다시 확인함.
+
+**시크릿 강도 규칙이 생긴 뒤 첫 AWS 배포에서 백엔드가 crash-loop**
+([ADR 0064](docs/ADR/0064-jwt-secret-generation-joi-strength-rule.ko.md))
+
+- **원인:** Terraform이 JWT 시크릿을 영숫자 48자로 만들었는데, 앱의 Joi 규칙은 기호를 요구함.
+- **해결:** 생성기가 문자 종류를 하나씩 반드시 포함하도록 수정.
+- **결과:** 다시 apply한 뒤 백엔드가 부팅하고 로그인까지 됨.
+
+**`GET /file`의 페이지 순서가 일정하지 않음**
+([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.ko.md))
+
+- **원인:** 쿼리에 `ORDER BY`가 없어서 offset 페이지네이션이 행을 중복하거나 건너뛸 수 있었음.
+- **해결:** 기본 `createdAt DESC`에 `id`를 tiebreaker로 추가. 정렬 필드는 고정된 표를 거쳐 매핑하므로
+  클라이언트 문자열이 컬럼명이 되지 않음.
+- **결과:** 파일과 게시글이 하나의 목록 규약을 공유함.
+
+**ADR 0021이 미뤄 둔 목록 쿼리 인덱스**
+([ADR 0049](docs/ADR/0049-performance-capacity-criteria.ko.md))
+
+- **원인:** ADR 0021이 테이블이 10,000행에 이를 때까지 미뤄 두었고 측정한 값은 아직 없었음.
+- **해결:** `file_entity`와 `post_entity`에 각각 10,000행을 넣고 측정한 뒤 전부 채택.
+- **선택 이유:** 응답시간 목표는 이미 통과였지만 쿼리가 1.6~70배 빨라지고 인덱스 비용은 합계 약 2.16 MB.
+- **결과:** 인덱스 6개 적용.
 
 ## 만든 방식
 
@@ -495,6 +539,9 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
 
 ### 예시 1. AI를 지휘한 경우: 업로드 악성코드 스캔
 
+<details>
+<summary>지시 내용, ADR 0059에 남은 판단, 나중에 발견한 허점</summary>
+
 개발자가 AI에게 지시한 범위는 `clamd`가 무엇인지, 예전에 쓰이던 전신 패키지(`clamdjs`)와 지금
 쓰이는 패키지(`clamscan`)의 구분과 두 패키지에 대한 조사, 두 패키지의 안전성과 의존성, 구현 위치와
 구현 코드, 사용처입니다. 그 결과 [ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)에 남은
@@ -505,7 +552,12 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
 정상으로 통과시키는 허점이 발견됐습니다. 실제 `clamd`로 재현한 뒤 고쳤고, 그 과정이 같은 ADR의 추가
 기록에 남아 있습니다.
 
+</details>
+
 ### 예시 2. AI의 허점을 바로잡은 경우
+
+<details>
+<summary>AI의 전제나 진단이 틀렸던 두 경우</summary>
 
 - **노드 구성 설계**([ADR 0043](docs/ADR/0043-terraform-project-adaptation.ko.md)): AI가 기억에 의존해
   틀린 전제를 내세웠고, 개발자의 첫 판단도 그 잘못된 정보를 바탕으로 나왔습니다. 이 오류는 AI가 다른
@@ -517,7 +569,12 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
   확인해 깨진 문자(`U+FFFD`)가 들어 있음을 찾았고, 원인을 클라이언트 셸의 인코딩으로 추정해 설명했습니다.
   원문은 복구할 수 없어 새로 쓴 문구를 개발자에게 확인받은 뒤 적용했습니다.
 
+</details>
+
 ### 기존 규칙을 어긴 사례
+
+<details>
+<summary>파일 44개 삭제와 낡은 근거로 우선순위를 매긴 일</summary>
 
 - **파일 44개 삭제 (2026-09-05).** [ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.ko.md)이
   "DB 이력이 없으면 전부 고아로 읽힌다"는 위험을 이미 적어 두었는데도, 삭제 모드로 실제 디렉터리를
@@ -527,6 +584,8 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
   복구 경로를 확인하도록 했습니다.
 - **낡은 근거로 우선순위를 매긴 일 (2026-10-14~16).** "근거에는 유효기간이 있다"는 규칙이 이미 있었는데도
   어긴 일이라서, 같은 규칙에 사례로 덧붙였습니다.
+
+</details>
 
 검토는 개발자 한 명이 전부 맡고 있으며, 별도의 검토자는 없습니다.
 
@@ -562,6 +621,9 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
   개를 붙이는 것은 아직 결정하지 않은 스키마 변경입니다([ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.ko.md) D5).
 - **회원가입은 이미 쓰는 이메일임을 알려 줍니다**(`AUTH_EMAIL_TAKEN`). 저울질한 끝에 그대로 두기로
   했고, 분당 5회 제한이 유일한 완화책입니다([ROADMAP.ko.md](docs/ROADMAP.ko.md) §7).
+<details>
+<summary>그 밖의 열린 항목</summary>
+
 - **워크로드마다 레플리카가 하나라 고가용성이 아닙니다.** 요청 횟수 카운터가 인스턴스 메모리에
   있으므로, 레플리카를 늘리려면 공유 카운터 저장소가 필요합니다
   ([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md)).
@@ -585,6 +647,8 @@ AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAU
 - **의존성.** 2026-10-27에 `pnpm audit --prod`는 알려진 취약점을 찾지 못했습니다. 2026-10-23에 공개된
   high 등급 advisory 두 건(`body-parser`, `multer`)은 `package.json` overrides의 버전을 올려 해결했습니다.
   일반 `pnpm audit`는 67건(심각 3건)이며 모두 빌드·테스트 도구에 있습니다.
+
+</details>
 
 아직 만들지 않은 것은 로드맵에 적힌 순서대로 다음과 같습니다. 레플리카를 둘 이상으로 늘리면서
 Redis 기반 요청 횟수 제한 저장소와 PodDisruptionBudget을 함께 두는 것(결정, 시작 전), 청구되기 전의

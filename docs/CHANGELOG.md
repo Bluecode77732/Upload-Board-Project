@@ -40,6 +40,23 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: README reading flow, measured by rendered length (2026-10-27)** — documentation only; no code, schema or
+  API changed, and no claim was changed or added. Measured before editing: Features had 26 ADR links in 42 lines,
+  four bullets ran past 500 characters, the troubleshooting table had cells of several hundred characters, and the
+  first install step sat at line 276. Changes: the role bullet, "In two minutes" and Features were tightened and
+  their ADR links moved to the end of each bullet (every ADR that was linked still is: 45 of 45); the five-column
+  troubleshooting table became five short entries with bold Cause, Fix, Why this fix and Result labels; secondary
+  material is folded into eight `<details>` blocks (notes, the no-Docker path, environment variables, how a deploy
+  runs, the two worked examples, the rule-breaking cases, and the lower-priority limitations); the module
+  paragraph under Architecture is one sentence plus a link to ARCHITECTURE.md. Raw lines went up (614 to 689 for
+  English) because the table became lists and each fold adds tag lines, so line count was the wrong measure.
+  Rendered scroll height, measured in Chromium with markdown-it 14.1.0 at 880 px wide, the four Mermaid blocks
+  replaced by a fixed 350 px placeholder and the folds closed: 18,350 px to 16,255 px (-11%), without counting the
+  AWS diagram, which is now about 300 px instead of about 930. By section: Quick Start 2,314 to 1,463 px, How this
+  was built 1,278 to 839, Troubleshooting 1,358 to 1,025, Known limitations 869 to 471, Features 868 to 819.
+  Not measured or not checked: the Korean README was not rendered or measured, only compared by structure and
+  numbers; GitHub's own renderer was not used for the folds (markdown-it follows CommonMark, which GitHub does
+  too, but the page was not opened after this change). The screenshots section, 3,800 px, is unchanged.
 - **Docs: README trimmed and corrected after a claim-by-claim check (2026-10-27)** — documentation only; no code,
   schema or API changed. Checked against the code and CI: the unit tests were rerun (20 suites, 282 tests), the E2E
   tests were counted (76) but not run, and the 68 ADRs, rate limits, error codes, stack versions, 14 screenshots and
