@@ -1739,6 +1739,15 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `JwtAuthGuard`, and relaxing the header for the content route would also cover unlisted files whose token
   travels in the URL. Revisit when explicitly requested. Also listed in README.md > Known limitations.
 
+- **README follow-ups and repository hygiene** — **recorded 2026-10-24; nothing scheduled.** Open after the
+  README review (details: CHANGELOG, Unreleased): (1) GitHub Secret scanning and push protection were
+  disabled when checked (2026-10-21); the developer enables them in the repository settings. (2)
+  `k8s/helm/values-prod.yaml` keeps the AWS account number and the RDS address; moving them to a gitignored
+  overlay would touch `deploy.sh` and was left. (3) `pnpm migration:run -- --fake` is still in `CLAUDE.md`,
+  `CONTRIBUTING` and older records, though the flag does not reach the command; fix `CONTRIBUTING` first, the
+  one a reader follows. (4) Not run: creating an admin account on the Docker path, an upload with ClamAV on
+  the non-Docker path. (5) `STYLE-PLAN.ko.md` mixes `-합니다` and `-다`. Revisit when explicitly requested.
+
 ## 8. Advisory notes
 
 Recorded criteria that inform but do not schedule work: privacy/compliance

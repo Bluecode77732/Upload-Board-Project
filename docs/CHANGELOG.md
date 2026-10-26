@@ -40,6 +40,36 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: README rewritten and checked against the code, repository identifiers masked (2026-10-21 – 2026-10-24)** —
+  documentation and `.env.example` only; no application code, schema or API changed.
+  README: restructured (status, "in two minutes", Mermaid diagrams including an AWS one drawn from the
+  Terraform code, project structure, a 10-route Core API table with Swagger for the rest, a
+  troubleshooting-and-decisions table, a role statement). Corrected against the code: the upload claim now
+  says what `FileService.uploadFile` does (insert, `storage.promote`, commit; a failed commit after a
+  successful move can leave an orphan, reported by the granted sweep, ADR 0051), the workload count, and the
+  manual External Secrets step in the AWS diagram. `.env.example`: placeholders replaced; the unedited file
+  fails Joi on `DB_PASSWORD`/`REFRESH_TOKEN_SECRET` on purpose, and with the three values filled in
+  validation passes (checked by booting the image).
+  Identifiers: the AWS account number is masked as `<AWS_ACCOUNT_ID>` in ten docs (ADR 0036, 0046, 0057,
+  ROADMAP, `k8s/helm/README`, each in both languages). `k8s/helm/values-prod.yaml` still holds the account
+  number (4 times) and the RDS address (once), because `deploy.sh` passes the file to `helm upgrade`; they
+  are identifiers, not credentials. History: no AWS access-key pattern, private key, `.env` or tfstate file;
+  a gitleaks scan of the full history (2026-10-22) gave 11 findings, all reviewed as false positives. No
+  history was rewritten.
+  Korean docs: `프런트엔드` → `프론트엔드` (13 files), `Addendum` → `추가 기록` (41 headings, 24 anchor links
+  updated, 2 already-broken links in this file fixed), two docs moved to the `-다` register; broken relative
+  links in ADR 0026 and one anchor here fixed (0 broken links across the docs afterwards).
+  Verified: the Docker Quick Start on a scratch copy of `HEAD`; on 2026-10-24 the non-Docker path and
+  `admin/` against a throwaway Postgres (migrations, `start:dev`, `/doc` 200, register 201, sign-in,
+  `GET /file` 200, upload 503 `UPLOAD_SCAN_UNAVAILABLE` with no `clamd`, `pnpm promote-superadmin`, admin
+  sign-in to `/dashboard`, CORS preflight from `:5174`). CI on `dev` for `7ce72f7`: all nine jobs passed. A
+  first admin run failed only because the scratch path passed Windows' 260-character limit (vite); a short
+  path worked. Not verified: creating an admin account on the Docker path, an upload with ClamAV on the
+  non-Docker path, sentence-by-sentence English/Korean parity of the README, and how GitHub renders the
+  dotted ALB edge. GitHub Secret scanning and push protection were disabled when checked (2026-10-21).
+  Left as is: `pnpm migration:run -- --fake` in `CLAUDE.md`, `CONTRIBUTING` (both languages), ADR 0006 and
+  older entries here — pnpm 10 passes the literal `--` on, so `--fake` does not reach the command as an
+  option; the README sentence was removed.
 - **Docs: shared-link behavior recorded after checking it (2026-10-20)** — documentation only; no code
   changed and nothing was decided. Public and unlisted file links, opened as a logged-out visitor and as a
   crawler on a local stack, behave like this: the file URLs open (image, video and audio, with seeking), the app

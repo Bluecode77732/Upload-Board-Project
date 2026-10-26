@@ -1640,6 +1640,15 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   토큰이 URL에 실리는 링크 공유 파일까지 함께 풀린다. 명시적으로 요청받을 때 다시 본다.
   README.ko.md > 알려진 한계에도 올려 두었다.
 
+- **README 후속 항목과 저장소 위생** — **2026-10-24 기록, 예정된 작업 없음.** README 점검 뒤에 남은 것
+  (자세한 내용은 CHANGELOG의 Unreleased): (1) GitHub Secret scanning과 push protection은 확인한 시점
+  (2026-10-21)에 꺼져 있었다. 개발자가 저장소 설정에서 직접 켠다. (2) `k8s/helm/values-prod.yaml`에
+  AWS 계정 번호와 RDS 주소가 있다. gitignore 처리한 오버레이로 옮기려면 `deploy.sh`를 건드려야 해서 그대로
+  두었다. (3) `pnpm migration:run -- --fake`가 `CLAUDE.md`, `CONTRIBUTING`, 옛 기록에 남아 있다. 이 플래그는
+  명령에 전달되지 않는다. 독자가 따라 하는 `CONTRIBUTING`부터 고친다. (4) 실행하지 않은 것: Docker 경로에서
+  admin 계정 만들기, 비도커 경로에서 ClamAV를 붙인 업로드. (5) `STYLE-PLAN.ko.md`에 `-합니다`와 `-다`가
+  섞여 있다. 명시적으로 요청받을 때 다시 본다.
+
 ## 8. Advisory 노트
 
 작업 일정에는 반영하지 않되 판단에 참고할 기준: 개인정보/컴플라이언스(삭제 정책,

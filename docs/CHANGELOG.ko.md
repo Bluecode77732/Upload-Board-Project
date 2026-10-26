@@ -36,6 +36,34 @@
   spec은 1분 간격의 묶음으로 나눠 돌렸다.
 
 ### 변경
+- **문서: README를 다시 쓰고 코드와 대조해 검증, 저장소의 식별 정보 마스킹 (2026-10-21 ~ 2026-10-24)** —
+  문서와 `.env.example`만 바꿨다. 애플리케이션 코드, 스키마, API는 바뀌지 않았다.
+  README: 구성을 새로 잡았다(현재 상태, "2분 요약", Terraform 코드를 보고 그린 AWS 구조도를 포함한 Mermaid
+  다이어그램, 프로젝트 구조, 라우트 10개의 핵심 API 표와 나머지는 Swagger, 트러블슈팅·결정 표, 역할 설명).
+  코드와 대조해 바로잡은 것: 업로드 서술이 `FileService.uploadFile`의 실제 동작(insert, `storage.promote`,
+  commit; 이동 뒤 commit이 실패하면 고아 파일이 남을 수 있고 granted 스윕이 이를 보고한다, ADR 0051)과
+  맞게 되었고, 워크로드 수와 AWS 구조도의 External Secrets 수동 단계도 고쳤다. `.env.example`: 자리표시자를
+  바꿨다. 손대지 않은 파일은 `DB_PASSWORD`/`REFRESH_TOKEN_SECRET`에서 일부러 Joi 검증이 실패하고, 세 값을
+  채우면 통과한다(이미지를 부팅해 확인).
+  식별 정보: AWS 계정 번호를 문서 10개(ADR 0036·0046·0057, ROADMAP, `k8s/helm/README`, 각각 두 언어)에서
+  `<AWS_ACCOUNT_ID>`로 가렸다. `k8s/helm/values-prod.yaml`에는 계정 번호(4번)와 RDS 주소(1번)가 그대로
+  있다. `deploy.sh`가 이 파일을 `helm upgrade`에 넘기기 때문이며, 둘 다 자격 증명이 아니라 식별자다. 이력:
+  AWS 액세스 키 패턴, 개인키, `.env`, tfstate 파일은 없었고, gitleaks로 이력 전체를 검사한 결과(2026-10-22)
+  11건이 나왔으나 전부 검토해 오탐으로 판정했다. 이력은 다시 쓰지 않았다.
+  한국어 문서: `프런트엔드` → `프론트엔드`(13개 파일), `Addendum` → `추가 기록`(제목 41개, 앵커 링크 24개
+  갱신, 이 파일에서 이미 깨져 있던 링크 2개 수정), 문서 두 개를 `-다` 문체로 통일했다. ADR 0026의 깨진 상대
+  경로와 이 파일의 앵커 하나도 고쳤다(이후 문서 전체의 깨진 링크 0개).
+  검증한 것: `HEAD`의 임시 사본에서 Docker Quick Start, 2026-10-24에 일회용 Postgres로 비도커 경로와
+  `admin/`(마이그레이션, `start:dev`, `/doc` 200, 가입 201, 로그인, `GET /file` 200, `clamd` 없이 업로드하면
+  503 `UPLOAD_SCAN_UNAVAILABLE`, `pnpm promote-superadmin`, admin 로그인 후 `/dashboard`, `:5174`의 CORS
+  preflight). `7ce72f7`의 `dev` CI는 9개 job이 모두 통과했다. admin 첫 실행은 임시 경로가 Windows의
+  260자 제한을 넘어(vite) 실패했을 뿐이고, 짧은 경로에서는 동작했다. 검증하지 못한 것: Docker 경로에서
+  admin 계정을 만드는 방법, 비도커 경로에서 ClamAV를 붙인 업로드, README 영어·한국어판의 문장 단위 대응,
+  점선 ALB 간선이 GitHub에서 그려지는 모습. GitHub Secret scanning과 push protection은 확인한 시점
+  (2026-10-21)에 꺼져 있었다.
+  그대로 둔 것: `CLAUDE.md`, `CONTRIBUTING`(두 언어), ADR 0006, 이 파일의 옛 항목에 있는
+  `pnpm migration:run -- --fake` — pnpm 10은 `--`를 그대로 넘기므로 `--fake`가 옵션으로 전달되지 않는다.
+  README의 해당 문장은 지웠다.
 - **문서: 공유 링크의 동작을 확인한 뒤 기록 (2026-10-20)** — 문서만 바꿨다. 코드는 바꾸지 않았고 결정한 것도
   없다. 공개·링크 공유 파일의 링크를 로컬 스택에서 로그아웃된 방문자와 크롤러로 열어 보니 이렇게 동작한다.
   파일 URL은 열리고(이미지·영상·오디오, 탐색 포함), 앱 화면 `/posts/:id`와 `/view/:id`는 `/login`으로 가며
