@@ -58,8 +58,9 @@ development line (package.json version).
   summaries, the four Mermaid blocks render without errors, the English AWS diagram is 381 px tall (it was about
   930 px), and all 18 screenshots and GIFs load. The Korean AWS diagram broke words inside its boxes ("IRSA
   역/할", "노/드"), because GitHub draws narrower boxes than the local renderer; the English one wrapped too. The
-  lines inside the three boxes are now split by hand so no renderer has to wrap them; that change was not looked
-  at on GitHub yet. Not measured: the Korean README's scroll length (only structure and numbers were compared).
+  lines inside the three boxes are now split by hand so no renderer has to wrap them; looked at again on GitHub
+  after the push (`c6fcb9d`, both languages): no word breaks inside the boxes, only the hyphenated
+  `kube-prometheus-stack` still wraps at its hyphens. Not measured: the Korean README's scroll length (only structure and numbers were compared).
   The screenshots section, 3,800 px, is unchanged.
 - **Docs: README trimmed and corrected after a claim-by-claim check (2026-10-27)** — documentation only; no code,
   schema or API changed. Checked against the code and CI: the unit tests were rerun (20 suites, 282 tests), the E2E
