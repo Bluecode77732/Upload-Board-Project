@@ -25,7 +25,7 @@ item below lands as its own dedicated, designed change
 > actually lands (with its own ADR), the current Architecture Decisions remain
 > operative.
 
-## Current position (as of 2026-08-31)
+## Current position (updated 2026-10-27)
 
 > **Summary — the roadmap is complete.** Every stage below (F, 0–5, 4) has landed, including
 > Stage 4's DevOps stack: Helm ([ADR 0041](ADR/0041-helm-chart-project-adaptation.md)/[0042](ADR/0042-k8s-helm-directory-consolidation.md)),
@@ -37,7 +37,8 @@ item below lands as its own dedicated, designed change
 > **re-applied 2026-08-29/30** to live-verify ADR 0047's observability stack, per §9's
 > entries, then **torn down again 2026-08-31** (dated from the local Terraform state files'
 > timestamps and commit `252e830`, which documents the teardown commands; §9 has no entry
-> for it), then **applied and torn down once more on 2026-09-26** (§9) — the docs
+> for it), then **applied and torn down once more on 2026-09-26** (§9), then **re-applied around 2026-09-29/30**, which
+> only the ADR addenda record (§9 has an entry that says so, and how that run ended is not recorded) — the docs
 > no longer say whether the stack is applied now, because that goes stale the day someone runs `apply` or
 > `destroy`; §9 is the dated log, and the real state is read from AWS (`k8s/infra/terraform/README.md` >
 > Status). One item was scoped out
@@ -1785,6 +1786,12 @@ ordering), docs-as-code enforcement (automated README/endpoint consistency — a
 candidate under the CI task).
 
 ## 9. Completed
+
+### 2026-09-29
+
+| Item | Notes |
+|---|---|
+| Third live run: re-applied and re-verified (recorded only in ADR addenda) | **There is no first-hand log of this run.** Its start, its teardown and who ran which command are not recorded; the facts below come from the addenda of the ADRs named, and nothing was re-checked for this entry. Recorded as observed on the live ALB on 2026-09-29: `ENV=prod` live and the refresh cookie's attributes verified over a real HTTPS connection ([ADR 0034](ADR/0034-https-termination-stance.md), [ADR 0012](ADR/0012-refresh-cookie-rotation.md)); the production CORS rule applied and all three visibility tiers loading in a real browser ([ADR 0036](ADR/0036-s3-presigned-content-redirect.md)); same-client throttling and cross-IP isolation on a real second network ([ADR 0054](ADR/0054-per-route-rate-limit-tuning.md)); the NetworkPolicy baseline with Ingress on, then off ([ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md)); response bodies, not only status codes, on a second live ALB for the frontend and `/admin` ([ADR 0060](ADR/0060-frontend-same-alb-path-routing.md), [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md)); pod termination speed on EKS, with the ALB shutdown race reproduced twice and a `preStop` sleep proposed, not adopted ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md)). On 2026-09-30: EICAR and clean uploads through the app ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.md)) and Range/seek through the S3 redirect in the `frontend/` player ([ADR 0036](ADR/0036-s3-presigned-content-redirect.md)). Whether the stack is applied now is not recorded here: check AWS. |
 
 ### 2026-09-26
 

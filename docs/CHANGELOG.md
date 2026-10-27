@@ -40,6 +40,13 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: ROADMAP header label and a §9 entry for the 2026-09-29/30 run (2026-10-27)** — documentation only. The
+  "Current position" heading said "as of 2026-08-31" while its text already went up to 2026-09-26; it now says
+  "updated 2026-10-27" and its sentence on the live runs names the third one. §9 gained a 2026-09-29 entry for it.
+  That entry says what it is: no session wrote the run up first-hand, so the entry only collects what the ADR
+  addenda (0012, 0034, 0036, 0054, 0056, 0059, 0060, 0061, 0062) record as observed on 2026-09-29/30, cites each,
+  and says its start, its teardown and who ran what are not recorded. Nothing was re-checked against AWS or the
+  ADRs beyond reading their addendum headings, and no end of the run is claimed. English and Korean.
 - **Docs: README reading flow, measured by rendered length (2026-10-27)** — documentation only; no code, schema or
   API changed, and no claim was changed or added. Measured before editing: Features had 26 ADR links in 42 lines,
   four bullets ran past 500 characters, the troubleshooting table had cells of several hundred characters, and the

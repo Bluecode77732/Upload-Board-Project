@@ -22,7 +22,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 > 이 계획에 편입되었다. 각 전용 작업이 실제로 완료되기 전까지는(각자의 ADR 포함)
 > 현행 Architecture Decisions가 그대로 유효하다.
 
-## 현재 위치 (2026-08-31 기준)
+## 현재 위치 (2026-10-27 갱신)
 
 > **요약 — 로드맵이 완료되었다.** 아래 모든 단계(F, 0–5, 4)가 랜딩했으며, Stage 4의
 > DevOps 스택도 포함된다: Helm([ADR 0041](ADR/0041-helm-chart-project-adaptation.ko.md)/
@@ -35,7 +35,8 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 > AWS 요금을 멈추기 위해 **2026-08-28 전면 철거**, ADR 0047 관측성 스택의 라이브 검증을
 > 위해 **2026-08-29/30 재적용**되었다 — §9의 각 항목대로. 이후 **2026-08-31에 다시
 > 철거**되었다(로컬 Terraform state 파일의 시각과 철거 명령을 문서화한 커밋 `252e830`으로
-> 날짜를 잡았고, §9에는 이 철거 항목이 없다), 그리고 **2026-09-26에 한 번 더 apply하고 철거**했다(§9) —
+> 날짜를 잡았고, §9에는 이 철거 항목이 없다), 그리고 **2026-09-26에 한 번 더 apply하고 철거**했다(§9). 그 뒤 **2026-09-29/30 무렵 다시 apply**했는데, 이는 ADR 추가 기록에만
+> 남아 있다(§9에 그렇게 밝힌 항목을 두었고, 그 실행이 어떻게 끝났는지는 기록이 없다) —
 > 문서는 이제 스택이 지금 apply돼 있는지를 적지 않는다. 그 내용은 누군가 `apply`나 `destroy`를 실행하는
 > 날 낡기 때문이다. §9가 날짜별 기록이고 실제 상태는 AWS에서 직접 읽는다(`k8s/infra/terraform/README.md`의
 > Status). 한 항목은 미완이 아니라 **범위에서 의도적으로 제외**되었다: 2026-08-31에
@@ -1685,6 +1686,12 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 (README/엔드포인트 일치의 자동 검증 — CI 작업 아래의 후보).
 
 ## 9. 완료
+
+### 2026-09-29
+
+| 항목 | 비고 |
+|---|---|
+| 세 번째 라이브 실행: 재적용과 재검증(ADR 추가 기록에만 남아 있음) | **이 실행의 직접 기록은 없다.** 시작과 철거 시각, 누가 어떤 명령을 실행했는지는 기록되지 않았고, 아래 내용은 명시한 ADR의 추가 기록에서 가져왔으며 이 항목을 쓰면서 다시 확인한 것은 없다. 2026-09-29에 라이브 ALB에서 관찰한 것으로 기록된 내용: `ENV=prod`가 라이브이고 리프레시 쿠키의 속성을 실제 HTTPS 연결에서 확인([ADR 0034](ADR/0034-https-termination-stance.ko.md), [ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md)), 운영 CORS 규칙을 적용하고 공개 범위 세 단계가 모두 실제 브라우저에서 로드됨([ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md)), 같은 클라이언트의 요청 제한과 실제 두 번째 네트워크에서의 IP 간 격리([ADR 0054](ADR/0054-per-route-rate-limit-tuning.ko.md)), Ingress를 켠 기준선과 끈 상태의 NetworkPolicy([ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md)), 두 번째 라이브 ALB에서 상태 코드뿐 아니라 응답 본문까지 확인한 프론트엔드와 `/admin`([ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md), [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)), EKS의 파드 종료 속도와 두 번 재현한 ALB 종료 경합, 제안했지만 채택하지 않은 `preStop` sleep([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md)). 2026-09-30에는 앱을 통한 EICAR·정상 파일 업로드([ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md))와 `frontend/` 플레이어에서 S3 리다이렉트를 거친 Range/탐색([ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md))을 확인했다. 스택이 지금 apply돼 있는지는 여기에 적지 않는다. AWS에서 확인한다. |
 
 ### 2026-09-26
 
