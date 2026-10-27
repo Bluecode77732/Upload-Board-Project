@@ -27,9 +27,7 @@ first.
 
 See [README.md](../README.md) > Quick Start. Summary: `pnpm install`, copy
 `.env.example` → `.env`, ensure `file/temp/` and `file/upload/` exist, create the
-database and apply the schema with `pnpm migration:run` (a pre-existing
-manually-created DB: `pnpm migration:run -- --fake` once —
-[ADR 0006](ADR/0006-schema-policy-and-migration-adoption.md)),
+database and apply the schema with `pnpm migration:run`,
 `pnpm run start:dev`. Alternatively, `docker compose up --build` runs Postgres, then a
 one-shot `migrate` step, then the API ([ADR 0015](ADR/0015-docker-and-compose.md),
 migration step split out by [ADR 0032](ADR/0032-migration-as-separate-deploy-step.md)).

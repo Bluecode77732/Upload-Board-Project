@@ -99,7 +99,7 @@ remember which resource to target.
 - New file: `k8s/infra/terraform/deploy.sh` (subcommands `cluster`, `app-infra`,
   `addons`, `helm`, `all`). No `.tf` file was changed — `terraform fmt -check` and
   `terraform validate` pass unchanged in `cluster/`, `app-infra/`, and `addons/`.
-- Live-verified against the real AWS account (`074416822640`, `ap-northeast-2`):
+- Live-verified against the real AWS account (`<AWS_ACCOUNT_ID>`, `ap-northeast-2`):
   `deploy.sh cluster` ran an actual `terraform plan` (confirmed "No changes. Your
   infrastructure matches the configuration.") and then correctly aborted with no
   application when given no interactive confirmation — the default-deny path was

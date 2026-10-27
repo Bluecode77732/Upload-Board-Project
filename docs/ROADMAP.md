@@ -25,7 +25,7 @@ item below lands as its own dedicated, designed change
 > actually lands (with its own ADR), the current Architecture Decisions remain
 > operative.
 
-## Current position (as of 2026-08-31)
+## Current position (updated 2026-10-27)
 
 > **Summary — the roadmap is complete.** Every stage below (F, 0–5, 4) has landed, including
 > Stage 4's DevOps stack: Helm ([ADR 0041](ADR/0041-helm-chart-project-adaptation.md)/[0042](ADR/0042-k8s-helm-directory-consolidation.md)),
@@ -37,14 +37,16 @@ item below lands as its own dedicated, designed change
 > **re-applied 2026-08-29/30** to live-verify ADR 0047's observability stack, per §9's
 > entries, then **torn down again 2026-08-31** (dated from the local Terraform state files'
 > timestamps and commit `252e830`, which documents the teardown commands; §9 has no entry
-> for it), then **applied and torn down once more on 2026-09-26** (§9) — the docs
+> for it), then **applied and torn down once more on 2026-09-26** (§9), then **re-applied around 2026-09-29/30**, which
+> only the ADR addenda record (§9 has an entry that says so, and how that run ended is not recorded) — the docs
 > no longer say whether the stack is applied now, because that goes stale the day someone runs `apply` or
 > `destroy`; §9 is the dated log, and the real state is read from AWS (`k8s/infra/terraform/README.md` >
 > Status). One item was scoped out
 > rather than left undone: **Istio (service mesh) was pulled from the DevOps stack and
 > deferred** on 2026-08-31 (§7) — this project runs a single backend workload with no
 > east-west traffic for a mesh to manage, so introducing one now would solve a problem this
-> project does not have; revisit only if the architecture grows multiple in-cluster services.
+> project does not have; revisit only if the architecture grows multiple in-cluster services
+> (true on 2026-08-31; the chart has four workloads since, see the 2026-10-27 addendum in §7).
 > What remains is not a build task: it is an **operating decision** (keep the AWS stack applied
 > and paying, or torn down until next needed) and routine doc upkeep — not a new
 > feature or a scheduled ADR. The narrative below is kept as the historical record of how each
@@ -445,7 +447,7 @@ the status of each is scannable rather than buried in prose (as of 2026-08-18). 
 | **Prometheus** | Metrics collection | ✅ landed, live-verified | [ADR 0047](ADR/0047-observability-prometheus-grafana.md): self-hosted via `eks_blueprints_addons`'s `enable_kube_prometheus_stack` flag (kube-prometheus-stack chart), scraping the app through a `ServiceMonitor` targeting a new `prom-client`-based `/metrics` endpoint (`MetricsModule`). Live-verified 2026-08-29/30 (ADR 0047 D4 Addendum): `up{job="upload-board"}` → `1`, custom counters (`upload_claims_total`, `temp_cleanup_deleted_total`) and the global `http_request_duration_seconds` histogram all present in query results. | [0047](ADR/0047-observability-prometheus-grafana.md), on [0017](ADR/0017-logging-conventions.md) |
 | **Grafana** | Dashboards | ✅ landed, live-verified | [ADR 0047](ADR/0047-observability-prometheus-grafana.md): bundled with the same `kube-prometheus-stack` Helm release as Prometheus (D3 — one combined decision, one Helm release). No custom dashboards provisioned yet — the default `kube-prometheus-stack` dashboards ship as-is. Live-verified 2026-08-29/30: `GET /api/datasources` lists a working `Prometheus` datasource, auto-provisioned by the chart with no manual wiring. | [0047](ADR/0047-observability-prometheus-grafana.md) |
 | **Terraform** | Infrastructure as code | ✅ applied live (dated runs in §9) | Project-specific design finalized ([0043](ADR/0043-terraform-project-adaptation.md), lifting [0038](ADR/0038-terraform-iac-scaffold.md)'s deferral) and implemented 2026-08-18: this project's own EKS (two heterogeneous node groups), RDS PostgreSQL, an S3 bucket + app IRSA role, Secrets Manager + External Secrets Operator, and a Route53/ACM-backed ALB ingress path — the Istio example is gone, not commented out. Reorganized 2026-08-20 from that single root module into three independently-appliable states ([0044](ADR/0044-terraform-three-state-split.md)): `cluster/` (`module.vpc`+`module.eks`), `app-infra/` (RDS/S3+IRSA/Secrets Manager/Route53+ACM, reads `cluster/` via `terraform_remote_state`), `addons/` (`module.eks_blueprints_addons` — ALB Controller+ESO+kube-prometheus-stack as of [0047](ADR/0047-observability-prometheus-grafana.md), the only state reading both others) — the retired single `main.tf` no longer exists. `terraform validate`/`fmt -check` pass in all three directories. Applied 2026-08-25–27, then fully destroyed 2026-08-28 to stop the AWS bill once proven end-to-end (§9). **Re-applied 2026-08-29/30** for [ADR 0047](ADR/0047-observability-prometheus-grafana.md) D4's live verification — `terraform output` in all three directories returns real values as of this edit (`cluster`'s EKS endpoint, `app-infra`'s ACM cert ARN, `addons`'s `kube_prometheus_stack` Helm release in `terraform state list`). Re-verify with `terraform plan`/`terraform output` before trusting this cell — it is still a snapshot, not live state, and the developer may tear it down again after this verification pass to stop the bill. | [0038](ADR/0038-terraform-iac-scaffold.md), [0043](ADR/0043-terraform-project-adaptation.md), [0044](ADR/0044-terraform-three-state-split.md), [0047](ADR/0047-observability-prometheus-grafana.md) |
-| **AWS** | Cloud / deploy target | ✅ proven live (dated runs in §9) | The container deploy target the rows above build toward — proven end-to-end 2026-08-25–27: account `074416822640` (`sharenpo-user`, Paid Plan since 2026-08-27), region `ap-northeast-2`, live EKS + RDS + S3 + Route53/ACM, with the app itself deployed and running (§9, 2026-08-27). Fully torn down 2026-08-28 once proven, to stop the bill (§9). **Re-applied 2026-08-29/30** for [ADR 0047](ADR/0047-observability-prometheus-grafana.md) D4's live verification via `deploy.sh all` — live again as of this edit; expect another teardown once the developer is done verifying, to stop the bill again. | deployment ADR (planned), [0047](ADR/0047-observability-prometheus-grafana.md) |
+| **AWS** | Cloud / deploy target | ✅ proven live (dated runs in §9) | The container deploy target the rows above build toward — proven end-to-end 2026-08-25–27: account `<AWS_ACCOUNT_ID>` (`sharenpo-user`, Paid Plan since 2026-08-27), region `ap-northeast-2`, live EKS + RDS + S3 + Route53/ACM, with the app itself deployed and running (§9, 2026-08-27). Fully torn down 2026-08-28 once proven, to stop the bill (§9). **Re-applied 2026-08-29/30** for [ADR 0047](ADR/0047-observability-prometheus-grafana.md) D4's live verification via `deploy.sh all` — live again as of this edit; expect another teardown once the developer is done verifying, to stop the bill again. | deployment ADR (planned), [0047](ADR/0047-observability-prometheus-grafana.md) |
 
 ### Stage 5 — Operational surface (admin console) — added 2026-07-30
 
@@ -1090,6 +1092,16 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   survived that cut. Revisit only if the architecture actually grows multiple in-cluster
   services that need traffic management, mTLS, or canary routing between them — a
   scenario not on this project's roadmap today.
+  **Addendum 2026-10-27 — the premise above has since changed.** The chart now deploys four
+  workloads: the backend, `frontend/` and `admin/` (static nginx), and ClamAV
+  ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.md),
+  [ADR 0060](ADR/0060-frontend-same-alb-path-routing.md),
+  [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md)). "Exactly one workload" no longer holds,
+  and "multiple in-cluster services", the revisit condition stated above, is met in letter. What is
+  actually east-west is narrow: backend to ClamAV (`clamd`, TCP 3310) and Prometheus to the
+  backend's `/metrics`. The two SPA containers serve static files and make no in-cluster call to
+  the backend (browsers reach it through the ALB). The decision itself was not re-evaluated and is
+  not changed here; the text above is kept as written.
 - ADR 0026 content-endpoint follow-ups (recorded 2026-08-01, from a post-implementation
   review of `GET /file/:id/content`,
   [file-content.controller.ts](../backend/file/file-content.controller.ts)), severity-ordered:
@@ -1718,6 +1730,53 @@ below are done; the remaining work is Stage 4 (infrastructure introduction, then
   `helm template` under both values sets, then a drain on a live cluster, since a template that has only
   been rendered has not been seen to work. No application code, schema or env var change. Revisit with
   the replica decision, or when explicitly requested. Also listed in CLAUDE.md > Known Gaps.
+- **Shared links: the app pages need a login, there is no link preview, and other sites cannot embed the
+  files** — **recorded 2026-10-20; nothing decided or scheduled.** Checked by opening the links as a
+  logged-out visitor and as a crawler (no JavaScript) against a local stack with `STORAGE_DRIVER=local`; not
+  on the deployed stack and not through the S3 redirect. What works: the file URLs themselves —
+  `/file/:id/content` for a public file and `?share=<token>` for an unlisted one — open directly in a new
+  browser for images, video and audio, with seeking (206, and 416 out of range). A private file, an unlisted
+  file with no or a wrong token, a rotated-out token and an expired one all answer 403. What does not:
+  (1) `/posts/:id` and `/view/:id` send a logged-out visitor to `/login` (`RequireAuth` passes no return
+  location), and after sign-in `LoginPage` goes to `/` rather than back to the link; the API answers 401 for
+  `/post/:id` and `/file/:id` without a token, so those pages have nothing to show a visitor who is not signed
+  in. (2) A crawler gets the same shell for every URL — `<title>Sharenpo</title>`, no description or Open
+  Graph tags — and `/robots.txt` and `/sitemap.xml` answer with the app's HTML, so there is no preview and
+  nothing to index. (3) An `<img>`, `<video>` or `<audio>` on another origin that points at a public file is
+  blocked with `ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`, because the API sends
+  `Cross-Origin-Resource-Policy: same-origin` ([ADR 0055](ADR/0055-helmet-security-headers.md) Addendum
+  2026-10-20). (4) `shareExpiresAt` is checked as an ISO 8601 string only (`@IsISO8601()`), so a date in the
+  past is accepted (200) and the link is dead at once. Each item is a design decision of its own: opening a
+  post or a public file page to visitors changes the default that every non-auth endpoint sits behind
+  `JwtAuthGuard`, and relaxing the header for the content route would also cover unlisted files whose token
+  travels in the URL. Revisit when explicitly requested. Also listed in README.md > Known limitations.
+
+- **README follow-ups and repository hygiene** — **recorded 2026-10-24, updated 2026-10-26; nothing scheduled.**
+  Status after the README review (details: CHANGELOG, Unreleased): (1) GitHub Secret scanning and push
+  protection were disabled when checked (2026-10-21); the developer enables them in the repository settings.
+  (2) Done 2026-10-26: the AWS account number, RDS address, role ARN and certificate ARN left
+  `k8s/helm/values-prod.yaml` for a gitignored `values-prod.local.yaml` that `deploy.sh` requires
+  ([ADR 0068](ADR/0068-deploy-identifiers-gitignored-overlay.md)); they stay in git history. (3) Done
+  2026-10-26: `pnpm migration:run -- --fake` removed from `CONTRIBUTING` and `CLAUDE.md`; older records keep
+  it. (4) Done 2026-10-26: the Docker-path admin account and the non-Docker upload with ClamAV were run and
+  passed. (5) Seen once, not reproduced: `docker compose up --build` failed on its first build with
+  `image "…/sharenpo-api:local": already exists` (`migrate` and `api` build the same tag); a retry without
+  building worked. A prior `docker compose build api` might avoid it; untested. (6) `STYLE-PLAN.ko.md`
+  mixes `-합니다` and `-다`. (7) Left for the developer to remove: Docker volumes `sharenpo-verify3_db-data` and
+  `sharenpo-verify3_clamav-data` and the image `sharenpo-api:local`, from the 2026-10-26 verification run.
+  Revisit when explicitly requested.
+- **Two high advisories in `pnpm audit --prod`, `body-parser` and `multer` — fixed 2026-10-27.** Both were
+  published 2026-10-23 (CVSS 7.5, denial of service), after the 2026-10-08 round that had left `--prod` clean.
+  Installed were `body-parser` 2.3.0 (fixed in 2.4.0, via `express`) and `multer` 2.4.0 (fixed in 2.5.0).
+  `multer`'s needs an asynchronous `fileFilter`; the one in `backend/upload/upload.controller.ts` calls `cb`
+  synchronously, so it was not reachable as configured. `body-parser`'s applies to its default options, which
+  `backend/main.ts` does not change, so a request with a compressed body and trailing bytes was expected to
+  crash the process; it was not reproduced, before or after. Fix: the `overrides` entries and the direct
+  `multer` range raised to `^2.4.0` and `^2.5.0`, then `pnpm install`; the lockfile gained only those two
+  packages and `content-type` 2.1.0, which `body-parser` 2.4.0 uses. Afterwards `pnpm audit --prod` is clean
+  (plain `pnpm audit` 69 to 67), `pnpm build` and lint pass (lint with the CRLF-neutral rule), and 282 unit and
+  76 E2E tests pass, the E2E against a throwaway PostgreSQL and `clamd`. Not checked: the compose or deployed
+  image, and uploads through the browser clients. Also listed in CLAUDE.md > Known Gaps.
 
 ## 8. Advisory notes
 
@@ -1727,6 +1786,12 @@ ordering), docs-as-code enforcement (automated README/endpoint consistency — a
 candidate under the CI task).
 
 ## 9. Completed
+
+### 2026-09-29
+
+| Item | Notes |
+|---|---|
+| Third live run: re-applied and re-verified (recorded only in ADR addenda) | **There is no first-hand log of this run.** Its start, its teardown and who ran which command are not recorded; the facts below come from the addenda of the ADRs named, and nothing was re-checked for this entry. Recorded as observed on the live ALB on 2026-09-29: `ENV=prod` live and the refresh cookie's attributes verified over a real HTTPS connection ([ADR 0034](ADR/0034-https-termination-stance.md), [ADR 0012](ADR/0012-refresh-cookie-rotation.md)); the production CORS rule applied and all three visibility tiers loading in a real browser ([ADR 0036](ADR/0036-s3-presigned-content-redirect.md)); same-client throttling and cross-IP isolation on a real second network ([ADR 0054](ADR/0054-per-route-rate-limit-tuning.md)); the NetworkPolicy baseline with Ingress on, then off ([ADR 0056](ADR/0056-networkpolicy-east-west-restriction.md)); response bodies, not only status codes, on a second live ALB for the frontend and `/admin` ([ADR 0060](ADR/0060-frontend-same-alb-path-routing.md), [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.md)); pod termination speed on EKS, with the ALB shutdown race reproduced twice and a `preStop` sleep proposed, not adopted ([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.md)). On 2026-09-30: EICAR and clean uploads through the app ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.md)) and Range/seek through the S3 redirect in the `frontend/` player ([ADR 0036](ADR/0036-s3-presigned-content-redirect.md)). Whether the stack is applied now is not recorded here: check AWS. |
 
 ### 2026-09-26
 
@@ -1750,7 +1815,7 @@ candidate under the CI task).
 
 | Item | Notes |
 |---|---|
-| First live AWS deployment reached a stable state | The Helm release `upload-board` (`k8s/helm/`) is `STATUS: deployed` (revision 5) on the real EKS cluster provisioned by `cluster/`'s Terraform state (§7's "not applied" claim was already corrected 2026-08-25; this is the app landing *onto* that infrastructure, not the infrastructure itself). Revisions 1–4 all failed: rev 1–3 on pod-slot/architecture mismatches while the account was still on the Free Plan (resolved by the Paid Plan upgrade and a manual multi-arch `docker buildx build --platform linux/amd64,linux/arm64` push, since `docker-publish` in CI only triggers on `main`, not `dev`); rev 4 failed the migration Job against the live RDS instance with `no pg_hba.conf entry ... no encryption` (`rds.force_ssl` requires TLS the app wasn't requesting). `helm upgrade upload-board . --reuse-values --set env.DB_SSL=true` (rev 5) fixed it using the `DB_SSL` env var added for exactly this (commit `cf0cbfe`, Joi schema + `.env.example` + `data-source.ts`) — the migration Job now completes and the app pod reaches `Running`/ready. S3 access was then wired: the `default` ServiceAccount was annotated with `app-infra`'s Terraform-output IAM role ARN (`eks.amazonaws.com/role-arn=arn:aws:iam::074416822640:role/upload-board-project-app`) and the deployment restarted to pick it up, confirmed by the injected `AWS_ROLE_ARN`/`AWS_WEB_IDENTITY_TOKEN_FILE` env vars and the projected `aws-iam-token` volume in the running pod — the release's `STORAGE_DRIVER=s3` value can now actually authenticate, though an end-to-end upload against the live bucket is still unverified. Reachable only inside the cluster for now (`ingress.enabled: false`, chart default) — the developer confirmed this stays as-is until an outside tester actually needs external access, rather than enabling `Ingress` speculatively. Two other open items were resolved the same day: `cluster/main.tf`'s graviton `t4g.medium` node type, originally a temporary workaround for the account's pre-upgrade pod-slot limit, is now the developer's **confirmed permanent choice** (cost-efficiency over `m6g.large`'s larger pod-slot headroom — comment updated in place, no `terraform apply` needed since the value itself doesn't change); and `k8s/helm/values-prod.yaml` was added, collecting this deployment's `--set env.DB_SSL/STORAGE_DRIVER/S3_BUCKET/...` flags into one overlay (`helm upgrade upload-board . -f values-prod.yaml`), verified by `helm template` to render an identical `ConfigMap` to the live release. |
+| First live AWS deployment reached a stable state | The Helm release `upload-board` (`k8s/helm/`) is `STATUS: deployed` (revision 5) on the real EKS cluster provisioned by `cluster/`'s Terraform state (§7's "not applied" claim was already corrected 2026-08-25; this is the app landing *onto* that infrastructure, not the infrastructure itself). Revisions 1–4 all failed: rev 1–3 on pod-slot/architecture mismatches while the account was still on the Free Plan (resolved by the Paid Plan upgrade and a manual multi-arch `docker buildx build --platform linux/amd64,linux/arm64` push, since `docker-publish` in CI only triggers on `main`, not `dev`); rev 4 failed the migration Job against the live RDS instance with `no pg_hba.conf entry ... no encryption` (`rds.force_ssl` requires TLS the app wasn't requesting). `helm upgrade upload-board . --reuse-values --set env.DB_SSL=true` (rev 5) fixed it using the `DB_SSL` env var added for exactly this (commit `cf0cbfe`, Joi schema + `.env.example` + `data-source.ts`) — the migration Job now completes and the app pod reaches `Running`/ready. S3 access was then wired: the `default` ServiceAccount was annotated with `app-infra`'s Terraform-output IAM role ARN (`eks.amazonaws.com/role-arn=arn:aws:iam::<AWS_ACCOUNT_ID>:role/upload-board-project-app`) and the deployment restarted to pick it up, confirmed by the injected `AWS_ROLE_ARN`/`AWS_WEB_IDENTITY_TOKEN_FILE` env vars and the projected `aws-iam-token` volume in the running pod — the release's `STORAGE_DRIVER=s3` value can now actually authenticate, though an end-to-end upload against the live bucket is still unverified. Reachable only inside the cluster for now (`ingress.enabled: false`, chart default) — the developer confirmed this stays as-is until an outside tester actually needs external access, rather than enabling `Ingress` speculatively. Two other open items were resolved the same day: `cluster/main.tf`'s graviton `t4g.medium` node type, originally a temporary workaround for the account's pre-upgrade pod-slot limit, is now the developer's **confirmed permanent choice** (cost-efficiency over `m6g.large`'s larger pod-slot headroom — comment updated in place, no `terraform apply` needed since the value itself doesn't change); and `k8s/helm/values-prod.yaml` was added, collecting this deployment's `--set env.DB_SSL/STORAGE_DRIVER/S3_BUCKET/...` flags into one overlay (`helm upgrade upload-board . -f values-prod.yaml`), verified by `helm template` to render an identical `ConfigMap` to the live release. |
 
 ### 2026-08-06
 

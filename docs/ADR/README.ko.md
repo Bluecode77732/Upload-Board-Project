@@ -75,6 +75,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0065](0065-multi-file-upload-client-sequential.ko.md) | 여러 파일 업로드는 클라이언트가 파일 하나짜리 요청을 반복한다. 백엔드는 요청당 파일 하나를 유지한다 | 승인됨 — `frontend/`에 구현됨, 2026-10-06 로컬 compose 스택에서 검증 | 2026-10-06 |
 | [0066](0066-stack-selection-rationale-retroactive.ko.md) | 스택 선택 근거, 소급 기록 — NestJS/TypeORM/PostgreSQL, AWS/EKS, 프론트엔드 상태 라이브러리 미사용, 요청 횟수 한도 수치 | 승인됨 — 소급 기록, 코드 변경 없음 | 2026-10-12 |
 | [0067](0067-file-transfer-service-split.ko.md) | 소유권 이전을 `FileService`에서 `FileTransferService`로 분리 | 승인됨 — 구현 완료, 동작 변경 없음 | 2026-10-14 |
+| [0068](0068-deploy-identifiers-gitignored-overlay.ko.md) | 배포 식별자를 `values-prod.yaml`에서 gitignore된 오버레이로 옮김 | 승인됨 — 구현 완료, 렌더링된 차트 변경 없음 | 2026-10-26 |
 
 **결정일** 열은 그 결정이 저장소에 처음 나타난 날짜입니다. ADR 0001~0005와 0009는 첫 커밋(2025-12-17)에
 이미 들어 있던 선택을 다루지만, 문서 자체는 2026-07-22에 작성했습니다. 이 사실은 각 문서의 `기록` 줄에

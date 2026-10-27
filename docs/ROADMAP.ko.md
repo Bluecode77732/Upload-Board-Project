@@ -22,7 +22,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 > 이 계획에 편입되었다. 각 전용 작업이 실제로 완료되기 전까지는(각자의 ADR 포함)
 > 현행 Architecture Decisions가 그대로 유효하다.
 
-## 현재 위치 (2026-08-31 기준)
+## 현재 위치 (2026-10-27 갱신)
 
 > **요약 — 로드맵이 완료되었다.** 아래 모든 단계(F, 0–5, 4)가 랜딩했으며, Stage 4의
 > DevOps 스택도 포함된다: Helm([ADR 0041](ADR/0041-helm-chart-project-adaptation.ko.md)/
@@ -35,14 +35,16 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 > AWS 요금을 멈추기 위해 **2026-08-28 전면 철거**, ADR 0047 관측성 스택의 라이브 검증을
 > 위해 **2026-08-29/30 재적용**되었다 — §9의 각 항목대로. 이후 **2026-08-31에 다시
 > 철거**되었다(로컬 Terraform state 파일의 시각과 철거 명령을 문서화한 커밋 `252e830`으로
-> 날짜를 잡았고, §9에는 이 철거 항목이 없다), 그리고 **2026-09-26에 한 번 더 apply하고 철거**했다(§9) —
+> 날짜를 잡았고, §9에는 이 철거 항목이 없다), 그리고 **2026-09-26에 한 번 더 apply하고 철거**했다(§9). 그 뒤 **2026-09-29/30 무렵 다시 apply**했는데, 이는 ADR 추가 기록에만
+> 남아 있다(§9에 그렇게 밝힌 항목을 두었고, 그 실행이 어떻게 끝났는지는 기록이 없다) —
 > 문서는 이제 스택이 지금 apply돼 있는지를 적지 않는다. 그 내용은 누군가 `apply`나 `destroy`를 실행하는
 > 날 낡기 때문이다. §9가 날짜별 기록이고 실제 상태는 AWS에서 직접 읽는다(`k8s/infra/terraform/README.md`의
 > Status). 한 항목은 미완이 아니라 **범위에서 의도적으로 제외**되었다: 2026-08-31에
 > **Istio(서비스 메시)를 DevOps 스택에서 빼고 보류**로 옮겼다(§7) — 이 프로젝트는 단일
 > 백엔드 워크로드만 돌아가 메시가 관리할 east-west 트래픽이 없으므로, 지금 도입하면 이
 > 프로젝트에 없는 문제를 푸는 셈이다; 아키텍처가 실제로 클러스터 내 다중 서비스로
-> 커질 때만 재검토한다. 이제 남은 것은 빌드 과제가 아니라 **운영 판단**(AWS 스택을
+> 커질 때만 재검토한다(2026-08-31에는 사실이었고, 이후 차트의 워크로드가 네 개로 늘었다 —
+> §7의 2026-10-27 추가 기록 참조). 이제 남은 것은 빌드 과제가 아니라 **운영 판단**(AWS 스택을
 > 계속 적용해 비용을 낼지, 다음에 필요할 때까지 철거 상태로 둘지)과 일상적 문서
 > 정리뿐 — 신규 기능도, 예정된 ADR도 아니다. 아래 서술은 각 단계가 어떻게 랜딩했는지의
 > 역사 기록으로 유지한다; 배포·철거·재배포의 날짜별 기록은 §9(완료)를, Istio 보류의
@@ -409,12 +411,12 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 | **마이그레이션 분리 단계** | 배포 안전 | 🔶 compose ✅ / K8s Job 🆕 | `docker-compose.yml`의 원샷 `migrate` 서비스가 향후 **Kubernetes Job**을 모델링 — 스케일된 `api`가 `migration:run`을 경합하지 않도록. K8s Job 자체는 예정. | [0032](ADR/0032-migration-as-separate-deploy-step.ko.md) |
 | **Kubernetes** | 오케스트레이션 | ✅ 라이브에 배포됨(날짜별 실행은 §9) | 예전 `k8s/pod/`, `k8s/deployment/`, `k8s/cluster/` 아래 있던 독립 정적 매니페스트는 2026-08-17 삭제됐다([0042](ADR/0042-k8s-helm-directory-consolidation.ko.md)) — 아래 Helm 차트가 이미 렌더링하는 것의 엄격한 부분집합을 중복했을 뿐, 소비하는 곳도 없었다(CI 잡도, compose 참조도 없음). Kubernetes 매니페스트는 이제 Helm 차트의 `templates/`(`k8s/helm/`)로만 존재한다. 실제 클러스터 배포(AWS)가 2026-08-27 반영됐고(§9), 검증이 끝난 2026-08-28에 밑단 클러스터를 destroy했다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 2026-08-29/30에 재적용** — 이 수정 시점 기준 `kubectl get nodes`가 `Ready` 노드 2개를 보여준다. `bash k8s/infra/terraform/deploy.sh all`로 재현 가능하며, 믿기 전에 `kubectl get nodes`로 재확인할 것 — 이 칸도 스냅샷이다. | 커밋 `48a89f2`, [0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0042](ADR/0042-k8s-helm-directory-consolidation.ko.md) |
 | **시크릿 전달** | 시크릿 | ✅ 코드 + 라이브에서 동기화(날짜별 실행은 §9) | 대상 결정: 네이티브 **Kubernetes `Secret`**, External Secrets Operator가 IRSA를 통해 **AWS Secrets Manager**에서 동기화. Helm 차트는 소비 측을 구현한다(`existingSecret` 참조 + `envFrom.secretRef`, 2026-08-17); Terraform 측([0043](ADR/0043-terraform-project-adaptation.ko.md) D7, 2026-08-18)은 Secrets Manager 항목과 ESO 설치+IRSA 역할(`eks_blueprints_addons`의 `enable_external_secrets`)을 프로비저닝한다. 2026-08-27 라이브로 정상 동작 확인했고, 2026-08-28에 나머지 스택과 함께 destroy됐다(§9). **2026-08-29/30에 재적용**: `external-secrets` Helm 릴리스가 `deployed`로 확인됐고(`helm list -A`), 이 수정 시점 기준 앱 파드가 RDS 인증·토큰 서명을 정상 수행 중이다 — 메커니즘이 한 번 검증된 게 아니라 다시 상시 가동 중이다. | [0033](ADR/0033-secrets-delivery-target.ko.md), [0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md) |
-| **HTTPS 종단** | TLS | 🔶 코드 준비됨. 2026-09-26에 리다이렉트·인증서를 라이브로 확인, 브라우저·쿠키 확인은 미결 | **ingress / ALB**에서 종단, 인프로세스 금지(`ENV=prod`에서 `Secure` refresh 쿠키에 필요하며, 실제 릴리스는 이미 `ENV=prod`로 동작했다 — `values.yaml` 기본값). Helm 차트의 `Ingress` 템플릿은 존재하지만 기본값은 여전히 비활성(`ingress.enabled: false`); 스택이 살아있던 동안엔 클러스터·등록된 도메인·인증서가 모두 실제로 존재했으므로(다음 문장 참고), 그 공백은 누락된 의존성이 아니라 개발자의 의도적 선택이었다 — 개발자는 2026-08-27(§9) 외부 테스터가 실제로 필요해지기 전까지 `Ingress`를 켜지 않기로 확정했다. 인증서 메커니즘은 결정되고 코드로도 있다: **ACM**, Terraform이 프로비저닝한 Route53 영역을 대상으로 DNS 검증([0043](ADR/0043-terraform-project-adaptation.ko.md) D4/D5, 2026-08-18), `sharenpo.cloud` 대상 — 인증서까지 포함한 스택 전체가 2026-08-28에 destroy되기(§9) 전에 `ISSUED` 상태까지 도달했다. ARN 패턴은 나중에 새 인증서가 발급되면 Ingress의 `certificate-arn` 주석에 바로 쓸 수 있게 준비돼 있다. **2026-09-13**: annotation 구성이 이제 완성돼 체크인됐다 — `k8s/helm/values-prod.yaml`에 주석 처리된 `ingress` 블록(도메인, ADR 0058 경로 목록 전체, `certificate-arn`/`listen-ports`/`ssl-redirect`)이 준비됐고, `k8s/infra/terraform/README.md`의 `helm upgrade --set ...` 레시피에도 빠져 있던 `listen-ports`/`ssl-redirect` 쌍이 추가됐다(`listen-ports` 없이는 ALB Controller가 `ssl-redirect`가 리다이렉트할 80번 포트 리스너를 아예 열지 않는다). 2026-09-13 시점에는 `ingress.enabled: false`를 여전히 의도적으로 유지했다 — 나중에 켤 때 실수를 줄이기 위한 준비일 뿐 상태 변경이 아니며, 검증도 `helm lint`/`helm template`로만 했다(실제 클러스터 없음) — 이건 렌더링된 YAML이 올바르다는 것만 증명할 뿐, ALB Controller가 실제로 그대로 동작한다는 건 증명하지 못한다. **미해결, 명시적으로 남김**: `k8s/helm/README.md`의 "Enabling HTTPS (Ingress)" 절에 이걸 실제로 켤 때 반드시 실행해야 할 검사 세 가지(ALB 리스너 두 개가 실제로 있는지, `curl`이 진짜 301/302 리다이렉트를 받는지, 브라우저가 인증서를 신뢰하는지)를 명시해뒀다 — 지금은 검증할 살아있는 ALB Controller가 없어서 아직 못 했다. **2026-09-26, 첫 라이브 확인**: 개발자가 라이브 클러스터에서 Ingress를 켰다(체크인된 `values-prod.yaml`의 블록은 여전히 주석 처리돼 있어 기본값은 꺼짐 그대로다). 세션은 ExternalDNS가 alias `A`/`AAAA` 레코드를 만든 것, `http://sharenpo.cloud/`가 `https://`로 `301`을 돌려준 것, `curl`이 인증서를 검증한 것을 확인했다([ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md) Addendum, `k8s/helm/README.md`). 확인하지 못한 것: `describe-listeners`(리스너 두 개), 브라우저의 인증서 수락, 실제 HTTPS 연결에서의 `Secure` refresh 쿠키. Service별 헬스체크 발견은 [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)의 Addendum에 있다. | [0034](ADR/0034-https-termination-stance.ko.md), [0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md), [0058](ADR/0058-ingress-path-allowlist.ko.md) |
+| **HTTPS 종단** | TLS | 🔶 코드 준비됨. 2026-09-26에 리다이렉트·인증서를 라이브로 확인, 브라우저·쿠키 확인은 미결 | **ingress / ALB**에서 종단, 인프로세스 금지(`ENV=prod`에서 `Secure` refresh 쿠키에 필요하며, 실제 릴리스는 이미 `ENV=prod`로 동작했다 — `values.yaml` 기본값). Helm 차트의 `Ingress` 템플릿은 존재하지만 기본값은 여전히 비활성(`ingress.enabled: false`); 스택이 살아있던 동안엔 클러스터·등록된 도메인·인증서가 모두 실제로 존재했으므로(다음 문장 참고), 그 공백은 누락된 의존성이 아니라 개발자의 의도적 선택이었다 — 개발자는 2026-08-27(§9) 외부 테스터가 실제로 필요해지기 전까지 `Ingress`를 켜지 않기로 확정했다. 인증서 메커니즘은 결정되고 코드로도 있다: **ACM**, Terraform이 프로비저닝한 Route53 영역을 대상으로 DNS 검증([0043](ADR/0043-terraform-project-adaptation.ko.md) D4/D5, 2026-08-18), `sharenpo.cloud` 대상 — 인증서까지 포함한 스택 전체가 2026-08-28에 destroy되기(§9) 전에 `ISSUED` 상태까지 도달했다. ARN 패턴은 나중에 새 인증서가 발급되면 Ingress의 `certificate-arn` 주석에 바로 쓸 수 있게 준비돼 있다. **2026-09-13**: annotation 구성이 이제 완성돼 체크인됐다 — `k8s/helm/values-prod.yaml`에 주석 처리된 `ingress` 블록(도메인, ADR 0058 경로 목록 전체, `certificate-arn`/`listen-ports`/`ssl-redirect`)이 준비됐고, `k8s/infra/terraform/README.md`의 `helm upgrade --set ...` 레시피에도 빠져 있던 `listen-ports`/`ssl-redirect` 쌍이 추가됐다(`listen-ports` 없이는 ALB Controller가 `ssl-redirect`가 리다이렉트할 80번 포트 리스너를 아예 열지 않는다). 2026-09-13 시점에는 `ingress.enabled: false`를 여전히 의도적으로 유지했다 — 나중에 켤 때 실수를 줄이기 위한 준비일 뿐 상태 변경이 아니며, 검증도 `helm lint`/`helm template`로만 했다(실제 클러스터 없음) — 이건 렌더링된 YAML이 올바르다는 것만 증명할 뿐, ALB Controller가 실제로 그대로 동작한다는 건 증명하지 못한다. **미해결, 명시적으로 남김**: `k8s/helm/README.md`의 "Enabling HTTPS (Ingress)" 절에 이걸 실제로 켤 때 반드시 실행해야 할 검사 세 가지(ALB 리스너 두 개가 실제로 있는지, `curl`이 진짜 301/302 리다이렉트를 받는지, 브라우저가 인증서를 신뢰하는지)를 명시해뒀다 — 지금은 검증할 살아있는 ALB Controller가 없어서 아직 못 했다. **2026-09-26, 첫 라이브 확인**: 개발자가 라이브 클러스터에서 Ingress를 켰다(체크인된 `values-prod.yaml`의 블록은 여전히 주석 처리돼 있어 기본값은 꺼짐 그대로다). 세션은 ExternalDNS가 alias `A`/`AAAA` 레코드를 만든 것, `http://sharenpo.cloud/`가 `https://`로 `301`을 돌려준 것, `curl`이 인증서를 검증한 것을 확인했다([ADR 0063](ADR/0063-alb-dns-externaldns-and-delegation-set.ko.md) 추가 기록, `k8s/helm/README.md`). 확인하지 못한 것: `describe-listeners`(리스너 두 개), 브라우저의 인증서 수락, 실제 HTTPS 연결에서의 `Secure` refresh 쿠키. Service별 헬스체크 발견은 [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)의 추가 기록에 있다. | [0034](ADR/0034-https-termination-stance.ko.md), [0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md), [0058](ADR/0058-ingress-path-allowlist.ko.md) |
 | **Helm** | 릴리스 패키징 | ✅ 차트 준비됨 / ✅ 릴리스 가동 중 | `k8s/helm/`에 위치(2026-08-17 형제 디렉터리였던 `helm/upload-board-project/`에서 이동 후 한 단계 더 평탄화, [0042](ADR/0042-k8s-helm-directory-consolidation.ko.md) — Kubernetes 관련 콘텐츠가 최상위에 하나만, 불필요한 중첩 없이 남도록). 2026-08-17 프로젝트 전용으로 적응([0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0037](ADR/0037-helm-chart-scaffold.ko.md)의 유예 해제): 실제 이미지/포트, `/health/live`+`/health/ready` probe, non-root `securityContext`, `ConfigMap`, `existingSecret` 전용 `Secret` 소비, `docker-compose.yml`의 `migrate` 서비스를 본뜬 migration `Job`, 기본 비활성 `Ingress`. `replicaCount` 기본값은 1(`STORAGE_DRIVER=local`에서 1보다 크면 replica 간 업로드 파일이 사라짐 — 실제 릴리스가 정확히 이 이유로 `s3`를 썼다). 임시 로컬 `kind` 클러스터에 대해 `helm install --wait` 검증 완료(2026-08-17, [0041](ADR/0041-helm-chart-project-adaptation.ko.md)의 추가 기록) — 실제 버그 2개(hook 순서, 빈 문자열 env var) 발견해 수정. 2026-08-27 실제 대상 클러스터에 설치 완료했다가 2026-08-28에 나머지 스택과 함께 제거됐다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md)의 `ServiceMonitor` 템플릿을 위해 차트를 `0.3.0`으로 올리고 2026-08-29/30에 재적용** — 이 수정 시점 기준 `helm list -A`가 `upload-board` 릴리스를 `deployed`로 보여준다. `bash k8s/infra/terraform/deploy.sh all`로 재현 가능. | [0037](ADR/0037-helm-chart-scaffold.ko.md), [0041](ADR/0041-helm-chart-project-adaptation.ko.md), [0042](ADR/0042-k8s-helm-directory-consolidation.ko.md) |
-| **Prometheus** | 메트릭 수집 | ✅ 랜딩, 라이브 검증 완료 | [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md): `eks_blueprints_addons`의 `enable_kube_prometheus_stack` 플래그(kube-prometheus-stack 차트)를 통한 자체호스팅, 새 `prom-client` 기반 `/metrics` 엔드포인트(`MetricsModule`)를 `ServiceMonitor`로 스크레이프. 2026-08-29/30 라이브 검증 완료(ADR 0047 D4 Addendum): `up{job="upload-board"}` → `1`, 커스텀 카운터(`upload_claims_total`, `temp_cleanup_deleted_total`)와 전역 `http_request_duration_seconds` 히스토그램 모두 쿼리 결과에 존재. | [0047](ADR/0047-observability-prometheus-grafana.ko.md), [0017](ADR/0017-logging-conventions.ko.md) 위 |
+| **Prometheus** | 메트릭 수집 | ✅ 랜딩, 라이브 검증 완료 | [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md): `eks_blueprints_addons`의 `enable_kube_prometheus_stack` 플래그(kube-prometheus-stack 차트)를 통한 자체호스팅, 새 `prom-client` 기반 `/metrics` 엔드포인트(`MetricsModule`)를 `ServiceMonitor`로 스크레이프. 2026-08-29/30 라이브 검증 완료(ADR 0047 D4 추가 기록): `up{job="upload-board"}` → `1`, 커스텀 카운터(`upload_claims_total`, `temp_cleanup_deleted_total`)와 전역 `http_request_duration_seconds` 히스토그램 모두 쿼리 결과에 존재. | [0047](ADR/0047-observability-prometheus-grafana.ko.md), [0017](ADR/0017-logging-conventions.ko.md) 위 |
 | **Grafana** | 대시보드 | ✅ 랜딩, 라이브 검증 완료 | [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md): Prometheus와 같은 `kube-prometheus-stack` Helm 릴리스에 함께 묶임(D3 — 결정 단위 하나, Helm 릴리스 하나). 아직 커스텀 대시보드는 없다 — `kube-prometheus-stack` 기본 대시보드를 그대로 사용. 2026-08-29/30 라이브 검증 완료: `GET /api/datasources`가 정상 동작하는 `Prometheus` 데이터소스를 보여준다 — 차트가 별도 수동 설정 없이 자동 프로비저닝했다. | [0047](ADR/0047-observability-prometheus-grafana.ko.md) |
 | **Terraform** | 코드형 인프라 | ✅ 라이브에 적용됨(날짜별 실행은 §9) | 프로젝트 전용 설계 확정([0043](ADR/0043-terraform-project-adaptation.ko.md), [0038](ADR/0038-terraform-iac-scaffold.ko.md)의 유예 해제) 및 2026-08-18 구현: 이 프로젝트 고유의 EKS(이기종 노드 그룹 2개), RDS PostgreSQL, S3 버킷 + 앱 IRSA 역할, Secrets Manager + External Secrets Operator, Route53/ACM 기반 ALB ingress 경로를 프로비저닝한다 — Istio 예제는 주석 처리가 아니라 완전히 사라졌다. 2026-08-20에 그 단일 루트 모듈을 독립적으로 apply 가능한 세 state로 재구성([0044](ADR/0044-terraform-three-state-split.ko.md)): `cluster/`(`module.vpc`+`module.eks`), `app-infra/`(RDS/S3+IRSA/Secrets Manager/Route53+ACM, `terraform_remote_state`로 `cluster/`를 읽음), `addons/`(`module.eks_blueprints_addons` — [ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) 기준 ALB Controller+ESO+kube-prometheus-stack, 다른 둘을 모두 읽는 유일한 state) — 퇴역한 단일 `main.tf`는 더 이상 존재하지 않는다. 세 디렉터리 모두 `terraform validate`/`fmt -check` 통과. 2026-08-25~27에 실제 AWS 계정에 apply됐고, 2026-08-28에 배포가 end-to-end로 검증된 후 과금을 멈추려고 전부 destroy됐다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 2026-08-29/30에 재적용** — 이 수정 시점 기준 세 디렉터리 모두에서 `terraform output`이 실제 값을 반환한다(`cluster`의 EKS 엔드포인트, `app-infra`의 ACM 인증서 ARN, `addons`의 `terraform state list`에 잡히는 `kube_prometheus_stack` Helm 릴리스). 믿기 전에 `terraform plan`/`terraform output`으로 재확인할 것 — 이 칸은 여전히 스냅샷일 뿐 실시간 상태가 아니고, 검증이 끝나면 개발자가 과금을 멈추려 다시 destroy할 수도 있다. | [0038](ADR/0038-terraform-iac-scaffold.ko.md), [0043](ADR/0043-terraform-project-adaptation.ko.md), [0044](ADR/0044-terraform-three-state-split.ko.md), [0047](ADR/0047-observability-prometheus-grafana.ko.md) |
-| **AWS** | 클라우드 / 배포 대상 | ✅ 라이브에서 검증됨(날짜별 실행은 §9) | 위 행들이 향하는 컨테이너 배포 대상 — 2026-08-25~27에 end-to-end로 검증됨: 계정 `074416822640`(`sharenpo-user`, 2026-08-27부로 Paid Plan), 리전 `ap-northeast-2`, 실제 EKS + RDS + S3 + Route53/ACM, 그리고 앱 자체가 배포되어 동작함(§9, 2026-08-27). 검증이 끝난 뒤 2026-08-28에 과금을 멈추려고 전부 destroy됐다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 `deploy.sh all`로 2026-08-29/30에 재적용** — 이 수정 시점 기준 다시 살아있다. 검증이 끝나면 개발자가 과금을 멈추려 다시 destroy할 것으로 예상. | 배포 ADR(예정), [0047](ADR/0047-observability-prometheus-grafana.ko.md) |
+| **AWS** | 클라우드 / 배포 대상 | ✅ 라이브에서 검증됨(날짜별 실행은 §9) | 위 행들이 향하는 컨테이너 배포 대상 — 2026-08-25~27에 end-to-end로 검증됨: 계정 `<AWS_ACCOUNT_ID>`(`sharenpo-user`, 2026-08-27부로 Paid Plan), 리전 `ap-northeast-2`, 실제 EKS + RDS + S3 + Route53/ACM, 그리고 앱 자체가 배포되어 동작함(§9, 2026-08-27). 검증이 끝난 뒤 2026-08-28에 과금을 멈추려고 전부 destroy됐다(§9). **[ADR 0047](ADR/0047-observability-prometheus-grafana.ko.md) D4의 라이브 검증을 위해 `deploy.sh all`로 2026-08-29/30에 재적용** — 이 수정 시점 기준 다시 살아있다. 검증이 끝나면 개발자가 과금을 멈추려 다시 destroy할 것으로 예상. | 배포 ADR(예정), [0047](ADR/0047-observability-prometheus-grafana.ko.md) |
 
 ### Stage 5 — 운영 화면 (admin 콘솔) — 2026-07-30 추가
 
@@ -797,7 +799,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   `Blueprint = upload-board-project` 태그는 upstream `terraform-aws-eks-blueprints` 모듈이
   붙이는 값이라 완전한 통일은 애초에 불가능하다. "적용된 적 없음"이라는 서술은 2026-08-25에
   `CLAUDE.md`(+ko)와 `k8s/infra/terraform/README.md`(+ko)에서 정정했다. **ADR 0043·0044의
-  Addendum에는 아직 그대로 남아 있으며, 이는 의도적이다** — ADR은 작성 시점의 사실을 기록하므로
+  추가 기록에는 아직 그대로 남아 있으며, 이는 의도적이다** — ADR은 작성 시점의 사실을 기록하므로
   고치지 않고, 정정의 기준은 이 행이다. **갱신(2026-08-28)**: 이 행이 측정했던 인프라는
   2026-08-25~27에 apply됐다가 2026-08-28에 전부 destroy됐다(배포 검증 완료 후 과금 중단
   목적 — `k8s/infra/terraform/README.md`(+ko)의 상태 참고). 지금 AWS엔 `upload-board-project`
@@ -889,7 +891,7 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   개발 DB 볼륨(`uploadboardproject_db-data`)이 지금은 `file_entity`/`user_entity`/
   `post_entity` 전부 **0행**이고, `file/upload`·`file/temp`도 디스크에서 전부 비어
   있다. 이 볼륨의 생성 시각(2026-09-05)은 [ADR 0051](ADR/0051-orphaned-granted-file-reclaim.ko.md)의
-  Addendum이 기록한 사고 날짜(실제 파일 44개가 지워진 라이브 스윕 테스트)와 일치한다 —
+  추가 기록에 적힌 사고 날짜(실제 파일 44개가 지워진 라이브 스윕 테스트)와 일치한다 —
   이 항목이 측정했던 데이터가 지금 접근 가능한 개발 DB엔 더 이상 존재하지 않으므로,
   정리할 것도 결정할 것도 남지 않았다. 이는 원래부터 *개발* DB에만 해당하는 이야기였고,
   운영 데이터 경로를 가리킨 적은 없다.
@@ -1036,6 +1038,16 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   이미 삭제됐지만, 이 ROADMAP의 계획 행만 그 정리에서 살아남아 있었다. 클러스터 안에
   실제로 여러 서비스가 생겨 그들 사이의 트래픽 관리·mTLS·카나리 라우팅이 필요해지는
   경우에만 재검토한다 — 오늘 이 프로젝트의 로드맵에는 그런 시나리오가 없다.
+  **2026-10-27 추가 기록 — 위의 전제는 그 뒤로 바뀌었다.** 차트는 이제 워크로드 네 개를 배포한다.
+  백엔드, `frontend/`와 `admin/`(정적 nginx), ClamAV다
+  ([ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md),
+  [ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md),
+  [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)). "정확히 하나"라는 말은 더 이상 맞지
+  않고, 위에서 밝힌 재검토 조건인 "클러스터 안의 여러 서비스"는 문구상 충족됐다. 다만 실제 east-west
+  트래픽은 좁다. 백엔드에서 ClamAV(`clamd`, TCP 3310)로 가는 호출과, Prometheus에서 백엔드의
+  `/metrics`로 가는 수집뿐이다. 두 SPA 컨테이너는 정적 파일만 서빙하고 클러스터 안에서 백엔드를
+  호출하지 않는다(브라우저가 ALB를 거쳐 접근한다). 결정 자체는 다시 평가하지 않았고 여기서 바꾸지도
+  않았으며, 위의 본문은 쓰인 그대로 둔다.
 - ADR 0026 콘텐츠 엔드포인트 후속 (2026-08-01 기록, `GET /file/:id/content`
   [file-content.controller.ts](../backend/file/file-content.controller.ts) 구현 후 검토), 심각도 순:
   1. ~~**[중간] 스트림 에러 미처리**~~ — **2026-09-07 해결**: 200·206 경로의
@@ -1429,12 +1441,12 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   모든 클라이언트의 `req.ip`가 프록시 자신의 주소 하나로 수렴해, 방문자 전원이
   버킷 하나를 나눠 쓰게 되는 문제였다. ~~인그레스 토폴로지 결정이 있을 때까지
   미룸~~ — **2026-09-14 해결**: `backend/main.ts`가 이제 이 프로젝트 자신의
-  VPC CIDR(`10.0.0.0/16` — ADR 0054의 2026-09-14 addendum) 안에서 온 연결에만
+  VPC CIDR(`10.0.0.0/16` — ADR 0054의 2026-09-14 추가 기록) 안에서 온 연결에만
   `X-Forwarded-For`를 신뢰한다 — 라이브 배포 없이 내린 설계 결정이다(이 프로젝트가
   이미 확정한 "ALB 직결, CDN 없음" 목표 구조, ADR 0034만으로 종이 위에서 값을
   확정하기 충분했다). dev/로컬 영향은 `proxy-addr`을 대상으로 직접 검증했고,
   실제 ALB의 연결 주체가 정말 그 CIDR 안에 들어오는지는 AWS 스택을 다시 적용할
-  때까지(§9) 미검증 상태로 남는다 — 정직한 잔여 사항은 해당 addendum 참고. Redis
+  때까지(§9) 미검증 상태로 남는다 — 정직한 잔여 사항은 해당 추가 기록 참고. Redis
   기반 `ThrottlerStorage`도 여전히 열려 있음 — 이 앱이 실제로 replica 2개
   이상으로 돌기 전까지는 필요 없다(현재 기본 storage는 인스턴스별로 카운트한다).
 - ~~회원가입 계정 열거~~ (위 두 항목과 함께 2026-09-09 발견, **2026-09-12 결정: 현행
@@ -1620,6 +1632,52 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
   두 values 조합에서의 `helm lint`와 `helm template`, 이어서 라이브 클러스터에서의 드레인. 렌더링만 해 본
   템플릿은 동작하는 것을 본 것이 아니기 때문이다. 애플리케이션 코드, 스키마, 환경 변수 변경은 없다. replica
   결정과 함께, 또는 명시적으로 요청받을 때 다시 본다. CLAUDE.md > Known Gaps에도 올려 두었다.
+- **공유 링크: 앱 화면은 로그인이 필요하고, 링크 미리보기가 없고, 다른 사이트가 파일을 끼워 넣을 수 없다** —
+  **2026-10-20 기록, 결정·일정 없음.** 링크를 로그아웃된 방문자와 크롤러(JavaScript 없이)로 열어
+  `STORAGE_DRIVER=local`인 로컬 스택에서 확인했다. 배포된 스택과 S3 리다이렉트를 거치는 경로는 확인하지
+  않았다. 되는 것: 파일 URL 자체, 곧 공개 파일의 `/file/:id/content`와 링크 공유 파일의
+  `?share=<token>`은 새 브라우저에서 이미지·영상·오디오 모두 바로 열리고 탐색도 된다(206, 범위를 벗어나면
+  416). 비공개 파일, 토큰이 없거나 틀린 링크 공유 파일, 재발급으로 무효가 된 토큰, 만료된 토큰은 모두 403이다.
+  안 되는 것: (1) `/posts/:id`와 `/view/:id`는 로그아웃된 방문자를 `/login`으로 보내고(`RequireAuth`가
+  돌아갈 위치를 넘기지 않는다), 로그인하면 `LoginPage`가 링크가 아니라 `/`로 보낸다. 토큰 없이 부르면
+  `/post/:id`와 `/file/:id` API가 401이라, 이 화면들은 로그인하지 않은 방문자에게 보여 줄 내용도 없다.
+  (2) 크롤러는 모든 URL에서 같은 빈 껍데기(`<title>Sharenpo</title>`, 설명·Open Graph 메타 없음)를 받고,
+  `/robots.txt`와 `/sitemap.xml`도 앱 HTML을 돌려준다. 그래서 미리보기도, 색인할 내용도 없다.
+  (3) 다른 출처의 `<img>`·`<video>`·`<audio>`가 공개 파일을 가리키면 브라우저가
+  `ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`으로 막는다. API가 `Cross-Origin-Resource-Policy: same-origin`을
+  보내기 때문이다([ADR 0055](ADR/0055-helmet-security-headers.ko.md) 2026-10-20 추가 기록).
+  (4) `shareExpiresAt`은 ISO 8601 문자열인지만 검증하므로(`@IsISO8601()`) 과거 시각도 받아들여지고(200)
+  그 링크는 곧바로 죽는다. 각 항목은 따로 설계해야 하는 결정이다. 게시글이나 공개 파일 화면을 방문자에게 열면
+  "인증이 아닌 모든 엔드포인트는 `JwtAuthGuard` 뒤에 둔다"는 기본 원칙이 바뀌고, 내용 경로의 헤더를 풀면
+  토큰이 URL에 실리는 링크 공유 파일까지 함께 풀린다. 명시적으로 요청받을 때 다시 본다.
+  README.ko.md > 알려진 한계에도 올려 두었다.
+
+- **README 후속 항목과 저장소 위생** — **2026-10-24 기록, 2026-10-26 갱신, 예정된 작업 없음.**
+  README 점검 뒤의 상태(자세한 내용은 CHANGELOG의 Unreleased): (1) GitHub Secret scanning과 push
+  protection은 확인한 시점(2026-10-21)에 꺼져 있었다. 개발자가 저장소 설정에서 직접 켠다. (2) 2026-10-26에
+  완료: AWS 계정 번호, RDS 주소, role ARN, 인증서 ARN을 `k8s/helm/values-prod.yaml`에서 gitignore된
+  `values-prod.local.yaml`로 옮겼고 `deploy.sh`가 이 파일을 요구한다
+  ([ADR 0068](ADR/0068-deploy-identifiers-gitignored-overlay.ko.md)). 값은 git 이력에 남아 있다. (3)
+  2026-10-26에 완료: `CONTRIBUTING`과 `CLAUDE.md`에서 `pnpm migration:run -- --fake`를 지웠다. 옛 기록에는
+  남아 있다. (4) 2026-10-26에 완료: Docker 경로의 admin 계정 만들기와 ClamAV를 붙인 비도커 업로드를
+  실행해 통과했다. (5) 한 번 보였고 재현하지 않음: `docker compose up --build`가 첫 빌드에서
+  `image "…/sharenpo-api:local": already exists`로 실패했다(`migrate`와 `api`가 같은 태그를 빌드한다).
+  빌드 없이 다시 실행하면 동작했다. `up` 전에 `docker compose build api`를 먼저 실행하면 피할 수 있을지도 모르지만 시험하지 않았다.
+  (6) `STYLE-PLAN.ko.md`에 `-합니다`와 `-다`가 섞여 있다. (7) 개발자가 지우도록 남긴 것: 2026-10-26 검증에서 만든
+  Docker 볼륨 `sharenpo-verify3_db-data`, `sharenpo-verify3_clamav-data`와 이미지 `sharenpo-api:local`.
+  명시적으로 요청받을 때 다시 본다.
+- **`pnpm audit --prod`의 high advisory 두 건, `body-parser`와 `multer` — 2026-10-27 해결.** 둘 다
+  2026-10-23에 공개됐고(CVSS 7.5, 서비스 거부), `--prod`를 깨끗하게 만든 2026-10-08 작업 뒤에 나왔다.
+  설치된 것은 `body-parser` 2.3.0(2.4.0에서 수정, `express` 경유)과 `multer` 2.4.0(2.5.0에서 수정)이었다.
+  `multer` 쪽은 비동기 `fileFilter`가 있어야 하는데 `backend/upload/upload.controller.ts`의 것은 `cb`를
+  동기로 호출하므로 현재 설정으로는 닿지 않았다. `body-parser` 쪽은 기본 옵션에 해당하고 `backend/main.ts`는
+  그 옵션을 바꾸지 않으므로, 압축된 본문 뒤에 여분의 바이트가 붙은 요청 하나로 프로세스가 죽을 것으로
+  예상했지만 수정 전후 모두 재현하지는 않았다. 수정: `overrides` 항목과 직접 의존성 `multer`의 범위를
+  `^2.4.0`, `^2.5.0`으로 올리고 `pnpm install`을 실행했다. lockfile에는 이 두 패키지와 `body-parser` 2.4.0이
+  쓰는 `content-type` 2.1.0만 추가됐다. 이후 `pnpm audit --prod`는 깨끗하고(전체 `pnpm audit`는 69건에서
+  67건), `pnpm build`와 린트(CRLF를 무시하는 규칙으로)가 통과하며, 단위 테스트 282건과 E2E 76건이 통과했다.
+  E2E는 일회용 PostgreSQL과 `clamd`로 돌렸다. 확인하지 않은 것: compose나 배포된 이미지, 브라우저
+  클라이언트를 통한 업로드. CLAUDE.ko.md > 알려진 미해결 지점에도 적어 두었다.
 
 ## 8. Advisory 노트
 
@@ -1628,6 +1686,12 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 (README/엔드포인트 일치의 자동 검증 — CI 작업 아래의 후보).
 
 ## 9. 완료
+
+### 2026-09-29
+
+| 항목 | 비고 |
+|---|---|
+| 세 번째 라이브 실행: 재적용과 재검증(ADR 추가 기록에만 남아 있음) | **이 실행의 직접 기록은 없다.** 시작과 철거 시각, 누가 어떤 명령을 실행했는지는 기록되지 않았고, 아래 내용은 명시한 ADR의 추가 기록에서 가져왔으며 이 항목을 쓰면서 다시 확인한 것은 없다. 2026-09-29에 라이브 ALB에서 관찰한 것으로 기록된 내용: `ENV=prod`가 라이브이고 리프레시 쿠키의 속성을 실제 HTTPS 연결에서 확인([ADR 0034](ADR/0034-https-termination-stance.ko.md), [ADR 0012](ADR/0012-refresh-cookie-rotation.ko.md)), 운영 CORS 규칙을 적용하고 공개 범위 세 단계가 모두 실제 브라우저에서 로드됨([ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md)), 같은 클라이언트의 요청 제한과 실제 두 번째 네트워크에서의 IP 간 격리([ADR 0054](ADR/0054-per-route-rate-limit-tuning.ko.md)), Ingress를 켠 기준선과 끈 상태의 NetworkPolicy([ADR 0056](ADR/0056-networkpolicy-east-west-restriction.ko.md)), 두 번째 라이브 ALB에서 상태 코드뿐 아니라 응답 본문까지 확인한 프론트엔드와 `/admin`([ADR 0060](ADR/0060-frontend-same-alb-path-routing.ko.md), [ADR 0062](ADR/0062-admin-same-alb-subpath-routing.ko.md)), EKS의 파드 종료 속도와 두 번 재현한 ALB 종료 경합, 제안했지만 채택하지 않은 `preStop` sleep([ADR 0061](ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md)). 2026-09-30에는 앱을 통한 EICAR·정상 파일 업로드([ADR 0059](ADR/0059-upload-malware-scanning-clamav.ko.md))와 `frontend/` 플레이어에서 S3 리다이렉트를 거친 Range/탐색([ADR 0036](ADR/0036-s3-presigned-content-redirect.ko.md))을 확인했다. 스택이 지금 apply돼 있는지는 여기에 적지 않는다. AWS에서 확인한다. |
 
 ### 2026-09-26
 
@@ -1645,13 +1709,13 @@ Sharenpo의 전체 계획서. 2026-07-23에 11개 축(본질 → 방법론 → �
 
 | 항목 | 비고 |
 |---|---|
-| end-to-end 검증 후 AWS 전체 destroy | 배포가 안정 상태로 확인됐고(아래 2026-08-27 행 참고), 같은 기간 실제 RDS를 상대로 TLS 검증 결함까지 발견·수정한 뒤(ADR 0039 Addendum — `rejectUnauthorized: false`를 `ssl: { ca: DB_SSL_CA }`로 교체, 재배포해 실제 인증서 검증 통과까지 확인), 개발자는 활성 테스터가 없는 상태로 스택을 계속 띄워두는 대신 AWS 과금을 멈추기로 했다. 순서: Helm 릴리스 먼저 제거, 그다음 `addons/` → `app-infra/` → `cluster/` 순으로 `terraform destroy` — `k8s/infra/terraform/README.md`가 명시한 역순 그대로다(ALB/Ingress를 한 번도 켠 적이 없어서 ADR이 기록한 `DependencyViolation` 타임아웃 위험도 해당 없었다). 이후 이 스택이 만든 모든 리소스 종류(EKS 클러스터, 노드그룹 EC2 인스턴스, RDS 인스턴스, S3 버킷, Route53 호스팅 존, NAT 게이트웨이, Elastic IP, EBS 볼륨, Secrets Manager, ACM 인증서, CloudWatch 로그그룹, 로드밸런서)를 `aws` describe 호출로 직접 확인했고 전부 빈 값/not-found였다. RDS 스냅샷은 안 남겼다(`skip_final_snapshot = true`가 원래 설계였고, 남길 데이터도 없었다). `CLAUDE.md`(+ko), `k8s/infra/terraform/README.md`(+ko), 이 문서의 Stage 4 상태 표를 같은 날 갱신해서 2026-08-25에 했던 "적용됨" 정정을 낡은 채로 두지 않고 다시 "미적용"으로 되돌렸다 — 각각 이게 특정 시점의 스냅샷이며 `terraform plan`으로 재확인해야 한다고 명시했다. 나중에 재배포할 때 새로 결정할 건 없다 — 같은 순서, 같은 `deploy.sh all`이 Terraform README의 Deploy 섹션(Destroy 섹션에서 상호참조)에 그대로 문서화돼 있다. |
+| end-to-end 검증 후 AWS 전체 destroy | 배포가 안정 상태로 확인됐고(아래 2026-08-27 행 참고), 같은 기간 실제 RDS를 상대로 TLS 검증 결함까지 발견·수정한 뒤(ADR 0039 추가 기록 — `rejectUnauthorized: false`를 `ssl: { ca: DB_SSL_CA }`로 교체, 재배포해 실제 인증서 검증 통과까지 확인), 개발자는 활성 테스터가 없는 상태로 스택을 계속 띄워두는 대신 AWS 과금을 멈추기로 했다. 순서: Helm 릴리스 먼저 제거, 그다음 `addons/` → `app-infra/` → `cluster/` 순으로 `terraform destroy` — `k8s/infra/terraform/README.md`가 명시한 역순 그대로다(ALB/Ingress를 한 번도 켠 적이 없어서 ADR이 기록한 `DependencyViolation` 타임아웃 위험도 해당 없었다). 이후 이 스택이 만든 모든 리소스 종류(EKS 클러스터, 노드그룹 EC2 인스턴스, RDS 인스턴스, S3 버킷, Route53 호스팅 존, NAT 게이트웨이, Elastic IP, EBS 볼륨, Secrets Manager, ACM 인증서, CloudWatch 로그그룹, 로드밸런서)를 `aws` describe 호출로 직접 확인했고 전부 빈 값/not-found였다. RDS 스냅샷은 안 남겼다(`skip_final_snapshot = true`가 원래 설계였고, 남길 데이터도 없었다). `CLAUDE.md`(+ko), `k8s/infra/terraform/README.md`(+ko), 이 문서의 Stage 4 상태 표를 같은 날 갱신해서 2026-08-25에 했던 "적용됨" 정정을 낡은 채로 두지 않고 다시 "미적용"으로 되돌렸다 — 각각 이게 특정 시점의 스냅샷이며 `terraform plan`으로 재확인해야 한다고 명시했다. 나중에 재배포할 때 새로 결정할 건 없다 — 같은 순서, 같은 `deploy.sh all`이 Terraform README의 Deploy 섹션(Destroy 섹션에서 상호참조)에 그대로 문서화돼 있다. |
 
 ### 2026-08-27
 
 | 항목 | 비고 |
 |---|---|
-| AWS 첫 실제 배포가 안정 상태에 도달함 | Helm 릴리스 `upload-board`(`k8s/helm/`)가 `cluster/`의 Terraform 상태로 프로비저닝된 실제 EKS 클러스터에서 `STATUS: deployed`(revision 5)에 도달했다(§7의 "적용 안 됨" 주장은 이미 2026-08-25에 정정됨 — 이번 건은 그 인프라 *위에* 앱이 올라간 것이지, 인프라 자체가 아니다). revision 1–4는 모두 실패했다: rev 1–3은 계정이 아직 Free Plan이던 동안의 파드 슬롯/아키텍처 불일치(Paid Plan 업그레이드와, `docker-publish` CI가 `dev`가 아닌 `main` push에만 반응하므로 수동으로 진행한 멀티아치 `docker buildx build --platform linux/amd64,linux/arm64` 푸시로 해결); rev 4는 실제 RDS 인스턴스를 상대로 마이그레이션 Job이 `no pg_hba.conf entry ... no encryption`로 실패했다(`rds.force_ssl`이 TLS를 요구하는데 앱이 요청하지 않고 있었음). `helm upgrade upload-board . --reuse-values --set env.DB_SSL=true`(rev 5)가 바로 이 문제를 위해 추가해둔 `DB_SSL` env var(커밋 `cf0cbfe`, Joi 스키마 + `.env.example` + `data-source.ts`)로 이를 해결했다 — 이제 마이그레이션 Job이 완료되고 앱 파드가 `Running`/ready 상태에 도달한다. 이어서 S3 접근을 연결했다: `default` ServiceAccount에 `app-infra`의 Terraform 출력 IAM 역할 ARN(`eks.amazonaws.com/role-arn=arn:aws:iam::074416822640:role/upload-board-project-app`)을 주석 처리하고 Deployment를 재시작해 반영했으며, 실행 중인 파드에 주입된 `AWS_ROLE_ARN`/`AWS_WEB_IDENTITY_TOKEN_FILE` env var와 projected `aws-iam-token` 볼륨으로 확인했다 — 릴리스의 `STORAGE_DRIVER=s3` 값이 이제 실제로 인증할 수 있지만, 실제 버킷을 상대로 한 엔드투엔드 업로드는 아직 검증되지 않았다. 아직은 클러스터 내부에서만 접근 가능하다(`ingress.enabled: false`, 차트 기본값) — 개발자는 외부 테스터가 실제로 필요해지기 전까지는 미리 `Ingress`를 켜지 않고 이 상태를 유지하기로 확정했다. 그 외 열려 있던 두 항목은 같은 날 해결됐다: `cluster/main.tf`의 graviton `t4g.medium` 노드 타입은 원래 계정이 업그레이드되기 전 파드 슬롯 제약을 우회하기 위한 임시값이었으나, 이제 개발자가 비용 효율(`m6g.large`의 더 넉넉한 파드 슬롯보다 우선)을 이유로 **영구 선택값**으로 확정했다(값 자체는 안 바뀌므로 `terraform apply` 불필요 — 주석만 현행화); `k8s/helm/values-prod.yaml`을 추가해 이번 배포의 `--set env.DB_SSL/STORAGE_DRIVER/S3_BUCKET/...` 플래그를 하나의 오버레이로 정리했다(`helm upgrade upload-board . -f values-prod.yaml`), `helm template`으로 실제 릴리스와 동일한 `ConfigMap`을 렌더링하는지 검증함. |
+| AWS 첫 실제 배포가 안정 상태에 도달함 | Helm 릴리스 `upload-board`(`k8s/helm/`)가 `cluster/`의 Terraform 상태로 프로비저닝된 실제 EKS 클러스터에서 `STATUS: deployed`(revision 5)에 도달했다(§7의 "적용 안 됨" 주장은 이미 2026-08-25에 정정됨 — 이번 건은 그 인프라 *위에* 앱이 올라간 것이지, 인프라 자체가 아니다). revision 1–4는 모두 실패했다: rev 1–3은 계정이 아직 Free Plan이던 동안의 파드 슬롯/아키텍처 불일치(Paid Plan 업그레이드와, `docker-publish` CI가 `dev`가 아닌 `main` push에만 반응하므로 수동으로 진행한 멀티아치 `docker buildx build --platform linux/amd64,linux/arm64` 푸시로 해결); rev 4는 실제 RDS 인스턴스를 상대로 마이그레이션 Job이 `no pg_hba.conf entry ... no encryption`로 실패했다(`rds.force_ssl`이 TLS를 요구하는데 앱이 요청하지 않고 있었음). `helm upgrade upload-board . --reuse-values --set env.DB_SSL=true`(rev 5)가 바로 이 문제를 위해 추가해둔 `DB_SSL` env var(커밋 `cf0cbfe`, Joi 스키마 + `.env.example` + `data-source.ts`)로 이를 해결했다 — 이제 마이그레이션 Job이 완료되고 앱 파드가 `Running`/ready 상태에 도달한다. 이어서 S3 접근을 연결했다: `default` ServiceAccount에 `app-infra`의 Terraform 출력 IAM 역할 ARN(`eks.amazonaws.com/role-arn=arn:aws:iam::<AWS_ACCOUNT_ID>:role/upload-board-project-app`)을 주석 처리하고 Deployment를 재시작해 반영했으며, 실행 중인 파드에 주입된 `AWS_ROLE_ARN`/`AWS_WEB_IDENTITY_TOKEN_FILE` env var와 projected `aws-iam-token` 볼륨으로 확인했다 — 릴리스의 `STORAGE_DRIVER=s3` 값이 이제 실제로 인증할 수 있지만, 실제 버킷을 상대로 한 엔드투엔드 업로드는 아직 검증되지 않았다. 아직은 클러스터 내부에서만 접근 가능하다(`ingress.enabled: false`, 차트 기본값) — 개발자는 외부 테스터가 실제로 필요해지기 전까지는 미리 `Ingress`를 켜지 않고 이 상태를 유지하기로 확정했다. 그 외 열려 있던 두 항목은 같은 날 해결됐다: `cluster/main.tf`의 graviton `t4g.medium` 노드 타입은 원래 계정이 업그레이드되기 전 파드 슬롯 제약을 우회하기 위한 임시값이었으나, 이제 개발자가 비용 효율(`m6g.large`의 더 넉넉한 파드 슬롯보다 우선)을 이유로 **영구 선택값**으로 확정했다(값 자체는 안 바뀌므로 `terraform apply` 불필요 — 주석만 현행화); `k8s/helm/values-prod.yaml`을 추가해 이번 배포의 `--set env.DB_SSL/STORAGE_DRIVER/S3_BUCKET/...` 플래그를 하나의 오버레이로 정리했다(`helm upgrade upload-board . -f values-prod.yaml`), `helm template`으로 실제 릴리스와 동일한 `ConfigMap`을 렌더링하는지 검증함. |
 
 ### 2026-08-06
 

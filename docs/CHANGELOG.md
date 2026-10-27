@@ -13,6 +13,17 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- **Docs: four short GIFs of flows a still picture cannot show (2026-10-20)** — documentation only.
+  The README's Screenshots section now has a "GIF" part with multi-file upload (three files of
+  different kinds, titled, uploaded one by one with progress), the share link (private → unlisted, copy,
+  rotate), ownership transfer (the owner proposes, the recipient accepts from their own account) and a
+  weak-password registration (the specific rule message, then a valid password). Each exists in English
+  and Korean (eight files, 0.14–0.41 MB each, 640 × 498); the Korean ones use Korean sample content.
+  Recorded on the same isolated stack as the screenshots. Frames come from the DevTools screencast
+  (lossless PNG) and are encoded to GIF outside the repository, because the `ffmpeg` that Playwright
+  ships cannot write GIFs; no dependency was added to any `package.json`. Sign-in uses a fresh
+  session per scene, because the refresh token is single-use (ADR 0012) and a reused one ends the
+  session. The share token is shortened to its first four characters.
 - **Frontend: several files can be chosen at once and are uploaded one by one (2026-10-06)** — the
   upload form's file input is now `multiple`. Each chosen file gets its own row with a title (the
   file name without its extension by default), a progress bar and its own result. The type radio is
@@ -29,6 +40,176 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: ROADMAP header label and a §9 entry for the 2026-09-29/30 run (2026-10-27)** — documentation only. The
+  "Current position" heading said "as of 2026-08-31" while its text already went up to 2026-09-26; it now says
+  "updated 2026-10-27" and its sentence on the live runs names the third one. §9 gained a 2026-09-29 entry for it.
+  That entry says what it is: no session wrote the run up first-hand, so the entry only collects what the ADR
+  addenda (0012, 0034, 0036, 0054, 0056, 0059, 0060, 0061, 0062) record as observed on 2026-09-29/30, cites each,
+  and says its start, its teardown and who ran what are not recorded. Nothing was re-checked against AWS or the
+  ADRs beyond reading their addendum headings, and no end of the run is claimed. English and Korean.
+- **Docs: README reading flow, measured by rendered length (2026-10-27)** — documentation only; no code, schema or
+  API changed, and no claim was changed or added. Measured before editing: Features had 26 ADR links in 42 lines,
+  four bullets ran past 500 characters, the troubleshooting table had cells of several hundred characters, and the
+  first install step sat at line 276. Changes: the role bullet, "In two minutes" and Features were tightened and
+  their ADR links moved to the end of each bullet (every ADR that was linked still is: 45 of 45); the five-column
+  troubleshooting table became five short entries with bold Cause, Fix, Why this fix and Result labels; secondary
+  material is folded into eight `<details>` blocks (notes, the no-Docker path, environment variables, how a deploy
+  runs, the two worked examples, the rule-breaking cases, and the lower-priority limitations); the module
+  paragraph under Architecture is one sentence plus a link to ARCHITECTURE.md. Raw lines went up (614 to 689 for
+  English) because the table became lists and each fold adds tag lines, so line count was the wrong measure.
+  Rendered scroll height, measured in Chromium with markdown-it 14.1.0 at 880 px wide, the four Mermaid blocks
+  replaced by a fixed 350 px placeholder and the folds closed: 18,350 px to 16,255 px (-11%), without counting the
+  AWS diagram, which is now about 300 px instead of about 930. By section: Quick Start 2,314 to 1,463 px, How this
+  was built 1,278 to 839, Troubleshooting 1,358 to 1,025, Known limitations 869 to 471, Features 868 to 819.
+  Checked on GitHub after the push (`dev`, both languages, 2026-10-27): the eight folds are closed with their
+  summaries, the four Mermaid blocks render without errors, the English AWS diagram is 381 px tall (it was about
+  930 px), and all 18 screenshots and GIFs load. The Korean AWS diagram broke words inside its boxes ("IRSA
+  역/할", "노/드"), because GitHub draws narrower boxes than the local renderer; the English one wrapped too. The
+  lines inside the three boxes are now split by hand so no renderer has to wrap them; looked at again on GitHub
+  after the push (`c6fcb9d`, both languages): no word breaks inside the boxes, only the hyphenated
+  `kube-prometheus-stack` still wraps at its hyphens. Not measured: the Korean README's scroll length (only structure and numbers were compared).
+  The screenshots section, 3,800 px, is unchanged.
+- **Docs: README trimmed and corrected after a claim-by-claim check (2026-10-27)** — documentation only; no code,
+  schema or API changed. Checked against the code and CI: the unit tests were rerun (20 suites, 282 tests), the E2E
+  tests were counted (76) but not run, and the 68 ADRs, rate limits, error codes, stack versions, 14 screenshots and
+  GIFs per language, 164 local links per language and the EN/KO structure all held. Corrected: the Istio sentence said
+  the chart has one backend workload and no east-west traffic, which stopped being true when ADR 0059, 0060 and 0062
+  added ClamAV, `frontend/` and `admin/` (the 2026-08-31 decision is unchanged; ROADMAP's header note and §7 keep
+  their text and gained a dated addendum saying the premise changed and what is actually east-west); the AWS diagram lacked kube-prometheus-stack in `addons/`, the one-way
+  `terraform_remote_state` reads between the three states and what `1.34` and the x64 group's `0` meant (redrawn
+  again below); the Core API intro no longer exempts all of `/auth/*` from the Bearer token (`signout` needs it).
+  Trimmed: 646 to 620 lines (Korean 638 to 616). Features no longer repeats the refresh, orphan and scan detail that
+  "In two minutes" and the ADRs carry, the test counts live only under Testing and CI, Core API went from 10 routes to
+  6 (Swagger has the rest), the deploy paragraph and both worked examples are shorter, two limitation bullets were
+  merged, and the identifier bullet is one short paragraph that states the gitleaks result as 11 findings, all false
+  positives. Not changed: ROADMAP §9 has no entry for the 2026-09-29/30 re-applies, so the README now points to "§9
+  and the ADR addenda"; the README on `main` is still the older 602-line version until `dev` is merged. The
+  AWS diagram was redrawn for readability. The first version drew every resource and arrow and rendered without
+  errors, but on GitHub the state-read arrows looped around the boxes and crossed the other lines (top to bottom
+  helped locally, not there). It is now three boxes, one per state, with the resources listed inside and the three
+  `terraform_remote_state` reads as the only arrows; the runtime links (port 5432 from the node security group,
+  the IRSA role, External Secrets, ExternalDNS and the ACM certificate, the Ingress and Helm) are four bullets
+  under it. Mermaid check, 2026-10-27: all eight blocks of both READMEs parse and render with mermaid 11.4.0 and
+  11.12.0 in Chromium (Playwright), and the redrawn diagram was looked at in both languages. GitHub rendered the
+  four English blocks of `dev` without errors before the redraw. Not verified: GitHub's rendering of the redrawn
+  diagram until it is pushed, and the Korean README on GitHub, which was not opened.
+- **Dependencies: `body-parser` 2.4.0 and `multer` 2.5.0, clearing two high advisories (2026-10-27)** — published
+  2026-10-23, both denial of service (CVSS 7.5). The `overrides` entries and the direct `multer` range in
+  `package.json` were raised and `pnpm install` rewrote the lockfile; only those two packages and `content-type`
+  2.1.0 changed. `pnpm audit --prod` is clean again (plain `pnpm audit` 69 to 67), `pnpm build` and lint pass,
+  282 unit tests pass, and 76 E2E tests pass against a throwaway PostgreSQL and `clamd`. Reachability, from the
+  code: the `multer` one needs an asynchronous `fileFilter` and the app's is synchronous; the `body-parser` one
+  applies to the default options, which `main.ts` leaves alone. Neither was reproduced. Not checked: the
+  compose or deployed image, and uploads through the browser clients. Recorded in ROADMAP §7 and CLAUDE.md >
+  Known Gaps.
+- **Docs: README rewritten and checked against the code, repository identifiers masked (2026-10-21 – 2026-10-26)** —
+  documentation and `.env.example` only; no application code, schema or API changed.
+  README: restructured (status, "in two minutes", Mermaid diagrams including an AWS one drawn from the
+  Terraform code, project structure, a 10-route Core API table with Swagger for the rest, a
+  troubleshooting-and-decisions table, a role statement). Corrected against the code: the upload claim now
+  says what `FileService.uploadFile` does (insert, `storage.promote`, commit; a failed commit after a
+  successful move can leave an orphan, reported by the granted sweep, ADR 0051), the workload count, and the
+  manual External Secrets step in the AWS diagram. `.env.example`: placeholders replaced; the unedited file
+  fails Joi on `DB_PASSWORD`/`REFRESH_TOKEN_SECRET` on purpose, and with the three values filled in
+  validation passes (checked by booting the image).
+  Identifiers: the AWS account number is masked as `<AWS_ACCOUNT_ID>` in ten docs (ADR 0036, 0046, 0057,
+  ROADMAP, `k8s/helm/README`, each in both languages). `k8s/helm/values-prod.yaml` held the account
+  number (4 times) and the RDS address (once) because `deploy.sh` passes the file to `helm upgrade`; they
+  are identifiers, not credentials, and on 2026-10-26 they moved (below). History: no AWS access-key pattern, private key, `.env` or tfstate file;
+  a gitleaks scan of the full history (2026-10-22) gave 11 findings, all reviewed as false positives. No
+  history was rewritten.
+  Korean docs: `프런트엔드` → `프론트엔드` (13 files), `Addendum` → `추가 기록` (41 headings, 24 anchor links
+  updated, 2 already-broken links in this file fixed), two docs moved to the `-다` register; broken relative
+  links in ADR 0026 and one anchor here fixed (0 broken links across the docs afterwards).
+  Verified: the Docker Quick Start on a scratch copy of `HEAD`; on 2026-10-24 the non-Docker path and
+  `admin/` against a throwaway Postgres (migrations, `start:dev`, `/doc` 200, register 201, sign-in,
+  `GET /file` 200, upload 503 `UPLOAD_SCAN_UNAVAILABLE` with no `clamd`, `pnpm promote-superadmin`, admin
+  sign-in to `/dashboard`, CORS preflight from `:5174`). On 2026-10-26 the non-Docker upload with a real `clamd`: a clean
+  PNG attached (201), claimed with `POST /file` (201) and read back from `GET /file/1/content` (200, byte-identical);
+  the EICAR test string, sent through a pipe because Windows Defender deletes the file, answered 400
+  `UPLOAD_MALWARE_DETECTED` and left nothing in `file/temp`. README English and Korean were compared section by
+  section for code spans, link targets and numbers: no link differences, the rest only wording. CI on `dev` for `7ce72f7`: all nine jobs passed. A
+  first admin run failed only because the scratch path passed Windows' 260-character limit (vite); a short
+  path worked. On 2026-10-26 on the Docker path: a registered account promoted with `docker compose exec api node dist/scripts/promote-superadmin.js` (then "already superadmin" on a second run, and `role: superadmin` in the new access token), and a changed `SUPERADMIN_EMAIL` picked up after `docker compose up -d` recreated `api`; the README now says so. Seen once and not reproduced: the first `docker compose up --build` on that run failed with `image "…/sharenpo-api:local": already exists` (`migrate` and `api` build the same tag), and a second `up -d` without building worked; a rebuild to retry it was not run. Not verified: sentence-by-sentence English/Korean parity of the README, and how GitHub renders the
+  dotted ALB edge. GitHub Secret scanning and push protection were disabled when checked (2026-10-21).
+  Removed on 2026-10-26: the `--fake` clause in `CONTRIBUTING` and `CLAUDE.md` (both languages) — pnpm 10 passes the literal `--` on, so `--fake` does not reach the command as an
+  option; the README sentence was removed earlier. Older records (ADR 0006, entries here) keep it.
+  Also on 2026-10-26: the account number, RDS address, role ARN and certificate ARN left `values-prod.yaml`
+  for a gitignored `k8s/helm/values-prod.local.yaml` that `deploy.sh` now requires, with a tracked
+  `values-prod.local.example.yaml` ([ADR 0068](ADR/0068-deploy-identifiers-gitignored-overlay.md)).
+  `helm template` with both files matches the output from the old file (607 lines, no diff); `deploy.sh helm`
+  stops with an error when the overlay is missing and, with it present, at the prompt when answered `n`. No
+  cluster was involved; the history was not rewritten. The Helm README gives the two-`-f` command.
+  Numbers and method: the README went from 686 to 645 lines (Korean 667 to 637); Features from 74 to 45 lines
+  with all 26 ADR links kept; Core API is 10 routes checked against the controllers; the troubleshooting table
+  has 5 rows from ADR and ROADMAP entries, its "why this fix" column filled where the developer confirmed it
+  (shutdown hooks, the null verdict), written as a decision from ADR 0049 for the index row and "—" for the
+  other two. The role statement comes from the developer's own answers. Every run above used a scratch copy of
+  `HEAD` and throwaway databases, never the dev database or `file/`. Seen during the runs, none of it a
+  repository defect: containers of another project and a VS Code Live Preview server took `127.0.0.1:3000`
+  mid-run and answered in place of the backend (requests to `[::1]:3000` reached the right server, and those
+  processes were left alone); Windows Defender deletes an EICAR file written to disk; and the permission mode
+  refused deleting compose volumes and images, so the volumes `sharenpo-verify3_db-data` and
+  `sharenpo-verify3_clamav-data` and the image `sharenpo-api:local` are left for the developer to remove.
+  Re-check, 2026-10-26, against the goals the README was meant to meet. The developer had enabled Secret
+  scanning and push protection and removed the image: both are on with 0 alerts, and the two `sharenpo-verify3_*`
+  volumes were still there. On GitHub (`dev`) all six in-page anchors resolve, the four Mermaid blocks and 23
+  images are present, and the CI badge reads `main`, whose last run passed (so did the last three on `dev`). All
+  eight Mermaid diagrams (four per language) render in Mermaid 11.4.0 without errors, with three dotted edges in
+  each AWS diagram; in the AWS one the Secrets Manager → External Secrets line passes behind the ALB node, and
+  reordering the edges did not change that (cosmetic, left as is; GitHub's own renderer was not seen). Numbers:
+  the 282 unit tests passed again, the 76 E2E tests match by count with `backend/` and `test/` unchanged since
+  the 2026-10-22 run, there are 68 ADRs (the README said 67 until ADR 0068), 91.6 % of 561 commits carry the
+  Claude trailer, and the versions in the tech-stack table match the `package.json` files and the Terraform.
+  The README top (intro, role, status) reads in about 1.1 minutes in English and 1.6 in Korean, about 2 and 3
+  with "In two minutes"; that measures length, not whether a reader understands it. English and Korean were read
+  side by side for the opening, Features, Architecture, Tech stack, Core API, Troubleshooting, Try the API,
+  How this was built, Testing and the limitations: no difference in meaning, only wording. The screenshot and GIF
+  captions and the Quick Start commands were compared by structure and counts, not line by line. Found while
+  checking: `pnpm audit --prod` now reports two high advisories published 2026-10-23, `body-parser` below 2.4.0
+  and `multer` below 2.5.0 (installed 2.3.0 and 2.4.0). The `multer` one needs an asynchronous `fileFilter`, and
+  this app's is synchronous; the `body-parser` one applies to the default options, which `main.ts` does not
+  change, and was not reproduced. The README, CLAUDE.md and ROADMAP §7 now say so; the override bump touches
+  `package.json` and the lockfile and waits for the developer's decision.
+- **Docs: shared-link behavior recorded after checking it (2026-10-20)** — documentation only; no code
+  changed and nothing was decided. Public and unlisted file links, opened as a logged-out visitor and as a
+  crawler on a local stack, behave like this: the file URLs open (image, video and audio, with seeking), the app
+  pages `/posts/:id` and `/view/:id` go to `/login` and not back after sign-in, a crawler sees one empty page for
+  every URL, another site cannot embed the files (`Cross-Origin-Resource-Policy: same-origin`), and a past
+  `shareExpiresAt` is accepted. Recorded as an Addendum to [ADR 0055](ADR/0055-helmet-security-headers.md), an
+  entry in ROADMAP §7 and a README "Known limitations" item. Not checked: the S3 redirect and the deployed
+  stack.
+- **Docs: README screenshots re-shot at one size, captions corrected (2026-10-19)** — documentation
+  only. The twenty images (ten per language) differed in height (900 to 1,601 px), mixed viewport
+  and full-page crops, and disagreed with each other: different creator IDs, an admin dashboard with
+  36 users and 30 files next to app pictures showing a handful. One caption described an expiry on
+  share links that the client has no control for, and a real share token was readable in the
+  unlisted-file picture. All twenty were shot again on an isolated stack (its own database, the API
+  on :3100, the client and admin on :5273/:5274) with one seeded data set, in one 900 × 1000 frame;
+  the admin picture is shared by both languages because that UI is English only. The Korean set uses
+  Korean file titles, posts and comments (a second seed run), not English text under a Korean UI. The table now
+  follows the file numbers (01–10), each caption says only what is visible, and the token is masked.
+  The API's `BASE_URL` was set to the client's own origin so media loads through the dev proxy; the
+  old pictures needed a relaxed `Cross-Origin-Resource-Policy` header in the capture browser, and the
+  README no longer says they did. The "public and unlisted media does not render locally" limitation
+  itself still holds for the default setup.
+- **Docs: the README says how the AI was directed and corrected; the destructive-action rule is widened (2026-10-17)** —
+  documentation only. The README's "How this was built" section was rewritten around a stated
+  principle (the serious ways the AI can go wrong are written into `CLAUDE.md` up front, and when one
+  happens anyway it is recorded with its date) and two kinds of example: directing the AI (the
+  malware-scan package choice, ADR 0059) and correcting it (the node group design, ADR 0043, and the
+  corrupted alert descriptions, ADR 0047). It also records cases where an existing rule was broken (44
+  files deleted, stale evidence) and says the rules are not claimed to prevent mistakes. Who did what
+  is stated only as far as the ADRs record it. `CLAUDE.md` > "Live-testing a sweep/reclaim service" now
+  also covers any destructive action: name the target, compare the expected and actual counts, state the
+  recovery path before running. `CLAUDE.ko.md` and `README.ko.md` mirror both.
+- **Docs: the lessons of the 2026-10-14..16 session are written into `CLAUDE.md` (2026-10-16)** — documentation
+  only. Four rules: Hallucination Prevention #10 now covers numbers and priorities and lists the three
+  stale-evidence incidents; the Clarification Protocol table gains a row for a request that names a
+  symptom or an audience reaction, to state the goal first; Additional Working Principles gains
+  "name the branch before the first commit" (the unrequested branch and the direct push to `main`)
+  and "another project's processes and containers are not this task's to stop" (the Chat Project
+  container stopped for a verification that needs port 3000). `CLAUDE.ko.md` mirrors all four.
 - **Docs: how the project was built, and when the oldest ADRs were written (2026-10-16)** — documentation
   only. `README.md` gained a "How this was built" section: the AI tooling, the written contract and
   hooks, where decisions and their alternatives are recorded, what was checked against real
@@ -1214,7 +1395,7 @@ development line (package.json version).
   measurement argued for one. New `perf/` tooling (seed/explain/load-test scripts) is reusable
   for re-measuring this baseline later; never wired into CI.
 - **`docker-tag-cleanup.yml` — daily Docker Hub tag retention for `docker-publish`'s
-  new `dev`-push volume (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md#addendum-2026-08-31--four-design-gaps-found-and-closed-the-next-day))**
+  new `dev`-push volume (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md#addendum-2026-08-31--five-design-gaps-found-and-closed-the-next-day))**
   — keeps the newest 30 tags, deleting only tags shaped like a 40-hex-char git SHA
   (`^[0-9a-f]{40}$`) so `:latest` and any manually-created tag can never be selected by
   construction. `workflow_dispatch` defaults to a dry run; the scheduled cron run deletes
@@ -1695,7 +1876,7 @@ development line (package.json version).
   character in the secret values from a web-UI paste, but the `v3`→`v4` bump was kept anyway
   as the correct fix for the Node-runtime mismatch it was diagnosing.
 - **Three design gaps in the `docker-publish`/smoke-test work above, found and closed the
-  next day (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md#addendum-2026-08-31--four-design-gaps-found-and-closed-the-next-day))**
+  next day (2026-08-31, [ADR 0048 Addendum](ADR/0048-ci-trigger-restoration-and-docker-publish-design.md#addendum-2026-08-31--five-design-gaps-found-and-closed-the-next-day))**
   — `docker-publish`'s `needs` narrowed from all 6 jobs to `[lint-and-unit, e2e]`: the root
   Dockerfile builds `backend/` only, so `frontend-lint`/`frontend-e2e`/`admin-lint-and-unit`/
   `admin-e2e` results said nothing about whether the backend image was safe to publish, yet

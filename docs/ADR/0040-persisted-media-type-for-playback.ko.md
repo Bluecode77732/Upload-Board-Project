@@ -92,7 +92,7 @@ DTO 계층에 판정 로직을 중복하지 않는다 — 컬럼이 이미 분�
 `toResponse()`(`file.service.ts`)는 오늘 `file.visibility`를 읽는 것과 같은
 방식으로 `file.mediaType`을 읽는다.
 
-### D5 — 프런트엔드: visibility가 아니라 mediaType으로 재생 태그를 분기한다
+### D5 — 프론트엔드: visibility가 아니라 mediaType으로 재생 태그를 분기한다
 
 `FileDetailPage.tsx`와 `PostDetailPage.tsx` 둘 다 기존의 visibility 기반 재생
 *소스* 로직은 그대로 둔다(private → 인증된 blob fetch + `objectURL`;
@@ -112,7 +112,7 @@ public/unlisted → 직접 `src`, ADR 0025/0026) — 각 분기가 렌더링하�
   패턴과 일치한다 — Scope Discipline(요청 없이 새 공유 추상화를 만들지 않는다)에
   부합. 여기서 해결하지 않은 잔여 위험: 네 번째로 허용되는 확장자가 생기면 세
   곳 모두를 함께 갱신해야 한다.
-- **`admin/`의 파일 뷰.** `admin/`은 루트 툴링 밖의 별도 프런트엔드다
+- **`admin/`의 파일 뷰.** `admin/`은 루트 툴링 밖의 별도 프론트엔드다
   (CLAUDE.md > Project Overview) — 파일 콘텐츠를 어디선가 렌더링하더라도 이
   ADR은 건드리지 않는다.
 - **생성 이후 `filePath`가 바뀐 행에 대한 `mediaType` 재판정**

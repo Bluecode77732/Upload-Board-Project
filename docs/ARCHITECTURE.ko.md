@@ -130,7 +130,7 @@ Responsibility 참조). "물리 파일"과 "파일 메타데이터"에 걸친 �
   조건 없음, private는 소유자·admin만, unlisted는 로그인 없이 `?share=<token>`이 맞아야
   통과합니다([ADR 0025](ADR/0025-file-visibility-and-media-expansion.ko.md)/[ADR 0026](ADR/0026-file-visibility-implementation.ko.md)).
 - `mediaType`(`image` / `audio` / `video`)은 업로드 시점에 확장자로 판정되며 클라이언트
-  값을 절대 믿지 않습니다 — 프런트엔드가 `<img>` / `<audio>` / `<video>` 중 어떤 태그를
+  값을 절대 믿지 않습니다 — 프론트엔드가 `<img>` / `<audio>` / `<video>` 중 어떤 태그를
   쓸지 이걸로 고릅니다([ADR 0040](ADR/0040-persisted-media-type-for-playback.ko.md)).
 - 이 컨트롤러는 파일시스템을 직접 만지지 않습니다. 먼저 `FileStorage` 포트에 서명된
   URL을 요청하고, 어댑터가 줄 수 있으면(S3만) 302로 리다이렉트하고 바이트를 직접 읽지

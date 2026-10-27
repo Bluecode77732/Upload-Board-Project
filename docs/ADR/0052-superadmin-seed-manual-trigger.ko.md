@@ -85,7 +85,7 @@ CLAUDE.md의 Config 절은 `backend/data-source.ts`를 `ConfigService` 밖에서
   있다. 이 ADR은 그 옵션들을 영구히 배제하는 것이 아니라, 현재 단계에 맞지 않아 보류하는
   것이다.
 
-### Addendum (2026-09-10) — `pnpm promote-superadmin`을 격리된 일회용 DB로 검증
+### 추가 기록 (2026-09-10) — `pnpm promote-superadmin`을 격리된 일회용 DB로 검증
 
 `pnpm build`/`pnpm lint:ci`/`pnpm test`(263/263)는 변경이 컴파일되고 기존 서비스를
 회귀시키지 않는다는 것만 증명할 뿐, 스크립트 자체의 DB 왕복은 전혀 건드리지 않는다 —
@@ -111,5 +111,5 @@ DB로 검증했다:
 **여전히 자동 테스트되지 않음**: 이 스크립트엔 Jest spec이 없다(`data-source.ts`가
 이미 처한 것과 같은 위치 — `coveragePathIgnorePatterns`엔 없지만, 이 프로젝트의
 커버리지가 측정하는 mock-repository 방식으로는 사실상 테스트 불가능하다. 하는 일 전체가
-실제 DB 왕복이기 때문이다). 커버리지엔 미측정으로 나타날 것이며, 이는 이 addendum이
+실제 DB 왕복이기 때문이다). 커버리지엔 미측정으로 나타날 것이며, 이는 이 추가 기록이
 새로 만든 구멍이 아니라 `data-source.ts`가 이미 선례를 세운, 받아들여진 트레이드오프다.

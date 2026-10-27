@@ -260,7 +260,7 @@ Context와 D1이 하나를 열어 뒀다. `values-prod.yaml`이 `networkPolicy.e
    7. ExternalDNS, External Secrets, ALB Controller가 영향받지 않는지: 정책의 `podSelector`는
       앱 라벨뿐이다.
 
-### Addendum (2026-09-26, 이후) — EKS 라이브 결과
+### 추가 기록 (2026-09-26, 이후) — EKS 라이브 결과
 
 개발자가 스택을 apply했고, 세션이 위의 확인 7개를 직접 실행했다. 읽기 전용 호출과 백엔드 파드
 안에서 돌린 프로브 스크립트 한 번(TCP 연결, clamd `PING`, clamd로 정상 바이트 전송)이 전부이고
@@ -324,7 +324,7 @@ Ingress가 켜져 있으면 VPC CIDR 규칙(D2 추가 기록)이 이미 Promethe
    엔진이 서로 달라서(D2) 1번이 이 항목을 대신하지 못한다.
 3. 둘 다 통과하면 이 목록과 `k8s/helm/README.md`의 미해결 항목이 관찰 기록으로 바뀐다.
 
-### Addendum (2026-09-29) — 둘 다 확인: Ingress 켠 상태의 기준선, 그리고 Ingress 끈 상태
+### 추가 기록 (2026-09-29) — 둘 다 확인: Ingress 켠 상태의 기준선, 그리고 Ingress 끈 상태
 
 세션이 라이브 Prometheus를 조회했다(`kubectl -n kube-prometheus-stack port-forward
 svc/kube-prometheus-stack-prometheus 9090:9090` 뒤 `GET /api/v1/targets`). 이때 `Ingress`는

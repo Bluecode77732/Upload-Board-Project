@@ -1,0 +1,18 @@
+# values-prod.local.yaml의 형식 예시 — 복사해서 실제 값으로 채운다(ADR 0068).
+#   cp values-prod.local.example.yaml values-prod.local.yaml
+# values-prod.local.yaml은 gitignore되어 커밋되지 않는다. 값은 Terraform 출력에서 얻는다:
+#   DB_HOST          app-infra/의 `terraform output -raw db_host`
+#   S3_BUCKET        apply 때 -var로 넘긴 s3_bucket_name
+#   role-arn         app-infra/의 IRSA role(이름 "${cluster_name}-app")의 ARN
+#   certificate-arn  app-infra/의 `terraform output -raw acm_certificate_arn`
+env:
+  DB_HOST: <RDS_HOST>
+  S3_BUCKET: sharenpo-<AWS_ACCOUNT_ID>
+
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/sharenpo-app
+
+ingress:
+  annotations:
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:<AWS_ACCOUNT_ID>:certificate/<CERTIFICATE_ID>

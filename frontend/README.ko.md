@@ -152,4 +152,4 @@ UI로 파일도 올리므로 `:3000`의 백엔드가 이를 받을 수 있게 �
 
 CI는 `.github/workflows/ci.yml`의 `frontend-e2e` job에서 이 값들을 설정한다. compose의 `api`는
 이 머신에서만 쓰는 값을 gitignore된 `.env.local`에 넣는다
-([ADR 0015](../docs/ADR/0015-docker-and-compose.ko.md) Addendum).
+([ADR 0015](../docs/ADR/0015-docker-and-compose.ko.md) 추가 기록).

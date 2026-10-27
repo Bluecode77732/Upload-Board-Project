@@ -76,9 +76,9 @@ apply -f -`), default ServiceAccount IRSA 어노테이션, ALB `Ingress` 활성�
 anything" #4 경고의 구체적 구현이다: `region`/`cluster_name`은 세 state 모두에 선언된 순수 변수일 뿐
 `terraform_remote_state`로 공유되지 않으므로, 한 state의 `-var`에 다른 값을 넣으면
 plan은 성공하면서 리소스 이름/태그만 조용히 어긋난다. 실행 시점에 실제 output을
-읽는 방식은(한 스크립트 실행 안에서 하나의 env var를 계속 쓰는 것만으로는 놓치는)
-`cluster`를 적용한 뒤 며칠 뒤 다른 스크립트 실행에서 `app-infra`/`addons`를 다른
-환경변수로 호출하는 경우까지 잡아낸다.
+읽는 방식은, 한 스크립트 실행 안에서 환경변수 하나를 계속 쓰는 것만으로는 놓치는 경우까지
+잡아낸다. `cluster`를 적용하고 며칠 뒤 다른 스크립트 실행에서 `app-infra`/`addons`를 다른
+환경변수로 호출하는 경우가 그렇다.
 
 ### D4 — ACM 2단계 apply 자동화
 
@@ -96,7 +96,7 @@ plan은 성공하면서 리소스 이름/태그만 조용히 어긋난다. 실�
   `addons`, `helm`, `all`). `.tf` 파일은 하나도 바뀌지 않았다 — `cluster/`,
   `app-infra/`, `addons/` 모두에서 `terraform fmt -check`와 `terraform validate`가
   변경 전과 동일하게 통과한다.
-- 실제 AWS 계정(`074416822640`, `ap-northeast-2`)을 대상으로 실측 검증했다:
+- 실제 AWS 계정(`<AWS_ACCOUNT_ID>`, `ap-northeast-2`)을 대상으로 실측 검증했다:
   `deploy.sh cluster`가 실제 `terraform plan`을 실행했고("No changes. Your
   infrastructure matches the configuration." 확인), 대화형 확인 입력이 없을 때는
   실제로 아무것도 적용하지 않고 중단했다 — 기본 거부 경로가 읽어본 것이 아니라
@@ -114,7 +114,7 @@ plan은 성공하면서 리소스 이름/태그만 조용히 어긋난다. 실�
 - `docs/ROADMAP.md` §7의 "cluster → app-infra → addons → Helm 배포 순서 자동화" 항목을
   완료 처리하고 이 문서를 가리키도록 갱신한다.
 
-### Addendum (2026-09-02) — cluster/app-infra/addons plan/apply 분리
+### 추가 기록 (2026-09-02) — cluster/app-infra/addons plan/apply 분리
 
 검증 목적으로 반복 apply할 때(실제 목적이 확인용이어도, 이 ADR이 애초에 다루는
 EKS/RDS와 물리적으로 동일한 실 AWS 리소스라 과금·비가역성은 그대로다) 매번 겪던
@@ -130,13 +130,13 @@ EKS/RDS와 물리적으로 동일한 실 AWS 리소스라 과금·비가역성�
 
 `deploy.sh plan <cluster|app-infra|addons>`와 `deploy.sh apply
 <cluster|app-infra|addons>`를 새 서브커맨드로 추가했다. 기존 `cluster`/`app-infra`/
-`addons`/`all`은 그대로 남겨(한 번에 계산+승인+적용까지 끝내고 싶을 때 계속 사용
-가능). `plan`은 plan을 계산해 고정 경로(`<state>/.deploy-plan*.tfplan`, gitignore
+`addons`/`all`은 그대로 남겨 두었다(한 번에 계산+승인+적용까지 끝내고 싶을 때 계속
+사용할 수 있다). `plan`은 plan을 계산해 고정 경로(`<state>/.deploy-plan*.tfplan`, gitignore
 처리)에 저장만 하고 종료한다 — apply는 하지 않는다. `apply`는 저장된 plan을 다시
 보여주고(`terraform show`), 여전히 명시적 `y` 확인이 있어야만 적용한다 — D3의
 불변식은 그대로이고, "언제 승인하는가"만 "언제 plan을 계산했는가"에서 분리됐다.
-저장된 plan이 실제 원격 상태와 어긋나 오래됐다면, `terraform apply` 자체가 거부하지
-잘못된 내용을 적용하지 않는다.
+저장된 plan이 실제 원격 상태와 어긋나 오래됐다면 `terraform apply` 자체가 이를 거부하므로,
+잘못된 내용이 적용되지 않는다.
 
 `app-infra`의 ACM 2단계 apply는 완전히 미리 계산해 둘 수 없다: 2단계 plan은 1단계에서
 만들어진 인증서가 실제로 존재해야만 계산 가능하다(D4). 그래서 `plan app-infra`는

@@ -78,7 +78,7 @@ Terraform state buckets default to SSE-KMS isn't cost (a customer-managed key is
 $1/month, confirmed via AWS's own pricing page) — it's that KMS decouples "who can
 `s3:GetObject`" from "who can decrypt," via a separate key policy, with a CloudTrail audit
 trail. That value requires a second principal to separate access *from*. This AWS account
-(`074416822640`) has exactly one human principal (the developer, IAM user `sharenpo-user`);
+(`<AWS_ACCOUNT_ID>`) has exactly one human principal (the developer, IAM user `sharenpo-user`);
 there is no one to withhold decrypt access from that S3 read access doesn't already reach.
 SSE-S3 already closes the actual gap this ADR exists for (plaintext at rest) at zero
 marginal cost. See D6 for when this should be revisited.

@@ -479,10 +479,20 @@ apply_addons() {
 #   세 이미지가 항상 같은 커밋에서 나온 쌍이라서 IMAGE_TAG 하나로 배포와 롤백을 다룰
 #   수 있다. IMAGE_TAG를 명시하면 확인 없이 세 이미지에 그대로 쓰므로, 프론트엔드나
 #   admin 이미지가 없던 시점의 sha로 롤백하면 그 파드가 이미지를 못 받는다.
+#   배포 식별자(DB 호스트, 버킷, role-arn, 인증서 ARN)는 values-prod.yaml에 없고 gitignore된
+#   values-prod.local.yaml에 있다(ADR 0068) -- 그 파일이 없으면 자리표시자를 그대로 배포하게
+#   되므로 조회나 y/N 질문보다 먼저 에러로 중단하고, 있으면 -f로 values-prod.yaml 뒤에 얹는다.
 deploy_helm() {
   local helm_dir="$SCRIPT_DIR/../../helm"
   local branch="${1:-$DEPLOY_BRANCH}"
   local resolved_tag="$IMAGE_TAG"
+
+  if [ ! -f "$helm_dir/values-prod.local.yaml" ]; then
+    echo "에러: $helm_dir/values-prod.local.yaml 이 없습니다. 배포 식별자(DB 호스트, 버킷," >&2
+    echo "role-arn, 인증서 ARN)는 이 파일에서 옵니다. values-prod.local.example.yaml 을" >&2
+    echo "복사해 terraform output 값으로 채우세요 (ADR 0068)." >&2
+    exit 1
+  fi
 
   if [ -z "$resolved_tag" ]; then
     echo "==> IMAGE_TAG가 지정되지 않아, $branch의 최신 커밋 이미지를 자동으로 조회합니다."
@@ -533,13 +543,13 @@ deploy_helm() {
     echo "==> IMAGE_TAG=$resolved_tag 가 명시적으로 지정되어, 자동 조회를 건너뜁니다."
   fi
 
-  echo "==> Helm 배포: 릴리스 이름 $HELM_RELEASE ($helm_dir, values-prod.yaml + image.tag=$resolved_tag + frontend.image.tag=$resolved_tag + admin.image.tag=$resolved_tag)"
+  echo "==> Helm 배포: 릴리스 이름 $HELM_RELEASE ($helm_dir, values-prod.yaml + values-prod.local.yaml + image.tag=$resolved_tag + frontend.image.tag=$resolved_tag + admin.image.tag=$resolved_tag)"
   echo "    (secrets.existingSecret으로 참조하는 Secret이 이미 만들어져 있어야 합니다 -- README.md 참고)"
   # run_terraform_step과 같은 이유로 read 실패를 흡수한다.
   read -r -p "helm upgrade --install 을 실행할까요? [y/N] " answer || answer=""
 
   if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
-    (cd "$helm_dir" && helm upgrade --install "$HELM_RELEASE" . -f values-prod.yaml --set image.tag="$resolved_tag" --set frontend.image.tag="$resolved_tag" --set admin.image.tag="$resolved_tag")
+    (cd "$helm_dir" && helm upgrade --install "$HELM_RELEASE" . -f values-prod.yaml -f values-prod.local.yaml --set image.tag="$resolved_tag" --set frontend.image.tag="$resolved_tag" --set admin.image.tag="$resolved_tag")
     (cd "$helm_dir" && helm status "$HELM_RELEASE")
   else
     echo "helm 단계에서 중단했습니다." >&2

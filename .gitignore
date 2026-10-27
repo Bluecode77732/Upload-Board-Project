@@ -121,3 +121,5 @@ terraform.rc
 # settings.local.json에 등록한 개인 PreToolUse 훅과 그 테스트 — 훅이 무엇을 막고 무엇을
 # 무인으로 허용하는지가 코드에 그대로 드러나서, 공개 저장소에 올리지 않는다
 /.claude/hooks/local/
+# 배포 식별자(DB 호스트, 버킷, role-arn, 인증서 ARN) 오버레이 — ADR 0068
+/k8s/helm/values-prod.local.yaml
