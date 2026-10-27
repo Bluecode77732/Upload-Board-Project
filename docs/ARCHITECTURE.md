@@ -512,6 +512,6 @@ elsewhere, so it doesn't go stale in two places at once.
   paragraph; see `CLAUDE.md`'s Terraform entry or run `terraform plan` in each of the three
   directories.
 
-Full detail lives in [README.md](../README.md) (Stack, Deployment) and
+Full detail lives in [README.en.md](../README.en.md) (Stack, Deployment) and
 [ROADMAP.md](ROADMAP.md), not here — repeating it in both places is exactly how a document goes
 stale twice instead of once.

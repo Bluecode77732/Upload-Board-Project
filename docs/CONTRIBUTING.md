@@ -25,7 +25,7 @@ first.
 
 ## Development Setup
 
-See [README.md](../README.md) > Quick Start. Summary: `pnpm install`, copy
+See [README.en.md](../README.en.md) > Quick Start. Summary: `pnpm install`, copy
 `.env.example` → `.env`, ensure `file/temp/` and `file/upload/` exist, create the
 database and apply the schema with `pnpm migration:run`,
 `pnpm run start:dev`. Alternatively, `docker compose up --build` runs Postgres, then a

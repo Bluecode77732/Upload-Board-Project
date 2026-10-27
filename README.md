@@ -10,179 +10,180 @@
 
 # Sharenpo
 
-> 한국어 버전: [README.ko.md](README.ko.md)
+> English version: [README.en.md](README.en.md)
 
-A service where signed-in users upload images, audio and video, choose who can see each file,
-and share them on a board with posts and comments. It is a NestJS API, a React client and an
-admin console, deployed to AWS/EKS with Helm and Terraform and observed with Prometheus and
-Grafana.
+로그인한 사용자가 이미지·오디오·동영상을 업로드하고, 파일마다 볼 수 있는 사람을 정하고,
+게시글과 댓글이 있는 게시판으로 공유하는 서비스입니다. NestJS API, React 클라이언트, 관리자
+콘솔로 이루어져 있고, Helm과 Terraform으로 AWS/EKS에 배포하며 Prometheus와 Grafana로
+관찰합니다.
 
-- Timeline: first commit 2025-12-17, still in progress
-- Scope: one developer, AI-assisted under the contract in [CLAUDE.md](CLAUDE.md) — backend,
-  `frontend/`, `admin/`, containers, CI, Helm and Terraform
-- Role: the developer decided the password policy and its error code, serving the frontend from
-  the same ALB instead of an external host, and fixing Terraform's secret generator instead of
-  loosening the app's secret rule. The AI lays out the options in a comparison table before any code
-  is written; the developer picks one, only that one is built, and the developer reads and approves
-  every change. Results are checked with tests, CI and reproductions in real environments (AWS/EKS,
-  a real ClamAV)
-- This README covers the whole repository. The backend sits at the repo root; the clients have
-  their own READMEs ([frontend/](frontend/README.md), [admin/](admin/README.md))
+- 기간: 첫 커밋 2025-12-17, 현재 진행 중
+- 범위: 개발자 1인, [CLAUDE.ko.md](CLAUDE.ko.md)의 규약 아래 AI의 도움을 받아 진행 — 백엔드,
+  `frontend/`, `admin/`, 컨테이너, CI, Helm, Terraform
+- 역할: 비밀번호 정책과 에러 코드, 프론트엔드를 외부 호스팅 대신 같은 ALB에서 서빙하는 것, 앱의
+  시크릿 규칙을 완화하는 대신 Terraform 생성기를 고치는 것은 개발자가 결정했습니다. 코드를 쓰기
+  전에 AI가 선택지를 비교표로 보여 주면 개발자가 하나를 고르고, 그것만 구현합니다. 개발자는 모든
+  변경을 읽고 승인합니다. 결과는 테스트, CI, 실제 환경(AWS/EKS, 실제 ClamAV)에서의 재현으로
+  확인합니다
+- 이 README는 저장소 전체를 다룹니다. 백엔드는 저장소 루트에 있고, 클라이언트에는 각자의
+  README가 있습니다([frontend/](frontend/README.ko.md), [admin/](admin/README.ko.md))
 
-## Status
+## 상태
 
-There is no always-on demo. The stack has been applied to AWS/EKS and torn down between runs
-(dated runs: [ROADMAP.md](docs/ROADMAP.md) §9 and the ADR addenda); this README does not say
-whether it is up right now. To see the project work:
+상시 운영 중인 데모는 없습니다. 이 스택은 AWS/EKS에 적용했다가 실행 사이사이에 내렸습니다
+(날짜별 실행 기록: [ROADMAP.ko.md](docs/ROADMAP.ko.md) §9와 ADR의 추가 기록). 지금 떠 있는지는
+이 README에 적지 않습니다. 프로젝트를 확인하는 방법은 다음과 같습니다.
 
-- Look at the [screenshots and GIFs](#screenshots) below
-- Run it yourself with Docker: [Quick Start](#quick-start)
-- Try every endpoint in the browser, locally: [Try the API](#try-the-api-swagger)
+- 아래의 [스크린샷과 GIF](#스크린샷)를 봅니다
+- Docker로 직접 실행합니다: [빠른 시작](#빠른-시작)
+- 모든 엔드포인트를 브라우저에서 로컬로 호출해 봅니다: [API 써 보기](#api-써-보기-swagger)
 
-## In two minutes
+## 요약본
 
-- **Two-phase upload.** A file is staged as `temp_…`, then promoted to `granted_…` inside one DB
-  transaction, so a failed move rolls the insert back. The only unprotected window is a commit that
-  fails after a successful move: it leaves an orphaned `granted_` file that a scheduled sweep
-  reports. Submitting the same upload twice replays the result instead of failing
-  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md), [0019](docs/ADR/0019-upload-claim-idempotency.md), [0051](docs/ADR/0051-orphaned-granted-file-reclaim.md)).
-- **No static file serving.** Stored bytes are reachable only through `GET /file/:id/content`, which
-  checks the file's visibility first ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md)).
-- **Refresh-token rotation with reuse detection.** The server keeps only a hash of the current
-  refresh token ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md)).
-- **Fail-closed malware scan** on every upload, before anything is stored ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md)).
-- **Checked:** the backend unit tests, a backend E2E suite on a real PostgreSQL and the Playwright
-  E2E of both clients pass (counts and dates in [Testing and CI](#testing-and-ci)). 68 ADRs record
-  the decisions.
-- **Built with AI, under written rules.** Most of the code was written with Claude Code. The
-  developer sets the rules in [CLAUDE.md](CLAUDE.md), chooses between alternatives and records them
-  as ADRs; where the AI broke a rule, that is written down too ([How this was built](#how-this-was-built)).
-- **Where to read first:** [backend/file/file.service.ts](backend/file/file.service.ts)
-  (transactions, claims), [backend/auth/auth.service.ts](backend/auth/auth.service.ts) (tokens),
-  [backend/storage/](backend/storage/) (the storage port).
+- **2단계 업로드.** 파일을 `temp_…`로 임시 저장한 뒤 하나의 DB 트랜잭션 안에서 `granted_…`로
+  승격하므로, 이동이 실패하면 insert가 롤백됩니다. 보호되지 않는 틈은 이동에 성공한 뒤 커밋이
+  실패하는 경우 하나뿐이며, 이때 고아 `granted_` 파일이 남고 주기적 정리 작업이 이를 보고합니다.
+  같은 업로드를 두 번 제출하면 실패하지 않고 앞선 결과를 그대로 돌려줍니다
+  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md), [0019](docs/ADR/0019-upload-claim-idempotency.ko.md), [0051](docs/ADR/0051-orphaned-granted-file-reclaim.ko.md)).
+- **정적 파일 서빙 없음.** 저장된 바이트는 공개 범위를 먼저 검사하는 `GET /file/:id/content`로만
+  나갑니다([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md)).
+- **재사용을 감지하는 리프레시 토큰 교체.** 서버는 현재 리프레시 토큰의 해시만 보관합니다
+  ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.ko.md)).
+- **저장 전 fail-closed 악성코드 스캔.** 모든 업로드에 적용합니다([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)).
+- **확인한 것:** 백엔드 단위 테스트, 실제 PostgreSQL을 쓰는 백엔드 E2E, 두 클라이언트의
+  Playwright E2E가 모두 통과합니다(건수와 날짜는 [테스트와 CI](#테스트와-ci)). 결정을 기록한
+  ADR은 68개입니다.
+- **AI와 함께, 문서로 정한 규칙 아래에서 만들었습니다.** 코드의 대부분은 Claude Code로 작성했습니다.
+  개발자가 [CLAUDE.ko.md](CLAUDE.ko.md)에 규칙을 정하고, 대안 중에서 선택하고, 그 내용을 ADR로
+  남깁니다. AI가 규칙을 어긴 일도 함께 적어 두었습니다([만든 방식](#만든-방식)).
+- **먼저 읽을 파일:** [backend/file/file.service.ts](backend/file/file.service.ts)(트랜잭션, 청구),
+  [backend/auth/auth.service.ts](backend/auth/auth.service.ts)(토큰),
+  [backend/storage/](backend/storage/)(스토리지 포트).
 
-## Screenshots
+## 스크린샷
 
-Local stack with throwaway demo data, English UI and sample content, light theme. The UI also runs in Korean and
-in a dark theme. Every picture is the same 900 × 1000 frame, scrolled to the part that matters.
-File URLs point at the client's own origin, as they do behind the ALB, and the share-link token
-is masked; see [Known limitations](#known-limitations-and-next-steps).
+임시 데모 데이터를 넣은 로컬 스택에서 한국어 UI, 한국어 예시 글, 라이트 테마로 찍었습니다. UI는
+영어와 다크 테마도 지원합니다. 모든 그림은 같은 900 × 1000 프레임에 맞췄고, 필요한 부분이
+보이도록 스크롤해서 찍었습니다. 파일 URL은 ALB 뒤에서처럼 클라이언트와 같은 출처를 가리키게
+했고, 링크 공유 토큰은 가렸습니다. [알려진 한계](#알려진-한계와-다음-단계)를 참고하세요.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/en/01-login.png" alt="Sign-in card with the password hidden and a show/hide toggle"><br><sub><b>Sign in</b> — Basic-token sign-in, register toggle, show/hide password</sub></td>
-<td width="50%"><img src="docs/images/en/02-post-board.png" alt="Post board: new post form with an optional attached file, search and sort, and the post list"><br><sub><b>Post board</b> — new post with an optional attached file, search, sort and pagination</sub></td>
+<td width="50%"><img src="docs/images/ko/01-login.png" alt="비밀번호가 가려져 있고 표시/숨김 버튼이 있는 로그인 카드"><br><sub><b>로그인</b> — Basic 토큰 로그인, 회원가입 전환, 비밀번호 표시/숨김</sub></td>
+<td width="50%"><img src="docs/images/ko/02-post-board.png" alt="게시판: 파일을 붙일 수 있는 새 글 폼, 검색·정렬, 게시글 목록"><br><sub><b>게시판</b> — 파일을 붙일 수 있는 새 글 폼, 검색·정렬, 페이지네이션</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/en/03-post-detail.png" alt="Post detail: attached image and a flat, oldest-first comment thread"><br><sub><b>Post detail</b> — attached image and a flat, oldest-first comment thread</sub></td>
-<td width="50%"><img src="docs/images/en/04-file-board.png" alt="File board: upload form, search, sort and creator filter, with the preview grid starting below"><br><sub><b>File board</b> — upload form, search, sort and creator filter, with the preview grid below</sub></td>
+<td width="50%"><img src="docs/images/ko/03-post-detail.png" alt="게시글 상세: 첨부 이미지와 오래된 순으로 정렬된 평면 댓글 스레드"><br><sub><b>게시글 상세</b> — 첨부 이미지와 오래된 순의 평면 댓글 스레드</sub></td>
+<td width="50%"><img src="docs/images/ko/04-file-board.png" alt="파일 보드: 업로드 폼, 검색·정렬·작성자 필터, 그 아래에서 시작하는 미리보기 그리드"><br><sub><b>파일 보드</b> — 업로드 폼, 검색·정렬·작성자 필터, 그 아래의 미리보기 그리드</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/en/05-file-board-media.png" alt="File board with image, audio and video tiles and Public, Unlisted and Private badges"><br><sub><b>Mixed media</b> — image, audio and video tiles with Public, Unlisted and Private badges</sub></td>
-<td width="50%"><img src="docs/images/en/06-file-detail.png" alt="File detail: image shown to its owner, visibility control and ownership transfer form"><br><sub><b>File detail</b> — image, visibility control and ownership transfer</sub></td>
+<td width="50%"><img src="docs/images/ko/05-file-board-media.png" alt="이미지·오디오·영상 타일과 공개·링크 공유·비공개 배지가 보이는 파일 보드"><br><sub><b>여러 미디어</b> — 이미지·오디오·영상 타일과 공개·링크 공유·비공개 배지</sub></td>
+<td width="50%"><img src="docs/images/ko/06-file-detail.png" alt="파일 상세: 소유자에게 보이는 이미지, 공개 범위 설정, 소유권 이전 폼"><br><sub><b>파일 상세</b> — 이미지, 공개 범위 설정, 소유권 이전</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/en/07-unlisted-share.png" alt="Unlisted file with its share link (token masked), a rotate button and the visibility control"><br><sub><b>Unlisted file</b> — share link (token masked), rotate button and visibility control</sub></td>
-<td width="50%"><img src="docs/images/en/08-video-player.png" alt="A public video with the browser's player controls"><br><sub><b>Video</b> — a public video in the browser's own player, served with Range support for seeking</sub></td>
+<td width="50%"><img src="docs/images/ko/07-unlisted-share.png" alt="공유 링크(토큰은 가림), 링크 재발급 버튼, 공개 범위 설정이 보이는 링크 공유 파일"><br><sub><b>링크 공유 파일</b> — 공유 링크(토큰은 가림), 링크 재발급 버튼, 공개 범위 설정</sub></td>
+<td width="50%"><img src="docs/images/ko/08-video-player.png" alt="브라우저 기본 컨트롤이 보이는 공개 영상"><br><sub><b>영상</b> — 브라우저 기본 플레이어로 재생하는 공개 영상(탐색은 Range 요청으로 처리)</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/en/09-audio-player.png" alt="A public audio file with the browser's audio player"><br><sub><b>Audio</b> — a public audio file in the browser's own player</sub></td>
-<td width="50%"><img src="docs/images/en/10-admin-dashboard.png" alt="Admin dashboard: totals and recent audit logs"><br><sub><b>Admin console</b> — totals and recent audit logs (the admin UI is English only)</sub></td>
+<td width="50%"><img src="docs/images/ko/09-audio-player.png" alt="브라우저 기본 플레이어가 보이는 공개 오디오"><br><sub><b>오디오</b> — 브라우저 기본 플레이어로 재생하는 공개 오디오</sub></td>
+<td width="50%"><img src="docs/images/ko/10-admin-dashboard.png" alt="관리자 대시보드: 총계와 최근 감사 로그"><br><sub><b>관리자 콘솔</b> — 총계와 최근 감사 로그(관리자 UI는 영어만 지원)</sub></td>
 </tr>
 </table>
 
 ### GIF
 
-Four short recordings of flows a still picture cannot show (640 × 498, under 0.5 MB each). Same
-local stack and sample data as above.
+정지 사진으로는 보이지 않는 흐름 네 가지를 짧은 GIF로 담았습니다(640 × 498, 각 0.5 MB
+미만). 위와 같은 로컬 스택과 예시 데이터로 찍었습니다.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/en/11-multi-upload.gif" alt="Upload form with three chosen files, each with a title and progress bar, then the new files on the board"><br><sub><b>Multi-file upload</b> — three files of different kinds are chosen at once, titled, and uploaded one by one with per-file progress</sub></td>
-<td width="50%"><img src="docs/images/en/12-share-link.gif" alt="A private file switched to unlisted, its share link copied and then rotated"><br><sub><b>Share link</b> — private → unlisted creates a share link; copy it, then rotate it to get a new token (token shortened)</sub></td>
+<td width="50%"><img src="docs/images/ko/11-multi-upload.gif" alt="파일 세 개를 고르고 제목과 진행률을 거쳐 업로드한 뒤 새 파일이 목록에 나타나는 업로드 폼"><br><sub><b>여러 파일 업로드</b> — 종류가 다른 파일 세 개를 한 번에 골라 제목을 붙이고, 파일별 진행률을 보며 하나씩 올리는 과정</sub></td>
+<td width="50%"><img src="docs/images/ko/12-share-link.gif" alt="비공개 파일을 링크 공유로 바꾸고 공유 링크를 복사한 뒤 재발급하는 화면"><br><sub><b>공유 링크</b> — 비공개를 링크 공유로 바꿔 공유 링크를 만들고, 복사한 뒤 재발급해 새 토큰을 받는 과정(토큰은 앞부분만 표시)</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/en/13-ownership-transfer.gif" alt="The owner proposes a transfer by email and the recipient accepts it from their own account"><br><sub><b>Ownership transfer</b> — the owner proposes by email; ownership moves only after the recipient accepts from their own account</sub></td>
-<td width="50%"><img src="docs/images/en/14-weak-password.gif" alt="Registering with a weak password shows the rule, then a valid password signs the new account in"><br><sub><b>Weak password</b> — registering with "password" shows the specific rule; a valid one registers and signs in</sub></td>
+<td width="50%"><img src="docs/images/ko/13-ownership-transfer.gif" alt="소유자가 이메일로 이전을 제안하고 받는 사람이 자기 계정에서 수락하는 화면"><br><sub><b>소유권 이전</b> — 소유자가 이메일로 제안하고, 받는 사람이 자기 계정에서 수락해야 소유권이 옮겨지는 과정</sub></td>
+<td width="50%"><img src="docs/images/ko/14-weak-password.gif" alt="약한 비밀번호로 가입하면 규칙 안내가 뜨고, 올바른 비밀번호로 고치면 가입과 로그인이 되는 화면"><br><sub><b>약한 비밀번호</b> — "password"로 가입하면 구체적인 규칙 안내가 뜨고, 규칙에 맞게 고치면 가입과 로그인까지 되는 과정</sub></td>
 </tr>
 </table>
 
-## Features
+## 기능
 
-- **Authentication** — Basic-token register/sign-in and a dual-secret JWT access/refresh pair with a
-  `type` claim; the refresh token is an httpOnly cookie that rotates on every refresh, with reuse
-  detection ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md), [0012](docs/ADR/0012-refresh-cookie-rotation.md))
-- **Two-phase upload** — `temp_` → `granted_` with the file move inside the DB transaction. The
-  attach filename is a one-shot claim token: the same user resubmitting gets the file back (200),
-  anyone else gets 409 `FILE_ALREADY_CLAIMED` ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md), [0019](docs/ADR/0019-upload-claim-idempotency.md))
-- **Malware scanning** — ClamAV, fail-closed, before anything is stored ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md))
-- **File visibility** — `public`, `private` (default) or `unlisted` (a share link whose token can be
-  rotated or expire); bytes are served only through the access-checked `GET /file/:id/content`
-  ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md), [0026](docs/ADR/0026-file-visibility-implementation.md))
-- **Storage port** — a `FileStorage` interface with local-disk and S3 adapters (`STORAGE_DRIVER`);
-  under S3 a passing access check redirects to a short-lived presigned URL ([ADR 0029](docs/ADR/0029-storage-port-adapter.md), [0036](docs/ADR/0036-s3-presigned-content-redirect.md))
-- **Board** — posts with an optional attached file, flat comments, and one search, filter, sort and
-  pagination contract ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md), [0023](docs/ADR/0023-board-domain-schema.md))
-- **RBAC + audit log** — `user`/`admin`/`superadmin` roles, ownership checks that extend to "self or
-  admin", role changes and deletes written to an audit log ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.md), layered on [0007](docs/ADR/0007-ownership-checks-without-rbac.md))
-- **Account and file lifecycle** — account deletion cascades only on explicit confirmation and is
-  irreversible by design ([ADR 0020](docs/ADR/0020-account-deletion-cascade.md)); moving a file to another owner needs the recipient's consent:
-  propose, accept, reject or cancel ([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.md))
-- **Hardening** — global `ValidationPipe` (`whitelist` + `forbidNonWhitelisted`), no `password` in
-  serialized entities, strength checks on token secrets and passwords, security response headers,
-  a non-root image, a default-deny NetworkPolicy and the Ingress path allow-list below
-  ([ADR 0055](docs/ADR/0055-helmet-security-headers.md), [0030](docs/ADR/0030-container-non-root-and-arch-stance.md), [0056](docs/ADR/0056-networkpolicy-east-west-restriction.md), [0058](docs/ADR/0058-ingress-path-allowlist.md))
-- **Rate limiting** — 100 requests/minute per route (keyed on controller + handler + client IP),
-  5/minute on `POST /auth/register`, `signin` and `token/refresh`, 15/minute on
-  `POST /upload/attach`; health and metrics probes are exempt ([ADR 0053](docs/ADR/0053-global-rate-limiting.md), [0054](docs/ADR/0054-per-route-rate-limit-tuning.md))
-- **Operations** — liveness/readiness endpoints, Prometheus metrics with Grafana, and scheduled
-  sweeps for orphaned `temp_` and `granted_` files; the latter only reports until deletion is turned
-  on ([ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.md), [0047](docs/ADR/0047-observability-prometheus-grafana.md), [0018](docs/ADR/0018-orphan-temp-file-cleanup.md), [0051](docs/ADR/0051-orphaned-granted-file-reclaim.md))
-- **Swagger** — API documentation and manual test bench at `/doc`
-- **React client (`frontend/`)** — sign-in and register, the post board with comments, a preview-grid
-  file board, playback by media type, visibility and share-link management, ownership transfer and
-  account deletion. The upload form sends up to 15 files one by one with a progress bar per file
-  ([ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.md)); the UI is English or Korean, light or dark
-- **Admin console (`admin/`)** — login, a dashboard with totals and recent audit logs, the user list
-  with role management, and the audit-log viewer, served under `/admin` on the same ALB ([ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.md))
+- **인증** — HTTP Basic 토큰으로 가입·로그인하고, `type` 클레임이 있는 JWT 액세스·리프레시 토큰
+  쌍을 서로 다른 시크릿으로 서명해 발급합니다. 리프레시 토큰은 httpOnly 쿠키로 오가며 갱신할
+  때마다 교체되고 재사용을 감지합니다([ADR 0002](docs/ADR/0002-dual-secret-token-pair.ko.md), [0012](docs/ADR/0012-refresh-cookie-rotation.ko.md))
+- **2단계 업로드** — `temp_` → `granted_` 상태 머신. 파일 이동이 DB 트랜잭션 안에서 실행됩니다.
+  attach 단계가 돌려준 파일명은 한 번만 쓸 수 있는 청구(claim) 토큰입니다. 같은 사용자가 다시
+  보내면 기존 파일을 돌려주고(200), 다른 사용자는 409 `FILE_ALREADY_CLAIMED`를 받습니다
+  ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md), [0019](docs/ADR/0019-upload-claim-idempotency.ko.md))
+- **악성코드 스캔** — ClamAV로 저장하기 전에 검사하고, 스캐너를 쓸 수 없으면 막는 fail-closed로
+  동작합니다([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md))
+- **파일 공개 범위** — `public`, `private`(기본값), `unlisted`(토큰을 재발급하거나 만료를 둘 수 있는
+  공유 링크). 바이트는 접근 검사를 거치는 `GET /file/:id/content`로만 서빙됩니다
+  ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md), [0026](docs/ADR/0026-file-visibility-implementation.ko.md))
+- **스토리지 포트** — `FileStorage` 인터페이스와 로컬 디스크·S3 어댑터(`STORAGE_DRIVER`). S3에서는
+  접근 검사를 통과하면 수명이 짧은 presigned URL로 리다이렉트합니다([ADR 0029](docs/ADR/0029-storage-port-adapter.ko.md), [0036](docs/ADR/0036-s3-presigned-content-redirect.ko.md))
+- **게시판** — 파일을 선택적으로 첨부하는 게시글, 평면 댓글, 하나의 검색·필터·정렬·페이지네이션
+  규약([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.ko.md), [0023](docs/ADR/0023-board-domain-schema.ko.md))
+- **RBAC + 감사 로그** — `user`/`admin`/`superadmin` 역할, "본인 또는 admin"으로 확장된 소유권 검사,
+  감사 로그에 남는 역할 변경과 삭제([ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md)은 [0007](docs/ADR/0007-ownership-checks-without-rbac.ko.md)을 바탕으로 합니다)
+- **계정과 파일의 수명 주기** — 계정 삭제는 명시적으로 확인했을 때만 연쇄 삭제되고 설계상 되돌릴
+  수 없습니다([ADR 0020](docs/ADR/0020-account-deletion-cascade.ko.md)). 파일의 소유자를 바꾸려면 받는 사람의 동의가 필요합니다 — 제안, 수락,
+  거절, 취소([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.ko.md))
+- **보안 강화** — 전역 `ValidationPipe`(`whitelist` + `forbidNonWhitelisted`), 직렬화된 엔티티에
+  `password` 미포함, 토큰 시크릿과 비밀번호의 강도 검사, 보안 응답 헤더, non-root 이미지,
+  기본 거부(default-deny) 방식의 NetworkPolicy, 아래에 설명한 Ingress 경로 허용 목록
+  ([ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md), [0030](docs/ADR/0030-container-non-root-and-arch-stance.ko.md), [0056](docs/ADR/0056-networkpolicy-east-west-restriction.ko.md), [0058](docs/ADR/0058-ingress-path-allowlist.ko.md))
+- **요청 횟수 제한** — 라우트마다 따로 기본 분당 100회(`@nestjs/throttler`가 컨트롤러+핸들러+클라이언트
+  IP를 키로 씁니다), `POST /auth/register`·`signin`·`token/refresh`는 분당 5회,
+  `POST /upload/attach`는 분당 15회이며 health/metrics 프로브는 제외됩니다([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md), [0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md))
+- **운영** — liveness/readiness 엔드포인트, Grafana를 곁들인 Prometheus 메트릭, 고아 `temp_` 파일과
+  고아 `granted_` 파일의 주기적 정리 — 후자는 운영자가 삭제를 켜기 전까지 보고만 합니다
+  ([ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.ko.md), [0047](docs/ADR/0047-observability-prometheus-grafana.ko.md), [0018](docs/ADR/0018-orphan-temp-file-cleanup.ko.md), [0051](docs/ADR/0051-orphaned-granted-file-reclaim.ko.md))
+- **Swagger** — `/doc`의 API 문서이자 수동 테스트 도구
+- **React 클라이언트(`frontend/`)** — 로그인과 가입, 댓글이 있는 게시판, 미리보기 그리드 파일 보드,
+  미디어 종류별 재생, 공개 범위와 공유 링크 관리, 소유권 이전, 계정 삭제. 업로드 폼은 파일을 최대
+  15개까지 파일별 진행률과 함께 하나씩 보냅니다([ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.ko.md)). UI는 영어·한국어, 라이트·다크
+  테마를 지원합니다
+- **관리자 콘솔(`admin/`)** — 로그인, 총계와 최근 감사 로그가 있는 대시보드, 역할을 관리할 수 있는
+  사용자 목록, 감사 로그 뷰어. 같은 ALB의 `/admin` 아래에서 서빙됩니다([ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.ko.md))
 
-## Architecture
+## 아키텍처
 
-One Helm release runs the backend, `frontend/` and `admin/` behind one ALB, plus ClamAV as its own
-Deployment. The Ingress is an explicit path
-allow-list: `/health`, `/metrics` and `/doc` are not routed to it
-([ADR 0058](docs/ADR/0058-ingress-path-allowlist.md)).
+하나의 Helm 릴리스가 백엔드, `frontend/`, `admin/`을 하나의 ALB 뒤에서 실행하고, ClamAV는 별도
+Deployment로 함께 실행합니다. Ingress는 경로를 명시한
+허용 목록이며, `/health`, `/metrics`, `/doc`은 Ingress로 라우팅되지 않습니다
+([ADR 0058](docs/ADR/0058-ingress-path-allowlist.ko.md)).
 
 ```mermaid
 flowchart LR
-  U[Browser] --> ALB["AWS ALB<br/>Ingress path allow-list"]
+  U[브라우저] --> ALB["AWS ALB<br/>Ingress 경로 허용 목록"]
   ALB -- "/" --> FE["frontend<br/>nginx + React SPA"]
   ALB -- "/admin" --> AD["admin<br/>nginx + React SPA"]
   ALB -- "/auth /user /post /comment<br/>/file /upload /audit-log" --> API["backend<br/>NestJS API"]
   API --> PG[("PostgreSQL<br/>RDS")]
-  API --> ST{{"FileStorage port"}}
-  ST --> LD["local disk"]
-  ST --> S3[("S3<br/>presigned redirect")]
+  API --> ST{{"FileStorage 포트"}}
+  ST --> LD["로컬 디스크"]
+  ST --> S3[("S3<br/>presigned 리다이렉트")]
   API --> CL["ClamAV<br/>clamd"]
-  PR["Prometheus + Grafana"] -. "scrapes /metrics" .-> API
+  PR["Prometheus + Grafana"] -. "/metrics 수집" .-> API
 ```
 
-An upload is two requests. The first scans and stages a `temp_` file; the second promotes it in
-one transaction and gives it an owner and a visibility
-([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md)):
+업로드는 요청 두 번으로 이루어집니다. 첫 요청은 스캔한 뒤 `temp_` 파일로 임시 저장하고, 두 번째
+요청은 하나의 트랜잭션으로 승격하면서 소유자와 공개 범위를 부여합니다
+([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md)).
 
 ```mermaid
 flowchart LR
-  A["POST /upload/attach"] --> B{"ClamAV scan"}
-  B -- infected --> X["400 UPLOAD_MALWARE_DETECTED"]
-  B -- "scanner down" --> Y["503 UPLOAD_SCAN_UNAVAILABLE"]
-  B -- clean --> C["temp_{uuid}_{timestamp}"]
-  C --> D["POST /file<br/>one DB transaction"]
-  D --> E["granted_… object<br/>+ FileEntity row"]
-  E --> F["GET /file/:id/content<br/>visibility gate"]
+  A["POST /upload/attach"] --> B{"ClamAV 스캔"}
+  B -- 감염 --> X["400 UPLOAD_MALWARE_DETECTED"]
+  B -- "스캐너 불가" --> Y["503 UPLOAD_SCAN_UNAVAILABLE"]
+  B -- 정상 --> C["temp_{uuid}_{timestamp}"]
+  C --> D["POST /file<br/>하나의 DB 트랜잭션"]
+  D --> E["granted_… 객체<br/>+ FileEntity 행"]
+  E --> F["GET /file/:id/content<br/>공개 범위 검사"]
 ```
 
-The data model, from the entity relations in `backend/*/entity/`:
+데이터 모델은 `backend/*/entity/`의 엔티티 관계를 그대로 옮긴 것입니다.
 
 ```mermaid
 erDiagram
@@ -194,262 +195,259 @@ erDiagram
   USER |o--o{ FILE : "pending transfer target"
 ```
 
-A post only references a file; deleting the post leaves the file. `comment.postId` is the
-schema's only database-level cascade
-([ADR 0023](docs/ADR/0023-board-domain-schema.md)).
+게시글은 파일을 참조할 뿐이라서 지워도 파일은 남습니다. `comment.postId`는 이 스키마에서
+유일한 데이터베이스 수준 연쇄 삭제입니다([ADR 0023](docs/ADR/0023-board-domain-schema.ko.md)).
 
-The AWS side is three Terraform states, each its own root module. It is drawn from the Terraform
-code and was not checked against a live state. Arrows are `terraform_remote_state` reads, one way
-only: `cluster/` reads neither of the others
-([ADR 0044](docs/ADR/0044-terraform-three-state-split.md)).
+AWS 쪽은 Terraform state 세 개이며, 각각 독립된 루트 모듈입니다. Terraform 코드를 기준으로 그렸고
+실제 state와는 대조하지 못했습니다. 화살표는 `terraform_remote_state` 읽기이며 한 방향뿐입니다.
+`cluster/`는 나머지 둘을 읽지 않습니다([ADR 0044](docs/ADR/0044-terraform-three-state-split.ko.md)).
 
 ```mermaid
 flowchart LR
   D["<b>addons/</b><br/>ALB Controller<br/>External Secrets<br/>ExternalDNS<br/>kube-prometheus-<br/>stack"]
-  A["<b>app-infra/</b><br/>RDS PostgreSQL<br/>16, single AZ<br/>S3 bucket<br/>+ IRSA role<br/>Secrets Manager<br/>Route 53 zone<br/>ACM certificate"]
-  C["<b>cluster/</b><br/>VPC, EKS 1.34<br/>Graviton nodes<br/>(t4g.medium)<br/>x64 nodes<br/>(m5.large)<br/>0 by default"]
-  D -- "reads state" --> A
-  D -- "reads state" --> C
-  A -- "reads state" --> C
+  A["<b>app-infra/</b><br/>RDS PostgreSQL<br/>16, 단일 AZ<br/>S3 버킷<br/>+ IRSA 역할<br/>Secrets Manager<br/>Route 53 존<br/>ACM 인증서"]
+  C["<b>cluster/</b><br/>VPC, EKS 1.34<br/>Graviton 노드<br/>(t4g.medium)<br/>x64 노드<br/>(m5.large)<br/>기본 0대"]
+  D -- "state 읽기" --> A
+  D -- "state 읽기" --> C
+  A -- "state 읽기" --> C
 ```
 
-How the pieces meet at runtime, which the diagram leaves out:
+도식에 넣지 않은, 런타임에서 이 자원들이 만나는 방식은 다음과 같습니다.
 
-- RDS is private and accepts port 5432 only from the node security group. The S3 bucket blocks
-  public access, and the app reaches it through an IAM role (IRSA).
-- Secrets Manager feeds External Secrets, which creates a Kubernetes Secret, after one manual
-  `kubectl apply`.
-- ExternalDNS writes the ALB's DNS record into the Route 53 zone, and the Ingress attaches the ACM
-  certificate to the ALB.
-- The ALB and the four workloads are not Terraform's: the Ingress and Helm create them.
+- RDS는 프라이빗이고 노드 보안 그룹에서 오는 5432 포트만 받습니다. S3 버킷은 퍼블릭 접근을
+  막아 두었고, 앱은 IAM 역할(IRSA)로 접근합니다.
+- Secrets Manager의 값을 External Secrets가 가져와 Kubernetes Secret을 만듭니다. 수동으로
+  `kubectl apply`를 한 번 한 뒤에 동작합니다.
+- ExternalDNS가 ALB의 DNS 레코드를 Route 53 호스티드 존에 쓰고, Ingress가 ACM 인증서를 ALB에
+  붙입니다.
+- ALB와 워크로드 네 개는 Terraform이 만들지 않습니다. Ingress와 Helm이 만듭니다.
 
-The backend is one NestJS module per concern (auth, user, file, post, comment, upload, storage, audit
-log) plus operational modules for the sweeps, health and metrics. The module map and the request and
-data flow are in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+백엔드는 관심사마다 NestJS 모듈 하나(auth, user, file, post, comment, upload, storage, audit log)와
+정리 작업, health, metrics를 위한 운영용 모듈로 이루어집니다. 모듈 구성과 요청·데이터 흐름은
+[ARCHITECTURE.ko.md](docs/ARCHITECTURE.ko.md)를 참고하세요.
 
-## Tech stack
+## 기술 스택
 
-| Technology | What it does here | Where |
+| 기술 | 여기서 하는 일 | 위치 |
 |---|---|---|
-| NestJS 11 (Express), TypeScript | The REST API; one module per concern | [backend/app.module.ts](backend/app.module.ts), [backend/main.ts](backend/main.ts) |
-| TypeORM 0.3 + PostgreSQL | Entities and relations; `synchronize: false`, schema by migrations ([ADR 0006](docs/ADR/0006-schema-policy-and-migration-adoption.md)) | [backend/entities.ts](backend/entities.ts), [backend/migrations/](backend/migrations/), [backend/data-source.ts](backend/data-source.ts) |
-| Transactions | Manual QueryRunner where a file move must commit with the DB write, `dataSource.transaction()` for pure DB writes ([ADR 0004](docs/ADR/0004-transaction-pattern-selection.md)) | [backend/file/file.service.ts](backend/file/file.service.ts), [backend/user/user.service.ts](backend/user/user.service.ts) |
-| Passport JWT, bcrypt | Basic-token sign-in, separate access and refresh secrets, rotation | [backend/auth/](backend/auth/) |
-| class-validator, Joi | DTO validation at the boundary; env vars validated at boot | [backend/common/validation-pipe-options.ts](backend/common/validation-pipe-options.ts), [backend/app.module.ts](backend/app.module.ts) |
-| `@nestjs/throttler`, helmet | Per-route rate limits; security response headers | [backend/app.module.ts](backend/app.module.ts), [backend/main.ts](backend/main.ts) |
-| `clamscan` (ClamAV) | Synchronous, fail-closed scan of each upload | [backend/upload/scan.service.ts](backend/upload/scan.service.ts) |
-| AWS SDK v3 | S3 adapter and presigned redirects | [backend/storage/s3.storage.ts](backend/storage/s3.storage.ts) |
-| `@nestjs/schedule` | Orphan `temp_` and `granted_` file sweeps | [backend/temp-cleanup/](backend/temp-cleanup/), [backend/file/granted-cleanup.service.ts](backend/file/granted-cleanup.service.ts) |
-| `prom-client`, Swagger | `GET /metrics`; API docs at `/doc` | [backend/metrics/](backend/metrics/), [backend/main.ts](backend/main.ts) |
-| React 19, Vite, React Router 7 | `frontend/`: CSS Modules, plain `fetch` wrapper, no state or data-fetching library | [frontend/src/](frontend/src/), [frontend/src/api/client.ts](frontend/src/api/client.ts) |
-| React 19, Zustand, axios | `admin/`: role management and audit-log viewer | [admin/src/](admin/src/) |
-| Jest, Playwright | Service unit tests; backend E2E on a real PostgreSQL; client E2E | `backend/**/*.spec.ts`, [test/](test/), [frontend/e2e/](frontend/e2e/), [admin/e2e/](admin/e2e/) |
-| Docker, Compose, GitHub Actions | Multi-stage image (`linux/amd64` and `linux/arm64` from `main`), local stack, CI that publishes images | [Dockerfile](Dockerfile), [docker-compose.yml](docker-compose.yml), [.github/workflows/ci.yml](.github/workflows/ci.yml) |
-| Helm, Terraform | One release for the backend, `frontend/`, `admin/` and ClamAV; VPC, EKS, RDS, S3, Route 53 and ACM in three state files, plus ALB Controller, External Secrets, ExternalDNS, kube-prometheus-stack | [k8s/helm/](k8s/helm/), [k8s/infra/terraform/](k8s/infra/terraform/) |
+| NestJS 11(Express), TypeScript | REST API. 관심사마다 모듈 하나 | [backend/app.module.ts](backend/app.module.ts), [backend/main.ts](backend/main.ts) |
+| TypeORM 0.3 + PostgreSQL | 엔티티와 관계. `synchronize: false`이고 스키마는 마이그레이션으로 관리([ADR 0006](docs/ADR/0006-schema-policy-and-migration-adoption.ko.md)) | [backend/entities.ts](backend/entities.ts), [backend/migrations/](backend/migrations/), [backend/data-source.ts](backend/data-source.ts) |
+| 트랜잭션 | 파일 이동이 DB 쓰기와 함께 커밋되어야 할 때는 수동 QueryRunner, 순수 DB 쓰기에는 `dataSource.transaction()`([ADR 0004](docs/ADR/0004-transaction-pattern-selection.ko.md)) | [backend/file/file.service.ts](backend/file/file.service.ts), [backend/user/user.service.ts](backend/user/user.service.ts) |
+| Passport JWT, bcrypt | Basic 토큰 로그인, 분리된 액세스·리프레시 시크릿, 토큰 교체 | [backend/auth/](backend/auth/) |
+| class-validator, Joi | 경계에서 DTO 검증, 부팅 시 환경변수 검증 | [backend/common/validation-pipe-options.ts](backend/common/validation-pipe-options.ts), [backend/app.module.ts](backend/app.module.ts) |
+| `@nestjs/throttler`, helmet | 라우트별 요청 횟수 제한, 보안 응답 헤더 | [backend/app.module.ts](backend/app.module.ts), [backend/main.ts](backend/main.ts) |
+| `clamscan`(ClamAV) | 업로드마다 동기식 fail-closed 스캔 | [backend/upload/scan.service.ts](backend/upload/scan.service.ts) |
+| AWS SDK v3 | S3 어댑터와 presigned 리다이렉트 | [backend/storage/s3.storage.ts](backend/storage/s3.storage.ts) |
+| `@nestjs/schedule` | 고아 `temp_`·`granted_` 파일 정리 | [backend/temp-cleanup/](backend/temp-cleanup/), [backend/file/granted-cleanup.service.ts](backend/file/granted-cleanup.service.ts) |
+| `prom-client`, Swagger | `GET /metrics`, `/doc`의 API 문서 | [backend/metrics/](backend/metrics/), [backend/main.ts](backend/main.ts) |
+| React 19, Vite, React Router 7 | `frontend/`: CSS Modules, 단순한 `fetch` 래퍼, 상태·데이터 패칭 라이브러리 없음 | [frontend/src/](frontend/src/), [frontend/src/api/client.ts](frontend/src/api/client.ts) |
+| React 19, Zustand, axios | `admin/`: 역할 관리와 감사 로그 뷰어 | [admin/src/](admin/src/) |
+| Jest, Playwright | 서비스 단위 테스트, 실제 PostgreSQL을 쓰는 백엔드 E2E, 클라이언트 E2E | `backend/**/*.spec.ts`, [test/](test/), [frontend/e2e/](frontend/e2e/), [admin/e2e/](admin/e2e/) |
+| Docker, Compose, GitHub Actions | 멀티 스테이지 이미지(`main`에서는 `linux/amd64`와 `linux/arm64`), 로컬 스택, 이미지를 발행하는 CI | [Dockerfile](Dockerfile), [docker-compose.yml](docker-compose.yml), [.github/workflows/ci.yml](.github/workflows/ci.yml) |
+| Helm, Terraform | 백엔드, `frontend/`, `admin/`, ClamAV를 위한 릴리스 하나. 세 개의 state로 나눈 VPC, EKS, RDS, S3, Route 53과 ACM, 그리고 ALB Controller, External Secrets, ExternalDNS, kube-prometheus-stack | [k8s/helm/](k8s/helm/), [k8s/infra/terraform/](k8s/infra/terraform/) |
 
-Why these were chosen is in [ADR 0066](docs/ADR/0066-stack-selection-rationale-retroactive.md),
-written after the fact. NestJS, TypeORM and PostgreSQL were picked with a later move toward
-services in mind. AWS/EKS was also a way to learn the deployment market's standard tools. The
-frontend has no state library because it has few screens. The ADR also says what was never
-weighed in writing, such as a comparison with ECS.
+이 스택을 고른 이유는 나중에 적은 [ADR 0066](docs/ADR/0066-stack-selection-rationale-retroactive.ko.md)에
+있습니다. NestJS, TypeORM, PostgreSQL은 트래픽이 커지면 서비스 단위로 나눌 수 있다는 점을 염두에 두고
+골랐습니다. AWS/EKS는 배포 시장의 표준 도구를 익히는 것도 목적이었습니다. 프론트엔드는 화면이 적어서
+상태 라이브러리를 쓰지 않습니다. ECS와의 비교처럼 글로 따져 보지 않은 부분도 그 ADR에 적혀 있습니다.
 
-## Project structure
+## 프로젝트 구조
 
-| Path | What is there |
+| 경로 | 들어 있는 것 |
 |---|---|
-| `backend/` | The NestJS API: one folder per module (`auth`, `user`, `file`, `post`, `comment`, `upload`, `storage`, …), `migrations/`, `entities.ts` |
-| `frontend/` | The React client, with its own README and Playwright E2E |
-| `admin/` | The admin console, with its own README and tests |
-| `test/` | Backend E2E suite (real PostgreSQL, throwaway database) |
-| `k8s/helm/`, `k8s/infra/terraform/` | The Helm chart and the three Terraform states (`cluster`, `app-infra`, `addons`) |
-| `docs/` | Decision records, roadmap, architecture notes, changelog and the screenshots (see [Documentation](#documentation)) |
-| `perf/` | Load-test and `EXPLAIN` scripts behind [ADR 0049](docs/ADR/0049-performance-capacity-criteria.md) |
+| `backend/` | NestJS API. 모듈마다 폴더 하나(`auth`, `user`, `file`, `post`, `comment`, `upload`, `storage` 등), `migrations/`, `entities.ts` |
+| `frontend/` | React 클라이언트. 자체 README와 Playwright E2E가 있습니다 |
+| `admin/` | 관리자 콘솔. 자체 README와 테스트가 있습니다 |
+| `test/` | 백엔드 E2E 스위트(실제 PostgreSQL, 일회용 데이터베이스) |
+| `k8s/helm/`, `k8s/infra/terraform/` | Helm 차트와 세 개의 Terraform state(`cluster`, `app-infra`, `addons`) |
+| `docs/` | 결정 기록, 로드맵, 아키텍처 설명, 변경 이력, 스크린샷([문서](#문서) 참고) |
+| `perf/` | [ADR 0049](docs/ADR/0049-performance-capacity-criteria.ko.md)의 근거가 된 부하 테스트와 `EXPLAIN` 스크립트 |
 
-## Quick Start
+## 빠른 시작
 
-### Fastest: Docker
+### 가장 빠른 방법: Docker
 
-Needs Docker with Compose 2.24 or newer. This brings up PostgreSQL, ClamAV, the migrations and
-the API ([ADR 0015](docs/ADR/0015-docker-and-compose.md),
-[ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md)).
+Compose 2.24 이상이 포함된 Docker가 필요합니다. PostgreSQL, ClamAV, 마이그레이션, API를 함께
+띄웁니다([ADR 0015](docs/ADR/0015-docker-and-compose.ko.md),
+[ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)).
 
-1. Copy `.env.example` to `.env` in the repo root and fill in three values; the rest works for
-   local development as it is:
+1. 저장소 루트에서 `.env.example`을 `.env`로 복사하고 세 값만 채웁니다. 나머지는 로컬 개발용으로
+   그대로 동작합니다.
 
    ```bash
    cp .env.example .env
-   # then set, in .env:
-   #   DB_PASSWORD           any password you choose
-   #   ACCESS_TOKEN_SECRET   32+ characters with a lowercase letter, an uppercase letter, a digit and a symbol
-   #   REFRESH_TOKEN_SECRET  the same rule, a different value
+   # 그다음 .env에서 다음을 설정합니다:
+   #   DB_PASSWORD           원하는 비밀번호
+   #   ACCESS_TOKEN_SECRET   32자 이상, 소문자·대문자·숫자·기호 포함
+   #   REFRESH_TOKEN_SECRET  같은 규칙, 다른 값
    ```
 
-   These three are left empty or invalid on purpose: the app refuses to boot until you set them,
-   rather than running with values anyone can read in this public repo.
+   이 세 값은 일부러 비워 두거나 규칙에 어긋나게 해 두었습니다. 공개 저장소에서 누구나 읽을 수 있는
+   값으로 서버가 뜨는 일이 없도록, 직접 채우기 전에는 부팅이 막힙니다.
 
-2. Start the stack:
+2. 스택을 띄웁니다.
 
    ```bash
-   docker compose up --build   # db + clamav → migrate (one-shot) → api on :3000
+   docker compose up --build   # db + clamav → migrate(one-shot) → api를 :3000에 기동
    ```
 
-   The first start downloads ClamAV's signature database, so `api` can take a few minutes to
-   become healthy. Then open `http://localhost:3000/doc` ([Try the API](#try-the-api-swagger)).
+   처음 시작할 때는 ClamAV가 시그니처 DB를 내려받으므로 `api`가 healthy가 되기까지 몇 분 걸릴 수
+   있습니다. 그 뒤 `http://localhost:3000/doc`을 엽니다([API 써 보기](#api-써-보기-swagger)).
 
-These steps start only the API, which has no UI. To run the clients, use separate terminals:
+위 단계로는 API만 뜨고 화면은 없습니다. 클라이언트를 실행하려면 별도 터미널에서 다음을 실행합니다.
 
 ```bash
-cd frontend && pnpm install && pnpm dev   # http://localhost:5173 (proxies to the backend on :3000)
+cd frontend && pnpm install && pnpm dev   # http://localhost:5173 (백엔드 :3000으로 프록시)
 
-cd admin && cp .env.example .env          # sets VITE_API_URL=http://localhost:3000
+cd admin && cp .env.example .env          # VITE_API_URL=http://localhost:3000 설정
 pnpm install && pnpm dev                  # http://localhost:5174
 ```
 
-`admin` calls the backend from another origin, so add `CORS_ORIGIN=http://localhost:5174` to the
-backend's `.env` and restart the backend (see admin/README.md).
+`admin`은 백엔드를 다른 출처로 호출하므로, 백엔드의 `.env`에 `CORS_ORIGIN=http://localhost:5174`를
+넣고 백엔드를 다시 시작하세요(`admin/README.ko.md` 참고).
 
-Signing in to `admin` needs a superadmin account. Register an account first (`POST /auth/register`
-works from Swagger), put its email in `.env` as `SUPERADMIN_EMAIL`, run `docker compose up -d` so `api`
-is recreated with the new value, then promote the account by hand
-([ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.md)):
+`admin`에 로그인하려면 superadmin 계정이 필요합니다. 먼저 계정을 등록하고(`POST /auth/register`는
+Swagger에서 호출할 수 있습니다), 그 이메일을 `.env`의 `SUPERADMIN_EMAIL`에 넣은 뒤
+`docker compose up -d`로 `api`를 새 값으로 다시 만들고, 계정을 직접 승격합니다
+([ADR 0052](docs/ADR/0052-superadmin-seed-manual-trigger.ko.md)).
 
 ```bash
 docker compose exec api node dist/scripts/promote-superadmin.js
 ```
 
 <details>
-<summary>Notes: ports, migrations, <code>.env.local</code></summary>
+<summary>참고: 포트, 마이그레이션, <code>.env.local</code></summary>
 
-- `db` publishes `${DB_PORT}` (5435), so host-run `pnpm test:e2e` and `pnpm migration:*` reach the
-  same database. Stop any legacy `upload-board-pg` container first — it holds that port.
-- Migrations run as their own `migrate` service, not inside `api`'s boot
-  ([ADR 0032](docs/ADR/0032-migration-as-separate-deploy-step.md)). The image runs as a non-root
-  user ([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.md)); on a native Linux host,
-  if the bind-mounted `./file` directory fails to write, run `sudo chown -R 1001:1001 file/` once.
-- To change a value only on your machine without touching `.env`, put it in the gitignored
-  `.env.local`: `api` and `migrate` read it after `.env`
-  ([ADR 0015](docs/ADR/0015-docker-and-compose.md) Addendum 2026-10-03).
+- `db` 서비스가 `${DB_PORT}`(5435)를 노출하므로, 호스트에서 돌리는 `pnpm test:e2e`와
+  `pnpm migration:*`도 같은 데이터베이스에 접속합니다. 그 포트를 쓰는 레거시 `upload-board-pg`
+  컨테이너가 있으면 먼저 멈추세요.
+- 마이그레이션은 `api`의 부팅 과정이 아니라 별도의 `migrate` 서비스로 실행됩니다
+  ([ADR 0032](docs/ADR/0032-migration-as-separate-deploy-step.ko.md)). 이미지는 non-root 사용자로
+  실행됩니다([ADR 0030](docs/ADR/0030-container-non-root-and-arch-stance.ko.md)). 네이티브 Linux
+  호스트에서 바인드 마운트한 `./file` 디렉터리에 쓰기가 실패하면 `sudo chown -R 1001:1001 file/`을
+  한 번 실행하세요.
+- `.env`는 건드리지 않고 이 머신에서만 값을 바꾸려면 gitignore된 `.env.local`에 적으세요. `api`와
+  `migrate`가 `.env` 뒤에 이 파일을 읽습니다
+  ([ADR 0015](docs/ADR/0015-docker-and-compose.ko.md) 2026-10-03 추가 기록).
 
 </details>
 
-### Without Docker
+### Docker 없이 실행
 
 <details>
-<summary>Prerequisites and commands</summary>
+<summary>사전 요건과 명령</summary>
 
-Prerequisites: Node.js 24 (see [.nvmrc](.nvmrc)), pnpm 10 via Corepack, PostgreSQL 16, and a
-reachable `clamd` — set `CLAMD_HOST`/`CLAMD_PORT` (default `clamav`/`3310`). Without a scanner,
-`POST /upload/attach` answers 503 `UPLOAD_SCAN_UNAVAILABLE` by design.
+사전 요건: Node.js 24([.nvmrc](.nvmrc) 참고), Corepack 기반 pnpm 10, PostgreSQL 16, 그리고 접속할 수
+있는 `clamd` — `CLAMD_HOST`/`CLAMD_PORT`(기본 `clamav`/`3310`)로 지정합니다. 스캐너가 없으면
+`POST /upload/attach`는 설계대로 503 `UPLOAD_SCAN_UNAVAILABLE`로 답합니다.
 
 ```bash
 pnpm install
-cp .env.example .env              # fill in the three values as above; DB_HOST is already localhost,
-                                  # and DB_PORT=5435 is the compose db's port: set your own (often 5432)
-# then create the database named in DB_DATABASE
-pnpm migration:run                # applies the schema (ADR 0006)
-pnpm run start:dev                # port 3000, Swagger at http://localhost:3000/doc
+cp .env.example .env              # 위의 세 값을 채웁니다. DB_HOST는 이미 localhost이고,
+                                  # DB_PORT=5435는 compose의 db 포트이니 본인의 포트(보통 5432)로 바꿉니다
+# 그다음 DB_DATABASE에 지정한 데이터베이스를 만듭니다
+pnpm migration:run                # 스키마 적용 (ADR 0006)
+pnpm run start:dev                # 포트 3000, Swagger는 http://localhost:3000/doc
 
-# optional: promote a superadmin — register the account first, set SUPERADMIN_EMAIL in .env, then
-pnpm promote-superadmin           # a deliberate manual step (ADR 0013/0052)
+# 선택: superadmin 승격 — 먼저 계정을 등록하고 .env의 SUPERADMIN_EMAIL을 그 주소로 설정한 뒤
+pnpm promote-superadmin           # 의도적인 수동 단계 (ADR 0013/0052)
 
-pnpm test                         # unit tests
-pnpm run test:cov                 # coverage (only services are measured)
+pnpm test                         # 단위 테스트
+pnpm run test:cov                 # 커버리지 (서비스만 측정)
 ```
 
 </details>
 
-### Environment variables
+### 환경변수
 
 <details>
-<summary>Required and common variables</summary>
+<summary>필수 변수와 자주 바꾸는 변수</summary>
 
-Required, validated by Joi at boot (a missing value fails fast): `ENV`, `DB_TYPE` (must be
-`postgres`), `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE`, `HASH_ROUNDS` (≥ 10),
-`ACCESS_TOKEN_SECRET` and `REFRESH_TOKEN_SECRET` (each ≥ 32 characters with a lowercase letter, an
-uppercase letter, a digit and a symbol), `ACCESS_TOKEN_SECRET_EXPIRES_IN`,
-`REFRESH_TOKEN_SECRET_EXPIRES_IN` (numbers).
+필수 항목은 부팅 시 Joi가 검증하며, 빠지면 즉시 실패합니다. `ENV`, `DB_TYPE`(반드시 `postgres`),
+`DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE`, `HASH_ROUNDS`(10 이상),
+`ACCESS_TOKEN_SECRET`과 `REFRESH_TOKEN_SECRET`(각각 32자 이상이면서 소문자·대문자·숫자·기호 포함),
+`ACCESS_TOKEN_SECRET_EXPIRES_IN`, `REFRESH_TOKEN_SECRET_EXPIRES_IN`(숫자)입니다.
 
-Everything else is optional and has a default. The settings you are most likely to touch are
-`BASE_URL`, `CORS_ORIGIN` ([ADR 0008](docs/ADR/0008-opt-in-cors.md)), `STORAGE_DRIVER` (`local` or
-`s3`; [ADR 0029](docs/ADR/0029-storage-port-adapter.md)) and `CLAMD_HOST`/`CLAMD_PORT`, all
-documented in `.env.example`. Leave `THROTTLE_ENABLED` at `true`; it exists only so the E2E
-suites can bypass rate limits.
+그 밖의 항목은 모두 선택이며 기본값이 있습니다. 자주 바꾸게 되는 것은 `BASE_URL`, `CORS_ORIGIN`
+([ADR 0008](docs/ADR/0008-opt-in-cors.ko.md)), `STORAGE_DRIVER`(`local` 또는 `s3`,
+[ADR 0029](docs/ADR/0029-storage-port-adapter.ko.md)), `CLAMD_HOST`/`CLAMD_PORT`이고, 모두
+`.env.example`에 설명되어 있습니다. `THROTTLE_ENABLED`는 `true`로 두세요. E2E 스위트가 요청 횟수
+제한을 우회할 때만 쓰는 값입니다.
 
 </details>
 
-### Deploying to AWS / Kubernetes
+### AWS / Kubernetes 배포
 
 <details>
-<summary>How a deploy runs</summary>
+<summary>배포는 이렇게 진행합니다</summary>
 
-The backend, `frontend/` and `admin/` ship as one Helm release behind one ALB, with ClamAV as its
-own Deployment ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md),
-[ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.md)). The normal path is
-`bash k8s/infra/terraform/deploy.sh all`: the three Terraform states in order, then
-`helm upgrade --install` with one `:<git-sha>` for all three images
-([ADR 0046](docs/ADR/0046-deploy-sequence-automation.md)), stopping for an explicit `y` before
-every `apply`. Flags, prerequisites and the manual steps (domain and NS delegation, the one-time
-External Secrets sync, turning `ingress.enabled` on) are in
-[k8s/infra/terraform/README.md](k8s/infra/terraform/README.md) and
-[k8s/helm/README.md](k8s/helm/README.md).
+백엔드·`frontend/`·`admin/`은 하나의 ALB 뒤에서 하나의 Helm 릴리스로 배포되고, ClamAV는 별도
+Deployment로 함께 배포됩니다([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.ko.md),
+[ADR 0062](docs/ADR/0062-admin-same-alb-subpath-routing.ko.md)). 기본 경로는
+`bash k8s/infra/terraform/deploy.sh all`입니다. Terraform 세 state를 순서대로 적용한 뒤 세 이미지에
+같은 `:<git-sha>`를 넣어 `helm upgrade --install`을 실행하며
+([ADR 0046](docs/ADR/0046-deploy-sequence-automation.ko.md)), 모든 `apply` 전에 `y`를 직접 입력해야
+진행합니다. 플래그와 선행 조건, 수동 단계(도메인 구매·NS 위임, 1회성 External Secrets 동기화,
+`ingress.enabled` 켜기)는
+[k8s/infra/terraform/README.md](k8s/infra/terraform/README.ko.md)와
+[k8s/helm/README.md](k8s/helm/README.ko.md)에 있습니다.
 
 </details>
 
-**CI does not deploy.** GitHub Actions only publishes the three images
-(`bluecode1775/sharenpo`, `-frontend`, `-admin`) to Docker Hub
-([ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.md)); a person runs
-`terraform apply` and `helm upgrade`. The stack has been applied to real AWS and checked there more
-than once. The live state is read from AWS, not from this README, because it goes stale the day
-someone runs `apply` or `destroy`.
+**CI는 배포하지 않습니다.** GitHub Actions는 세 이미지(`bluecode1775/sharenpo`,
+`-frontend`, `-admin`)를 Docker Hub에 발행할 뿐이고
+([ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)),
+`terraform apply`와 `helm upgrade`는 사람이 실행합니다. 이 스택은 실제 AWS에 적용해 여러 번
+확인했습니다. 지금의 실제 상태는 이 README가 아니라 AWS에서 직접 확인합니다. `apply`나
+`destroy`를 실행하는 순간 이 문서의 내용은 낡아 버리기 때문입니다.
 
-## Try the API (Swagger)
+## API 써 보기 (Swagger)
 
-Swagger UI is served by the backend itself at `/doc`. The deployed Ingress deliberately does not
-route `/doc` ([ADR 0058](docs/ADR/0058-ingress-path-allowlist.md)), so it is available when you run
-the backend yourself — with the [Docker quick start](#fastest-docker) it is
-`http://localhost:3000/doc`.
+Swagger UI는 백엔드가 `/doc`에서 직접 서빙합니다. 배포된 Ingress는 `/doc`을 일부러 라우팅하지
+않으므로([ADR 0058](docs/ADR/0058-ingress-path-allowlist.ko.md)), 백엔드를 직접 실행했을 때 쓸 수
+있습니다. [Docker 빠른 시작](#가장-빠른-방법-docker)으로 띄웠다면 `http://localhost:3000/doc`입니다.
 
-1. Open `/doc` and click **Authorize**. The dialog lists three schemes: `bearer` (a pasted token),
-   `basic` (email and password) and `cookie` (the refresh cookie).
-2. Under `basic`, enter an email and a password that meets the rule (at least 10 characters with a
-   lowercase letter, an uppercase letter, a digit and a symbol), and apply it.
-3. Run `POST /auth/register` with **Try it out**; it uses those credentials as the Basic token and
-   answers 201. Then run `POST /auth/signin` and copy `accessToken` from the response.
-4. Paste that token under `bearer`, apply it, and call anything else, for example `GET /file`.
-   Without a token the same call is rejected with 401.
+1. `/doc`을 열고 **Authorize**를 누릅니다. 창에는 `bearer`(붙여 넣는 토큰), `basic`(이메일과
+   비밀번호), `cookie`(리프레시 쿠키) 세 가지가 보입니다.
+2. `basic`에 이메일과 규칙에 맞는 비밀번호(10자 이상, 소문자·대문자·숫자·기호 포함)를 입력하고
+   적용합니다.
+3. **Try it out**으로 `POST /auth/register`를 실행합니다. 방금 넣은 값이 Basic 토큰으로 쓰이고 201로
+   답합니다. 이어서 `POST /auth/signin`을 실행해 응답의 `accessToken`을 복사합니다.
+4. 그 토큰을 `bearer`에 붙여 넣고 적용한 뒤 나머지 API를 호출합니다. 예를 들면 `GET /file`입니다.
+   토큰 없이 같은 호출을 하면 401로 거절됩니다.
 
-`persistAuthorization` is on, so the entered values survive a page reload.
-`POST /upload/attach` is a multipart upload: pick one file in exactly one of the `image`, `audio` or
-`video` fields, then send the returned `temp_…` name to `POST /file` as `filePath`.
+`persistAuthorization`이 켜져 있어서 입력한 값은 페이지를 새로 고쳐도 남습니다.
+`POST /upload/attach`는 멀티파트 업로드입니다. `image`, `audio`, `video` 필드 중 정확히 하나에
+파일을 고르고, 돌려받은 `temp_…` 이름을 `POST /file`의 `filePath`로 보냅니다.
 
-Checked on 2026-10-21 against the Docker stack above. `/doc` was served and rendered with no console
-errors. Register answered 201, sign-in returned a token, and `GET /file` answered 401 without it and
-200 with it. A 1×1 PNG went through `attach` (201, through the ClamAV scan) and `POST /file` (201,
-`private`); sending `POST /file` again answered 200. The file's content answered 403 without a token
-and 200 for the owner. The Authorize dialog was opened in a browser, but typing into it and pressing
-its buttons was not tried.
+2026-10-21에 위의 Docker 스택으로 확인했습니다. `/doc`이 콘솔 에러 없이 서빙되고 렌더링됐습니다.
+회원가입은 201이었고, 로그인은 토큰을 돌려줬으며, `GET /file`은 토큰이 없으면 401, 있으면 200이었습니다.
+1×1 PNG는 `attach`(201, ClamAV 스캔 통과)와 `POST /file`(201, `private`)을 거쳤고, `POST /file`을
+다시 보내면 200이었습니다. 그 파일의 콘텐츠는 토큰이 없으면 403, 소유자에게는 200이었습니다.
+Authorize 창이 열리는 것까지는 브라우저로 확인했지만, 그 안에 직접 입력하고 버튼을 누르는 동작은
+해 보지 않았습니다.
 
-## Core API
+## 핵심 API
 
-Six routes carry the main flow. Swagger at `/doc` lists every route (users, ownership transfer,
-audit log, health, metrics, and the rest of files, posts and comments) with its parameters and error
-codes. Every route needs a Bearer access token except `POST /auth/register` and `POST /auth/signin`
-(Basic token), `POST /auth/token/refresh` (refresh cookie), the operational `/health/*` and
-`/metrics`, and `GET /file/:id/content` (Bearer optional).
+주요 흐름을 이루는 라우트 여섯 개입니다. 사용자, 소유권 이전, 감사 로그, health, metrics와 나머지
+파일·게시글·댓글 라우트를 포함한 전체 라우트와 파라미터, 에러 코드는 `/doc`의 Swagger에 있습니다.
+`POST /auth/register`·`POST /auth/signin`(Basic 토큰), `POST /auth/token/refresh`(리프레시 쿠키),
+운영용 `/health/*`와 `/metrics`, `GET /file/:id/content`(Bearer 선택)를 제외한 모든 라우트는 Bearer
+액세스 토큰이 필요합니다.
 
-| Route | Auth | What it does | Notable errors, ADR |
+| 라우트 | 인증 | 하는 일 | 주요 에러, ADR |
 |---|---|---|---|
-| `POST /auth/register`, `POST /auth/signin` | Basic | Creates an account from `base64(email:password)` (the password must be ≥ 10 characters with all four character classes); sign-in returns `{ accessToken }` and sets the httpOnly refresh cookie | 400 `AUTH_WEAK_PASSWORD`, 400 `AUTH_EMAIL_TAKEN` ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md)) |
-| `POST /auth/token/refresh` | refresh cookie | Rotates the refresh cookie and returns a new access token | 401 `AUTH_REFRESH_REUSED` ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.md)) |
-| `POST /upload/attach` | Bearer | Scans, then stages one file (`image`, `audio` or `video` field, 100 MB) as `temp_…` and returns its name | 400 `UPLOAD_MALWARE_DETECTED`, 400 `UPLOAD_INVALID_TYPE`, 503 `UPLOAD_SCAN_UNAVAILABLE` ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md)) |
-| `POST /file` | Bearer | Promotes the staged file to an owned, `private` file in one transaction; a repeat by the same user replays (200) | 409 `FILE_ALREADY_CLAIMED` ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md)) |
-| `GET /file/:id/content` | optional Bearer | Streams the bytes after the visibility check, with `Range`; under S3 it answers a `302` to a presigned URL | 403 `FORBIDDEN_NOT_OWNER`, 403 `FILE_SHARE_INVALID` ([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.md)) |
-| `POST /post` | Bearer | Creates a post with an optional `fileId`, which doubles as its idempotency key | 409 `POST_FILE_TAKEN`, 403 `FORBIDDEN_NOT_OWNER` ([ADR 0023](docs/ADR/0023-board-domain-schema.md)) |
+| `POST /auth/register`, `POST /auth/signin` | Basic | `base64(email:password)`로 계정을 만듭니다(비밀번호는 10자 이상이고 네 가지 문자 종류를 모두 포함해야 합니다). 로그인은 `{ accessToken }`을 돌려주고 httpOnly 리프레시 쿠키를 설정합니다 | 400 `AUTH_WEAK_PASSWORD`, 400 `AUTH_EMAIL_TAKEN`([ADR 0002](docs/ADR/0002-dual-secret-token-pair.ko.md)) |
+| `POST /auth/token/refresh` | 리프레시 쿠키 | 리프레시 쿠키를 교체하고 새 액세스 토큰을 돌려줍니다 | 401 `AUTH_REFRESH_REUSED`([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.ko.md)) |
+| `POST /upload/attach` | Bearer | 스캔한 뒤 파일 하나(`image`, `audio`, `video` 필드, 100 MB)를 `temp_…`로 임시 저장하고 그 이름을 돌려줍니다 | 400 `UPLOAD_MALWARE_DETECTED`, 400 `UPLOAD_INVALID_TYPE`, 503 `UPLOAD_SCAN_UNAVAILABLE`([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)) |
+| `POST /file` | Bearer | 임시 저장한 파일을 하나의 트랜잭션으로 소유자가 있는 `private` 파일로 승격합니다. 같은 사용자가 다시 보내면 기존 결과를 돌려줍니다(200) | 409 `FILE_ALREADY_CLAIMED`([ADR 0019](docs/ADR/0019-upload-claim-idempotency.ko.md)) |
+| `GET /file/:id/content` | 선택적 Bearer | 공개 범위를 검사한 뒤 바이트를 `Range`와 함께 스트리밍합니다. S3에서는 presigned URL로 `302` 리다이렉트합니다 | 403 `FORBIDDEN_NOT_OWNER`, 403 `FILE_SHARE_INVALID`([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md)) |
+| `POST /post` | Bearer | 선택적 `fileId`와 함께 게시글을 만듭니다. `fileId`가 멱등 키 역할도 합니다 | 409 `POST_FILE_TAKEN`, 403 `FORBIDDEN_NOT_OWNER`([ADR 0023](docs/ADR/0023-board-domain-schema.ko.md)) |
 
-### Error responses
+### 에러 응답
 
-Every error follows a fixed, machine-readable shape
-([ADR 0011](docs/ADR/0011-error-code-contract.md)):
+모든 에러는 바뀌지 않는, 기계가 읽을 수 있는 형식을 따릅니다
+([ADR 0011](docs/ADR/0011-error-code-contract.ko.md)):
 
 ```json
 {
@@ -461,229 +459,222 @@ Every error follows a fixed, machine-readable shape
 }
 ```
 
-Branch on `code` (stable contract — see `backend/common/error-code.ts`), never on
-`message` (free to change). Validation failures use `code: "VALIDATION_FAILED"`
-with a `message` array; when `ENV=dev` a `stack` field is included.
+에러를 구분할 때는 `code`(바뀌지 않는 계약 — `backend/common/error-code.ts` 참고)만 쓰고,
+바뀔 수 있는 `message`로는 구분하지 마세요. 검증 실패는
+`code`가 `VALIDATION_FAILED`이고 `message`가 배열로 오며, `ENV=dev`에서는 `stack`
+필드가 추가됩니다.
 
-## Troubleshooting and decisions
+## 트러블슈팅과 결정
 
-Problems that were measured or reproduced, and where each is recorded in full. A reason for the fix
-is given only where the record states one.
+측정하거나 재현한 문제와, 그 전체 기록이 있는 위치입니다. 선택 이유는 기록에 적힌 것만 적었습니다.
 
-**`docker stop` took 10.4 s and the container exited 137**
-([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.md))
+**`docker stop`이 10.4초 걸리고 컨테이너가 종료 코드 137로 끝남**
+([ADR 0061](docs/ADR/0061-shutdown-hooks-and-pid1-sigterm.ko.md))
 
-- **Cause:** `node` is PID 1 and ignored SIGTERM, so the DB pool was never closed.
-- **Fix:** `app.enableShutdownHooks([], { useProcessExit: true })` in [backend/main.ts](backend/main.ts).
-- **Why this fix:** the plain call only exits when nothing keeps the event loop alive; with a leftover
-  timer it still took 10.4 s, the option 0.4 s. The option also stops a future leaked handle (likely
-  `S3Storage`) from silently bringing the slow shutdown back.
-- **Result:** about 0.4 s and exit 0 in a local container and a pod on a local `kind` cluster; not
-  measured on EKS.
+- **원인:** `node`가 PID 1이라 SIGTERM을 무시했고, 그래서 DB 풀이 닫히지 않았음.
+- **해결:** [backend/main.ts](backend/main.ts)에 `app.enableShutdownHooks([], { useProcessExit: true })` 추가.
+- **선택 이유:** 일반 호출은 이벤트 루프를 붙잡는 것이 하나라도 남으면 종료되지 않음. 타이머를 남겨 두면
+  10.4초, 옵션을 쓰면 0.4초. 이후 핸들이 새도(유력 후보는 `S3Storage`) 느린 종료가 조용히 돌아오지
+  않게 함.
+- **결과:** 로컬 컨테이너와 로컬 `kind` 클러스터의 파드에서 약 0.4초, 종료 코드 0. EKS에서는 측정하지 않음.
 
-**An upload passed the malware scan when the scanner gave no verdict**
-([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md) addenda 2026-10-03 and 2026-10-12)
+**스캐너가 판정을 내리지 못했는데도 업로드가 악성코드 스캔을 통과함**
+([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md) 2026-10-03, 2026-10-12 추가 기록)
 
-- **Cause:** `clamscan` resolves with `isInfected: null` ("unable to scan") instead of rejecting, and
-  the code read that as clean.
-- **Fix:** a non-boolean verdict now counts as a failed attempt: retried once, then 503
-  `UPLOAD_SCAN_UNAVAILABLE`.
-- **Why this fix:** no verdict is not a clean verdict, so it follows the same fail-closed rule as an
-  unreachable scanner and reuses the existing retry and 503 path. It was reproduced against a real
-  `clamd` first: a restart or crash mid-scan is enough to trigger it.
-- **Result:** reproduced against a real `clamd`, and re-checked after the fix.
+- **원인:** `clamscan`이 reject하지 않고 `isInfected: null`("스캔 불가")로 resolve하는데, 코드가 이를
+  정상으로 읽었음.
+- **해결:** boolean이 아닌 판정을 실패한 시도로 처리: 한 번 재시도한 뒤 503 `UPLOAD_SCAN_UNAVAILABLE`.
+- **선택 이유:** 판정 불가는 정상이 아니므로 스캐너 불가와 같은 fail-closed 규칙을 쓰고 기존 재시도·503
+  경로를 재사용함. 실제 `clamd`로 먼저 재현했고, 스캔 중 재시작·종료만으로 발생함.
+- **결과:** 실제 `clamd`로 재현했고 수정 뒤에도 다시 확인함.
 
-**The backend crash-looped on the first AWS deploy after the secret-strength rule**
-([ADR 0064](docs/ADR/0064-jwt-secret-generation-joi-strength-rule.md))
+**시크릿 강도 규칙이 생긴 뒤 첫 AWS 배포에서 백엔드가 crash-loop**
+([ADR 0064](docs/ADR/0064-jwt-secret-generation-joi-strength-rule.ko.md))
 
-- **Cause:** Terraform generated the JWT secrets as 48 alphanumeric characters; the app's Joi rule
-  requires a symbol.
-- **Fix:** the generator now guarantees one of each character class.
-- **Result:** after a re-apply the backend booted and signed in.
+- **원인:** Terraform이 JWT 시크릿을 영숫자 48자로 만들었는데, 앱의 Joi 규칙은 기호를 요구함.
+- **해결:** 생성기가 문자 종류를 하나씩 반드시 포함하도록 수정.
+- **결과:** 다시 apply한 뒤 백엔드가 부팅하고 로그인까지 됨.
 
-**`GET /file` paged non-deterministically**
-([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md))
+**`GET /file`의 페이지 순서가 일정하지 않음**
+([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.ko.md))
 
-- **Cause:** the query had no `ORDER BY`, so offset paging could repeat or skip rows.
-- **Fix:** default `createdAt DESC` with `id` as a tiebreaker; sort fields map through a fixed table, so
-  a client string never becomes a column name.
-- **Result:** one list contract shared by files and posts.
+- **원인:** 쿼리에 `ORDER BY`가 없어서 offset 페이지네이션이 행을 중복하거나 건너뛸 수 있었음.
+- **해결:** 기본 `createdAt DESC`에 `id`를 tiebreaker로 추가. 정렬 필드는 고정된 표를 거쳐 매핑하므로
+  클라이언트 문자열이 컬럼명이 되지 않음.
+- **결과:** 파일과 게시글이 하나의 목록 규약을 공유함.
 
-**The list-query indexes ADR 0021 had deferred**
-([ADR 0049](docs/ADR/0049-performance-capacity-criteria.md))
+**ADR 0021이 미뤄 둔 목록 쿼리 인덱스**
+([ADR 0049](docs/ADR/0049-performance-capacity-criteria.ko.md))
 
-- **Cause:** ADR 0021 deferred them until the tables reached 10,000 rows, with nothing measured yet.
-- **Fix:** measured at 10,000 rows each in `file_entity` and `post_entity`, then adopted all of them.
-- **Why this fix:** the response-time targets already passed, but the queries got 1.6–70× faster for
-  about 2.16 MB of indexes.
-- **Result:** six indexes in place.
+- **원인:** ADR 0021이 테이블이 10,000행에 이를 때까지 미뤄 두었고 측정한 값은 아직 없었음.
+- **해결:** `file_entity`와 `post_entity`에 각각 10,000행을 넣고 측정한 뒤 전부 채택.
+- **선택 이유:** 응답시간 목표는 이미 통과였지만 쿼리가 1.6~70배 빨라지고 인덱스 비용은 합계 약 2.16 MB.
+- **결과:** 인덱스 6개 적용.
 
-## How this was built
+## 만든 방식
 
-Most of the code was written with Claude Code, and the history says so: more than nine in ten
-commits carry a `Co-Authored-By: Claude` trailer.
+코드의 대부분은 Claude Code로 작성했고, 커밋 이력에도 그대로 남아 있습니다. 커밋의 90% 넘게
+`Co-Authored-By: Claude` 트레일러가 붙어 있습니다.
 
-The serious ways the AI can go wrong while it acts are written into [CLAUDE.md](CLAUDE.md) as
-principles up front. When one happens anyway, the date and the event are recorded as a lesson in
-the relevant document. This does not claim the rules prevent mistakes: where a rule existed and
-the same kind of mistake happened again, that is recorded in the same place.
+AI가 작업 중에 일으킬 수 있는 중대한 허점은 [CLAUDE.ko.md](CLAUDE.ko.md)에 원칙으로 먼저 명시해
+두었습니다. 그래도 실제로 일어나면 날짜와 경위를 교훈으로 삼아 관련 문서에 기록합니다. 규칙이
+사고를 막아 준다고 주장하지는 않습니다. 규칙이 있는데도 같은 부류의 실수가 되풀이된 일 역시
+같은 곳에 적혀 있습니다.
 
-### How the AI is operated
+### AI 운영 방식
 
-- **A written contract.** [CLAUDE.md](CLAUDE.md) says what may change without asking, what must
-  never appear (`any`, unvalidated env vars, files served by a client-supplied path) and what
-  has to be run before a change is called done. Hooks in `.claude/hooks/` ask for confirmation
-  before an edit to the highest-blast-radius files or a `migration:generate`.
-- **Choices are the developer's, with the alternatives written down.** Where a real choice
-  existed, the options went to the developer as a comparison table and the outcome became an
-  ADR. Examples the repository records: the password policy and its error code, confirmed before
-  any code; keeping `AUTH_EMAIL_TAKEN` visible after three options were weighed (both in
-  [CLAUDE.md](CLAUDE.md) > Known gaps); serving the frontend from the same ALB instead of an
-  external host ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md)).
-- **Checked against the real thing.** Unit tests, an end-to-end suite on a real PostgreSQL,
-  Playwright against a running backend, and dated live runs on AWS
-  ([ROADMAP.md](docs/ROADMAP.md) §9).
+- **규약을 문서로 정해 두었습니다.** [CLAUDE.ko.md](CLAUDE.ko.md)에는 묻지 않고 바꿔도 되는 것,
+  코드에 나오면 안 되는 것(`any`, 검증하지 않은 환경변수, 클라이언트가 보낸 경로로 파일을 내주는
+  코드), 작업을 끝났다고 말하기 전에 돌려야 하는 검증이 정리돼 있습니다. `.claude/hooks/`의 훅은
+  영향 범위가 큰 파일을 수정하거나 `migration:generate`를 실행하기 전에 확인을 요청합니다.
+- **선택은 개발자가 하고, 검토한 대안은 글로 남깁니다.** 선택지가 실제로 있던 곳에서는 대안을
+  비교표로 정리해 개발자에게 물었고, 결과는 ADR로 남겼습니다. 저장소에서 확인할 수 있는 예는 다음과
+  같습니다. 코드를 쓰기 전에 확정한 비밀번호 정책과 에러 코드, 세 가지 방안을 따져 본 뒤
+  `AUTH_EMAIL_TAKEN` 노출을 유지한 결정([CLAUDE.ko.md](CLAUDE.ko.md) > 알려진 미해결 지점),
+  프론트엔드를 외부 호스팅 대신 같은 ALB에서 서빙하기로 한 결정
+  ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.ko.md)).
+- **실제 환경에서 확인합니다.** 단위 테스트, 실제 PostgreSQL을 쓰는 E2E, 실행 중인 백엔드를 상대로 돌리는
+  Playwright, 날짜와 함께 기록한 AWS 라이브 실행([ROADMAP.ko.md](docs/ROADMAP.ko.md) §9)이
+  있습니다.
 
-### Example 1. Directing the AI: malware scanning for uploads
+### 예시 1. AI를 지휘한 경우: 업로드 악성코드 스캔
 
 <details>
-<summary>The brief, the judgments recorded in ADR 0059, and the hole found later</summary>
+<summary>지시 내용, ADR 0059에 남은 판단, 나중에 발견한 허점</summary>
 
-The developer told the AI what to cover: what `clamd` is, how the earlier predecessor package
-(`clamdjs`) differs from the one in use now (`clamscan`) with both researched, each package's safety
-and dependencies, and where to implement it and where it is used. The judgments that ended up in
-[ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md): `clamscan` over `clamdjs` (last release
-2019, about 4% of the downloads); version 2.4.0, where `CVE-2020-7613` is fixed, with the vulnerable
-code path left switched off; the scan runs on the in-memory buffer before anything is stored, and an
-unreachable scanner means the upload is refused, not passed. A later dependency audit found a hole:
-when the scanner gave no verdict (`null`), the file was treated as clean. It was reproduced against a
-real `clamd` and fixed, and the steps are in the same ADR's addenda.
+개발자가 AI에게 지시한 범위는 `clamd`가 무엇인지, 예전에 쓰이던 전신 패키지(`clamdjs`)와 지금
+쓰이는 패키지(`clamscan`)의 구분과 두 패키지에 대한 조사, 두 패키지의 안전성과 의존성, 구현 위치와
+구현 코드, 사용처입니다. 그 결과 [ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)에 남은
+판단은 다음과 같습니다. 마지막 릴리스가 2019년이고 다운로드 수가 `clamscan`의 약 4%에 그치는
+`clamdjs` 대신 `clamscan`을 선택했습니다. `clamscan`의 알려진 취약점(`CVE-2020-7613`)이 수정된
+2.4.0을 쓰고, 취약한 경로는 켜지 않습니다. 저장하기 전에 메모리 버퍼에서 검사하고, 스캐너에 연결하지
+못하면 통과시키지 않고 거부합니다. 이후 의존성 점검에서 스캐너가 판정을 내리지 못한 경우(`null`)를
+정상으로 통과시키는 허점이 발견됐습니다. 실제 `clamd`로 재현한 뒤 고쳤고, 그 과정이 같은 ADR의 추가
+기록에 남아 있습니다.
 
 </details>
 
-### Example 2. Correcting the AI's mistakes
+### 예시 2. AI의 허점을 바로잡은 경우
 
 <details>
-<summary>Two cases where the AI's premise or diagnosis was wrong</summary>
+<summary>AI의 전제나 진단이 틀렸던 두 경우</summary>
 
-- **Node group design** ([ADR 0043](docs/ADR/0043-terraform-project-adaptation.md)): the AI put
-  forward a wrong premise from memory, and the developer's first answer rested on it. The AI noticed
-  the error while reading another document. After the correction the developer asked what to choose so
-  that both could be implemented, which led to a design with both an x64 and an ARM node group. The
-  AI's three errors are written in the ADR's process note.
-- **Corrupted alert descriptions** ([ADR 0047](docs/ADR/0047-observability-prometheus-grafana.md)):
-  the developer reported that some alert rule descriptions showed characters that were neither Korean
-  nor English. The AI inspected the stored values byte by byte, found the replacement character
-  (`U+FFFD`) and attributed it to the client shell's encoding. The original text was unrecoverable, so
-  rewritten text was applied after the developer confirmed it.
+- **노드 구성 설계**([ADR 0043](docs/ADR/0043-terraform-project-adaptation.ko.md)): AI가 기억에 의존해
+  틀린 전제를 내세웠고, 개발자의 첫 판단도 그 잘못된 정보를 바탕으로 나왔습니다. 이 오류는 AI가 다른
+  문서를 읽다가 알아챘습니다. 전제를 정정한 뒤 개발자가 둘 다 구현하려면 무엇을 골라야 하는지 물었고,
+  그 결과 x64와 ARM 노드 그룹을 모두 두는 설계로 정리됐습니다. AI의 오류 세 가지는 ADR의 과정 메모에
+  그대로 적혀 있습니다.
+- **알림 설명이 깨진 문제**([ADR 0047](docs/ADR/0047-observability-prometheus-grafana.ko.md)): 개발자가
+  알림 규칙의 설명이 한국어도 영어도 아닌 글자로 보인다고 알렸습니다. AI가 저장된 값을 바이트 단위로
+  확인해 깨진 문자(`U+FFFD`)가 들어 있음을 찾았고, 원인을 클라이언트 셸의 인코딩으로 추정해 설명했습니다.
+  원문은 복구할 수 없어 새로 쓴 문구를 개발자에게 확인받은 뒤 적용했습니다.
 
 </details>
 
-### Cases where an existing rule was broken
+### 기존 규칙을 어긴 사례
 
 <details>
-<summary>The 44-file deletion and the ranking made from stale evidence</summary>
+<summary>파일 44개 삭제와 낡은 근거로 우선순위를 매긴 일</summary>
 
-- **44 files deleted (2026-09-05).** [ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.md)
-  had already written down that with no DB history every file reads as an orphan, yet a delete-mode
-  run was pointed at the real directory. That the deleted files were disposable test data was
-  luck, and the ADR 0051 addendum and [CLAUDE.md](CLAUDE.md) say so; later live checks ran in
-  isolated environments. The rule was later widened to destructive actions in general: check the
-  target, the count and the recovery path before running.
-- **Ranking work from stale evidence (2026-10-14..16).** A rule that evidence expires already
-  existed and was broken, so the case was added to that same rule.
+- **파일 44개 삭제 (2026-09-05).** [ADR 0051](docs/ADR/0051-orphaned-granted-file-reclaim.ko.md)이
+  "DB 이력이 없으면 전부 고아로 읽힌다"는 위험을 이미 적어 두었는데도, 삭제 모드로 실제 디렉터리를
+  대상으로 실행하다 생긴 사고입니다. 지워진 파일이 버려도 되는 테스트 데이터였던 것은 운이 좋았을
+  뿐이며, 이 점은 ADR 0051의 추가 기록과 [CLAUDE.ko.md](CLAUDE.ko.md)에 적었습니다. 이후의 라이브
+  검증은 격리된 환경에서 했고, 이 규칙은 나중에 파괴적인 동작 전반으로 넓혀 실행 전에 대상, 개수,
+  복구 경로를 확인하도록 했습니다.
+- **낡은 근거로 우선순위를 매긴 일 (2026-10-14~16).** "근거에는 유효기간이 있다"는 규칙이 이미 있었는데도
+  어긴 일이라서, 같은 규칙에 사례로 덧붙였습니다.
 
 </details>
 
-One developer reviews all of it; there is no second reviewer.
+검토는 개발자 한 명이 전부 맡고 있으며, 별도의 검토자는 없습니다.
 
-## Testing and CI
+## 테스트와 CI
 
-- **Unit tests** — Jest, colocated as `*.spec.ts`. Only the services are measured for coverage;
-  repositories and the QueryRunner are mocked, so no database is needed (`pnpm test`). 20 suites
-  and 282 tests passed on 2026-10-26.
-- **Backend E2E** — `pnpm test:e2e` runs the real app against a real PostgreSQL. It builds a
-  throwaway `sharenpo_e2e` database from the real migrations, truncates it between tests and
-  drops it afterwards; the dev database is never touched. 76 tests passed on 2026-10-22.
-- **Client E2E** — Playwright in `frontend/` and `admin/` (see each folder's README). Both jobs
-  passed in CI on 2026-10-22.
-- **GitHub Actions** ([ADR 0016](docs/ADR/0016-github-actions-ci.md),
-  [ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.md)) — lint and unit
-  tests, backend E2E against a PostgreSQL service and a ClamAV service, lint and E2E for each
-  client, then image publishing for the backend, `frontend/` and `admin/`. Before an image is
-  pushed, the built image is booted against a throwaway database and its `HEALTHCHECK` is
-  polled until healthy.
-- There is no deploy pipeline and there are no git hooks. CI stops at publishing images.
+- **단위 테스트** — Jest, 소스 파일 옆의 `*.spec.ts`. 커버리지는 서비스만 측정하고, 리포지토리와
+  QueryRunner는 모킹하므로 데이터베이스가 필요 없습니다(`pnpm test`). 2026-10-26에 20개 스위트,
+  282건이 통과했습니다.
+- **백엔드 E2E** — `pnpm test:e2e`는 실제 앱을 실제 PostgreSQL에 붙여 실행합니다. 실제
+  마이그레이션으로 일회용 `sharenpo_e2e` 데이터베이스를 만들고, 테스트 사이에 비우고, 끝나면
+  삭제합니다. 개발용 데이터베이스는 건드리지 않습니다. 2026-10-22에 76건이 통과했습니다.
+- **클라이언트 E2E** — `frontend/`와 `admin/`의 Playwright(각 폴더의 README 참고). 두 잡 모두
+  2026-10-22 CI에서 통과했습니다.
+- **GitHub Actions**([ADR 0016](docs/ADR/0016-github-actions-ci.ko.md),
+  [ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)) — lint와 단위
+  테스트, PostgreSQL·ClamAV 서비스 컨테이너를 붙인 백엔드 E2E, 클라이언트별 lint와 E2E를 거친 뒤
+  백엔드·`frontend/`·`admin/` 이미지를 발행합니다. 이미지를 푸시하기 전에, 빌드한 이미지를 일회용
+  데이터베이스에 붙여 부팅하고 `HEALTHCHECK`가 healthy가 될 때까지 확인합니다.
+- 배포 파이프라인과 git 훅은 없습니다. CI는 이미지를 발행하는 데서 끝납니다.
 
-## Known limitations and next steps
+## 알려진 한계와 다음 단계
 
-Open items, each recorded where it was found; the full list is in
-[ROADMAP.md](docs/ROADMAP.md) §7 and CLAUDE.md > Known Gaps.
+아직 열려 있는 항목이며, 각각 발견한 곳에 기록되어 있습니다. 전체 목록은
+[ROADMAP.ko.md](docs/ROADMAP.ko.md) §7과 CLAUDE.ko.md > 알려진 미해결 지점에 있습니다.
 
-- **An unclaimed upload filename is not bound to its uploader.** Until the first `POST /file`, any
-  signed-in user who knows the `temp_` name can claim it. Assessed low (v4 UUID, 24-hour expiry)
-  ([ADR 0019](docs/ADR/0019-upload-claim-idempotency.md), addendum 2026-10-06).
-- **A refresh can race across browser tabs.** One anchor per account and no grace window; one
-  attempt did not reproduce it.
-- **Narrow upload scope.** An interrupted upload restarts from zero (there is no resumable or chunked
-  upload, and none is designed), and a post references at most one file (several files per post is an
-  undecided schema change, [ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.md) D5).
-- **Registration reveals that an email is taken** (`AUTH_EMAIL_TAKEN`). Weighed and accepted; the
-  5/minute limit is the only mitigation ([ROADMAP.md](docs/ROADMAP.md) §7).
+- **청구되기 전의 업로드 파일명이 업로더에게 묶여 있지 않습니다.** 첫 `POST /file` 전까지는
+  `temp_` 파일명을 아는 로그인 사용자 누구나 청구할 수 있습니다. 위험은 낮게 평가했습니다(v4 UUID, 24시간
+  뒤 만료)([ADR 0019](docs/ADR/0019-upload-claim-idempotency.ko.md), 2026-10-06 추가 기록).
+- **브라우저 탭 사이에서 리프레시가 경합할 수 있습니다.** 계정당 앵커가 하나이고 유예 시간이 없습니다.
+  한 번 시도했을 때는 재현되지 않았습니다.
+- **업로드 범위가 좁습니다.** 끊긴 업로드는 처음부터 다시 보내야 하고(이어 올리기나 청크 업로드는
+  없으며 설계도 하지 않았습니다), 게시글 하나는 파일을 최대 하나만 참조합니다. 한 게시글에 파일 여러
+  개를 붙이는 것은 아직 결정하지 않은 스키마 변경입니다([ADR 0065](docs/ADR/0065-multi-file-upload-client-sequential.ko.md) D5).
+- **회원가입은 이미 쓰는 이메일임을 알려 줍니다**(`AUTH_EMAIL_TAKEN`). 저울질한 끝에 그대로 두기로
+  했고, 분당 5회 제한이 유일한 완화책입니다([ROADMAP.ko.md](docs/ROADMAP.ko.md) §7).
 <details>
-<summary>Other open items</summary>
+<summary>그 밖의 열린 항목</summary>
 
-- **One replica per workload, so not highly available.** Rate-limit counters live in each instance's
-  memory; more replicas need shared counter storage ([ADR 0053](docs/ADR/0053-global-rate-limiting.md)).
-- **Public and unlisted media does not render in the local dev setup.** The client (`:5173`) and
-  the API (`:3000`) are different origins, and the API's `Cross-Origin-Resource-Policy: same-origin`
-  blocks embedding; the screenshots set `BASE_URL` to the client's origin. Behind one ALB the origin
-  is shared ([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.md)), but this was not observed
-  on the deployed stack.
-- **A shared link opens the file itself, not an app page.** Signed-out visitors to the app pages are
-  sent to the login page and a crawler sees an empty page. Checked on 2026-10-20 on the local
-  stack only; undecided ([ADR 0055](docs/ADR/0055-helmet-security-headers.md) Addendum,
-  [ROADMAP.md](docs/ROADMAP.md) §7).
-- **Deploys are manual, and there is no service mesh.** A person runs the deploy. Istio was dropped
-  on 2026-08-31, when the chart deployed one workload; it now deploys four (backend, `frontend/`,
-  `admin/`, ClamAV), and that decision has not been re-evaluated ([ROADMAP.md](docs/ROADMAP.md) §7).
-- **The AWS account number and the database address are still in the git history.** The current tree
-  holds placeholders and the real values sit in a gitignored overlay
-  ([ADR 0068](docs/ADR/0068-deploy-identifiers-gitignored-overlay.md)). They are identifiers, not
-  credentials, and history was not rewritten. A gitleaks scan of the full history (2026-10-22) gave 11
-  findings, all reviewed as false positives.
-- **Dependencies.** `pnpm audit --prod` found no known vulnerabilities on 2026-10-27, after two high
-  advisories published 2026-10-23 (`body-parser`, `multer`) were fixed by raising their `package.json`
-  overrides. Plain `pnpm audit` reports 67 (3 critical), all in build and test tooling.
+- **워크로드마다 레플리카가 하나라 고가용성이 아닙니다.** 요청 횟수 카운터가 인스턴스 메모리에
+  있으므로, 레플리카를 늘리려면 공유 카운터 저장소가 필요합니다
+  ([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md)).
+- **로컬 개발 환경에서는 공개·링크 공유 미디어가 렌더링되지 않습니다.** 클라이언트(`:5173`)와
+  API(`:3000`)의 출처가 달라서 API의 `Cross-Origin-Resource-Policy: same-origin`이 삽입을 막습니다.
+  위 스크린샷은 `BASE_URL`을 클라이언트의 출처로 맞춰 피했습니다. 하나의 ALB 뒤에서는 출처가
+  같으므로([ADR 0060](docs/ADR/0060-frontend-same-alb-path-routing.ko.md)) 생기지 않으리라 보지만,
+  배포된 스택에서는 확인하지 않았습니다.
+- **공유 링크는 앱 화면이 아니라 파일 자체를 엽니다.** 로그인하지 않은 방문자는 앱 화면에서 로그인
+  화면으로 가고, 크롤러에게는 빈 페이지로 보입니다. 2026-10-20에 로컬 스택에서만 확인했고 결정한
+  것은 없습니다([ADR 0055](docs/ADR/0055-helmet-security-headers.ko.md) 추가 기록,
+  [ROADMAP.ko.md](docs/ROADMAP.ko.md) §7).
+- **배포는 수동이고 서비스 메시는 없습니다.** 배포는 사람이 실행합니다. Istio는 차트가 워크로드
+  하나를 배포하던 2026-08-31에 계획에서 뺐습니다. 지금은 워크로드가 네 개(백엔드, `frontend/`,
+  `admin/`, ClamAV)로 늘었지만 그 결정은 다시 평가하지 않았습니다([ROADMAP.ko.md](docs/ROADMAP.ko.md) §7).
+- **AWS 계정 번호와 데이터베이스 주소가 git 이력에는 남아 있습니다.** 현재 트리에는 자리표시자만
+  있고 실제 값은 gitignore된 오버레이 파일에 있습니다
+  ([ADR 0068](docs/ADR/0068-deploy-identifiers-gitignored-overlay.ko.md)). 둘 다 자격 증명이 아니라
+  식별자이고, 이력은 다시 쓰지 않았습니다. gitleaks로 이력 전체를 검사한 결과(2026-10-22) 11건이
+  나왔고 모두 오탐으로 확인했습니다.
+- **의존성.** 2026-10-27에 `pnpm audit --prod`는 알려진 취약점을 찾지 못했습니다. 2026-10-23에 공개된
+  high 등급 advisory 두 건(`body-parser`, `multer`)은 `package.json` overrides의 버전을 올려 해결했습니다.
+  일반 `pnpm audit`는 67건(심각 3건)이며 모두 빌드·테스트 도구에 있습니다.
 
 </details>
 
-Not built yet, in the order the roadmap records them: more than one replica together with
-Redis-backed rate-limit storage and a PodDisruptionBudget (decided, not started); binding an
-unclaimed upload name to its uploader (decided as later hardening, not started); and the
-undecided items above.
+아직 만들지 않은 것은 로드맵에 적힌 순서대로 다음과 같습니다. 레플리카를 둘 이상으로 늘리면서
+Redis 기반 요청 횟수 제한 저장소와 PodDisruptionBudget을 함께 두는 것(결정, 시작 전), 청구되기 전의
+업로드 파일명을 업로더에게 묶는 것(나중에 보강하기로 결정, 시작 전), 그리고 위의 미결정 항목들입니다.
 
-## Documentation
+## 문서
 
-| Document | Purpose |
+| 문서 | 목적 |
 |---|---|
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module map, request flow, entities, conventions |
-| [ADR/](docs/ADR/README.md) | Architecture decision records — the *why* behind the design |
-| [CHANGELOG.md](docs/CHANGELOG.md) | Version history |
-| [ROADMAP.md](docs/ROADMAP.md) | Full staged project plan and known gaps |
-| [CONTRIBUTING.md](docs/CONTRIBUTING.md) | Development workflow and conventions |
-| [CLAUDE.md](CLAUDE.md) | Operating contract for AI-assisted development |
-| [frontend/README.md](frontend/README.md) | React client — structure, auth model, E2E |
-| [admin/README.md](admin/README.md) | Admin console — what was adapted and how it is hosted |
-| [k8s/helm/README.md](k8s/helm/README.md) | Helm chart — values, secrets, NetworkPolicy |
-| [k8s/infra/terraform/README.md](k8s/infra/terraform/README.md) | Terraform — three states, apply and destroy order |
+| [ARCHITECTURE.ko.md](docs/ARCHITECTURE.ko.md) | 모듈 구성, 요청 흐름, 엔티티, 관례 |
+| [ADR/](docs/ADR/README.ko.md) | 아키텍처 결정 기록 — 설계 이면의 *이유* |
+| [CHANGELOG.ko.md](docs/CHANGELOG.ko.md) | 버전 이력 |
+| [ROADMAP.ko.md](docs/ROADMAP.ko.md) | 단계별 전체 프로젝트 계획과 알려진 공백 |
+| [CONTRIBUTING.ko.md](docs/CONTRIBUTING.ko.md) | 개발 워크플로와 관례 |
+| [CLAUDE.ko.md](CLAUDE.ko.md) | AI 협업 개발을 위한 운영 규약 |
+| [frontend/README.ko.md](frontend/README.ko.md) | React 클라이언트 — 구조, 인증 모델, E2E |
+| [admin/README.ko.md](admin/README.ko.md) | 관리자 콘솔 — 무엇을 어떻게 맞췄고 어디에 호스팅되는지 |
+| [k8s/helm/README.ko.md](k8s/helm/README.ko.md) | Helm 차트 — values, 시크릿, NetworkPolicy |
+| [k8s/infra/terraform/README.ko.md](k8s/infra/terraform/README.ko.md) | Terraform — 세 개의 state, apply·destroy 순서 |
 
-Each document has a Korean sibling (`*.ko.md`).
+각 문서에는 영어 원본(`.md`)과 한국어 버전(`.ko.md`)이 있습니다.
 
-## License
+## 라이선스
 
 [MIT](LICENSE)
 
-## Author
+## 작성자
 
 BLUECODE77732 — https://github.com/Bluecode77732
