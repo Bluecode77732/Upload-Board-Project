@@ -15,14 +15,14 @@
 로그인한 사용자가 이미지·오디오·동영상을 업로드하고, 파일마다 볼 수 있는 사람을 정하고,
 게시글과 댓글이 있는 게시판으로 공유하는 서비스입니다. NestJS API, React 클라이언트, 관리자
 콘솔로 이루어져 있고, Helm과 Terraform으로 AWS/EKS에 배포하며 Prometheus와 Grafana로
-관찰합니다.
+모니터링합니다.
 
 - 기간: 첫 커밋 2025-12-17, 현재 진행 중
 - 범위: 개발자 1인, [CLAUDE.ko.md](CLAUDE.ko.md)의 규약 아래 AI의 도움을 받아 진행 — 백엔드,
   `frontend/`, `admin/`, 컨테이너, CI, Helm, Terraform
 - 역할: 비밀번호 정책과 에러 코드, 프론트엔드를 외부 호스팅 대신 같은 ALB에서 서빙하는 것, 앱의
   시크릿 규칙을 완화하는 대신 Terraform 생성기를 고치는 것은 개발자가 결정했습니다. 코드를 쓰기
-  전에 AI가 선택지를 비교표로 보여 주면 개발자가 하나를 고르고, 그것만 구현합니다. 개발자는 모든
+  전에 AI가 대안을 비교표로 정리하고, 개발자가 선택한 방안만 구현하도록 했습니다. 개발자는 모든
   변경을 읽고 승인합니다. 결과는 테스트, CI, 실제 환경(AWS/EKS, 실제 ClamAV)에서의 재현으로
   확인합니다
 - 이 README는 저장소 전체를 다룹니다. 백엔드는 저장소 루트에 있고, 클라이언트에는 각자의
@@ -30,9 +30,9 @@
 
 ## 상태
 
-상시 운영 중인 데모는 없습니다. 이 스택은 AWS/EKS에 적용했다가 실행 사이사이에 내렸습니다
-(날짜별 실행 기록: [ROADMAP.ko.md](docs/ROADMAP.ko.md) §9와 ADR의 추가 기록). 지금 떠 있는지는
-이 README에 적지 않습니다. 프로젝트를 확인하는 방법은 다음과 같습니다.
+AWS/EKS에 배포해 검증한 뒤 환경을 종료했습니다. 현재 운영 중인 데모는 없습니다
+(날짜별 실행 기록: [ROADMAP.ko.md](docs/ROADMAP.ko.md) §9와 ADR의 추가 기록).
+프로젝트를 확인하는 방법은 다음과 같습니다.
 
 - 아래의 [스크린샷과 GIF](#스크린샷)를 봅니다
 - Docker로 직접 실행합니다: [빠른 시작](#빠른-시작)
@@ -41,12 +41,12 @@
 ## 요약본
 
 - **2단계 업로드.** 파일을 `temp_…`로 임시 저장한 뒤 하나의 DB 트랜잭션 안에서 `granted_…`로
-  승격하므로, 이동이 실패하면 insert가 롤백됩니다. 보호되지 않는 틈은 이동에 성공한 뒤 커밋이
-  실패하는 경우 하나뿐이며, 이때 고아 `granted_` 파일이 남고 주기적 정리 작업이 이를 보고합니다.
+  승격하므로, 이동이 실패하면 insert가 롤백됩니다. 남아 있는 예외 상황은 이동에 성공한 뒤 커밋이
+  실패하는 경우뿐이며, 이때 고아 `granted_` 파일이 남고 주기적 정리 작업이 이를 보고합니다.
   같은 업로드를 두 번 제출하면 실패하지 않고 앞선 결과를 그대로 돌려줍니다
   ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md), [0019](docs/ADR/0019-upload-claim-idempotency.ko.md), [0051](docs/ADR/0051-orphaned-granted-file-reclaim.ko.md)).
-- **정적 파일 서빙 없음.** 저장된 바이트는 공개 범위를 먼저 검사하는 `GET /file/:id/content`로만
-  나갑니다([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md)).
+- **정적 파일 서빙 없음.** 파일 콘텐츠는 공개 범위를 먼저 검사하는 `GET /file/:id/content` 엔드포인트를 통해서만
+  제공됩니다([ADR 0025](docs/ADR/0025-file-visibility-and-media-expansion.ko.md)).
 - **재사용을 감지하는 리프레시 토큰 교체.** 서버는 현재 리프레시 토큰의 해시만 보관합니다
   ([ADR 0012](docs/ADR/0012-refresh-cookie-rotation.ko.md)).
 - **저장 전 fail-closed 악성코드 스캔.** 모든 업로드에 적용합니다([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.ko.md)).
@@ -56,7 +56,7 @@
 - **AI와 함께, 문서로 정한 규칙 아래에서 만들었습니다.** 코드의 대부분은 Claude Code로 작성했습니다.
   개발자가 [CLAUDE.ko.md](CLAUDE.ko.md)에 규칙을 정하고, 대안 중에서 선택하고, 그 내용을 ADR로
   남깁니다. AI가 규칙을 어긴 일도 함께 적어 두었습니다([만든 방식](#만든-방식)).
-- **먼저 읽을 파일:** [backend/file/file.service.ts](backend/file/file.service.ts)(트랜잭션, 청구),
+- **먼저 읽을 파일:** [backend/file/file.service.ts](backend/file/file.service.ts)(트랜잭션, 업로드한 파일을 내 파일로 확정하는 청구),
   [backend/auth/auth.service.ts](backend/auth/auth.service.ts)(토큰),
   [backend/storage/](backend/storage/)(스토리지 포트).
 
@@ -64,17 +64,17 @@
 
 임시 데모 데이터를 넣은 로컬 스택에서 한국어 UI, 한국어 예시 글, 라이트 테마로 찍었습니다. UI는
 영어와 다크 테마도 지원합니다. 모든 그림은 같은 900 × 1000 프레임에 맞췄고, 필요한 부분이
-보이도록 스크롤해서 찍었습니다. 파일 URL은 ALB 뒤에서처럼 클라이언트와 같은 출처를 가리키게
-했고, 링크 공유 토큰은 가렸습니다. [알려진 한계](#알려진-한계와-다음-단계)를 참고하세요.
+보이도록 스크롤해서 찍었습니다. 파일 URL의 출처는 ALB 뒤에서처럼 클라이언트와 동일하게 맞췄고,
+링크 공유 토큰은 가렸습니다. [알려진 한계](#알려진-한계와-다음-단계)를 참고하세요.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/ko/01-login.png" alt="비밀번호가 가려져 있고 표시/숨김 버튼이 있는 로그인 카드"><br><sub><b>로그인</b> — Basic 토큰 로그인, 회원가입 전환, 비밀번호 표시/숨김</sub></td>
+<td width="50%"><img src="docs/images/ko/01-login.png" alt="비밀번호가 가려져 있고 표시/숨김 버튼이 있는 로그인 카드"><br><sub><b>로그인</b> — Basic 인증 로그인, 회원가입 전환, 비밀번호 표시/숨김</sub></td>
 <td width="50%"><img src="docs/images/ko/02-post-board.png" alt="게시판: 파일을 붙일 수 있는 새 글 폼, 검색·정렬, 게시글 목록"><br><sub><b>게시판</b> — 파일을 붙일 수 있는 새 글 폼, 검색·정렬, 페이지네이션</sub></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/images/ko/03-post-detail.png" alt="게시글 상세: 첨부 이미지와 오래된 순으로 정렬된 평면 댓글 스레드"><br><sub><b>게시글 상세</b> — 첨부 이미지와 오래된 순의 평면 댓글 스레드</sub></td>
-<td width="50%"><img src="docs/images/ko/04-file-board.png" alt="파일 보드: 업로드 폼, 검색·정렬·작성자 필터, 그 아래에서 시작하는 미리보기 그리드"><br><sub><b>파일 보드</b> — 업로드 폼, 검색·정렬·작성자 필터, 그 아래의 미리보기 그리드</sub></td>
+<td width="50%"><img src="docs/images/ko/04-file-board.png" alt="파일 보드: 업로드 폼, 검색·정렬·작성자 필터, 아래로 이어지는 미리보기 그리드"><br><sub><b>파일 보드</b> — 업로드 폼, 검색·정렬·작성자 필터, 아래로 이어지는 미리보기 그리드</sub></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/images/ko/05-file-board-media.png" alt="이미지·오디오·영상 타일과 공개·링크 공유·비공개 배지가 보이는 파일 보드"><br><sub><b>여러 미디어</b> — 이미지·오디오·영상 타일과 공개·링크 공유·비공개 배지</sub></td>
@@ -108,11 +108,11 @@
 
 ## 기능
 
-- **인증** — HTTP Basic 토큰으로 가입·로그인하고, `type` 클레임이 있는 JWT 액세스·리프레시 토큰
+- **인증** — HTTP Basic 인증으로 가입·로그인하고, 로그인하면 `type` 클레임이 있는 JWT 액세스·리프레시 토큰
   쌍을 서로 다른 시크릿으로 서명해 발급합니다. 리프레시 토큰은 httpOnly 쿠키로 오가며 갱신할
   때마다 교체되고 재사용을 감지합니다([ADR 0002](docs/ADR/0002-dual-secret-token-pair.ko.md), [0012](docs/ADR/0012-refresh-cookie-rotation.ko.md))
 - **2단계 업로드** — `temp_` → `granted_` 상태 머신. 파일 이동이 DB 트랜잭션 안에서 실행됩니다.
-  attach 단계가 돌려준 파일명은 한 번만 쓸 수 있는 청구(claim) 토큰입니다. 같은 사용자가 다시
+  attach 단계가 돌려준 임시 파일명이 곧 한 번만 쓸 수 있는 청구(claim) 토큰입니다(별도 토큰은 발급하지 않습니다). 같은 사용자가 다시
   보내면 기존 파일을 돌려주고(200), 다른 사용자는 409 `FILE_ALREADY_CLAIMED`를 받습니다
   ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.ko.md), [0019](docs/ADR/0019-upload-claim-idempotency.ko.md))
 - **악성코드 스캔** — ClamAV로 저장하기 전에 검사하고, 스캐너를 쓸 수 없으면 막는 fail-closed로
@@ -124,10 +124,11 @@
   접근 검사를 통과하면 수명이 짧은 presigned URL로 리다이렉트합니다([ADR 0029](docs/ADR/0029-storage-port-adapter.ko.md), [0036](docs/ADR/0036-s3-presigned-content-redirect.ko.md))
 - **게시판** — 파일을 선택적으로 첨부하는 게시글, 평면 댓글, 하나의 검색·필터·정렬·페이지네이션
   규약([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.ko.md), [0023](docs/ADR/0023-board-domain-schema.ko.md))
-- **RBAC + 감사 로그** — `user`/`admin`/`superadmin` 역할, "본인 또는 admin"으로 확장된 소유권 검사,
+- **RBAC + 감사 로그** — `user`/`admin`/`superadmin` 역할, 소유자 본인 또는 admin에게만 수정·삭제를 허용하는 소유권 검사,
   감사 로그에 남는 역할 변경과 삭제([ADR 0013](docs/ADR/0013-rbac-and-audit-log.ko.md)은 [0007](docs/ADR/0007-ownership-checks-without-rbac.ko.md)을 바탕으로 합니다)
-- **계정과 파일의 수명 주기** — 계정 삭제는 명시적으로 확인했을 때만 연쇄 삭제되고 설계상 되돌릴
-  수 없습니다([ADR 0020](docs/ADR/0020-account-deletion-cascade.ko.md)). 파일의 소유자를 바꾸려면 받는 사람의 동의가 필요합니다 — 제안, 수락,
+- **계정과 파일의 수명 주기** — 계정을 삭제하면 그 계정의 댓글과 게시글이 함께 삭제되고, 파일은 `?deleteFiles=true`로 명시적으로
+  확인했을 때만 저장된 파일까지 함께 삭제됩니다(파일이 있는데 확인하지 않으면 409). 설계상 되돌릴 수
+  없습니다([ADR 0020](docs/ADR/0020-account-deletion-cascade.ko.md)). 파일의 소유자를 바꾸려면 받는 사람의 동의가 필요합니다 — 제안, 수락,
   거절, 취소([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.ko.md))
 - **보안 강화** — 전역 `ValidationPipe`(`whitelist` + `forbidNonWhitelisted`), 직렬화된 엔티티에
   `password` 미포함, 토큰 시크릿과 비밀번호의 강도 검사, 보안 응답 헤더, non-root 이미지,
@@ -136,8 +137,8 @@
 - **요청 횟수 제한** — 라우트마다 따로 기본 분당 100회(`@nestjs/throttler`가 컨트롤러+핸들러+클라이언트
   IP를 키로 씁니다), `POST /auth/register`·`signin`·`token/refresh`는 분당 5회,
   `POST /upload/attach`는 분당 15회이며 health/metrics 프로브는 제외됩니다([ADR 0053](docs/ADR/0053-global-rate-limiting.ko.md), [0054](docs/ADR/0054-per-route-rate-limit-tuning.ko.md))
-- **운영** — liveness/readiness 엔드포인트, Grafana를 곁들인 Prometheus 메트릭, 고아 `temp_` 파일과
-  고아 `granted_` 파일의 주기적 정리 — 후자는 운영자가 삭제를 켜기 전까지 보고만 합니다
+- **운영** — liveness/readiness 엔드포인트, Grafana를 곁들인 Prometheus 메트릭, 고아 `temp_` 파일은
+  주기적으로 정리하고, 고아 `granted_` 파일은 운영자가 삭제를 켜기 전까지 탐지해 보고만 합니다
   ([ADR 0031](docs/ADR/0031-health-and-readiness-endpoints.ko.md), [0047](docs/ADR/0047-observability-prometheus-grafana.ko.md), [0018](docs/ADR/0018-orphan-temp-file-cleanup.ko.md), [0051](docs/ADR/0051-orphaned-granted-file-reclaim.ko.md))
 - **Swagger** — `/doc`의 API 문서이자 수동 테스트 도구
 - **React 클라이언트(`frontend/`)** — 로그인과 가입, 댓글이 있는 게시판, 미리보기 그리드 파일 보드,
@@ -198,8 +199,8 @@ erDiagram
 게시글은 파일을 참조할 뿐이라서 지워도 파일은 남습니다. `comment.postId`는 이 스키마에서
 유일한 데이터베이스 수준 연쇄 삭제입니다([ADR 0023](docs/ADR/0023-board-domain-schema.ko.md)).
 
-AWS 쪽은 Terraform state 세 개이며, 각각 독립된 루트 모듈입니다. Terraform 코드를 기준으로 그렸고
-실제 state와는 대조하지 못했습니다. 화살표는 `terraform_remote_state` 읽기이며 한 방향뿐입니다.
+AWS 쪽은 Terraform state 세 개이며, 각각 독립된 루트 모듈입니다. Terraform 코드에 정의된 구성을 기준으로 그렸으며,
+실제 Terraform state와의 대조는 완료하지 않았습니다. 화살표는 `terraform_remote_state` 읽기이며 한 방향뿐입니다.
 `cluster/`는 나머지 둘을 읽지 않습니다([ADR 0044](docs/ADR/0044-terraform-three-state-split.ko.md)).
 
 ```mermaid
@@ -212,7 +213,7 @@ flowchart LR
   A -- "state 읽기" --> C
 ```
 
-도식에 넣지 않은, 런타임에서 이 자원들이 만나는 방식은 다음과 같습니다.
+도식에 넣지 않은, 실행 중 각 리소스가 연동되는 방식은 다음과 같습니다.
 
 - RDS는 프라이빗이고 노드 보안 그룹에서 오는 5432 포트만 받습니다. S3 버킷은 퍼블릭 접근을
   막아 두었고, 앱은 IAM 역할(IRSA)로 접근합니다.
@@ -222,8 +223,8 @@ flowchart LR
   붙입니다.
 - ALB와 워크로드 네 개는 Terraform이 만들지 않습니다. Ingress와 Helm이 만듭니다.
 
-백엔드는 관심사마다 NestJS 모듈 하나(auth, user, file, post, comment, upload, storage, audit log)와
-정리 작업, health, metrics를 위한 운영용 모듈로 이루어집니다. 모듈 구성과 요청·데이터 흐름은
+백엔드는 관심사별로 NestJS 모듈을 분리했습니다(auth, user, file, post, comment, upload, storage, audit log).
+정리 작업, health, metrics를 위한 운영용 모듈도 있습니다. 모듈 구성과 요청·데이터 흐름은
 [ARCHITECTURE.ko.md](docs/ARCHITECTURE.ko.md)를 참고하세요.
 
 ## 기술 스택
@@ -233,7 +234,7 @@ flowchart LR
 | NestJS 11(Express), TypeScript | REST API. 관심사마다 모듈 하나 | [backend/app.module.ts](backend/app.module.ts), [backend/main.ts](backend/main.ts) |
 | TypeORM 0.3 + PostgreSQL | 엔티티와 관계. `synchronize: false`이고 스키마는 마이그레이션으로 관리([ADR 0006](docs/ADR/0006-schema-policy-and-migration-adoption.ko.md)) | [backend/entities.ts](backend/entities.ts), [backend/migrations/](backend/migrations/), [backend/data-source.ts](backend/data-source.ts) |
 | 트랜잭션 | 파일 이동이 DB 쓰기와 함께 커밋되어야 할 때는 수동 QueryRunner, 순수 DB 쓰기에는 `dataSource.transaction()`([ADR 0004](docs/ADR/0004-transaction-pattern-selection.ko.md)) | [backend/file/file.service.ts](backend/file/file.service.ts), [backend/user/user.service.ts](backend/user/user.service.ts) |
-| Passport JWT, bcrypt | Basic 토큰 로그인, 분리된 액세스·리프레시 시크릿, 토큰 교체 | [backend/auth/](backend/auth/) |
+| Passport JWT, bcrypt | Basic 인증 로그인, 분리된 액세스·리프레시 시크릿, 토큰 교체 | [backend/auth/](backend/auth/) |
 | class-validator, Joi | 경계에서 DTO 검증, 부팅 시 환경변수 검증 | [backend/common/validation-pipe-options.ts](backend/common/validation-pipe-options.ts), [backend/app.module.ts](backend/app.module.ts) |
 | `@nestjs/throttler`, helmet | 라우트별 요청 횟수 제한, 보안 응답 헤더 | [backend/app.module.ts](backend/app.module.ts), [backend/main.ts](backend/main.ts) |
 | `clamscan`(ClamAV) | 업로드마다 동기식 fail-closed 스캔 | [backend/upload/scan.service.ts](backend/upload/scan.service.ts) |
@@ -247,8 +248,8 @@ flowchart LR
 | Helm, Terraform | 백엔드, `frontend/`, `admin/`, ClamAV를 위한 릴리스 하나. 세 개의 state로 나눈 VPC, EKS, RDS, S3, Route 53과 ACM, 그리고 ALB Controller, External Secrets, ExternalDNS, kube-prometheus-stack | [k8s/helm/](k8s/helm/), [k8s/infra/terraform/](k8s/infra/terraform/) |
 
 이 스택을 고른 이유는 나중에 적은 [ADR 0066](docs/ADR/0066-stack-selection-rationale-retroactive.ko.md)에
-있습니다. NestJS, TypeORM, PostgreSQL은 트래픽이 커지면 서비스 단위로 나눌 수 있다는 점을 염두에 두고
-골랐습니다. AWS/EKS는 배포 시장의 표준 도구를 익히는 것도 목적이었습니다. 프론트엔드는 화면이 적어서
+있습니다. NestJS, TypeORM, PostgreSQL은 향후 서비스 분리를 고려해
+선택했습니다. AWS/EKS는 배포 시장의 표준 도구를 익히는 것도 목적이었습니다. 프론트엔드는 화면이 적어서
 상태 라이브러리를 쓰지 않습니다. ECS와의 비교처럼 글로 따져 보지 않은 부분도 그 ADR에 적혀 있습니다.
 
 ## 프로젝트 구조
@@ -398,7 +399,7 @@ Deployment로 함께 배포됩니다([ADR 0060](docs/ADR/0060-frontend-same-alb-
 `-frontend`, `-admin`)를 Docker Hub에 발행할 뿐이고
 ([ADR 0048](docs/ADR/0048-ci-trigger-restoration-and-docker-publish-design.ko.md)),
 `terraform apply`와 `helm upgrade`는 사람이 실행합니다. 이 스택은 실제 AWS에 적용해 여러 번
-확인했습니다. 지금의 실제 상태는 이 README가 아니라 AWS에서 직접 확인합니다. `apply`나
+확인했습니다. AWS 리소스의 현재 상태는 실제 AWS 환경에서 확인해야 합니다. `apply`나
 `destroy`를 실행하는 순간 이 문서의 내용은 낡아 버리기 때문입니다.
 
 ## API 써 보기 (Swagger)
@@ -411,7 +412,7 @@ Swagger UI는 백엔드가 `/doc`에서 직접 서빙합니다. 배포된 Ingres
    비밀번호), `cookie`(리프레시 쿠키) 세 가지가 보입니다.
 2. `basic`에 이메일과 규칙에 맞는 비밀번호(10자 이상, 소문자·대문자·숫자·기호 포함)를 입력하고
    적용합니다.
-3. **Try it out**으로 `POST /auth/register`를 실행합니다. 방금 넣은 값이 Basic 토큰으로 쓰이고 201로
+3. **Try it out**으로 `POST /auth/register`를 실행합니다. 방금 넣은 값이 Basic 인증 정보로 쓰이고 201로
    답합니다. 이어서 `POST /auth/signin`을 실행해 응답의 `accessToken`을 복사합니다.
 4. 그 토큰을 `bearer`에 붙여 넣고 적용한 뒤 나머지 API를 호출합니다. 예를 들면 `GET /file`입니다.
    토큰 없이 같은 호출을 하면 401로 거절됩니다.
@@ -431,7 +432,7 @@ Authorize 창이 열리는 것까지는 브라우저로 확인했지만, 그 안
 
 주요 흐름을 이루는 라우트 여섯 개입니다. 사용자, 소유권 이전, 감사 로그, health, metrics와 나머지
 파일·게시글·댓글 라우트를 포함한 전체 라우트와 파라미터, 에러 코드는 `/doc`의 Swagger에 있습니다.
-`POST /auth/register`·`POST /auth/signin`(Basic 토큰), `POST /auth/token/refresh`(리프레시 쿠키),
+`POST /auth/register`·`POST /auth/signin`(Basic 인증), `POST /auth/token/refresh`(리프레시 쿠키),
 운영용 `/health/*`와 `/metrics`, `GET /file/:id/content`(Bearer 선택)를 제외한 모든 라우트는 Bearer
 액세스 토큰이 필요합니다.
 

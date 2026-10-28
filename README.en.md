@@ -31,9 +31,8 @@ Grafana.
 
 ## Status
 
-There is no always-on demo. The stack has been applied to AWS/EKS and torn down between runs
-(dated runs: [ROADMAP.md](docs/ROADMAP.md) §9 and the ADR addenda); this README does not say
-whether it is up right now. To see the project work:
+The stack was deployed to AWS/EKS for verification and then shut down; there is no running demo
+(dated runs: [ROADMAP.md](docs/ROADMAP.md) §9 and the ADR addenda). To see the project work:
 
 - Look at the [screenshots and GIFs](#screenshots) below
 - Run it yourself with Docker: [Quick Start](#quick-start)
@@ -58,7 +57,7 @@ whether it is up right now. To see the project work:
   developer sets the rules in [CLAUDE.md](CLAUDE.md), chooses between alternatives and records them
   as ADRs; where the AI broke a rule, that is written down too ([How this was built](#how-this-was-built)).
 - **Where to read first:** [backend/file/file.service.ts](backend/file/file.service.ts)
-  (transactions, claims), [backend/auth/auth.service.ts](backend/auth/auth.service.ts) (tokens),
+  (transactions, and claiming an upload as one's own file), [backend/auth/auth.service.ts](backend/auth/auth.service.ts) (tokens),
   [backend/storage/](backend/storage/) (the storage port).
 
 ## Screenshots
@@ -70,7 +69,7 @@ is masked; see [Known limitations](#known-limitations-and-next-steps).
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/en/01-login.png" alt="Sign-in card with the password hidden and a show/hide toggle"><br><sub><b>Sign in</b> — Basic-token sign-in, register toggle, show/hide password</sub></td>
+<td width="50%"><img src="docs/images/en/01-login.png" alt="Sign-in card with the password hidden and a show/hide toggle"><br><sub><b>Sign in</b> — HTTP Basic sign-in, register toggle, show/hide password</sub></td>
 <td width="50%"><img src="docs/images/en/02-post-board.png" alt="Post board: new post form with an optional attached file, search and sort, and the post list"><br><sub><b>Post board</b> — new post with an optional attached file, search, sort and pagination</sub></td>
 </tr>
 <tr>
@@ -109,11 +108,11 @@ local stack and sample data as above.
 
 ## Features
 
-- **Authentication** — Basic-token register/sign-in and a dual-secret JWT access/refresh pair with a
-  `type` claim; the refresh token is an httpOnly cookie that rotates on every refresh, with reuse
+- **Authentication** — register and sign-in with HTTP Basic authentication; sign-in issues a dual-secret JWT access/refresh pair
+  with a `type` claim, and the refresh token is an httpOnly cookie that rotates on every refresh, with reuse
   detection ([ADR 0002](docs/ADR/0002-dual-secret-token-pair.md), [0012](docs/ADR/0012-refresh-cookie-rotation.md))
 - **Two-phase upload** — `temp_` → `granted_` with the file move inside the DB transaction. The
-  attach filename is a one-shot claim token: the same user resubmitting gets the file back (200),
+  temporary filename that attach returns is itself the one-shot claim token (no separate token is issued): the same user resubmitting gets the file back (200),
   anyone else gets 409 `FILE_ALREADY_CLAIMED` ([ADR 0003](docs/ADR/0003-two-phase-upload-contract.md), [0019](docs/ADR/0019-upload-claim-idempotency.md))
 - **Malware scanning** — ClamAV, fail-closed, before anything is stored ([ADR 0059](docs/ADR/0059-upload-malware-scanning-clamav.md))
 - **File visibility** — `public`, `private` (default) or `unlisted` (a share link whose token can be
@@ -123,10 +122,9 @@ local stack and sample data as above.
   under S3 a passing access check redirects to a short-lived presigned URL ([ADR 0029](docs/ADR/0029-storage-port-adapter.md), [0036](docs/ADR/0036-s3-presigned-content-redirect.md))
 - **Board** — posts with an optional attached file, flat comments, and one search, filter, sort and
   pagination contract ([ADR 0021](docs/ADR/0021-list-query-search-filter-sort.md), [0023](docs/ADR/0023-board-domain-schema.md))
-- **RBAC + audit log** — `user`/`admin`/`superadmin` roles, ownership checks that extend to "self or
-  admin", role changes and deletes written to an audit log ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.md), layered on [0007](docs/ADR/0007-ownership-checks-without-rbac.md))
-- **Account and file lifecycle** — account deletion cascades only on explicit confirmation and is
-  irreversible by design ([ADR 0020](docs/ADR/0020-account-deletion-cascade.md)); moving a file to another owner needs the recipient's consent:
+- **RBAC + audit log** — `user`/`admin`/`superadmin` roles, ownership checks that let only the owner or an admin change or delete a resource, role changes and deletes written to an audit log ([ADR 0013](docs/ADR/0013-rbac-and-audit-log.md), layered on [0007](docs/ADR/0007-ownership-checks-without-rbac.md))
+- **Account and file lifecycle** — deleting an account also deletes its comments and posts; its files, stored objects included, go
+  only when the request confirms it with `?deleteFiles=true` (otherwise 409); irreversible by design ([ADR 0020](docs/ADR/0020-account-deletion-cascade.md)); moving a file to another owner needs the recipient's consent:
   propose, accept, reject or cancel ([ADR 0050](docs/ADR/0050-consent-based-file-ownership-transfer.md))
 - **Hardening** — global `ValidationPipe` (`whitelist` + `forbidNonWhitelisted`), no `password` in
   serialized entities, strength checks on token secrets and passwords, security response headers,
@@ -234,7 +232,7 @@ data flow are in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | NestJS 11 (Express), TypeScript | The REST API; one module per concern | [backend/app.module.ts](backend/app.module.ts), [backend/main.ts](backend/main.ts) |
 | TypeORM 0.3 + PostgreSQL | Entities and relations; `synchronize: false`, schema by migrations ([ADR 0006](docs/ADR/0006-schema-policy-and-migration-adoption.md)) | [backend/entities.ts](backend/entities.ts), [backend/migrations/](backend/migrations/), [backend/data-source.ts](backend/data-source.ts) |
 | Transactions | Manual QueryRunner where a file move must commit with the DB write, `dataSource.transaction()` for pure DB writes ([ADR 0004](docs/ADR/0004-transaction-pattern-selection.md)) | [backend/file/file.service.ts](backend/file/file.service.ts), [backend/user/user.service.ts](backend/user/user.service.ts) |
-| Passport JWT, bcrypt | Basic-token sign-in, separate access and refresh secrets, rotation | [backend/auth/](backend/auth/) |
+| Passport JWT, bcrypt | HTTP Basic sign-in, separate access and refresh secrets, rotation | [backend/auth/](backend/auth/) |
 | class-validator, Joi | DTO validation at the boundary; env vars validated at boot | [backend/common/validation-pipe-options.ts](backend/common/validation-pipe-options.ts), [backend/app.module.ts](backend/app.module.ts) |
 | `@nestjs/throttler`, helmet | Per-route rate limits; security response headers | [backend/app.module.ts](backend/app.module.ts), [backend/main.ts](backend/main.ts) |
 | `clamscan` (ClamAV) | Synchronous, fail-closed scan of each upload | [backend/upload/scan.service.ts](backend/upload/scan.service.ts) |
@@ -413,7 +411,7 @@ the backend yourself — with the [Docker quick start](#fastest-docker) it is
    `basic` (email and password) and `cookie` (the refresh cookie).
 2. Under `basic`, enter an email and a password that meets the rule (at least 10 characters with a
    lowercase letter, an uppercase letter, a digit and a symbol), and apply it.
-3. Run `POST /auth/register` with **Try it out**; it uses those credentials as the Basic token and
+3. Run `POST /auth/register` with **Try it out**; it uses those credentials as its HTTP Basic credentials and
    answers 201. Then run `POST /auth/signin` and copy `accessToken` from the response.
 4. Paste that token under `bearer`, apply it, and call anything else, for example `GET /file`.
    Without a token the same call is rejected with 401.
@@ -434,7 +432,7 @@ its buttons was not tried.
 Six routes carry the main flow. Swagger at `/doc` lists every route (users, ownership transfer,
 audit log, health, metrics, and the rest of files, posts and comments) with its parameters and error
 codes. Every route needs a Bearer access token except `POST /auth/register` and `POST /auth/signin`
-(Basic token), `POST /auth/token/refresh` (refresh cookie), the operational `/health/*` and
+(HTTP Basic), `POST /auth/token/refresh` (refresh cookie), the operational `/health/*` and
 `/metrics`, and `GET /file/:id/content` (Bearer optional).
 
 | Route | Auth | What it does | Notable errors, ADR |
