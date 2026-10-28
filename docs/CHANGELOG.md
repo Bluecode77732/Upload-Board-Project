@@ -40,6 +40,26 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: README files renamed, and a wording pass on the Korean README (2026-10-28)** — documentation only; no code,
+  schema or API changed. The Korean README is now `README.md` and the English one `README.en.md`; the old
+  `README.ko.md` is gone (commit `6fd4f67`, which had no entry here). The summary section is titled "요약본" and
+  "Summary". Five links the rename broke were fixed (the two READMEs' links to each other, `CONTRIBUTING.md`,
+  `CONTRIBUTING.ko.md`, `ARCHITECTURE.md`). Not changed, and now out of date: CLAUDE.md, the `.ko.md` sibling hook
+  and the skills still assume `README.md` is English and `README.ko.md` exists; links from outside the repository
+  to `README.ko.md` now return 404. Wording pass, from a list the developer gave: 16 phrasing fixes in the Korean
+  README ("모니터링", "엔드포인트를 통해서만 제공", "실행 중 각 리소스가 연동되는 방식" and similar) and three
+  changes of meaning applied to both languages. Sign-in is described as HTTP Basic authentication that issues the
+  JWT pair, with "Basic 토큰" / "Basic token" replaced throughout the README (ADR titles keep their wording). The
+  ownership check is "only the owner or an admin can change or delete", not limited to files, because `canManage` is
+  also in the comment and transfer services. Account deletion now says what it removes: comments and posts always,
+  files (stored objects included) only with `?deleteFiles=true`, otherwise 409 (`user.service.ts`); the old wording
+  said the whole cascade needed confirmation, which was not accurate. Three more were decided with the developer: "청구"
+  stays and is explained where it is used (the attach filename is itself the claim token, no separate token is
+  issued, ADR 0019); the status section now says the stack was deployed for verification and shut down and that no
+  demo is running; and the screenshot caption says the file board's grid "continues below" because the frame shows only
+  its start. The status sentence states a current condition, which the ROADMAP and CLAUDE.md deliberately avoid, so it
+  must be edited if the stack is applied again. Checked: 165 local links per language with no problems, matching
+  structure (headings, tables, diagrams, images, folds) and the same set of linked ADRs in both languages.
 - **Docs: ROADMAP header label and a §9 entry for the 2026-09-29/30 run (2026-10-27)** — documentation only. The
   "Current position" heading said "as of 2026-08-31" while its text already went up to 2026-09-26; it now says
   "updated 2026-10-27" and its sentence on the live runs names the third one. §9 gained a 2026-09-29 entry for it.
