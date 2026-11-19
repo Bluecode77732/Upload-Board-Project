@@ -13,6 +13,15 @@ development line (package.json version).
 ## [Unreleased]
 
 ### Added
+- **Perf: k6 load test across user and admin flows (2026-11-19, [ADR 0069](ADR/0069-k6-load-testing.md))**
+  — `perf/k6/load.js` runs one VU level per run as the `grafana/k6:2.3.0` image (no pnpm dependency):
+  a 70/20/5/5 mix of browsing, writes, uploads and account/transfer/admin actions, one seeded account
+  and one partner account per VU, and every response counted as a designed rejection (by
+  `ErrorCode`), an unplanned response or an unexpected failure. `perf/k6/throttle.js` checks the 5/min
+  and 100/min boundaries. `perf/seed.js` adds the k6 accounts and files; `perf/load-test.js` now fails
+  on non-2xx responses, errors or timeouts, and its write benchmark targets a file the measure user
+  owns. `perf/README.md` has the commands. The 10-VU smoke passed with 0 unexpected failures; the load
+  levels are not run yet.
 - **Docs: four short GIFs of flows a still picture cannot show (2026-10-20)** — documentation only.
   The README's Screenshots section now has a "GIF" part with multi-file upload (three files of
   different kinds, titled, uploaded one by one with progress), the share link (private → unlisted, copy,

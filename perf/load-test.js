@@ -49,14 +49,24 @@ function run(opts) {
   });
 }
 
+// 목적: autocannon 결과 하나를 ADR 0049 D1 목표와 비교해 PASS/FAIL로 찍는다.
+// 이유: 지연만 보면 403·404처럼 빨리 끝나는 실패 응답도 PASS가 된다 — 측정 대상이 아닌 경로를 잰 셈이다.
+// 방법: p50/p97.5가 목표 안이고 non2xx·errors·timeouts가 모두 0일 때만 PASS로 본다.
 function report(label, result, targetP50, targetP95) {
   const p50 = result.latency.p50;
   const p95 = result.latency.p97_5; // closest built-in autocannon percentile to p95
-  const ok = p50 <= targetP50 && p95 <= targetP95;
+  const failures = {
+    non2xx: result.non2xx,
+    errors: result.errors,
+    timeouts: result.timeouts,
+  };
+  const clean = Object.values(failures).every((n) => n === 0);
+  const ok = clean && p50 <= targetP50 && p95 <= targetP95;
   console.log(
     `${ok ? 'PASS' : 'FAIL'} ${label}: p50=${p50}ms p97.5(~p95)=${p95}ms ` +
       `throughput=${result.requests.average.toFixed(1)}req/s ` +
-      `(target p50<=${targetP50}ms, p95<=${targetP95}ms)`,
+      `non2xx=${failures.non2xx} errors=${failures.errors} timeouts=${failures.timeouts} ` +
+      `(target p50<=${targetP50}ms, p95<=${targetP95}ms, no failed responses)`,
   );
 }
 
@@ -65,7 +75,10 @@ async function main() {
   const authHeader = { Authorization: `Bearer ${token}` };
   const publicContentId = await findFileIdByTitle(token, 'perf-content-public');
   const privateContentId = await findFileIdByTitle(token, 'perf-content-private');
-  const anyFileId = await findFileIdByTitle(token, 'perf-file-000001-trip');
+  // Row 0 is public and owned by the measure user (perf/seed.js), so the PATCH below gets past the
+  // ownership check. Row 1 belongs to perf-seed-1: its PATCH was a 403 FORBIDDEN_NOT_OWNER that the
+  // latency-only check passed.
+  const anyFileId = await findFileIdByTitle(token, 'perf-file-000000-holiday');
 
   const common = { connections: 20, duration: 10 };
 
@@ -135,13 +148,15 @@ async function main() {
   );
 
   report(
-    'PATCH /file/:id (write, idempotent same-title update)',
+    'PATCH /file/:id (write, idempotent visibility update)',
+    // Not a same-title update: updateFile's duplicate check does not exclude the row itself, so
+    // that is a 400 FILE_TITLE_TAKEN, not a write.
     await run({
       ...common,
       url: `${BASE_URL}/file/${anyFileId}`,
       method: 'PATCH',
       headers: { ...authHeader, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'perf-file-000001-trip' }),
+      body: JSON.stringify({ visibility: 'public' }),
     }),
     100,
     300,
