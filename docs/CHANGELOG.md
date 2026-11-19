@@ -20,8 +20,10 @@ development line (package.json version).
   `ErrorCode`), an unplanned response or an unexpected failure. `perf/k6/throttle.js` checks the 5/min
   and 100/min boundaries. `perf/seed.js` adds the k6 accounts and files; `perf/load-test.js` now fails
   on non-2xx responses, errors or timeouts, and its write benchmark targets a file the measure user
-  owns. `perf/README.md` has the commands. The 10-VU smoke passed with 0 unexpected failures; the load
-  levels are not run yet.
+  owns. `perf/README.md` has the commands. The 10-VU smoke passed with 0 unexpected failures. The 50, 100,
+  200, 300 and 500 VU levels had 0 unexpected failures and 0 unplanned responses, with every ADR 0049
+  tier within target; the recovery check after them failed once (after the first 200-VU run, cause
+  not found) and passed on a rerun. The results table is in ADR 0069.
 - **Docs: four short GIFs of flows a still picture cannot show (2026-10-20)** — documentation only.
   The README's Screenshots section now has a "GIF" part with multi-file upload (three files of
   different kinds, titled, uploaded one by one with progress), the share link (private → unlisted, copy,

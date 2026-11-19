@@ -76,7 +76,7 @@ Decisions 섹션)이며, 각 ADR은 그 규칙 이면의 *이유*를 기록합�
 | [0066](0066-stack-selection-rationale-retroactive.ko.md) | 스택 선택 근거, 소급 기록 — NestJS/TypeORM/PostgreSQL, AWS/EKS, 프론트엔드 상태 라이브러리 미사용, 요청 횟수 한도 수치 | 승인됨 — 소급 기록, 코드 변경 없음 | 2026-10-12 |
 | [0067](0067-file-transfer-service-split.ko.md) | 소유권 이전을 `FileService`에서 `FileTransferService`로 분리 | 승인됨 — 구현 완료, 동작 변경 없음 | 2026-10-14 |
 | [0068](0068-deploy-identifiers-gitignored-overlay.ko.md) | 배포 식별자를 `values-prod.yaml`에서 gitignore된 오버레이로 옮김 | 승인됨 — 구현 완료, 렌더링된 차트 변경 없음 | 2026-10-26 |
-| [0069](0069-k6-load-testing.ko.md) | 사용자·관리자 흐름 전체를 k6로 500 VU 이상까지 부하 시험 — ADR 0049 D2 개정 | 제안됨 — Phase 1 구현, 부하 단계 미실행 | 2026-11-19 |
+| [0069](0069-k6-load-testing.ko.md) | 사용자·관리자 흐름 전체를 k6로 500 VU 이상까지 부하 시험 — ADR 0049 D2 개정 | 승인됨 — 구현 완료, 부하 단계 50~500 VU 실행, 500 초과는 미실행 | 2026-11-19 |
 
 **결정일** 열은 그 결정이 저장소에 처음 나타난 날짜입니다. ADR 0001~0005와 0009는 첫 커밋(2025-12-17)에
 이미 들어 있던 선택을 다루지만, 문서 자체는 2026-07-22에 작성했습니다. 이 사실은 각 문서의 `기록` 줄에

@@ -1,6 +1,6 @@
 # ADR 0069: k6 load testing across user and admin flows, up to 500+ VUs
 
-- Status: Proposed — Phase 1 implemented (tooling, seed, 10-VU smoke); the load levels have not been run
+- Status: Accepted — implemented; load levels 50–500 VUs run 2026-11-19, nothing above 500 VUs run yet
 - Date: 2026-11-19
 - Amends: [ADR 0049](0049-performance-capacity-criteria.md) D2 (which considered and rejected k6)
 - 한국어: [0069-k6-load-testing.ko.md](0069-k6-load-testing.ko.md)
@@ -142,12 +142,48 @@ Artillery, the other tool ADR 0049 rejected, was not re-evaluated.
     read of the same shape would hang the same way.
   - **A same-title PATCH was refused — fixed the same day.** No ADR, test or doc recorded it as
     intended (the check came in on 2025-12-19, `283e9ab`, to stop a clash with another file), and
-    the frontend never PATCHes a file title. The check now ignores the row being updated. `updateFile`'s duplicate check does not exclude the row
-    being updated, so `PATCH /file/:id { title: <its current title> }` answers 400
-    `FILE_TITLE_TAKEN`.
+    the frontend never PATCHes a file title. `updateFile`'s duplicate check did not exclude the row
+    being updated, so `PATCH /file/:id { title: <its current title> }` answered 400
+    `FILE_TITLE_TAKEN`. The check now ignores the row being updated.
 - Limits accepted: k6, the app, Postgres and ClamAV share one Windows machine under Docker
   Desktop, so absolute numbers say little about EKS; the comparison between levels is the
   result. One app process, `STORAGE_DRIVER=local`, throttling off. k6's documentation does not
   say how its cookie jar treats `SameSite`; the smoke run's successful refreshes show the
   `SameSite=Strict`, `Path=/auth/token` cookie is sent.
-- The load levels (Phase 2) are still to be run and recorded here.
+- Load levels (Phase 2, 2026-11-19; the 200-VU rerun 2026-11-20). Each level is a 30 s ramp and
+  a 3 min hold, followed straight away by the 10-VU, 60 s recovery run. Same build as the smoke
+  (`d9f990e`), same machine (12 logical CPUs; Docker Desktop VM with 12 CPUs and 16 GB). Latency
+  is p50/p95 in ms. CPU was sampled once, 90 s into the hold, in % of one core.
+
+  | VUs | Requests (req/s) | list | detail | content | write | Unexpected / unplanned | Designed: share / transfer target / no pending / email taken | Recovery p95 (bound 31.0) | CPU app / Postgres / k6 |
+  |---|---|---|---|---|---|---|---|---|---|
+  | 50 | 11,957 (56.6) | 8.2/15.1 | 3.4/4.5 | 9.6/18.0 | 8.0/15.2 | 0 / 0 | 100 / 20 / 20 / 11 | 24.4 PASS | 20 / 15 / 9 |
+  | 100 | 24,223 (114.5) | 7.6/15.6 | 2.7/4.1 | 8.4/19.1 | 7.0/11.6 | 0 / 0 | 223 / 31 / 31 / 36 | 26.9 PASS | 40 / 23 / 9 |
+  | 200 | 48,400 (228.8) | 7.9/16.9 | 2.5/4.4 | 9.0/20.4 | 6.8/12.6 | 0 / 0 | 468 / 66 / 66 / 68 | 71.3 **FAIL** | 71 / 61 / 22 |
+  | 300 | 72,882 (344.5) | 9.2/21.3 | 2.5/5.6 | 9.8/25.5 | 7.0/15.5 | 0 / 0 | 698 / 108 / 108 / 98 | 17.3 PASS | 108 / 115 / 29 |
+  | 500 | 117,573 (555.6) | 25.2/79.4 | 9.2/57.6 | 23.5/60.0 | 23.3/113.8 | 0 / 0 | 1,053 / 168 / 168 / 173 | 21.0 PASS | 203 / 294 / 54 |
+  | 200, rerun after 500 | 48,623 (229.9) | 10.8/27.1 | 2.7/6.0 | 9.6/28.7 | 7.4/16.3 | 0 / 0 | 531 / 55 / 55 / 76 | 23.6 PASS | 89 / 111 / 21 |
+
+  - No level had an unexpected failure or an unplanned response, and every ADR 0049 tier stayed
+    within target at every level. After each level `GET /health/ready` answered in under 2 ms,
+    `pg_stat_activity` showed no session `idle in transaction`, and the app log had no `ERROR` or
+    `WARN` line. The pool deadlock fixed above did not come back.
+  - The request rate grew in step with the VU count (about 1.1 req/s per VU), so think time, not
+    the app, set the rate up to 500. Up to 300 VUs the p50s barely moved. At 500 they roughly
+    tripled and write p95 reached 113.8 ms. Postgres was the busiest process (294% of one core),
+    and mid-hold `pg_stat_activity` showed 8 active sessions against the pool of 10. Where the next
+    limit lies (the pool, Postgres CPU, or this one machine) was not measured.
+  - The auth tier (signin, register) sat at p50 55–65 ms at every level: that is bcrypt at
+    `HASH_ROUNDS=10`, not load.
+  - The recovery check failed once, after the first 200-VU run: p95 71.3 ms against the 31.0 ms
+    bound. Write endpoints and signin/register rose while reads stayed at the smoke values. A
+    Postgres checkpoint ran during that window, but checkpoints also overlapped the 300- and 500-VU
+    recovery runs, which passed. The cause was not found. Rerun after all the other levels, 200
+    VUs passed recovery (23.6 ms). The rerun's own numbers are higher than the first run's because
+    the database had grown in between.
+  - The database was not reset between levels. After all runs it held 19,008 files, 16,915 posts,
+    6,928 comments and 19,994 audit rows (12,084 files, 10,114 posts and 103 comments before
+    Phase 2).
+  - k6 itself used at most 54% of one core, so it was not the bottleneck. A first 50-VU attempt
+    overlapped another project's load test on the same machine and was discarded. In the recorded
+    50-VU run, the last ~22 s of the recovery run overlapped that test's next round.
