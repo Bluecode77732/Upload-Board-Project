@@ -906,6 +906,18 @@ development line (package.json version).
   Redis-backed storage for one true per-route ceiling across replicas.
 
 ### Fixed
+- **Ten concurrent upload promotions or title PATCHes no longer hang the whole app (2026-11-19,
+  [ADR 0069](ADR/0069-k6-load-testing.md))** — `FileService.uploadFile` and `updateFile` held their
+  QueryRunner connection for the transaction and ran the duplicate-title check on
+  `this.fileRepository`, a second pool connection; `uploadFile` also looked up the 23505 winner that
+  way before `release()`. With the default pool of 10, ten such requests at once each held one
+  connection and waited for an eleventh with no timeout, and every DB-backed route stopped
+  answering until a restart (`/health/live` stayed green). Found by the perf work: 20 concurrent
+  `POST /file` and 20 concurrent title PATCHes both hung it. The three reads now go through
+  `queryRunner.manager`, so a transaction holds one connection. After the fix the same 20-way runs
+  returned 20 × 201, 20 × 200 and 20 × 200 (replay), and concurrent same-filename and same-title
+  submits still resolve to one 201 plus typed 200 replays or 400 `FILE_TITLE_TAKEN`. Unit tests now
+  assert the pool repository is not read inside the transaction.
 - **Terraform-generated JWT secrets now satisfy the app's Joi strength rule (2026-09-26,
   [ADR 0064](ADR/0064-jwt-secret-generation-joi-strength-rule.md), `f322972`)** — on the first live
   run the backend pod crash-looped at boot with `Config validation error: "ACCESS_TOKEN_SECRET" ...

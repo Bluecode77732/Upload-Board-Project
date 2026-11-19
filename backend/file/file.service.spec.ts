@@ -186,10 +186,10 @@ describe('FileService', () => {
       queryRunner.manager.createQueryBuilder = jest
         .fn()
         .mockReturnValue(builder);
-      // findOne 호출 순서: 청구 사전 체크(미청구), 중복 제목 사전 체크, 커밋 후 재조회.
+      // 풀 연결 findOne은 청구 사전 체크(미청구)와 커밋 후 재조회 두 번뿐이다. 중복 제목 사전 체크는
+      // 트랜잭션이 쥔 연결(queryRunner.manager)로 한다(ADR 0069 — 풀 교착).
       jest
         .spyOn(fileRepository, 'findOne')
-        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(mockFileEntity);
 
@@ -204,9 +204,13 @@ describe('FileService', () => {
         // 응답 모양이 updateFile의 것과 일치한다.
         creator: { id: 1, email: 'creator@test.com' },
       });
-      expect(fileRepository.findOne).toHaveBeenNthCalledWith(3, {
+      expect(fileRepository.findOne).toHaveBeenCalledTimes(2);
+      expect(fileRepository.findOne).toHaveBeenNthCalledWith(2, {
         where: { id: 1 },
         relations: ['creator'],
+      });
+      expect(queryRunner.manager.findOne).toHaveBeenCalledWith(FileEntity, {
+        where: { title: uploadFileDto.title },
       });
       // insert는 uploadFileDto.filePath 자체의 .mp4 확장자로부터 mediaType을 판정한다 —
       // 클라이언트가 넘긴 필드에서 가져오는 게 아니다(ADR 0040 D2).
@@ -234,7 +238,6 @@ describe('FileService', () => {
       jest
         .spyOn(fileRepository, 'findOne')
         .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(mockFileEntity);
 
       await fileService.uploadFile(imageDto, 1);
@@ -258,7 +261,6 @@ describe('FileService', () => {
       jest
         .spyOn(fileRepository, 'findOne')
         .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(mockFileEntity);
 
       await fileService.uploadFile(audioDto, 1);
@@ -277,7 +279,6 @@ describe('FileService', () => {
         .mockReturnValue(builder);
       jest
         .spyOn(fileRepository, 'findOne')
-        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(mockFileEntity);
 
@@ -303,7 +304,6 @@ describe('FileService', () => {
       jest
         .spyOn(fileRepository, 'findOne')
         .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(mockFileEntity);
 
       await fileService.uploadFile(publicDto, 1);
@@ -326,7 +326,6 @@ describe('FileService', () => {
         .mockReturnValue(builder);
       jest
         .spyOn(fileRepository, 'findOne')
-        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(mockFileEntity);
 
@@ -363,7 +362,6 @@ describe('FileService', () => {
         .mockReturnValue(builder);
       jest
         .spyOn(fileRepository, 'findOne')
-        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(unlistedSavedRow);
 
@@ -445,11 +443,9 @@ describe('FileService', () => {
     });
 
     it('should throw BadRequestException (FILE_TITLE_TAKEN) when the title already exists', async () => {
-      // 청구되지 않은 파일명이지만, 중복 제목 사전 체크가 기존 행을 발견한다.
-      jest
-        .spyOn(fileRepository, 'findOne')
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(mockFileEntity);
+      // 청구되지 않은 파일명이지만, 중복 제목 사전 체크(트랜잭션 연결)가 기존 행을 발견한다.
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValueOnce(null);
+      queryRunner.manager.findOne = jest.fn().mockResolvedValue(mockFileEntity);
 
       await expect(fileService.uploadFile(uploadFileDto, 1)).rejects.toThrow(
         BadRequestException,
@@ -468,16 +464,22 @@ describe('FileService', () => {
           insertQueryBuilder(jest.fn().mockRejectedValue(uniqueViolation())),
         );
       // 청구 사전 체크와 제목 사전 체크 둘 다 통과한다(경합이 아직 열려 있다), 그 다음
-      // 롤백 후 조회가 승자 제출이 커밋한 행을 발견한다.
-      jest
-        .spyOn(fileRepository, 'findOne')
-        .mockResolvedValueOnce(null)
+      // 롤백 후 조회가 승자 제출이 커밋한 행을 발견한다. 롤백 후 조회도 release 전이라
+      // 트랜잭션이 쥔 연결로 한다.
+      jest.spyOn(fileRepository, 'findOne').mockResolvedValueOnce(null);
+      queryRunner.manager.findOne = jest
+        .fn()
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(claimedFile);
 
       const result = await fileService.uploadFile(uploadFileDto, 1);
 
       expect(result.replayed).toBe(true);
+      expect(fileRepository.findOne).toHaveBeenCalledTimes(1);
+      expect(queryRunner.manager.findOne).toHaveBeenLastCalledWith(FileEntity, {
+        where: { filePath: claimedFile.filePath },
+        relations: ['creator'],
+      });
       expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
       expect(queryRunner.release).toHaveBeenCalled();
     });
@@ -503,7 +505,11 @@ describe('FileService', () => {
     it('should update file title successfully', async () => {
       const updateFileDto = { title: 'Updated Title' };
 
-      queryRunner.manager.findOne = jest.fn().mockResolvedValue(mockFileEntity);
+      // 트랜잭션 연결로 대상 행을 읽고, 같은 연결로 중복 제목 사전 체크를 한다(ADR 0069).
+      queryRunner.manager.findOne = jest
+        .fn()
+        .mockResolvedValueOnce(mockFileEntity)
+        .mockResolvedValueOnce(null);
 
       const mockUpdateQueryBuilder = {
         update: jest.fn().mockReturnThis(),
@@ -517,13 +523,21 @@ describe('FileService', () => {
         .mockReturnValue(mockUpdateQueryBuilder);
       jest
         .spyOn(fileRepository, 'findOne')
-        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ ...mockFileEntity, title: 'Updated Title' });
 
       const result = await fileService.updateFile(1, updateFileDto, owner);
 
       expect(result).toMatchObject({ title: 'Updated Title' });
       expect(queryRunner.commitTransaction).toHaveBeenCalled();
+      expect(queryRunner.manager.findOne).toHaveBeenNthCalledWith(
+        2,
+        FileEntity,
+        {
+          where: { title: 'Updated Title' },
+        },
+      );
+      // 풀 연결은 커밋 후 재조회 한 번뿐이다.
+      expect(fileRepository.findOne).toHaveBeenCalledTimes(1);
     });
 
     it('should throw NotFoundException when file is not found', async () => {
@@ -545,7 +559,10 @@ describe('FileService', () => {
     });
 
     it('should allow an admin to update a file they do not own', async () => {
-      queryRunner.manager.findOne = jest.fn().mockResolvedValue(mockFileEntity);
+      queryRunner.manager.findOne = jest
+        .fn()
+        .mockResolvedValueOnce(mockFileEntity)
+        .mockResolvedValueOnce(null);
 
       const mockUpdateQueryBuilder = {
         update: jest.fn().mockReturnThis(),
@@ -558,7 +575,6 @@ describe('FileService', () => {
         .mockReturnValue(mockUpdateQueryBuilder);
       jest
         .spyOn(fileRepository, 'findOne')
-        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ ...mockFileEntity, title: 'By Admin' });
 
       const result = await fileService.updateFile(
@@ -582,11 +598,11 @@ describe('FileService', () => {
         );
 
       it('should translate a concurrent title race into 400 FILE_TITLE_TAKEN, not a raw 500', async () => {
+        // 대상 행을 읽고, 중복 제목 사전 체크는 통과한다(경합이 아직 열려 있다).
         queryRunner.manager.findOne = jest
           .fn()
-          .mockResolvedValue(mockFileEntity);
-        // 중복 제목 사전 체크는 통과한다(경합이 아직 열려 있다).
-        jest.spyOn(fileRepository, 'findOne').mockResolvedValueOnce(null);
+          .mockResolvedValueOnce(mockFileEntity)
+          .mockResolvedValueOnce(null);
 
         const mockUpdateQueryBuilder = {
           update: jest.fn().mockReturnThis(),
@@ -608,8 +624,8 @@ describe('FileService', () => {
       it('should rethrow an unrelated update failure unchanged', async () => {
         queryRunner.manager.findOne = jest
           .fn()
-          .mockResolvedValue(mockFileEntity);
-        jest.spyOn(fileRepository, 'findOne').mockResolvedValueOnce(null);
+          .mockResolvedValueOnce(mockFileEntity)
+          .mockResolvedValueOnce(null);
 
         const failure = new Error('connection lost');
         const mockUpdateQueryBuilder = {

@@ -843,6 +843,16 @@
   필요함.
 
 ### 수정
+- **업로드 승격이나 제목 PATCH가 동시에 10건이어도 앱 전체가 멈추지 않음 (2026-11-19,
+  [ADR 0069](ADR/0069-k6-load-testing.ko.md))** — `FileService.uploadFile`과 `updateFile`은 트랜잭션 동안
+  QueryRunner 연결을 쥔 채 제목 중복 검사를 `this.fileRepository`, 즉 풀의 다른 연결로 했다.
+  `uploadFile`은 `release()` 전에 23505 승자 조회도 같은 방식으로 했다. 기본 풀이 10개라, 이런 요청이
+  동시에 10건이면 각자 연결 하나를 쥔 채 타임아웃 없이 11번째를 기다렸고, 재시작할 때까지 DB를 쓰는
+  모든 라우트가 응답하지 않았다(`/health/live`는 정상으로 남았다). 성능 작업 중에 찾았다. `POST /file`
+  20건 동시와 제목 PATCH 20건 동시가 둘 다 앱을 멈췄다. 세 읽기를 이제 `queryRunner.manager`로 해서
+  트랜잭션 하나가 연결 하나만 쓴다. 고친 뒤 같은 20건 동시 실행은 201 20건, 200 20건, replay 200
+  20건이었고, 같은 파일명·같은 제목 동시 제출도 여전히 201 하나와 타입 있는 replay 200 또는 400
+  `FILE_TITLE_TAKEN`으로 갈렸다. 단위 테스트가 이제 트랜잭션 안에서 풀 repository를 읽지 않음을 확인한다.
 - **Terraform이 만드는 JWT 시크릿이 이제 앱의 Joi 강도 규칙을 만족 (2026-09-26,
   [ADR 0064](ADR/0064-jwt-secret-generation-joi-strength-rule.ko.md), `f322972`)** — 첫 라이브 실행에서
   백엔드 파드가 `Config validation error: "ACCESS_TOKEN_SECRET" ... fails to match the required

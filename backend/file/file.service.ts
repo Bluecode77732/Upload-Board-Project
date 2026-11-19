@@ -308,11 +308,19 @@ export class FileService {
   // 목적: 해당 저장 경로를 이미 점유한 FileEntity 행을 찾는다.
   // 이유: 서버 발급 파일명은 1회용 청구 토큰이므로, 그 행의 존재 자체가 "이미 청구됨"의 증거다.
   // 방법: filePath 정확 일치로 조회하되 creator를 함께 로드해 재제출자 본인 여부를 판정할 수 있게 한다.
-  private findClaim(storedPath: string): Promise<FileEntity | null> {
-    return this.fileRepository.findOne({
+  //       QueryRunner를 쥔 호출자는 그 manager를 넘긴다 — 쥔 채로 풀에서 연결을 하나 더 받으면 동시 요청이
+  //       풀 크기를 넘을 때 서로 빈 연결을 기다리며 멈춘다(ADR 0069).
+  private findClaim(
+    storedPath: string,
+    manager?: EntityManager,
+  ): Promise<FileEntity | null> {
+    const options = {
       where: { filePath: storedPath },
       relations: ['creator'],
-    });
+    };
+    return manager
+      ? manager.findOne(FileEntity, options)
+      : this.fileRepository.findOne(options);
   }
 
   // 목적: 이미 청구된 업로드의 재제출을 멱등 replay 또는 409로 판정한다.
@@ -389,6 +397,7 @@ export class FileService {
   // 이유: DB 저장과 물리 승격이 따로 실패하면 행이 없는 파일을 가리키고, 재시도는 모호한 400이나 500을 받는다.
   // 방법: 파일명을 1회용 청구 토큰으로 보고 선청구 여부부터 판정(replay/409)한다. 미청구일 때만 한 트랜잭션에서
   //       insert → storage.promote → commit 하고, 실패하면 rollback, release()는 finally에서 한다(ADR 0019, 0029).
+  //       트랜잭션 안의 읽기(제목 사전 체크, 23505 뒤 승자 조회)는 모두 queryRunner.manager로 해 연결을 하나만 쓴다.
   //       visibility는 값이 있을 때만 insert에 넣어 DB 기본값(private)을 살리고, unlisted면 shareToken도 같이 넣는다.
   async uploadFile(
     uploadFileDto: UploadFileDto,
@@ -420,8 +429,8 @@ export class FileService {
     let fileId: number;
     try {
       // title은 unique다 — 사전 체크를 해 둬야 DB 제약 위반이 타입 없는 500에 묻히지 않고
-      // 타입 있는 FILE_TITLE_TAKEN으로 드러난다(updateFile과 동일한 패턴).
-      const duplicatedTitle = await this.fileRepository.findOne({
+      // 타입 있는 FILE_TITLE_TAKEN으로 드러난다(updateFile과 동일한 패턴). 이미 쥔 연결로 읽는다.
+      const duplicatedTitle = await queryRunner.manager.findOne(FileEntity, {
         where: { title: uploadFileDto.title },
       });
       if (duplicatedTitle) {
@@ -474,8 +483,9 @@ export class FileService {
       // title 사전 체크는 잠금 없는 읽기라, 동시 제출 둘 다 이걸 통과하고 unique 제약이
       // 승자를 가릴 수 있다. 승자가 바로 이 파일명을 청구한 것이라면, 패자는 같은 요청이
       // 두 번 온 것이므로 에러 대신 replay로 처리한다.
+      // rollback 뒤에도 release 전까지는 이 연결을 쥐고 있으므로 같은 연결로 읽는다.
       if (this.isPgErrorCode(error, UNIQUE_VIOLATION)) {
-        const winner = await this.findClaim(storedPath);
+        const winner = await this.findClaim(storedPath, queryRunner.manager);
         if (winner) {
           return this.resolveClaim(winner, userId);
         }
@@ -510,6 +520,7 @@ export class FileService {
   // 방법: 한 트랜잭션 안에서 필드를 갱신한다. unlisted로 들어갈 때(또는 rotateShareToken일 때)만 새 토큰을
   //       발급하고, unlisted를 벗어나면 토큰과 만료를 비운다. title 사전 체크는 잠금 없는 읽기라서 동시
   //       PATCH가 둘 다 통과할 수 있으므로, catch에서 UNIQUE 위반만 400 FILE_TITLE_TAKEN으로 번역한다.
+  //       사전 체크도 queryRunner.manager로 읽어, 트랜잭션 하나가 풀 연결을 둘 쥐지 않게 한다.
   async updateFile(
     id: number,
     updateFileDto: UpdateFileDto,
@@ -545,7 +556,8 @@ export class FileService {
       const updateFields: Partial<FileEntity> = {};
 
       if (title) {
-        const duplicatedTitle = await this.fileRepository.findOne({
+        // 트랜잭션이 쥔 연결로 읽는다 — 풀에서 하나 더 받으면 동시 PATCH가 풀을 다 쥔 채 멈춘다(ADR 0069).
+        const duplicatedTitle = await queryRunner.manager.findOne(FileEntity, {
           where: { title },
         });
         if (duplicatedTitle) {
