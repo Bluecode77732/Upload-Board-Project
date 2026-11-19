@@ -108,8 +108,8 @@ Artillery, the other tool ADR 0049 rejected, was not re-evaluated.
   writes inside the current directory.
 - `perf/load-test.js` reports `FAIL` when `non2xx`, `errors` or `timeouts` is non-zero, and
   measures `perf-file-000000-holiday`, a public file owned by the measure user, with a
-  `{ visibility: 'public' }` PATCH (an idempotent write on a public file; same-title PATCHes are
-  refused, see below). All eight benchmarks pass after the fix; the write now measures p50 28 ms,
+  `{ visibility: 'public' }` PATCH (an idempotent write on a public file; same-title PATCHes were
+  refused until the fix below). All eight benchmarks pass after the fix; the write now measures p50 28 ms,
   p97.5 60 ms on the success path. ADR 0049 D3's
   `PATCH /file/:id` row (16/19 ms) was therefore measured on the 403 path, not on a write: both
   scripts are unchanged since that ADR's commit (`a4c1261`), and the file ownership check predates
@@ -140,7 +140,9 @@ Artillery, the other tool ADR 0049 rejected, was not re-evaluated.
     filename gave 1 × 201 and 19 × 200, and of one title 1 × 201 and 19 × 400 `FILE_TITLE_TAKEN`.
     The pool still has no acquire timeout (CLAUDE.md > Known gaps, 2026-10-12 review), so a future
     read of the same shape would hang the same way.
-  - **A same-title PATCH is refused — not fixed, undecided.** `updateFile`'s duplicate check does not exclude the row
+  - **A same-title PATCH was refused — fixed the same day.** No ADR, test or doc recorded it as
+    intended (the check came in on 2025-12-19, `283e9ab`, to stop a clash with another file), and
+    the frontend never PATCHes a file title. The check now ignores the row being updated. `updateFile`'s duplicate check does not exclude the row
     being updated, so `PATCH /file/:id { title: <its current title> }` answers 400
     `FILE_TITLE_TAKEN`.
 - Limits accepted: k6, the app, Postgres and ClamAV share one Windows machine under Docker

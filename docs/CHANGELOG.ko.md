@@ -851,6 +851,11 @@
   필요함.
 
 ### 수정
+- **파일의 현재 제목을 그대로 보낸 `PATCH /file/:id`가 이제 성공 (2026-11-19,
+  [ADR 0069](ADR/0069-k6-load-testing.ko.md))** — 제목 중복 검사가 수정 대상 행 자신을 빼지 않아, 파일의
+  원래 제목을 다시 보내면 400 `FILE_TITLE_TAKEN`이 났다. 이것을 의도로 기록한 ADR, 테스트, 문서는 없었고,
+  프론트엔드는 파일 제목을 PATCH하지 않는다. 다른 파일과의 충돌은 여전히 400 `FILE_TITLE_TAKEN`이며, Swagger의
+  400 설명은 "다른 파일"이라고 바꿨다. 두 경우를 단위 테스트 2개로 고정했고, 실행 중인 앱에서도 확인했다.
 - **업로드 승격이나 제목 PATCH가 동시에 10건이어도 앱 전체가 멈추지 않음 (2026-11-19,
   [ADR 0069](ADR/0069-k6-load-testing.ko.md))** — `FileService.uploadFile`과 `updateFile`은 트랜잭션 동안
   QueryRunner 연결을 쥔 채 제목 중복 검사를 `this.fileRepository`, 즉 풀의 다른 연결로 했다.

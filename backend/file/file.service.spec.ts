@@ -12,6 +12,7 @@ import {
 import { FileEntity } from './entity/file.entity';
 import { FileVisibility } from './entity/file-visibility.enum';
 import { FileMediaType } from './entity/file-media-type.enum';
+import { ErrorCode } from 'backend/common/error-code';
 import { GetFilesDto } from './dto/get-files.dto';
 import { UserEntity } from 'backend/user/entity/user.entity';
 import {
@@ -585,6 +586,58 @@ describe('FileService', () => {
 
       expect(result).toMatchObject({ title: 'By Admin' });
       expect(queryRunner.commitTransaction).toHaveBeenCalled();
+    });
+
+    it("should accept resubmitting the file's own current title", async () => {
+      // 사전 체크가 찾은 행이 수정 대상 자신(id 1)이다 — 충돌이 아니다.
+      queryRunner.manager.findOne = jest
+        .fn()
+        .mockResolvedValueOnce(mockFileEntity)
+        .mockResolvedValueOnce(mockFileEntity);
+      const mockUpdateQueryBuilder = {
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      };
+      queryRunner.manager.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(mockUpdateQueryBuilder);
+      jest
+        .spyOn(fileRepository, 'findOne')
+        .mockResolvedValueOnce(mockFileEntity);
+
+      const result = await fileService.updateFile(
+        1,
+        { title: mockFileEntity.title },
+        owner,
+      );
+
+      expect(result).toMatchObject({ title: mockFileEntity.title });
+      expect(queryRunner.commitTransaction).toHaveBeenCalled();
+    });
+
+    it('should reject a title another file already has with FILE_TITLE_TAKEN', async () => {
+      queryRunner.manager.findOne = jest
+        .fn()
+        .mockResolvedValueOnce(mockFileEntity)
+        .mockResolvedValueOnce({ ...mockFileEntity, id: 2, title: 'Taken' });
+      const execute = jest.fn();
+      queryRunner.manager.createQueryBuilder = jest.fn().mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute,
+      });
+
+      await expect(
+        fileService.updateFile(1, { title: 'Taken' }, owner),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCode.FILE_TITLE_TAKEN },
+      });
+      expect(execute).not.toHaveBeenCalled();
+      expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+      expect(queryRunner.release).toHaveBeenCalled();
     });
 
     // ~459행의 사전 체크는 잠금 없는 읽기라, 같은 제목으로 경합하는 동시 PATCH가

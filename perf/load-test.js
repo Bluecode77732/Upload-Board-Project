@@ -149,8 +149,8 @@ async function main() {
 
   report(
     'PATCH /file/:id (write, idempotent visibility update)',
-    // Not a same-title update: updateFile's duplicate check does not exclude the row itself, so
-    // that is a 400 FILE_TITLE_TAKEN, not a write.
+    // A visibility write rather than a same-title one, so the result stays comparable with runs
+    // from before 2026-11-19, when a same-title PATCH answered 400 FILE_TITLE_TAKEN.
     await run({
       ...common,
       url: `${BASE_URL}/file/${anyFileId}`,

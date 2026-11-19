@@ -520,7 +520,8 @@ export class FileService {
   // 방법: 한 트랜잭션 안에서 필드를 갱신한다. unlisted로 들어갈 때(또는 rotateShareToken일 때)만 새 토큰을
   //       발급하고, unlisted를 벗어나면 토큰과 만료를 비운다. title 사전 체크는 잠금 없는 읽기라서 동시
   //       PATCH가 둘 다 통과할 수 있으므로, catch에서 UNIQUE 위반만 400 FILE_TITLE_TAKEN으로 번역한다.
-  //       사전 체크도 queryRunner.manager로 읽어, 트랜잭션 하나가 풀 연결을 둘 쥐지 않게 한다.
+  //       사전 체크도 queryRunner.manager로 읽어, 트랜잭션 하나가 풀 연결을 둘 쥐지 않게 한다. 사전 체크가 찾은
+  //       행이 수정 대상 자신이면 충돌로 보지 않는다(같은 제목 PATCH는 200).
   async updateFile(
     id: number,
     updateFileDto: UpdateFileDto,
@@ -560,7 +561,8 @@ export class FileService {
         const duplicatedTitle = await queryRunner.manager.findOne(FileEntity, {
           where: { title },
         });
-        if (duplicatedTitle) {
+        // 자기 행은 충돌이 아니다 — 현재 제목을 그대로 다시 보낸 PATCH는 200이다.
+        if (duplicatedTitle && duplicatedTitle.id !== id) {
           throw new BadRequestException({
             code: ErrorCode.FILE_TITLE_TAKEN,
             message: 'Title already in use.',

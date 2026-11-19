@@ -159,9 +159,9 @@ export class FileController {
   @ApiResponse({
     status: 400,
     description:
-      'FILE_TITLE_TAKEN — 제목이 이미 사용 중이다. FILE_INVALID_PATH — filePath가 ' +
+      'FILE_TITLE_TAKEN — 다른 파일이 이미 그 제목을 쓴다. FILE_INVALID_PATH — filePath가 ' +
       'granted_ 파일명이 아니거나(temp_는 이 엔드포인트에서 거부된다) 존재하지 않는다. ' +
-      '(FILE_TITLE_TAKEN — the title is already taken. FILE_INVALID_PATH — filePath is ' +
+      '(FILE_TITLE_TAKEN — another file already has this title. FILE_INVALID_PATH — filePath is ' +
       'not a granted_ filename (a temp_ one is rejected here) or no longer exists.)',
   })
   @ApiResponse({

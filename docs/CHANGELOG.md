@@ -915,6 +915,12 @@ development line (package.json version).
   Redis-backed storage for one true per-route ceiling across replicas.
 
 ### Fixed
+- **`PATCH /file/:id` with the file's current title now succeeds (2026-11-19,
+  [ADR 0069](ADR/0069-k6-load-testing.md))** — the duplicate-title check did not exclude the row
+  being updated, so resending a file's own title answered 400 `FILE_TITLE_TAKEN`. No ADR, test or
+  doc recorded that as intended, and the frontend never PATCHes a file title. A clash with another
+  file is still 400 `FILE_TITLE_TAKEN`; the Swagger 400 text now says "another file". Two unit tests
+  pin both cases, and both were checked against a running app.
 - **Ten concurrent upload promotions or title PATCHes no longer hang the whole app (2026-11-19,
   [ADR 0069](ADR/0069-k6-load-testing.md))** — `FileService.uploadFile` and `updateFile` held their
   QueryRunner connection for the transaction and ran the duplicate-title check on
