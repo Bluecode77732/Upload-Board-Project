@@ -526,6 +526,6 @@ Bearer 토큰이 새로고침해도 남습니다)([ADR 0009](ADR/0009-rest-only-
   사실입니다 — `CLAUDE.md`의 Terraform 항목을 보거나 세 디렉터리에서 각각
   `terraform plan`을 돌려 확인하세요.
 
-자세한 내용은 여기가 아니라 [README.md](../README.md)(Stack, Deployment)와
+자세한 내용은 여기가 아니라 [TECHNICAL.ko.md](TECHNICAL.ko.md)(기술 스택, AWS / Kubernetes 배포)와
 [ROADMAP.ko.md](ROADMAP.ko.md)에 있습니다 — 같은 내용을 두 곳에 적어 두면 딱 두 곳이
 동시에 낡는 지름길이 될 뿐입니다.

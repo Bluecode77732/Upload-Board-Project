@@ -51,6 +51,17 @@ development line (package.json version).
   were run in batches a minute apart because the local API has the 5/minute sign-up limit on.
 
 ### Changed
+- **Docs: README rewritten as a short portfolio page; the technical detail moved to `docs/TECHNICAL.md` (2026-11-20)**
+  — documentation only; no code, schema or API changed. `README.md` (Korean) and `README.en.md` now follow
+  six sections: a one-line summary, three screens, the problems solved and key features, a system flow
+  diagram, a tech stack table, and a minimal Quick Start. Every earlier section (status, summary, all
+  screenshots and GIFs, features, architecture diagrams, environment variables, deployment, Swagger, core
+  API, troubleshooting, how this was built, testing and CI, known limitations, the documents table) moved
+  word for word into `docs/TECHNICAL.md` / `TECHNICAL.ko.md`, with relative links adjusted for `docs/`, the
+  ADR count raised from 68 to 69 and ADR 0069 added to the `perf/` row. `ARCHITECTURE.md`'s pointer to the
+  README's stack and deployment detail now points to `TECHNICAL.md`. The Quick Start's host-side e2e command
+  carries `CLAMD_HOST=127.0.0.1`, since `.env`'s default is the compose service name; that command was not run
+  for this change.
 - **Docs: README files renamed, and a wording pass on the Korean README (2026-10-28)** — documentation only; no code,
   schema or API changed. The Korean README is now `README.md` and the English one `README.en.md`; the old
   `README.ko.md` is gone (commit `6fd4f67`, which had no entry here). The summary section is titled "요약본" and
